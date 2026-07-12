@@ -196,7 +196,7 @@ function semanticRuntimeDiagnostic(
   if (row == null) return null;
   const range = semanticRuntimeDiagnosticRange(row.source, document);
   if (range == null) return null;
-  const rowRelatedInformation = (row.relatedInformation ?? []).flatMap((related) =>
+  const rowRelatedInformation = row.relatedInformation.flatMap((related) =>
     semanticRuntimeDiagnosticRelatedSourceInformation(related, document, workspaceRoot, lookupText)
   );
   const allRelatedInformation = [...rowRelatedInformation, ...relatedInformation];
@@ -219,7 +219,7 @@ function semanticRuntimeTypeScriptDiagnosticCode(row: SemanticAppDiagnosticRow):
   if (row.diagnosticAuthority !== "typescript") return null;
   const candidates = [
     row.missingInput,
-    ...(row.missingInputs ?? []),
+    ...row.missingInputs,
   ];
   for (const candidate of candidates) {
     if (candidate == null) continue;

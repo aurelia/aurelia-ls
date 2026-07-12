@@ -139,12 +139,49 @@ describe("handleGetDiagnostics", () => {
               subjectName: "title",
               source: null,
             },
-            relatedInformation: [],
+            relatedInformation: [{
+              message: "Subject declaration.",
+              source: {
+                kind: "source-span-address",
+                label: "src/app.ts@10..15",
+                path: "src/app.ts",
+                start: 10,
+                end: 15,
+                role: "range",
+              },
+              relationKind: "subject-declaration",
+              code: null,
+              sourceRole: "app-source",
+            }],
             suggestion: null,
             sourceRole: "template",
             relatedQueryKind: "template-diagnostics",
           },
         ],
+        presentation: {
+          rawRowCount: 1,
+          primaryCount: 1,
+          contextualCount: 0,
+          complete: true,
+          groups: [{
+            groupKey: "member-title",
+            subject: {
+              subjectKind: "template-member-access",
+              subjectName: "title",
+              source: null,
+            },
+            primary: {
+              rowId: "diagnostic-title",
+              rowIndex: 0,
+              role: "primary",
+              relation: null,
+            },
+            related: [],
+            rawRowCount: 1,
+            primarySeverity: "warning",
+            maxRawSeverity: "warning",
+          }],
+        },
       },
       page: null,
     });
@@ -186,7 +223,14 @@ describe("handleGetDiagnostics", () => {
             surfaces: ["lsp", "vscode-panel"],
           }),
         ],
-        suppressed: [],
+        presentation: expect.objectContaining({
+          groups: [expect.objectContaining({
+            subject: {
+              subjectKind: "template-member-access",
+              subjectName: "title",
+            },
+          })],
+        }),
       },
     });
     expect(result?.diagnostics.bySurface.lsp[0]?.data).toEqual(expect.objectContaining({
@@ -195,6 +239,13 @@ describe("handleGetDiagnostics", () => {
       diagnosticKind: "missing-expression-member",
       relatedQueryKind: "template-diagnostics",
     }));
+    expect(result?.diagnostics.raw[0]?.related).toEqual([{
+      message: "Subject declaration.",
+      uri: expect.stringContaining("src/app.ts"),
+      span: { start: 10, end: 15 },
+      sourceRole: "app-source",
+      relationKind: "subject-declaration",
+    }]);
   });
 
   test("maps runtime informational severity to report info severity", async () => {

@@ -50,6 +50,83 @@ function assignmentDiagnosticRow(
 }
 
 describe("app diagnostic fact conservation", () => {
+  test("preserves closed evaluation, DI, and resource subjects through app aggregation", async () => {
+    const evaluationRuntime = await createSemanticRuntime({
+      workspaceRoot: path.join(packageRoot, "fixtures/pressure/kernel-api-errors"),
+      storeKey: "app-diagnostic-fact-conservation-evaluation-subject",
+    });
+    const evaluationApp = await evaluationRuntime.openApp({ analysisDepth: "binding-observation" });
+    const evaluationOwning = evaluationApp.ask({
+      kind: SemanticAppQueryKind.EvaluationIssues,
+      detail: SemanticRuntimeDetail.Handles,
+      page: { size: 100 },
+    }).value.rows.find((row) => row.issueKind === "event-aggregator-publish-invalid-event-name");
+    const evaluationDiagnostic = evaluationApp.ask({
+      kind: SemanticAppQueryKind.AppDiagnostics,
+      detail: SemanticRuntimeDetail.Handles,
+      page: { size: 300 },
+    }).value.rows.find((row) => row.handles?.productHandle === evaluationOwning?.handles?.productHandle);
+
+    expect(evaluationOwning).toBeDefined();
+    expect(evaluationDiagnostic?.subject).toEqual({
+      subjectKind: "event-aggregator-publish-call",
+      subjectName: null,
+      source: evaluationOwning?.source,
+    });
+
+    const diRuntime = await createSemanticRuntime({
+      workspaceRoot: path.join(packageRoot, "fixtures/pressure/di-resolve-contexts"),
+      storeKey: "app-diagnostic-fact-conservation-di-subject",
+    });
+    const diApp = await diRuntime.openApp({ analysisDepth: "binding-observation" });
+    const diOwning = diApp.ask({
+      kind: SemanticAppQueryKind.DiIssues,
+      detail: SemanticRuntimeDetail.Handles,
+      page: { size: 100 },
+    }).value.rows.find((row) =>
+      row.issueKind === "no-construct-native-function"
+      && row.containerApiCall?.methodKind === "invoke"
+    );
+    const diDiagnostic = diApp.ask({
+      kind: SemanticAppQueryKind.AppDiagnostics,
+      detail: SemanticRuntimeDetail.Handles,
+      page: { size: 300 },
+    }).value.rows.find((row) => row.handles?.productHandle === diOwning?.handles?.productHandle);
+
+    expect(diOwning).toBeDefined();
+    expect(diDiagnostic?.subject).toEqual({
+      subjectKind: "container-api-call",
+      subjectName: "Array",
+      source: diOwning?.source,
+    });
+
+    const resourceRuntime = await createSemanticRuntime({
+      workspaceRoot: path.join(packageRoot, "fixtures/pressure/resource-registration-duplicates"),
+      storeKey: "app-diagnostic-fact-conservation-resource-subject",
+    });
+    const resourceApp = await resourceRuntime.openApp({ analysisDepth: "binding-observation" });
+    const resourceOwning = resourceApp.ask({
+      kind: SemanticAppQueryKind.ResourceIssues,
+      detail: SemanticRuntimeDetail.Handles,
+      page: { size: 100 },
+    }).value.rows.find((row) =>
+      row.frameworkErrorCode === "AUR0153"
+      && row.resource.name === "duplicate-card"
+    );
+    const resourceDiagnostic = resourceApp.ask({
+      kind: SemanticAppQueryKind.AppDiagnostics,
+      detail: SemanticRuntimeDetail.Handles,
+      page: { size: 300 },
+    }).value.rows.find((row) => row.handles?.productHandle === resourceOwning?.handles?.productHandle);
+
+    expect(resourceOwning).toBeDefined();
+    expect(resourceDiagnostic?.subject).toEqual({
+      subjectKind: "custom-element",
+      subjectName: "duplicate-card",
+      source: resourceOwning?.source,
+    });
+  });
+
   test("preserves observation identity, repair intent, and detailed origin handles", async () => {
     const runtime = await createSemanticRuntime({
       workspaceRoot: path.join(packageRoot, "fixtures/pressure/trackable-method-dependencies"),

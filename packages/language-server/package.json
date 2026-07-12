@@ -13,6 +13,10 @@
     "./api": {
       "import": "./out/api.js",
       "types": "./out/api.d.ts"
+    },
+    "./protocol": {
+      "import": "./out/protocol.js",
+      "types": "./out/protocol.d.ts"
     }
   },
   "license": "MIT",

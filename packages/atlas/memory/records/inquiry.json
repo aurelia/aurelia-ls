@@ -935,7 +935,8 @@
         "StateDefaultConfiguration and AppTask admissions require project-specific state/lifecycle intent and should remain guidance-only unless a dedicated planner supplies those facts.",
         "Do not use actionability to mean an edit exists, and reserve any future autofix/fix-all vocabulary for batch or on-save-safe operations.",
         "Do not reintroduce a local suggestion.actionKind === declare-member shortcut for source edits. The planner must prove the target kind and exact source operation it edits.",
-        "When attaching LSP diagnostics to CodeActions, match every contributing semantic diagnostic by authority, kind, and exact source range so Problems-panel quick fixes preserve which diagnostics the edit resolves."
+        "When attaching LSP diagnostics to CodeActions, match every contributing semantic diagnostic by authority, kind, and exact source range so Problems-panel quick fixes preserve which diagnostics the edit resolves.",
+        "Every semantic code-action edit must carry an exact source and non-null oldText; zero-length insertions use the empty string. LSP mapping validates every row and refuses the whole plan on an unmappable or stale edit rather than applying a partial WorkspaceEdit."
       ],
       "anchors": [
         {
@@ -961,6 +962,12 @@
           "filePath": "packages/semantic-runtime/src/api/contracts.ts",
           "symbolName": "SemanticTemplateCodeActionRow",
           "summary": "Public edit-backed plan contract with non-empty source diagnostics and edit tuples."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticTemplateCodeActionEditRow",
+          "summary": "Exact edit contract requiring source and oldText, including empty-string insertion validation."
         },
         {
           "kind": "source",

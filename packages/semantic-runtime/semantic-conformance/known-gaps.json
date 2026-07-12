@@ -3,13 +3,6 @@
   "schemaVersion": "semantic-conformance-known-gaps.v1",
   "knownGaps": [
     {
-      "assertionId": "code-action-edit-plan-coverage/declaration-insertion-old-text",
-      "status": "known-gap",
-      "failureBucket": "code-action-edit-plan-oldText-data-loss",
-      "firstObserved": "2026-07-09",
-      "rationale": "Declare-view-model-member code action edits target a zero-length TypeScript insertion span but publish oldText as null, while other insertion edit plans publish empty-string oldText for all-or-nothing validation."
-    },
-    {
       "assertionId": "bindable-contracts-lab/inline-multi-binding-segment-semantic-tokens",
       "status": "known-gap",
       "failureBucket": "inline-multi-binding-segment-source-projection",
@@ -45,11 +38,11 @@
       "rationale": "The parser emits ObjectBindingPattern for repeat.for object syntax, while the checked-in Repeat controller only materializes ArrayDestructuring/ObjectDestructuring and therefore creates no locals. Semantic-runtime currently accepts and types the non-working syntax without a diagnostic."
     },
     {
-      "assertionId": "template-controller-built-ins/repeat-source-rejection-and-cascade-policy",
+      "assertionId": "template-controller-built-ins/repeat-source-rejection-presentation-cascade-policy",
       "status": "known-gap",
       "failureBucket": "diagnostic-cascade-policy",
       "firstObserved": "2026-07-09",
-      "rationale": "Once AUR0777 establishes that a repeat source cannot produce runtime rows, child member diagnostics are derivative noise. The diagnostic presentation policy currently publishes both root-cause and downstream local-member failures."
+      "rationale": "Raw AUR0777, assignment, checker, and weak-slot rows are all grounded evidence and must remain available. Presentation lacks an explicit causal edge from the rejected iterator projection to its derived repeat-local diagnostics, so the IDE still presents six consequences as independent problems instead of contextual evidence under the two root errors."
     },
     {
       "assertionId": "template-controller-built-ins/with-null-binding-context-is-diagnosed",

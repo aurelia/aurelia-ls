@@ -40,22 +40,20 @@ function countSeverities(items: readonly DiagnosticsSnapshotItem[]): SeverityCou
   );
 }
 
-function formatDiagnosticsReport(snapshot: DiagnosticsSnapshotResponse, fallbackUri: string): string {
-  const uri = snapshot.uri ?? fallbackUri;
-  const diagnostics = snapshot.diagnostics ?? { bySurface: {}, suppressed: [] };
-  const surfaceEntries = Object.entries(diagnostics.bySurface ?? {}).sort(([a], [b]) => a.localeCompare(b));
-  const suppressed = diagnostics.suppressed ?? [];
-  const lspDiags = diagnostics.bySurface?.["lsp"] ?? [];
+function formatDiagnosticsReport(snapshot: DiagnosticsSnapshotResponse): string {
+  const diagnostics = snapshot.diagnostics;
+  const surfaceEntries = Object.entries(diagnostics.bySurface).sort(([a], [b]) => a.localeCompare(b));
+  const lspDiags = diagnostics.bySurface["lsp"] ?? [];
   const totalCounts = countSeverities(lspDiags);
 
   const lines: string[] = ["# Aurelia Diagnostics Report", ""];
 
   // Summary section
-  lines.push(`**File:** \`${uri}\``);
-  if (snapshot.fingerprint) lines.push(`**Analysis:** ${snapshot.fingerprint}`);
+  lines.push(`**File:** \`${snapshot.uri}\``);
+  lines.push(`**Analysis:** ${snapshot.fingerprint}`);
   lines.push("");
 
-  if (totalCounts.total === 0 && suppressed.length === 0) {
+  if (totalCounts.total === 0) {
     lines.push("No diagnostics. Analysis is clean.");
     return lines.join("\n");
   }
@@ -74,17 +72,6 @@ function formatDiagnosticsReport(snapshot: DiagnosticsSnapshotResponse, fallback
       lines.push(`- \\[${icon}\\] **${diag.code}**: ${diag.message}`);
       if (diag.category) lines.push(`  - Category: ${diag.category}`);
       if (diag.actionability && diag.actionability !== "none") lines.push(`  - Fix: ${diag.actionability}`);
-    }
-    lines.push("");
-  }
-
-  // Suppressed diagnostics
-  if (suppressed.length > 0) {
-    lines.push(`## Suppressed (${suppressed.length})`, "");
-    lines.push("These diagnostics were suppressed because analysis confidence is too low to assert them reliably.", "");
-    for (const diag of suppressed) {
-      lines.push(`- **${diag.code}**: ${diag.message}`);
-      if (diag.suppressionReason) lines.push(`  - Reason: ${diag.suppressionReason}`);
     }
     lines.push("");
   }
@@ -172,7 +159,7 @@ export const UserCommandsFeature: FeatureModule = {
             vscode.window.showInformationMessage("No diagnostics available for this document");
             return;
           }
-          const report = formatDiagnosticsReport(snapshot, uri);
+          const report = formatDiagnosticsReport(snapshot);
           const doc = await vscode.workspace.openTextDocument({
             language: "markdown",
             content: report,

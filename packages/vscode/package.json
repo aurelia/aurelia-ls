@@ -369,6 +369,7 @@
     "vscode-languageclient": "^10.1.0"
   },
   "devDependencies": {
+    "@aurelia-ls/language-server": "workspace:*",
     "@types/vscode": "1.91.0",
     "@vscode/test-electron": "^3.0.0",
     "esbuild": "^0.24.0",

@@ -181,6 +181,7 @@ import type {
 import type {
   ObservationIssueKind,
   ObservationIssuePhase,
+  ObservationIssueRelatedSourceKind,
 } from '../observation/observation-issue.js';
 import type {
   ComputedObservationDependencyMode,
@@ -2173,24 +2174,60 @@ export type SemanticAppDiagnosticPhase =
   | DialogIssuePhase
   | `${DialogIssuePhase}`;
 
+/** Closed subject vocabulary projected by normalized diagnostics; interpret domain-local members with `diagnosticDomain`. */
 export type SemanticDiagnosticSubjectKind =
   | 'template-member-access'
   | 'template-member-call'
   | 'template-expression'
-  | 'template-value-site'
-  | 'source-span';
+  | 'observation-member'
+  | EvaluationIssueSubjectKind
+  | `${EvaluationIssueSubjectKind}`
+  | DiIssueSubjectKind
+  | `${DiIssueSubjectKind}`
+  | ResourceDefinitionKind
+  | `${ResourceDefinitionKind}`;
 
 export interface SemanticDiagnosticSubject {
-  readonly subjectKind: SemanticDiagnosticSubjectKind | string;
+  readonly subjectKind: SemanticDiagnosticSubjectKind;
   readonly subjectName: string | null;
   readonly source: SemanticSourceReference | null;
 }
+
+/** TypeScript's extensible numeric diagnostic namespace, serialized in the same form as `tsc`. */
+export type SemanticTypeScriptDiagnosticKind = `TS${number}`;
+
+/** Closed semantic-runtime diagnostic kinds plus TypeScript's explicitly patterned namespace. */
+export type SemanticAppDiagnosticKind =
+  | SemanticTypeScriptDiagnosticKind
+  | SemanticTemplateCursorDiagnosticKind
+  | EvaluationIssueKind
+  | `${EvaluationIssueKind}`
+  | ConfigurationIssueKind
+  | `${ConfigurationIssueKind}`
+  | DiIssueKind
+  | `${DiIssueKind}`
+  | ObservationIssueKind
+  | `${ObservationIssueKind}`
+  | ResourceIssueKind
+  | `${ResourceIssueKind}`
+  | StateIssueKind
+  | `${StateIssueKind}`
+  | ValidationIssueKind
+  | `${ValidationIssueKind}`
+  | FetchClientIssueKind
+  | `${FetchClientIssueKind}`
+  | DialogIssueKind
+  | `${DialogIssueKind}`
+  | RouterIssueKind
+  | `${RouterIssueKind}`
+  | RouteRecognizerIssueKind
+  | `${RouteRecognizerIssueKind}`;
 
 export interface SemanticDiagnosticRelatedInformation {
   readonly message: string;
   readonly source: SemanticSourceReference | null;
   /** Semantic relationship to the owning diagnostic when the producer has a typed relation vocabulary. */
-  readonly relationKind?: string | null;
+  readonly relationKind?: ObservationIssueRelatedSourceKind | `${ObservationIssueRelatedSourceKind}` | null;
   /** Diagnostic code carried by a related diagnostic, distinct from `relationKind`. */
   readonly code?: string | null;
   readonly sourceRole?: SourceFileRole | `${SourceFileRole}` | null;
@@ -2201,7 +2238,7 @@ export interface SemanticAppDiagnosticRow {
   readonly diagnosticDomain: SemanticAppDiagnosticDomain;
   /** Null only when the owning diagnostic product does not currently publish a phase. */
   readonly phase: SemanticAppDiagnosticPhase | null;
-  readonly diagnosticKind: string;
+  readonly diagnosticKind: SemanticAppDiagnosticKind;
   readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority | 'semantic-runtime-product' | 'typescript';
   readonly frameworkErrorCode: string | null;
   readonly frameworkRawErrorAuthority: string | null;
@@ -2275,7 +2312,7 @@ export interface SemanticAppDiagnosticsResult {
 
 export interface SemanticAppDiagnosticSummaryRow {
   readonly diagnosticDomain: SemanticAppDiagnosticDomain;
-  readonly diagnosticKind: string;
+  readonly diagnosticKind: SemanticAppDiagnosticKind;
   readonly diagnosticAuthority: SemanticAppDiagnosticRow['diagnosticAuthority'];
   readonly frameworkErrorCode: string | null;
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
@@ -2309,7 +2346,7 @@ export interface SemanticTypeScriptDiagnosticRow {
   readonly phase: TypeSystemDiagnosticPhase;
   readonly category: TypeSystemDiagnosticCategory;
   readonly code: number;
-  readonly diagnosticKind: string;
+  readonly diagnosticKind: SemanticTypeScriptDiagnosticKind;
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly message: string;
   readonly typescriptSource: string | null;
@@ -2329,7 +2366,7 @@ export interface SemanticTypeScriptDiagnosticSummaryRow {
   readonly phase: TypeSystemDiagnosticPhase;
   readonly category: TypeSystemDiagnosticCategory;
   readonly code: number;
-  readonly diagnosticKind: string;
+  readonly diagnosticKind: SemanticTypeScriptDiagnosticKind;
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly typescriptSource: string | null;
   readonly count: number;
@@ -3879,8 +3916,8 @@ export enum SemanticTemplateCodeActionEditKind {
 
 export interface SemanticTemplateCodeActionEditRow {
   readonly editKind: SemanticTemplateCodeActionEditKind | `${SemanticTemplateCodeActionEditKind}`;
-  readonly source: SemanticSourceReference | null;
-  readonly oldText: string | null;
+  readonly source: SemanticSourceReference;
+  readonly oldText: string;
   readonly newText: string;
 }
 

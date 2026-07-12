@@ -1695,7 +1695,7 @@ function declareViewModelMemberEdit(
       start: insertion.offset,
       end: insertion.offset,
     },
-    oldText: null,
+    oldText: '',
     newText,
   };
 }

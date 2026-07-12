@@ -610,7 +610,9 @@ registration edits are planned through `source-plan`: imports are updated with T
 `.register(...)` is inserted before the proven app-root call. Other diagnostic suggestions remain structured repair
 intent until a future planner can prove their source operation; clients should not treat every suggestion row as an
 automatic fix. Code-action rows retain a non-empty set of source diagnostics, carry the same diagnostic-stage `repair`
-affordance, and prove plan availability with a non-empty tuple of exact edits. Equivalent-plan deduplication merges the
+affordance, and prove plan availability with a non-empty tuple of exact edits. Every edit carries a non-null authored
+source and `oldText`; insertion plans use the empty string so delayed hosts can validate them under the same
+all-or-nothing rule as replacements. Equivalent-plan deduplication merges the
 source diagnostic evidence instead of choosing one representative diagnostic. The split is intentional: a diagnostic
 may be guided or `source-edit-policy-open` while one returned quick fix carries a concrete multi-edit plan, because the
 source planner has crossed the stricter authored-operation boundary for that app context.
@@ -911,8 +913,12 @@ Config read/parse/option diagnostics are kept on the same surface, so public ada
 or build a second Program. This aggregation is a normalized index, not a replacement owner record. Every app diagnostic
 preserves the common facts available from its owning row: phase, raw framework authority, missing inputs, structured
 subject kind/name/source, related information, repair suggestion, and source role use explicit nullable or empty values
-rather than disappearing by domain. Phase is a closed union of the owning domain phase ontologies and must be
-interpreted with `diagnosticDomain`; aggregation must not widen it to an ungoverned string. At `detail: "handles"`, the
+rather than disappearing by domain. Evaluation and DI subjects preserve their existing domain enums, resource subjects
+reuse the existing resource taxonomy, and template/observation subjects use the normalized member/expression vocabulary;
+adapters must not widen these back to `string` or drop `subjectName`. Phase and diagnostic kind are closed unions of the
+owning domain ontologies and must be interpreted with `diagnosticDomain`. TypeScript diagnostic kinds remain extensible
+only through the explicit `TS${number}` namespace; aggregation must not widen any of these fields to an ungoverned
+string. At `detail: "handles"`, the
 normalized handle carrier preserves the owning issue product/identity/source route plus any modeled owner,
 related-source, template-source, or resource-definition routes;
 compact rows omit the handle carrier. Domain-specific payload remains on the owning query. `diagnosticDomain`

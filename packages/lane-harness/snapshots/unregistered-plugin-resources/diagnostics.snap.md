@@ -20,7 +20,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 8,
+  "diagnosticCount": 11,
   "diagnostics": [
     {
       "anomaly": null,
@@ -324,6 +324,56 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     },
     {
       "anomaly": null,
+      "code": "AUR0103",
+      "data": {
+        "diagnosticAuthority": "framework-error-code",
+        "diagnosticDomain": "template",
+        "diagnosticKind": "runtime-value-converter-framework-error",
+        "frameworkErrorCode": "AUR0103",
+        "frameworkRawErrorAuthority": null,
+        "missingInput": "runtime-value-converter:AUR0103",
+        "missingInputs": [
+          "runtime-value-converter:AUR0103"
+        ],
+        "phase": "bind",
+        "relatedInformation": [],
+        "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "register-resource",
+          "actionability": "guided",
+          "changeDomain": "app-source",
+          "planKind": "resource-registration",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
+        "sourceRole": "template",
+        "subject": null,
+        "taxonomy": {
+          "actionability": "guided",
+          "category": "template-syntax",
+          "confidence": null,
+          "impact": "blocking",
+          "schema": "diagnostics-taxonomy/1"
+        }
+      },
+      "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope..",
+      "range": {
+        "end": {
+          "character": 17,
+          "line": 11
+        },
+        "start": {
+          "character": 16,
+          "line": 11
+        }
+      },
+      "rangeText": "t",
+      "relatedInformation": [],
+      "severity": "error",
+      "source": "aurelia"
+    },
+    {
+      "anomaly": null,
       "code": "framework-capability-not-registered",
       "data": {
         "diagnosticAuthority": "semantic-authoring-policy",
@@ -357,6 +407,56 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "message": "Binding behavior \"validate\" uses Aurelia validation-html default resources, but that framework capability is not registered in this app world.",
+      "range": {
+        "end": {
+          "character": 41,
+          "line": 12
+        },
+        "start": {
+          "character": 33,
+          "line": 12
+        }
+      },
+      "rangeText": "validate",
+      "relatedInformation": [],
+      "severity": "error",
+      "source": "aurelia"
+    },
+    {
+      "anomaly": null,
+      "code": "AUR0101",
+      "data": {
+        "diagnosticAuthority": "framework-error-code",
+        "diagnosticDomain": "template",
+        "diagnosticKind": "runtime-binding-behavior-framework-error",
+        "frameworkErrorCode": "AUR0101",
+        "frameworkRawErrorAuthority": null,
+        "missingInput": "runtime-binding-behavior:AUR0101",
+        "missingInputs": [
+          "runtime-binding-behavior:AUR0101"
+        ],
+        "phase": "bind",
+        "relatedInformation": [],
+        "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "register-resource",
+          "actionability": "guided",
+          "changeDomain": "app-source",
+          "planKind": "resource-registration",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
+        "sourceRole": "template",
+        "subject": null,
+        "taxonomy": {
+          "actionability": "guided",
+          "category": "template-syntax",
+          "confidence": null,
+          "impact": "blocking",
+          "schema": "diagnostics-taxonomy/1"
+        }
+      },
+      "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope..",
       "range": {
         "end": {
           "character": 41,
@@ -421,6 +521,56 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
+    },
+    {
+      "anomaly": null,
+      "code": "AUR0101",
+      "data": {
+        "diagnosticAuthority": "framework-error-code",
+        "diagnosticDomain": "template",
+        "diagnosticKind": "runtime-binding-behavior-framework-error",
+        "frameworkErrorCode": "AUR0101",
+        "frameworkRawErrorAuthority": null,
+        "missingInput": "runtime-binding-behavior:AUR0101",
+        "missingInputs": [
+          "runtime-binding-behavior:AUR0101"
+        ],
+        "phase": "bind",
+        "relatedInformation": [],
+        "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "register-resource",
+          "actionability": "guided",
+          "changeDomain": "app-source",
+          "planKind": "resource-registration",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
+        "sourceRole": "template",
+        "subject": null,
+        "taxonomy": {
+          "actionability": "guided",
+          "category": "template-syntax",
+          "confidence": null,
+          "impact": "blocking",
+          "schema": "diagnostics-taxonomy/1"
+        }
+      },
+      "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope..",
+      "range": {
+        "end": {
+          "character": 49,
+          "line": 13
+        },
+        "start": {
+          "character": 44,
+          "line": 13
+        }
+      },
+      "rangeText": "state",
+      "relatedInformation": [],
+      "severity": "error",
+      "source": "aurelia"
     }
   ],
   "outcome": "published",
@@ -439,7 +589,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "contextualCount": 0,
     "groups": [
       {
-        "groupKey": "row:diagnostic:7:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:8:21:router.default-resources",
+        "groupKey": "row:diagnostic:10:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:8:21:router.default-resources",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -501,7 +651,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:7:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:8:21:router.default-resources"
+          "rowId": "diagnostic:10:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:8:21:router.default-resources"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -509,7 +659,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:5:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:38:65:router.default-resources",
+        "groupKey": "row:diagnostic:8:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:38:65:router.default-resources",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -571,7 +721,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:5:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:38:65:router.default-resources"
+          "rowId": "diagnostic:8:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:38:65:router.default-resources"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -579,7 +729,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:6:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:78:112:ui-virtualization.default-resources",
+        "groupKey": "row:diagnostic:9:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:78:112:ui-virtualization.default-resources",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -641,7 +791,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:6:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:78:112:ui-virtualization.default-resources"
+          "rowId": "diagnostic:9:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:78:112:ui-virtualization.default-resources"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -859,7 +1009,77 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:3:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:283:291:validation-html.default-resources",
+        "groupKey": "row:diagnostic:3:template:runtime-value-converter-framework-error:framework-error-code:AUR0103:src/unregistered-plugin-resources-app.html:243:244:runtime-value-converter:AUR0103",
+        "maxRawSeverity": "error",
+        "primary": {
+          "diagnostic": {
+            "actionability": "guided",
+            "anomaly": null,
+            "category": "template-syntax",
+            "code": "AUR0103",
+            "data": {
+              "diagnosticAuthority": "framework-error-code",
+              "diagnosticDomain": "template",
+              "diagnosticKind": "runtime-value-converter-framework-error",
+              "frameworkErrorCode": "AUR0103",
+              "frameworkRawErrorAuthority": null,
+              "missingInput": "runtime-value-converter:AUR0103",
+              "missingInputs": [
+                "runtime-value-converter:AUR0103"
+              ],
+              "phase": "bind",
+              "relatedInformation": [],
+              "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "register-resource",
+                "actionability": "guided",
+                "changeDomain": "app-source",
+                "planKind": "resource-registration",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
+              },
+              "sourceRole": null,
+              "subject": null,
+              "taxonomy": {
+                "actionability": null,
+                "category": null,
+                "confidence": null,
+                "impact": null,
+                "schema": null
+              }
+            },
+            "file": "src/unregistered-plugin-resources-app.html",
+            "impact": "blocking",
+            "issues": [
+              {
+                "code": "AUR0103",
+                "kind": "runtime-value-converter-framework-error",
+                "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope.."
+              }
+            ],
+            "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope..",
+            "related": [],
+            "severity": "error",
+            "source": "semantic-runtime:template",
+            "span": {
+              "end": 244,
+              "start": 243
+            },
+            "spanText": "t",
+            "status": "primary",
+            "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+          },
+          "relation": null,
+          "role": "primary",
+          "rowId": "diagnostic:3:template:runtime-value-converter-framework-error:framework-error-code:AUR0103:src/unregistered-plugin-resources-app.html:243:244:runtime-value-converter:AUR0103"
+        },
+        "primarySeverity": "error",
+        "rawRowCount": 1,
+        "related": [],
+        "subject": null
+      },
+      {
+        "groupKey": "row:diagnostic:4:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:283:291:validation-html.default-resources",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -921,7 +1141,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:3:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:283:291:validation-html.default-resources"
+          "rowId": "diagnostic:4:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:283:291:validation-html.default-resources"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -929,7 +1149,77 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:4:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:338:343:state.default-resources",
+        "groupKey": "row:diagnostic:5:template:runtime-binding-behavior-framework-error:framework-error-code:AUR0101:src/unregistered-plugin-resources-app.html:283:291:runtime-binding-behavior:AUR0101",
+        "maxRawSeverity": "error",
+        "primary": {
+          "diagnostic": {
+            "actionability": "guided",
+            "anomaly": null,
+            "category": "template-syntax",
+            "code": "AUR0101",
+            "data": {
+              "diagnosticAuthority": "framework-error-code",
+              "diagnosticDomain": "template",
+              "diagnosticKind": "runtime-binding-behavior-framework-error",
+              "frameworkErrorCode": "AUR0101",
+              "frameworkRawErrorAuthority": null,
+              "missingInput": "runtime-binding-behavior:AUR0101",
+              "missingInputs": [
+                "runtime-binding-behavior:AUR0101"
+              ],
+              "phase": "bind",
+              "relatedInformation": [],
+              "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "register-resource",
+                "actionability": "guided",
+                "changeDomain": "app-source",
+                "planKind": "resource-registration",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
+              },
+              "sourceRole": null,
+              "subject": null,
+              "taxonomy": {
+                "actionability": null,
+                "category": null,
+                "confidence": null,
+                "impact": null,
+                "schema": null
+              }
+            },
+            "file": "src/unregistered-plugin-resources-app.html",
+            "impact": "blocking",
+            "issues": [
+              {
+                "code": "AUR0101",
+                "kind": "runtime-binding-behavior-framework-error",
+                "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope.."
+              }
+            ],
+            "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope..",
+            "related": [],
+            "severity": "error",
+            "source": "semantic-runtime:template",
+            "span": {
+              "end": 291,
+              "start": 283
+            },
+            "spanText": "validate",
+            "status": "primary",
+            "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+          },
+          "relation": null,
+          "role": "primary",
+          "rowId": "diagnostic:5:template:runtime-binding-behavior-framework-error:framework-error-code:AUR0101:src/unregistered-plugin-resources-app.html:283:291:runtime-binding-behavior:AUR0101"
+        },
+        "primarySeverity": "error",
+        "rawRowCount": 1,
+        "related": [],
+        "subject": null
+      },
+      {
+        "groupKey": "row:diagnostic:6:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:338:343:state.default-resources",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -991,7 +1281,77 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:4:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:338:343:state.default-resources"
+          "rowId": "diagnostic:6:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:338:343:state.default-resources"
+        },
+        "primarySeverity": "error",
+        "rawRowCount": 1,
+        "related": [],
+        "subject": null
+      },
+      {
+        "groupKey": "row:diagnostic:7:template:runtime-binding-behavior-framework-error:framework-error-code:AUR0101:src/unregistered-plugin-resources-app.html:338:343:runtime-binding-behavior:AUR0101",
+        "maxRawSeverity": "error",
+        "primary": {
+          "diagnostic": {
+            "actionability": "guided",
+            "anomaly": null,
+            "category": "template-syntax",
+            "code": "AUR0101",
+            "data": {
+              "diagnosticAuthority": "framework-error-code",
+              "diagnosticDomain": "template",
+              "diagnosticKind": "runtime-binding-behavior-framework-error",
+              "frameworkErrorCode": "AUR0101",
+              "frameworkRawErrorAuthority": null,
+              "missingInput": "runtime-binding-behavior:AUR0101",
+              "missingInputs": [
+                "runtime-binding-behavior:AUR0101"
+              ],
+              "phase": "bind",
+              "relatedInformation": [],
+              "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "register-resource",
+                "actionability": "guided",
+                "changeDomain": "app-source",
+                "planKind": "resource-registration",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
+              },
+              "sourceRole": null,
+              "subject": null,
+              "taxonomy": {
+                "actionability": null,
+                "category": null,
+                "confidence": null,
+                "impact": null,
+                "schema": null
+              }
+            },
+            "file": "src/unregistered-plugin-resources-app.html",
+            "impact": "blocking",
+            "issues": [
+              {
+                "code": "AUR0101",
+                "kind": "runtime-binding-behavior-framework-error",
+                "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope.."
+              }
+            ],
+            "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope..",
+            "related": [],
+            "severity": "error",
+            "source": "semantic-runtime:template",
+            "span": {
+              "end": 343,
+              "start": 338
+            },
+            "spanText": "state",
+            "status": "primary",
+            "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+          },
+          "relation": null,
+          "role": "primary",
+          "rowId": "diagnostic:7:template:runtime-binding-behavior-framework-error:framework-error-code:AUR0101:src/unregistered-plugin-resources-app.html:338:343:runtime-binding-behavior:AUR0101"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -999,11 +1359,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       }
     ],
-    "primaryCount": 8,
-    "rawRowCount": 8
+    "primaryCount": 11,
+    "rawRowCount": 11
   },
   "raw": {
-    "diagnosticCount": 8,
+    "diagnosticCount": 11,
     "diagnostics": [
       {
         "actionability": "guided",
@@ -1180,6 +1540,63 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "actionability": "guided",
         "anomaly": null,
         "category": "template-syntax",
+        "code": "AUR0103",
+        "data": {
+          "diagnosticAuthority": "framework-error-code",
+          "diagnosticDomain": "template",
+          "diagnosticKind": "runtime-value-converter-framework-error",
+          "frameworkErrorCode": "AUR0103",
+          "frameworkRawErrorAuthority": null,
+          "missingInput": "runtime-value-converter:AUR0103",
+          "missingInputs": [
+            "runtime-value-converter:AUR0103"
+          ],
+          "phase": "bind",
+          "relatedInformation": [],
+          "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "register-resource",
+            "actionability": "guided",
+            "changeDomain": "app-source",
+            "planKind": "resource-registration",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
+          },
+          "sourceRole": null,
+          "subject": null,
+          "taxonomy": {
+            "actionability": null,
+            "category": null,
+            "confidence": null,
+            "impact": null,
+            "schema": null
+          }
+        },
+        "file": "src/unregistered-plugin-resources-app.html",
+        "impact": "blocking",
+        "issues": [
+          {
+            "code": "AUR0103",
+            "kind": "runtime-value-converter-framework-error",
+            "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope.."
+          }
+        ],
+        "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope..",
+        "related": [],
+        "severity": "error",
+        "source": "semantic-runtime:template",
+        "span": {
+          "end": 244,
+          "start": 243
+        },
+        "spanText": "t",
+        "status": "canonical",
+        "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+      },
+      {
+        "actionability": "guided",
+        "anomaly": null,
+        "category": "template-syntax",
         "code": "framework-capability-not-registered",
         "data": {
           "diagnosticAuthority": "semantic-authoring-policy",
@@ -1237,6 +1654,63 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "actionability": "guided",
         "anomaly": null,
         "category": "template-syntax",
+        "code": "AUR0101",
+        "data": {
+          "diagnosticAuthority": "framework-error-code",
+          "diagnosticDomain": "template",
+          "diagnosticKind": "runtime-binding-behavior-framework-error",
+          "frameworkErrorCode": "AUR0101",
+          "frameworkRawErrorAuthority": null,
+          "missingInput": "runtime-binding-behavior:AUR0101",
+          "missingInputs": [
+            "runtime-binding-behavior:AUR0101"
+          ],
+          "phase": "bind",
+          "relatedInformation": [],
+          "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "register-resource",
+            "actionability": "guided",
+            "changeDomain": "app-source",
+            "planKind": "resource-registration",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
+          },
+          "sourceRole": null,
+          "subject": null,
+          "taxonomy": {
+            "actionability": null,
+            "category": null,
+            "confidence": null,
+            "impact": null,
+            "schema": null
+          }
+        },
+        "file": "src/unregistered-plugin-resources-app.html",
+        "impact": "blocking",
+        "issues": [
+          {
+            "code": "AUR0101",
+            "kind": "runtime-binding-behavior-framework-error",
+            "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope.."
+          }
+        ],
+        "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope..",
+        "related": [],
+        "severity": "error",
+        "source": "semantic-runtime:template",
+        "span": {
+          "end": 291,
+          "start": 283
+        },
+        "spanText": "validate",
+        "status": "canonical",
+        "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+      },
+      {
+        "actionability": "guided",
+        "anomaly": null,
+        "category": "template-syntax",
         "code": "framework-capability-not-registered",
         "data": {
           "diagnosticAuthority": "semantic-authoring-policy",
@@ -1279,6 +1753,63 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           }
         ],
         "message": "Binding behavior \"state\" uses Aurelia state default resources, but that framework capability is not registered in this app world.",
+        "related": [],
+        "severity": "error",
+        "source": "semantic-runtime:template",
+        "span": {
+          "end": 343,
+          "start": 338
+        },
+        "spanText": "state",
+        "status": "canonical",
+        "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+      },
+      {
+        "actionability": "guided",
+        "anomaly": null,
+        "category": "template-syntax",
+        "code": "AUR0101",
+        "data": {
+          "diagnosticAuthority": "framework-error-code",
+          "diagnosticDomain": "template",
+          "diagnosticKind": "runtime-binding-behavior-framework-error",
+          "frameworkErrorCode": "AUR0101",
+          "frameworkRawErrorAuthority": null,
+          "missingInput": "runtime-binding-behavior:AUR0101",
+          "missingInputs": [
+            "runtime-binding-behavior:AUR0101"
+          ],
+          "phase": "bind",
+          "relatedInformation": [],
+          "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "register-resource",
+            "actionability": "guided",
+            "changeDomain": "app-source",
+            "planKind": "resource-registration",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
+          },
+          "sourceRole": null,
+          "subject": null,
+          "taxonomy": {
+            "actionability": null,
+            "category": null,
+            "confidence": null,
+            "impact": null,
+            "schema": null
+          }
+        },
+        "file": "src/unregistered-plugin-resources-app.html",
+        "impact": "blocking",
+        "issues": [
+          {
+            "code": "AUR0101",
+            "kind": "runtime-binding-behavior-framework-error",
+            "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope.."
+          }
+        ],
+        "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope..",
         "related": [],
         "severity": "error",
         "source": "semantic-runtime:template",
@@ -1469,7 +2000,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   },
   "surfaces": {
     "lsp": {
-      "diagnosticCount": 8,
+      "diagnosticCount": 11,
       "diagnostics": [
         {
           "actionability": "guided",
@@ -1817,6 +2348,63 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "actionability": "guided",
           "anomaly": null,
           "category": "template-syntax",
+          "code": "AUR0103",
+          "data": {
+            "diagnosticAuthority": "framework-error-code",
+            "diagnosticDomain": "template",
+            "diagnosticKind": "runtime-value-converter-framework-error",
+            "frameworkErrorCode": "AUR0103",
+            "frameworkRawErrorAuthority": null,
+            "missingInput": "runtime-value-converter:AUR0103",
+            "missingInputs": [
+              "runtime-value-converter:AUR0103"
+            ],
+            "phase": "bind",
+            "relatedInformation": [],
+            "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "register-resource",
+              "actionability": "guided",
+              "changeDomain": "app-source",
+              "planKind": "resource-registration",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
+            },
+            "sourceRole": null,
+            "subject": null,
+            "taxonomy": {
+              "actionability": null,
+              "category": null,
+              "confidence": null,
+              "impact": null,
+              "schema": null
+            }
+          },
+          "file": "src/unregistered-plugin-resources-app.html",
+          "impact": "blocking",
+          "issues": [
+            {
+              "code": "AUR0103",
+              "kind": "runtime-value-converter-framework-error",
+              "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope.."
+            }
+          ],
+          "message": "Aurelia runtime value converter AUR0103 rejects this binding: Value converter 't' was not resolved through the current compiler resource scope..",
+          "related": [],
+          "severity": "error",
+          "source": "semantic-runtime:template",
+          "span": {
+            "end": 244,
+            "start": 243
+          },
+          "spanText": "t",
+          "status": "primary",
+          "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+        },
+        {
+          "actionability": "guided",
+          "anomaly": null,
+          "category": "template-syntax",
           "code": "framework-capability-not-registered",
           "data": {
             "diagnosticAuthority": "semantic-authoring-policy",
@@ -1859,6 +2447,63 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             }
           ],
           "message": "Binding behavior \"validate\" uses Aurelia validation-html default resources, but that framework capability is not registered in this app world.",
+          "related": [],
+          "severity": "error",
+          "source": "semantic-runtime:template",
+          "span": {
+            "end": 291,
+            "start": 283
+          },
+          "spanText": "validate",
+          "status": "primary",
+          "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+        },
+        {
+          "actionability": "guided",
+          "anomaly": null,
+          "category": "template-syntax",
+          "code": "AUR0101",
+          "data": {
+            "diagnosticAuthority": "framework-error-code",
+            "diagnosticDomain": "template",
+            "diagnosticKind": "runtime-binding-behavior-framework-error",
+            "frameworkErrorCode": "AUR0101",
+            "frameworkRawErrorAuthority": null,
+            "missingInput": "runtime-binding-behavior:AUR0101",
+            "missingInputs": [
+              "runtime-binding-behavior:AUR0101"
+            ],
+            "phase": "bind",
+            "relatedInformation": [],
+            "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "register-resource",
+              "actionability": "guided",
+              "changeDomain": "app-source",
+              "planKind": "resource-registration",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
+            },
+            "sourceRole": null,
+            "subject": null,
+            "taxonomy": {
+              "actionability": null,
+              "category": null,
+              "confidence": null,
+              "impact": null,
+              "schema": null
+            }
+          },
+          "file": "src/unregistered-plugin-resources-app.html",
+          "impact": "blocking",
+          "issues": [
+            {
+              "code": "AUR0101",
+              "kind": "runtime-binding-behavior-framework-error",
+              "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope.."
+            }
+          ],
+          "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'validate' was not resolved through the current compiler resource scope..",
           "related": [],
           "severity": "error",
           "source": "semantic-runtime:template",
@@ -1926,6 +2571,63 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "spanText": "state",
           "status": "primary",
           "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+        },
+        {
+          "actionability": "guided",
+          "anomaly": null,
+          "category": "template-syntax",
+          "code": "AUR0101",
+          "data": {
+            "diagnosticAuthority": "framework-error-code",
+            "diagnosticDomain": "template",
+            "diagnosticKind": "runtime-binding-behavior-framework-error",
+            "frameworkErrorCode": "AUR0101",
+            "frameworkRawErrorAuthority": null,
+            "missingInput": "runtime-binding-behavior:AUR0101",
+            "missingInputs": [
+              "runtime-binding-behavior:AUR0101"
+            ],
+            "phase": "bind",
+            "relatedInformation": [],
+            "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "register-resource",
+              "actionability": "guided",
+              "changeDomain": "app-source",
+              "planKind": "resource-registration",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
+            },
+            "sourceRole": null,
+            "subject": null,
+            "taxonomy": {
+              "actionability": null,
+              "category": null,
+              "confidence": null,
+              "impact": null,
+              "schema": null
+            }
+          },
+          "file": "src/unregistered-plugin-resources-app.html",
+          "impact": "blocking",
+          "issues": [
+            {
+              "code": "AUR0101",
+              "kind": "runtime-binding-behavior-framework-error",
+              "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope.."
+            }
+          ],
+          "message": "Aurelia runtime binding behavior AUR0101 rejects this binding: Binding behavior 'state' was not resolved through the current compiler resource scope..",
+          "related": [],
+          "severity": "error",
+          "source": "semantic-runtime:template",
+          "span": {
+            "end": 343,
+            "start": 338
+          },
+          "spanText": "state",
+          "status": "primary",
+          "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
         }
       ]
     }
@@ -1940,10 +2642,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "comparisonKey": "domain/kind/code/severity/text/message",
   "countsMatch": true,
-  "customLspSurfaceCount": 8,
+  "customLspSurfaceCount": 11,
   "customOnly": [],
   "lspOnly": [],
-  "lspPublishCount": 8,
+  "lspPublishCount": 11,
   "suppressedCount": 0
 }
 ```

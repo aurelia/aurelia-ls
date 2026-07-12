@@ -45,7 +45,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 486,
+            "kind": "source-span-address",
+            "label": "src/main.ts@467..486",
+            "path": "src/main.ts",
+            "role": "primary",
+            "start": 467
+          },
+          "span": null,
+          "subjectKind": "dependency-cycle",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "project",
@@ -115,7 +127,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 486,
+                  "kind": "source-span-address",
+                  "label": "src/main.ts@467..486",
+                  "path": "src/main.ts",
+                  "role": "primary",
+                  "start": 467
+                },
+                "span": null,
+                "subjectKind": "dependency-cycle",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -152,7 +176,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 486,
+            "start": 467
+          },
+          "subjectKind": "dependency-cycle",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/di-cyclic-dependency/src/main.ts"
+        }
       }
     ],
     "primaryCount": 1,
@@ -186,7 +218,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 486,
+              "kind": "source-span-address",
+              "label": "src/main.ts@467..486",
+              "path": "src/main.ts",
+              "role": "primary",
+              "start": 467
+            },
+            "span": null,
+            "subjectKind": "dependency-cycle",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -251,7 +295,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 486,
+                "kind": "source-span-address",
+                "label": "src/main.ts@467..486",
+                "path": "src/main.ts",
+                "role": "primary",
+                "start": 467
+              },
+              "span": null,
+              "subjectKind": "dependency-cycle",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,

@@ -191,6 +191,76 @@
       ]
     },
     {
+      "id": "evaluation-diagnostic-subject-conservation",
+      "fixture": "fixtures/pressure/kernel-api-errors",
+      "aureliaDomain": "runtime-api-boundary",
+      "capability": "diagnostic-fact-conservation",
+      "domainAxis": "diagnostics",
+      "coverageIntent": "boundary-contract",
+      "assertionKind": "query-expectations",
+      "requirement": "App diagnostics preserve the closed evaluation subject vocabulary and exact subject source without copying evaluator-specific payload into the normalized index.",
+      "sourceFile": "src/main.ts",
+      "expectations": [
+        {
+          "name": "owning evaluation issue",
+          "query": { "kind": "evaluation-issues", "options": { "detail": "handles", "page": { "size": 100 } } },
+          "rows": [
+            {
+              "fields": { "issueKind": "event-aggregator-publish-invalid-event-name", "subjectKind": "event-aggregator-publish-call" },
+              "source": { "marker": "events.publish('')", "token": "''" },
+              "count": 1
+            }
+          ]
+        },
+        {
+          "name": "aggregated evaluation diagnostic",
+          "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 100 } } },
+          "rows": [
+            {
+              "fields": { "diagnosticDomain": "evaluation", "diagnosticKind": "event-aggregator-publish-invalid-event-name", "subject.subjectKind": "event-aggregator-publish-call", "subject.subjectName": null },
+              "source": { "marker": "events.publish('')", "token": "''" },
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "di-diagnostic-subject-conservation",
+      "fixture": "fixtures/pressure/di-resolve-contexts",
+      "aureliaDomain": "runtime-api-boundary",
+      "capability": "diagnostic-fact-conservation",
+      "domainAxis": "diagnostics",
+      "coverageIntent": "boundary-contract",
+      "assertionKind": "query-expectations",
+      "requirement": "App diagnostics preserve DI's closed subject kind and compact key identity while retaining the owning query for the full discriminated subject payload.",
+      "sourceFile": "src/resolve-context-app.ts",
+      "expectations": [
+        {
+          "name": "owning DI issue",
+          "query": { "kind": "di-issues", "options": { "detail": "handles", "page": { "size": 100 } } },
+          "rows": [
+            {
+              "fields": { "issueKind": "no-construct-native-function", "subjectKind": "container-api-call", "containerApiCall.methodKind": "invoke", "containerApiCall.keyExpressionText": "Array" },
+              "source": { "marker": "this.container.invoke(Array)", "token": "this.container.invoke(Array)" },
+              "count": 1
+            }
+          ]
+        },
+        {
+          "name": "aggregated DI diagnostic",
+          "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 300 } } },
+          "rows": [
+            {
+              "fields": { "diagnosticDomain": "di", "diagnosticKind": "no-construct-native-function", "subject.subjectKind": "container-api-call", "subject.subjectName": "Array", "relatedQueryKind": "di-issues" },
+              "source": { "marker": "this.container.invoke(Array)", "token": "this.container.invoke(Array)" },
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "unregistered-router-code-action-oldText",
       "fixture": "fixtures/pressure/unregistered-plugin-resources",
       "aureliaDomain": "plugin-capability-admission",
@@ -5826,7 +5896,7 @@
               "name": "app diagnostics",
               "query": { "kind": "app-diagnostics", "sourceFile": "src/main.ts", "options": { "detail": "handles", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "diagnosticDomain": "resource", "frameworkErrorCode": "AUR0153", "relatedQueryKind": "resource-issues" }, "source": { "sourceFile": "src/main.ts", "marker": "DuplicateCardOne,\n    DuplicateCardTwo", "token": "DuplicateCardTwo" }, "count": 1 }
+                { "fields": { "diagnosticDomain": "resource", "frameworkErrorCode": "AUR0153", "subject.subjectKind": "custom-element", "subject.subjectName": "duplicate-card", "relatedQueryKind": "resource-issues" }, "source": { "sourceFile": "src/main.ts", "marker": "DuplicateCardOne,\n    DuplicateCardTwo", "token": "DuplicateCardTwo" }, "count": 1 }
               ]
             }
           ]
@@ -8669,12 +8739,12 @@
           ]
         },
         {
-          "id": "repeat-source-rejection-and-cascade-policy",
+          "id": "repeat-source-rejection-retains-raw-evidence",
           "sourceFile": "src/template-controller-edge-cases-app.html",
           "domainAxis": "diagnostics",
           "expectations": [
             {
-              "name": "unregistered ArrayLike source is rejected at the iterable",
+              "name": "invalid repeat sources retain root and derivative evidence",
               "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
               "rows": [
                 {
@@ -8682,20 +8752,50 @@
                   "source": { "marker": "windowProduct of unregisteredProductWindow", "token": "unregisteredProductWindow" }
                 },
                 {
+                  "fields": { "diagnosticKind": "binding-target-assignment-strictness", "missingInput": "binding-target-assignment:source-to-target-type-mismatch" },
+                  "source": { "marker": "windowProduct of unregisteredProductWindow", "token": "unregisteredProductWindow" }
+                },
+                {
+                  "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS18046" },
+                  "source": { "marker": "${windowProduct.label}", "token": "windowProduct" }
+                },
+                {
+                  "fields": { "diagnosticKind": "weak-expression-member-owner", "selectedMemberName": "label", "missingInput": "expression-member-owner-type:missing-slot-type" },
+                  "source": { "marker": "${windowProduct.label}", "token": "label" }
+                },
+                {
                   "fields": { "diagnosticKind": "runtime-binding-scope-framework-error", "frameworkErrorCode": "AUR0777", "missingInput": "runtime-repeat:AUR0777" },
                   "source": { "marker": "unsupportedProduct of unsupportedRepeatSource", "token": "unsupportedRepeatSource" }
                 },
                 {
-                  "fields": { "selectedMemberName": "label" },
-                  "source": { "marker": "${windowProduct.label}", "token": "label" },
-                  "absent": true
+                  "fields": { "diagnosticKind": "binding-target-assignment-strictness", "missingInput": "binding-target-assignment:source-to-target-type-mismatch" },
+                  "source": { "marker": "unsupportedProduct of unsupportedRepeatSource", "token": "unsupportedRepeatSource" }
                 },
                 {
-                  "fields": { "selectedMemberName": "label" },
-                  "source": { "marker": "${unsupportedProduct.label}", "token": "label" },
-                  "absent": true
+                  "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS18046" },
+                  "source": { "marker": "${unsupportedProduct.label}", "token": "unsupportedProduct" }
+                },
+                {
+                  "fields": { "diagnosticKind": "weak-expression-member-owner", "selectedMemberName": "label", "missingInput": "expression-member-owner-type:missing-slot-type" },
+                  "source": { "marker": "${unsupportedProduct.label}", "token": "label" }
                 }
               ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-source-rejection-presentation-cascade-policy",
+          "sourceFile": "src/template-controller-edge-cases-app.html",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "invalid repeat source consequences are contextual presentation evidence",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "equals": {
+                "value.presentation.rawRowCount": 17,
+                "value.presentation.primaryCount": 11,
+                "value.presentation.contextualCount": 6
+              }
             }
           ]
         },

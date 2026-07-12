@@ -22,6 +22,21 @@ import {
   diagnosticRepairAffordanceForSuggestion,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
+import type {
+  DiagnosticActionability,
+  DiagnosticCategory,
+  DiagnosticImpact,
+  DiagnosticSeverity,
+  DiagnosticStatus,
+  DiagnosticsSnapshotBundle,
+  DiagnosticsSnapshotItem,
+  DiagnosticsSnapshotPresentation,
+  DiagnosticsSnapshotPresentationGroup,
+  DiagnosticsSnapshotPresentationItem,
+  DiagnosticsSnapshotRelated,
+  DiagnosticsSnapshotResponse,
+  SourceSpan,
+} from "../protocol.js";
 import { canonicalDocumentUri } from "../utils/document-uri.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
 import { mapSemanticRuntimeTemplateRenameEdit, semanticRuntimeDiagnosticCode } from "../mapping/lsp-types.js";
@@ -31,100 +46,9 @@ import {
 } from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 
-type DiagnosticSeverity = "error" | "warning" | "info" | "hint";
-type DiagnosticImpact = "blocking" | "degraded" | "informational";
-type DiagnosticActionability = "guided" | "manual" | "none";
-type DiagnosticCategory =
-  | "expression"
-  | "template-syntax"
-  | "resource-resolution"
-  | "bindable-validation"
-  | "project";
-type DiagnosticStatus = "canonical" | "primary" | "contextual" | "suppressed" | "experimental";
-type DiagnosticStage = string;
-type DiagnosticSurface = "lsp" | "vscode-panel" | "ci" | string;
 type ResourceOrigin = "builtin" | "source" | "external" | string;
-type SourceSpan = { start: number; end: number };
 
 type MaybeUriParam = { uri?: string } | string | null;
-
-type DiagnosticsSnapshotRelated = {
-  code?: string;
-  message: string;
-  uri?: string;
-  span?: SourceSpan;
-  sourceRole?: string;
-};
-
-type DiagnosticsSnapshotIssue = {
-  kind: string;
-  message: string;
-  code?: string;
-  rawCode?: string;
-  field?: string;
-};
-
-type DiagnosticsSnapshotItem = {
-  code: string;
-  message: string;
-  severity?: DiagnosticSeverity;
-  impact?: DiagnosticImpact;
-  actionability?: DiagnosticActionability;
-  category?: DiagnosticCategory;
-  status?: DiagnosticStatus;
-  stage?: DiagnosticStage;
-  source?: string;
-  uri?: string;
-  span?: SourceSpan;
-  data?: Readonly<Record<string, unknown>>;
-  related?: readonly DiagnosticsSnapshotRelated[];
-  surfaces?: readonly DiagnosticSurface[];
-  suppressed?: boolean;
-  suppressionReason?: string;
-  issues?: readonly DiagnosticsSnapshotIssue[];
-};
-
-type DiagnosticsSnapshotBundle = {
-  bySurface: Record<string, readonly DiagnosticsSnapshotItem[]>;
-  raw: readonly DiagnosticsSnapshotItem[];
-  presentation?: DiagnosticsSnapshotPresentation;
-  suppressed: readonly DiagnosticsSnapshotItem[];
-};
-
-type DiagnosticsSnapshotPresentation = {
-  rawRowCount: number;
-  primaryCount: number;
-  contextualCount: number;
-  complete: boolean;
-  groups: readonly DiagnosticsSnapshotPresentationGroup[];
-};
-
-type DiagnosticsSnapshotPresentationGroup = {
-  groupKey: string;
-  subject?: {
-    subjectKind: string;
-    uri?: string;
-    span?: SourceSpan;
-  };
-  primary: DiagnosticsSnapshotPresentationItem;
-  related: readonly DiagnosticsSnapshotPresentationItem[];
-  rawRowCount: number;
-  primarySeverity: DiagnosticSeverity;
-  maxRawSeverity: DiagnosticSeverity;
-};
-
-type DiagnosticsSnapshotPresentationItem = {
-  rowId: string;
-  role: "primary" | "contextual";
-  relation?: string;
-  diagnostic: DiagnosticsSnapshotItem | null;
-};
-
-type DiagnosticsSnapshotResponse = {
-  uri: string;
-  fingerprint: string;
-  diagnostics: DiagnosticsSnapshotBundle;
-};
 
 function uriFromParam(params: MaybeUriParam): string | undefined {
   if (typeof params === "string") return params;
@@ -155,7 +79,6 @@ function serializeRuntimeDiagnosticsSnapshot(
     },
     raw,
     ...(presentation == null ? {} : { presentation: runtimeDiagnosticsPresentation(workspaceRoot, rows, presentation) }),
-    suppressed: [],
   };
 }
 
@@ -186,13 +109,13 @@ function toRuntimeSnapshotItem(
       diagnosticAuthority: row.diagnosticAuthority,
       frameworkErrorCode: row.frameworkErrorCode,
       relatedQueryKind: row.relatedQueryKind,
-      missingInput: row.missingInput ?? null,
-      missingInputs: row.missingInputs ?? [],
-      subject: row.subject ?? null,
-      suggestion: row.suggestion ?? null,
+      missingInput: row.missingInput,
+      missingInputs: row.missingInputs,
+      subject: row.subject,
+      suggestion: row.suggestion,
       repairAffordance: diagnosticRepairAffordanceForSuggestion(row.suggestion),
     },
-    related: runtimeDiagnosticRelatedInformation(workspaceRoot, row.relatedInformation ?? []),
+    related: runtimeDiagnosticRelatedInformation(workspaceRoot, row.relatedInformation),
     surfaces: ["lsp", "vscode-panel"],
     issues: [
       {
@@ -218,6 +141,7 @@ function runtimeDiagnosticRelatedInformation(
       ...(file == null ? {} : { uri: pathToFileURL(file).toString() }),
       ...(span == null ? {} : { span }),
       ...(related.sourceRole == null ? {} : { sourceRole: related.sourceRole }),
+      ...(related.relationKind == null ? {} : { relationKind: related.relationKind }),
     };
   });
 }
@@ -277,6 +201,7 @@ function runtimeDiagnosticSubject(
   const file = filePathForSource(workspaceRoot, subject.source);
   return {
     subjectKind: subject.subjectKind,
+    subjectName: subject.subjectName,
     ...(file == null ? {} : { uri: pathToFileURL(file).toString() }),
     ...(subject.source?.start == null || subject.source.end == null
       ? {}

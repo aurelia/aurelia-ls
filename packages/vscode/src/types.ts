@@ -1,16 +1,40 @@
-export type DiagnosticActionability = "guided" | "manual" | "none";
-export type DiagnosticCategory =
-  | "expression"
-  | "template-syntax"
-  | "resource-resolution"
-  | "bindable-validation"
-  | "project";
-export type DiagnosticImpact = "blocking" | "degraded" | "informational";
-export type DiagnosticStage = string;
-export type DiagnosticStatus = "canonical" | "suppressed" | "experimental";
-export type DiagnosticSurface = "lsp" | "vscode-panel" | "ci" | string;
-export type DiagnosticSeverity = "error" | "warning" | "info" | "hint";
-export type SourceSpan = { start: number; end: number };
+import type {
+  DiagnosticActionability,
+  DiagnosticCategory,
+  DiagnosticImpact,
+  DiagnosticPresentationRelation,
+  DiagnosticRelatedRelation,
+  DiagnosticSeverity,
+  DiagnosticSourceRole,
+  DiagnosticStage,
+  DiagnosticStatus,
+  DiagnosticSurface,
+  DiagnosticsSnapshotBundle,
+  DiagnosticsSnapshotIssue,
+  DiagnosticsSnapshotItem,
+  DiagnosticsSnapshotRelated,
+  DiagnosticsSnapshotResponse,
+  SourceSpan,
+} from "@aurelia-ls/language-server/protocol";
+
+export type {
+  DiagnosticActionability,
+  DiagnosticCategory,
+  DiagnosticImpact,
+  DiagnosticPresentationRelation,
+  DiagnosticRelatedRelation,
+  DiagnosticSeverity,
+  DiagnosticSourceRole,
+  DiagnosticStage,
+  DiagnosticStatus,
+  DiagnosticSurface,
+  DiagnosticsSnapshotBundle,
+  DiagnosticsSnapshotIssue,
+  DiagnosticsSnapshotItem,
+  DiagnosticsSnapshotRelated,
+  DiagnosticsSnapshotResponse,
+  SourceSpan,
+};
 
 export type AnalysisReadyPayload = {
   uri?: string;
@@ -45,51 +69,6 @@ export type ProtocolTextDocumentEdit = {
 export type ProtocolWorkspaceEdit = {
   changes?: Record<string, ProtocolTextEdit[]>;
   documentChanges?: ProtocolTextDocumentEdit[];
-};
-
-export type DiagnosticsSnapshotIssue = {
-  kind: string;
-  message: string;
-  code?: string;
-  rawCode?: string;
-  field?: string;
-};
-
-export type DiagnosticsSnapshotRelated = {
-  code?: string;
-  message: string;
-  span?: DiagnosticsSpan;
-};
-
-export type DiagnosticsSnapshotItem = {
-  code: string;
-  message: string;
-  severity?: DiagnosticSeverity;
-  impact?: DiagnosticImpact;
-  actionability?: DiagnosticActionability;
-  category?: DiagnosticCategory;
-  status?: DiagnosticStatus;
-  stage?: DiagnosticStage;
-  source?: string;
-  uri?: string;
-  span?: DiagnosticsSpan;
-  data?: Readonly<Record<string, unknown>>;
-  related?: readonly DiagnosticsSnapshotRelated[];
-  surfaces?: readonly DiagnosticSurface[];
-  suppressed?: boolean;
-  suppressionReason?: string;
-  issues?: readonly DiagnosticsSnapshotIssue[];
-};
-
-export type DiagnosticsSnapshotBundle = {
-  bySurface: Record<string, readonly DiagnosticsSnapshotItem[]>;
-  suppressed: readonly DiagnosticsSnapshotItem[];
-};
-
-export type DiagnosticsSnapshotResponse = {
-  uri?: string;
-  fingerprint?: string;
-  diagnostics: DiagnosticsSnapshotBundle;
 };
 
 export interface ResourceExplorerBindable {

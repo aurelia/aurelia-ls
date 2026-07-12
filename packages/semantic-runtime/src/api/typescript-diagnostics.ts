@@ -155,7 +155,7 @@ interface MutableTypeScriptDiagnosticSummary {
   readonly phase: SemanticTypeScriptDiagnosticSummaryRow['phase'];
   readonly category: SemanticTypeScriptDiagnosticSummaryRow['category'];
   readonly code: number;
-  readonly diagnosticKind: string;
+  readonly diagnosticKind: SemanticTypeScriptDiagnosticSummaryRow['diagnosticKind'];
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly typescriptSource: string | null;
   count: number;

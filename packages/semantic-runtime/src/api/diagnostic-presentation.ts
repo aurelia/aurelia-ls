@@ -70,7 +70,7 @@ export function appDiagnosticPresentation(
     }
     const group = presentationGroup(
       groupKey,
-      unknownOwner.row.subject ?? null,
+      unknownOwner.row.subject,
       unknownOwner,
       related,
       'semantic-explanation',
@@ -97,7 +97,7 @@ export function appDiagnosticPresentation(
       }
       const group = presentationGroup(
         `missing-member-assignment:${groupKey}`,
-        missingMember.row.subject ?? null,
+        missingMember.row.subject,
         missingMember,
         related,
         'same-subject',
@@ -132,7 +132,7 @@ export function appDiagnosticPresentation(
       if (existingGroupIndex < 0) {
         groups.push(presentationGroup(
           `checker-agreement:${relationship}:${groupKey}:${semanticRow.rowId}`,
-          semanticRow.row.subject ?? null,
+          semanticRow.row.subject,
           semanticRow,
           checkerEvidence,
           'checker-evidence',
@@ -157,7 +157,7 @@ export function appDiagnosticPresentation(
     }
     groups.push(presentationGroup(
       `row:${row.rowId}`,
-      row.row.subject ?? null,
+      row.row.subject,
       row,
       [],
       null,
@@ -285,7 +285,7 @@ function isTemplateUnknownOwnerOverlayDiagnostic(
   return row.diagnosticDomain === 'template'
     && row.diagnosticAuthority === 'typescript'
     && row.diagnosticKind === 'template-expression-typescript-diagnostic'
-    && (row.missingInputs ?? []).includes('typescript:TS18046');
+    && row.missingInputs.includes('typescript:TS18046');
 }
 
 function isTemplateWeakNoMembersDiagnostic(
@@ -294,7 +294,7 @@ function isTemplateWeakNoMembersDiagnostic(
   return row.diagnosticDomain === 'template'
     && row.diagnosticAuthority === 'semantic-authoring-policy'
     && row.diagnosticKind === 'weak-expression-member-owner'
-    && (row.missingInputs ?? []).includes('expression-member-owner-type:no-members');
+    && row.missingInputs.includes('expression-member-owner-type:no-members');
 }
 
 function isTemplateMissingMemberDiagnostic(
@@ -303,7 +303,7 @@ function isTemplateMissingMemberDiagnostic(
   return row.diagnosticDomain === 'template'
     && row.diagnosticAuthority === 'semantic-authoring-policy'
     && row.diagnosticKind === 'missing-expression-member'
-    && (row.missingInputs ?? []).includes('expression-member:selected-member-missing');
+    && row.missingInputs.includes('expression-member:selected-member-missing');
 }
 
 function isTemplateMissingMemberAssignmentDiagnostic(
@@ -362,8 +362,7 @@ function hasAnyMissingInput(
   row: SemanticAppDiagnosticRow,
   values: readonly string[],
 ): boolean {
-  const missingInputs = row.missingInputs ?? [];
-  return values.some((value) => missingInputs.includes(value));
+  return values.some((value) => row.missingInputs.includes(value));
 }
 
 function subjectGroupKey(
@@ -395,7 +394,7 @@ function diagnosticRowId(
     row.source?.path ?? 'no-source',
     row.source?.start ?? 'no-start',
     row.source?.end ?? 'no-end',
-    (row.missingInputs ?? []).join('+') || row.missingInput || 'no-missing-input',
+    row.missingInputs.join('+') || row.missingInput || 'no-missing-input',
   ].join(':');
 }
 

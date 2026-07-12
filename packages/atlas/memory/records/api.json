@@ -364,12 +364,16 @@
         "A source-file TemplateDiagnostics request must use an app world that actually contains the requested template. Reusing the default app and then filtering its rows by the requested orphan/local template produces an honest empty LSP result from the wrong semantic basis; admit an authoring template or select an existing world that owns that source before materializing rows.",
         "Router issue products remain owned by the router lanes even when projected into template diagnostics for file/cursor loci: AppDiagnostics filters router-framework-error template copies and reads owning router/route-recognizer rows directly. Preserve repair facts on that owning RouterIssues row as well as code/domain/source. The shared router diagnostic policy emits fix-router-instruction guidance only for source-role-proven template instruction failures; TypeScript route-config, redirect, and recognizer issues must not inherit template-expression repair by product proximity.",
         "Treat AppDiagnostics as a normalized index rather than a copied union. Preserve common owning facts (phase, raw authority, missing inputs, structured subject identity/source, related information, repair suggestion, and source role) with explicit null/empty values; phase is a closed union of owning domain phase ontologies and must be interpreted with diagnosticDomain, not widened to string. At detail=handles preserve available product/identity/owner/source routes, while compact rows omit the handle carrier. Keep domain-specific payload in the owning query.",
+        "Keep AppDiagnostics diagnosticKind and subjectKind closed. Domain-owned issue enums remain the source vocabulary, resource subjects use author-facing resource taxonomy, template/observation subjects use the normalized shared vocabulary, and TypeScript is the one patterned extension through TS${number}; adapters must not widen these fields back to string.",
+        "Evaluation, DI, and resource issue projection must conserve compact subject identity and exact issue source through AppDiagnostics. Resource subjects use the issue locus, with the definition carrier only as a no-source fallback; keep the owning query and owner identity route as the drill-down rather than broadening the normalized subject back to the whole definition.",
         "Preserve raw diagnostic rows as the authoritative evidence table. Human/editor calm belongs in additive AppDiagnostics presentation groups with primary/contextual row ids, not in producer-time row deletion or adapter-local suppression.",
+        "Do not infer diagnostic cascades from span geometry. If one issue causes downstream scope, checker, or member diagnostics, retain every grounded raw row and add an explicit product-level causal relation before presentation demotes consequences to contextual evidence.",
         "Template diagnostics that describe different tokens of the same semantic operation should preserve a shared diagnostic subject. For member-access canaries, overlay TypeScript rows and semantic weak-owner rows share `SemanticDiagnosticSubject(subjectKind=template-member-access)` over the authored member-access span while each row source remains the exact squiggle token.",
         "LSP diagnostics are a presentation boundary over AppDiagnostics, not a paged row-table consumer. The LSP session should exhaust AppDiagnostics pages for the current document and publish a complete replacement diagnostic array for that URI; MCP and public app queries keep bounded row paging.",
         "Do not drop TypeScript diagnostic relatedInformation at AppDiagnostics aggregation. Preserve related source/message/code/sourceRole rows so LSP and custom diagnostics can emit same-file or cross-file related locations from real provenance.",
         "When an owning diagnostic lane has typed relationships between the primary issue and related sources, preserve a relationKind separately from any related diagnostic code. Observation issues use subject-declaration and hidden-state-read relations so API, AppDiagnostics, and LSP data do not recover meaning from array position or overload a code field.",
         "LSP diagnostic data should carry the normalized SemanticAppDiagnosticRow intact plus adapter-owned presentation metadata. Maintaining a second hand-copied runtime payload silently loses new provenance, related-information, and handle fields.",
+        "The custom diagnostics wire contract is owned by @aurelia-ls/language-server/protocol and imported by the bundled VS Code client. Do not maintain a smaller client-side copy: raw rows, presentation groups, subject names, related source roles and relation kinds, status, and closed phase/kind vocabulary must evolve together. Do not reintroduce the deleted suppression side table; calm presentation is additive over retained raw rows.",
         "Keep ordinary TypeScript diagnostics TypeSystemProject-owned. Do not shell out to tsc from MCP or rebuild a local TypeScript Program in API code; use the shared Program/tsconfig epoch, including config root filenames and config diagnostics, and expose rows through typescript-diagnostics / typescript-diagnostic-summary plus the unified app diagnostic surfaces.",
         "When aggregating diagnostics, collect unpaged rows from each owning diagnostic family before applying the app-level page. Child-query paging before aggregation creates misleading pressure counts.",
         "Weak-owner template diagnostic suggestions should keep action targets source-bearing. For source-independent owner shapes such as any, prefer the value-producing type annotation or return type source route when one exists; if no navigable owner route exists, target the expression source rather than emitting owner-type:no-source.",
@@ -786,7 +790,7 @@
       "anchors": [
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/api/runtime-resource-ownership.ts",
+          "filePath": "packages/semantic-runtime/src/template/runtime-resource-ownership.ts",
           "summary": "Resource-local row selection helpers for runtime binding-family API projections."
         },
         {
@@ -814,11 +818,11 @@
       "liveChecks": [
         {
           "kind": "source-file-exists",
-          "filePath": "packages/semantic-runtime/src/api/runtime-resource-ownership.ts"
+          "filePath": "packages/semantic-runtime/src/template/runtime-resource-ownership.ts"
         },
         {
           "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/api/runtime-resource-ownership.ts",
+          "filePath": "packages/semantic-runtime/src/template/runtime-resource-ownership.ts",
           "symbolName": "resourceLocalBindingDataFlows"
         },
         {

@@ -529,7 +529,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 397,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@372..397",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "value",
+            "start": 372
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -577,7 +589,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 453,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@430..453",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "value",
+            "start": 430
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -625,7 +649,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 841,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@756..841",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "value",
+            "start": 756
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -673,7 +709,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 937,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@847..937",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "value",
+            "start": 847
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -721,7 +769,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 1066,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@1054..1066",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "name",
+            "start": 1054
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -769,7 +829,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 1125,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@1112..1125",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "name",
+            "start": 1112
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -817,7 +889,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 1288,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@1275..1288",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "value",
+            "start": 1275
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -915,7 +999,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 1495,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@1487..1495",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "value",
+            "start": 1487
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -963,7 +1059,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 1594,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@1559..1594",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "value",
+            "start": 1559
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -1011,7 +1119,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 1748,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@1746..1748",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "value",
+            "start": 1746
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -1059,7 +1179,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 1908,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@1904..1908",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "value",
+            "start": 1904
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -1107,7 +1239,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 2286,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@2232..2286",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "name",
+            "start": 2232
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -1155,7 +1299,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 2334,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@2313..2334",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "value",
+            "start": 2313
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -1203,7 +1359,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 2675,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@2661..2675",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "name",
+            "start": 2661
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -1251,7 +1419,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 2836,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@2831..2836",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "value",
+            "start": 2831
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -1299,7 +1479,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "not-applicable"
         },
         "sourceRole": "app-source",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 3055,
+            "kind": "source-span-address",
+            "label": "src/resource-metadata-errors-app.ts@3045..3055",
+            "path": "src/resource-metadata-errors-app.ts",
+            "role": "name",
+            "start": 3045
+          },
+          "span": null,
+          "subjectKind": "custom-element",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "manual",
           "category": "resource-resolution",
@@ -2053,7 +2245,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 397,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@372..397",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "value",
+                  "start": 372
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -2090,7 +2294,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 397,
+            "start": 372
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:24:resource:watch-invalid-change-handler:framework-error-code:AUR0773:src/resource-metadata-errors-app.ts:430:453:no-missing-input",
@@ -2121,7 +2333,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 453,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@430..453",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "value",
+                  "start": 430
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -2158,7 +2382,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 453,
+            "start": 430
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:25:resource:controller-watch-invalid-callback:framework-error-code:AUR0506:src/resource-metadata-errors-app.ts:756:841:no-missing-input",
@@ -2189,7 +2421,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 841,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@756..841",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "value",
+                  "start": 756
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -2226,7 +2470,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 841,
+            "start": 756
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:26:resource:controller-watch-invalid-callback:framework-error-code:AUR0506:src/resource-metadata-errors-app.ts:847:937:no-missing-input",
@@ -2257,7 +2509,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 937,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@847..937",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "value",
+                  "start": 847
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -2294,7 +2558,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 937,
+            "start": 847
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:8:resource:watch-non-method-decorator-usage:framework-error-code:AUR0774:src/resource-metadata-errors-app.ts:1054:1066:no-missing-input",
@@ -2325,7 +2597,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 1066,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@1054..1066",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "name",
+                  "start": 1054
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -2362,7 +2646,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 1066,
+            "start": 1054
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:9:resource:watch-non-method-decorator-usage:framework-error-code:AUR0774:src/resource-metadata-errors-app.ts:1112:1125:no-missing-input",
@@ -2393,7 +2685,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 1125,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@1112..1125",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "name",
+                  "start": 1112
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -2430,7 +2734,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 1125,
+            "start": 1112
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:10:resource:controller-no-shadow-on-containerless:framework-error-code:AUR0501:src/resource-metadata-errors-app.ts:1275:1288:no-missing-input",
@@ -2461,7 +2773,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 1288,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@1275..1288",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "value",
+                  "start": 1275
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -2498,7 +2822,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 1288,
+            "start": 1275
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:11:template:template-compiler-error:framework-error-code:AUR0717:src/resource-metadata-errors-app.ts:1435:1448:template-compiler:AUR0717",
@@ -2599,7 +2931,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 1495,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@1487..1495",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "value",
+                  "start": 1487
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -2636,7 +2980,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 1495,
+            "start": 1487
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:13:resource:invalid-bindable-decorator-usage-class-without-configuration:framework-error-code:AUR0228:src/resource-metadata-errors-app.ts:1559:1594:no-missing-input",
@@ -2667,7 +3019,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 1594,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@1559..1594",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "value",
+                  "start": 1559
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -2704,7 +3068,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 1594,
+            "start": 1559
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:14:resource:invalid-bindable-decorator-usage-class-without-property-name-configuration:framework-error-code:AUR0229:src/resource-metadata-errors-app.ts:1746:1748:no-missing-input",
@@ -2735,7 +3107,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 1748,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@1746..1748",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "value",
+                  "start": 1746
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -2772,7 +3156,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 1748,
+            "start": 1746
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:15:resource:invalid-bindable-decorator-usage-symbol:framework-error-code:AUR0227:src/resource-metadata-errors-app.ts:1904:1908:no-missing-input",
@@ -2803,7 +3195,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 1908,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@1904..1908",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "value",
+                  "start": 1904
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -2840,7 +3244,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 1908,
+            "start": 1904
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:16:resource:invalid-bindable-decorator-usage-symbol:framework-error-code:AUR0227:src/resource-metadata-errors-app.ts:2232:2286:no-missing-input",
@@ -2871,7 +3283,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 2286,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@2232..2286",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "name",
+                  "start": 2232
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -2908,7 +3332,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 2286,
+            "start": 2232
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:19:resource:invalid-process-content-hook:framework-error-code:AUR0766:src/resource-metadata-errors-app.ts:2313:2334:no-missing-input",
@@ -2939,7 +3371,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 2334,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@2313..2334",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "value",
+                  "start": 2313
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -2976,7 +3420,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 2334,
+            "start": 2313
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:20:resource:invalid-process-content-hook:framework-error-code:AUR0766:src/resource-metadata-errors-app.ts:2661:2675:no-missing-input",
@@ -3007,7 +3459,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 2675,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@2661..2675",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "name",
+                  "start": 2661
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -3044,7 +3508,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 2675,
+            "start": 2661
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:21:resource:children-invalid-query:framework-error-code:AUR9989:src/resource-metadata-errors-app.ts:2831:2836:no-missing-input",
@@ -3075,7 +3547,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 2836,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@2831..2836",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "value",
+                  "start": 2831
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -3112,7 +3596,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 2836,
+            "start": 2831
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       },
       {
         "groupKey": "row:diagnostic:22:resource:slotted-decorator-invalid-usage:framework-error-code:AUR9990:src/resource-metadata-errors-app.ts:3045:3055:no-missing-input",
@@ -3143,7 +3635,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "not-applicable"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 3055,
+                  "kind": "source-span-address",
+                  "label": "src/resource-metadata-errors-app.ts@3045..3055",
+                  "path": "src/resource-metadata-errors-app.ts",
+                  "role": "name",
+                  "start": 3045
+                },
+                "span": null,
+                "subjectKind": "custom-element",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -3180,7 +3684,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 3055,
+            "start": 3045
+          },
+          "subjectKind": "custom-element",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/resource-metadata-errors/src/resource-metadata-errors-app.ts"
+        }
       }
     ],
     "primaryCount": 27,
@@ -3654,7 +4166,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 1066,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@1054..1066",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "name",
+              "start": 1054
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -3709,7 +4233,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 1125,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@1112..1125",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "name",
+              "start": 1112
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -3764,7 +4300,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 1288,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@1275..1288",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "value",
+              "start": 1275
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -3876,7 +4424,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 1495,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@1487..1495",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "value",
+              "start": 1487
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -3931,7 +4491,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 1594,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@1559..1594",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "value",
+              "start": 1559
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -3986,7 +4558,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 1748,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@1746..1748",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "value",
+              "start": 1746
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -4041,7 +4625,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 1908,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@1904..1908",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "value",
+              "start": 1904
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -4096,7 +4692,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 2286,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@2232..2286",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "name",
+              "start": 2232
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -4265,7 +4873,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 2334,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@2313..2334",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "value",
+              "start": 2313
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -4320,7 +4940,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 2675,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@2661..2675",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "name",
+              "start": 2661
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -4375,7 +5007,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 2836,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@2831..2836",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "value",
+              "start": 2831
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -4430,7 +5074,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 3055,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@3045..3055",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "name",
+              "start": 3045
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -4485,7 +5141,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 397,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@372..397",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "value",
+              "start": 372
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -4540,7 +5208,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 453,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@430..453",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "value",
+              "start": 430
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -4595,7 +5275,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 841,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@756..841",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "value",
+              "start": 756
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -4650,7 +5342,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "not-applicable"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 937,
+              "kind": "source-span-address",
+              "label": "src/resource-metadata-errors-app.ts@847..937",
+              "path": "src/resource-metadata-errors-app.ts",
+              "role": "value",
+              "start": 847
+            },
+            "span": null,
+            "subjectKind": "custom-element",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -5269,7 +5973,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 397,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@372..397",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "start": 372
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -5324,7 +6040,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 453,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@430..453",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "start": 430
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -5379,7 +6107,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 841,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@756..841",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "start": 756
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -5434,7 +6174,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 937,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@847..937",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "start": 847
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -5489,7 +6241,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 1066,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1054..1066",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "name",
+                "start": 1054
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -5544,7 +6308,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 1125,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1112..1125",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "name",
+                "start": 1112
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -5599,7 +6375,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 1288,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1275..1288",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "start": 1275
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -5711,7 +6499,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 1495,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1487..1495",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "start": 1487
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -5766,7 +6566,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 1594,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1559..1594",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "start": 1559
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -5821,7 +6633,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 1748,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1746..1748",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "start": 1746
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -5876,7 +6700,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 1908,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@1904..1908",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "start": 1904
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -5931,7 +6767,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 2286,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@2232..2286",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "name",
+                "start": 2232
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -5986,7 +6834,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 2334,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@2313..2334",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "start": 2313
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -6041,7 +6901,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 2675,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@2661..2675",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "name",
+                "start": 2661
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -6096,7 +6968,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 2836,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@2831..2836",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "value",
+                "start": 2831
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -6151,7 +7035,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "not-applicable"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 3055,
+                "kind": "source-span-address",
+                "label": "src/resource-metadata-errors-app.ts@3045..3055",
+                "path": "src/resource-metadata-errors-app.ts",
+                "role": "name",
+                "start": 3045
+              },
+              "span": null,
+              "subjectKind": "custom-element",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,

@@ -3,6 +3,7 @@ import {
 } from '../kernel/source-address.js';
 import { SourceFileRole } from '../kernel/address.js';
 import type { SourceFileAdmission } from '../boot/frames.js';
+import { DiIssueSubjectKind } from '../di/di-issue.js';
 import type {
   SemanticAppDiagnosticPhase,
   SemanticAppDiagnosticRow,
@@ -157,7 +158,7 @@ export function appDiagnosticSummaryRows(
 
 interface DiagnosticSummaryCluster {
   readonly diagnosticDomain: SemanticAppDiagnosticRow['diagnosticDomain'];
-  readonly diagnosticKind: string;
+  readonly diagnosticKind: SemanticAppDiagnosticRow['diagnosticKind'];
   readonly diagnosticAuthority: SemanticAppDiagnosticRow['diagnosticAuthority'];
   readonly frameworkErrorCode: string | null;
   readonly severity: SemanticAppDiagnosticRow['severity'];
@@ -266,7 +267,7 @@ type AppDiagnosticHandles = NonNullable<SemanticAppDiagnosticRow['handles']>;
 interface OwnedIssueDiagnosticRow {
   readonly projectKey: string;
   readonly phase: SemanticAppDiagnosticPhase;
-  readonly issueKind: string;
+  readonly issueKind: SemanticAppDiagnosticRow['diagnosticKind'];
   readonly diagnosticAuthority: SemanticAppDiagnosticRow['diagnosticAuthority'];
   readonly frameworkErrorCode: string | null;
   readonly severity: SemanticAppDiagnosticRow['severity'];
@@ -352,6 +353,11 @@ function evaluationAppDiagnosticRow(
 ): SemanticAppDiagnosticRow {
   return ownedIssueAppDiagnosticRow(row, 'evaluation', 'evaluation-issues', {
     frameworkRawErrorAuthority: row.frameworkRawErrorAuthority,
+    subject: {
+      subjectKind: row.subjectKind,
+      subjectName: null,
+      source: row.source,
+    },
   });
 }
 
@@ -364,7 +370,35 @@ function configurationAppDiagnosticRow(
 function diAppDiagnosticRow(
   row: SemanticDiIssueRow,
 ): SemanticAppDiagnosticRow {
-  return ownedIssueAppDiagnosticRow(row, 'di', 'di-issues');
+  return ownedIssueAppDiagnosticRow(row, 'di', 'di-issues', {
+    subject: {
+      subjectKind: row.subjectKind,
+      subjectName: diDiagnosticSubjectName(row),
+      source: row.source,
+    },
+  });
+}
+
+function diDiagnosticSubjectName(
+  row: SemanticDiIssueRow,
+): string | null {
+  switch (row.subjectKind) {
+    case DiIssueSubjectKind.ResourceSlot:
+      return row.resourceKey;
+    case DiIssueSubjectKind.ResolveCall:
+      return row.resolveCall?.keyExpressionText ?? null;
+    case DiIssueSubjectKind.InjectDecorator:
+      return row.injectDecorator?.targetName ?? null;
+    case DiIssueSubjectKind.ContainerApiCall:
+      return row.containerApiCall?.wrappedKeyName
+        ?? row.containerApiCall?.keyExpressionText
+        ?? null;
+    case DiIssueSubjectKind.DependencyCycle:
+      return row.dependencyCycle?.entryKeyName ?? null;
+    case DiIssueSubjectKind.RegistrationCascade:
+      return null;
+  }
+  return null;
 }
 
 function observationAppDiagnosticRow(
@@ -429,6 +463,13 @@ function resourceAppDiagnosticRow(
   row: SemanticResourceIssueRow,
 ): SemanticAppDiagnosticRow {
   return ownedIssueAppDiagnosticRow(row, 'resource', 'resource-issues', {
+    subject: row.resource.resourceKind == null
+      ? null
+      : {
+        subjectKind: row.resource.resourceKind,
+        subjectName: row.resource.name ?? row.resource.key,
+        source: row.source ?? row.resource.source,
+      },
     relatedInformation: row.relatedInformation,
     ownerIdentityHandle: row.handles?.ownerDefinitionIdentityHandle ?? null,
     relatedSourceAddressHandles: row.handles?.relatedSourceAddressHandles ?? [],
