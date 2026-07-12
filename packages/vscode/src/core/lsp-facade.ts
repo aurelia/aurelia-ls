@@ -1,4 +1,5 @@
 import type { LanguageClient } from "vscode-languageclient/node";
+import type { CancellationToken } from "vscode";
 import type { ClientLogger } from "../log.js";
 import type { DebugChannel, ObservabilityService, TraceService } from "./observability.js";
 import type {
@@ -39,14 +40,14 @@ export class LspFacade {
     this.#client.onNotification(method, handler);
   }
 
-  sendRequest<T>(method: string, params?: unknown): Promise<T> {
+  sendRequest<T>(method: string, params?: unknown, token?: CancellationToken): Promise<T> {
     return this.#trace.spanAsync(`lsp.${method}`, async () => {
       this.#debug("request", { method });
       this.#logger.info(`[lsp] → ${method}`);
       this.#trace.setAttribute("lsp.method", method);
       this.#trace.setAttribute("lsp.hasParams", Boolean(params));
       try {
-        const result = await this.#client.sendRequest<T>(method, params);
+        const result = await this.#client.sendRequest<T>(method, params, token);
         this.#debug("response", { method });
         this.#logger.info(`[lsp] ← ${method} ok`);
         return result;
@@ -123,9 +124,14 @@ export class LspFacade {
     uri: string,
     position: { line: number; character: number },
     newName: string,
+    token?: CancellationToken,
   ): Promise<RenameFromTsResponse> {
     try {
-      const response = await this.sendRequest<RenameFromTsResponse | null>("aurelia/renameFromTs", { uri, position, newName });
+      const response = await this.sendRequest<RenameFromTsResponse | null>(
+        "aurelia/renameFromTs",
+        { uri, position, newName },
+        token,
+      );
       return response ?? {
         status: "blocked",
         reason: "empty-response",

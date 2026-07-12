@@ -113,30 +113,7 @@ describe("refreshDocument", () => {
     expect(ctx.semanticRuntime.recordProjectTopologyChanged).not.toHaveBeenCalled();
   });
 
-  test("does not publish diagnostics from a stale refresh generation", async () => {
-    const first = createGeneration(1);
-    const second = createGeneration(2);
-    const ctx = createMockContext({
-      semanticRuntime: {
-        recordProjectTopologyChanged: vi.fn(() => second),
-        recordSourceTextChanged: vi.fn(async () => first),
-        currentGeneration: vi.fn(() => second),
-        requestGuard: vi.fn(() => ({ generation: first, isCancellationRequested: null })),
-        isCurrentGeneration: vi.fn((candidate) => candidate.sourceGeneration === second.sourceGeneration),
-        appDiagnostics: vi.fn(async () => ({ value: { rows: [] } })),
-      },
-    });
-    const doc = createMockDoc();
-
-    await refreshDocument(ctx as never, doc as never, "change");
-
-    expect(ctx.connection.sendDiagnostics).not.toHaveBeenCalled();
-    expect(ctx.logger.log).toHaveBeenCalledWith(
-      expect.stringContaining("skipped stale diagnostics"),
-    );
-  });
-
-  test("retries a stale diagnostics request once for a still-open document", async () => {
+  test("re-enters the current generation after a stale diagnostics request", async () => {
     const first = createGeneration(1);
     const second = createGeneration(2);
     const doc = createMockDoc();
@@ -166,9 +143,6 @@ describe("refreshDocument", () => {
 
     expect(ctx.semanticRuntime.appDiagnostics).toHaveBeenCalledTimes(2);
     expect(ctx.connection.sendDiagnostics).toHaveBeenCalledTimes(1);
-    expect(ctx.logger.log).toHaveBeenCalledWith(
-      expect.stringContaining("retrying stale request"),
-    );
   });
 });
 
@@ -178,6 +152,7 @@ describe("refreshAllOpenDocuments", () => {
     const second = createMockDoc("file:///app/src/two.html");
     const ctx = createMockContext({
       documents: {
+        get: vi.fn((uri: string) => uri === first.uri ? first : uri === second.uri ? second : null),
         all: vi.fn(() => [first, second]),
       },
     });
@@ -275,6 +250,40 @@ describe("registerLifecycleHandlers — onDidChangeWatchedFiles", () => {
 });
 
 describe("registerLifecycleHandlers — onDidChangeContent", () => {
+  test("does not consume the onDidChangeContent echo emitted for onDidOpen", async () => {
+    let openHandler: ((e: { document: ReturnType<typeof createMockDoc> }) => void) | undefined;
+    let changeHandler: ((e: { document: ReturnType<typeof createMockDoc> }) => void) | undefined;
+    const documents = {
+      get: vi.fn(() => null),
+      all: vi.fn(() => []),
+      onDidOpen: vi.fn((fn: (e: { document: ReturnType<typeof createMockDoc> }) => void) => {
+        openHandler = fn;
+      }),
+      onDidChangeContent: vi.fn((fn: (e: { document: ReturnType<typeof createMockDoc> }) => void) => {
+        changeHandler = fn;
+      }),
+      onDidClose: vi.fn(),
+    };
+    const connection = {
+      onInitialize: vi.fn(),
+      onDidChangeConfiguration: vi.fn(),
+      onDidChangeWatchedFiles: vi.fn(),
+      sendDiagnostics: vi.fn(),
+      sendNotification: vi.fn(),
+      sendRequest: vi.fn(async () => undefined),
+    };
+    const ctx = createMockContext({ documents, connection });
+    const doc = createMockDoc();
+
+    registerLifecycleHandlers(ctx as never);
+    openHandler!({ document: doc });
+    changeHandler!({ document: doc });
+    await settleAsyncWork();
+
+    expect(ctx.semanticRuntime.recordSourceTextChanged).toHaveBeenCalledTimes(1);
+    expect(ctx.logger.log).not.toHaveBeenCalledWith(expect.stringContaining("didChange"));
+  });
+
   test("records source text changes immediately before the diagnostic debounce fires", () => {
     vi.useFakeTimers();
     try {

@@ -64,6 +64,136 @@ test("template diagnostics use current dirty-buffer spans after offset churn", a
   }
 }, 30000);
 
+test("cold open-document bursts converge on diagnostics for the latest unsaved template", async () => {
+  const fixture = copyFixtureDirectory(helloWorldFixture);
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+  const documents = new Map<string, TrackedDocument>();
+  const openUris = new Set<string>();
+  const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
+  const serverLogs: string[] = [];
+  const logSubscription = connection.onNotification(
+    "window/logMessage",
+    (params: { message?: unknown }) => {
+      if (typeof params.message === "string") {
+        serverLogs.push(params.message);
+      }
+    },
+  );
+
+  try {
+    await initialize(connection, child, getStderr, fixture);
+    const myApp = openTrackedDocument(connection, fixture, "src/my-app.html", "html", documents, openUris);
+    const searchOffset = myApp.text.indexOf("state.searchText") + "state.".length;
+    expect(searchOffset).toBeGreaterThanOrEqual("state.".length);
+    await connection.sendRequest("textDocument/hover", {
+      textDocument: { uri: myApp.uri },
+      position: positionAt(myApp.text, searchOffset),
+    });
+
+    for (const [relPath, languageId] of [
+      ["src/my-app.ts", "typescript"],
+      ["src/components/product-card.html", "html"],
+      ["src/components/product-card.ts", "typescript"],
+      ["src/components/stock-badge.html", "html"],
+      ["src/components/stock-badge.ts", "typescript"],
+      ["src/attributes/display-hint.ts", "typescript"],
+    ] as const) {
+      openTrackedDocument(connection, fixture, relPath, languageId, documents, openUris);
+    }
+
+    changeOpenBufferDocument(
+      connection,
+      myApp,
+      myApp.text.replace("${preview.name}", "${heading()}"),
+    );
+
+    let rows: LspDiagnosticLike[];
+    try {
+      rows = await waitForDiagnosticsWithMessage(diagnostics, myApp.uri, "not callable");
+    } catch (error) {
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}\nServer lifecycle log:\n${serverLogs.join("\n")}`,
+        { cause: error },
+      );
+    }
+    const diagnostic = rows.find((row) => diagnosticMessage(row).includes("not callable"));
+    expect(diagnostic).toBeDefined();
+    const start = myApp.text.indexOf("heading()");
+    expect(diagnostic?.range).toEqual({
+      start: positionAt(myApp.text, start),
+      end: positionAt(myApp.text, start + "heading".length),
+    });
+  } finally {
+    logSubscription.dispose();
+    diagnostics.dispose();
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}, 60000);
+
+test("cold dirty-template open bursts publish diagnostics for every opened document", async () => {
+  const fixture = copyFixtureDirectory(helloWorldFixture);
+  const { connection, child, dispose, getStderr } = startServer(fixture);
+  const documents = new Map<string, TrackedDocument>();
+  const openUris = new Set<string>();
+  const diagnostics = createDiagnosticsRecorder(connection, child, getStderr);
+
+  try {
+    await initialize(connection, child, getStderr, fixture);
+    const cases = [
+      {
+        relPath: "src/my-app.html",
+        marker: "missingMyAppOpen",
+        change: (text: string) => text.replace("preview.name", "preview.missingMyAppOpen"),
+      },
+      {
+        relPath: "src/components/product-card.html",
+        marker: "missingProductOpen",
+        change: (text: string) => text.replace("item.description", "item.missingProductOpen"),
+      },
+      {
+        relPath: "src/components/stock-badge.html",
+        marker: "missingStockOpen",
+        change: (text: string) => text.replace("item?.tone", "item?.missingStockOpen"),
+      },
+    ] as const;
+
+    const opened = cases.map(({ relPath, change }) => {
+      const text = change(fs.readFileSync(path.join(fixture, relPath), "utf8"));
+      return openTrackedDocumentWithText(
+        connection,
+        fixture,
+        relPath,
+        "html",
+        text,
+        documents,
+        openUris,
+      );
+    });
+
+    const published = await Promise.all(cases.map(({ marker }, index) =>
+      waitForDiagnosticsWithMessage(diagnostics, opened[index]!.uri, marker)));
+    for (let index = 0; index < cases.length; index += 1) {
+      const marker = cases[index]!.marker;
+      const document = opened[index]!;
+      const row = published[index]!.find((diagnostic) => diagnosticMessage(diagnostic).includes(marker));
+      const start = document.text.indexOf(marker);
+      expect(row?.range).toEqual({
+        start: positionAt(document.text, start),
+        end: positionAt(document.text, start + marker.length),
+      });
+    }
+  } finally {
+    diagnostics.dispose();
+    dispose();
+    child.kill("SIGKILL");
+    await waitForExit(child);
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
+}, 60000);
+
 test("rapid invalid-to-valid template edits do not leak stale diagnostics", async () => {
   const fixture = copyFixtureDirectory(helloWorldFixture);
   const { connection, child, dispose, getStderr } = startServer(fixture);
@@ -161,8 +291,28 @@ function openTrackedDocument(
   documents: Map<string, TrackedDocument>,
   openUris: Set<string>,
 ): TrackedDocument {
-  const uri = fileUri(fixture, relPath);
   const text = fs.readFileSync(path.join(fixture, relPath), "utf8");
+  return openTrackedDocumentWithText(
+    connection,
+    fixture,
+    relPath,
+    languageId,
+    text,
+    documents,
+    openUris,
+  );
+}
+
+function openTrackedDocumentWithText(
+  connection: ReturnType<typeof startServer>["connection"],
+  fixture: string,
+  relPath: string,
+  languageId: string,
+  text: string,
+  documents: Map<string, TrackedDocument>,
+  openUris: Set<string>,
+): TrackedDocument {
+  const uri = fileUri(fixture, relPath);
   const document: TrackedDocument = { uri, languageId, text, version: 1 };
   documents.set(uri, document);
   openUris.add(uri);
@@ -179,6 +329,17 @@ function changeTrackedDocument(
   document.text = text;
   document.version += 1;
   fs.writeFileSync(pathFromFileUri(document.uri), document.text, "utf8");
+  changeDocument(connection, document.uri, document.text, document.version);
+}
+
+function changeOpenBufferDocument(
+  connection: ReturnType<typeof startServer>["connection"],
+  document: TrackedDocument,
+  text: string,
+): void {
+  expect(text, `expected ${document.uri} to change`).not.toBe(document.text);
+  document.text = text;
+  document.version += 1;
   changeDocument(connection, document.uri, document.text, document.version);
 }
 

@@ -29,19 +29,28 @@ import { logIfSemanticRuntimeRequestAborted } from "./request-guard.js";
 /** Debounce delay for document changes (ms). Waits for typing to pause before processing. */
 const DOCUMENT_CHANGE_DEBOUNCE_MS = 300;
 
-const pendingRefreshesByContext = new WeakMap<ServerContext, Map<string, ReturnType<typeof setTimeout>>>();
-
-interface DiagnosticRefreshWave {
-  readonly reason: "open" | "change";
-  readonly guard: SemanticRuntimeLspRequestGuard;
-}
+type DiagnosticRefreshReason = "open" | "change";
+type DiagnosticRefreshOutcome = "published" | "stale" | "failed";
 
 interface DiagnosticRefreshOptions {
-  readonly wave?: DiagnosticRefreshWave;
   readonly sourceChanged?: boolean;
   readonly notifyWorkspace?: boolean;
-  readonly staleRetryCount?: number;
 }
+
+interface PendingDiagnosticRefresh {
+  readonly document: TextDocument;
+  readonly reason: DiagnosticRefreshReason;
+  readonly notifyWorkspace: boolean;
+}
+
+interface LifecycleRefreshState {
+  readonly documentVersions: Map<string, number>;
+  readonly pendingDebounces: Map<string, ReturnType<typeof setTimeout>>;
+  readonly pendingDiagnostics: Map<string, PendingDiagnosticRefresh>;
+  diagnosticDrain: Promise<void> | null;
+}
+
+const lifecycleRefreshStates = new WeakMap<ServerContext, LifecycleRefreshState>();
 
 function hasSourceFileStructuralChange(changes: readonly FileEvent[]): boolean {
   for (const change of changes) {
@@ -96,48 +105,148 @@ async function refreshWorkspaceAfterRecordedSourceTextChanged(
 
 export async function refreshAllOpenDocuments(
   ctx: ServerContext,
-  reason: "open" | "change",
+  reason: DiagnosticRefreshReason,
   options: DiagnosticRefreshOptions = {},
 ): Promise<void> {
-  try {
-    const wave = options.wave ?? await beginDiagnosticRefreshWave(ctx, reason, options.sourceChanged === true);
-    if (options.notifyWorkspace !== false) {
-      await notifyWorkspaceChanged(ctx, ["diagnostics", "templates"], reason, wave.guard.generation);
-    }
-    const openDocs = ctx.documents.all();
-    for (const doc of openDocs) {
-      if (!ctx.semanticRuntime.isCurrentGeneration(wave.guard.generation)) {
-        ctx.logger.log("refreshAllOpenDocuments stopped because the refresh wave is stale");
-        return;
-      }
-      await refreshDocument(ctx, doc, reason, {
-        wave,
-        notifyWorkspace: false,
-        sourceChanged: false,
-      });
-    }
-  } catch (e: unknown) {
-    const message = e instanceof Error ? e.stack ?? e.message : String(e);
-    ctx.logger.error(`refreshAllOpenDocuments failed: ${message}`);
+  if (options.sourceChanged === true) {
+    await ctx.semanticRuntime.recordSourceTextChanged();
   }
+  await enqueueDiagnosticRefreshes(
+    ctx,
+    ctx.documents.all().map((document) => ({
+      document,
+      reason,
+      notifyWorkspace: options.notifyWorkspace !== false,
+    })),
+  );
 }
 
 export async function refreshDocument(
   ctx: ServerContext,
   doc: TextDocument,
-  reason: "open" | "change",
+  reason: DiagnosticRefreshReason,
   options: DiagnosticRefreshOptions = {},
 ): Promise<void> {
+  if (options.sourceChanged ?? true) {
+    await ctx.semanticRuntime.recordSourceTextChanged();
+  }
+  await enqueueDiagnosticRefreshes(ctx, [{
+    document: doc,
+    reason,
+    notifyWorkspace: options.notifyWorkspace !== false,
+  }]);
+}
+
+async function enqueueDiagnosticRefreshes(
+  ctx: ServerContext,
+  refreshes: readonly PendingDiagnosticRefresh[],
+): Promise<void> {
+  const state = lifecycleRefreshState(ctx);
+  for (const refresh of refreshes) {
+    state.pendingDiagnostics.set(refresh.document.uri, refresh);
+  }
+  if (state.pendingDiagnostics.size === 0) {
+    return;
+  }
+
+  do {
+    await ensureDiagnosticDrain(ctx, state);
+  } while (state.diagnosticDrain != null || state.pendingDiagnostics.size > 0);
+}
+
+function ensureDiagnosticDrain(
+  ctx: ServerContext,
+  state: LifecycleRefreshState,
+): Promise<void> {
+  if (state.diagnosticDrain != null) {
+    return state.diagnosticDrain;
+  }
+  const drain = drainDiagnosticRefreshes(ctx, state);
+  state.diagnosticDrain = drain;
+  void drain.then(
+    () => finishDiagnosticDrain(ctx, state, drain),
+    () => finishDiagnosticDrain(ctx, state, drain),
+  );
+  return drain;
+}
+
+function finishDiagnosticDrain(
+  ctx: ServerContext,
+  state: LifecycleRefreshState,
+  drain: Promise<void>,
+): void {
+  if (state.diagnosticDrain === drain) {
+    state.diagnosticDrain = null;
+  }
+  if (state.pendingDiagnostics.size > 0) {
+    void ensureDiagnosticDrain(ctx, state);
+  }
+}
+
+async function drainDiagnosticRefreshes(
+  ctx: ServerContext,
+  state: LifecycleRefreshState,
+): Promise<void> {
   try {
-    const wave = options.wave ?? await beginDiagnosticRefreshWave(
-      ctx,
-      reason,
-      options.sourceChanged ?? true,
-    );
-    const diagnostics = await ctx.semanticRuntime.appDiagnostics(doc, wave.guard);
-    if (!ctx.semanticRuntime.isCurrentGeneration(wave.guard.generation)) {
-      await retryStaleRefresh(ctx, doc, reason, options, "diagnostics");
-      return;
+    while (state.pendingDiagnostics.size > 0) {
+      const batch = [...state.pendingDiagnostics.values()];
+      state.pendingDiagnostics.clear();
+      const guard = ctx.semanticRuntime.requestGuard(null);
+      let staleIndex = -1;
+
+      for (let index = 0; index < batch.length; index += 1) {
+        const refresh = batch[index]!;
+        const liveDocument = ctx.documents.get(refresh.document.uri);
+        if (liveDocument == null && state.documentVersions.has(refresh.document.uri)) {
+          continue;
+        }
+        const currentDocument = liveDocument ?? refresh.document;
+        const outcome = await publishDocumentDiagnostics(ctx, currentDocument, guard);
+        if (outcome === "stale") {
+          staleIndex = index;
+          break;
+        }
+      }
+
+      if (staleIndex >= 0) {
+        requeueStaleDiagnosticRefreshes(state, batch.slice(staleIndex));
+        continue;
+      }
+
+      const notify = batch.find((refresh) => refresh.notifyWorkspace);
+      if (notify != null && ctx.semanticRuntime.isCurrentGeneration(guard.generation)) {
+        await notifyWorkspaceChanged(ctx, ["diagnostics", "templates"], notify.reason, guard.generation);
+      }
+    }
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.stack ?? e.message : String(e);
+    ctx.logger.error(`diagnostic refresh drain failed: ${message}`);
+  }
+}
+
+function requeueStaleDiagnosticRefreshes(
+  state: LifecycleRefreshState,
+  refreshes: readonly PendingDiagnosticRefresh[],
+): void {
+  for (const refresh of refreshes) {
+    if (state.pendingDebounces.has(refresh.document.uri)) {
+      continue;
+    }
+    if (!state.pendingDiagnostics.has(refresh.document.uri)) {
+      state.pendingDiagnostics.set(refresh.document.uri, refresh);
+    }
+  }
+}
+
+async function publishDocumentDiagnostics(
+  ctx: ServerContext,
+  doc: TextDocument,
+  guard: SemanticRuntimeLspRequestGuard,
+): Promise<DiagnosticRefreshOutcome> {
+  try {
+    const diagnostics = await ctx.semanticRuntime.appDiagnostics(doc, guard);
+    if (!ctx.semanticRuntime.isCurrentGeneration(guard.generation)) {
+      return "stale";
     }
     const lspDiagnostics = mapSemanticRuntimeAppDiagnostics(
       diagnostics,
@@ -145,56 +254,27 @@ export async function refreshDocument(
       ctx.workspaceRoot,
       (uri) => ctx.lookupText(uri),
     );
-    if (!ctx.semanticRuntime.isCurrentGeneration(wave.guard.generation)) {
-      await retryStaleRefresh(ctx, doc, reason, options, "mapping");
-      return;
+    if (!ctx.semanticRuntime.isCurrentGeneration(guard.generation)) {
+      return "stale";
     }
     await ctx.connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
-
-    if (options.notifyWorkspace !== false) {
-      await notifyWorkspaceChanged(ctx, ["diagnostics", "templates"], reason, wave.guard.generation);
-    }
     await ctx.connection.sendNotification("aurelia/analysisReady", {
       uri: doc.uri,
       diags: lspDiagnostics.length,
-      fingerprint: wave.guard.generation.fingerprint,
+      fingerprint: guard.generation.fingerprint,
     });
+    return "published";
   } catch (e: unknown) {
     if (isSemanticRuntimeLspRequestAborted(e) && e.reason === "stale") {
-      await retryStaleRefresh(ctx, doc, reason, options, "request");
-      return;
+      return "stale";
     }
     if (logIfSemanticRuntimeRequestAborted(ctx, "refreshDocument", e, doc.uri)) {
-      return;
+      return "failed";
     }
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
     ctx.logger.error(`refreshDocument failed: ${message}`);
+    return "failed";
   }
-}
-
-async function retryStaleRefresh(
-  ctx: ServerContext,
-  doc: TextDocument,
-  reason: "open" | "change",
-  options: DiagnosticRefreshOptions,
-  phase: string,
-): Promise<void> {
-  const retryCount = options.staleRetryCount ?? 0;
-  if (retryCount >= 1) {
-    ctx.logger.log(`refreshDocument skipped stale ${phase} for ${doc.uri}`);
-    return;
-  }
-  const currentDoc = ctx.documents.get(doc.uri);
-  if (currentDoc == null) {
-    ctx.logger.log(`refreshDocument skipped stale ${phase} for closed document ${doc.uri}`);
-    return;
-  }
-  ctx.logger.log(`refreshDocument retrying stale ${phase} for ${doc.uri}`);
-  await refreshDocument(ctx, currentDoc, reason, {
-    notifyWorkspace: options.notifyWorkspace,
-    sourceChanged: false,
-    staleRetryCount: retryCount + 1,
-  });
 }
 
 export function handleInitialize(ctx: ServerContext, params: InitializeParams): InitializeResult {
@@ -235,6 +315,8 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
   ctx.connection.onInitialize((params) => handleInitialize(ctx, params));
 
   ctx.documents.onDidOpen((e) => {
+    const state = lifecycleRefreshState(ctx);
+    state.documentVersions.set(e.document.uri, e.document.version);
     ctx.logger.log(`didOpen ${e.document.uri}`);
     recordSourceTextChanged(ctx, "document open");
     if (isScriptDocumentUri(e.document.uri)) {
@@ -276,12 +358,18 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
 
   ctx.documents.onDidChangeContent((e) => {
     const uri = e.document.uri;
+    const state = lifecycleRefreshState(ctx);
+    // vscode-languageserver fires onDidChangeContent immediately after onDidOpen
+    // with the same document version. onDidOpen already owns that source event.
+    if (state.documentVersions.get(uri) === e.document.version) {
+      return;
+    }
+    state.documentVersions.set(uri, e.document.version);
     ctx.logger.log(`didChange ${uri} (debouncing)`);
     recordSourceTextChanged(ctx, "document content change");
 
     // Cancel any pending refresh for this document
-    const pendingRefreshes = pendingRefreshesForContext(ctx);
-    const existing = pendingRefreshes.get(uri);
+    const existing = state.pendingDebounces.get(uri);
     if (existing) {
       clearTimeout(existing);
     }
@@ -289,7 +377,7 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
     // Schedule new refresh after debounce period
     // This ensures we only process after typing pauses, not on every keystroke
     const timeout = setTimeout(() => {
-      pendingRefreshes.delete(uri);
+      state.pendingDebounces.delete(uri);
       ctx.logger.log(`didChange ${uri} (processing after debounce)`);
       if (isScriptDocumentUri(uri)) {
         void refreshWorkspaceAfterRecordedSourceTextChanged(ctx, "change", "change");
@@ -298,18 +386,20 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
       }
     }, DOCUMENT_CHANGE_DEBOUNCE_MS);
 
-    pendingRefreshes.set(uri, timeout);
+    state.pendingDebounces.set(uri, timeout);
   });
 
   ctx.documents.onDidClose((e) => {
     ctx.logger.log(`didClose ${e.document.uri}`);
 
     // Cancel any pending refresh for this document
-    const pendingRefreshes = pendingRefreshesForContext(ctx);
-    const pending = pendingRefreshes.get(e.document.uri);
+    const state = lifecycleRefreshState(ctx);
+    state.documentVersions.delete(e.document.uri);
+    state.pendingDiagnostics.delete(e.document.uri);
+    const pending = state.pendingDebounces.get(e.document.uri);
     if (pending) {
       clearTimeout(pending);
-      pendingRefreshes.delete(e.document.uri);
+      state.pendingDebounces.delete(e.document.uri);
     }
 
     recordSourceTextChanged(ctx, "document close");
@@ -327,20 +417,6 @@ function recordSourceTextChanged(ctx: ServerContext, reason: string): void {
     const message = error instanceof Error ? error.stack ?? error.message : String(error);
     ctx.logger.error(`${reason} source refresh failed: ${message}`);
   });
-}
-
-async function beginDiagnosticRefreshWave(
-  ctx: ServerContext,
-  reason: "open" | "change",
-  sourceChanged: boolean,
-): Promise<DiagnosticRefreshWave> {
-  if (sourceChanged) {
-    await ctx.semanticRuntime.recordSourceTextChanged();
-  }
-  return {
-    reason,
-    guard: ctx.semanticRuntime.requestGuard(null),
-  };
 }
 
 async function notifyWorkspaceChanged(
@@ -362,12 +438,17 @@ async function notifyWorkspaceChanged(
   }
 }
 
-function pendingRefreshesForContext(ctx: ServerContext): Map<string, ReturnType<typeof setTimeout>> {
-  const existing = pendingRefreshesByContext.get(ctx);
+function lifecycleRefreshState(ctx: ServerContext): LifecycleRefreshState {
+  const existing = lifecycleRefreshStates.get(ctx);
   if (existing != null) {
     return existing;
   }
-  const pending = new Map<string, ReturnType<typeof setTimeout>>();
-  pendingRefreshesByContext.set(ctx, pending);
-  return pending;
+  const state: LifecycleRefreshState = {
+    documentVersions: new Map(),
+    pendingDebounces: new Map(),
+    pendingDiagnostics: new Map(),
+    diagnosticDrain: null,
+  };
+  lifecycleRefreshStates.set(ctx, state);
+  return state;
 }

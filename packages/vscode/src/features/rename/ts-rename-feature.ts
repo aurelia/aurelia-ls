@@ -62,7 +62,9 @@ export const TsRenameFeature: FeatureModule = {
           document.uri.toString(),
           { line: position.line, character: position.character },
           newName,
+          token,
         );
+        if (token?.isCancellationRequested === true) return undefined;
 
         if (aureliaRename.status === "blocked" || aureliaRename.status === "refused") {
           const message = renamePropagationFailureMessage(aureliaRename);

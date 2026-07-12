@@ -45,7 +45,18 @@ function createMockContext(overrides: Record<string, unknown> = {}) {
         outcome: "hit",
         closure: "complete",
         summary: "mock",
-        value: { displayText: "mock", typeScript: null, rows: [] },
+        value: {
+          displayText: "mock",
+          typeScript: null,
+          rows: [],
+          presentation: {
+            rawRowCount: 0,
+            primaryCount: 0,
+            contextualCount: 0,
+            complete: true,
+            groups: [],
+          },
+        },
         page: null,
       })),
       templateCursorInfo: vi.fn(() => Promise.resolve({
@@ -279,6 +290,26 @@ describe("handleGetDiagnostics", () => {
             relatedQueryKind: "typescript-diagnostics",
           },
         ],
+        presentation: {
+          rawRowCount: 1,
+          primaryCount: 1,
+          contextualCount: 0,
+          complete: true,
+          groups: [{
+            groupKey: "typescript-TS1234",
+            subject: null,
+            primary: {
+              rowId: "diagnostic-TS1234",
+              rowIndex: 0,
+              role: "primary",
+              relation: null,
+            },
+            related: [],
+            rawRowCount: 1,
+            primarySeverity: "information",
+            maxRawSeverity: "information",
+          }],
+        },
       },
       page: null,
     });
@@ -333,6 +364,26 @@ describe("handleGetDiagnostics", () => {
             relatedQueryKind: "template-diagnostics",
           },
         ],
+        presentation: {
+          rawRowCount: 1,
+          primaryCount: 1,
+          contextualCount: 0,
+          complete: true,
+          groups: [{
+            groupKey: "template-TS2345",
+            subject: null,
+            primary: {
+              rowId: "diagnostic-TS2345",
+              rowIndex: 0,
+              role: "primary",
+              relation: null,
+            },
+            related: [],
+            rawRowCount: 1,
+            primarySeverity: "error",
+            maxRawSeverity: "error",
+          }],
+        },
       },
       page: null,
     });

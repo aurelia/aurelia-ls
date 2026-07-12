@@ -948,13 +948,16 @@
         "incrementality",
         "cancellation"
       ],
-      "summary": "The LSP bridge uses explicit source/workspace generations and required request guards over semantic-runtime app-world clearing; this is not the grand incremental compiler.",
-      "rationale": "The prior LSP lifecycle used one invalidate path for ordinary text edits, source topology changes, and configuration changes. That dropped the runtime facade on every diagnostic refresh and let in-flight requests publish stale results. semantic-runtime already has the correct bridge primitive: clearAnalysisCache(...) clears retained app-world products while keeping boot/source discovery and TypeScript dependency caches warm. The LSP now names the lifecycle distinction in SemanticRuntimeLspSession and requires every runtime-backed request to carry a generation/cancellation guard.",
+      "summary": "The LSP bridge uses explicit source/workspace generations, a convergent diagnostic drain, and required request guards over semantic-runtime app-world clearing; this is not the grand incremental compiler.",
+      "rationale": "The prior LSP lifecycle used one invalidate path for ordinary text edits, source topology changes, and configuration changes. The first generation bridge separated those boundaries, but consumed vscode-languageserver's onDidChangeContent open echo as a second source event and relied on one stale retry. Cold document bursts could therefore exhaust the retry and never publish the latest diagnostics. The bridge now classifies document events by version, coalesces pending app-world clears, and retains affected documents in one context-owned drain until a current generation publishes or analysis genuinely fails.",
       "guidance": [
         "For existing admitted source text edits, call recordSourceTextChanged(); it advances the source generation and clears retained app-world products through clearAnalysisCache({ typeSystemDependencyCacheClearPolicy: 'preserve' }) when a runtime exists.",
         "For project topology, configuration, workspace root, or source-admission changes, call recordProjectTopologyChanged(); it advances workspace/source generations and drops the runtime facade.",
+        "vscode-languageserver TextDocuments.onDidChangeContent fires for both open and change. onDidOpen owns the initial source event; ignore the immediately following same-version content event instead of invalidating twice.",
+        "Diagnostics refreshes are a latest-generation drain. Keep every affected open document queued across stale generations and publish only under a current guard; do not restore fixed retry counts or independent fire-and-forget refresh ownership.",
+        "Concurrent source notifications may share one pending app-world clear. A later generation still stales older guards, while one clear after runtime opening covers every source change observed before that clear executes.",
         "Do not reintroduce adapter-local invalidate calls or optional request guards. Runtime/session-backed handlers must capture a guard from the session and pass it through to paged query loops.",
-        "Diagnostics refreshes should run as generation waves: mark source changes once, reuse the wave guard for each document, and publish only if the captured generation is still current.",
+        "When a VS Code provider supplies a cancellation token, carry it through custom language-client requests. TS-origin rename composition must stop before conversion/application when cancellation wins.",
         "Use `pnpm --filter @aurelia-ls/language-server measure:incrementality` for bridge telemetry. It measures the largest pressure fixture by default, records generation/timing/cache snapshots, and samples stale/cancelled request abort pressure without adding timing thresholds to tests.",
         "MCP does not need LSP-style source generations unless it gains a live source-text stream or file-watch lifecycle. Its current integration is appRetention plus aurelia_clear_analysis_cache/analysis-cache overview for retained semantic-runtime sessions.",
         "Boundary cancellation/stale checks prevent extra pages and stale publication, but they do not cancel synchronous semantic-runtime materialization already in progress. Deep materializer cancellation remains part of the later typed dependency/edge-kind incrementality work.",
@@ -965,13 +968,25 @@
           "kind": "source",
           "filePath": "packages/language-server/src/runtime/semantic-runtime-session.ts",
           "line": 63,
-          "summary": "LSP session owns workspace/source generations, runtime facade retention, app-world clearing, and required request guards."
+          "summary": "LSP session owns workspace/source generations, runtime facade retention, coalesced app-world clearing, and required request guards."
         },
         {
           "kind": "source",
           "filePath": "packages/language-server/src/handlers/lifecycle.ts",
-          "line": 95,
-          "summary": "Diagnostics refresh captures a generation wave guard and skips stale publication."
+          "line": 186,
+          "summary": "The context-owned diagnostic drain retains affected documents until a current generation publishes them."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/language-server/src/handlers/lifecycle.ts",
+          "line": 359,
+          "summary": "Document versions distinguish a real content change from TextDocuments' same-version open echo."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/vscode/src/core/lsp-facade.ts",
+          "line": 123,
+          "summary": "TS-origin rename carries the provider cancellation token through the custom LSP request."
         },
         {
           "kind": "source",
@@ -995,7 +1010,7 @@
         }
       ],
       "createdAt": "2026-07-08",
-      "updatedAt": "2026-07-08"
+      "updatedAt": "2026-07-12"
     },
     {
       "id": "decision:ide-assurance-layer-ownership",

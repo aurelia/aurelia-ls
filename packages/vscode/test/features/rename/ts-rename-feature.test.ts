@@ -106,6 +106,23 @@ function createContext(options: { renameResponse?: RenameResponse; textDocuments
     providers.push(provider);
     return { dispose: vi.fn() };
   });
+  const convertWorkspaceEdit = vi.fn(async (workspaceEdit: Extract<RenameResponse, { status: "success" }>["workspaceEdit"]) => {
+    const edit = new StubWorkspaceEdit();
+    for (const change of workspaceEdit.documentChanges ?? []) {
+      const uri = new StubUri(change.textDocument.uri);
+      for (const row of change.edits) {
+        edit.replace(
+          uri,
+          new StubRange(
+            new StubPosition(row.range.start.line, row.range.start.character),
+            new StubPosition(row.range.end.line, row.range.end.character),
+          ),
+          row.newText,
+        );
+      }
+    }
+    return edit;
+  });
 
   const ctx = {
     vscode: {
@@ -136,23 +153,7 @@ function createContext(options: { renameResponse?: RenameResponse; textDocuments
     },
     rawClient: {
       protocol2CodeConverter: {
-        asWorkspaceEdit: vi.fn(async (workspaceEdit: Extract<RenameResponse, { status: "success" }>["workspaceEdit"]) => {
-          const edit = new StubWorkspaceEdit();
-          for (const change of workspaceEdit.documentChanges ?? []) {
-            const uri = new StubUri(change.textDocument.uri);
-            for (const row of change.edits) {
-              edit.replace(
-                uri,
-                new StubRange(
-                  new StubPosition(row.range.start.line, row.range.start.character),
-                  new StubPosition(row.range.end.line, row.range.end.character),
-                ),
-                row.newText,
-              );
-            }
-          }
-          return edit;
-        }),
+        asWorkspaceEdit: convertWorkspaceEdit,
       },
     },
     logger: {
@@ -161,7 +162,7 @@ function createContext(options: { renameResponse?: RenameResponse; textDocuments
     },
   } as unknown as ClientContext;
 
-  return { ctx, providers, executeCommand, renameFromTs, tsEdit, infoMessages };
+  return { ctx, providers, executeCommand, renameFromTs, convertWorkspaceEdit, tsEdit, infoMessages };
 }
 
 function createDocument(): StubDocument {
@@ -212,11 +213,13 @@ describe("TsRenameFeature", () => {
     });
     TsRenameFeature.activate(harness.ctx);
     const document = createDocument();
+    const token = { isCancellationRequested: false } as never;
 
     const edit = await harness.providers[0]?.provideRenameEdits(
       document,
       new StubPosition(2, 11),
       "heading",
+      token,
     );
 
     expect(harness.executeCommand).toHaveBeenCalledWith(
@@ -229,6 +232,7 @@ describe("TsRenameFeature", () => {
       "file:///app.ts",
       { line: 2, character: 11 },
       "heading",
+      token,
     );
     expect(edit).toBe(harness.tsEdit);
     expect(edit?.replacements).toHaveLength(2);
@@ -281,6 +285,47 @@ describe("TsRenameFeature", () => {
       new StubPosition(2, 11),
       "heading",
     )).rejects.toThrow("editor documents changed");
+  });
+
+  test("stops TS-origin composition when the provider request is cancelled", async () => {
+    const harness = createContext({
+      renameResponse: {
+        status: "success",
+        workspaceEdit: { documentChanges: [] },
+        message: "No current edit.",
+        templateReferenceCount: 0,
+        candidateCount: 0,
+      },
+    });
+    TsRenameFeature.activate(harness.ctx);
+    const document = createDocument();
+    const token = { isCancellationRequested: false };
+    harness.renameFromTs.mockImplementationOnce(async () => {
+      token.isCancellationRequested = true;
+      return {
+        status: "success",
+        workspaceEdit: { documentChanges: [] },
+        message: "Cancelled edit.",
+        templateReferenceCount: 0,
+        candidateCount: 0,
+      };
+    });
+
+    const edit = await harness.providers[0]?.provideRenameEdits(
+      document,
+      new StubPosition(2, 11),
+      "heading",
+      token,
+    );
+
+    expect(edit).toBeUndefined();
+    expect(harness.renameFromTs).toHaveBeenCalledWith(
+      "file:///app.ts",
+      { line: 2, character: 11 },
+      "heading",
+      token,
+    );
+    expect(harness.convertWorkspaceEdit).not.toHaveBeenCalled();
   });
 
   test("returns TypeScript-only edits when template propagation is not applicable", async () => {

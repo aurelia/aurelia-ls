@@ -432,25 +432,17 @@ export class SemanticRuntimeLspSession {
       cursor = answer.page?.nextCursor;
     } while (cursor != null);
 
-    return answer == null
-      ? await runtime.answerAppQuery({
-          kind: SemanticAppQueryKind.TemplateInlayHints,
-          sourceFile: { filePath },
-          sourceFilePath: filePath,
-          page: { size: 200 },
-          inquiryProfile: "lsp-cursor",
-          analysisDepth: "binding-observation",
-          includeAuthoringTemplates: true,
-          appRetention: "retain-app",
-        }) as SemanticRuntimeAnswer<SemanticTemplateInlayHintsResult>
-      : {
-          ...answer,
-          value: {
-            displayText: `${rows.length} template inlay hint row(s).`,
-            rows,
-          },
-          page: null,
-        };
+    if (answer == null) {
+      throw new Error("Semantic runtime returned no template inlay hint answer.");
+    }
+    return {
+      ...answer,
+      value: {
+        displayText: `${rows.length} template inlay hint row(s).`,
+        rows,
+      },
+      page: null,
+    };
   }
 
   async templateSemanticTokens(
@@ -479,25 +471,17 @@ export class SemanticRuntimeLspSession {
       cursor = answer.page?.nextCursor;
     } while (cursor != null);
 
-    return answer == null
-      ? await runtime.answerAppQuery({
-          kind: SemanticAppQueryKind.TemplateSemanticTokens,
-          sourceFile: { filePath },
-          sourceFilePath: filePath,
-          page: { size: 500 },
-          inquiryProfile: "lsp-cursor",
-          analysisDepth: "runtime-topology",
-          includeAuthoringTemplates: true,
-          appRetention: "retain-app",
-        }) as SemanticRuntimeAnswer<SemanticTemplateSemanticTokensResult>
-      : {
-          ...answer,
-          value: {
-            displayText: `${rows.length} template semantic token row(s).`,
-            rows,
-          },
-          page: null,
-        };
+    if (answer == null) {
+      throw new Error("Semantic runtime returned no template semantic token answer.");
+    }
+    return {
+      ...answer,
+      value: {
+        displayText: `${rows.length} template semantic token row(s).`,
+        rows,
+      },
+      page: null,
+    };
   }
 
   async templateFoldingRanges(
@@ -526,25 +510,17 @@ export class SemanticRuntimeLspSession {
       cursor = answer.page?.nextCursor;
     } while (cursor != null);
 
-    return answer == null
-      ? await runtime.answerAppQuery({
-          kind: SemanticAppQueryKind.TemplateFoldingRanges,
-          sourceFile: { filePath },
-          sourceFilePath: filePath,
-          page: { size: 500 },
-          inquiryProfile: "lsp-cursor",
-          analysisDepth: "runtime-topology",
-          includeAuthoringTemplates: true,
-          appRetention: "retain-app",
-        }) as SemanticRuntimeAnswer<SemanticTemplateFoldingRangesResult>
-      : {
-          ...answer,
-          value: {
-            displayText: `${rows.length} template folding range row(s).`,
-            rows,
-          },
-          page: null,
-        };
+    if (answer == null) {
+      throw new Error("Semantic runtime returned no template folding range answer.");
+    }
+    return {
+      ...answer,
+      value: {
+        displayText: `${rows.length} template folding range row(s).`,
+        rows,
+      },
+      page: null,
+    };
   }
 
   private async openRuntime(guard: SemanticRuntimeLspRequestGuard): Promise<SemanticRuntime> {
@@ -565,6 +541,9 @@ export class SemanticRuntimeLspSession {
   }
 
   private queueAppWorldClear(runtime: Promise<SemanticRuntime>): Promise<void> {
+    if (this.pendingAppWorldClear != null) {
+      return this.pendingAppWorldClear;
+    }
     const clear = (async () => {
       try {
         const openedRuntime = await runtime;
