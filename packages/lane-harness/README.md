@@ -1,9 +1,15 @@
 # @aurelia-ls/lane-harness
 
-LSP-boundary lane tests (Tier 2 of the IDE testing shape). Boots the real language server
+LSP-boundary lane tests (the medium-volume second layer of the three-layer IDE campaign). Semantic conformance owns
+high-volume semantic-runtime query/locus truth; extension-host E2E owns low-volume VS Code state behavior; fixture
+verification supports all three by checking reopened pressure-corpus product facts. This harness boots the real language server
 (`packages/language-server/out/main.js`) over stdio against a fixture workspace, drives standard
 LSP requests (rename, references, hover, completions, definition, documentHighlight, diagnostics, codeAction), applies the results to
 in-memory copies of the fixture, and snapshots before/after.
+
+Add a lane probe when protocol projection, paging/draining, source mapping, refusal conversion, or `WorkspaceEdit`
+assembly is itself under question. Do not mirror the semantic matrix case-for-case. Stateful client behavior such as
+dirty buffers, undo/redo, and diagnostics recovery belongs in extension-host E2E.
 
 **Authority for vision, doctrine, decisions, and Slice 1 scope: `.temp/ide-lane-harness-vision-2026-07-03.md`.**
 Read it fully before writing any code here.

@@ -3,53 +3,70 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   collectEdits,
-  createFixture,
+  createAureliaAppFixture,
+  createDiagnosticsRecorder,
   decodeHover,
   fileUri,
   initialize,
+  normalizedUriPath,
   openDocument,
   positionAt,
   startServer,
-  waitForDiagnostics,
   waitForExit,
 } from "./helpers/lsp-harness.js";
-import type { LspDiagnostic, LspLocation } from "../helpers/test-factories.js";
+import type { Location, LocationLink } from "vscode-languageserver/node";
+import type { LspDiagnostic } from "../helpers/test-factories.js";
 
-test("maps TypeScript diagnostics back to template spans", async () => {
-  const fixture = createFixture({
-    "tsconfig.json": JSON.stringify({
-      compilerOptions: {
-        target: "ES2022",
-        module: "NodeNext",
-        moduleResolution: "NodeNext",
-        strict: true,
-        types: [],
-      },
-      files: ["component.ts"],
-    }),
-    "component.ts": [
-      "export class Component {",
-      "  existing: number = 1;",
+function createComponentFixture(classMembers: readonly string[], template: string): string {
+  return createAureliaAppFixture({
+    "src/app.ts": [
+      "import { customElement } from 'aurelia';",
+      "import template from './app.html';",
+      "@customElement({ name: 'app-root', template })",
+      "export class AppRoot {",
+      ...classMembers.map((member) => `  ${member}`),
       "}",
     ].join("\n"),
-    "component.html": "<template>${missing}</template>",
+    "src/app.html": template,
   });
+}
 
-  const diagUri = fileUri(fixture, "component.html");
+function definitionTarget(
+  definitions: unknown,
+  targetUri: string,
+): Location | LocationLink | null {
+  if (!Array.isArray(definitions)) {
+    return null;
+  }
+  return definitions.find((definition: Location | LocationLink) =>
+    normalizedUriPath("targetUri" in definition ? definition.targetUri : definition.uri)
+      === normalizedUriPath(targetUri)
+  ) ?? null;
+}
+
+test("maps template diagnostics to exact authored member spans", async () => {
+  const fixture = createComponentFixture(
+    ["existing: number = 1;"],
+    "<template>${missing}</template>",
+  );
+
+  const diagUri = fileUri(fixture, "src/app.html");
   const { connection, child, dispose, getStderr } = startServer(fixture);
+  const diagnosticsRecorder = createDiagnosticsRecorder(connection, child, getStderr);
 
   try {
     await initialize(connection, child, getStderr, fixture);
-    await openDocument(connection, diagUri, "html", fs.readFileSync(path.join(fixture, "component.html"), "utf8"));
+    await openDocument(connection, diagUri, "html", fs.readFileSync(path.join(fixture, "src/app.html"), "utf8"));
 
-    const diagnostics = (await waitForDiagnostics(connection, child, () => getStderr(), diagUri, 5000)) as LspDiagnostic[];
-    const tsDiag = diagnostics.find((d) => d.source === "typescript") ?? diagnostics[0];
-    expect(tsDiag, "should receive at least one diagnostic").toBeTruthy();
-    expect(tsDiag.range.start.line).toBe(0);
-    expect(tsDiag.range.start.character).toBe(12);
-    expect(tsDiag.range.end.character).toBe(19);
-    expect(tsDiag.message, "diagnostic message should mention missing").toMatch(/missing/i);
+    const diagnostics = (await diagnosticsRecorder.wait(diagUri, 5000)) as LspDiagnostic[];
+    const missingMember = diagnostics.find((diagnostic) => diagnostic.message.includes("missing"));
+    expect(missingMember, "should publish the missing-member diagnostic").toBeTruthy();
+    expect(missingMember?.range).toEqual({
+      start: { line: 0, character: 12 },
+      end: { line: 0, character: 19 },
+    });
   } finally {
+    diagnosticsRecorder.dispose();
     dispose();
     child.kill("SIGKILL");
     await waitForExit(child);
@@ -58,47 +75,40 @@ test("maps TypeScript diagnostics back to template spans", async () => {
 });
 
 test("routes definitions to the view-model via provenance", async () => {
-  const fixture = createFixture({
-    "tsconfig.json": JSON.stringify({
-      compilerOptions: {
-        target: "ES2022",
-        module: "NodeNext",
-        moduleResolution: "NodeNext",
-        strict: true,
-        types: [],
-      },
-      files: ["component.ts"],
-    }),
-    "component.ts": [
-      "export class Component {",
-      "  existing: number = 1;",
-      "}",
-    ].join("\n"),
-    "component.html": "<template>${existing}</template>",
-  });
+  const fixture = createComponentFixture(
+    ["existing: number = 1;"],
+    "<template>${existing}</template>",
+  );
 
-  const defsUri = fileUri(fixture, "component.html");
-  const vmUri = fileUri(fixture, "component.ts");
+  const defsUri = fileUri(fixture, "src/app.html");
+  const vmUri = fileUri(fixture, "src/app.ts");
   const { connection, child, dispose, getStderr } = startServer(fixture);
+  const diagnosticsRecorder = createDiagnosticsRecorder(connection, child, getStderr);
 
   try {
     await initialize(connection, child, getStderr, fixture);
-    await openDocument(connection, defsUri, "html", fs.readFileSync(path.join(fixture, "component.html"), "utf8"));
-    await waitForDiagnostics(connection, child, () => getStderr(), defsUri, 5000);
+    const htmlText = fs.readFileSync(path.join(fixture, "src/app.html"), "utf8");
+    await openDocument(connection, defsUri, "html", htmlText);
+    await diagnosticsRecorder.wait(defsUri, 5000);
 
-    const position = { line: 0, character: 13 }; // inside "existing"
-    const definitions = (await connection.sendRequest("textDocument/definition", {
+    const definitions = await connection.sendRequest("textDocument/definition", {
       textDocument: { uri: defsUri },
-      position,
-    })) as LspLocation[];
+      position: positionAt(htmlText, htmlText.indexOf("existing")),
+    });
 
-    expect(Array.isArray(definitions), "definition response should be an array").toBe(true);
-    const vmDef = definitions.find((def) => def.uri === vmUri);
-    if (vmDef) {
-      expect(vmDef.range.start.line).toBe(1);
-      expect(vmDef.range.start.character).toBe(2);
-    }
+    const vmDefinition = definitionTarget(definitions, vmUri);
+    expect(
+      vmDefinition,
+      `definition should target the backing TypeScript member: ${JSON.stringify(definitions)}`,
+    ).toBeTruthy();
+    const targetRange = vmDefinition == null
+      ? null
+      : "targetSelectionRange" in vmDefinition
+        ? vmDefinition.targetSelectionRange
+        : vmDefinition.range;
+    expect(targetRange?.start).toEqual({ line: 4, character: 2 });
   } finally {
+    diagnosticsRecorder.dispose();
     dispose();
     child.kill("SIGKILL");
     await waitForExit(child);
@@ -107,34 +117,21 @@ test("routes definitions to the view-model via provenance", async () => {
 });
 
 test("hover/definition map through semantic-runtime provenance and rename succeeds for expression members", async () => {
-  const fixture = createFixture({
-    "tsconfig.json": JSON.stringify({
-      compilerOptions: {
-        target: "ES2022",
-        module: "NodeNext",
-        moduleResolution: "NodeNext",
-        strict: true,
-        types: [],
-      },
-      files: ["component.ts"],
-    }),
-    "component.ts": [
-      "export class Component {",
-      '  message: string = "Hello";',
-      "}",
-    ].join("\n"),
-    "component.html": "<template><div>${message}</div></template>",
-  });
+  const fixture = createComponentFixture(
+    ['message: string = "Hello";'],
+    "<template><div>${message}</div></template>",
+  );
 
-  const htmlUri = fileUri(fixture, "component.html");
-  const tsUri = fileUri(fixture, "component.ts");
+  const htmlUri = fileUri(fixture, "src/app.html");
+  const tsUri = fileUri(fixture, "src/app.ts");
   const { connection, child, dispose, getStderr } = startServer(fixture);
+  const diagnosticsRecorder = createDiagnosticsRecorder(connection, child, getStderr);
 
   try {
     await initialize(connection, child, getStderr, fixture);
-    const htmlText = fs.readFileSync(path.join(fixture, "component.html"), "utf8");
+    const htmlText = fs.readFileSync(path.join(fixture, "src/app.html"), "utf8");
     await openDocument(connection, htmlUri, "html", htmlText);
-    await waitForDiagnostics(connection, child, () => getStderr(), htmlUri, 5000);
+    await diagnosticsRecorder.wait(htmlUri, 5000);
 
     const pos = positionAt(htmlText, htmlText.indexOf("message"));
 
@@ -150,12 +147,10 @@ test("hover/definition map through semantic-runtime provenance and rename succee
       textDocument: { uri: htmlUri },
       position: pos,
     });
-    const defArray = Array.isArray(definitions) ? definitions : [];
-    expect(defArray.length > 0, "definition response should contain at least one location").toBe(true);
-    const vmDef = defArray.find((d) => d.uri === tsUri);
-    if (vmDef) {
-      expect(vmDef.range.start.line).toBe(1);
-    }
+    expect(
+      definitionTarget(definitions, tsUri),
+      `definition should target app.ts: ${JSON.stringify(definitions)}`,
+    ).toBeTruthy();
 
     const renameResult = await connection.sendRequest("textDocument/rename", {
       textDocument: { uri: htmlUri },
@@ -165,8 +160,10 @@ test("hover/definition map through semantic-runtime provenance and rename succee
     // Expression-member rename is a working feature: policy allows it,
     // tryExpressionMemberRename produces cross-domain edits.
     expect(renameResult, "rename should return a workspace edit").toBeTruthy();
-    expect(collectEdits(renameResult as never).length, "rename should produce edits in at least one file").toBeGreaterThan(0);
+    const changedPaths = new Set(collectEdits(renameResult as never).map((edit) => normalizedUriPath(edit.uri)));
+    expect(changedPaths).toEqual(new Set([normalizedUriPath(htmlUri), normalizedUriPath(tsUri)]));
   } finally {
+    diagnosticsRecorder.dispose();
     dispose();
     child.kill("SIGKILL");
     await waitForExit(child);

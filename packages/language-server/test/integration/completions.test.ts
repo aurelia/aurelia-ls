@@ -5,6 +5,7 @@ import { describe, expect, test } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  createAureliaAppFixture,
   createFixture,
   fileUri,
   initialize,
@@ -32,41 +33,6 @@ function expectCompletionList(response: unknown): CompletionListResponse {
   expect(typeof list.isIncomplete).toBe("boolean");
   expect(Array.isArray(list.items)).toBe(true);
   return list as CompletionListResponse;
-}
-
-function createAureliaAppFixture(files: Record<string, string>): string {
-  return createFixture({
-    "package.json": JSON.stringify({
-      name: "aurelia-lsp-runtime-completion-fixture",
-      private: true,
-      type: "module",
-      dependencies: {
-        aurelia: "^2.0.0-rc.1",
-      },
-      devDependencies: {
-        typescript: "^6.0.3",
-      },
-    }),
-    "tsconfig.json": JSON.stringify({
-      compilerOptions: {
-        target: "ES2022",
-        module: "ESNext",
-        moduleResolution: "Bundler",
-        lib: ["ES2022", "DOM", "DOM.Iterable"],
-        strict: true,
-        skipLibCheck: true,
-        allowArbitraryExtensions: true,
-        noEmit: true,
-      },
-      include: ["src"],
-    }),
-    "src/main.ts": [
-      "import Aurelia from 'aurelia';",
-      "import { AppRoot } from './app';",
-      "Aurelia.app(AppRoot).start();",
-    ].join("\n"),
-    ...files,
-  });
 }
 
 describe("Completions", () => {
@@ -191,7 +157,7 @@ describe("Completions", () => {
     }
   });
 
-  test("supports standalone component/template authoring files", async () => {
+  test("does not invent a convention resource for unadmitted standalone files", async () => {
     const fixture = createFixture({
       "tsconfig.json": JSON.stringify({
         compilerOptions: {
@@ -222,8 +188,8 @@ describe("Completions", () => {
       });
 
       const completionList = expectCompletionList(completions);
-      expect(completionList.isIncomplete).toBe(false);
-      expect(completionList.items.map((item) => item.label)).toContain("message");
+      expect(completionList.isIncomplete).toBe(true);
+      expect(completionList.items).toEqual([]);
     } finally {
       dispose();
       child.kill("SIGKILL");

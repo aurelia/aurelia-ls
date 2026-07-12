@@ -20,3 +20,8 @@ Guidelines:
   Keep this suite focused on client-boundary behavior that Vitest stubs cannot
   observe, such as multi-file edit application,
   undo/redo grouping, dirty state, and diagnostics after rollback.
+- Extension-host E2E is the low-volume third layer of the IDE campaign. The
+  semantic conformance matrix owns high-volume query truth and lane-harness
+  owns medium-volume LSP projection, so do not reproduce either corpus here.
+  Add a host journey when the expected result depends on VS Code state or API
+  spending rather than on a single semantic answer.

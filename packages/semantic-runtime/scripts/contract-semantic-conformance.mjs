@@ -7,6 +7,10 @@ import {
   readSemanticAppQueryCatalog,
   SemanticAppQueryKind,
 } from '../out/index.js';
+import {
+  authoredMarkerSpan,
+  authoredSourceSpanForSpec,
+} from './semantic-conformance-source-locus.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const defaultMatrixPath = path.join(packageRoot, 'semantic-conformance/matrix.json');
@@ -362,7 +366,12 @@ async function assertCandidateHonesty(assertion, failures, notes) {
 async function assertDiagnosticProvenanceAgreement(assertion, failures, notes) {
   const context = contextForAssertion(assertion);
   const expectedSpan = tokenSpanForCursor(context);
-  const subjectSpan = spanForMarker(context.sourceText, assertion.expected.subjectMarker, context.relativeSourceFile);
+  const subjectSpan = spanForMarker(
+    context.sourceText,
+    assertion.expected.subjectMarker,
+    context.relativeSourceFile,
+    assertion.expected.subjectMarkerOccurrence,
+  );
   const runtime = await runtimeForAssertion(assertion);
   const templateDiagnostics = await runtime.answerAppQuery({
     ...sourceFileQuery(SemanticAppQueryKind.TemplateDiagnostics, context.sourceFilePath, { detail: 'full', page: { size: 50 } }),
@@ -645,6 +654,7 @@ function validateMatrix(value, expandedAssertions) {
     throw new Error('Semantic conformance matrix must contain assertions or assertionSets.');
   }
   const ids = new Set();
+  const sourceLocusErrors = [];
   for (const assertion of expandedAssertions) {
     if (typeof assertion.id !== 'string' || assertion.id.length === 0) {
       throw new Error('Every semantic conformance assertion must have an id.');
@@ -678,8 +688,65 @@ function validateMatrix(value, expandedAssertions) {
       if (typeof assertion.sourceFile !== 'string' || assertion.sourceFile.length === 0) {
         throw new Error(`Semantic conformance assertion '${assertion.id}' must name a sourceFile.`);
       }
+      sourceLocusErrors.push(...validateAssertionSourceLoci(assertion));
     }
   }
+  if (sourceLocusErrors.length > 0) {
+    throw new Error(
+      `Semantic conformance source-locus preflight found ${sourceLocusErrors.length} invalid locator(s):\n`
+      + sourceLocusErrors.map((error) => `- ${error}`).join('\n'),
+    );
+  }
+}
+
+function validateAssertionSourceLoci(assertion) {
+  const fixtureRoot = path.join(packageRoot, assertion.fixture);
+  const defaultSourceFile = assertion.sourceFile;
+  const errors = [];
+  const validate = (locus, operation) => {
+    try {
+      operation();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`Semantic conformance assertion '${assertion.id}' ${locus}: ${message}`);
+    }
+  };
+  if (assertion.cursor != null) {
+    validate('cursor', () => {
+      cursorForSpec(fixtureRoot, defaultSourceFile, assertion.cursor);
+    });
+  }
+  if (assertion.expected?.subjectMarker != null) {
+    validate('expected.subjectMarker', () => {
+      const sourceText = sourceTextFor(absoluteFixturePath(fixtureRoot, defaultSourceFile));
+      authoredMarkerSpan(
+        defaultSourceFile,
+        sourceText,
+        assertion.expected.subjectMarker,
+        assertion.expected.subjectMarkerOccurrence,
+      );
+    });
+  }
+  for (const [expectationIndex, expectation] of (assertion.expectations ?? []).entries()) {
+    const querySourceFile = expectation.query?.sourceFile ?? defaultSourceFile;
+    if (expectation.query?.cursor != null && expectation.query.cursor !== false) {
+      validate(`expectations[${expectationIndex}].query.cursor`, () => {
+        cursorForSpec(fixtureRoot, querySourceFile, expectation.query.cursor);
+      });
+    }
+    for (const [rowIndex, rowExpectation] of (expectation.rows ?? []).entries()) {
+      if (rowExpectation.source != null) {
+        validate(`expectations[${expectationIndex}].rows[${rowIndex}].source`, () => {
+          spanForSpec(
+            fixtureRoot,
+            rowExpectation.source.sourceFile ?? defaultSourceFile,
+            rowExpectation.source,
+          );
+        });
+      }
+    }
+  }
+  return errors;
 }
 
 function validateKnownGaps(value, expandedAssertions) {
@@ -808,17 +875,6 @@ function cursorForSpec(fixtureRoot, defaultSourceFile, spec) {
   const sourceFile = spec.sourceFile ?? defaultSourceFile;
   const sourceFilePath = absoluteFixturePath(fixtureRoot, sourceFile);
   const sourceText = sourceTextFor(sourceFilePath);
-  if (spec.position === 'before-marker' || spec.position === 'after-marker') {
-    const marker = spec.marker ?? spec.token;
-    const markerStart = nthIndexOf(sourceText, marker, spec.occurrence ?? 1);
-    if (markerStart < 0) {
-      throw new Error(`Marker not found in ${sourceFile}: ${marker}`);
-    }
-    const offset = markerStart
-      + (spec.position === 'after-marker' ? marker.length : 0)
-      + (spec.offsetDelta ?? 0);
-    return cursorAtOffset(sourceFilePath, sourceText, offset);
-  }
   const span = spanForSpec(fixtureRoot, defaultSourceFile, spec);
   return cursorForSpan(sourceFilePath, sourceText, span);
 }
@@ -827,81 +883,15 @@ function spanForSpec(fixtureRoot, defaultSourceFile, spec) {
   const sourceFile = spec.sourceFile ?? defaultSourceFile;
   const sourceFilePath = absoluteFixturePath(fixtureRoot, sourceFile);
   const sourceText = sourceTextFor(sourceFilePath);
-  if (spec.startMarker != null && spec.endMarker != null) {
-    const start = nthIndexOf(sourceText, spec.startMarker, spec.startMarkerOccurrence ?? spec.markerOccurrence ?? 1);
-    if (start < 0) {
-      throw new Error(`Start marker not found in ${sourceFile}: ${spec.startMarker}`);
-    }
-    const endMarkerStart = sourceText.indexOf(spec.endMarker, start + spec.startMarker.length);
-    if (endMarkerStart < 0) {
-      throw new Error(`End marker not found in ${sourceFile} after ${spec.startMarker}: ${spec.endMarker}`);
-    }
-    const end = endMarkerStart + spec.endMarker.length + (spec.offsetDelta ?? 0);
-    return {
-      path: sourceFile,
-      start,
-      end,
-      text: sourceText.slice(start, end),
-    };
-  }
-  const marker = spec.marker ?? spec.token;
-  const markerStart = nthIndexOf(sourceText, marker, spec.markerOccurrence ?? 1);
-  if (markerStart < 0) {
-    throw new Error(`Marker not found in ${sourceFile}: ${marker}`);
-  }
-  if (spec.position === 'before-marker' || spec.position === 'after-marker') {
-    const offset = markerStart
-      + (spec.position === 'after-marker' ? marker.length : 0)
-      + (spec.offsetDelta ?? 0);
-    return {
-      path: sourceFile,
-      start: offset,
-      end: offset,
-      text: '',
-    };
-  }
-  let tokenStart = markerStart - 1;
-  const occurrence = spec.occurrence ?? 1;
-  for (let index = 0; index < occurrence; index++) {
-    tokenStart = sourceText.indexOf(spec.token, tokenStart + 1);
-    if (tokenStart < 0) {
-      throw new Error(`Token '${spec.token}' occurrence ${occurrence} not found after marker '${marker}'.`);
-    }
-  }
-  return {
-    path: sourceFile,
-    start: tokenStart,
-    end: tokenStart + spec.token.length,
-    text: spec.token,
-  };
-}
-
-function nthIndexOf(text, marker, occurrence) {
-  let start = -1;
-  for (let index = 0; index < occurrence; index++) {
-    start = text.indexOf(marker, start + 1);
-    if (start < 0) {
-      return -1;
-    }
-  }
-  return start;
+  return authoredSourceSpanForSpec(sourceFile, sourceText, spec);
 }
 
 function absoluteFixturePath(fixtureRoot, sourceFile) {
   return path.isAbsolute(sourceFile) ? sourceFile : path.join(fixtureRoot, sourceFile);
 }
 
-function spanForMarker(text, marker, sourcePath = null) {
-  const start = text.indexOf(marker);
-  if (start < 0) {
-    throw new Error(`Expected marker not found: ${marker}`);
-  }
-  return {
-    path: sourcePath,
-    start,
-    end: start + marker.length,
-    text: marker,
-  };
+function spanForMarker(text, marker, sourcePath = null, occurrence = null) {
+  return authoredMarkerSpan(sourcePath ?? '<source>', text, marker, occurrence);
 }
 
 function cursorForSpan(filePath, text, span) {

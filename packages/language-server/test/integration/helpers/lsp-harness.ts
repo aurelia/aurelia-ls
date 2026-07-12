@@ -300,6 +300,42 @@ export function createFixture(files: Record<string, string>): string {
   return dir;
 }
 
+/** Create a boot-admitted Aurelia app instead of relying on filename conventions in adapter tests. */
+export function createAureliaAppFixture(files: Record<string, string>): string {
+  return createFixture({
+    "package.json": JSON.stringify({
+      name: "aurelia-lsp-integration-fixture",
+      private: true,
+      type: "module",
+      dependencies: {
+        aurelia: "^2.0.0-rc.1",
+      },
+      devDependencies: {
+        typescript: "^6.0.3",
+      },
+    }),
+    "tsconfig.json": JSON.stringify({
+      compilerOptions: {
+        target: "ES2022",
+        module: "ESNext",
+        moduleResolution: "Bundler",
+        lib: ["ES2022", "DOM", "DOM.Iterable"],
+        strict: true,
+        skipLibCheck: true,
+        allowArbitraryExtensions: true,
+        noEmit: true,
+      },
+      include: ["src"],
+    }),
+    "src/main.ts": [
+      "import Aurelia from 'aurelia';",
+      "import { AppRoot } from './app';",
+      "Aurelia.app(AppRoot).start();",
+    ].join("\n"),
+    ...files,
+  });
+}
+
 export function copyFixtureDirectory(sourceDir: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aurelia-lsp-integ-"));
   fs.cpSync(sourceDir, dir, { recursive: true });
@@ -325,6 +361,10 @@ export function fileUri(root: string, relPath: string): string {
 
 export function pathFromFileUri(uri: string): string {
   return fileURLToPath(uri);
+}
+
+export function normalizedUriPath(uri: string): string {
+  return normalizedFileIdentity(pathFromFileUri(uri));
 }
 
 export interface TrackedDocument {

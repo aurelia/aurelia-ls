@@ -63,7 +63,7 @@ describe("runtime-backed workspace symbols", () => {
         {
           resourceKind: "custom-element",
           name: "product-card",
-          aliases: ["product-tile"],
+          aliases: [{ name: "product-tile", source: null }],
           key: "custom-element:product-card",
           targetName: "ProductCard",
           targetSource: source("src/resources.ts", productClassStart, productClassStart + "ProductCard".length),

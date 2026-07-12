@@ -977,6 +977,91 @@
       ],
       "createdAt": "2026-07-08",
       "updatedAt": "2026-07-08"
+    },
+    {
+      "id": "decision:ide-assurance-layer-ownership",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "language-server",
+        "vscode",
+        "lsp",
+        "testing",
+        "fixtures"
+      ],
+      "summary": "IDE assurance uses three active campaign layers over a supporting pressure-fixture corpus contract.",
+      "rationale": "Semantic truth, protocol projection, and stateful VS Code behavior fail at different boundaries and require different volumes and oracles. Fixture verification proves reopened product terrain; semantic conformance owns high-volume public query/locus truth; lane-harness owns medium-volume real-LSP projection; extension-host E2E owns low-volume client state and edit reliability. Adapter/unit tests support those boundaries without replacing them.",
+      "guidance": [
+        "Treat pressure fixtures as a mixed historical evidence corpus, not an exhaustive or uniformly rigorous suite. Fixture count is not coverage quality.",
+        "Start semantic and cross-query questions in semantic conformance. Stable requirements stay in matrix.json and transient failures stay in known-gaps.json.",
+        "Semantic-conformance source markers must be unique unless markerOccurrence, startMarkerOccurrence, or endMarkerOccurrence explicitly selects a repeated witness. Token occurrence is independent from anchor occurrence, and locator failures must preflight before known-gap classification.",
+        "Add lane-harness probes when LSP mapping, paging, source mapping, refusal conversion, or WorkspaceEdit assembly can lose or reshape a rich semantic answer. Generated snapshots record observation; sidecar verdicts record judgment.",
+        "Add extension-host journeys only when VS Code state or API spending matters: dirty buffers, cancellation, diagnostics publication/recovery, multi-file edit application, undo/redo, or provider middleware.",
+        "Use explicit boot-admitted Aurelia app fixtures for adapter tests that claim app/template behavior. Keep unadmitted filename-paired files only as honest negative controls; do not reintroduce project-global convention inference through tests.",
+        "Use selective triangulation after a coherent refactor. Do not clone every semantic assertion through every layer."
+      ],
+      "anchors": [
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/semantic-conformance/README.md",
+          "summary": "High-volume semantic query/locus contract and source-locator rules."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/lane-harness/README.md",
+          "summary": "Medium-volume real-LSP projection boundary."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/vscode/test/README.md",
+          "summary": "Low-volume extension-host state and reliability boundary."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/fixtures/pressure/README.md",
+          "summary": "Pressure fixtures are reusable evidence corpus inputs rather than one canonical suite."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/language-server/test/integration/helpers/lsp-harness.ts",
+          "summary": "Shared explicit boot-admitted app fixture for LSP adapter tests."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance",
+          "summary": "Runs high-volume semantic query/locus conformance."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/lane-harness/scripts/run-lane.mjs --fixture <fixture> --lane <lane>",
+          "summary": "Runs one real-LSP projection lane."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm test:vscode:extension-host",
+          "summary": "Runs low-volume real VS Code reliability journeys."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-semantic-conformance.mjs"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/language-server/test/integration/helpers/lsp-harness.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/lane-harness/scripts/run-lane.mjs"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/vscode/test/extension-host/suite/index.cjs"
+        }
+      ],
+      "createdAt": "2026-07-12",
+      "updatedAt": "2026-07-12"
     }
   ]
 }

@@ -2,12 +2,17 @@
 
 This folder contains semantic-runtime conformance assertions and the current known-gap ledger.
 
-The conformance matrix is a query/locus contract layer, not a replacement for fixture verification or lane snapshots:
+The conformance matrix is the high-volume semantic layer in a three-layer IDE campaign, not a replacement for its
+supporting corpus contract or downstream boundaries:
 
-- fixture verification checks reopened app product facts;
+- supporting fixture verification checks reopened app product facts;
 - semantic conformance checks public query behavior, source precision, answer closure, and cross-query agreement;
 - lane snapshots check LSP protocol projection;
 - extension-host tests check VS Code boundary behavior.
+
+Adapter/unit tests support these layers but do not replace them. Start a semantic or cross-query question here; add a
+lane probe when LSP projection can lose or reshape the answer, and add an extension-host journey only when VS Code state,
+dirty buffers, cancellation, edit application, diagnostics publication, or undo/redo behavior is part of the contract.
 
 The stable requirement lives in `matrix.json`. It should describe what must be true, not whether the implementation
 currently satisfies it.
@@ -35,6 +40,13 @@ the behavior query kinds actually exercised by each Aurelia domain. Query-kind c
 data rather than duplicated as metadata. That is deliberate: these fields are not tags for decoration. Unknown values
 are rejected so the matrix does not grow parallel taxonomies by accident.
 Unknown CLI flags are rejected for the same reason.
+
+Source loci are also validated before any runtime query or known-gap classification. A `marker`, `startMarker`, or
+`endMarker` must occur exactly once in its selected source file unless `markerOccurrence`, `startMarkerOccurrence`, or
+`endMarkerOccurrence` explicitly selects a positive one-based occurrence. Within a marker-anchored span, `occurrence`
+selects the one-based occurrence of `token` after that anchor; it does not select the marker. Ambiguous loci are test
+infrastructure defects and abort the run, so they cannot be hidden by a known-gap row. Prefer a more specific marker
+when it communicates the semantic witness; use an explicit occurrence for deliberately repeated gallery examples.
 
 Focused examples:
 
@@ -75,7 +87,7 @@ Transient verdict state lives in `known-gaps.json`:
 
 This keeps the north-star requirements durable while making today's implementation gaps explicit.
 
-Current matrix scale, as of 2026-07-11:
+Current matrix scale, as of 2026-07-12:
 
 - public app-query catalog boundary assertions;
 - source precision and cross-query agreement canaries;
@@ -101,13 +113,12 @@ Current matrix scale, as of 2026-07-11:
 - code-action edit-plan provenance, including safe no-action cases;
 - framework capability demand rows before diagnostic/code-action projection.
 
-Current default output: 401 active assertions pass with 34 known gaps. The bindable-contracts subdomain has 82 assertion
-rows: 60 active passes and 22 known-gap witnesses. Its gaps are grouped by causal mechanism rather than surface symptom:
-bindable metadata/class-symbol closure, inline multi-binding segment projection, coercion policy loss, field-provenance
-loss, cursor type loss, interceptor-reference convergence, custom-attribute compiler-policy projection, and TS-origin callback
-propagation. The router-composition subdomain has 86 assertion rows: 83 active passes and 3 known-gap witnesses;
-the resource-registration subdomain has 90 active assertion rows and no current known gaps; the runtime-composition
-subdomain has 4 assertion rows.
+Current default output: 445 active assertions pass with 14 known gaps. The bindable-contracts subdomain has 82 assertion
+rows: 76 active passes and 6 known-gap witnesses. Its remaining gaps cover inline multi-binding segment projection,
+coercion policy, cursor type projection, interceptor-reference convergence, and custom-attribute compiler-policy
+projection. The router-composition subdomain has 110 active assertion rows and no current known gaps; the
+resource-registration subdomain has 90 active assertion rows and no current known gaps; the runtime-composition
+subdomain has 4 active assertion rows.
 
 The matrix is intentionally structural rather than exhaustive. New assertion families should be added when they expose
 a new semantic axis, a new answer contract, or a known data-loss risk. Do not add duplicate rows merely to raise the

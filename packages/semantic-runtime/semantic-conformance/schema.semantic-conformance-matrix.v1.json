@@ -67,6 +67,69 @@
         "source-precision-agreement"
       ]
     },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sourceLocus": {
+      "type": "object",
+      "description": "Authored source locator. Markers must be unique unless their corresponding occurrence field is explicit.",
+      "properties": {
+        "sourceFile": { "type": "string", "minLength": 1 },
+        "marker": { "type": "string", "minLength": 1 },
+        "markerOccurrence": { "$ref": "#/$defs/positiveInteger" },
+        "token": { "type": "string", "minLength": 1 },
+        "occurrence": { "$ref": "#/$defs/positiveInteger" },
+        "position": { "enum": ["before-marker", "after-marker"] },
+        "offsetDelta": { "type": "integer" },
+        "startMarker": { "type": "string", "minLength": 1 },
+        "startMarkerOccurrence": { "$ref": "#/$defs/positiveInteger" },
+        "endMarker": { "type": "string", "minLength": 1 },
+        "endMarkerOccurrence": { "$ref": "#/$defs/positiveInteger" }
+      },
+      "anyOf": [
+        { "required": ["marker"] },
+        { "required": ["token"] },
+        { "required": ["startMarker", "endMarker"] }
+      ],
+      "additionalProperties": false
+    },
+    "querySpec": {
+      "type": "object",
+      "properties": {
+        "sourceFile": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "const": false }
+          ]
+        },
+        "cursor": {
+          "oneOf": [
+            { "$ref": "#/$defs/sourceLocus" },
+            { "const": false }
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "rowExpectation": {
+      "type": "object",
+      "properties": {
+        "source": { "$ref": "#/$defs/sourceLocus" }
+      },
+      "additionalProperties": true
+    },
+    "queryExpectation": {
+      "type": "object",
+      "properties": {
+        "query": { "$ref": "#/$defs/querySpec" },
+        "rows": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/rowExpectation" }
+        }
+      },
+      "additionalProperties": true
+    },
     "assertionBase": {
       "type": "object",
       "required": [
@@ -87,7 +150,12 @@
         "domainAxis": { "$ref": "#/$defs/domainAxis" },
         "coverageIntent": { "$ref": "#/$defs/coverageIntent" },
         "assertionKind": { "$ref": "#/$defs/assertionKind" },
-        "requirement": { "type": "string", "minLength": 1 }
+        "requirement": { "type": "string", "minLength": 1 },
+        "cursor": { "$ref": "#/$defs/sourceLocus" },
+        "expectations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/queryExpectation" }
+        }
       },
       "additionalProperties": true
     },
@@ -109,7 +177,12 @@
                 "properties": {
                   "id": { "type": "string", "minLength": 1 },
                   "aureliaDomain": { "$ref": "#/$defs/aureliaDomain" },
-                  "coverageIntent": { "$ref": "#/$defs/coverageIntent" }
+                  "coverageIntent": { "$ref": "#/$defs/coverageIntent" },
+                  "cursor": { "$ref": "#/$defs/sourceLocus" },
+                  "expectations": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/queryExpectation" }
+                  }
                 },
                 "additionalProperties": true
               }

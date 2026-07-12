@@ -10,6 +10,7 @@ import {
   createDiagnosticsRecorder,
   fileUri,
   initialize,
+  normalizedUriPath,
   openDocument,
   pathFromFileUri,
   positionAt,
@@ -392,11 +393,6 @@ function expectVersionedEdit(edit: RenameResult, ...documents: readonly TrackedD
     );
     expect(change?.textDocument?.version, `expected a versioned edit for ${document.uri}`).toBe(document.version);
   }
-}
-
-function normalizedUriPath(uri: string): string {
-  const filePath = path.resolve(pathFromFileUri(uri));
-  return process.platform === "win32" ? filePath.toLowerCase() : filePath;
 }
 
 async function waitForDiagnosticMessage(

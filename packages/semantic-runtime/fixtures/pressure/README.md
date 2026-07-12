@@ -1,7 +1,12 @@
 # Pressure Fixtures
 
-This folder is for analyzer pressure fixtures, including hand-authored edge cases and migrated app-pattern fixtures that
-should remain as semantic contracts rather than app-builder recipes.
+This folder is a reusable semantic evidence corpus, not one exhaustive or uniformly designed test suite. It contains
+hand-authored analyzer edge cases, migrated app-pattern fixtures, generated app-builder pressure, framework/runtime
+diagnostic canaries, and newer IDE-lane witnesses from several development eras. Fixture verification, semantic
+conformance, the lane harness, and focused contracts may all reopen entries from this corpus without making fixture
+count a coverage claim.
+
+Migrated app-pattern fixtures should remain semantic contracts rather than app-builder recipes.
 
 Use these fixtures to preserve shapes that real Aurelia projects may contain, including weak type surfaces, mixed state
 ownership, callback bindables, object bindables on non-leaf components, dynamic form controls, and partially inconsistent

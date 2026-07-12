@@ -559,7 +559,7 @@
               "name": "semantic tokens",
               "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "tokenType": "aureliaController" }, "source": { "marker": "<label repeat.for=\"option of options\">", "token": "repeat" } }
+                { "fields": { "tokenType": "aureliaController" }, "source": { "marker": "<label repeat.for=\"option of options\">", "markerOccurrence": 1, "token": "repeat" } }
               ]
             }
           ]
@@ -572,7 +572,7 @@
               "name": "semantic tokens",
               "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<label repeat.for=\"option of options\">", "token": "for" } }
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<label repeat.for=\"option of options\">", "markerOccurrence": 1, "token": "for" } }
               ]
             }
           ]
@@ -585,7 +585,7 @@
               "name": "semantic tokens",
               "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "tokenType": "variable" }, "source": { "marker": "<label repeat.for=\"option of options\">", "token": "option" } }
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "<label repeat.for=\"option of options\">", "markerOccurrence": 1, "token": "option" } }
               ]
             }
           ]
@@ -598,7 +598,7 @@
               "name": "semantic tokens",
               "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "tokenType": "variable" }, "source": { "marker": "<label repeat.for=\"option of options\">", "token": "options" } }
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "<label repeat.for=\"option of options\">", "markerOccurrence": 1, "token": "options" } }
               ]
             }
           ]
@@ -611,7 +611,7 @@
               "name": "semantic tokens",
               "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "tokenType": "variable" }, "source": { "marker": "model.bind=\"option\"", "token": "option" } }
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "model.bind=\"option\"", "markerOccurrence": 1, "token": "option" } }
               ]
             }
           ]
@@ -624,7 +624,7 @@
               "name": "semantic tokens",
               "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "tokenType": "property" }, "source": { "marker": "${option.label}", "token": "label" } }
+                { "fields": { "tokenType": "property" }, "source": { "marker": "${option.label}", "markerOccurrence": 1, "token": "label" } }
               ]
             }
           ]
@@ -911,7 +911,7 @@
               "name": "semantic tokens",
               "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "tokenType": "aureliaBehavior" }, "source": { "marker": "draft.title & debounce", "token": "debounce" } }
+                { "fields": { "tokenType": "aureliaBehavior" }, "source": { "marker": "draft.title & debounce", "markerOccurrence": 1, "token": "debounce" } }
               ]
             }
           ]
@@ -1275,7 +1275,9 @@
                   },
                   "source": {
                     "startMarker": "<label repeat.for=\"option of options\">",
-                    "endMarker": "</label>"
+                    "startMarkerOccurrence": 1,
+                    "endMarker": "</label>",
+                    "endMarkerOccurrence": 1
                   }
                 }
               ]
@@ -1314,6 +1316,7 @@
                   },
                   "source": {
                     "marker": "<input type=\"time\" value.bind=\"draft.title\"",
+                    "markerOccurrence": 1,
                     "token": "value.bind"
                   }
                 }
@@ -1809,7 +1812,7 @@
           "id": "inline-custom-attribute-default-segment-cursor",
           "domainAxis": "query-locus",
           "capability": "template-cursor-info",
-          "cursor": { "marker": "tone.bind: accentTone", "token": "tone" },
+          "cursor": { "marker": "tone.bind: accentTone", "markerOccurrence": 1, "token": "tone" },
           "expectations": [
             {
               "name": "cursor info",
@@ -2046,7 +2049,7 @@
           "id": "inline-default-derived-segment-rename-edits-segment-target",
           "domainAxis": "edit-plan",
           "capability": "bindable-rename",
-          "cursor": { "marker": "tone.bind: accentTone", "token": "tone" },
+          "cursor": { "marker": "tone.bind: accentTone", "markerOccurrence": 1, "token": "tone" },
           "expectations": [
             {
               "name": "property rename",
@@ -2056,7 +2059,7 @@
                 {
                   "rowPath": "value.edits",
                   "fields": { "editKind": "bindable-attribute", "oldText": "tone", "newText": "accent-tone-value" },
-                  "source": { "marker": "tone.bind: accentTone", "token": "tone" },
+                  "source": { "marker": "tone.bind: accentTone", "markerOccurrence": 1, "token": "tone" },
                   "oldTextMatchesSource": true
                 },
                 {
@@ -2190,10 +2193,10 @@
               "rows": [
                 { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "display-hint=\"message.bind: statusMessage", "token": "message" } },
                 { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "display-hint=\"message.bind: statusMessage; display-label.bind: aliasLabel", "token": "display-label" } },
-                { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "tone.bind: accentTone", "token": "tone" } },
-                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "message.bind: statusMessage", "token": "bind" } },
+                { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "tone.bind: accentTone", "markerOccurrence": 1, "token": "tone" } },
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "message.bind: statusMessage", "markerOccurrence": 1, "token": "bind" } },
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "display-label.bind: aliasLabel", "token": "bind" } },
-                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "tone.bind: accentTone", "token": "bind" } }
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "tone.bind: accentTone", "markerOccurrence": 1, "token": "bind" } }
               ]
             }
           ]
@@ -3322,7 +3325,7 @@
               "rows": [
                 {
                   "fields": { "targetProperty": "message", "authoredMode": "default", "effectiveMode": "to-view" },
-                  "source": { "marker": "message.bind: statusMessage", "token": "message.bind" },
+                  "source": { "marker": "message.bind: statusMessage", "markerOccurrence": 1, "token": "message.bind" },
                   "count": 1
                 },
                 {
@@ -3332,7 +3335,7 @@
                 },
                 {
                   "fields": { "targetProperty": "tone", "authoredMode": "default", "effectiveMode": "to-view" },
-                  "source": { "marker": "tone.bind: accentTone", "token": "tone.bind" },
+                  "source": { "marker": "tone.bind: accentTone", "markerOccurrence": 1, "token": "tone.bind" },
                   "count": 1
                 }
               ]
@@ -4433,7 +4436,7 @@
                 {
                   "rowPath": "value.edits",
                   "fields": { "editKind": "resource-name-declaration", "newText": "shared-card" },
-                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'shared'", "token": "shared" },
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'shared'", "markerOccurrence": 1, "token": "shared" },
                   "oldTextMatchesSource": true,
                   "count": 1
                 },
@@ -4961,7 +4964,7 @@
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "marker": "as-custom-element=\"nested-local\"", "token": "nested-local" }, "count": 1 },
                 { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "<nested-local nested-value", "token": "nested-local" }, "count": 1 },
-                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "</nested-local>", "token": "nested-local", "occurrence": 1 }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "</nested-local>", "markerOccurrence": 1, "token": "nested-local" }, "count": 1 },
                 { "source": { "marker": "<nested-local></nested-local>", "token": "nested-local" }, "absent": true }
               ]
             }
@@ -5020,7 +5023,7 @@
         },
         {
           "id": "local-bindable-property-references-and-rename-remain-inside-generated-view-model",
-          "cursor": { "marker": "value.bind=\"label\"", "token": "label" },
+          "cursor": { "marker": "value.bind=\"label\"", "markerOccurrence": 1, "token": "label" },
           "expectations": [
             {
               "name": "property references",
@@ -5028,7 +5031,7 @@
               "equals": { "value.selectedMemberName": "label", "value.rows.length": 4 },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "marker": "<bindable name=\"label\"", "token": "label" }, "count": 1 },
-                { "source": { "marker": "value.bind=\"label\"", "token": "label" }, "count": 1 },
+                { "source": { "marker": "value.bind=\"label\"", "markerOccurrence": 1, "token": "label" }, "count": 1 },
                 { "source": { "marker": "value.bind=\"label\"></global-helper>", "token": "label" }, "count": 1 },
                 { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" }, "source": { "marker": "public-label.bind=\"message\"", "token": "public-label" }, "count": 1 }
               ]
@@ -5039,7 +5042,7 @@
               "equals": { "value.status": "available", "value.edits.length": 3 },
               "rows": [
                 { "rowPath": "value.edits", "source": { "marker": "<bindable name=\"label\"", "token": "label" }, "oldTextMatchesSource": true, "count": 1 },
-                { "rowPath": "value.edits", "source": { "marker": "value.bind=\"label\"", "token": "label" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "value.bind=\"label\"", "markerOccurrence": 1, "token": "label" }, "oldTextMatchesSource": true, "count": 1 },
                 { "rowPath": "value.edits", "source": { "marker": "value.bind=\"label\"></global-helper>", "token": "label" }, "oldTextMatchesSource": true, "count": 1 },
                 { "rowPath": "value.edits", "source": { "marker": "public-label.bind=\"message\"", "token": "public-label" }, "absent": true }
               ]
@@ -5090,7 +5093,7 @@
               "name": "template diagnostics",
               "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "label" }, "source": { "marker": "value.bind=\"label\"", "token": "label" }, "absent": true },
+                { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "label" }, "source": { "marker": "value.bind=\"label\"", "markerOccurrence": 1, "token": "label" }, "absent": true },
                 { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "label" }, "source": { "marker": "value.bind=\"label\"></global-helper>", "token": "label" }, "absent": true },
                 { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "value" }, "source": { "marker": "<span>${value}</span>", "token": "value" }, "absent": true }
               ]
@@ -5202,14 +5205,14 @@
               "name": "template diagnostics",
               "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
               "rows": [
-                { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0709" }, "source": { "startMarker": "<template as-custom-element=\"nested-local\">", "endMarker": "</template>" }, "count": 1 }
+                { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0709" }, "source": { "startMarker": "<template as-custom-element=\"nested-local\">", "endMarker": "</template>", "endMarkerOccurrence": 1 }, "count": 1 }
               ]
             },
             {
               "name": "app diagnostics",
               "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
               "rows": [
-                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0709", "relatedQueryKind": "template-diagnostics" }, "source": { "startMarker": "<template as-custom-element=\"nested-local\">", "endMarker": "</template>" }, "count": 1 }
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0709", "relatedQueryKind": "template-diagnostics" }, "source": { "startMarker": "<template as-custom-element=\"nested-local\">", "endMarker": "</template>", "endMarkerOccurrence": 1 }, "count": 1 }
               ]
             }
           ]
@@ -6237,7 +6240,7 @@
               "name": "template completions",
               "query": {
                 "kind": "template-completions",
-                "cursor": { "marker": "${", "position": "after-marker" },
+                "cursor": { "marker": "${", "markerOccurrence": 1, "position": "after-marker" },
                 "options": { "page": { "size": 100 } }
               },
               "equals": { "value.siteKind": "expression" },
@@ -6262,7 +6265,7 @@
               "name": "template completions",
               "query": {
                 "kind": "template-completions",
-                "cursor": { "marker": "${", "position": "after-marker" },
+                "cursor": { "marker": "${", "markerOccurrence": 1, "position": "after-marker" },
                 "options": { "page": { "size": 100 } }
               },
               "rows": [
@@ -6446,7 +6449,7 @@
               "query": {
                 "kind": "template-completions",
                 "sourceFile": "src/app.html",
-                "cursor": { "marker": "${selectedTask.", "position": "after-marker", "occurrence": 1 },
+                "cursor": { "marker": "${selectedTask.", "position": "after-marker", "markerOccurrence": 1 },
                 "options": { "page": { "size": 100 } }
               },
               "outcomes": [ "partial" ],
@@ -6471,7 +6474,7 @@
               "query": {
                 "kind": "template-completions",
                 "sourceFile": "src/app.html",
-                "cursor": { "marker": "${selectedTask.", "position": "after-marker", "occurrence": 2 },
+                "cursor": { "marker": "${selectedTask.", "position": "after-marker", "markerOccurrence": 2 },
                 "options": { "page": { "size": 100 } }
               },
               "outcomes": [ "hit" ],
@@ -7105,7 +7108,7 @@
               "rows": [
                 { "fields": { "referenceKind": "declaration", "name": "hostTitle" }, "source": { "marker": "<let hostTitle.bind=\"task.name\"", "token": "hostTitle" } },
                 { "fields": { "referenceKind": "template-usage", "name": "hostTitle" }, "source": { "marker": "<span class=\"let-binding-context\">${hostTitle}</span>", "token": "hostTitle" } },
-                { "fields": { "referenceKind": "template-usage", "name": "hostTitle" }, "source": { "marker": "${$parent.hostTitle}", "token": "hostTitle" } },
+                { "fields": { "referenceKind": "template-usage", "name": "hostTitle" }, "source": { "marker": "${$parent.hostTitle}", "markerOccurrence": 1, "token": "hostTitle" } },
                 { "fields": { "referenceKind": "declaration", "name": "hostTitle" }, "source": { "sourceFile": "src/scope-lab-app.ts", "marker": "hostTitle = 'Scope lab'", "token": "hostTitle" }, "absent": true }
               ]
             },
@@ -7336,7 +7339,7 @@
         },
         {
           "id": "with-value-scope-members",
-          "cursor": { "marker": "${name}</span>", "token": "name" },
+          "cursor": { "marker": "${name}</span>", "markerOccurrence": 1, "token": "name" },
           "expectations": [
             {
               "name": "with scope member cursor info",
@@ -7351,7 +7354,7 @@
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
               "rows": [
                 { "fields": { "referenceKind": "declaration", "name": "name" }, "source": { "sourceFile": "src/scope-lab-app.ts", "marker": "export interface ScopeTask {\n  readonly id: string;\n  readonly name: string;", "token": "name" } },
-                { "fields": { "referenceKind": "template-usage", "name": "name" }, "source": { "marker": "${name}</span>", "token": "name" } }
+                { "fields": { "referenceKind": "template-usage", "name": "name" }, "source": { "marker": "${name}</span>", "markerOccurrence": 1, "token": "name" } }
               ]
             }
           ]
@@ -7847,7 +7850,7 @@
                     "diagnosticKind": "template-expression-typescript-diagnostic",
                     "missingInput": "typescript:TS2339"
                   },
-                  "source": { "marker": "${$parent.hostTitle}", "token": "hostTitle" },
+                  "source": { "marker": "${$parent.hostTitle}", "markerOccurrence": 1, "token": "hostTitle" },
                   "absent": true
                 }
               ]
@@ -7974,7 +7977,7 @@
           "expectations": [
             {
               "name": "$previous is optional on the first contextual row",
-              "query": { "kind": "template-cursor-info", "cursor": { "marker": "$previous?.label", "token": "$previous" } },
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "$previous?.label", "markerOccurrence": 1, "token": "$previous" } },
               "equals": { "value.selectedMember.typeDisplay": "BuiltInProduct | undefined" }
             },
             {
@@ -8647,7 +8650,7 @@
                 { "fields": { "tokenType": "variable", "tokenModifiers": ["defaultLibrary"] }, "source": { "marker": "${$index}:${$odd}:${$even}:${$first}:${$middle}:${$last}:${$length}", "token": "$middle" } },
                 { "fields": { "tokenType": "variable", "tokenModifiers": ["defaultLibrary"] }, "source": { "marker": "${$index}:${$odd}:${$even}:${$first}:${$middle}:${$last}:${$length}", "token": "$last" } },
                 { "fields": { "tokenType": "variable", "tokenModifiers": ["defaultLibrary"] }, "source": { "marker": "${$index}:${$odd}:${$even}:${$first}:${$middle}:${$last}:${$length}", "token": "$length" } },
-                { "fields": { "tokenType": "variable", "tokenModifiers": ["defaultLibrary"] }, "source": { "marker": "$previous?.label", "token": "$previous" } }
+                { "fields": { "tokenType": "variable", "tokenModifiers": ["defaultLibrary"] }, "source": { "marker": "$previous?.label", "markerOccurrence": 1, "token": "$previous" } }
               ]
             }
           ]
@@ -8960,8 +8963,8 @@
               "name": "route contexts",
               "query": { "kind": "route-contexts", "options": { "page": { "size": 100 } } },
               "rows": [
-                { "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "startMarker": "{\n      id: 'main'", "endMarker": "\n    }" } },
-                { "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "startMarker": "{\n      id: 'open'", "endMarker": "\n    }" }, "atLeast": 2 }
+                { "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "startMarker": "{\n      id: 'main'", "endMarker": "\n    }", "endMarkerOccurrence": 1 } },
+                { "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "startMarker": "{\n      id: 'open'", "endMarker": "\n    }", "endMarkerOccurrence": 1 }, "atLeast": 2 }
               ]
             },
             {
@@ -9640,7 +9643,7 @@
         },
         {
           "id": "load-multi-binding-key-completions",
-          "cursor": { "marker": "load=\"route: product-detail; ", "position": "after-marker" },
+          "cursor": { "marker": "load=\"route: product-detail; ", "markerOccurrence": 1, "position": "after-marker" },
           "expectations": [
             {
               "name": "template completions",
@@ -9721,7 +9724,7 @@
         },
         {
           "id": "route-primary-value-completions-use-route-world",
-          "cursor": { "marker": "load=\"route: ", "position": "after-marker" },
+          "cursor": { "marker": "load=\"route: ", "markerOccurrence": 1, "position": "after-marker" },
           "expectations": [
             {
               "name": "template completions",
@@ -9756,7 +9759,7 @@
         },
         {
           "id": "route-params-key-completions-use-selected-route-parameters",
-          "cursor": { "marker": "params.bind: { ", "position": "after-marker" },
+          "cursor": { "marker": "params.bind: { ", "markerOccurrence": 1, "position": "after-marker" },
           "coverageIntent": "domain-contract",
           "expectations": [
             {
@@ -9836,7 +9839,7 @@
           "id": "route-error-completions-offer-configured-routes",
           "fixture": "fixtures/pressure/router-instruction-errors",
           "sourceFile": "src/router-instruction-errors-app.html",
-          "cursor": { "marker": "load=\"", "position": "after-marker" },
+          "cursor": { "marker": "load=\"", "markerOccurrence": 1, "position": "after-marker" },
           "expectations": [
             {
               "name": "template completions",
@@ -9865,7 +9868,7 @@
       "cases": [
         {
           "id": "filled-multi-path-route-offers-the-endpoint-parameter-union",
-          "cursor": { "marker": "route: product-detail; params.bind: { ", "position": "after-marker" },
+          "cursor": { "marker": "route: product-detail; params.bind: { ", "markerOccurrence": 1, "position": "after-marker" },
           "expectations": [
             {
               "name": "template completions",
@@ -9987,7 +9990,7 @@
         },
         {
           "id": "parameter-value-position-keeps-ordinary-expression-completion",
-          "cursor": { "marker": "params.bind: { productId: ", "position": "after-marker" },
+          "cursor": { "marker": "params.bind: { productId: ", "markerOccurrence": 1, "position": "after-marker" },
           "expectations": [
             {
               "name": "template completions",
@@ -10271,7 +10274,7 @@
               "query": { "kind": "route-patterns", "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "path": "decorator-object", "routeConfig.routeKind": "child-route" }, "source": { "marker": "id: 'decorator-object',\n      path: [", "token": "'decorator-object'", "occurrence": 2 } },
-                { "fields": { "path": "class-reference-alias", "routeConfig.routeKind": "child-route" }, "source": { "marker": "@alias(", "token": "class-reference-alias" } },
+                { "fields": { "path": "class-reference-alias", "routeConfig.routeKind": "child-route" }, "source": { "marker": "@alias(", "markerOccurrence": 1, "token": "class-reference-alias" } },
                 { "fields": { "path": "scoped-alias", "routeConfig.routeKind": "child-route" }, "source": { "marker": "path: 'scoped-alias'", "token": "'scoped-alias'" } },
                 { "fields": { "path": "static-child/:childId", "routeConfig.routeKind": "child-route", "parameterCount": 1 }, "source": { "marker": "path: 'static-child/:childId'", "token": "'static-child/:childId'" } }
               ]
@@ -10439,14 +10442,14 @@
               "name": "routes",
               "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 300 } } },
               "rows": [
-                { "fields": { "originKind": "child-routes-property", "effectKind": "applied", "stage": "applied", "closure": "open", "id": "recursive-child", "paths": ["recursive-child"], "component.name": "RecursiveRoute", "openFields": ["children"], "effectiveUseCount": 2 }, "source": { "marker": "static routes = [", "token": "{\n    id: 'recursive-child',\n    path: 'recursive-child',\n    component: RecursiveRoute,\n  }" } }
+                { "fields": { "originKind": "child-routes-property", "effectKind": "applied", "stage": "applied", "closure": "open", "id": "recursive-child", "paths": ["recursive-child"], "component.name": "RecursiveRoute", "openFields": ["children"], "effectiveUseCount": 2 }, "source": { "marker": "static routes = [", "markerOccurrence": 2, "token": "{\n    id: 'recursive-child',\n    path: 'recursive-child',\n    component: RecursiveRoute,\n  }" } }
               ]
             },
             {
               "name": "open seams",
               "query": { "kind": "open-seams", "options": { "page": { "size": 300 } } },
               "rows": [
-                { "fields": { "seamKindKey": "router.open-route-config", "reasonKinds": ["router-route-config-recursive-application"] }, "source": { "marker": "static routes = [", "token": "{\n    id: 'recursive-child',\n    path: 'recursive-child',\n    component: RecursiveRoute,\n  }" } }
+                { "fields": { "seamKindKey": "router.open-route-config", "reasonKinds": ["router-route-config-recursive-application"] }, "source": { "marker": "static routes = [", "markerOccurrence": 2, "token": "{\n    id: 'recursive-child',\n    path: 'recursive-child',\n    component: RecursiveRoute,\n  }" } }
               ]
             }
           ]
@@ -10554,8 +10557,8 @@
               "name": "router options",
               "query": { "kind": "router-options", "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "appRootComponentName": "SharedRouterRoot", "activeClass": "shared-active" }, "sourceField": "registrationSource", "source": { "marker": ".register(StandardConfiguration, sharedRouterConfiguration)\n  .app({ host: document.body, component: SharedRouterRoot });", "token": "sharedRouterConfiguration", "occurrence": 1 } },
-                { "fields": { "appRootComponentName": "SharedRouterRoot", "activeClass": "shared-active" }, "sourceField": "registrationSource", "source": { "marker": ".register(StandardConfiguration, sharedRouterConfiguration)\n  .app({ host: document.body, component: SharedRouterRoot });", "token": "sharedRouterConfiguration", "occurrence": 2 } }
+                { "fields": { "appRootComponentName": "SharedRouterRoot", "activeClass": "shared-active" }, "sourceField": "registrationSource", "source": { "marker": ".register(StandardConfiguration, sharedRouterConfiguration)\n  .app({ host: document.body, component: SharedRouterRoot });", "markerOccurrence": 1, "token": "sharedRouterConfiguration" } },
+                { "fields": { "appRootComponentName": "SharedRouterRoot", "activeClass": "shared-active" }, "sourceField": "registrationSource", "source": { "marker": ".register(StandardConfiguration, sharedRouterConfiguration)\n  .app({ host: document.body, component: SharedRouterRoot });", "markerOccurrence": 2, "token": "sharedRouterConfiguration" } }
               ]
             }
           ]
@@ -10968,7 +10971,7 @@
           "expectations": [
             {
               "name": "template completions",
-              "query": { "kind": "template-completions", "cursor": { "marker": "${$this.", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "query": { "kind": "template-completions", "cursor": { "marker": "${$this.", "markerOccurrence": 1, "position": "after-marker" }, "options": { "page": { "size": 100 } } },
               "rows": [
                 { "rowPath": "value.candidates", "fields": { "name": "canLoad", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
                 { "rowPath": "value.candidates", "fields": { "name": "loading", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
@@ -11029,7 +11032,7 @@
           "expectations": [
             {
               "name": "top-level template completions",
-              "query": { "kind": "template-completions", "cursor": { "marker": "${", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "query": { "kind": "template-completions", "cursor": { "marker": "${", "markerOccurrence": 1, "position": "after-marker" }, "options": { "page": { "size": 100 } } },
               "rows": [
                 { "rowPath": "value.candidates", "fields": { "name": "loading", "candidateKind": "binding-context-slot", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
                 { "rowPath": "value.candidates", "fields": { "name": "attached", "candidateKind": "binding-context-slot", "memberKind": "method", "aureliaHookKind": "component-lifecycle" } },

@@ -10,6 +10,7 @@ import {
   createDiagnosticsRecorder,
   fileUri,
   initialize,
+  normalizedUriPath,
   openDocument,
   positionAt,
   type RenameResult,
@@ -342,11 +343,6 @@ function positionAtNeedle(document: TrackedDocument, needle: string): { line: nu
 
 function editPaths(edit: RenameResult): string[] {
   return [...new Set(collectEdits(edit).map((row) => normalizedUriPath(row.uri)))];
-}
-
-function normalizedUriPath(uri: string): string {
-  const filePath = path.resolve(fileURLToPath(uri));
-  return process.platform === "win32" ? filePath.toLowerCase() : filePath;
 }
 
 function expectDiagnosticsNotToMention(diagnostics: readonly unknown[], text: string): void {
