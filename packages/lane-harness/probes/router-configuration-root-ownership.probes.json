@@ -1,0 +1,14 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/router-configuration-root-ownership",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "duplicate-router-configuration-one-causal-error",
+        "file": "src/main.ts",
+        "verdict": "correct",
+        "reason": "Reports the second RouterConfiguration registration as one blocking AUR3168 error, relates the first registration, and keeps duplicate built-in resource warnings as contextual runtime consequences rather than competing primary diagnostics.",
+        "note": "NEW 2026-07-12. One RouterConfiguration registration is valid per modeled application root. The framework tolerates repeated registration until root RouteContext hydration, but tooling can prove the incoherent lifecycle earlier and should report the causal error rather than the incidental resource-registration cascade."
+      }
+    ]
+  }
+}

@@ -309,10 +309,12 @@ components also seed template compilation as routeable resources, which lets
 nested routed templates and `au-viewport` / `ViewportAgent` topology surface before a future route-tree/navigation
 emulator exists. Treat this as recursive static topology, not viewport activation.
 
-Router option convergence now sits before route-context materialization. `RouterConfiguration` admissions create
-framework-defaulted `RouterOptions` products, owner-tagged `customize(...)` option contributions fold into those options,
-and the API exposes them through `routerOptions`. Route-context topology starts from configured app roots when the app
-root is known, with graph-root fallback for library-style package analysis. Definition and per-use applied
+Router option convergence now spends concrete DI registration operations before route-context materialization.
+`RouterConfiguration` admissions and owner-tagged `customize(...)` contributions become framework-defaulted
+`RouterOptions` only when registered, with one product and exact definition/use provenance per `AppRoot`. Reused
+configuration values remain shared definitions with distinct rooted uses; a duplicate registration publishes AUR3168
+and withholds an arbitrary topology winner. Route-context topology starts from configured app roots when the app root
+is known, with graph-root fallback for library-style package analysis. Definition and per-use applied
 `RouteConfig` products converge class metadata, child overlays, inherited parent policy, and framework defaults before
 topology consumes them, so nested child routes become visible without repeating `RouteConfig._applyChildRouteConfig(...)`
 precedence downstream. `useEagerLoading: true` reuses the root recognizer for child contexts and materializes

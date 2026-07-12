@@ -119,7 +119,7 @@ export class RouteRecognizerMaterializationProjectPass {
           routeConfigContext,
           routeConfigContextsByIdentity,
           routeConfigsByIdentity,
-          routeContexts.usesEagerLoading(),
+          routeContexts.usesEagerLoading(routeConfigContext),
         )
       );
     const stateGraphs = materializeStateGraphs(store, routeEmissions);

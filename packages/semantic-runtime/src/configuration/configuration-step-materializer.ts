@@ -277,7 +277,7 @@ export class ConfigurationStepMaterializer {
     const appTasks = this.recordsForStepAppTasks(context, observation, local);
     records.push(...appTasks.records);
 
-    const options = this.recordsForStepOptions(context, observation, local);
+    const options = this.recordsForStepOptions(context, observation, local, source);
     records.push(...options.records);
 
     const registrationEmission = this.emitStepRegistrations(
@@ -361,12 +361,14 @@ export class ConfigurationStepMaterializer {
     context: ConfigurationRecognitionContext,
     observation: ConfigurationStepObservation,
     local: string,
+    configurationValueSource: ConfigurationSourceRecordSet,
   ): OptionContributionEmissionSet {
     const emissions = observation.optionContributions.map((contribution, optionIndex) =>
       this.recordsForOptionContribution(
         context,
         contribution,
         `${local}:option:${optionIndex}`,
+        configurationValueSource,
       )
     );
     return new OptionContributionEmissionSet(
@@ -509,12 +511,19 @@ export class ConfigurationStepMaterializer {
     context: ConfigurationRecognitionContext,
     observation: ConfigurationOptionContributionObservation,
     local: string,
+    configurationValueSource: ConfigurationSourceRecordSet,
   ): OptionContributionEmission {
     const source = this.optionContributionSource(context, observation, local);
     const value = this.recordsForOptionValue(context, observation.value, local);
     const openSeams = this.publication.recordsForOpenSeams(context, observation.openSeams, `configuration-option:${local}`);
     const handles = this.publication.configurationProductHandles(`configuration-option:${local}`);
-    const contribution = this.optionContributionForObservation(observation, source, handles, value);
+    const contribution = this.optionContributionForObservation(
+      observation,
+      source,
+      configurationValueSource,
+      handles,
+      value,
+    );
     return new OptionContributionEmission(
       [
         ...source.records,
@@ -546,6 +555,7 @@ export class ConfigurationStepMaterializer {
   private optionContributionForObservation(
     observation: ConfigurationOptionContributionObservation,
     source: ConfigurationSourceRecordSet,
+    configurationValueSource: ConfigurationSourceRecordSet,
     handles: ConfigurationProductHandles,
     value: ConfigurationOptionValueEmission,
   ): ConfigurationOptionContribution {
@@ -554,10 +564,16 @@ export class ConfigurationStepMaterializer {
       handles.identityHandle,
       observation.contributionKind,
       observation.configurationKind,
+      configurationValueSource.addressHandle,
       observation.optionPath,
       value.value,
       source.addressHandle,
       compactFieldProvenance<ConfigurationOptionField>([
+        fieldProvenanceWhenDistinct(
+          'configurationValue',
+          configurationValueSource.provenanceHandle,
+          source.provenanceHandle,
+        ),
         fieldProvenanceWhenDistinct('value', value.provenanceHandle, source.provenanceHandle),
       ]),
     );

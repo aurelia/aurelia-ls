@@ -893,6 +893,73 @@
       ],
       "createdAt": "2026-07-11",
       "updatedAt": "2026-07-11"
+    },
+    {
+      "id": "decision:router-options-rooted-registration-ownership",
+      "kind": "decision",
+      "domains": [
+        "router",
+        "configuration",
+        "di",
+        "diagnostics"
+      ],
+      "summary": "Effective RouterOptions belong to concrete RouterConfiguration DI registration uses per AppRoot; duplicate rooted registration is one causal AUR3168 error with no topology winner.",
+      "rationale": "Configuration source values are definitions and may be unregistered or reused. ContainerRegistrationOperation already records the exact admission use and receiving container, while AppRoot is the runtime ownership boundary consumed by route topology. Spending those existing products removes the project-global first-options-row island and preserves definition/use provenance. The framework's RouteContext.setRoot rejects an ancestor-visible existing IRouteContext, so a definitely executed second registration in one modeled app root is incoherent even though lower-level registration emits additional resource warnings first.",
+      "guidance": [
+        "Derive effective RouterOptions from DI registration spending, never from configuration sequence order or the first recognized customize call.",
+        "Retain the configuration-value definition source separately from each registration-use source. One reused value may yield several rooted options products; an unregistered value yields none.",
+        "When one modeled AppRoot has several definitely executed RouterConfiguration operations, publish AUR3168 on each operation after the first, relate the first operation, and do not build RouterOptions or route topology for that root.",
+        "Keep same-source AUR0153/AUR0154 duplicate router built-in resource rows as raw evidence, but present them as runtime consequences under the causal AUR3168 diagnostic on IDE surfaces.",
+        "Use readRouterIssues(...) as the owning enumeration for RouterIssues rows, app summary counts, and cursor diagnostic projection; do not hand-assemble producer lists in each consumer.",
+        "App admission still synthesizes root containers and does not spend an explicit new Aurelia(container) argument or authored createChild topology. Common-parent versus forked multi-root analysis belongs in configuration/DI; do not approximate it with router-local source containment or sequence ordering."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/router-options-materialization.ts",
+          "symbolName": "RouterOptionsMaterializationProjectPass",
+          "summary": "Consumes rooted DI registration uses, folds option definitions, and publishes duplicate-registration issues."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-option.ts",
+          "symbolName": "ConfigurationOptionContribution",
+          "summary": "Carries option/value provenance plus the source of the configuration value receiving the contribution."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-context-materialization.ts",
+          "symbolName": "RouteConfigContextMaterializationProjectPass",
+          "summary": "Builds configured-route topology per AppRoot and rooted RouterOptions reference."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/route-projections.ts",
+          "symbolName": "readRouterIssues",
+          "summary": "Shared product-owned router issue enumeration used by query, summary, and cursor-diagnostic consumers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/diagnostic-presentation.ts",
+          "symbolName": "appDiagnosticPresentation",
+          "summary": "Groups duplicate router built-in registrations as contextual consequences of AUR3168."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/router/README.md",
+          "heading": "Responsibilities",
+          "summary": "Stable root-owned RouterOptions and duplicate-registration contract."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.router",
+          "projection": "relationships",
+          "summary": "Framework RouteContext, RouterConfiguration, AppTask, and container relationship evidence."
+        }
+      ],
+      "createdAt": "2026-07-12",
+      "updatedAt": "2026-07-12"
     }
   ]
 }

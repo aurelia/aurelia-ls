@@ -431,7 +431,6 @@ class RouteTreeTransitionMaterializationFrame {
       instructionTree,
       rootNode,
       childNodes,
-      this.routerOptions,
     );
 
     return {
@@ -537,7 +536,7 @@ function initialRouteTree(
   rootNode: RouteNodeModel,
   routerOptions: RouterOptionsMaterializationProjectResult | null,
 ): RouteTreeModel {
-  const effectiveRouterOptions = routerOptions?.readEffectiveRouterOptions() ?? null;
+  const effectiveRouterOptions = routerOptions?.readRouterOptionsForReference(routeContext.options) ?? null;
   return new RouteTreeModel(
     store.handles.product(treeLocal),
     store.handles.identity(treeLocal),
@@ -746,7 +745,6 @@ function transitionRouteTree(
   instructionTree: ViewportInstructionTreeModel,
   rootNode: RouteNodeModel,
   childNodes: readonly TransitionRouteNodeEmission[],
-  routerOptions: RouterOptionsMaterializationProjectResult | null,
 ): RouteTreeModel {
   return new RouteTreeModel(
     store.handles.product(treeLocal),
@@ -754,7 +752,7 @@ function transitionRouteTree(
     RouterRealizationStageKind.Planned,
     rootNode.toReference(),
     instructionTree.toReference(),
-    routerOptions?.readEffectiveRouterOptions()?.toReference() ?? null,
+    instructionTree.options,
     flattenTransitionRouteNodeEmissions(childNodes).length + 1,
     instructionTree.queryParamCount,
     instructionTree.queryParams,

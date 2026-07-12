@@ -26,9 +26,15 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 - Preserve the split between router configuration/options, router services, normalized route config records, route
   contexts, route-tree state, viewport instructions, and router-supplied built-in resources in the resource catalog.
 - Keep router registration visible as a configuration/registration pressure source before DI spending.
-- Materialize `RouterOptions` from `RouterConfiguration` admissions and owner-tagged `customize(...)` option
-  contributions. Option folding follows the framework defaults before route-context topology decides recognizer
-  ownership.
+- Materialize effective `RouterOptions` from concrete DI spending of `RouterConfiguration`, one product per valid
+  `AppRoot` registration use. A reused customized registry value retains one definition source while each root keeps
+  its own registration source and option product. Unregistered `customize(...)` values remain configuration evidence,
+  not effective router state. Option folding follows the framework defaults before route-context topology decides
+  recognizer ownership.
+- Treat a definitely executed second `RouterConfiguration` registration in one modeled application root as the causal
+  `RouteContext.setRoot(...)` failure `rcHasRootContext` / `AUR3168`. Do not select one option set or build topology for
+  the conflicted root. Duplicate `au-viewport`, `load`, and `href` registration rows remain raw resource evidence but
+  are contextual runtime consequences of the one blocking router diagnostic on IDE surfaces.
 - Materialize authored route-config contributions from `@route(...)`, executed or unproven `Route.configure(...)`, class
   static defaults, instance `getRouteConfig` hooks, and child `routes` entries without running navigation. Contributions
   stay source/provenance oriented and preserve separate origin and value-shape dimensions: whether the input came from `@route(...)`,
@@ -333,8 +339,9 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 - Exposing arbitrary `TypedNavigationInstruction.toUrlComponent(...)` calls. `instrInvalidUrlComponentOperation` /
   `AUR3403` is a framework internal-bug guard for asking non-URL instruction kinds to render as URL components.
 - Executing `RouteContext.setRoot(...)` or `RouteContext.resolve(...)` against arbitrary mutable runtime containers or
-  caller-provided context objects. Startup guards such as `AUR3167` through `AUR3170` stay outside the static app-world
-  product surface.
+  caller-provided context objects. The statically provable duplicate-configuration branch of `AUR3168` is modeled from
+  DI registration spending; the other `AUR3167` through `AUR3170` startup/context guards stay outside the static
+  app-world product surface.
 - Claiming exact `rcNoContextStringComponent` / `AUR3178` from generic route-context absence. Router-resource
   no-context cases stay as open seams until relative string normalization can distinguish an exact framework throw from
   an unresolved context handoff.
@@ -360,6 +367,11 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 
 ## Watchpoints
 
+- App admission currently synthesizes one root container per recognized Aurelia app. It does not yet retain the
+  explicit container argument of `new Aurelia(container)` or connect authored `createContainer()` / `createChild()`
+  topology to `AppRoot`. Root-owned RouterOptions and duplicate registration are exact for modeled app roots, but
+  common-parent versus correctly forked multi-root registration requires that upstream configuration/DI ownership
+  work; do not add a router-local source scanner or infer ancestry from sequence order.
 - Router route configs can name components by strings, imported resource definitions, view-model classes, promises,
   navigation strategies, and nested viewport instructions. Keep those forms referential until a materializer has enough
   evaluated source facts to converge them.

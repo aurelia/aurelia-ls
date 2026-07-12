@@ -45,6 +45,7 @@ export const enum ConfigurationOptionValueKind {
 export type ConfigurationOptionField =
   | 'contributionKind'
   | 'configurationKind'
+  | 'configurationValue'
   | 'optionPath'
   | 'value'
   | 'source';
@@ -231,6 +232,8 @@ export class ConfigurationOptionContribution {
     readonly contributionKind: ConfigurationOptionContributionKind,
     /** Framework configuration object that owns this option path, when the receiver is recognized. */
     readonly configurationKind: FrameworkRegistrationKind | null,
+    /** Source of the configuration value whose runtime instance receives this contribution. */
+    readonly configurationValueSourceAddressHandle: AddressHandle | null,
     /** Runtime option path, such as `coercingOptions.enableCoercion` or `devToolsOptions.disable`. */
     readonly optionPath: readonly string[],
     /** Value reference observed for this option path. */

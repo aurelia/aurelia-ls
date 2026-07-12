@@ -33,6 +33,28 @@ export function appDiagnosticPresentation(
   const consumed = new Set<number>();
   const groups: SemanticDiagnosticPresentationGroup[] = [];
 
+  for (const primary of inputRows.filter((candidate) => isDuplicateRouterConfigurationDiagnostic(candidate.row))) {
+    const related = inputRows.filter((candidate) =>
+      candidate.index !== primary.index
+      && isRouterRegistrationResourceConsequence(candidate.row)
+      && sameDiagnosticSource(primary.row, candidate.row)
+    );
+    if (related.length === 0) {
+      continue;
+    }
+    groups.push(presentationGroup(
+      `router-registration:${primary.rowId}`,
+      null,
+      primary,
+      related,
+      'runtime-consequence',
+    ));
+    consumed.add(primary.index);
+    for (const row of related) {
+      consumed.add(row.index);
+    }
+  }
+
   for (const [groupKey, groupRows] of groupedRows) {
     const unknownOwner = groupRows.find((candidate) => isTemplateUnknownOwnerOverlayDiagnostic(candidate.row)) ?? null;
     if (unknownOwner == null) {
@@ -111,6 +133,35 @@ export function appDiagnosticPresentation(
     complete,
     groups: sortedGroups,
   };
+}
+
+function isDuplicateRouterConfigurationDiagnostic(
+  row: SemanticAppDiagnosticRow,
+): boolean {
+  return row.diagnosticDomain === 'router'
+    && row.diagnosticKind === 'duplicate-router-configuration'
+    && row.frameworkErrorCode === 'AUR3168';
+}
+
+function isRouterRegistrationResourceConsequence(
+  row: SemanticAppDiagnosticRow,
+): boolean {
+  return row.diagnosticDomain === 'resource'
+    && (
+      row.diagnosticKind === 'custom-element-already-registered'
+      || row.diagnosticKind === 'custom-attribute-already-registered'
+    )
+    && (row.frameworkErrorCode === 'AUR0153' || row.frameworkErrorCode === 'AUR0154');
+}
+
+function sameDiagnosticSource(
+  left: SemanticAppDiagnosticRow,
+  right: SemanticAppDiagnosticRow,
+): boolean {
+  return left.source?.path != null
+    && left.source.path === right.source?.path
+    && left.source.start === right.source?.start
+    && left.source.end === right.source?.end;
 }
 
 function subjectGroups(

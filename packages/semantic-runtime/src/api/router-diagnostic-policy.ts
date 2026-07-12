@@ -73,6 +73,7 @@ function routerIssueRepairSummary(issueKind: RouterIssueKind): string | null {
     case RouterIssueKind.NoAvailableViewportAgent:
       return 'Target a compatible declared viewport, or declare the viewport needed by this routed component.';
     case RouterIssueKind.InvalidRouteConfig:
+    case RouterIssueKind.DuplicateRouterConfiguration:
     case RouterIssueKind.InvalidRouteConfigProperty:
     case RouterIssueKind.UnknownRouteConfigProperty:
     case RouterIssueKind.UnknownRedirectRouteConfigProperty:

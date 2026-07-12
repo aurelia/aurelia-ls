@@ -5,6 +5,7 @@ import { i18nTranslationBindingGroups } from '../i18n/translation-binding-groups
 import type { KernelStore } from '../kernel/store.js';
 import type { TemplateCompilerWorldEmission } from '../template/compiler-world-materializer.js';
 import { readAppOpenSeams } from './open-seam-projections.js';
+import { readRouterIssues } from './route-projections.js';
 import type { SemanticAppSummary, SemanticSourceRoleCount } from './contracts.js';
 import {
   resourceLocalBindingBehaviorApplications,
@@ -181,7 +182,7 @@ function routerSummaryCounts(emission: AureliaAppWorldProjectEmission): AppSumma
     routeEndpoints: emission.routeRecognizer.readEndpoints().length,
     routeRecognizerStates: emission.routeRecognizer.readStates().length,
     routeRecognizerIssues: emission.routeRecognizer.readIssues().length,
-    routerIssues: emission.routes.readIssues().length + emission.routeInstructions.readIssues().length + emission.routeRecognition.readIssues().length + emission.routeTree.readIssues().length,
+    routerIssues: readRouterIssues(emission).length,
     recognizedRoutes: emission.routeRecognition.readRecognizedRoutes().length,
     typedNavigationInstructions: emission.routeInstructions.readTypedNavigationInstructions().length,
     viewportInstructions: emission.routeInstructions.readViewportInstructions().length,

@@ -1,4 +1,6 @@
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
+import type { AppRoot } from '../configuration/app-root.js';
+import type { ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import type {
   ComponentAgentModel,
@@ -79,8 +81,9 @@ export function readRouterOptionsRows(
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticRouterOptionsRow[] {
+  const appRootsByProduct = indexAppRootsByProduct(emission);
   return emission.routerOptions.readRouterOptions()
-    .map((options) => routerOptionsRow(emission, store, options, handles))
+    .map((options) => routerOptionsRow(emission, store, options, appRootsByProduct, handles))
     .sort((left, right) =>
       `${left.useEagerLoading}:${left.useUrlFragmentHash}:${left.source?.label ?? ''}`
         .localeCompare(`${right.useEagerLoading}:${right.useUrlFragmentHash}:${right.source?.label ?? ''}`)
@@ -105,8 +108,9 @@ export function readRouteContextRows(
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticRouteContextRow[] {
+  const appRootsByProduct = indexAppRootsByProduct(emission);
   return emission.routeRuntimeTopology.readRouteContexts()
-    .map((routeContext) => routeContextRow(emission, store, routeContext, handles))
+    .map((routeContext) => routeContextRow(emission, store, routeContext, appRootsByProduct, handles))
     .sort((left, right) =>
       `${left.label ?? ''}:${left.parentLabel ?? ''}:${left.source?.label ?? ''}`
         .localeCompare(`${right.label ?? ''}:${right.parentLabel ?? ''}:${right.source?.label ?? ''}`)
@@ -269,18 +273,26 @@ export function readRouterIssueRows(
   store: KernelStore,
   handles: boolean,
 ): SemanticRouterIssuesResult['rows'] {
-  return [
-    ...emission.routes.readIssues(),
-    ...emission.routeContextParameterReads.readIssues(),
-    ...emission.routeInstructions.readIssues(),
-    ...emission.routeRecognition.readIssues(),
-    ...emission.routeTree.readIssues(),
-  ]
+  return readRouterIssues(emission)
     .map((issue) => routerIssueRow(emission, store, issue, handles))
     .sort((left, right) =>
       `${left.phase}:${left.issueKind}:${left.path ?? ''}:${left.source?.label ?? ''}`
         .localeCompare(`${right.phase}:${right.issueKind}:${right.path ?? ''}:${right.source?.label ?? ''}`)
     );
+}
+
+/** All product-owned router issues; route-recognizer issues remain a distinct lower-level query lane. */
+export function readRouterIssues(
+  emission: AureliaAppWorldProjectEmission,
+): readonly RouterIssueModel[] {
+  return [
+    ...emission.routerOptions.readIssues(),
+    ...emission.routes.readIssues(),
+    ...emission.routeContextParameterReads.readIssues(),
+    ...emission.routeInstructions.readIssues(),
+    ...emission.routeRecognition.readIssues(),
+    ...emission.routeTree.readIssues(),
+  ];
 }
 
 export function readRecognizedRouteRows(
@@ -348,10 +360,18 @@ function routerOptionsRow(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   options: RouterOptionsModel,
+  appRootsByProduct: ReadonlyMap<ProductHandle, AppRoot>,
   handles: boolean,
 ): SemanticRouterOptionsRow {
+  const appRoot = options.appRoot.productHandle == null
+    ? null
+    : appRootsByProduct.get(options.appRoot.productHandle) ?? null;
   return {
     projectKey: emission.project.projectKey,
+    appRootComponentName: appRoot?.component?.localName ?? null,
+    appRootSource: describeAddress(store, options.appRoot.addressHandle),
+    registrationSource: describeAddress(store, options.registrationSourceAddressHandle),
+    configurationValueSource: describeAddress(store, options.configurationValueSourceAddressHandle),
     basePath: options.basePath,
     useUrlFragmentHash: options.useUrlFragmentHash,
     useHref: options.useHref,
@@ -366,6 +386,13 @@ function routerOptionsRow(
       handles: {
         productHandle: options.productHandle,
         identityHandle: options.identityHandle,
+        appRootProductHandle: options.appRoot.productHandle,
+        appRootIdentityHandle: options.appRoot.identityHandle,
+        containerProductHandle: options.container.productHandle,
+        containerIdentityHandle: options.container.identityHandle,
+        registrationProductHandle: options.registrationProductHandle,
+        registrationSourceAddressHandle: options.registrationSourceAddressHandle,
+        configurationValueSourceAddressHandle: options.configurationValueSourceAddressHandle,
         sourceAddressHandle: options.sourceAddressHandle,
       },
     } : {}),
@@ -663,11 +690,19 @@ function routeContextRow(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   routeContext: RouteContextModel,
+  appRootsByProduct: ReadonlyMap<ProductHandle, AppRoot>,
   handles: boolean,
 ): SemanticRouteContextRow {
+  const options = emission.routerOptions.readRouterOptionsForReference(routeContext.options);
+  const appRoot = options?.appRoot.productHandle == null
+    ? null
+    : appRootsByProduct.get(options.appRoot.productHandle) ?? null;
   return {
     projectKey: emission.project.projectKey,
     realizationStage: routeContext.realizationStage,
+    appRootComponentName: appRoot?.component?.localName ?? null,
+    activeClass: options?.activeClass ?? null,
+    useEagerLoading: options?.useEagerLoading ?? null,
     label: routeContext.localName,
     parentLabel: routeContext.parent?.localName ?? null,
     rootLabel: routeContext.root.localName,
@@ -688,12 +723,22 @@ function routeContextRow(
         routeConfigContextIdentityHandle: routeContext.routeConfigContext?.identityHandle ?? null,
         containerProductHandle: routeContext.container?.productHandle ?? null,
         containerIdentityHandle: routeContext.container?.identityHandle ?? null,
+        routerOptionsProductHandle: routeContext.options?.productHandle ?? null,
+        routerOptionsIdentityHandle: routeContext.options?.identityHandle ?? null,
         hostingViewportAgentCandidateProductHandle: routeContext.hostingViewportAgentCandidate?.productHandle ?? null,
         hostingViewportAgentCandidateIdentityHandle: routeContext.hostingViewportAgentCandidate?.identityHandle ?? null,
         sourceAddressHandle: routeContext.sourceAddressHandle,
       },
     } : {}),
   };
+}
+
+function indexAppRootsByProduct(
+  emission: AureliaAppWorldProjectEmission,
+): ReadonlyMap<ProductHandle, AppRoot> {
+  return new Map(
+    emission.configuration.readConfiguration().appRoots.map((appRoot) => [appRoot.productHandle, appRoot]),
+  );
 }
 
 function routeContextParameterReadRow(

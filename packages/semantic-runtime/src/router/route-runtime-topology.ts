@@ -482,6 +482,7 @@ function materializedRouteContext(
     parent?.routeContext.root ?? selfReference,
     container?.toReference() ?? null,
     null,
+    routeConfigContext.options,
     routeConfigContext.toReference(),
     hostingViewport?.viewportAgent.toReference() ?? null,
     routeConfigContext.friendlyPath,

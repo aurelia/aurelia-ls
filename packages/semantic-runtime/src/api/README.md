@@ -1281,10 +1281,12 @@ metadata. `AppDiagnostics` aggregates configuration, DI, observation,
 evaluation, template, resource, router, and route-recognizer diagnostics by reading each owning diagnostic row set first, then applying the
 app-level page; do not page one diagnostic domain before aggregation or app-level counts will drift.
 
-`RouterOptions` exposes effective option products materialized from `RouterConfiguration` admissions and
-owner-tagged `customize(...)` option contributions. Rows include the framework-defaulted booleans and strings that are
-already used by static topology, especially `useHref`, `useUrlFragmentHash`, and `useEagerLoading`. These rows are the
-authoring/API view of router option convergence; they are not a navigation runtime state snapshot.
+`RouterOptions` exposes effective option products materialized from concrete `RouterConfiguration` DI registration
+uses. Each row is owned by one `AppRoot` and reports the root/component, receiving container, exact registration use,
+configuration-value definition source, and framework-defaulted booleans and strings used by static topology,
+especially `useHref`, `useUrlFragmentHash`, and `useEagerLoading`. An unregistered customized value produces no row;
+one value reused by several roots produces one row per registration use. These rows are the authoring/API view of
+root-owned router option convergence; they are not a navigation runtime state snapshot.
 
 `Routes` is a source-backed authoring view built as a contribution/effective join. It emits one row per authored
 `@route(...)`, `Route.configure(...)`, static metadata, or child-route contribution; `originKind`, `valueKind`, execution
@@ -1327,6 +1329,11 @@ RouteConfigContext eager path generation publishes `eager-path-generation-failed
 whose endpoint path cannot be generated from the provided params. Rows preserve route-config and recognized-route
 references when available, the component/path/redirect fields relevant to the owning router algorithm, source, and
 optional handles.
+Definitely executed duplicate `RouterConfiguration` registrations in one modeled app root publish
+`duplicate-router-configuration` with `rcHasRootContext` / `AUR3168` authority. The second registration is primary, the
+first is related, and no arbitrary RouterOptions/topology winner is produced. App diagnostic presentation keeps the
+same-source duplicate built-in resource rows as contextual runtime consequences so the IDE reports one causal error
+without deleting raw resource evidence.
 Router issues may also carry related information when one source fact has several concrete router contexts. The
 `shared-base-route-context-parameter-read` warning is a `semantic-authoring-policy` row rather than a framework error:
 it points at the inherited base call and relates every routed descendant without selecting one owner or merging their

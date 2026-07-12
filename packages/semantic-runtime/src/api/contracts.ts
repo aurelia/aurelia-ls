@@ -2174,7 +2174,8 @@ export type SemanticDiagnosticPresentationRole =
 export type SemanticDiagnosticPresentationRelation =
   | 'same-subject'
   | 'semantic-explanation'
-  | 'checker-evidence';
+  | 'checker-evidence'
+  | 'runtime-consequence';
 
 export interface SemanticDiagnosticPresentationRow {
   readonly rowId: string;
@@ -2574,6 +2575,10 @@ export interface SemanticRouteConfigComponentRow {
 
 export interface SemanticRouterOptionsRow {
   readonly projectKey: string;
+  readonly appRootComponentName: string | null;
+  readonly appRootSource: SemanticSourceReference | null;
+  readonly registrationSource: SemanticSourceReference | null;
+  readonly configurationValueSource: SemanticSourceReference | null;
   readonly basePath: string | null;
   readonly useUrlFragmentHash: boolean | null;
   readonly useHref: boolean | null;
@@ -2587,6 +2592,13 @@ export interface SemanticRouterOptionsRow {
   readonly handles?: {
     readonly productHandle: ProductHandle;
     readonly identityHandle: IdentityHandle;
+    readonly appRootProductHandle: ProductHandle | null;
+    readonly appRootIdentityHandle: IdentityHandle | null;
+    readonly containerProductHandle: ProductHandle | null;
+    readonly containerIdentityHandle: IdentityHandle | null;
+    readonly registrationProductHandle: ProductHandle;
+    readonly registrationSourceAddressHandle: AddressHandle | null;
+    readonly configurationValueSourceAddressHandle: AddressHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }
@@ -2642,6 +2654,9 @@ export interface SemanticRouteConfigsResult {
 export interface SemanticRouteContextRow {
   readonly projectKey: string;
   readonly realizationStage: RouterRealizationStageKind | `${RouterRealizationStageKind}`;
+  readonly appRootComponentName: string | null;
+  readonly activeClass: string | null;
+  readonly useEagerLoading: boolean | null;
   readonly label: string | null;
   readonly parentLabel: string | null;
   readonly rootLabel: string | null;
@@ -2661,6 +2676,8 @@ export interface SemanticRouteContextRow {
     readonly routeConfigContextIdentityHandle: IdentityHandle | null;
     readonly containerProductHandle: ProductHandle | null;
     readonly containerIdentityHandle: IdentityHandle | null;
+    readonly routerOptionsProductHandle: ProductHandle | null;
+    readonly routerOptionsIdentityHandle: IdentityHandle | null;
     readonly hostingViewportAgentCandidateProductHandle: ProductHandle | null;
     readonly hostingViewportAgentCandidateIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;

@@ -233,16 +233,18 @@ class LspClient {
   }
 
   #handleMessage(message) {
+    // JSON-RPC request IDs are scoped to each direction. A server request may legally reuse the ID of a pending
+    // client request, so the presence of `method` must win over numeric ID matching.
+    if (Object.prototype.hasOwnProperty.call(message, "id") && typeof message.method === "string") {
+      this.#sendResponse(message.id, defaultClientResponse(message));
+      return;
+    }
+
     if (Object.prototype.hasOwnProperty.call(message, "id") && this.#pending.has(message.id)) {
       const pending = this.#pending.get(message.id);
       this.#pending.delete(message.id);
       clearTimeout(pending.timeout);
       pending.resolve(message);
-      return;
-    }
-
-    if (Object.prototype.hasOwnProperty.call(message, "id") && typeof message.method === "string") {
-      this.#sendResponse(message.id, defaultClientResponse(message));
       return;
     }
 

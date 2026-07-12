@@ -415,7 +415,8 @@ class AureliaAppWorldProjectConstructionFrame {
     const configuration = this.recognizeConfiguration(evaluation, typeSystem, resourceIndex);
     const routes = this.convergeRouteConfigs(routeConfigContributions, resourceIndex, configuration);
     this.materializeConfigurationOptionShapeIssues(configuration);
-    const routerOptions = this.materializeRouterOptions(configuration);
+    const appWorld = this.composeAppWorld(configuration, resourceIndex, typeSystem);
+    const routerOptions = this.materializeRouterOptions(configuration, appWorld);
     const routeContexts = this.materializeRouteContexts(routes, routerOptions, configuration);
     const routeRecognizer = this.materializeRouteRecognizer(routeContexts);
     const routeContextParameterReads = this.materializeRouteContextParameterReads(
@@ -432,7 +433,6 @@ class AureliaAppWorldProjectConstructionFrame {
     const validation = this.materializeValidationSourceIssues(typeSystem, configuration, sourceApiRoots);
     const fetchClient = this.materializeFetchClientSourceIssues(typeSystem, sourceApiRoots);
     const dialog = this.materializeDialogSourceIssues(typeSystem, sourceApiRoots);
-    const appWorld = this.composeAppWorld(configuration, resourceIndex, typeSystem);
     this.enrichFrameworkServiceRoots(serviceRoots);
     const templates = this.compileTemplates(evaluation, appWorld, typeSystem, resourceIndex, routeContexts, stateBase);
     const capabilityDemands = this.materializeFrameworkCapabilityDemands(typeSystem, templates, configuration, serviceRoots);
@@ -694,12 +694,14 @@ class AureliaAppWorldProjectConstructionFrame {
 
   private materializeRouterOptions(
     configuration: ConfigurationRecognitionProjectResult,
+    appWorld: AureliaAppWorldEmission,
   ): RouterOptionsMaterializationProjectResult {
     return this.measure('router-options-materialization', () =>
       new RouterOptionsMaterializationProjectPass().materializeAndEmit(
         this.store,
         this.project,
         configuration,
+        appWorld.diWorld,
       )
     );
   }

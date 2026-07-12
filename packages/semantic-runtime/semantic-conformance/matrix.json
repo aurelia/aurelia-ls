@@ -8930,6 +8930,13 @@
                   "source": { "sourceFile": "src/route-parameters/shared-route-parameters.ts", "marker": "resolve(IRouteContext).getRouteParameters<{ sharedId: string }>()", "token": "resolve(IRouteContext).getRouteParameters<{ sharedId: string }>()" }
                 }
               ]
+            },
+            {
+              "name": "app summary",
+              "query": { "kind": "summary" },
+              "rows": [
+                { "rowPath": "value", "fields": { "routerIssues": 1 } }
+              ]
             }
           ]
         }
@@ -10505,6 +10512,96 @@
               "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "id": "lazy-valid", "component.componentKind": "promise", "component.name": "./routes/lazy-route", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "component: import('./routes/lazy-route')", "token": "import('./routes/lazy-route')" } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "router-configuration-root-ownership",
+      "fixture": "fixtures/pressure/router-configuration-root-ownership",
+      "aureliaDomain": "router-composition",
+      "capability": "router-configuration-root-ownership",
+      "domainAxis": "query-contract",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/main.ts",
+      "requirement": "Effective RouterOptions are derived from DI registration spending per AppRoot, customized values retain definition/use provenance, duplicate registrations refuse an arbitrary winner with exact AUR3168 evidence, and independent roots remain separate.",
+      "cases": [
+        {
+          "id": "effective-options-follow-rooted-registration-uses",
+          "expectations": [
+            {
+              "name": "router options",
+              "query": { "kind": "router-options", "options": { "detail": "full", "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 4 },
+              "rows": [
+                { "fields": { "appRootComponentName": "FirstRouterRoot", "activeClass": "first-active", "useEagerLoading": true }, "sourceField": "configurationValueSource", "source": { "marker": "RouterConfiguration.customize({\n      activeClass: 'first-active'", "token": "RouterConfiguration.customize({\n      activeClass: 'first-active',\n      useEagerLoading: true,\n    })" } },
+                { "fields": { "appRootComponentName": "RegistryRouterRoot", "activeClass": "registry-active", "useEagerLoading": true }, "sourceField": "configurationValueSource", "source": { "marker": "container.register(RouterConfiguration.customize({", "token": "RouterConfiguration.customize({\n      activeClass: 'registry-active',\n      useEagerLoading: true,\n    })" } },
+                { "fields": { "appRootComponentName": "SharedRouterRoot", "activeClass": "shared-active", "useEagerLoading": false }, "count": 2, "sourceField": "configurationValueSource", "source": { "marker": "const sharedRouterConfiguration", "token": "RouterConfiguration.customize({\n  activeClass: 'shared-active',\n  useEagerLoading: false,\n})" } },
+                { "fields": { "activeClass": "unused-active" }, "absent": true },
+                { "fields": { "activeClass": "duplicate-first" }, "absent": true },
+                { "fields": { "activeClass": "duplicate-second" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "reused-configuration-preserves-distinct-registration-uses",
+          "expectations": [
+            {
+              "name": "router options",
+              "query": { "kind": "router-options", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "appRootComponentName": "SharedRouterRoot", "activeClass": "shared-active" }, "sourceField": "registrationSource", "source": { "marker": ".register(StandardConfiguration, sharedRouterConfiguration)\n  .app({ host: document.body, component: SharedRouterRoot });", "token": "sharedRouterConfiguration", "occurrence": 1 } },
+                { "fields": { "appRootComponentName": "SharedRouterRoot", "activeClass": "shared-active" }, "sourceField": "registrationSource", "source": { "marker": ".register(StandardConfiguration, sharedRouterConfiguration)\n  .app({ host: document.body, component: SharedRouterRoot });", "token": "sharedRouterConfiguration", "occurrence": 2 } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "route-context-topology-spends-root-owned-options",
+          "expectations": [
+            {
+              "name": "route contexts",
+              "query": { "kind": "route-contexts", "options": { "detail": "full", "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 8 },
+              "rows": [
+                { "fields": { "appRootComponentName": "FirstRouterRoot", "activeClass": "first-active", "useEagerLoading": true, "label": "first-router-root" } },
+                { "fields": { "appRootComponentName": "RegistryRouterRoot", "activeClass": "registry-active", "useEagerLoading": true, "label": "registry-router-root" } },
+                { "fields": { "appRootComponentName": "SharedRouterRoot", "activeClass": "shared-active", "useEagerLoading": false, "label": "shared-router-root" }, "count": 2 },
+                { "fields": { "label": "duplicate-router-root" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "duplicate-registration-is-one-causal-ide-diagnostic",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "detail": "full", "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 1 },
+              "rows": [
+                { "fields": { "phase": "router-configuration-registration", "issueKind": "duplicate-router-configuration", "diagnosticAuthority": "framework-error-code", "frameworkErrorCode": "AUR3168", "severity": "error", "relatedInformation.0.message": "The first RouterConfiguration registration in this application container tree is here." }, "source": { "marker": "RouterConfiguration.customize({ activeClass: 'duplicate-second' })", "token": "RouterConfiguration.customize({ activeClass: 'duplicate-second' })" } },
+                { "fields": { "issueKind": "duplicate-router-configuration" }, "sourceField": "relatedInformation.0.source", "source": { "marker": "RouterConfiguration.customize({ activeClass: 'duplicate-first' })", "token": "RouterConfiguration.customize({ activeClass: 'duplicate-first' })" } }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 4, "value.presentation.primaryCount": 1, "value.presentation.contextualCount": 3, "value.presentation.groups.0.primarySeverity": "error" },
+              "rows": [
+                { "fields": { "diagnosticDomain": "router", "diagnosticKind": "duplicate-router-configuration", "frameworkErrorCode": "AUR3168" }, "source": { "marker": "RouterConfiguration.customize({ activeClass: 'duplicate-second' })", "token": "RouterConfiguration.customize({ activeClass: 'duplicate-second' })" } }
+              ]
+            },
+            {
+              "name": "app summary",
+              "query": { "kind": "summary" },
+              "rows": [
+                { "rowPath": "value", "fields": { "routerIssues": 1 } }
               ]
             }
           ]

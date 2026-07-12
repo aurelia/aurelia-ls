@@ -160,6 +160,11 @@ renderers, but it is not the only possible source of those effects. Custom bundl
 setup should enter the same capability lane by replaying framework-owned registry bodies or decomposed groups instead
 of adding new hard-coded app-world gates.
 
+Option contributions retain both the exact option/value source and the source of the configuration value receiving
+the contribution. The latter is definition provenance: downstream consumers join it to a concrete DI registration
+operation before claiming effective per-root configuration. Do not infer effective options from source sequence
+membership; a customized value may be unregistered or reused by several application roots.
+
 The browser `aurelia` facade also admits `StandardConfiguration` implicitly. Framework source constructs the default
 container for `new Aurelia()` and static quick-start calls such as `Aurelia.app(...)` through a `createContainer()`
 helper that registers `StandardConfiguration`; semantic-runtime records that as an `AureliaFacadeDefault` registration

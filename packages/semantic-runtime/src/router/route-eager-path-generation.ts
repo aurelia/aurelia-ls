@@ -106,12 +106,13 @@ interface EagerRouteCandidate {
 export class RouteEagerPathGenerationIndex {
   private readonly routeConfigsByIdentity: ReadonlyMap<IdentityHandle, RouteConfigModel>;
   private readonly endpointsByRecognizerAndPath: ReadonlyMap<string, EndpointModel>;
-  private readonly useEagerLoading: boolean;
+  private readonly routeContexts: RouteConfigContextMaterializationProjectResult;
 
   constructor(
     routeContexts: RouteConfigContextMaterializationProjectResult,
     routeRecognizer: RouteRecognizerMaterializationProjectResult,
   ) {
+    this.routeContexts = routeContexts;
     this.routeConfigsByIdentity = new Map(
       routeContexts.readRouteConfigs().map((routeConfig) => [routeConfig.identityHandle, routeConfig] as const),
     );
@@ -123,7 +124,6 @@ export class RouteEagerPathGenerationIndex {
           : [[endpointKey(recognizerIdentity, endpoint.path), endpoint] as const];
       }),
     );
-    this.useEagerLoading = routeContexts.usesEagerLoading();
   }
 
   generate(
@@ -208,7 +208,7 @@ export class RouteEagerPathGenerationIndex {
     const normalizedParentPath = normalizeParentRoutePath(
       routeConfigContext,
       this.routeConfigsByIdentity,
-      this.useEagerLoading,
+      this.routeContexts.usesEagerLoading(routeConfigContext),
       parentRoutePath,
     );
     if (normalizedParentPath.kind === 'open') {

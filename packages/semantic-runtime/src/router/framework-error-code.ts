@@ -44,6 +44,13 @@ export const RouterFrameworkErrorCode = {
     'rcEagerPathGenerationFailed',
     'AUR3166',
   ),
+  /** `router Events.rcHasRootContext`; more than one root RouteContext is being installed in one container tree. */
+  RootRouteContextAlreadyRegistered: frameworkErrorCode(
+    'router',
+    'Events',
+    'rcHasRootContext',
+    'AUR3168',
+  ),
   /** `router Events.rcNoPathLazyImport`; RouteConfigContext needs a path before a lazy child component resolves. */
   ChildRouteLazyImportMissingPath: frameworkErrorCode(
     'router',

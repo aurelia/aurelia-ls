@@ -81,6 +81,7 @@ import {
   readTypeSystemOverlayDiagnostics,
   type TypeSystemOverlayDiagnostic,
 } from '../type-system/diagnostics.js';
+import { readRouterIssues } from './route-projections.js';
 import { semanticTypeScriptDiagnosticSeverity } from './typescript-diagnostics.js';
 import { TypeSystemProjectBuilder, type TypeSystemProject } from '../type-system/project.js';
 import {
@@ -321,17 +322,6 @@ function readTemplateCursorInfoValue(
     missingInputs,
     value: withCursorDiagnostics(baseValue, diagnostics),
   };
-}
-
-function routerIssues(
-  emission: AureliaAppWorldProjectEmission,
-): readonly RouterIssueModel[] {
-  return [
-    ...emission.routes.readIssues(),
-    ...emission.routeInstructions.readIssues(),
-    ...emission.routeRecognition.readIssues(),
-    ...emission.routeTree.readIssues(),
-  ];
 }
 
 function templateDiagnosticExpectedValueTypeForCursor(
@@ -1619,7 +1609,7 @@ function routerIssueDiagnosticRowsForSelection(
   if (templateSpan == null) {
     return [];
   }
-  return routerIssues(emission).flatMap((issue) => {
+  return readRouterIssues(emission).flatMap((issue) => {
     const source = sourceReferenceForRouterIssue(store, issue);
     if (
       source == null

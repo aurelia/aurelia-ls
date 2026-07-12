@@ -1109,7 +1109,7 @@ function viewportInstructionTreeModel(
   routerOptions: RouterOptionsMaterializationProjectResult,
   site: RouterResourceInstructionSite,
 ): ViewportInstructionTreeModel {
-  const effectiveOptions = routerOptions.readEffectiveRouterOptions();
+  const effectiveOptions = routerOptions.readRouterOptionsForReference(parsed.routeContext.options);
   return new ViewportInstructionTreeModel(
     store.handles.product(treeLocal),
     store.handles.identity(treeLocal),
@@ -2983,7 +2983,7 @@ function hrefClickInterceptionFacts(
     return [];
   }
   const facts: HrefClickInterceptionFact[] = [];
-  const effectiveOptions = routerOptions.readEffectiveRouterOptions();
+  const effectiveOptions = routerOptions.readRouterOptionsForReference(site.routeContext?.options ?? null);
   if (effectiveOptions?.useHref === false) {
     facts.push({
       summary: 'RouterOptions.useHref=false disables router click interception.',

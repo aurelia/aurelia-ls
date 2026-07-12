@@ -6,6 +6,7 @@ import type {
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { ContainerReference } from '../di/container-reference.js';
+import type { AppRootReference } from '../configuration/app-root.js';
 import type { RouterFrameworkErrorCode } from './framework-error-code.js';
 import type { RouteRecognizerRawErrorAuthority } from './framework-raw-error-authority.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
@@ -180,6 +181,7 @@ export const enum RouteRecognizerIssueKind {
 }
 
 export const enum RouterIssuePhase {
+  RouterConfigurationRegistration = 'router-configuration-registration',
   RouteConfigValidation = 'route-config-validation',
   RouteConfigContextChildRouteConfiguration = 'route-config-context-child-route-configuration',
   RouteContextLazyImportResolution = 'route-context-lazy-import-resolution',
@@ -195,6 +197,7 @@ export const enum RouterIssuePhase {
 }
 
 export const enum RouterIssueKind {
+  DuplicateRouterConfiguration = 'duplicate-router-configuration',
   InvalidRouteConfig = 'invalid-route-config',
   InvalidRouteConfigProperty = 'invalid-route-config-property',
   UnknownRouteConfigProperty = 'unknown-route-config-property',
@@ -226,6 +229,10 @@ export type RouterField =
   | 'source';
 
 export type RouterOptionsField =
+  | 'appRoot'
+  | 'container'
+  | 'registration'
+  | 'configurationValue'
   | 'basePath'
   | 'useUrlFragmentHash'
   | 'useHref'
@@ -290,6 +297,8 @@ export type RouteableComponentField =
   | 'source';
 
 export type RouteConfigContextField =
+  | 'appRoot'
+  | 'options'
   | 'parent'
   | 'root'
   | 'config'
@@ -306,6 +315,7 @@ export type RouteContextField =
   | 'root'
   | 'container'
   | 'router'
+  | 'options'
   | 'routeConfigContext'
   | 'hostingViewportAgentCandidate'
   | 'source';
@@ -681,6 +691,11 @@ export class RouterOptionsModel {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
+    readonly appRoot: AppRootReference,
+    readonly container: ContainerReference,
+    readonly registrationProductHandle: ProductHandle,
+    readonly registrationSourceAddressHandle: AddressHandle | null,
+    readonly configurationValueSourceAddressHandle: AddressHandle | null,
     readonly basePath: string | null,
     readonly useUrlFragmentHash: boolean | null,
     readonly useHref: boolean | null,
@@ -770,6 +785,7 @@ export class RouteContextModel {
     readonly root: RouterReference,
     readonly container: ContainerReference | null,
     readonly router: RouterReference | null,
+    readonly options: RouterOptionsReference | null,
     readonly routeConfigContext: RouterReference | null,
     readonly hostingViewportAgentCandidate: RouterReference | null,
     readonly localName: string | null,
@@ -848,6 +864,8 @@ export class RouteConfigContextModel {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
+    readonly appRoot: AppRootReference | null,
+    readonly options: RouterOptionsReference | null,
     readonly parent: RouterReference | null,
     readonly root: RouterReference,
     readonly config: RouteConfigReference,
