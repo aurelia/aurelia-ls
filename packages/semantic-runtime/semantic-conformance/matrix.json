@@ -2365,7 +2365,7 @@
                   "rowPath": "value.rows[].bindables",
                   "fields": { "name": "status" },
                   "sourceField": "modeSource",
-                  "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "mode: BindingMode.fromView", "token": "BindingMode.fromView" },
+                  "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "callback: 'statusDidChange',\n      mode: BindingMode.fromView", "token": "BindingMode.fromView" },
                   "count": 1
                 },
                 {

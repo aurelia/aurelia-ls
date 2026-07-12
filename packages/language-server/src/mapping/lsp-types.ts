@@ -698,7 +698,9 @@ function semanticRuntimeDefinitionTarget(
   value: SemanticTemplateCursorInfoResult,
 ): SemanticSourceReference | null {
   return firstSemanticRuntimeExactSourceReference([
+    value.selectedMember?.declarationSource ?? null,
     value.selectedMember?.source ?? null,
+    value.selectedBindable?.propertySource ?? null,
     value.selectedBindable?.source ?? null,
     value.selectedDefinition?.targetSource ?? null,
     value.selectedDefinition?.source ?? null,

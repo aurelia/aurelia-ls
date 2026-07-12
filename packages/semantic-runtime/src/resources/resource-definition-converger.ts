@@ -336,7 +336,7 @@ class CustomElementConvergenceFrame {
       return null;
     }
 
-    const bindables = this.readBindables();
+    const bindables = this.readBindables(target);
     const watches = this.readWatches();
     const aliases = mergeResourceAliasObservations(
       this.annotations.aliases,
@@ -397,13 +397,14 @@ class CustomElementConvergenceFrame {
     };
   }
 
-  private readBindables(): BindableRead {
+  private readBindables(target: ResourceTargetReference): BindableRead {
     return readBindables(
       this.store,
       this.context,
       this.local('bindable'),
       this.definitionExpression,
       this.targetClass,
+      target,
       this.header.primaryIdentityHandle,
       this.provenanceHandle,
     );
@@ -996,6 +997,7 @@ export class ResourceDefinitionConverger {
       `resource-definition-converged:${header.localKey}:bindable`,
       definitionExpression,
       targetClass,
+      target,
       header.primaryIdentityHandle,
       provenanceHandle,
     );

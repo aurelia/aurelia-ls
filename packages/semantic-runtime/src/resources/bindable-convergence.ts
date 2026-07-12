@@ -24,7 +24,11 @@ import {
   type EvaluationValue,
 } from '../evaluation/values.js';
 import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
+import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
+import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
+import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import { bindableAttributeNameForProperty } from './bindable-attribute.js';
+import { ResourceTargetReference } from './resource-reference.js';
 import {
   BindableBindingMode,
   BindableContributionKind,
@@ -60,6 +64,7 @@ import {
 import {
   sourceSpanEvidenceForNode,
   sourceSpanAddressForNode,
+  templateCarrierExpression,
   type SourceSpanEvidenceSet,
 } from './resource-source-address.js';
 
@@ -209,6 +214,7 @@ export function readBindables(
   local: string,
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
+  target: ResourceTargetReference,
   ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
 ): BindableRead {
@@ -256,7 +262,13 @@ export function readBindables(
     records.push(...read.records);
     issues.push(...read.issues);
   }
-  return { bindables: [...byName.values()], contributions, open, records, issues };
+  return {
+    bindables: [...byName.values()].map((bindable) => bindableWithMemberTargets(store, target, bindable)),
+    contributions,
+    open,
+    records,
+    issues,
+  };
 }
 
 function readClassPrototypeChain(
@@ -548,7 +560,17 @@ function bindableEntry(
   const setter = setterOverride ?? readBindableSetter(partial);
   const nameSource = readObjectStringFieldSource(store, context, `${local}:name`, partial, 'name') ?? source;
   const attributeSource = readObjectStringFieldSource(store, context, `${local}:attribute`, partial, 'attribute');
-  const fieldProvenance = bindableFieldProvenance(source, nameSource, attributeSource);
+  const callbackSource = readObjectStringFieldSource(store, context, `${local}:callback`, partial, 'callback');
+  const modeSource = readObjectFieldSource(store, context, `${local}:mode`, partial, 'mode');
+  const setSource = readObjectFieldSource(store, context, `${local}:set`, partial, 'set');
+  const fieldProvenance = bindableFieldProvenance(
+    source,
+    nameSource,
+    attributeSource,
+    callbackSource,
+    modeSource,
+    setSource,
+  );
   return {
     bindable: new BindableDefinition(
       attribute,
@@ -560,6 +582,9 @@ function bindableEntry(
       fieldProvenance,
       nameSource?.addressHandle ?? null,
       attributeSource?.addressHandle ?? null,
+      callbackSource?.addressHandle ?? null,
+      modeSource?.addressHandle ?? null,
+      setSource?.addressHandle ?? null,
     ),
     contribution: new BindableDefinitionContribution(
       contributionKind,
@@ -573,9 +598,12 @@ function bindableEntry(
       fieldProvenance,
       nameSource?.addressHandle ?? null,
       attributeSource?.addressHandle ?? null,
+      callbackSource?.addressHandle ?? null,
+      modeSource?.addressHandle ?? null,
+      setSource?.addressHandle ?? null,
     ),
     open: null,
-    records: bindableSourceRecords(source, nameSource, attributeSource),
+    records: bindableSourceRecords(source, nameSource, attributeSource, callbackSource, modeSource, setSource),
     issues: [],
   };
 }
@@ -597,6 +625,22 @@ function readObjectStringFieldSource(
     : sourceSpanEvidenceForNode(store, context, sourceNode, local, SourceSpanRole.Name);
 }
 
+function readObjectFieldSource(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  value: EvaluationObjectValue | null,
+  propertyName: string,
+): SourceSpanEvidenceSet | null {
+  const property = value?.properties.get(propertyName) ?? null;
+  const sourceNode = property?.node == null
+    ? property?.value.node ?? null
+    : templateCarrierExpression(property.node) ?? property.value.node;
+  return sourceNode == null
+    ? null
+    : sourceSpanEvidenceForNode(store, context, sourceNode, local, SourceSpanRole.Value);
+}
+
 function bindableSourceRecords(
   ...sources: readonly (SourceSpanEvidenceSet | null)[]
 ): readonly KernelStoreRecord[] {
@@ -616,6 +660,9 @@ function bindableFieldProvenance(
   source: SourceSpanEvidenceSet | null,
   nameSource: SourceSpanEvidenceSet | null,
   attributeSource: SourceSpanEvidenceSet | null,
+  callbackSource: SourceSpanEvidenceSet | null,
+  modeSource: SourceSpanEvidenceSet | null,
+  setSource: SourceSpanEvidenceSet | null,
 ): readonly FieldProvenance<BindableDefinitionField>[] {
   return compactFieldProvenance<BindableDefinitionField>([
     nameSource == null || nameSource.provenanceHandle === source?.provenanceHandle
@@ -624,7 +671,62 @@ function bindableFieldProvenance(
     attributeSource == null
       ? null
       : new FieldProvenance('attribute', attributeSource.provenanceHandle),
+    callbackSource == null
+      ? null
+      : new FieldProvenance('callback', callbackSource.provenanceHandle),
+    modeSource == null
+      ? null
+      : new FieldProvenance('mode', modeSource.provenanceHandle),
+    setSource == null
+      ? null
+      : new FieldProvenance('set', setSource.provenanceHandle),
   ]);
+}
+
+function bindableWithMemberTargets(
+  store: KernelStore,
+  ownerTarget: ResourceTargetReference,
+  bindable: BindableDefinition,
+): BindableDefinition {
+  return new BindableDefinition(
+    bindable.attribute,
+    bindable.callback,
+    bindable.mode,
+    bindable.name,
+    bindable.set,
+    bindable.sourceAddressHandle,
+    bindable.fieldProvenance,
+    bindable.nameSourceAddressHandle,
+    bindable.attributeSourceAddressHandle,
+    bindable.callbackSourceAddressHandle,
+    bindable.modeSourceAddressHandle,
+    bindable.setSourceAddressHandle,
+    bindableMemberTarget(store, ownerTarget, bindable.name),
+    bindableMemberTarget(store, ownerTarget, bindable.callback),
+  );
+}
+
+function bindableMemberTarget(
+  store: KernelStore,
+  ownerTarget: ResourceTargetReference,
+  memberName: string,
+): ResourceTargetReference | null {
+  const targetTypeProductHandle = ownerTarget.targetType?.productHandle ?? null;
+  const targetType = targetTypeProductHandle == null
+    ? null
+    : store.productDetails.read(TypeSystemProductDetails.TypeShape, targetTypeProductHandle);
+  const member = targetType == null
+    ? null
+    : readOrProjectCheckerTypeMembers(store, targetType, targetType.productHandle)
+      .find((candidate) => candidate.name === memberName) ?? null;
+  return member == null
+    ? null
+    : new ResourceTargetReference(
+        member.declarationIdentityHandle,
+        checkerTypeMemberSourceAddressHandle(store, member),
+        member.name,
+        member.valueType,
+      );
 }
 
 function defaultBindableMode(

@@ -259,12 +259,13 @@ function observedScopeNameProjectionForDependency(
       name,
       `${localKey}:observed-dependency:scope-slot:${dependency.spanStart ?? 'open'}:${localKeyPart(name)}`,
     );
-    const sourceAddressHandle = lookup.slot.sourceAddressHandle ?? access?.memberSourceAddressHandle ?? null;
+    const sourceAddressHandle = access?.memberSourceAddressHandle ?? lookup.slot.sourceAddressHandle ?? null;
     return {
       observedMemberKind: access?.memberKind ?? null,
       observedMemberSourceAddressHandle: sourceAddressHandle,
-      // The slot/context address names the scope entry the row itself observes, so it counts as the
-      // observed name's own declaration.
+      // A resolved checker member is the identity the expression observes. Slot provenance can be
+      // a distinct declaration surface (for example static bindable metadata), so use it only when
+      // the member substrate cannot name the reached declaration.
       observedMemberSourceRoute: sourceAddressHandle == null
         ? null
         : RuntimeObservedMemberSourceRoute.MemberDeclaration,

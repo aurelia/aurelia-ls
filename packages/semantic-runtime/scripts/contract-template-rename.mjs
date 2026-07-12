@@ -21,9 +21,9 @@ const resourceTemplatePath = path.join(resourceFixtureRoot, 'src/routes/item-lis
 const resourceDefinitionPath = path.join(resourceFixtureRoot, 'src/components/item-card.ts');
 const resourceTemplateText = fs.readFileSync(resourceTemplatePath, 'utf8');
 const resourceDefinitionText = fs.readFileSync(resourceDefinitionPath, 'utf8');
-const conventionResourceDefinitionText = resourceDefinitionText
-  .replace('import { bindable, customElement, resolve }', 'import { bindable, resolve }')
-  .replace(/@customElement\(\{\r?\n  name: 'item-card',\r?\n  template,\r?\n\}\)\r?\n/u, '');
+const conventionResourceFixtureRoot = path.join(packageRoot, 'fixtures/pressure/resource-conventions-enabled');
+const conventionResourceTemplatePath = path.join(conventionResourceFixtureRoot, 'src/conventions-enabled-app.html');
+const conventionResourceTemplateText = fs.readFileSync(conventionResourceTemplatePath, 'utf8');
 const attributeFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-compiler-errors');
 const attributeTemplatePath = path.join(attributeFixtureRoot, 'src/template-compiler-errors-app.html');
 const attributeDefinitionPath = path.join(attributeFixtureRoot, 'src/template-compiler-errors-app.ts');
@@ -102,16 +102,8 @@ const resourceRuntime = await createSemanticRuntime({
   storeKey: 'contract:template-resource-rename',
 });
 const conventionResourceRuntime = await createSemanticRuntime({
-  workspaceRoot: resourceFixtureRoot,
+  workspaceRoot: conventionResourceFixtureRoot,
   storeKey: 'contract:template-resource-rename-convention-blocker',
-  sourceTextProvider: {
-    readFile(fileName) {
-      return samePath(fileName, resourceDefinitionPath) ? conventionResourceDefinitionText : undefined;
-    },
-    fileExists() {
-      return undefined;
-    },
-  },
 });
 const attributeRuntime = await createSemanticRuntime({
   workspaceRoot: attributeFixtureRoot,
@@ -343,8 +335,14 @@ async function askResourceRename(newName) {
 async function askConventionResourceRename(newName) {
   const answer = await conventionResourceRuntime.answerAppQuery({
     kind: SemanticAppQueryKind.TemplateRename,
-    sourceFilePath: resourceTemplatePath,
-    cursor: cursorInside(resourceTemplateText, resourceTemplatePath, '<item-card item.bind="item">', 'item-card', 1),
+    sourceFilePath: conventionResourceTemplatePath,
+    cursor: cursorInside(
+      conventionResourceTemplateText,
+      conventionResourceTemplatePath,
+      '<convention-card>',
+      'convention-card',
+      1,
+    ),
     ...(newName == null ? {} : { newName }),
     analysisDepth: 'binding-observation',
     diagnosticProjection: 'type-projection',

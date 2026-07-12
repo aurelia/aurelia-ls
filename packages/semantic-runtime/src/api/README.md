@@ -294,9 +294,13 @@ Cursor-locus callers can skip that manual open step by asking the runtime facade
 
 ```ts
 const cursorInfo = await runtime.templateCursorInfo({
-  cursor: { filePath: 'packages/my-package/src/my-element.html', line: 12, character: 18, offset: 340 },
+  cursor: { filePath: 'packages/my-package/src/my-element.html', line: 12, character: 18 },
 });
 ```
+
+Public cursor queries accept line/character as the complete locus contract. An explicit offset is an optimization for
+editor clients; completions, cursor info, references, rename, and code actions normalize a missing offset through the
+same authored-source resolver before performing containment checks.
 
 `templateCursorInfo(...)` and `templateCompletions(...)` first reuse any already opened app-world whose compiled
 template owns the cursor source. That preserves app context for templates that entered the compiler world through an
@@ -569,12 +573,11 @@ envelope; that produces a self-contradictory public answer.
 `TemplateCursorInfo` uses the same cursor-to-template selection and value-site classification path, but returns the
 semantic site under the cursor rather than completion candidates: site kind, HTML node/attribute, active value site,
 selected definition, selected bindable, selected expression member, member-owner type, parser frontier, and template
-lane. It is the shared footing for future hover, definition, diagnostic, and explanation APIs. Bindable selection is
-source-bearing when the resource definition has authored bindable metadata, so go-to-definition can later target the
-bindable declaration instead of stopping at the owning custom element or custom attribute. Expression-member selection
-keeps the owner type available for completion and diagnostics, but also resolves the exact authored member token when
-the cursor is on a closed member name; hover/definition can then target the member declaration rather than only the
-owner type. The owner type row deliberately exposes both the template/expression projection source and the TypeScript
+lane. It is the shared footing for hover, definition, diagnostics, and explanation APIs. Bindable selection exposes its
+metadata source fields separately from `propertySource` and `callbackTargetSource`; definition can therefore target the
+implementation while references and rename retain all authored metadata declarations. Expression-member selection
+keeps the owner type available for completion and diagnostics, and distinguishes the source that introduced a scope slot
+from the TypeScript `declarationSource` reached by its identity. The owner type row likewise exposes both the template/expression projection source and the TypeScript
 declaration source. Hover/explanation can point at the projection source when answering "why this type here?", while
 definition and owner-type repair planning should prefer the declaration source when the checker can name one.
 Those member declarations may come from app source, source-shipped packages, or Program-only declaration files. The API
@@ -589,11 +592,12 @@ authored on a known owner type but the owner does not project that member, curso
 completion hit.
 Cursor-info answers also own `displayText` for MCP/LSP-style hover or explanation surfaces: selected HTML/value site,
 resource/bindable/member/owner facts, cursor diagnostics, missing inputs, and the next focused tool family.
-`TemplateReferences` uses the same cursor-to-template and selected-member path, then joins the selected member's exact
-declaration source to runtime binding observed-dependency rows. Returned `template-usage` rows use the exact authored
-member token as their primary `source`; `declaration` rows are included only when `includeDeclaration` is true. This is
-the IDE/LSP reference projection for template expression reads and intentionally does not fall back to broad controller
-or framework declaration spans when a source-backed member cannot be proven.
+`TemplateReferences` and `TemplateRename` share one canonical property target and occurrence closure. Returned
+`template-usage` rows use the exact authored member token as their primary `source`; declaration rows can include both
+the TypeScript property and distinct bindable metadata names, with `bindableDeclarationKind` preserving the authored
+form. Default-derived attribute spellings join through the bindable's property target, explicit aliases remain a
+separate public-name surface, and conventional `${name}Changed` propagation spends the converged callback target rather
+than reconstructing a class AST locally. Declaration rows are included only when `includeDeclaration` is true.
 `TemplateCodeActions` is the conservative edit-planning projection for runtime-owned template diagnostics at a cursor.
 It reads the same diagnostic rows as `TemplateDiagnostics`, but only turns a suggestion into an edit when semantic-runtime
 can prove the authored target and exact insertion span. Supported edit families include `declare-view-model-member`

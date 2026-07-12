@@ -52,6 +52,16 @@ export class BindableDefinition {
     readonly nameSourceAddressHandle: AddressHandle | null = sourceAddressHandle,
     /** Source address for an explicitly authored public attribute alias token, when known. */
     readonly attributeSourceAddressHandle: AddressHandle | null = null,
+    /** Source address for an explicitly authored callback name token, when known. */
+    readonly callbackSourceAddressHandle: AddressHandle | null = null,
+    /** Source address for an explicitly authored binding mode expression, when known. */
+    readonly modeSourceAddressHandle: AddressHandle | null = null,
+    /** Source address for an explicitly authored setter/interceptor expression, when known. */
+    readonly setSourceAddressHandle: AddressHandle | null = null,
+    /** TypeScript property targeted by this bindable metadata, when the owner type proves one. */
+    readonly propertyTarget: ResourceTargetReference | null = null,
+    /** TypeScript callback member targeted by this bindable metadata, when the owner type proves one. */
+    readonly callbackTarget: ResourceTargetReference | null = null,
   ) {}
 }
 
@@ -72,6 +82,8 @@ export class BindableDefinitionReference {
     readonly nameSourceAddressHandle: AddressHandle | null = sourceAddressHandle,
     /** Source address for an explicitly authored public attribute alias token, when known. */
     readonly attributeSourceAddressHandle: AddressHandle | null = null,
+    /** TypeScript property targeted by this bindable metadata, when the owner type proves one. */
+    readonly propertyTarget: ResourceTargetReference | null = null,
   ) {}
 }
 
@@ -100,5 +112,11 @@ export class BindableDefinitionContribution {
     readonly nameSourceAddressHandle: AddressHandle | null = sourceAddressHandle,
     /** Source address for an explicitly authored public attribute alias token, when known. */
     readonly attributeSourceAddressHandle: AddressHandle | null = null,
+    /** Source address for an explicitly authored callback name token, when known. */
+    readonly callbackSourceAddressHandle: AddressHandle | null = null,
+    /** Source address for an explicitly authored binding mode expression, when known. */
+    readonly modeSourceAddressHandle: AddressHandle | null = null,
+    /** Source address for an explicitly authored setter/interceptor expression, when known. */
+    readonly setSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }

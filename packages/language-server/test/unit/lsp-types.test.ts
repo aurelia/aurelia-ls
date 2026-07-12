@@ -251,6 +251,90 @@ describe("mapSemanticRuntimeTemplateHover", () => {
 });
 
 describe("mapSemanticRuntimeTemplateDefinition", () => {
+  test("prefers reached member declarations over scope-introduction sources", () => {
+    const componentStart = definitionText.indexOf("Component");
+    const messageStart = definitionText.indexOf("message");
+    const originDocument = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "<template>${message}</template>",
+    );
+
+    const mapped = mapSemanticRuntimeTemplateDefinition({
+      value: {
+        selectedMember: {
+          source: {
+            kind: "typescript-node",
+            label: `${definitionLspUri}@${componentStart}..${componentStart + "Component".length}`,
+            path: definitionLspUri,
+            start: componentStart,
+            end: componentStart + "Component".length,
+          },
+          declarationSource: {
+            kind: "typescript-node",
+            label: `${definitionLspUri}@${messageStart}..${messageStart + "message".length}`,
+            path: definitionLspUri,
+            start: messageStart,
+            end: messageStart + "message".length,
+          },
+        },
+        selectedBindable: null,
+        selectedDefinition: null,
+      },
+    } as never, lookupText, {
+      workspaceRoot: "C:/projects/app",
+      originDocument,
+    });
+
+    expect(mapped?.[0]?.targetSelectionRange).toEqual({
+      start: { line: 1, character: 2 },
+      end: { line: 1, character: 9 },
+    });
+  });
+
+  test("prefers bindable property targets over metadata name sources", () => {
+    const componentStart = definitionText.indexOf("Component");
+    const messageStart = definitionText.indexOf("message");
+    const originDocument = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "<template><my-el message.bind=\"message\"></my-el></template>",
+    );
+
+    const mapped = mapSemanticRuntimeTemplateDefinition({
+      value: {
+        selectedMember: null,
+        selectedBindable: {
+          source: {
+            kind: "typescript-node",
+            label: `${definitionLspUri}@${componentStart}..${componentStart + "Component".length}`,
+            path: definitionLspUri,
+            start: componentStart,
+            end: componentStart + "Component".length,
+          },
+          propertySource: {
+            kind: "typescript-node",
+            label: `${definitionLspUri}@${messageStart}..${messageStart + "message".length}`,
+            path: definitionLspUri,
+            start: messageStart,
+            end: messageStart + "message".length,
+          },
+        },
+        selectedDefinition: null,
+      },
+    } as never, lookupText, {
+      workspaceRoot: "C:/projects/app",
+      originDocument,
+    });
+
+    expect(mapped?.[0]?.targetSelectionRange).toEqual({
+      start: { line: 1, character: 2 },
+      end: { line: 1, character: 9 },
+    });
+  });
+
   test("maps selected member source references to LSP location links", () => {
     const messageStart = definitionText.indexOf("message");
     const originDocument = TextDocument.create(

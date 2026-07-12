@@ -141,9 +141,12 @@ metadata walks the class prototype chain from base to derived, while `Type.binda
 lookup and therefore uses the nearest static `bindables` member in the constructor chain. Other resource fields should
 not inherit unless the framework source shows the same exception. Inherited bindable decorators and inherited static
 `bindables` entries must use the source-local recognition context for the class or member that declared them, not the
-subclass context currently being converged. Bindable definitions preserve the source address for the metadata entry or
-member declaration that produced them, because template attribute completion, go-to-definition, and later rename support
-need that narrower origin instead of only the owning resource definition. Member `@bindable(...)` still contributes the
+subclass context currently being converged. Bindable definitions preserve exact source addresses for authored metadata
+fields (`name`, `attribute`, `callback`, `mode`, and `set`) and separately retain TypeChecker-backed property and callback
+targets when the owner type proves them. Metadata provenance explains how a bindable was configured; the property target
+names the TypeScript symbol that template expressions and default-derived attributes address. References and rename spend
+both surfaces, while go-to-definition prefers the backing property implementation. Do not collapse a static/definition
+metadata token into the property source or rediscover that relation in an IDE lane. Member `@bindable(...)` still contributes the
 property as bindable when its optional config object stays open; checker-visible `set` properties become open setter
 metadata, and the unresolved config fields remain visible as seams instead of erasing the bindable. Known primitive,
 nullish, and string member-decorator arguments follow the framework's property-decorator default-config path rather

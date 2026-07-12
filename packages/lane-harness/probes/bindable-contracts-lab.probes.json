@@ -1,0 +1,189 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/bindable-contracts-lab",
+  "lanes": {
+    "rename": [
+      {
+        "id": "class-level-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "external-value.bind=\"externalValue\"",
+        "at": "external-value",
+        "newName": "externalState",
+        "verdict": "correct",
+        "reason": "The default-derived attribute addresses the externalValue property, so rename must keep the class-level @bindable metadata, TypeScript field, child-template usage, and authored attribute synchronized.",
+        "note": "Retrospective witness for metadata-to-TypeScript-property closure."
+      },
+      {
+        "id": "inherited-static-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "base-static.bind=\"inheritedStatic\"",
+        "at": "base-static",
+        "newName": "baseValue",
+        "verdict": "correct",
+        "reason": "The default-derived attribute addresses the inherited baseStatic property; the inherited static metadata string and base-class field are part of one property rename closure.",
+        "note": "Retrospective witness for inherited static metadata."
+      },
+      {
+        "id": "inherited-decorator-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "inherited-only.bind=\"precedenceInherited\"",
+        "at": "inherited-only",
+        "newName": "baseOnly",
+        "verdict": "correct",
+        "reason": "Member-decorator metadata shares the TypeScript member token, so inherited property rename should already close across field, child template, and default-derived attribute.",
+        "note": "Negative control against broader inheritance or TypeChecker failure."
+      },
+      {
+        "id": "static-list-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "static-only.bind=\"precedenceStatic\"",
+        "at": "static-only",
+        "newName": "configuredOnly",
+        "verdict": "correct",
+        "reason": "The static bindables entry names the staticOnly TypeScript field and must participate in the same default-derived property rename closure.",
+        "note": "Retrospective witness for nearest static metadata not overwritten by the definition object."
+      },
+      {
+        "id": "definition-object-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "definition-only.bind=\"precedenceDefinition\"",
+        "at": "definition-only",
+        "newName": "declaredOnly",
+        "verdict": "correct",
+        "reason": "The effective definition-object bindable name, TypeScript field, child-template usage, and default-derived attribute are one property rename closure.",
+        "note": "Retrospective witness for winning definition-object metadata."
+      }
+    ],
+    "references": [
+      {
+        "id": "class-level-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "external-value.bind=\"externalValue\"",
+        "at": "external-value",
+        "verdict": "correct",
+        "reason": "References must include the class-level metadata token, TypeScript field declaration, child-template use, and default-derived attribute occurrence.",
+        "note": "Same semantic subject as the paired rename probe."
+      },
+      {
+        "id": "inherited-static-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "base-static.bind=\"inheritedStatic\"",
+        "at": "base-static",
+        "verdict": "correct",
+        "reason": "References must close through inherited static metadata to the base-class property and child-template use.",
+        "note": "Same semantic subject as the paired rename probe."
+      },
+      {
+        "id": "inherited-decorator-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "inherited-only.bind=\"precedenceInherited\"",
+        "at": "inherited-only",
+        "verdict": "correct",
+        "reason": "Member-decorator metadata and the TypeScript member already share an exact declaration token.",
+        "note": "Negative control for the metadata carrier distinction."
+      },
+      {
+        "id": "static-list-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "static-only.bind=\"precedenceStatic\"",
+        "at": "static-only",
+        "verdict": "correct",
+        "reason": "References must include the static metadata token, TypeScript field, child-template use, and default-derived attribute occurrence.",
+        "note": "Same semantic subject as the paired rename probe."
+      },
+      {
+        "id": "definition-object-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "definition-only.bind=\"precedenceDefinition\"",
+        "at": "definition-only",
+        "verdict": "correct",
+        "reason": "References must include the effective definition-object token, TypeScript field, child-template use, and default-derived attribute occurrence.",
+        "note": "Same semantic subject as the paired rename probe."
+      }
+    ],
+    "definition": [
+      {
+        "id": "class-level-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "external-value.bind=\"externalValue\"",
+        "at": "external-value",
+        "verdict": "correct",
+        "reason": "Go to Definition should target the externalValue TypeScript property rather than the class-level metadata string that names it.",
+        "note": "Definition is an implementation-target operation even though references also include metadata declarations."
+      },
+      {
+        "id": "inherited-static-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "base-static.bind=\"inheritedStatic\"",
+        "at": "base-static",
+        "verdict": "correct",
+        "reason": "Go to Definition should target the inherited baseStatic TypeScript property, not its static metadata string.",
+        "note": "Inherited property implementation target."
+      },
+      {
+        "id": "inherited-decorator-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "inherited-only.bind=\"precedenceInherited\"",
+        "at": "inherited-only",
+        "verdict": "correct",
+        "reason": "The inherited member decorator and property declaration share the same exact member token.",
+        "note": "Negative control."
+      },
+      {
+        "id": "static-list-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "static-only.bind=\"precedenceStatic\"",
+        "at": "static-only",
+        "verdict": "correct",
+        "reason": "Go to Definition should target the staticOnly TypeScript property rather than the static metadata token.",
+        "note": "Nearest static metadata implementation target."
+      },
+      {
+        "id": "definition-object-bindable-property",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "definition-only.bind=\"precedenceDefinition\"",
+        "at": "definition-only",
+        "verdict": "correct",
+        "reason": "Go to Definition should target the definitionOnly TypeScript property rather than the resource definition metadata token.",
+        "note": "Winning definition-object metadata implementation target."
+      },
+      {
+        "id": "element-alias-property-target",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "display-label.bind=\"aliasLabel\"",
+        "at": "display-label",
+        "verdict": "correct",
+        "reason": "Definition on the ProductCard public alias should target the backing labelText property implementation.",
+        "note": "Contrasts implementation-target definition with alias-scoped references and rename."
+      },
+      {
+        "id": "inline-alias-property-target",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "display-hint=\"message.bind: statusMessage; display-label.bind: aliasLabel",
+        "at": "display-label",
+        "verdict": "correct",
+        "reason": "Definition on the inline DisplayHint alias should target that custom attribute's backing labelText property, not the same-spelling ProductCard bindable.",
+        "note": "Owner-isolation control for multi-binding segment selection."
+      }
+    ],
+    "documentHighlight": [
+      {
+        "id": "element-alias-owner-isolation",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "display-label.bind=\"aliasLabel\"",
+        "at": "display-label",
+        "verdict": "correct",
+        "reason": "Highlights should include the two ProductCard display-label attributes in this document and exclude the same-spelling DisplayHint inline segment.",
+        "note": "Document-local projection of the alias reference context."
+      },
+      {
+        "id": "inline-alias-owner-isolation",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "display-hint=\"message.bind: statusMessage; display-label.bind: aliasLabel",
+        "at": "display-label",
+        "verdict": "correct",
+        "reason": "Highlights should include only the DisplayHint inline alias segment and exclude ProductCard attributes with the same spelling.",
+        "note": "Document-local owner-isolation control."
+      }
+    ]
+  }
+}

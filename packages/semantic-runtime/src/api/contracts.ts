@@ -931,7 +931,7 @@ export interface SemanticRuntimeSourceCursorInput {
   readonly line: number;
   /** Zero-based source character. */
   readonly character: number;
-  /** Optional zero-based source offset; callers with an editor document should usually supply this. */
+  /** Optional zero-based source offset; queries resolve it from line/character when omitted. */
   readonly offset?: number | null;
 }
 
@@ -1720,6 +1720,11 @@ export interface SemanticResourceDefinitionBindableRow {
   readonly source: SemanticSourceReference | null;
   readonly nameSource: SemanticSourceReference | null;
   readonly attributeSource: SemanticSourceReference | null;
+  readonly propertySource: SemanticSourceReference | null;
+  readonly callbackSource: SemanticSourceReference | null;
+  readonly callbackTargetSource: SemanticSourceReference | null;
+  readonly modeSource: SemanticSourceReference | null;
+  readonly setSource: SemanticSourceReference | null;
 }
 
 export interface SemanticResourceDefinitionWatchRow {
@@ -3501,11 +3506,23 @@ export interface SemanticTemplateCursorBindableRow {
   readonly source: SemanticSourceReference | null;
   readonly nameSource: SemanticSourceReference | null;
   readonly attributeSource: SemanticSourceReference | null;
+  readonly propertySource: SemanticSourceReference | null;
+  readonly callbackSource: SemanticSourceReference | null;
+  readonly callbackTargetSource: SemanticSourceReference | null;
+  readonly modeSource: SemanticSourceReference | null;
+  readonly setSource: SemanticSourceReference | null;
   readonly handles?: {
     readonly ownerDefinitionProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
     readonly nameSourceAddressHandle: AddressHandle | null;
     readonly attributeSourceAddressHandle: AddressHandle | null;
+    readonly propertyTargetIdentityHandle: IdentityHandle | null;
+    readonly propertyTargetAddressHandle: AddressHandle | null;
+    readonly callbackSourceAddressHandle: AddressHandle | null;
+    readonly callbackTargetIdentityHandle: IdentityHandle | null;
+    readonly callbackTargetAddressHandle: AddressHandle | null;
+    readonly modeSourceAddressHandle: AddressHandle | null;
+    readonly setSourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -3515,13 +3532,17 @@ export interface SemanticTemplateCursorMemberRow {
   readonly typeDisplay: string | null;
   readonly isOptional: boolean;
   readonly isReadonly: boolean;
+  /** Authored source that introduced this name into the active template scope. */
   readonly source: SemanticSourceReference | null;
+  /** TypeScript member declaration reached by the slot identity, when distinct from its scope source. */
+  readonly declarationSource: SemanticSourceReference | null;
   readonly handles?: {
     readonly productHandle: ProductHandle;
     readonly declarationIdentityHandle: IdentityHandle | null;
     readonly ownerTypeIdentityHandle: IdentityHandle | null;
     readonly reachableIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly declarationSourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -3739,6 +3760,13 @@ export enum SemanticTemplateBindableAttributeSourceKind {
   ImplicitDefault = 'implicit-default',
 }
 
+export enum SemanticTemplateBindableDeclarationKind {
+  /** Authored metadata that names the TypeScript property exposed as a bindable. */
+  PropertyName = 'property-name',
+  /** Authored public attribute alias, distinct from the backing property name. */
+  AttributeAlias = 'attribute-alias',
+}
+
 export interface SemanticTemplateReferenceRow {
   readonly referenceKind: SemanticTemplateReferenceKind | `${SemanticTemplateReferenceKind}`;
   readonly name: string;
@@ -3749,6 +3777,8 @@ export interface SemanticTemplateReferenceRow {
   readonly resourceUsageKind?: SemanticTemplateResourceUsageKind | `${SemanticTemplateResourceUsageKind}` | null;
   /** Public-name declaration form, present on resource declaration rows. */
   readonly resourceDeclarationKind?: SemanticTemplateResourceDeclarationKind | `${SemanticTemplateResourceDeclarationKind}` | null;
+  /** Bindable metadata form, present when a declaration row is not the TypeScript property itself. */
+  readonly bindableDeclarationKind?: SemanticTemplateBindableDeclarationKind | `${SemanticTemplateBindableDeclarationKind}` | null;
   readonly bindableAttributeSourceKind?: SemanticTemplateBindableAttributeSourceKind | `${SemanticTemplateBindableAttributeSourceKind}` | null;
   /** Exact source span for the returned reference/declaration. */
   readonly source: SemanticSourceReference | null;
@@ -3796,6 +3826,8 @@ export enum SemanticTemplateRenameEditKind {
   TemplateUsage = 'template-usage',
   TemplateLocalDeclaration = 'template-local-declaration',
   TemplateLocalUsage = 'template-local-usage',
+  /** Authored bindable metadata that names a distinct TypeScript property target. */
+  BindablePropertyDeclaration = 'bindable-property-declaration',
   BindableAttribute = 'bindable-attribute',
   BindableAttributeAliasDeclaration = 'bindable-attribute-alias-declaration',
   ResourceNameDeclaration = 'resource-name-declaration',

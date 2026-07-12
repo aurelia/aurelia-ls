@@ -259,6 +259,11 @@ function bindableRows(
       source: describeAddress(store, bindable.sourceAddressHandle),
       nameSource: describeAddress(store, bindable.nameSourceAddressHandle),
       attributeSource: describeAddress(store, bindable.attributeSourceAddressHandle),
+      propertySource: describeAddress(store, bindable.propertyTarget?.addressHandle ?? null),
+      callbackSource: describeAddress(store, bindable.callbackSourceAddressHandle),
+      callbackTargetSource: describeAddress(store, bindable.callbackTarget?.addressHandle ?? null),
+      modeSource: describeAddress(store, bindable.modeSourceAddressHandle),
+      setSource: describeAddress(store, bindable.setSourceAddressHandle),
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
 }

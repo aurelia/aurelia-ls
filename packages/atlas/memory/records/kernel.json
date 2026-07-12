@@ -64,16 +64,17 @@
         "diagnostics",
         "overlay"
       ],
-      "summary": "AuthoredSourceTextCache is the shared raw-file text reader for source-span slicing and cursor offset conversion.",
-      "rationale": "Template markup can be decoded or source-mapped while diagnostics, overlays, cursor inquiries, and future edit surfaces still need exact authored HTML or TypeScript host text. Centralizing the raw read/cache and line math prevents API/template-local filesystem readers from drifting.",
+      "summary": "AuthoredSourceTextCache is the shared raw-file text reader for source slicing and cursor coordinate conversion.",
+      "rationale": "Template markup can be decoded or source-mapped while diagnostics, overlays, cursor inquiries, and edit surfaces still need exact authored HTML or TypeScript host text. Centralizing the raw read/cache and line math prevents API/template-local filesystem readers and offset requirements from drifting.",
       "guidance": [
-        "Use AuthoredSourceTextCache when a product already has a source path/span and needs to slice raw authored text or convert offsets to line/character positions.",
+        "Use AuthoredSourceTextCache when a product already has a source path/span and needs to slice raw authored text or convert between offset and line/character coordinates.",
+        "Use resolveSemanticSourceCursor at the public query boundary before any cursor containment operation. Line and character are the complete contract; an explicit offset is only a caller optimization.",
         "Use AuthoredSourceTextCache for app-source text scans that read authored project files, including boot project-shape source-signal scans; boot package/tsconfig discovery and evaluation module-host reads have separate lifetimes.",
         "Do not replace this with TemplateSource.markup unless the consumer only needs decoded compiler input and not authored-source coordinates.",
         "Resource convergence should use the same cache for conventional/imported external template text so template-file reads, decoded metadata, diagnostics, cursor loci, and overlays stay on one authored-text boundary.",
         "I18n imported JSON key spans should use the evaluator asset-module helper over this cache so source addresses point at authored JSON properties rather than the generated module wrapper.",
         "Use product.architecture source-file read pressure before adding new direct readFileSync, existsSync, or line-offset helpers in semantic-runtime.",
-        "If a future source epoch or content-hash layer appears, thread it through this cache boundary instead of adding local defensive reads in diagnostics, overlays, or completion."
+        "If a future source epoch or content-hash layer appears, thread it through this cache boundary instead of adding local defensive reads in diagnostics, overlays, completion, references, or rename."
       ],
       "anchors": [
         {
@@ -81,6 +82,12 @@
           "filePath": "packages/semantic-runtime/src/kernel/authored-source-text.ts",
           "symbolName": "AuthoredSourceTextCache",
           "summary": "Shared authored source text cache and line/offset helper boundary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/source-cursor.ts",
+          "symbolName": "resolveSemanticSourceCursor",
+          "summary": "Normalizes line/character-only public query cursors before offset containment."
         },
         {
           "kind": "source",
@@ -117,10 +124,15 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/kernel/authored-source-text.ts",
           "symbolName": "AuthoredSourceTextCache"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/source-cursor.ts",
+          "symbolName": "resolveSemanticSourceCursor"
         }
       ],
       "createdAt": "2026-05-24",
-      "updatedAt": "2026-05-24"
+      "updatedAt": "2026-07-12"
     },
     {
       "id": "frontier:open-seam-reason-provenance",
@@ -133,8 +145,6 @@
         "diagnostics",
         "repair"
       ],
-      "status": "active",
-      "nextActionPolicy": "when-touched",
       "summary": "OpenSeam carries a primary unresolved site plus optional reasonSources for adjacent source/evidence sites that contributed individual reason kinds.",
       "rationale": "Router href target pressure exposed the shape: the seam is correctly owned by the dynamic href value, but `router-href-click-interception-target-open` is contributed by the host target attribute. The kernel now has an OpenSeam.reasonSources carrier, router dynamic href seams publish source-bearing reason rows for the value, externality, and target-open facts, and authoring repair suggestions can choose action targets from those rows. Similar multi-site reasons can appear in binding value channels, observer selection, and framework error projections, so new consumers should extend the shared reason-source primitive instead of adding caller-local side tables.",
       "guidance": [
@@ -150,6 +160,7 @@
         "Router dynamic href target-open pressure is the first proof lane: `contract:router-dynamic-pattern` expects the `router-href-click-interception-target-open` reason source and repair action target to be source-bearing.",
         "Do not split one coherent runtime boundary into several open seams just to get per-reason source addresses; that loses the fact that the reasons describe one unresolved runtime decision."
       ],
+      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",

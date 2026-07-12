@@ -27,12 +27,9 @@ import { sourceSpanContainsOffset } from '../kernel/address.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import {
   AuthoredSourceTextCache,
-  authoredSourceHostPathCandidates,
-  authoredSourceOffsetForLineCharacter,
   authoredSourcePositionForOffset,
   type AuthoredSourceText,
 } from '../kernel/authored-source-text.js';
-import type { SemanticRuntimeSourceTextProvider } from '../kernel/source-text-provider.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import { isAureliaExpressionGlobalName } from '../expression/global-names.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
@@ -107,6 +104,7 @@ import {
   semanticClosureForInquiry,
   semanticOutcomeForInquiry,
 } from './answer.js';
+import { resolveSemanticSourceCursor } from './source-cursor.js';
 import { closureForAnswer } from './answer-helpers.js';
 import type {
   SemanticRuntimePageResult,
@@ -221,12 +219,6 @@ interface TemplateDiagnosticsScanContext {
   readonly sourceTextCache: AuthoredSourceTextCache;
   readonly seenRows: Set<string>;
   readonly semanticAgreementRows: Set<string>;
-}
-
-interface CursorOffsetResolution {
-  readonly offset: number | null;
-  readonly missingInputs: readonly string[];
-  readonly summary: string | null;
 }
 
 export function readSemanticTemplateCompletions(
@@ -611,26 +603,30 @@ function readContextForCursor(
     return missingTemplateCompletion(page, ['source-cursor'], 'Template completion requires a source cursor.');
   }
 
-  const resolution = cursor.offset == null
-    ? offsetResolutionForCursor(workspaceRootDir, projectRootDir, cursor, emission.project.sourceTextProvider)
-    : { offset: cursor.offset, missingInputs: [], summary: null };
-  const offset = resolution.offset;
-  if (offset == null) {
+  const resolution = resolveSemanticSourceCursor(
+    workspaceRootDir,
+    projectRootDir,
+    cursor,
+    emission.project.sourceTextProvider,
+  );
+  if (resolution.cursor == null || resolution.cursor.offset == null) {
     return missingTemplateCompletion(
       page,
       resolution.missingInputs,
       resolution.summary ?? 'Template completion requires a source offset or readable source file.',
     );
   }
+  const offset = resolution.cursor.offset;
+  const resolvedCursor = resolution.cursor;
 
-  const selection = selectTemplateResourceForCursor(store, emission, cursor.filePath, offset);
+  const selection = selectTemplateResourceForCursor(store, emission, resolvedCursor.filePath, offset);
   if (selection == null) {
     return missingTemplateCompletion(page, ['template-resource'], 'No compiled template resource was available for the supplied source cursor.');
   }
 
   return {
     locus: new SourceCursorInquiryLocus(
-      new SourceTextCursor(cursor.filePath, cursor.line, cursor.character, offset),
+      new SourceTextCursor(resolvedCursor.filePath, resolvedCursor.line, resolvedCursor.character, offset),
       selection.resource.compilation.unit.templateSource.sourceAddressHandle,
     ),
     selection,
@@ -2314,12 +2310,24 @@ function cursorBindableRow(
     source: describeAddress(store, bindable.reference.sourceAddressHandle),
     nameSource: describeAddress(store, bindable.reference.nameSourceAddressHandle),
     attributeSource: describeAddress(store, bindable.reference.attributeSourceAddressHandle),
+    propertySource: describeAddress(store, bindable.reference.propertyTarget?.addressHandle ?? null),
+    callbackSource: describeAddress(store, bindable.definition.callbackSourceAddressHandle),
+    callbackTargetSource: describeAddress(store, bindable.definition.callbackTarget?.addressHandle ?? null),
+    modeSource: describeAddress(store, bindable.definition.modeSourceAddressHandle),
+    setSource: describeAddress(store, bindable.definition.setSourceAddressHandle),
     ...(includeHandles ? {
       handles: {
         ownerDefinitionProductHandle: bindable.reference.ownerDefinitionProductHandle,
         sourceAddressHandle: bindable.reference.sourceAddressHandle,
         nameSourceAddressHandle: bindable.reference.nameSourceAddressHandle,
         attributeSourceAddressHandle: bindable.reference.attributeSourceAddressHandle,
+        propertyTargetIdentityHandle: bindable.reference.propertyTarget?.identityHandle ?? null,
+        propertyTargetAddressHandle: bindable.reference.propertyTarget?.addressHandle ?? null,
+        callbackSourceAddressHandle: bindable.definition.callbackSourceAddressHandle,
+        callbackTargetIdentityHandle: bindable.definition.callbackTarget?.identityHandle ?? null,
+        callbackTargetAddressHandle: bindable.definition.callbackTarget?.addressHandle ?? null,
+        modeSourceAddressHandle: bindable.definition.modeSourceAddressHandle,
+        setSourceAddressHandle: bindable.definition.setSourceAddressHandle,
       },
     } : {}),
   };
@@ -2384,6 +2392,7 @@ function cursorSelectedMemberRow(
       isOptional: false,
       isReadonly: false,
       source: null,
+      declarationSource: null,
     };
   }
   if (member == null) {
@@ -2396,6 +2405,7 @@ function cursorSelectedMemberRow(
     isOptional: member.isOptional,
     isReadonly: member.isReadonly,
     source: describeAddress(store, checkerTypeMemberSourceAddressHandle(store, member)),
+    declarationSource: describeAddress(store, checkerTypeMemberSourceAddressHandle(store, member)),
     ...(includeHandles ? {
       handles: {
         productHandle: member.productHandle,
@@ -2403,6 +2413,7 @@ function cursorSelectedMemberRow(
         ownerTypeIdentityHandle: member.ownerType.identityHandle,
         reachableIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
         sourceAddressHandle: checkerTypeMemberSourceAddressHandle(store, member),
+        declarationSourceAddressHandle: checkerTypeMemberSourceAddressHandle(store, member),
       },
     } : {}),
   };
@@ -2419,6 +2430,9 @@ function cursorScopeSlotMemberRow(
     : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
   const sourceAddressHandle = slot.sourceAddressHandle
     ?? (member == null ? null : checkerTypeMemberSourceAddressHandle(store, member));
+  const declarationSourceAddressHandle = member == null
+    ? null
+    : checkerTypeMemberSourceAddressHandle(store, member);
   const productHandle = slot.targetProductHandle ?? cursorContext.query.bindingScopeProductHandle;
   return {
     name: slot.name,
@@ -2427,6 +2441,7 @@ function cursorScopeSlotMemberRow(
     isOptional: member?.isOptional ?? false,
     isReadonly: member?.isReadonly ?? false,
     source: describeAddress(store, sourceAddressHandle),
+    declarationSource: describeAddress(store, declarationSourceAddressHandle),
     ...(includeHandles && productHandle != null ? {
       handles: {
         productHandle,
@@ -2436,6 +2451,7 @@ function cursorScopeSlotMemberRow(
           ? slot.targetIdentityHandle
           : checkerTypeMemberReachableIdentityHandle(member),
         sourceAddressHandle,
+        declarationSourceAddressHandle,
       },
     } : {}),
   };
@@ -2552,46 +2568,6 @@ function templateSourceSpan(
     return authored?.kind === 'source-span-address' ? authored as SourceSpanAddress : null;
   }
   return null;
-}
-
-function offsetResolutionForCursor(
-  workspaceRootDir: string,
-  projectRootDir: string,
-  cursor: SemanticRuntimeSourceCursorInput,
-  sourceTextProvider: SemanticRuntimeSourceTextProvider | null,
-): CursorOffsetResolution {
-  const source = new AuthoredSourceTextCache('', sourceTextProvider).readFirst(authoredSourceHostPathCandidates(
-    workspaceRootDir,
-    projectRootDir,
-    cursor.filePath,
-  ));
-  if (source === null) {
-    return {
-      offset: null,
-      missingInputs: ['source-offset', 'readable-source-file'],
-      summary: `Template cursor file '${cursor.filePath}' was not readable; supply a valid source file path or explicit offset.`,
-    };
-  }
-  if (cursor.line >= source.lineStarts.length) {
-    return {
-      offset: null,
-      missingInputs: ['source-offset', 'source-line'],
-      summary: `Template cursor line ${cursor.line} is outside '${cursor.filePath}' (${source.lineStarts.length} zero-based line(s)).`,
-    };
-  }
-  const offset = authoredSourceOffsetForLineCharacter(source, cursor.line, cursor.character);
-  if (offset == null) {
-    return {
-      offset: null,
-      missingInputs: ['source-offset', 'source-character'],
-      summary: `Template cursor character ${cursor.character} is outside '${cursor.filePath}' line ${cursor.line}.`,
-    };
-  }
-  return {
-    offset,
-    missingInputs: [],
-    summary: null,
-  };
 }
 
 function templateCompletionCandidateRow(
