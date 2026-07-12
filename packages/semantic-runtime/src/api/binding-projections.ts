@@ -51,7 +51,7 @@ import {
   resourceLocalBindingTargetOperations,
   resourceLocalBindingValueChannels,
   resourceLocalValueConverterApplications,
-} from './runtime-resource-ownership.js';
+} from '../template/runtime-resource-ownership.js';
 
 const BINDING_SUMMARY_NAME_LIMIT = 12;
 const BINDING_SUMMARY_TYPE_LIMIT = 8;
@@ -217,7 +217,7 @@ export function readValueConverterApplicationRows(
         definitionName: resource.compilation.definition.name,
         bindingKind: application.binding.bindingKind,
         converterName: application.converterName,
-        resource: templateResourceReferenceRow(store, application.resource, handles)!,
+        resource: templateResourceReferenceRow(store, application.resource, handles),
         phase: application.phase,
         argumentCount: application.argumentCount,
         source: describeAddress(store, application.sourceAddressHandle),

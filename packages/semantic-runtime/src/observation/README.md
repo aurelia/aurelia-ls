@@ -750,6 +750,11 @@ Observed-dependency collection also enters through this projector. `projectSourc
 binding-behavior lifecycle choice while splitting interpolation holes and evaluating trackable method calls in the
 projected source scope. This keeps binding-owned dependency rows aligned with data-flow and overlay rows for
 `& state`, i18n evaluate-only keys, recursive render-context scopes, and strict/non-strict nullish policy.
+Recursive rendering can expose one child binding through both its parent aggregate analysis and its own resource
+analysis. Project-wide observation producers therefore select `resourceLocalBindingObservedDependencies(...)` through
+the template runtime ownership boundary before publishing source-owned facts. Handle identity is compilation-context
+identity, not authored-occurrence identity; using every raw recursive dependency would duplicate one warning at the
+same template token.
 Member-source and collection-owner projection for those dependency rows spend the same
 `CheckerExpressionTypeEvaluationContext` produced from the source projection, so strict/nullish policy,
 source address, and binding-behavior lifecycle do not diverge after dependency collection has already selected the

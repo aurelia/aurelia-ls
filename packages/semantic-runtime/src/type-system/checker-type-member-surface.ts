@@ -57,7 +57,8 @@ export function projectCheckerTypeMemberSurface(
   if (carrier == null) {
     return null;
   }
-  const localKey = `query-member-surface:${localKeyPart(localKeySeed)}`;
+  const memberType = carrier.checker.getNonNullableType(carrier.type);
+  const localKey = `query-member-surface:${localKeyPart(localKeySeed)}${memberType === carrier.type ? '' : ':non-nullish'}`;
   const projectedProductHandle = store.handles.product(`type-shape:${localKey}`);
   const existing = store.productDetails.read(TypeSystemProductDetails.TypeShape, projectedProductHandle);
   if (existing != null) {
@@ -66,12 +67,12 @@ export function projectCheckerTypeMemberSurface(
   return new CheckerTypeProjector(store).project({
     localKey,
     checker: carrier.checker,
-    type: carrier.type,
+    type: memberType,
     origin: typeShape.origin,
     sourceNode: carrier.declarations[0] ?? null,
     sourceAddressHandle: typeShape.sourceAddressHandle,
     ownerIdentityHandle: typeShape.identityHandle,
-    display: typeShape.display,
+    display: carrier.checker.typeToString(memberType),
     memberProjection: CheckerTypeMemberProjectionPolicy.Eager,
   }).typeShape;
 }

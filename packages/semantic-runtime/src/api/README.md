@@ -286,6 +286,9 @@ const app = await runtime.openApp({
 When `projectKey` is omitted, `sourceFilePath` selects the admitted project that owns the file. If
 `authoringTemplateSourceFiles` is omitted, the same source file becomes the authoring template selection. Callers that
 already know the project can still pass `projectKey` and `authoringTemplateSourceFiles` explicitly.
+Retained-app reuse preserves the `includeAuthoringTemplates` admission bit separately from an empty/unbounded source
+selection. A project-only app therefore cannot satisfy a later source-locus authoring request merely because both
+requests normalize to an empty source-file list and no limit.
 `TemplateCompilations` returns a `compilationLane` of `app-runtime` or `authoring` so callers can distinguish hydrated
 app templates from source-file-selected authoring templates. Use `authoringTemplateLimit` only as an explicit pressure
 budget or fallback when no source file is known.
@@ -755,6 +758,10 @@ data-flow already knows the binding direction, target observer/value channel, so
 `astAssign` policy. When a parse AST is available, the public diagnostic source narrows through
 `runtimeAssignmentTargetAstForParse(...)` to the authored assignment expression target (`binding-source-assignment`)
 instead of the whole binding attribute; repair action targets still use the TypeChecker member/declaration source.
+The opposite direction is owned by the same product. A proven `sourceToTargetAssignable: false` publishes
+`binding-target-assignment-strictness` on the authored source expression, distinguishing general incompatibility from
+nullable-source-to-required-target pressure. This must not be delegated to generated overlays: only binding data-flow
+knows the effective mode, converter result, child bindable target type, and runtime value channel together.
 The reserved `$host` access scope is the exception on both read and write paths. A missing `$host` runtime context maps
 to `ast_$host_not_found` (`AUR0105`) during source evaluation, and framework `astAssign` throws
 `ast_no_assign_$host` (`AUR0106`) before ordinary scope lookup during writeback. Binding data-flow therefore reports
@@ -831,13 +838,15 @@ Custom binding-behavior bind methods can contribute direct `PropertyBinding.useT
 the compiler resource scope; conflicting target-subscriber effects surface as `AUR9995`.
 The sibling `AUR9993` service replacement failure is intentionally unclaimed until semantic-runtime models non-default
 `INodeObserverLocator` configuration.
-`BindingBehaviorApplications` exposes the positive side of that same materializer: each authored `& behavior`
-application that survives resource lookup and bind-time modeling reports its behavior name, owning binding kind,
+`BindingBehaviorApplications` exposes the application side of that same materializer: each authored `& behavior`
+attempt reports its behavior name, owning binding kind,
 bind-time phase, argument count, statically known scalar/template literal argument values, target kind/property, source
-address, and optional product handles. Use this query when authoring needs to verify that a generated template
+address, nullable resolved resource, and optional product handles. A null resource retains the attempted application
+that owns AUR0101 instead of deleting the authored use before diagnostics. Use this query when authoring needs to verify that a generated template
 materialized a behavior such as validation-html `& validate:'blur'`; keep it distinct from diagnostics, which only
 surface rejected or conflicting applications.
-Runtime value-converter diagnostics are owned below the API by `RuntimeValueConverterIssue`. Built-in `sanitize`
+Runtime value-converter diagnostics are owned below the API by `RuntimeValueConverterIssue`. Missing converter lookup
+is a bind-phase AUR0103 issue attached to an application whose resource is null. Built-in `sanitize`
 invocation now spends runtime-html `method_not_implemented` (`AUR0099`) only when the converter resource is visible and
 the active container tree has no modeled `ISanitizer` resolver; app-provided sanitizer registrations suppress the
 diagnostic. Template diagnostics surface that row as `runtime-value-converter-framework-error` with service-registration
@@ -940,7 +949,8 @@ ordinary `.ts` diagnostics: they come from a virtual TypeScript source that repl
 materialized binding-scope ancestry, then maps admitted checker diagnostics back to the authored template span. Keep the
 public admission policy narrow. Syntax/name-resolution/implicit-any complaints from generated overlay code are
 substrate pressure unless the overlay can prove a specific authored cause; public rows currently admit semantic
-missing-member, nullish access, type/argument mismatch, and readonly-assignment-style codes and carry
+missing-member, nullish access, type/argument mismatch, overload rejection, non-callable values, and
+readonly-assignment-style codes and carry
 `missingInput: "typescript:TS####"` plus a structured action target. Nullish overlay diagnostics use
 `guard-nullish-expression` because the authored repair is usually a guard, optional chain, or earlier narrowing step;
 other admitted checker rows stay on `inspect-owner-type` until the diagnostic policy can prove a more specific repair.
@@ -1533,18 +1543,19 @@ for the same projection while callers migrate to the broader name.
 names return the custom attribute view-model, `controller` returns the controller product, and unsupported `view.ref`
 stays open. These rows are consumed by value-channel and data-flow projections as `ref-target` target-to-source flow.
 
-`BindingBehaviorApplications` exposes successfully materialized runtime binding-behavior applications after the
+`BindingBehaviorApplications` exposes authored runtime binding-behavior application attempts after the
 compiler resource scope, rendered binding product, controller bind phase, and binding-behavior materializer have all had
-their say. Rows intentionally describe positive applications rather than errors: behavior name, owning binding kind,
+their say. Rows describe the application fact rather than replacing the issue lane: behavior name, owning binding kind,
 phase, argument count, static scalar/template literal argument values, target kind/property, source address, and
-optional handles. Source addresses prefer the exact binding-behavior name span, including names inside interpolation
+nullable resolved resource plus optional handles. A null resource is the retained cause of AUR0101. Source addresses prefer the exact binding-behavior name span, including names inside interpolation
 holes, and only fall back to the broader binding carrier when no source file can be recovered. Authoring
 verification uses this lane for fact-level effects such as "the generated validated form actually produced `& validate`
 applications" before deriving higher-level validation ownership taste.
 
 `ValueConverterApplications` mirrors that positive-materialization lane for authored `| converter` expressions. Rows
-report the owning resource definition, binding kind, converter name, runtime phase (`to-view`/`from-view`), argument
-count, exact converter-name source address when available, and optional handles. Use this query when IDE/LSP, MCP, or
+report the nullable owning resource definition, binding kind, converter name, invocation phase (`to-view`/`from-view`),
+argument count, exact converter-name source address when available, and optional handles. A null resource preserves the
+attempted application whose separate issue product owns bind-phase AUR0103. Use this query when IDE/LSP, MCP, or
 future build/AOT consumers need to prove that a template actually applied a converter such as `featuredProducts`, rather
 than inferring converter usage from token coloring or diagnostics.
 
@@ -1596,7 +1607,9 @@ pass materialized them first. Aggregate child custom-element rendering remains v
 projections filter binding-backed rows to the resource whose template contains the binding source span. Captured
 `...$attrs` are the main canary: a forwarded inner input binding can render inside a wrapper component while its source
 expression still belongs to the parent usage template that authored the captured attribute. Render-controller ownership
-is only a fallback for rows that genuinely lack exact source spans.
+is only a fallback for rows that genuinely lack exact source spans. Project-level producers consume the same
+`runtime-resource-ownership` projection before publishing source-owned diagnostics; otherwise a child binding visible
+in both parent aggregate rendering and child analysis would produce duplicate semantic facts before the API is reached.
 `repeat.for` owner bindings use the `template-controller-iteration` value channel and Aurelia repeat-source
 compatibility rather than raw `Repeat.items` TypeScript assignability. Dynamic `model.bind` on `<option>` or `<input>`
 uses the `element-model-value` channel, because Aurelia's select and checked observers read the element's model value as

@@ -21,6 +21,9 @@ import type {
   RuntimeBindingTargetAccessReference,
 } from './runtime-binding.js';
 import type { TemplateVisibleResourceReference } from './compiler-world-reference.js';
+import type {
+  RuntimeHtmlAstFrameworkErrorCode as RuntimeHtmlAstFrameworkErrorCodeValue,
+} from '../type-system/framework-error-code.js';
 
 export const enum RuntimeBindingBehaviorApplicationPhase {
   Bind = 'bind',
@@ -80,6 +83,10 @@ export const enum RuntimeBindingBehaviorIssuePhase {
 }
 
 export const enum RuntimeBindingBehaviorIssueKind {
+  /** `astBind` could not resolve the authored behavior from the binding service locator. */
+  ResourceNotFound = 'resource-not-found',
+  /** `astBind` encountered the same behavior name twice on one binding expression. */
+  DuplicateApplication = 'duplicate-application',
   SelfInvalidUsage = 'self-invalid-usage',
   SignalInvalidUsage = 'signal-invalid-usage',
   SignalNoSignals = 'signal-no-signals',
@@ -99,7 +106,8 @@ export const enum RuntimeBindingBehaviorIssueKind {
 
 export type RuntimeBindingBehaviorFrameworkErrorCodeValue =
   | RuntimeHtmlBindingBehaviorFrameworkErrorCodeValue
-  | ValidationHtmlBindingBehaviorFrameworkErrorCodeValue;
+  | ValidationHtmlBindingBehaviorFrameworkErrorCodeValue
+  | RuntimeHtmlAstFrameworkErrorCodeValue;
 
 export type RuntimeBindingBehaviorIssueField =
   | 'application'

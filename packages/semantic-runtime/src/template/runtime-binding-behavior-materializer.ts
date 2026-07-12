@@ -70,6 +70,7 @@ import {
   type RuntimeBindingBehaviorBindEffects,
 } from './runtime-binding-behavior-effect.js';
 import { RuntimeHtmlBindingBehaviorFrameworkErrorCode } from './framework-error-code.js';
+import { RuntimeHtmlAstFrameworkErrorCode } from '../type-system/framework-error-code.js';
 import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-expression-products.js';
 import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
 import { appendRuntimeBindingProductValue } from './runtime-binding-product-index.js';
@@ -142,6 +143,7 @@ class RuntimeBindingBehaviorPublication {
 class BindingBehaviorBindState {
   private rateLimitBehaviorName: RateLimitBindingBehaviorName | null = null;
   private targetSubscriberBehaviorName: string | null = null;
+  private readonly appliedBehaviorNames = new Set<string>();
 
   constructor(
     private currentBindingMode: TemplateBindingMode | null,
@@ -153,6 +155,14 @@ class BindingBehaviorBindState {
 
   setBindingMode(bindingMode: TemplateBindingMode): void {
     this.currentBindingMode = bindingMode;
+  }
+
+  hasAppliedBehavior(behaviorName: string): boolean {
+    return this.appliedBehaviorNames.has(behaviorName);
+  }
+
+  markAppliedBehavior(behaviorName: string): void {
+    this.appliedBehaviorNames.add(behaviorName);
   }
 
   hasDifferentRateLimitBehavior(behaviorName: RateLimitBindingBehaviorName): boolean {
@@ -231,9 +241,6 @@ export class RuntimeBindingBehaviorMaterializer {
             bindEffects,
             source,
           );
-          if (publication == null) {
-            continue;
-          }
           applications.push(publication.application);
           issues.push(...publication.issues);
           records.push(...publication.records);
@@ -255,13 +262,10 @@ export class RuntimeBindingBehaviorMaterializer {
     bindState: BindingBehaviorBindState,
     bindEffects: RuntimeBindingBehaviorBindEffectReader,
     source: RuntimeBindingBehaviorSourceSet,
-  ): RuntimeBindingBehaviorPublication | null {
+  ): RuntimeBindingBehaviorPublication {
     const resource = bindEffects.findResource(behavior.name.name);
     const effects = bindEffects.readEffects(resource);
     const issue = this.issueForBindingBehavior(binding, targetAccess, behavior, bindState, effects, resource != null);
-    if (issue === undefined) {
-      return null;
-    }
     const expressionSource = sourceAddressForRuntimeExpressionSpan(
       this.store,
       local,
@@ -292,12 +296,24 @@ export class RuntimeBindingBehaviorMaterializer {
     bindState: BindingBehaviorBindState,
     effects: RuntimeBindingBehaviorBindEffects,
     resourceResolved: boolean,
-  ): BuiltInBindingBehaviorBindIssue | null | undefined {
+  ): BuiltInBindingBehaviorBindIssue | null {
+    if (!resourceResolved) {
+      return {
+        issueKind: RuntimeBindingBehaviorIssueKind.ResourceNotFound,
+        message: `Binding behavior '${behavior.name.name}' was not resolved through the current compiler resource scope.`,
+        frameworkErrorCode: RuntimeHtmlAstFrameworkErrorCode.AstBehaviorNotFound,
+      };
+    }
+    if (bindState.hasAppliedBehavior(behavior.name.name)) {
+      return {
+        issueKind: RuntimeBindingBehaviorIssueKind.DuplicateApplication,
+        message: `Binding behavior '${behavior.name.name}' is already applied to this binding.`,
+        frameworkErrorCode: RuntimeHtmlAstFrameworkErrorCode.AstBehaviorDuplicated,
+      };
+    }
+    bindState.markAppliedBehavior(behavior.name.name);
     const bindingModeBehaviorMode = bindingModeForBindingBehaviorName(behavior.name.name);
     if (bindingModeBehaviorMode != null) {
-      if (!resourceResolved) {
-        return undefined;
-      }
       bindState.setBindingMode(bindingModeBehaviorMode);
       return null;
     }
@@ -342,9 +358,6 @@ export class RuntimeBindingBehaviorMaterializer {
           targetProperty: binding instanceof PropertyBinding ? binding.target : null,
         }));
       case BuiltInBindingBehaviorName.Validate:
-        if (!resourceResolved) {
-          return undefined;
-        }
         return this.afterValidateBindingEffects(behavior, bindState, effects, this.validate.bind({
           bindingIsPropertyBinding: binding instanceof PropertyBinding,
           targetIsNodeOrControllerViewModel: validateTargetIsNodeOrControllerViewModel(targetAccess),
@@ -354,9 +367,7 @@ export class RuntimeBindingBehaviorMaterializer {
           preExtraneousArgumentsCannotThrow: validatePreExtraneousArgumentsCannotThrow(behavior),
         }));
       default:
-        return resourceResolved
-          ? this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, null)
-          : undefined;
+        return this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, null);
     }
   }
 

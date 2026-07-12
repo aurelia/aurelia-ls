@@ -1,7 +1,9 @@
 import type {
   AccessMemberExpression,
   ArrowFunction,
+  BinaryExpression,
   CallMemberExpression,
+  ConditionalExpression,
   ExpressionAstNode,
 } from '../expression/ast.js';
 import type { BindingScope } from '../configuration/scope.js';
@@ -47,6 +49,17 @@ export interface CheckerExpressionMemberOwnerProjectorHost {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeReference | null;
+
+  shortCircuitRightScope(
+    expression: BinaryExpression,
+    context: CheckerExpressionTypeEvaluationContext,
+  ): BindingScope;
+
+  conditionalBranchScope(
+    expression: ConditionalExpression,
+    branch: 'truthy' | 'falsy',
+    context: CheckerExpressionTypeEvaluationContext,
+  ): BindingScope;
 }
 
 /** Offset-aware projector for the owner expression behind a member-access cursor. */
@@ -94,11 +107,25 @@ export class CheckerExpressionMemberOwnerProjector {
           ?? this.evaluateArgumentListAtOffset(expression, expression.expressions, context, offset);
       case 'Binary':
         return this.evaluateAtOffset(context.child(expression.left, 'left'), offset)
-          ?? this.evaluateAtOffset(context.child(expression.right, 'right'), offset);
+          ?? this.evaluateAtOffset(context.childInScope(
+            expression.right,
+            this.host.shortCircuitRightScope(expression, context),
+            'right',
+          ), offset);
       case 'Conditional':
         return this.evaluateAtOffset(context.child(expression.condition, 'condition'), offset)
-          ?? this.evaluateAtOffset(context.child(expression.yes, 'yes', context.contextualType), offset)
-          ?? this.evaluateAtOffset(context.child(expression.no, 'no', context.contextualType), offset);
+          ?? this.evaluateAtOffset(context.childInScope(
+            expression.yes,
+            this.host.conditionalBranchScope(expression, 'truthy', context),
+            'yes',
+            context.contextualType,
+          ), offset)
+          ?? this.evaluateAtOffset(context.childInScope(
+            expression.no,
+            this.host.conditionalBranchScope(expression, 'falsy', context),
+            'no',
+            context.contextualType,
+          ), offset);
       case 'Assign':
         return this.evaluateAtOffset(context.child(expression.target, 'target'), offset)
           ?? this.evaluateAtOffset(context.child(expression.value, 'value'), offset);

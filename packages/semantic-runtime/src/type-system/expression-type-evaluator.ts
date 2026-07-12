@@ -196,6 +196,27 @@ export class CheckerExpressionTypeEvaluator {
         this.contextualTypes.contextualArrayElementType(contextualType, elementIndex, localKey, sourceAddressHandle),
       contextualObjectPropertyType: (contextualType, propertyName, localKey, sourceAddressHandle) =>
         this.contextualTypes.contextualObjectPropertyType(contextualType, propertyName, localKey, sourceAddressHandle),
+      shortCircuitRightScope: (expression, context) =>
+        this.branchScopes.shortCircuitRightScope(
+          expression,
+          context.scope,
+          `${context.projectionLocalKey()}:member-owner:right-scope`,
+          context.sourceAddressHandle,
+        ),
+      conditionalBranchScope: (expression, branch, context) =>
+        branch === 'truthy'
+          ? this.branchScopes.truthyScope(
+              expression.condition,
+              context.scope,
+              `${context.projectionLocalKey()}:member-owner:condition:truthy`,
+              context.sourceAddressHandle,
+            )
+          : this.branchScopes.falsyScope(
+              expression.condition,
+              context.scope,
+              `${context.projectionLocalKey()}:member-owner:condition:falsy`,
+              context.sourceAddressHandle,
+            ),
     });
   }
 

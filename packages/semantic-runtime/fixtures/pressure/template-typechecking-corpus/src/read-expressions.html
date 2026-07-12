@@ -1,0 +1,35 @@
+<template>
+  <p class="member-valid">${definiteItem.label}</p>
+  <p class="member-invalid">${definiteItem.missingLabel}</p>
+  <p class="optional-valid">${maybeItem?.label}</p>
+  <p class="nullish-invalid">${maybeItem.label}</p>
+  <p class="unknown-invalid">${unknownValue.label}</p>
+
+  <section if.bind="maybeItem">
+    <p class="truthy-narrow-valid">${maybeItem.label}</p>
+  </section>
+  <p class="conditional-narrow-valid">${maybeItem == null ? 'none' : maybeItem.label}</p>
+  <p class="logical-and-narrow-valid">${maybeItem && maybeItem.label}</p>
+  <p class="nullish-coalesce-valid">${maybeItem?.label ?? fallbackLabel}</p>
+
+  <p class="call-valid">${acceptItem(definiteItem)}</p>
+  <p class="call-argument-invalid">${acceptItem('not-an-item')}</p>
+  <p class="call-arity-invalid">${acceptItem(definiteItem, definiteItem)}</p>
+  <p class="overload-string-valid">${describe('ready')}</p>
+  <p class="overload-number-valid">${describe(2)}</p>
+  <p class="overload-invalid">${describe(true)}</p>
+  <p class="not-callable-invalid">${notCallable()}</p>
+
+  <p class="callback-valid">${items.filter(item => item.enabled).map(item => item.label).join(', ')}</p>
+  <p class="callback-member-invalid">${items.map(item => item.missingLabel).join(', ')}</p>
+  <p class="callback-return-invalid">${acceptPredicate(item => item.label)}</p>
+
+  <p class="global-valid">${Math.max(definiteItem.score, 0)}</p>
+  <p class="global-argument-invalid">${JSON.parse(42)}</p>
+  <p class="keyed-valid">${itemById[activeId].label}</p>
+  <p class="array-literal-valid">${sum([1, definiteItem.score])}</p>
+  <p class="object-literal-valid">${acceptPair({ label: definiteItem.label, count: definiteItem.score })}</p>
+  <p class="object-literal-invalid">${acceptPair({ label: definiteItem.label, count: 'many' })}</p>
+  <p class="template-literal-valid">${`item:${definiteItem.id}`}</p>
+  <p class="new-expression-valid">${new Date(timestamp).getUTCFullYear()}</p>
+</template>

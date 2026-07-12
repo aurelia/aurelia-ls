@@ -1662,7 +1662,7 @@ export class SemanticRuntime {
       if (
         app.project.projectKey === projectKey
         && semanticAppAnalysisDepthSatisfies(app.emission.analysisDepth, requestedDepth)
-        && appSatisfiesAuthoringTemplateRequest(app, includeAuthoringTemplates, authoringTemplateSourceFiles, authoringTemplateLimit)
+        && app.satisfiesAuthoringTemplateRequest(includeAuthoringTemplates, authoringTemplateSourceFiles, authoringTemplateLimit)
       ) {
         return app;
       }
@@ -2458,6 +2458,23 @@ export class SemanticApp {
 
   get kernelMarker(): KernelStoreMarker {
     return this.cacheRequest.kernelMarker;
+  }
+
+  satisfiesAuthoringTemplateRequest(
+    includeAuthoringTemplates: boolean,
+    authoringTemplateSourceFiles: readonly string[],
+    authoringTemplateLimit: number | null,
+  ): boolean {
+    return !includeAuthoringTemplates
+      || (
+        this.cacheRequest.includeAuthoringTemplates
+        && authoringTemplateSourceFileRequestSatisfied(
+          this.emission.templates.authoringTemplateSourceFiles,
+          authoringTemplateSourceFiles,
+          this.emission.templates.authoringTemplateLimit,
+        )
+        && authoringTemplateLimitSatisfied(this.emission.templates.authoringTemplateLimit, authoringTemplateLimit)
+      );
   }
 
   cacheSummary(rowLimit: number, includeQueryClaimRows: boolean): SemanticRuntimeCachedAppSummary {
@@ -5361,25 +5378,6 @@ function authoringTemplateSourceFilesForOpen(
     return requestedAuthoringSourceFiles;
   }
   return sourceFilePath == null ? [] : [sourceFilePath];
-}
-
-function appSatisfiesAuthoringTemplateRequest(
-  app: SemanticApp,
-  includeAuthoringTemplates: boolean,
-  authoringTemplateSourceFiles: readonly string[],
-  authoringTemplateLimit: number | null,
-): boolean {
-  if (!includeAuthoringTemplates) {
-    return true;
-  }
-  if (!authoringTemplateSourceFileRequestSatisfied(
-    app.emission.templates.authoringTemplateSourceFiles,
-    authoringTemplateSourceFiles,
-    app.emission.templates.authoringTemplateLimit,
-  )) {
-    return false;
-  }
-  return authoringTemplateLimitSatisfied(app.emission.templates.authoringTemplateLimit, authoringTemplateLimit);
 }
 
 function authoringTemplateSourceFileRequestSatisfied(

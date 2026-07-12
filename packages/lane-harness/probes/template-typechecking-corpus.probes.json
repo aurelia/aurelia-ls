@@ -1,0 +1,48 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "typechecking-read-expressions",
+        "file": "src/read-expressions.html",
+        "verdict": "correct",
+        "reason": "Publishes authored-source semantic and overlay-checker diagnostics for missing members, nullish access, call arguments and arity, overload rejection, non-callable values, callback returns, globals, and object literals without leaking generated TypeScript loci.",
+        "note": "NEW 2026-07-12. Representative LSP/custom adapter replay for the dedicated expression/typechecking corpus. Dense semantic truth remains in semantic-conformance."
+      },
+      {
+        "id": "typechecking-write-bindings",
+        "file": "src/write-bindings.html",
+        "verdict": "correct",
+        "reason": "Publishes distinct assignment-policy diagnostics for non-writable sources, source-to-target mismatch, nullish-to-required targets, and target-to-source writeback mismatch at the authored binding expressions, with exact LSP/custom alignment.",
+        "note": "NEW 2026-07-12. Representative adapter replay for binding direction, writeability, and bidirectional type compatibility."
+      },
+      {
+        "id": "typechecking-resource-boundaries",
+        "file": "src/resource-boundaries.html",
+        "verdict": "correct",
+        "reason": "Publishes converter call/type diagnostics, missing converter and behavior bind-phase errors, duplicate behavior application, semantic member evidence, and child-bindable assignment mismatch at their authored loci with exact LSP/custom alignment.",
+        "note": "NEW 2026-07-12. Representative adapter replay for the framework astBind resource lifecycle and typed child-resource boundary."
+      }
+    ],
+    "hover": [
+      {
+        "id": "optional-chain-member-type",
+        "file": "src/read-expressions.html",
+        "anchor": "${maybeItem?.label}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "Describes the selected `label` member as `string` while retaining the nullable `CorpusItem | null` owner context; optional access does not erase member identity or widen the member value.",
+        "note": "NEW 2026-07-12. Adapter witness for lazy member projection through the checker non-nullable value lane."
+      },
+      {
+        "id": "logical-and-narrowed-member-type",
+        "file": "src/read-expressions.html",
+        "anchor": "${maybeItem && maybeItem.label}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "Describes the right-branch `label` member as `string` under the existing short-circuit branch scope.",
+        "note": "NEW 2026-07-12. Adapter witness that expression-owner projection spends the checker branch-scope product rather than re-deriving nullish narrowing in presentation code."
+      }
+    ]
+  }
+}

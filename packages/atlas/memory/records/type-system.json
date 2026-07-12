@@ -434,7 +434,7 @@
         "Start here when a feature needs member value type, dynamic keyed access, finite literal-key access, or array/tuple numeric access from a type-shape product.",
         "Do not collapse index-signature, finite-key, numeric-key, and dot-member semantics into one fuzzy member lookup.",
         "Use checkerTypeNullishPresence(...) and CheckerTypeShapeAccess.nonNullishTypeShape(...) when expression, overlay, diagnostic, or source-value consumers need maybe-nullish read/call semantics. Optional and non-strict maybe-nullish member/keyed/call reads should evaluate the non-nullish lane and union the result with undefined; strict or unknown strictness should stay explicit runtime/open pressure.",
-        "Use checkerTypeShapeNullishUnionHasValueProperty(...) when diagnostic or cursor policy needs to decide whether a missing member on a checker-backed nullable union is really nullish pressure rather than a weak member. Do not duplicate union constituent property walks in API answer code.",
+        "Lazy cursor member projection should ask the checker for the owner's non-nullable value lane while preserving the original nullable owner identity and display. Diagnostic policy consumes that member result directly; do not reopen union constituent property walks in API answer code.",
         "Prefer checker-backed union projection from expression-type-support before falling back to synthetic common-member unions when all alternatives came from one checker epoch. This keeps nullable collection, member, and call surfaces available to repeat, source-value, overlay, and diagnostic consumers.",
         "Use memberValueAccess when diagnostics, expression reads, or repairs need to distinguish missing members from checker-visible members whose value type could not be projected.",
         "Use memberWriteAccess when observation or a future policy layer needs TypeChecker writability; downstream code should map the result into framework policy instead of reopening checker symbols locally.",
@@ -472,9 +472,9 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/type-system/checker-type-shape-access.ts",
-          "symbolName": "checkerTypeShapeNullishUnionHasValueProperty",
-          "summary": "Shared nullable-union value-member policy used by diagnostics before reporting weak-member pressure."
+          "filePath": "packages/semantic-runtime/src/type-system/checker-type-member-surface.ts",
+          "symbolName": "projectCheckerTypeMemberSurface",
+          "summary": "Lazy member-surface projection through the checker non-nullable value lane while retaining owner identity."
         },
         {
           "kind": "source",
@@ -519,7 +519,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-25"
+      "updatedAt": "2026-07-12"
     },
     {
       "id": "reuse:checker-backed-union-projection",

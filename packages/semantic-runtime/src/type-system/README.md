@@ -108,10 +108,11 @@ source, value, expression, or template-local slot.
   non-nullish lane over a projected type shape. Member/keyed/call evaluation should spend those primitives so optional
   or non-strict maybe-nullish reads become the reached value union `undefined`, while strict or unknown strictness stays
   explicit runtime/open pressure.
-- Keep nullish-union member policy in the same type-shape access substrate. Diagnostic policy that sees a missing
-  member on `T | null | undefined` should ask `checkerTypeShapeNullishUnionHasValueProperty(...)` whether every
-  non-nullish constituent exposes that member before reporting weak-member pressure; do not reopen union constituent
-  walks inside API answer code.
+- Keep nullable owner identity separate from the selected member's value surface. Lazy member projection asks the
+  checker for the owner's non-nullable value lane while preserving the original union identity and display for cursor
+  context. Branch-aware owner projection spends `CheckerExpressionBranchScopeProjector` for short-circuit and
+  conditional branches. Diagnostic policy consumes that projected member result directly; it must not reopen union
+  constituent walks merely to suppress a false missing-member row.
 - Prefer checker-backed unions before synthetic common-member unions when every branch came from the same checker
   epoch. Preserving the real TypeScript union is what keeps `T[] | undefined` collection, member, and call surfaces
   available to downstream repeat, source-value, overlay, and diagnostic consumers.

@@ -507,7 +507,7 @@
         "recursive-rendering"
       ],
       "summary": "RuntimeBoundControllerValueTable carries parent-to-child controller property values for binding-source evaluation and child-template type overlays.",
-    "rationale": "External app pressure showed dynamic router href values flowing through child view-model methods and parent-bound callback properties. The right substrate is the binding source/value layer because Aurelia bindable property instructions target child controllers while the source expression belongs to the parent scope. Template-controller overlays can copy a view-model binding context while changing scope ownership, so the table must also recognize unambiguous view-model definition/type ownership rather than relying only on exact controller product handles. Template TypeScript overlays spend the same table by projecting unambiguous parent-bound values into the child root BindingContext, so child templates do not diagnose against placeholder bindable initializers when a parent binding supplies a more precise function/member type. That handoff must keep the child declaration identity separate from the runtime-delivered value type and its optional direct member carrier.",
+      "rationale": "External app pressure showed dynamic router href values flowing through child view-model methods and parent-bound callback properties. The right substrate is the binding source/value layer because Aurelia bindable property instructions target child controllers while the source expression belongs to the parent scope. Template-controller overlays can copy a view-model binding context while changing scope ownership, so the table must also recognize unambiguous view-model definition/type ownership rather than relying only on exact controller product handles. Template TypeScript overlays spend the same table by projecting unambiguous parent-bound values into the child root BindingContext, so child templates do not diagnose against placeholder bindable initializers when a parent binding supplies a more precise function/member type. That handoff must keep the child declaration identity separate from the runtime-delivered value type and its optional direct member carrier.",
       "guidance": [
         "Keep router, diagnostics, and authoring inquiries as consumers of this binding-owned value flow; do not add router-local expression shortcuts for parent-to-child bindable values.",
         "Keep RuntimeBoundControllerValueTable in runtime-bound-controller-value.ts as the binding/rendering handoff; RuntimeBindingSourceValueEvaluator should consume it, not own its table-construction policy.",
@@ -516,8 +516,8 @@
         "If multiple call sites bind the same definition property, keep the value open unless a future recursive rendering context can pick the exact call site.",
         "Treat remaining dynamic state/service boundaries after this handoff as evaluator or DI/state-store pressure, not as missing router semantics.",
         "Child resource template overlays should use parent-bound controller slots when the table gives a single source slot or evaluated type; do not suppress TS2554/TS2345 locally when root alias typing is missing.",
-      "When a direct parent-bound value flows through composed state such as state.actions, scope construction should use bindingContextSlotTargetTypeShape(...) to materialize the slot target type lazily, retain the child bindable as declaration identity, and record the reached parent member only in targetTypeSourceProductHandle for importable overlay aliases.",
-      "Value converters are not provenance-transparent. Their evaluated toView return type owns the child slot's current value type even when its display matches the pre-converter source member; do not carry that source member into targetTypeSourceProductHandle merely to obtain a convenient type spelling.",
+        "When a direct parent-bound value flows through composed state such as state.actions, scope construction should use bindingContextSlotTargetTypeShape(...) to materialize the slot target type lazily, retain the child bindable as declaration identity, and record the reached parent member only in targetTypeSourceProductHandle for importable overlay aliases.",
+        "Value converters are not provenance-transparent. Their evaluated toView return type owns the child slot's current value type even when its display matches the pre-converter source member; do not carry that source member into targetTypeSourceProductHandle merely to obtain a convenient type spelling.",
         "When a source expression itself names a slot, use bindingContextSlotDraftForExpressionAccess(...) after the binding-source lifecycle projection selects the correct source scope. That helper owns AccessScope/AccessThis/AccessMember slot walking for bound-controller root slots, overlays, and future cursor/reference consumers.",
         "When parent-bound values flow through source-scope-changing binding behaviors such as `& state`, child root slot source lookup must spend RuntimeBindingExpressionScopeProjector before chasing AccessScope/AccessMember identity. The source slot and evaluated type should agree instead of letting overlays compensate for a source-less child bindable type.",
         "RuntimeBoundControllerValueTable crosses from parent resource analysis into child resource analysis. Carry parent authored source address, strict mode, and binding-behavior lifecycle on the table entry; do not reread the parent RuntimeBinding from the child's RuntimeRenderingEmission.",
@@ -559,17 +559,17 @@
           "symbolName": "bindingContextSlotTargetTypeShape",
           "summary": "Lazy slot-target type materialization for composed state member access."
         },
-      {
-        "kind": "source",
-        "filePath": "packages/semantic-runtime/src/configuration/binding-scope-slot-projector.ts",
-        "symbolName": "bindingContextSlotTargetTypeSourceMember",
-        "summary": "Resolves the optional current-type member carrier without replacing slot declaration identity."
-      },
-      {
-        "kind": "source",
-        "filePath": "packages/semantic-runtime/src/configuration/binding-scope-slot-projector.ts",
-        "symbolName": "bindingContextSlotDraftForExpressionAccess",
-        "summary": "Shared AccessScope/AccessThis/AccessMember source-expression-to-slot projection through type-transparent wrappers after the source scope is selected."
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/binding-scope-slot-projector.ts",
+          "symbolName": "bindingContextSlotTargetTypeSourceMember",
+          "summary": "Resolves the optional current-type member carrier without replacing slot declaration identity."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/binding-scope-slot-projector.ts",
+          "symbolName": "bindingContextSlotDraftForExpressionAccess",
+          "summary": "Shared AccessScope/AccessThis/AccessMember source-expression-to-slot projection through type-transparent wrappers after the source scope is selected."
         },
         {
           "kind": "source",
@@ -615,7 +615,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-    "updatedAt": "2026-07-09"
+      "updatedAt": "2026-07-09"
     },
     {
       "id": "frontier:proxy-observable-domain-modeling",
@@ -1482,6 +1482,13 @@
           "symbolName": "RuntimeBindingSourceExpressionContextProjector"
         },
         {
+          "kind": "product-large-class",
+          "className": "RuntimeBindingSourceExpressionContextProjector",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-source-expression-context.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        },
+        {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/observation/runtime-binding-primitive-value.ts",
           "symbolName": "runtimeBindingPrimitiveValueFromExpressionValue"
@@ -1500,7 +1507,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-25"
+      "updatedAt": "2026-07-12"
     },
     {
       "id": "frontier:binding-data-flow-materializer",
@@ -1904,6 +1911,13 @@
           "minMethodCount": 2
         },
         {
+          "kind": "product-large-class",
+          "className": "RuntimeBindingSourceExpressionContextProjector",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-source-expression-context.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        },
+        {
           "kind": "source-file-exists",
           "filePath": "packages/semantic-runtime/scripts/contract-template-collection-observation.mjs"
         },
@@ -1917,7 +1931,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-25"
+      "updatedAt": "2026-07-12"
     },
     {
       "id": "reuse:forms-observation-value-channels",
@@ -2139,6 +2153,66 @@
       ],
       "createdAt": "2026-07-07",
       "updatedAt": "2026-07-07"
+    },
+    {
+      "id": "decision:recursive-runtime-binding-resource-ownership",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "template",
+        "observation",
+        "recursive-rendering",
+        "diagnostics",
+        "provenance"
+      ],
+      "summary": "Source-owned binding facts select resource-local runtime rows before publication because recursive rendering intentionally exposes child bindings in parent aggregate analyses.",
+      "rationale": "Runtime binding product handles identify a compilation/rendering context, not one authored occurrence. A child binding can therefore appear in a parent aggregate analysis and the child's own analysis with different handles but the same authored source. Topology may need both contexts; source-owned diagnostics, references, and public binding rows must publish the authored fact once through the shared resource-ownership projection.",
+      "guidance": [
+        "Use resourceLocalRuntimeBindings and the resourceLocalBinding* helpers from template/runtime-resource-ownership.ts before projecting or publishing source-owned binding facts.",
+        "Do not deduplicate recursive binding facts by product handle: distinct recursive contexts legitimately mint distinct handles for the same authored source.",
+        "Exact template source containment is the primary ownership proof. Rendering-controller definition ownership is the fallback for rows without exact source spans.",
+        "Aggregate controller/topology consumers may retain recursive contexts, but that is a different question from authored occurrence cardinality and should remain explicit.",
+        "If a project-level producer emits duplicate rows at one authored token, first check whether it consumed raw resource runtimeAnalysis products instead of the shared resource-local ownership lane."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-resource-ownership.ts",
+          "symbolName": "resourceLocalBindingObservedDependencies",
+          "summary": "Shared authored-source/controller ownership projection for observed dependencies."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/non-trackable-template-method-call-issues.ts",
+          "symbolName": "NonTrackableTemplateMethodCallIssueMaterializer",
+          "summary": "Project-level observation producer that consumes resource-local dependencies."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/template/README.md",
+          "summary": "Recursive rendering and runtime-resource ownership boundary."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus",
+          "scenario": "recursive child binding observation cardinality",
+          "summary": "The acceptPredicate template call must produce one observation issue despite root aggregate and child runtime analyses."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance -- --fixture fixtures/pressure/template-typechecking-corpus",
+          "summary": "Executable one-row observation ownership invariant beside overlay/typechecking coverage."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-resource-ownership.ts",
+          "symbolName": "resourceLocalBindingObservedDependencies"
+        }
+      ],
+      "createdAt": "2026-07-12",
+      "updatedAt": "2026-07-12"
     }
   ]
 }

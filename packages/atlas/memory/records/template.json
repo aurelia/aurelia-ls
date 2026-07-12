@@ -780,13 +780,13 @@
         "diagnostics",
         "framework-errors"
       ],
-      "summary": "RuntimeValueConverterMaterializer is the invocation frontier for value-converter applications after rendered bindings and resource scope exist.",
-      "rationale": "Value-converter behavior is runtime invocation pressure, not generic expression syntax. Keeping this materializer tracked prevents future framework-error work from rediscovering `sanitize` or routing converter issues through API-local diagnostics.",
+      "summary": "RuntimeValueConverterMaterializer owns rendered value-converter applications from bind-time resource lookup through toView/fromView invocation.",
+      "rationale": "Value-converter behavior is a runtime application lifecycle, not generic expression syntax. Keeping this materializer tracked prevents missing-resource and invocation errors from being deleted before diagnostics or reconstructed in API answer code.",
       "guidance": [
         "Start here when work touches built-in or custom value-converter invocation effects, converter-owned diagnostics, or expression ASTs that contain `ValueConverterExpression` nodes.",
         "Walk interpolation hole expressions when collecting value-converter applications: runtime-html binds and evaluates each InterpolationPartBinding expression, not only the outer Interpolation AST.",
         "Source value-converter application and issue products to the exact converter name span when the binding carrier has an admitted source file; broad binding-carrier spans should be fallback only.",
-        "Keep missing converter resource lookup in the runtime-html AST/binding-utils lane; this materializer owns effects after the converter resource is visible.",
+        "Retain unresolved authored converter applications with resource: null and publish ast_converter_not_found / AUR0103 in the bind issue phase. Do not silently skip the application or reconstruct missing-resource errors in diagnostics.",
         "Template overlays should call checker-visible converter `toView(...)` methods directly so overload order and argument diagnostics come from TypeScript's native call resolution; the generated identity helper is only for missing converters or converter targets without `toView`, and dynamic `withContext` should emit both strict-true runtime branches. Keep the overlay branch projection paired with the direct TypeChecker expression evaluator union proof.",
         "The first modeled framework path is `SanitizeValueConverter.toView(...)`: visible `sanitize` plus no modeled app `ISanitizer` resolver claims runtime-html `method_not_implemented` / `AUR0099`, while app `ISanitizer` registrations suppress it.",
         "Before adding another converter-owned framework code, inspect `framework.errors` usage rows and use `framework.resources` / `framework.rendering` to confirm the owning runtime concept."
@@ -833,7 +833,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-19"
+      "updatedAt": "2026-07-12"
     },
     {
       "id": "frontier:binding-command-lowering-materializer",
@@ -1912,6 +1912,8 @@
         "Keep expression parsing and behavior expression extraction below bindingBehaviorExpressions and runtimeAcceptedBindingExpressionAstForParse; do not reparse expression text in app/API diagnostics.",
         "Walk interpolation hole expressions when collecting binding-behavior applications: runtime-html binds each InterpolationPartBinding expression and lets behaviors such as & state call useScope(...) for that hole.",
         "Source binding-behavior application and issue products to the exact behavior name span when the binding carrier has an admitted source file; broad binding-carrier spans should be fallback only.",
+        "Retain unresolved authored behavior applications with resource: null and publish ast_behavior_not_found / AUR0101 before behavior-specific effects run.",
+        "Track applied behavior names in runtime-html astBind order so repeated authored names publish ast_behavior_duplicated / AUR0102 at the bind attempt that discovers the duplicate.",
         "Keep bind-time target facts flowing through RuntimeControllerBindEmission and RuntimeBindingBehaviorBindEffectReader before publishing framework-error authority.",
         "Binding-mode behaviors are resource-visible bind-time effects, not parser aliases: share the effective mode through runtime-binding-mode-behavior.ts so controller bind target access, value-converter phases, bound-controller values, template-controller source assignment, and observation data-flow do not grow separate mode interpreters or let unresolved behavior syntax mutate direction.",
         "ValidationHtmlConfiguration admits ValidateBindingBehavior as a resource; validate-specific AUR4200-AUR4205 diagnostics must stay gated on resource visibility and closed parser-owned facts. AUR4206 is a malformed/foreign-AST fallback and should stay unclaimed until semantic-runtime admits that input surface.",
@@ -1978,7 +1980,7 @@
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-05-19"
+      "updatedAt": "2026-07-12"
     },
     {
       "id": "frontier:runtime-composition-materializer",
@@ -2531,6 +2533,8 @@
         "For exact missing-member or assignment agreement, AppDiagnostics.presentation keeps the Aurelia-aware semantic row primary and relates the TypeScript row as contextual checker-evidence. LSP drains diagnostic pages before presenting one primary; MCP/AOT/raw consumers retain both facts.",
         "Detailed template and app diagnostic rows preserve the owning semantic product, materialized identity, source address, lifecycle phase, and overlay origin key/file/segment. Recover these from existing product envelopes and overlay segments rather than reconstructing provenance in adapters.",
         "At the LSP/custom diagnostics boundary, template overlay TypeScript diagnostics should use the concrete `TS####` from `missingInput: \"typescript:TS####\"` as the visible diagnostic `code` while preserving Aurelia/template ownership and `template-expression-typescript-diagnostic` identity in diagnostic data.",
+        "Public overlay diagnostic admission includes ordinary authored call failures such as TS2349 non-callable values and TS2769 overload rejection when exact generated segments map them back to the template. Keep generated-code syntax/name-resolution noise private unless an authored cause is equally exact.",
+        "Use the template-typechecking-corpus semantic-conformance family as the high-volume authority for read/write, scope, converter/behavior, child-bindable, overlay-provenance, and semantic/checker agreement. Lane and extension-host cases remain representative adapter witnesses rather than copies of that matrix.",
         "Repeat overlay prelude projection should preserve weak app types: `any` may stay `any`, but `unknown` repeat sources should produce unknown locals and public TS18046 diagnostics instead of silently degrading to `any`.",
         "Keep repeat unknown slot preservation shared below overlays: TypeChecker iterator projection should use the common checker-union helper and materialize unknown locals so semantic cursor diagnostics expose no-members rather than missing-slot-type.",
         "Generated overlay context-slot locals should spend materialized BindingScope target types when present and degrade to `unknown` when absent; `contract:type-system-overlays` checks generated overlay text for accidental `undefined as any` holes across current canaries.",
@@ -2717,6 +2721,11 @@
           "summary": "Pressure fixture for public overlay diagnostics and cursor diagnostic rows."
         },
         {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/template-typechecking-corpus",
+          "summary": "Dedicated high-volume corpus for template expression typing, binding direction, scope replay, resource boundaries, and exact overlay/semantic agreement."
+        },
+        {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/template-completion.ts",
           "symbolName": "templateDiagnosticOriginFields",
@@ -2807,6 +2816,13 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/observation/runtime-binding-source-expression-context.ts",
           "symbolName": "RuntimeBindingSourceExpressionContextProjector"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "RuntimeBindingSourceExpressionContextProjector",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-source-expression-context.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
         },
         {
           "kind": "source-declaration-exists",

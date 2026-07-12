@@ -16,7 +16,7 @@ import {
   resourceLocalBindingTargetOperations,
   resourceLocalBindingValueChannels,
   resourceLocalRuntimeBindings,
-} from './runtime-resource-ownership.js';
+} from '../template/runtime-resource-ownership.js';
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
 

@@ -24,7 +24,7 @@ const baseline = new Map(
 );
 let changeLog = [];
 
-suite("extension-host rename reliability", () => {
+suite("extension-host IDE reliability", () => {
   let subscription;
 
   suiteSetup(async () => {
@@ -317,6 +317,45 @@ suite("extension-host rename reliability", () => {
       "src/attributes/display-hint.ts": ["@bindable displayToneAgain", "this.displayToneAgain", "displayToneAgainChanged()"],
     });
     await waitForDiagnosticsClean(affected, "after custom-attribute second rename");
+  });
+
+  test("unsaved template type errors publish at the authored token and clear on undo", async () => {
+    const rel = "src/my-app.html";
+    const document = await showDocument(rel);
+    const original = "${preview.name}";
+    const replacement = "${heading()}";
+    const start = document.getText().indexOf(original);
+    assert.notStrictEqual(start, -1, `Could not find ${JSON.stringify(original)} in ${rel}`);
+
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(
+      document.uri,
+      new vscode.Range(document.positionAt(start), document.positionAt(start + original.length)),
+      replacement,
+    );
+    const applied = await vscode.workspace.applyEdit(edit, { label: "Introduce template type error" });
+    assert.strictEqual(applied, true, "template type-error edit should apply");
+
+    let nonCallableDiagnostic;
+    await waitFor(() => {
+      nonCallableDiagnostic = vscode.languages.getDiagnostics(document.uri).find((diagnostic) => {
+        const code = typeof diagnostic.code === "object" ? diagnostic.code.value : diagnostic.code;
+        return diagnostic.source === "aurelia"
+          && code === "TS2349"
+          && document.getText(diagnostic.range) === "heading";
+      });
+      return nonCallableDiagnostic != null;
+    }, "unsaved non-callable template expression should publish TS2349 on the authored member token");
+    assert.strictEqual(nonCallableDiagnostic.severity, vscode.DiagnosticSeverity.Error);
+    assert.match(nonCallableDiagnostic.message, /not callable/i);
+    assertDirty([rel], true, "after introducing template type error");
+
+    changeLog = [];
+    await runEditorCommand("undo", document);
+    await waitForDocumentsEqual([rel], baseline, "after undoing template type error");
+    await waitForDiagnosticsClean([rel], "after undoing template type error");
+    await waitForDirtyState([rel], false, "after undoing template type error");
+    assertUndoRedoReasons([rel], vscode.TextDocumentChangeReason.Undo, "template type-error undo");
   });
 });
 

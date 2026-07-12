@@ -335,6 +335,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   subscriber slot. `update_trigger_behavior_not_supported` (`AUR9993`) remains unclaimed because
   semantic-runtime does not yet model replacing the default `INodeObserverLocator` service; binding-behavior
   definition/registration failures remain resource/DI catalog pressure rather than bind-time behavior issues.
+  Authored applications are retained even when resource lookup fails: the application carries `resource: null` and
+  owns `ast_behavior_not_found` (`AUR0101`) at bind time. The bind-state application set also mirrors runtime-html's
+  outer-to-inner `astBind(...)` traversal so a repeated behavior name publishes `ast_behavior_duplicated` (`AUR0102`)
+  on the second bind attempt before behavior-specific effects run.
   Interpolation bindings are handled as runtime-html handles them: each interpolation hole behaves like an
   `InterpolationPartBinding` expression for bind-time behavior and value-converter publication, rather than treating the
   outer interpolation string as an inert wrapper. Behavior application and issue products source to the exact behavior
@@ -344,9 +348,11 @@ classification, expression parsing, and instruction lowering converge on the sam
   controller bind target access, value-converter phases, bound-controller values, template-controller source assignment,
   and observation data-flow all see the same post-`astBind` mode without letting unresolved behavior syntax silently
   mutate binding direction.
-- `runtime-value-converter.ts` and `runtime-value-converter-materializer.ts` own value-converter invocation pressure
-  that belongs to a rendered binding expression rather than to resource lookup. Application products now distinguish
-  `to-view` and `from-view` phases when binding mode proves target-to-source writeback; data-flow owns the exact
+- `runtime-value-converter.ts` and `runtime-value-converter-materializer.ts` own the rendered value-converter
+  application lifecycle from bind-time resource lookup through invocation. Unresolved authored uses retain an
+  application with `resource: null` and publish `ast_converter_not_found` (`AUR0103`) in the `bind` phase instead of
+  disappearing before diagnostics. Resolved application products distinguish `to-view` and `from-view` phases when
+  binding mode proves target-to-source writeback; data-flow owns the exact
   `fromView` return-type projection and assignment strictness, while this materializer owns phase publication and
   converter-owned framework issues. The first modeled issue path is
   `SanitizeValueConverter.toView`: when the compiler resource scope resolves the built-in `sanitize` converter and the
@@ -366,6 +372,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   observer value-channel projection, and binding data-flow materialization. Runtime analysis runs after the project has
   compiled every template front door, and receives
   `TemplateRuntimeAnalysisProjectContext` so controller products can be linked to already-known compiled templates.
+  Recursive rendering intentionally exposes child bindings in a parent aggregate analysis as well as the child's own
+  analysis. `runtime-resource-ownership.ts` is the shared source/controller ownership boundary used by public binding
+  projections and project-level source-owned producers; consumers must select resource-local rows there rather than
+  treating every recursively visible binding as a new authored fact.
   Custom-element controllers publish `configuration.controller-uses-compiled-template` claims; template-controller
   controllers publish `configuration.controller-uses-instruction-sequence` claims for their nested child sequence. Those
   controllers also materialize an `IViewFactory` product with a generated embedded custom-element definition, matching

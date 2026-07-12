@@ -49,8 +49,9 @@ import {
   RuntimeValueConverterIssueKind,
   RuntimeValueConverterIssuePhase,
   SanitizeValueConverter,
-  type BuiltInValueConverterInvocationIssue,
+  type RuntimeValueConverterIssueDraft,
 } from './runtime-value-converter.js';
+import { RuntimeHtmlAstFrameworkErrorCode } from '../type-system/framework-error-code.js';
 import {
   effectivePropertyBindingMode,
 } from './runtime-binding-mode-behavior.js';
@@ -161,9 +162,6 @@ export class RuntimeValueConverterMaterializer {
             converter,
             source,
           );
-          if (publication == null) {
-            continue;
-          }
           applications.push(...publication.applications);
           issues.push(...publication.issues);
           records.push(...publication.records);
@@ -180,12 +178,15 @@ export class RuntimeValueConverterMaterializer {
     binding: RuntimeBinding,
     converter: ValueConverterExpression,
     source: RuntimeValueConverterSourceSet,
-  ): RuntimeValueConverterPublication | null {
+  ): RuntimeValueConverterPublication {
     const resource = findValueConverterResource(input.resourceScope, converter.name.name);
-    if (resource == null) {
-      return null;
-    }
-    const issue = this.issueForValueConverter(input, converter);
+    const issue = resource == null
+      ? {
+          issueKind: RuntimeValueConverterIssueKind.ResourceNotFound,
+          message: `Value converter '${converter.name.name}' was not resolved through the current compiler resource scope.`,
+          frameworkErrorCode: RuntimeHtmlAstFrameworkErrorCode.AstConverterNotFound,
+        }
+      : this.issueForValueConverter(input, converter);
     const expressionSource = sourceAddressForRuntimeExpressionSpan(
       this.store,
       local,
@@ -195,15 +196,25 @@ export class RuntimeValueConverterMaterializer {
     const applications = valueConverterApplicationPhasesForBinding(this.store, binding, input.resourceScope).map((phase) =>
       this.applicationProduct(`${local}:phase:${phase}`, binding, resource, converter, phase, expressionSource.handle, source)
     );
-    const toViewApplication = applications.find((application) =>
-      application.phase === RuntimeValueConverterApplicationPhase.ToView
-    ) ?? null;
-    const issueProduct = issue == null || toViewApplication == null
+    const issueApplication = resource == null
+      ? applications[0] ?? null
+      : applications.find((application) =>
+          application.phase === RuntimeValueConverterApplicationPhase.ToView
+        ) ?? null;
+    const issueProduct = issue == null || issueApplication == null
       ? null
-      : this.issueProduct(`${local}:issue:${issue.issueKind}`, toViewApplication, binding, issue, expressionSource.handle, source);
-    const issueRecords = issueProduct == null || toViewApplication == null
+      : this.issueProduct(
+          `${local}:issue:${issue.issueKind}`,
+          issueApplication,
+          binding,
+          resource == null ? RuntimeValueConverterIssuePhase.Bind : RuntimeValueConverterIssuePhase.ToView,
+          issue,
+          expressionSource.handle,
+          source,
+        );
+    const issueRecords = issueProduct == null || issueApplication == null
       ? []
-      : recordsForIssue(issueProduct, toViewApplication.identityHandle, source.provenanceHandle);
+      : recordsForIssue(issueProduct, issueApplication.identityHandle, source.provenanceHandle);
     return new RuntimeValueConverterPublication(
       applications,
       issueProduct == null ? [] : [issueProduct],
@@ -220,7 +231,7 @@ export class RuntimeValueConverterMaterializer {
   private issueForValueConverter(
     input: RuntimeValueConverterMaterializationRequest,
     converter: ValueConverterExpression,
-  ): BuiltInValueConverterInvocationIssue | null {
+  ): RuntimeValueConverterIssueDraft | null {
     switch (converter.name.name) {
       case BuiltInValueConverterName.Sanitize:
         return this.sanitize.toView({
@@ -234,7 +245,7 @@ export class RuntimeValueConverterMaterializer {
   private applicationProduct(
     local: string,
     binding: RuntimeBinding,
-    resource: TemplateVisibleResource,
+    resource: TemplateVisibleResource | null,
     converter: ValueConverterExpression,
     phase: RuntimeValueConverterApplicationPhase,
     sourceAddressHandle: AddressHandle | null,
@@ -244,7 +255,7 @@ export class RuntimeValueConverterMaterializer {
       this.store.handles.product(local),
       this.store.handles.identity(local),
       binding.toReference(),
-      resource.toReference(),
+      resource?.toReference() ?? null,
       phase,
       converter.name.name,
       converter.args.length,
@@ -256,7 +267,8 @@ export class RuntimeValueConverterMaterializer {
     local: string,
     application: RuntimeValueConverterApplication,
     binding: RuntimeBinding,
-    issue: BuiltInValueConverterInvocationIssue,
+    phase: RuntimeValueConverterIssuePhase,
+    issue: RuntimeValueConverterIssueDraft,
     sourceAddressHandle: AddressHandle | null,
     source: RuntimeValueConverterSourceSet,
   ): RuntimeValueConverterIssue {
@@ -265,7 +277,7 @@ export class RuntimeValueConverterMaterializer {
       this.store.handles.identity(local),
       application.toReference(),
       binding.toReference(),
-      RuntimeValueConverterIssuePhase.ToView,
+      phase,
       issue.issueKind,
       issue.message,
       issue.frameworkErrorCode,

@@ -14,6 +14,7 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import type { TemplateCompilationProjectEmission } from '../template/template-compilation-project-pass.js';
+import { resourceLocalBindingObservedDependencies } from '../template/runtime-resource-ownership.js';
 import { sourceAddressForRuntimeExpressionBounds } from '../template/runtime-expression-source-address.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { sourceSpanForCheckerNode } from '../type-system/declaration-source.js';
@@ -88,7 +89,7 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
     const calls: NonTrackableTemplateMethodCall[] = [];
     const seen = new Set<string>();
     for (const resource of templates.resources) {
-      for (const dependency of resource.runtimeAnalysis.bindingDataFlow.observedDependencies) {
+      for (const dependency of resourceLocalBindingObservedDependencies(this.store, resource)) {
         const call = this.nonTrackableMethodCallForDependency(project, typeSystem, dependency);
         if (call == null) {
           continue;

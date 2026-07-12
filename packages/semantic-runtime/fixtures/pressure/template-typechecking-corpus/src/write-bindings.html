@@ -1,0 +1,22 @@
+<template>
+  <input class="native-default-valid" value.bind="mutableText">
+  <input class="native-to-view-readonly-valid" value.to-view="readonlyText">
+  <input class="native-two-way-readonly-invalid" value.two-way="readonlyText">
+  <input class="native-from-view-getter-invalid" value.from-view="getterOnlyText">
+  <input class="native-two-way-accessor-valid" value.two-way="accessorText">
+  <input class="native-two-way-number-invalid" value.two-way="count">
+  <input class="native-two-way-record-valid" value.two-way="mutableRecord[activeKey]">
+  <input class="native-two-way-readonly-record-invalid" value.two-way="readonlyRecord[activeKey]">
+  <input class="native-checked-valid" type="checkbox" checked.two-way="enabled">
+
+  <input class="behavior-one-time-readonly-valid" value.bind="readonlyText & oneTime">
+  <input class="behavior-two-way-readonly-invalid" value.bind="readonlyText & twoWay">
+
+  <input class="converter-two-way-valid" value.two-way="count | numberText">
+  <input class="converter-missing-from-view-invalid" value.two-way="count | toViewOnlyNumber">
+
+  <type-target class="child-valid" required-text.bind="mutableText" count.bind="count" current.two-way="mutableText"></type-target>
+  <type-target class="child-source-invalid" required-text.bind="count"></type-target>
+  <type-target class="child-nullish-invalid" required-text.bind="nullableText"></type-target>
+  <type-target class="child-writeback-invalid" current.two-way="readonlyText"></type-target>
+</template>

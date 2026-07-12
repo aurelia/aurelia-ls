@@ -35,8 +35,6 @@ import {
   checkerNumberIndexValueType,
   checkerNullishType,
   checkerTupleElementType,
-  checkerTypeNullishPresence,
-  CheckerTypeNullishPresence,
 } from './checker-related-types.js';
 import {
   checkerPropertySymbol,
@@ -688,33 +686,6 @@ export function checkerTypeMemberWriteAccess(
     checkerTypeMemberValueSourceAddressHandle(store, member)
       ?? checkerTypeMemberSourceAddressHandle(store, member),
   );
-}
-
-/** Whether a checker-backed union is nullish and every value constituent exposes the requested property. */
-export function checkerTypeShapeNullishUnionHasValueProperty(
-  ownerType: CheckerTypeShape,
-  propertyName: string,
-): boolean {
-  const carrier = ownerType.carrier;
-  if (ownerType.shapeKind !== CheckerTypeShapeKind.Union || carrier == null || !carrier.type.isUnion()) {
-    return false;
-  }
-  let hasNullishConstituent = false;
-  let hasNonNullishConstituent = false;
-  for (const constituent of carrier.type.types) {
-    const nullishPresence = checkerTypeNullishPresence(carrier.checker, constituent);
-    if (nullishPresence !== CheckerTypeNullishPresence.None) {
-      hasNullishConstituent = true;
-    }
-    if (nullishPresence === CheckerTypeNullishPresence.Definitely) {
-      continue;
-    }
-    hasNonNullishConstituent = true;
-    if (checkerPropertySymbol(carrier.checker, constituent, propertyName) == null) {
-      return false;
-    }
-  }
-  return hasNullishConstituent && hasNonNullishConstituent;
 }
 
 function checkerTypeMemberWriteAccessFromSurface(

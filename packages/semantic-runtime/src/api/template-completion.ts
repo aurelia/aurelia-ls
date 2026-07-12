@@ -162,7 +162,7 @@ import {
   resourceLocalBindingDataFlows,
   resourceLocalBindingObservedDependencies,
   resourceLocalBindingTargetAccesses,
-} from './runtime-resource-ownership.js';
+} from '../template/runtime-resource-ownership.js';
 import {
   TemplateTypeSystemOverlayBuilder,
   type TemplateTypeSystemOverlayEmission,
@@ -882,6 +882,7 @@ function templateExpressionDiagnosticSubject(
   resource: TemplateResourceRuntimeAnalysisEmission,
   semanticProductHandle: ProductHandle | null,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+  subjectName: string | null = null,
 ): SemanticDiagnosticSubject | null {
   if (source.path == null || source.start == null || source.end == null) {
     return null;
@@ -893,11 +894,11 @@ function templateExpressionDiagnosticSubject(
     source.end,
   );
   if (access != null) {
-    return diagnosticSubjectForSpan(source.path, access.subjectKind, access.subjectSpan, null);
+    return diagnosticSubjectForSpan(source.path, access.subjectKind, access.subjectSpan, subjectName);
   }
   return {
     subjectKind: 'template-expression',
-    subjectName: null,
+    subjectName,
     source,
   };
 }
@@ -972,10 +973,12 @@ function templateOverlayDiagnosticIsPublic(
     case 2322:
     case 2339:
     case 2345:
+    case 2349:
     case 2532:
     case 2551:
     case 2554:
     case 2588:
+    case 2769:
     case 18046:
     case 18047:
     case 18048:
@@ -1169,7 +1172,6 @@ function bindingDataFlowDiagnosticRowsForSelection(
       return [];
     }
     const diagnostics = bindingDataFlowDiagnostics(store, dataFlow, source);
-    const subject = templateExpressionDiagnosticSubject(selection.resource, dataFlow.expressionProductHandle, source);
     return diagnostics.flatMap((diagnostic) => {
       const key = templateDiagnosticRowKey(diagnostic, source);
       if (context.seenRows.has(key)) {
@@ -1185,7 +1187,12 @@ function bindingDataFlowDiagnosticRowsForSelection(
         }),
         siteKind: TemplateCompletionSiteKind.Expression,
         valueSiteKind: valueSiteKindForDataFlow(store, dataFlow.expressionProductHandle),
-        subject,
+        subject: templateExpressionDiagnosticSubject(
+          selection.resource,
+          dataFlow.expressionProductHandle,
+          source,
+          diagnostic.selectedMemberName,
+        ),
         template: {
           compilationLane: selection.lane,
           source: describeAddress(store, selection.sourceAddressHandle),

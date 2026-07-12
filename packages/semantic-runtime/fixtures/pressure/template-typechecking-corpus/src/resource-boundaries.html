@@ -1,0 +1,18 @@
+<template>
+  <p class="converter-valid">${item | itemLabel:prefix}</p>
+  <p class="converter-value-invalid">${prefix | itemLabel:prefix}</p>
+  <p class="converter-argument-invalid">${item | itemLabel:count}</p>
+  <p class="contextual-converter-valid">${item | contextualItemLabel:prefix}</p>
+  <template repeat.for="identityValue of items | identityItem">
+    <p class="identity-converter-valid">${identityValue.label}</p>
+  </template>
+  <p class="missing-converter-semantic-only">${item | absentConverter}</p>
+
+  <p class="behavior-transparent-valid">${item.label & auditValue}</p>
+  <p class="behavior-transparent-invalid">${item.missingLabel & auditValue}</p>
+  <p class="missing-behavior-semantic-only">${item.label & absentBehavior}</p>
+  <p class="duplicate-behavior-invalid">${item.label & auditValue & auditValue}</p>
+
+  <type-target class="resource-child-valid" required-text.bind="item.label" count.bind="item.score"></type-target>
+  <type-target class="resource-child-invalid" required-text.bind="item.score"></type-target>
+</template>

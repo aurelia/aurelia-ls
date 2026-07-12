@@ -11330,6 +11330,875 @@
           ]
         }
       ]
+    },
+    {
+      "id": "template-typechecking-read-expressions",
+      "fixture": "fixtures/pressure/template-typechecking-corpus",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "template-expression-typechecking",
+      "domainAxis": "overlays",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/read-expressions.html",
+      "requirement": "Template read expressions preserve direct checker member facts, TypeScript-native call and narrowing diagnostics, semantic/checker agreement, exact authored spans, and clean positive controls across Aurelia expression contexts.",
+      "cases": [
+        {
+          "id": "member-read-positive-control",
+          "expectations": [
+            {
+              "name": "cursor member type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${definiteItem.label}", "token": "label" } },
+              "equals": { "value.selectedMemberName": "label", "value.selectedMember.typeDisplay": "string", "value.memberOwnerType.display": "CorpusItem", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "missing-member-semantic-checker-agreement",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "missing-expression-member", "diagnosticAuthority": "semantic-authoring-policy", "selectedMemberName": "missingLabel" }, "source": { "marker": "${definiteItem.missingLabel}", "token": "missingLabel" }, "count": 1 },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "diagnosticAuthority": "typescript", "missingInput": "typescript:TS2339" }, "source": { "marker": "${definiteItem.missingLabel}", "token": "missingLabel" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "optional-chain-retains-member-type",
+          "expectations": [
+            {
+              "name": "optional member cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${maybeItem?.label}", "token": "label" } },
+              "equals": { "value.selectedMemberName": "label", "value.selectedMember.typeDisplay": "string", "value.memberOwnerType.display": "CorpusItem | null", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "unguarded-nullish-read",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS18047", "suggestion.actionKind": "rewrite-expression" }, "source": { "marker": "${maybeItem.label}</p>", "markerOccurrence": 1, "token": "maybeItem" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "unknown-owner-stays-unknown",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS18046" }, "source": { "marker": "${unknownValue.label}", "token": "unknownValue" }, "count": 1 },
+                { "fields": { "diagnosticKind": "weak-expression-member-owner", "selectedMemberName": "label" }, "source": { "marker": "${unknownValue.label}", "token": "label" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "if-branch-narrows-nullish-owner",
+          "expectations": [
+            {
+              "name": "narrowed cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${maybeItem.label}</p>", "markerOccurrence": 2, "token": "label" } },
+              "equals": { "value.selectedMemberName": "label", "value.selectedMember.typeDisplay": "string", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "conditional-and-coalesce-narrowing-controls",
+          "expectations": [
+            {
+              "name": "conditional cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "maybeItem == null ? 'none' : maybeItem.label", "token": "label" } },
+              "equals": { "value.selectedMemberName": "label", "value.selectedMember.typeDisplay": "string", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "coalesce cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "maybeItem?.label ?? fallbackLabel", "token": "fallbackLabel" } },
+              "equals": { "value.selectedMemberName": "fallbackLabel", "value.selectedMember.typeDisplay": "\"Unknown\"", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "short-circuit-right-branch-retains-narrowing",
+          "expectations": [
+            {
+              "name": "logical-and member cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "maybeItem && maybeItem.label", "token": "label" } },
+              "equals": { "value.selectedMemberName": "label", "value.selectedMember.typeDisplay": "string", "value.memberOwnerType.display": "CorpusItem", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "call-positive-control",
+          "expectations": [
+            {
+              "name": "call cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${acceptItem(definiteItem)}", "token": "acceptItem" } },
+              "equals": { "value.selectedMemberName": "acceptItem", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "call-argument-mismatch",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2345" }, "source": { "marker": "acceptItem('not-an-item')", "token": "'not-an-item'" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "call-arity-mismatch",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2554" }, "source": { "marker": "acceptItem(definiteItem, definiteItem)", "token": "definiteItem", "occurrence": 2 }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "overload-positive-controls",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "source": { "marker": "${describe('ready')}", "token": "describe" }, "absent": true },
+                { "source": { "marker": "${describe(2)}", "token": "describe" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "overload-rejection-is-public",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2769" }, "source": { "marker": "${describe(true)}", "token": "true" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "non-callable-rejection-is-public",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2349" }, "source": { "marker": "${notCallable()}", "token": "notCallable" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "contextual-callback-parameter-type",
+          "expectations": [
+            {
+              "name": "callback cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "item => item.enabled", "token": "enabled" } },
+              "equals": { "value.selectedMemberName": "enabled", "value.selectedMember.typeDisplay": "boolean", "value.memberOwnerType.display": "CorpusItem", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "callback-member-agreement",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "missingLabel" }, "source": { "marker": "item => item.missingLabel", "token": "missingLabel" }, "count": 1 },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2339" }, "source": { "marker": "item => item.missingLabel", "token": "missingLabel" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "callback-return-mismatch",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2322" }, "source": { "marker": "acceptPredicate(item => item.label)", "token": "item.label" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "resource-local observation issue",
+              "query": { "kind": "observation-issues", "options": { "detail": "full", "page": { "size": 200 } } },
+              "equals": { "value.rows.length": 1 },
+              "rows": [
+                { "fields": { "issueKind": "non-trackable-template-method-call", "subjectName": "acceptPredicate" }, "source": { "marker": "acceptPredicate(item => item.label)", "token": "acceptPredicate" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "global-call-controls",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "source": { "marker": "Math.max(definiteItem.score, 0)", "token": "Math" }, "absent": true },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2345" }, "source": { "marker": "JSON.parse(42)", "token": "42" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "keyed-and-array-literal-controls",
+          "expectations": [
+            {
+              "name": "keyed member cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "itemById[activeId].label", "token": "label" } },
+              "equals": { "value.selectedMemberName": "label", "value.selectedMember.typeDisplay": "string", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "array literal diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "source": { "marker": "sum([1, definiteItem.score])", "token": "definiteItem.score" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "object-literal-contextual-typing",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "source": { "marker": "acceptPair({ label: definiteItem.label, count: definiteItem.score })", "token": "count" }, "absent": true },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2322" }, "source": { "marker": "acceptPair({ label: definiteItem.label, count: 'many' })", "token": "count" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "template-literal-and-new-expression-controls",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "source": { "marker": "`item:${definiteItem.id}`", "token": "definiteItem.id" }, "absent": true },
+                { "source": { "marker": "new Date(timestamp).getUTCFullYear()", "token": "getUTCFullYear" }, "absent": true }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "template-typechecking-write-bindings",
+      "fixture": "fixtures/pressure/template-typechecking-corpus",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "binding-direction-and-assignability",
+      "domainAxis": "type-system",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/write-bindings.html",
+      "requirement": "Binding modes spend one shared data-flow authority for source and target types, source writeability, converter writeback, exact authored assignment loci, and directional diagnostics without asking overlays to infer Aurelia transport policy.",
+      "cases": [
+        {
+          "id": "native-and-accessor-two-way-controls",
+          "expectations": [
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "direction": "two-way", "sourceName": "mutableText", "sourceType": "string", "targetProperty": "value", "targetValueType": "string", "sourceWritable": true, "sourceAssignmentKind": "runtime-assignable", "sourceToTargetAssignable": true, "targetToSourceAssignable": true }, "source": { "marker": "value.bind=\"mutableText\"", "token": "value.bind=\"mutableText\"" }, "count": 1 },
+                { "fields": { "direction": "two-way", "sourceName": "accessorText", "sourceType": "string", "sourceWritable": true, "sourceAssignmentKind": "runtime-assignable", "sourceToTargetAssignable": true, "targetToSourceAssignable": true }, "source": { "marker": "value.two-way=\"accessorText\"", "token": "value.two-way=\"accessorText\"" }, "count": 1 },
+                { "fields": { "direction": "two-way", "sourceName": "enabled", "sourceType": "boolean", "targetProperty": "checked", "targetValueType": "boolean", "sourceWritable": true, "sourceToTargetAssignable": true, "targetToSourceAssignable": true }, "source": { "marker": "checked.two-way=\"enabled\"", "token": "checked.two-way=\"enabled\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "to-view-and-one-time-do-not-require-writeability",
+          "expectations": [
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "direction": "source-to-target", "sourceName": "readonlyText", "sourceType": "\"Readonly\"", "sourceWritable": null, "sourceAssignmentKind": null, "sourceToTargetAssignable": true, "targetToSourceAssignable": null }, "source": { "marker": "value.to-view=\"readonlyText\"", "token": "value.to-view=\"readonlyText\"" }, "count": 1 },
+                { "fields": { "direction": "source-to-target", "sourceName": "readonlyText", "sourceWritable": null, "sourceAssignmentKind": null, "sourceToTargetAssignable": true, "targetToSourceAssignable": null }, "source": { "marker": "value.bind=\"readonlyText & oneTime\"", "token": "value.bind=\"readonlyText & oneTime\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "readonly-two-way-surfaces-share-assignment-policy",
+          "expectations": [
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "direction": "two-way", "sourceName": "readonlyText", "sourceWritable": false, "sourceAssignmentKind": "runtime-assignable-with-typescript-strictness", "sourceAssignmentReasonKinds": ["source-member-readonly", "target-to-source-type-mismatch"] }, "source": { "marker": "value.two-way=\"readonlyText\"", "token": "value.two-way=\"readonlyText\"" }, "count": 1 },
+                { "fields": { "direction": "two-way", "sourceName": "readonlyText", "sourceWritable": false, "sourceAssignmentKind": "runtime-assignable-with-typescript-strictness", "sourceAssignmentReasonKinds": ["source-member-readonly", "target-to-source-type-mismatch"] }, "source": { "marker": "value.bind=\"readonlyText & twoWay\"", "token": "value.bind=\"readonlyText & twoWay\"" }, "count": 1 },
+                { "fields": { "direction": "two-way", "sourceName": "readonlyText", "targetProperty": "current", "sourceWritable": false, "sourceAssignmentKind": "runtime-assignable-with-typescript-strictness" }, "source": { "marker": "current.two-way=\"readonlyText\"", "token": "current.two-way=\"readonlyText\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "binding-source-assignment-strictness", "missingInput": "binding-source-assignment:source-member-readonly", "selectedMemberName": "readonlyText" }, "source": { "marker": "value.two-way=\"readonlyText\"", "token": "readonlyText" }, "count": 1 },
+                { "fields": { "diagnosticKind": "binding-source-assignment-strictness", "missingInput": "binding-source-assignment:source-member-readonly", "selectedMemberName": "readonlyText" }, "source": { "marker": "value.bind=\"readonlyText & twoWay\"", "token": "readonlyText" }, "count": 1 },
+                { "fields": { "diagnosticKind": "binding-source-assignment-strictness", "missingInput": "binding-source-assignment:source-member-readonly", "selectedMemberName": "readonlyText" }, "source": { "marker": "current.two-way=\"readonlyText\"", "token": "readonlyText" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "getter-only-writeback-is-runtime-noop",
+          "expectations": [
+            {
+              "name": "binding data flow",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "direction": "target-to-source", "sourceName": "getterOnlyText", "sourceWritable": false, "sourceAssignmentKind": "runtime-unassignable", "sourceAssignmentReasonKinds": ["source-member-getter-without-setter"], "targetToSourceAssignable": true }, "source": { "marker": "value.from-view=\"getterOnlyText\"", "token": "value.from-view=\"getterOnlyText\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "template diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "binding-source-assignment-runtime-noop", "missingInput": "binding-source-assignment:source-member-getter-without-setter", "selectedMemberName": "getterOnlyText" }, "source": { "marker": "value.from-view=\"getterOnlyText\"", "token": "getterOnlyText" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "native-number-writeback-preserves-directional-mismatch",
+          "expectations": [
+            {
+              "name": "binding data flow",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "direction": "two-way", "sourceName": "count", "sourceType": "number", "targetValueType": "string", "sourceToTargetAssignable": false, "targetToSourceAssignable": false, "sourceAssignmentReasonKinds": ["target-to-source-type-mismatch"] }, "source": { "marker": "value.two-way=\"count\"", "token": "value.two-way=\"count\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "template diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "binding-source-assignment-strictness", "missingInput": "binding-source-assignment:target-to-source-type-mismatch", "selectedMemberName": "count" }, "source": { "marker": "value.two-way=\"count\"", "token": "count" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "keyed-writeability-distinguishes-mutable-and-readonly-records",
+          "expectations": [
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "sourceKind": "keyed", "sourceName": "mutableRecord[activeKey]", "sourceWritable": true, "sourceAssignmentKind": "runtime-assignable", "sourceToTargetAssignable": true, "targetToSourceAssignable": true }, "source": { "marker": "value.two-way=\"mutableRecord[activeKey]\"", "token": "value.two-way=\"mutableRecord[activeKey]\"" }, "count": 1 },
+                { "fields": { "sourceKind": "keyed", "sourceName": "readonlyRecord[activeKey]", "sourceWritable": false, "sourceAssignmentKind": "runtime-assignable-with-typescript-strictness", "sourceAssignmentReasonKinds": ["source-member-readonly"] }, "source": { "marker": "value.two-way=\"readonlyRecord[activeKey]\"", "token": "value.two-way=\"readonlyRecord[activeKey]\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "converter-writeback-spends-from-view-shape",
+          "expectations": [
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "sourceName": "count", "sourceType": "string", "targetValueType": "string", "sourceWritable": true, "sourceAssignmentKind": "runtime-assignable", "sourceToTargetAssignable": true, "targetToSourceAssignable": true }, "source": { "marker": "value.two-way=\"count | numberText\"", "token": "value.two-way=\"count | numberText\"" }, "count": 1 },
+                { "fields": { "sourceName": "count", "sourceType": "string", "sourceWritable": true, "sourceAssignmentKind": "runtime-assignable-with-typescript-strictness", "sourceToTargetAssignable": true, "targetToSourceAssignable": false, "sourceAssignmentReasonKinds": ["target-to-source-type-mismatch"] }, "source": { "marker": "value.two-way=\"count | toViewOnlyNumber\"", "token": "value.two-way=\"count | toViewOnlyNumber\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "typed-child-positive-controls",
+          "expectations": [
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "direction": "source-to-target", "sourceName": "mutableText", "sourceType": "string", "targetProperty": "requiredText", "targetPropertyType": "string", "sourceToTargetAssignable": true }, "source": { "marker": "required-text.bind=\"mutableText\"", "token": "required-text.bind=\"mutableText\"" }, "count": 1 },
+                { "fields": { "direction": "source-to-target", "sourceName": "count", "sourceType": "number", "targetProperty": "count", "targetPropertyType": "number", "sourceToTargetAssignable": true }, "source": { "marker": "count.bind=\"count\"", "token": "count.bind=\"count\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "typed-child-source-mismatch-is-diagnosed",
+          "expectations": [
+            {
+              "name": "binding data flow",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "direction": "source-to-target", "sourceName": "count", "sourceType": "number", "targetProperty": "requiredText", "targetPropertyType": "string", "sourceToTargetAssignable": false }, "source": { "marker": "required-text.bind=\"count\"", "token": "required-text.bind=\"count\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "template diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "binding-target-assignment-strictness", "missingInput": "binding-target-assignment:source-to-target-type-mismatch", "selectedMemberName": "count" }, "source": { "marker": "required-text.bind=\"count\"", "token": "count" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "typed-child-nullish-mismatch-is-diagnosed",
+          "expectations": [
+            {
+              "name": "binding data flow",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "direction": "source-to-target", "sourceName": "nullableText", "sourceType": "string | null", "targetProperty": "requiredText", "targetPropertyType": "string", "sourceToTargetAssignable": false, "sourceToTargetTypeMismatchKinds": ["source-nullish-to-required-target"] }, "source": { "marker": "required-text.bind=\"nullableText\"", "token": "required-text.bind=\"nullableText\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "template diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "binding-target-assignment-strictness", "missingInput": "binding-target-assignment:source-nullish-to-required-target", "selectedMemberName": "nullableText" }, "source": { "marker": "required-text.bind=\"nullableText\"", "token": "nullableText" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "assignment-facts-survive-app-aggregation",
+          "expectations": [
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "binding-source-assignment-strictness", "diagnosticAuthority": "semantic-runtime-product", "subject.subjectName": "readonlyText", "relatedQueryKind": "template-diagnostics" }, "source": { "marker": "value.two-way=\"readonlyText\"", "token": "readonlyText" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "template-typechecking-scope-projections",
+      "fixture": "fixtures/pressure/template-typechecking-corpus",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "scope-checker-overlay-agreement",
+      "domainAxis": "overlays",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/scope-projections.html",
+      "requirement": "Generated checker overlays replay Aurelia scope products without inventing a parallel scope model, preserving local and parent types, contextual slots, narrowing, promise assignments, and exact semantic/checker disagreement boundaries.",
+      "cases": [
+        {
+          "id": "repeat-local-type-control",
+          "expectations": [
+            {
+              "name": "repeat local cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${item.label}", "token": "item" } },
+              "equals": { "value.selectedMemberName": "item", "value.selectedMember.typeDisplay": "CorpusItem", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "repeat-member-semantic-checker-agreement",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "missingLabel" }, "source": { "marker": "${item.missingLabel}", "token": "missingLabel" }, "count": 1 },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2339" }, "source": { "marker": "${item.missingLabel}", "token": "missingLabel" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-contextual-types-and-invalid-member",
+          "expectations": [
+            {
+              "name": "index cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${$index.toFixed()}", "token": "$index" } },
+              "equals": { "value.selectedMemberName": "$index", "value.selectedMember.typeDisplay": "number", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "first cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${$first.toUpperCase()}", "token": "$first" } },
+              "equals": { "value.selectedMemberName": "$first", "value.selectedMember.typeDisplay": "boolean" }
+            },
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "toUpperCase" }, "source": { "marker": "${$first.toUpperCase()}", "token": "toUpperCase" }, "count": 1 },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2339" }, "source": { "marker": "${$first.toUpperCase()}", "token": "toUpperCase" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-callback-contextual-type",
+          "expectations": [
+            {
+              "name": "callback cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "candidate => candidate.", "markerOccurrence": 1, "position": "after-marker", "offsetDelta": 1 } },
+              "equals": { "value.selectedMemberName": "id", "value.selectedMember.typeDisplay": "string", "value.memberOwnerType.display": "CorpusItem", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "missingFlag" }, "source": { "marker": "candidate => candidate.missingFlag", "token": "missingFlag" }, "count": 1 },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2339" }, "source": { "marker": "candidate => candidate.missingFlag", "token": "missingFlag" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "let-local-type-and-invalid-member",
+          "expectations": [
+            {
+              "name": "let cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${upperLabel.toLowerCase()}", "token": "upperLabel" } },
+              "equals": { "value.selectedMemberName": "upperLabel", "value.selectedMember.typeDisplay": "string", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "missing" }, "source": { "marker": "${upperLabel.missing}", "token": "missing" }, "count": 1 },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2339" }, "source": { "marker": "${upperLabel.missing}", "token": "missing" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nested-repeat-child-type",
+          "expectations": [
+            {
+              "name": "child cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${child.label}", "token": "child" } },
+              "equals": { "value.selectedMemberName": "child", "value.selectedMember.typeDisplay": "CorpusChild", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "nested-parent-alias-type-and-agreement",
+          "expectations": [
+            {
+              "name": "parent item cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${$parent.item.label}", "token": "item" } },
+              "equals": { "value.selectedMemberName": "item", "value.selectedMember.typeDisplay": "CorpusItem", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "missingLabel" }, "source": { "marker": "${$parent.item.missingLabel}", "token": "missingLabel" }, "count": 1 },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2339" }, "source": { "marker": "${$parent.item.missingLabel}", "token": "missingLabel" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nested-root-parent-chain",
+          "expectations": [
+            {
+              "name": "root heading cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${$parent.$parent.heading}", "token": "heading" } },
+              "equals": { "value.selectedMemberName": "heading", "value.selectedMember.typeDisplay": "\"Scope projection\"", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "map-destructuring-local-types",
+          "expectations": [
+            {
+              "name": "key cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${key.toUpperCase()}", "token": "key" } },
+              "equals": { "value.selectedMemberName": "key", "value.selectedMember.typeDisplay": "string", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "entry cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${entry.label}", "token": "entry" } },
+              "equals": { "value.selectedMemberName": "entry", "value.selectedMember.typeDisplay": "CorpusItem", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "map-destructuring-member-agreement",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "missingLabel" }, "source": { "marker": "${entry.missingLabel}", "token": "missingLabel" }, "count": 1 },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2339" }, "source": { "marker": "${entry.missingLabel}", "token": "missingLabel" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "with-value-and-parent-scope-controls",
+          "expectations": [
+            {
+              "name": "with value cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<span class=\"with-valid\">${label}</span>", "token": "label" } },
+              "equals": { "value.selectedMemberName": "label", "value.selectedMember.typeDisplay": "string", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "with parent cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<span class=\"with-parent-valid\">${$parent.heading}</span>", "token": "heading" } },
+              "equals": { "value.selectedMemberName": "heading", "value.selectedMember.typeDisplay": "\"Scope projection\"", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "with-missing-root-is-semantic-only",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "missing-expression-member", "diagnosticAuthority": "semantic-authoring-policy", "selectedMemberName": "missingLabel" }, "source": { "marker": "<span class=\"with-invalid\">${missingLabel}</span>", "token": "missingLabel" }, "count": 1 },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2304" }, "source": { "marker": "<span class=\"with-invalid\">${missingLabel}</span>", "token": "missingLabel" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "if-branch-narrowing-replays-scope-condition",
+          "expectations": [
+            {
+              "name": "selected item cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${selectedItem.label}", "token": "selectedItem" } },
+              "equals": { "value.selectedMemberName": "selectedItem", "value.selectedMember.typeDisplay": "CorpusItem", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "promise-settlement-type-and-member-agreement",
+          "expectations": [
+            {
+              "name": "settlement cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${settledItem.label}", "token": "settledItem" } },
+              "equals": { "value.selectedMemberName": "settledItem", "value.selectedMember.typeDisplay": "CorpusItem", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "missingLabel" }, "source": { "marker": "${settledItem.missingLabel}", "token": "missingLabel" }, "count": 1 },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2339" }, "source": { "marker": "${settledItem.missingLabel}", "token": "missingLabel" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "promise-rejection-remains-unknown",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "source": { "marker": "${String(itemError)}", "token": "itemError" }, "absent": true },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS18046" }, "source": { "marker": "${itemError.message}", "token": "itemError" }, "count": 1 },
+                { "fields": { "diagnosticKind": "weak-expression-member-owner", "selectedMemberName": "message" }, "source": { "marker": "${itemError.message}", "token": "message" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "template-typechecking-resource-boundaries",
+      "fixture": "fixtures/pressure/template-typechecking-corpus",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "resource-checker-overlay-agreement",
+      "domainAxis": "overlays",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/resource-boundaries.html",
+      "requirement": "Value converters, binding behaviors, and typed child bindables preserve resource identity, checker-visible call contracts, transparent result types, missing-resource authority, and exact source-to-target assignment evidence.",
+      "cases": [
+        {
+          "id": "value-converter-valid-control",
+          "expectations": [
+            {
+              "name": "source cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${item | itemLabel:prefix}", "token": "item" } },
+              "equals": { "value.selectedMemberName": "item", "value.selectedMember.typeDisplay": "CorpusItem", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "no source diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "source": { "marker": "${item | itemLabel:prefix}", "token": "item" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "value-converter-input-type-mismatch",
+          "expectations": [
+            {
+              "name": "checker diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "diagnosticAuthority": "typescript", "missingInput": "typescript:TS2345" }, "source": { "marker": "${prefix | itemLabel:prefix}", "token": "prefix", "occurrence": 1 }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "value-converter-argument-type-mismatch",
+          "expectations": [
+            {
+              "name": "checker diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "diagnosticAuthority": "typescript", "missingInput": "typescript:TS2345" }, "source": { "marker": "${item | itemLabel:count}", "token": "count" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "contextual-value-converter-hides-caller-context-parameter",
+          "expectations": [
+            {
+              "name": "source cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${item | contextualItemLabel:prefix}", "token": "item" } },
+              "equals": { "value.selectedMemberName": "item", "value.selectedMember.typeDisplay": "CorpusItem", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "no source diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "source": { "marker": "${item | contextualItemLabel:prefix}", "token": "item" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "identity-value-converter-preserves-repeat-element-type",
+          "expectations": [
+            {
+              "name": "repeat local cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${identityValue.label}", "token": "identityValue" } },
+              "equals": { "value.selectedMemberName": "identityValue", "value.selectedMember.typeDisplay": "CorpusItem", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "missing-value-converter-keeps-framework-authority",
+          "expectations": [
+            {
+              "name": "framework diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "runtime-value-converter-framework-error", "diagnosticAuthority": "framework-error-code", "frameworkErrorCode": "AUR0103", "missingInput": "runtime-value-converter:AUR0103", "selectedMemberName": "absentConverter" }, "source": { "marker": "${item | absentConverter}", "token": "absentConverter" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "binding-behavior-preserves-expression-type",
+          "expectations": [
+            {
+              "name": "member cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${item.label & auditValue}", "token": "label" } },
+              "equals": { "value.selectedMemberName": "label", "value.selectedMember.typeDisplay": "string", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "binding-behavior-preserves-member-diagnostics",
+          "expectations": [
+            {
+              "name": "semantic and checker diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "missingLabel" }, "source": { "marker": "${item.missingLabel & auditValue}", "token": "missingLabel" }, "count": 1 },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2339" }, "source": { "marker": "${item.missingLabel & auditValue}", "token": "missingLabel" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "missing-binding-behavior-keeps-framework-authority",
+          "expectations": [
+            {
+              "name": "framework diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "runtime-binding-behavior-framework-error", "diagnosticAuthority": "framework-error-code", "frameworkErrorCode": "AUR0101", "missingInput": "runtime-binding-behavior:AUR0101", "selectedMemberName": "absentBehavior" }, "source": { "marker": "${item.label & absentBehavior}", "token": "absentBehavior" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "duplicate-binding-behavior-keeps-bind-order-authority",
+          "expectations": [
+            {
+              "name": "framework diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "runtime-binding-behavior-framework-error", "diagnosticAuthority": "framework-error-code", "frameworkErrorCode": "AUR0102", "missingInput": "runtime-binding-behavior:AUR0102", "selectedMemberName": "auditValue" }, "source": { "marker": "${item.label & auditValue & auditValue}", "token": "auditValue", "occurrence": 1 }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "typed-child-bindables-preserve-compatible-flows",
+          "expectations": [
+            {
+              "name": "required text flow",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "direction": "source-to-target", "sourceName": "item.label", "sourceRootName": "item", "sourceType": "string", "targetProperty": "requiredText", "targetPropertyType": "string", "sourceToTargetAssignable": true }, "source": { "marker": "required-text.bind=\"item.label\"", "token": "required-text.bind=\"item.label\"" }, "count": 1 },
+                { "fields": { "direction": "source-to-target", "sourceName": "item.score", "sourceRootName": "item", "sourceType": "number", "targetProperty": "count", "targetPropertyType": "number", "sourceToTargetAssignable": true }, "source": { "marker": "count.bind=\"item.score\"", "token": "count.bind=\"item.score\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "typed-child-bindable-rejects-source-type-mismatch",
+          "expectations": [
+            {
+              "name": "binding data flow",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "direction": "source-to-target", "sourceName": "item.score", "sourceRootName": "item", "sourceType": "number", "targetProperty": "requiredText", "targetPropertyType": "string", "sourceToTargetAssignable": false }, "source": { "marker": "required-text.bind=\"item.score\"", "token": "required-text.bind=\"item.score\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "template diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "binding-target-assignment-strictness", "missingInput": "binding-target-assignment:source-to-target-type-mismatch", "selectedMemberName": "item.score" }, "source": { "marker": "required-text.bind=\"item.score\"", "token": "item.score" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

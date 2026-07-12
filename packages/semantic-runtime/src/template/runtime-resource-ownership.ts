@@ -10,24 +10,24 @@ import {
 } from '../kernel/source-address.js';
 import type { KernelStore } from '../kernel/store.js';
 import type {
+  RuntimeBindingDataFlow,
+  RuntimeBindingObservedDependency,
+  RuntimeBindingValueChannel,
+} from '../observation/runtime-binding-observation.js';
+import type {
   RuntimeBinding,
   RuntimeBindingReference,
   RuntimeBindingSourceOperation,
   RuntimeBindingTargetAccess,
   RuntimeBindingTargetOperation,
-} from '../template/runtime-binding.js';
-import type { RuntimeBindingBehaviorApplication } from '../template/runtime-binding-behavior.js';
-import type { RuntimeValueConverterApplication } from '../template/runtime-value-converter.js';
+} from './runtime-binding.js';
+import type { RuntimeBindingBehaviorApplication } from './runtime-binding-behavior.js';
+import type { RuntimeValueConverterApplication } from './runtime-value-converter.js';
 import {
   RuntimeControllerCreationKind,
   type RuntimeControllerFrame,
-} from '../template/runtime-controller.js';
-import type { TemplateResourceRuntimeAnalysisEmission } from '../template/template-compilation-project-pass.js';
-import type {
-  RuntimeBindingDataFlow,
-  RuntimeBindingObservedDependency,
-  RuntimeBindingValueChannel,
-} from '../observation/runtime-binding-observation.js';
+} from './runtime-controller.js';
+import type { TemplateResourceRuntimeAnalysisEmission } from './template-compilation-project-pass.js';
 
 export function resourceLocalRuntimeBindings(
   store: KernelStore,

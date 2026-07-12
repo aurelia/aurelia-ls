@@ -15,6 +15,9 @@ import {
   type RuntimeHtmlValueConverterFrameworkErrorCode as RuntimeHtmlValueConverterFrameworkErrorCodeValue,
 } from './framework-error-code.js';
 import type {
+  RuntimeHtmlAstFrameworkErrorCode as RuntimeHtmlAstFrameworkErrorCodeValue,
+} from '../type-system/framework-error-code.js';
+import type {
   RuntimeBindingReference,
 } from './runtime-binding.js';
 import type { TemplateVisibleResourceReference } from './compiler-world-reference.js';
@@ -35,7 +38,7 @@ export type RuntimeValueConverterApplicationField =
 export class RuntimeValueConverterApplicationReference {
   constructor(
     readonly converterName: string,
-    readonly resource: TemplateVisibleResourceReference,
+    readonly resource: TemplateVisibleResourceReference | null,
     readonly productHandle: ProductHandle | null,
     readonly identityHandle: IdentityHandle | null,
     readonly addressHandle: AddressHandle | null,
@@ -50,7 +53,7 @@ export class RuntimeValueConverterApplication {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly binding: RuntimeBindingReference,
-    readonly resource: TemplateVisibleResourceReference,
+    readonly resource: TemplateVisibleResourceReference | null,
     readonly phase: RuntimeValueConverterApplicationPhase,
     readonly converterName: string,
     readonly argumentCount: number,
@@ -70,13 +73,24 @@ export class RuntimeValueConverterApplication {
 }
 
 export const enum RuntimeValueConverterIssuePhase {
+  /** `astBind` resolves the converter and subscribes any declared signals. */
+  Bind = 'bind',
+  /** Source-to-target evaluation invokes `toView`. */
   ToView = 'to-view',
+  /** Target-to-source assignment invokes `fromView`. */
   FromView = 'from-view',
 }
 
 export const enum RuntimeValueConverterIssueKind {
+  /** `astBind` could not resolve the authored converter from the binding service locator. */
+  ResourceNotFound = 'resource-not-found',
+  /** The default sanitize converter reached the intentionally throwing sanitizer implementation. */
   SanitizerMethodNotImplemented = 'sanitizer-method-not-implemented',
 }
+
+export type RuntimeValueConverterFrameworkErrorCodeValue =
+  | RuntimeHtmlValueConverterFrameworkErrorCodeValue
+  | RuntimeHtmlAstFrameworkErrorCodeValue;
 
 export type RuntimeValueConverterIssueField =
   | 'application'
@@ -99,16 +113,16 @@ export class RuntimeValueConverterIssue {
     readonly phase: RuntimeValueConverterIssuePhase,
     readonly issueKind: RuntimeValueConverterIssueKind,
     readonly message: string,
-    readonly frameworkErrorCode: RuntimeHtmlValueConverterFrameworkErrorCodeValue,
+    readonly frameworkErrorCode: RuntimeValueConverterFrameworkErrorCodeValue,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeValueConverterIssueField>[] = [],
   ) {}
 }
 
-export type BuiltInValueConverterInvocationIssue = {
+export type RuntimeValueConverterIssueDraft = {
   readonly issueKind: RuntimeValueConverterIssueKind;
   readonly message: string;
-  readonly frameworkErrorCode: RuntimeHtmlValueConverterFrameworkErrorCodeValue;
+  readonly frameworkErrorCode: RuntimeValueConverterFrameworkErrorCodeValue;
 };
 
 export type SanitizeValueConverterToViewContext = {
@@ -126,7 +140,7 @@ export type SanitizeValueConverterToViewContext = {
 export class SanitizeValueConverter {
   readonly name = BuiltInValueConverterName.Sanitize;
 
-  toView(context: SanitizeValueConverterToViewContext): BuiltInValueConverterInvocationIssue | null {
+  toView(context: SanitizeValueConverterToViewContext): RuntimeValueConverterIssueDraft | null {
     if (context.hasCustomSanitizer) {
       return null;
     }

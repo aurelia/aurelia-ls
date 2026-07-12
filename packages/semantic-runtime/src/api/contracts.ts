@@ -3630,6 +3630,7 @@ export type SemanticTemplateCursorDiagnosticKind =
   | 'binding-source-assignment-strictness'
   | 'binding-source-assignment-framework-managed'
   | 'binding-source-assignment-runtime-noop'
+  | 'binding-target-assignment-strictness'
   | 'binding-source-runtime-branch-open';
 
 export type SemanticTemplateCursorDiagnosticAuthority =
@@ -4388,7 +4389,7 @@ export interface SemanticValueConverterApplicationRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
   readonly converterName: string;
-  readonly resource: SemanticTemplateResourceReferenceRow;
+  readonly resource: SemanticTemplateResourceReferenceRow | null;
   readonly phase: RuntimeValueConverterApplicationPhase | `${RuntimeValueConverterApplicationPhase}`;
   readonly argumentCount: number;
   readonly source: SemanticSourceReference | null;

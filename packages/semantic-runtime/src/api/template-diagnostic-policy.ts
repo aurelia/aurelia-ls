@@ -9,6 +9,7 @@ import {
   RuntimeBindingDataFlow,
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceAssignmentReasonKind,
+  RuntimeBindingDataFlowTypeMismatchKind,
   RuntimeBindingValueChannelKind,
 } from '../observation/runtime-binding-observation.js';
 import { bindingDataFlowDirectionIncludesSourceToTarget } from '../observation/binding-data-flow-direction.js';
@@ -29,7 +30,10 @@ import {
   type RuntimeBindingBehaviorIssue,
   RuntimeBindingBehaviorIssueKind,
 } from '../template/runtime-binding-behavior.js';
-import type { RuntimeValueConverterIssue } from '../template/runtime-value-converter.js';
+import {
+  type RuntimeValueConverterIssue,
+  RuntimeValueConverterIssueKind,
+} from '../template/runtime-value-converter.js';
 import type { RuntimeBindingTargetAccess } from '../template/runtime-binding.js';
 import {
   type RuntimeControllerIssue,
@@ -45,7 +49,6 @@ import {
   type CheckerTypeShape,
   CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
-import { checkerTypeShapeNullishUnionHasValueProperty } from '../type-system/checker-type-shape-access.js';
 import {
   RuntimeAstFrameworkErrorCode,
   RuntimeHtmlAstFrameworkErrorCode,
@@ -140,9 +143,6 @@ export function cursorDiagnosticRows(
     )];
   }
   if (selectedMember == null) {
-    if (checkerTypeShapeNullishUnionHasValueProperty(ownerType, selectedMemberName)) {
-      return [];
-    }
     return [missingMemberDiagnostic(
       source,
       selectedMemberName,
@@ -358,6 +358,10 @@ export function bindingDataFlowDiagnostics(
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
 ): readonly SemanticTemplateCursorDiagnosticRow[] {
   const diagnostics: SemanticTemplateCursorDiagnosticRow[] = [];
+  const targetAssignmentDiagnostic = bindingTargetAssignmentDiagnostic(dataFlow, source);
+  if (targetAssignmentDiagnostic != null) {
+    diagnostics.push(targetAssignmentDiagnostic);
+  }
   const assignmentDiagnosticKind = bindingSourceAssignmentDiagnosticKind(dataFlow.sourceAssignmentKind);
   if (assignmentDiagnosticKind != null) {
     diagnostics.push(bindingSourceAssignmentDiagnostic(
@@ -381,6 +385,53 @@ export function bindingDataFlowDiagnostics(
     diagnostics.push(openDiagnostic);
   }
   return diagnostics;
+}
+
+function bindingTargetAssignmentDiagnostic(
+  dataFlow: RuntimeBindingDataFlow,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorDiagnosticRow | null {
+  if (!bindingDataFlowDirectionIncludesSourceToTarget(dataFlow.direction)
+    || dataFlow.sourceToTargetAssignable !== false) {
+    return null;
+  }
+  const nullish = dataFlow.sourceToTargetTypeMismatchKinds.includes(
+    RuntimeBindingDataFlowTypeMismatchKind.SourceNullishToRequiredTarget,
+  );
+  const sourceTypeDisplay = dataFlow.sourceType?.display ?? null;
+  const targetTypeDisplay = dataFlow.targetValueType?.display ?? dataFlow.targetPropertyType?.display ?? null;
+  const targetProperty = dataFlow.targetAccess?.targetProperty ?? 'unknown';
+  const missingInput = nullish
+    ? 'binding-target-assignment:source-nullish-to-required-target'
+    : 'binding-target-assignment:source-to-target-type-mismatch';
+  return {
+    diagnosticKind: 'binding-target-assignment-strictness',
+    diagnosticAuthority: 'semantic-runtime-product',
+    frameworkErrorCode: null,
+    severity: 'warning',
+    summary: nullish
+      ? `Binding source type ${sourceTypeDisplay ?? 'unknown'} may be nullish, but target '${targetProperty}' requires ${targetTypeDisplay ?? 'a non-nullish value'}.`
+      : `Binding source type ${sourceTypeDisplay ?? 'unknown'} is not assignable to target '${targetProperty}' of type ${targetTypeDisplay ?? 'unknown'}.`,
+    missingInput,
+    missingInputs: [missingInput],
+    source,
+    selectedMemberName: dataFlow.sourceName,
+    ownerTypeDisplay: sourceTypeDisplay,
+    ownerTypeShapeKind: dataFlow.sourceType?.shapeKind ?? null,
+    ownerTypeOrigin: dataFlow.sourceType?.origin ?? null,
+    suggestion: {
+      suggestionKind: nullish ? 'guard-nullish-expression' : 'align-assignment-type',
+      actionKind: 'rewrite-expression',
+      actionTarget: suggestionActionTarget('expression', source, dataFlow.sourceName, targetTypeDisplay),
+      summary: nullish
+        ? 'Guard or default the nullable source before binding it to this required target.'
+        : 'Convert or retarget the binding expression so its value satisfies the target contract.',
+      targetMemberName: dataFlow.sourceName,
+      ownerTypeDisplay: sourceTypeDisplay,
+      valueTypeDisplay: targetTypeDisplay,
+      valueTypeSource: targetTypeDisplay == null ? null : 'binding-target',
+    },
+  };
 }
 
 export function bindingDataFlowDiagnosticSource(
@@ -881,7 +932,15 @@ export function runtimeBindingBehaviorIssueDiagnostic(
   issue: RuntimeBindingBehaviorIssue,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
 ): SemanticTemplateCursorDiagnosticRow {
-  const suggestion = runtimeBindingBehaviorIssueSuggestion(issue);
+  const selectedMemberName = issue.issueKind === RuntimeBindingBehaviorIssueKind.ResourceNotFound
+    || issue.issueKind === RuntimeBindingBehaviorIssueKind.DuplicateApplication
+    ? issue.application.behaviorName
+    : null;
+  const expressionSuggestion = issue.frameworkErrorCode === RuntimeHtmlAstFrameworkErrorCode.AstBehaviorNotFound
+    || issue.frameworkErrorCode === RuntimeHtmlAstFrameworkErrorCode.AstBehaviorDuplicated
+    ? expressionRuntimeEvaluationSuggestion(issue.frameworkErrorCode, source, selectedMemberName)
+    : null;
+  const suggestion = expressionSuggestion?.summary ?? runtimeBindingBehaviorIssueSuggestion(issue);
   return {
     diagnosticKind: 'runtime-binding-behavior-framework-error',
     diagnosticAuthority: 'framework-error-code',
@@ -897,16 +956,17 @@ export function runtimeBindingBehaviorIssueDiagnostic(
         : `runtime-binding-behavior:${issue.frameworkErrorCode}`,
     ],
     source,
-    selectedMemberName: null,
+    selectedMemberName,
     ownerTypeDisplay: null,
     ownerTypeShapeKind: null,
     ownerTypeOrigin: null,
     suggestion: {
-      suggestionKind: 'fix-template-syntax',
-      actionKind: 'rewrite-template-syntax',
-      actionTarget: suggestionActionTarget('template-syntax', source, null, null),
+      suggestionKind: expressionSuggestion?.suggestionKind ?? 'fix-template-syntax',
+      actionKind: expressionSuggestion?.actionKind ?? 'rewrite-template-syntax',
+      actionTarget: expressionSuggestion?.actionTarget
+        ?? suggestionActionTarget('template-syntax', source, null, null),
       summary: suggestion,
-      targetMemberName: null,
+      targetMemberName: selectedMemberName,
       ownerTypeDisplay: null,
       valueTypeDisplay: null,
       valueTypeSource: null,
@@ -916,6 +976,10 @@ export function runtimeBindingBehaviorIssueDiagnostic(
 
 function runtimeBindingBehaviorIssueSuggestion(issue: RuntimeBindingBehaviorIssue): string {
   switch (issue.issueKind) {
+    case RuntimeBindingBehaviorIssueKind.ResourceNotFound:
+      return 'Register or import a binding behavior with this name into the compiler resource scope.';
+    case RuntimeBindingBehaviorIssueKind.DuplicateApplication:
+      return 'Remove the duplicate binding behavior application or combine its arguments into one application.';
     case RuntimeBindingBehaviorIssueKind.BindingAlreadyHasRateLimited:
       return 'Keep only one rate-limiting behavior on this binding, or combine the behavior arguments into one rate limiter.';
     case RuntimeBindingBehaviorIssueKind.BindingAlreadyHasTargetSubscriber:
@@ -949,6 +1013,12 @@ export function runtimeValueConverterIssueDiagnostic(
   issue: RuntimeValueConverterIssue,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
 ): SemanticTemplateCursorDiagnosticRow {
+  const selectedMemberName = issue.issueKind === RuntimeValueConverterIssueKind.ResourceNotFound
+    ? issue.application.converterName
+    : null;
+  const expressionSuggestion = issue.frameworkErrorCode === RuntimeHtmlAstFrameworkErrorCode.AstConverterNotFound
+    ? expressionRuntimeEvaluationSuggestion(issue.frameworkErrorCode, source, selectedMemberName)
+    : null;
   return {
     diagnosticKind: 'runtime-value-converter-framework-error',
     diagnosticAuthority: 'framework-error-code',
@@ -958,16 +1028,18 @@ export function runtimeValueConverterIssueDiagnostic(
     missingInput: `runtime-value-converter:${issue.frameworkErrorCode}`,
     missingInputs: [`runtime-value-converter:${issue.frameworkErrorCode}`],
     source,
-    selectedMemberName: null,
+    selectedMemberName,
     ownerTypeDisplay: null,
     ownerTypeShapeKind: null,
     ownerTypeOrigin: null,
     suggestion: {
-      suggestionKind: 'register-di-service',
-      actionKind: 'register-service',
-      actionTarget: suggestionActionTarget('service', source, 'ISanitizer', null),
-      summary: 'Register an app ISanitizer implementation before using the built-in sanitize value converter.',
-      targetMemberName: 'ISanitizer',
+      suggestionKind: expressionSuggestion?.suggestionKind ?? 'register-di-service',
+      actionKind: expressionSuggestion?.actionKind ?? 'register-service',
+      actionTarget: expressionSuggestion?.actionTarget
+        ?? suggestionActionTarget('service', source, 'ISanitizer', null),
+      summary: expressionSuggestion?.summary
+        ?? 'Register an app ISanitizer implementation before using the built-in sanitize value converter.',
+      targetMemberName: expressionSuggestion == null ? 'ISanitizer' : selectedMemberName,
       ownerTypeDisplay: null,
       valueTypeDisplay: null,
       valueTypeSource: null,
