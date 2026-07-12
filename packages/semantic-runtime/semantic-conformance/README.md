@@ -113,7 +113,7 @@ Current matrix scale, as of 2026-07-12:
 - code-action edit-plan provenance, including safe no-action cases;
 - framework capability demand rows before diagnostic/code-action projection.
 
-Current default output: 445 active assertions pass with 14 known gaps. The bindable-contracts subdomain has 82 assertion
+Current default output: 447 active assertions pass with 13 known gaps. The bindable-contracts subdomain has 82 assertion
 rows: 76 active passes and 6 known-gap witnesses. Its remaining gaps cover inline multi-binding segment projection,
 coercion policy, cursor type projection, interceptor-reference convergence, and custom-attribute compiler-policy
 projection. The router-composition subdomain has 110 active assertion rows and no current known gaps; the

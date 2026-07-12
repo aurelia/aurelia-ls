@@ -855,10 +855,11 @@ function templateExpressionDiagnosticSubject(
     source.end,
   );
   if (access != null) {
-    return diagnosticSubjectForSpan(source.path, access.subjectKind, access.subjectSpan);
+    return diagnosticSubjectForSpan(source.path, access.subjectKind, access.subjectSpan, null);
   }
   return {
     subjectKind: 'template-expression',
+    subjectName: null,
     source,
   };
 }
@@ -1072,7 +1073,12 @@ function templateDiagnosticRowForDiagnostic(
   return [{
     ...diagnostic,
     source,
-    subject: diagnosticSubjectForSpan(filePath, span.subjectKind, span.subjectSpan),
+    subject: diagnosticSubjectForSpan(
+      filePath,
+      span.subjectKind,
+      span.subjectSpan,
+      diagnostic.selectedMemberName,
+    ),
     siteKind: cursorInfo.siteKind,
     valueSiteKind: cursorInfo.valueSite?.siteKind ?? null,
     template: cursorInfo.template,
@@ -1903,9 +1909,11 @@ function diagnosticSubjectForSpan(
   filePath: string,
   subjectKind: SemanticDiagnosticSubject['subjectKind'],
   span: SourceSpan,
+  subjectName: string | null,
 ): SemanticDiagnosticSubject {
   return {
     subjectKind,
+    subjectName,
     source: sourceReferenceForSpan(filePath, span, subjectKind),
   };
 }

@@ -3376,7 +3376,11 @@ export class SemanticApp {
         ? query.sourceFile
         : null,
     });
-    const frameworkRows = readFrameworkCapabilityDemandDiagnosticRows(this.emission, this.runtime.workspace.store);
+    const frameworkRows = readFrameworkCapabilityDemandDiagnosticRows(
+      this.emission,
+      this.runtime.workspace.store,
+      includeHandles(detail),
+    );
     const resourceRows = readResourceIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const stateRows = readStateIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const validationRows = readValidationIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));

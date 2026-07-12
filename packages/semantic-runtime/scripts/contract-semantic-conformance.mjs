@@ -389,11 +389,12 @@ async function assertDiagnosticProvenanceAgreement(assertion, failures, notes) {
   if (templateRow != null) {
     expectSource(templateRow.source, context.fixtureRoot, expectedSpan, 'template diagnostic source', failures);
     expectSource(templateRow.subject?.source, context.fixtureRoot, subjectSpan, 'template diagnostic subject source', failures);
+    expectEqual(templateRow.subject?.subjectName, assertion.expected.selectedMemberName, 'template diagnostic subject name', failures);
     expectEqual(templateRow.suggestion?.actionKind, assertion.expected.suggestionActionKind, 'template diagnostic suggestion action', failures);
   }
   if (appRow != null) {
     expectEqual(appRow.diagnosticDomain, assertion.expected.appDiagnosticDomain, 'app diagnostic domain', failures);
-    expectEqual(appRow.selectedMemberName, assertion.expected.selectedMemberName, 'app diagnostic selectedMemberName', failures);
+    expectEqual(appRow.subject?.subjectName, assertion.expected.selectedMemberName, 'app diagnostic subject name', failures);
     expectSource(appRow.source, context.fixtureRoot, expectedSpan, 'app diagnostic source', failures);
     expectSource(appRow.subject?.source, context.fixtureRoot, subjectSpan, 'app diagnostic subject source', failures);
     expectEqual(appRow.suggestion?.actionKind, assertion.expected.suggestionActionKind, 'app diagnostic suggestion action', failures);

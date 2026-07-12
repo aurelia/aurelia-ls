@@ -90,6 +90,55 @@
       }
     },
     {
+      "id": "observation-diagnostic-fact-conservation",
+      "fixture": "fixtures/pressure/trackable-method-dependencies",
+      "aureliaDomain": "runtime-api-boundary",
+      "capability": "diagnostic-fact-conservation",
+      "domainAxis": "diagnostics",
+      "coverageIntent": "boundary-contract",
+      "assertionKind": "query-expectations",
+      "requirement": "App diagnostics preserve the owning observation phase, subject identity, source, and repair intent while retaining an exact handle route at detailed projection.",
+      "sourceFile": "src/trackable-method-dependencies-app.html",
+      "expectations": [
+        {
+          "name": "owning observation issue",
+          "query": { "kind": "observation-issues", "options": { "detail": "handles", "page": { "size": 50 } } },
+          "rows": [
+            {
+              "fields": {
+                "phase": "binding-observation",
+                "issueKind": "non-trackable-template-method-call",
+                "subjectName": "ordinaryCounterLabel",
+                "suggestion.suggestionKind": "make-method-trackable",
+                "suggestion.actionKind": "configure-observer"
+              },
+              "source": { "marker": "${ordinaryCounterLabel()}", "token": "ordinaryCounterLabel" },
+              "count": 1
+            }
+          ]
+        },
+        {
+          "name": "aggregated app diagnostic",
+          "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 100 } } },
+          "rows": [
+            {
+              "fields": {
+                "diagnosticDomain": "observation",
+                "phase": "binding-observation",
+                "diagnosticKind": "non-trackable-template-method-call",
+                "subject.subjectKind": "observation-member",
+                "subject.subjectName": "ordinaryCounterLabel",
+                "suggestion.suggestionKind": "make-method-trackable",
+                "suggestion.actionKind": "configure-observer"
+              },
+              "source": { "marker": "${ordinaryCounterLabel()}", "token": "ordinaryCounterLabel" },
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "unregistered-router-code-action-oldText",
       "fixture": "fixtures/pressure/unregistered-plugin-resources",
       "aureliaDomain": "plugin-capability-admission",

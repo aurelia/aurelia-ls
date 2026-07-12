@@ -73,6 +73,7 @@ export function frameworkCapabilityDemandsDisplayText(
 export function readFrameworkCapabilityDemandDiagnosticRows(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
+  includeHandles: boolean,
 ): readonly SemanticAppDiagnosticRow[] {
   return emission.capabilityDemands.readDemands()
     .filter((demand) =>
@@ -88,24 +89,34 @@ export function readFrameworkCapabilityDemandDiagnosticRows(
       return [{
         projectKey: demand.projectKey,
         diagnosticDomain: 'framework',
+        phase: null,
         diagnosticKind: diagnostic.diagnosticKind,
         diagnosticAuthority: diagnostic.diagnosticAuthority,
         frameworkErrorCode: diagnostic.frameworkErrorCode,
+        frameworkRawErrorAuthority: null,
         severity: diagnostic.severity,
         summary: diagnostic.summary,
         missingInput: diagnostic.missingInput,
         missingInputs: diagnostic.missingInputs,
         source: diagnostic.source,
+        subject: null,
+        relatedInformation: [],
         suggestion: diagnostic.suggestion,
+        sourceRole: null,
         relatedQueryKind: relatedQueryKindForCapability(demand.requiredCapability),
-        handles: {
-          productHandle: demand.productHandle,
-          identityHandle: demand.identityHandle,
-          ownerIdentityHandle: demand.ownerIdentityHandle,
-          sourceAddressHandle: demand.sourceAddressHandle,
-          templateSourceAddressHandle: demand.templateSourceAddressHandle,
-          resourceDefinitionProductHandle: demand.resourceDefinitionProductHandle,
-        },
+        ...(includeHandles
+          ? {
+            handles: {
+              productHandle: demand.productHandle,
+              identityHandle: demand.identityHandle,
+              ownerIdentityHandle: demand.ownerIdentityHandle,
+              sourceAddressHandle: demand.sourceAddressHandle,
+              relatedSourceAddressHandles: [],
+              templateSourceAddressHandle: demand.templateSourceAddressHandle,
+              resourceDefinitionProductHandle: demand.resourceDefinitionProductHandle,
+            },
+          }
+          : {}),
       }];
     })
     .sort((left, right) =>

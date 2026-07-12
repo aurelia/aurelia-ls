@@ -9,11 +9,12 @@ import {
   sourceSpanAddressForAddress,
 } from '../kernel/source-address.js';
 import {
-  KernelStore,
   KernelStoreBatch,
+  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import type { TemplateCompilationProjectEmission } from '../template/template-compilation-project-pass.js';
+import { sourceAddressForRuntimeExpressionBounds } from '../template/runtime-expression-source-address.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { sourceSpanForCheckerNode } from '../type-system/declaration-source.js';
 import { CheckerTypeMemberKind } from '../type-system/type-shape.js';
@@ -21,8 +22,8 @@ import {
   RuntimeBindingKind,
 } from '../template/runtime-binding.js';
 import {
-  RuntimeBindingObservedDependency,
   RuntimeObservedDependencyKind,
+  type RuntimeBindingObservedDependency,
 } from './runtime-binding-observation.js';
 import { readTrackableMethodDependency } from './trackable-method-dependency-recognition.js';
 import {
@@ -147,6 +148,13 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
     index: number,
   ): ObservationIssuePublication {
     const local = nonTrackableTemplateMethodCallLocalKey(project, call, index);
+    const source = sourceAddressForRuntimeExpressionBounds(
+      this.store,
+      `${local}:source`,
+      call.dependency.sourceAddressHandle,
+      call.dependency.memberNameSpanStart,
+      call.dependency.memberNameSpanEnd,
+    );
     const relatedSources = [
       call.dependency.observedMemberSourceAddressHandle,
       ...call.bodyReads.map((read) => read.sourceAddressHandle),
@@ -158,11 +166,12 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
       ObservationIssueKind.NonTrackableTemplateMethodCall,
       nonTrackableTemplateMethodCallMessage(call),
       null,
-      call.dependency.sourceAddressHandle,
+      source.handle,
       relatedSources,
       call.methodName,
     );
     return new ObservationIssuePublication(publication.issue, [
+      ...source.records,
       ...call.bodyReads.flatMap((read) => read.records),
       ...publication.records,
     ]);

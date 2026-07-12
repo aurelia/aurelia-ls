@@ -3,13 +3,6 @@
   "schemaVersion": "semantic-conformance-known-gaps.v1",
   "knownGaps": [
     {
-      "assertionId": "mixed-form-option-label-diagnostic-provenance-agreement",
-      "status": "known-gap",
-      "failureBucket": "diagnostic-provenance-data-loss",
-      "firstObserved": "2026-07-09",
-      "rationale": "TemplateDiagnostics preserves selectedMemberName for the weak owner row, while AppDiagnostics preserves source/domain but drops that selected member identity."
-    },
-    {
       "assertionId": "code-action-edit-plan-coverage/declaration-insertion-old-text",
       "status": "known-gap",
       "failureBucket": "code-action-edit-plan-oldText-data-loss",

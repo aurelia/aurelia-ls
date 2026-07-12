@@ -181,6 +181,7 @@ function toRuntimeSnapshotItem(
     data: {
       semanticRuntime: true,
       diagnosticDomain: row.diagnosticDomain,
+      phase: row.phase,
       diagnosticKind: row.diagnosticKind,
       diagnosticAuthority: row.diagnosticAuthority,
       frameworkErrorCode: row.frameworkErrorCode,

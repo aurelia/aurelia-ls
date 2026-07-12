@@ -356,6 +356,7 @@ function semanticRuntimeDiagnosticData(
     queryKind: "app-diagnostics",
     projectKey: row.projectKey,
     diagnosticDomain: row.diagnosticDomain,
+    phase: row.phase,
     diagnosticKind: row.diagnosticKind,
     diagnosticAuthority: row.diagnosticAuthority,
     frameworkErrorCode: row.frameworkErrorCode,

@@ -2125,6 +2125,30 @@ export type SemanticAppDiagnosticDomain =
   | 'router'
   | 'route-recognizer';
 
+/** Domain-local diagnostic lifecycle phase; interpret together with `diagnosticDomain`. */
+export type SemanticAppDiagnosticPhase =
+  | TypeSystemDiagnosticPhase
+  | EvaluationIssuePhase
+  | `${EvaluationIssuePhase}`
+  | ConfigurationIssuePhase
+  | `${ConfigurationIssuePhase}`
+  | DiIssuePhase
+  | `${DiIssuePhase}`
+  | ObservationIssuePhase
+  | `${ObservationIssuePhase}`
+  | ResourceIssuePhase
+  | `${ResourceIssuePhase}`
+  | StateIssuePhase
+  | `${StateIssuePhase}`
+  | ValidationIssuePhase
+  | `${ValidationIssuePhase}`
+  | FetchClientIssuePhase
+  | `${FetchClientIssuePhase}`
+  | DialogIssuePhase
+  | `${DialogIssuePhase}`
+  | RouterIssuePhase
+  | `${RouterIssuePhase}`;
+
 export type SemanticDiagnosticSubjectKind =
   | 'template-member-access'
   | 'template-member-call'
@@ -2134,6 +2158,7 @@ export type SemanticDiagnosticSubjectKind =
 
 export interface SemanticDiagnosticSubject {
   readonly subjectKind: SemanticDiagnosticSubjectKind | string;
+  readonly subjectName: string | null;
   readonly source: SemanticSourceReference | null;
 }
 
@@ -2147,28 +2172,31 @@ export interface SemanticDiagnosticRelatedInformation {
 export interface SemanticAppDiagnosticRow {
   readonly projectKey: string;
   readonly diagnosticDomain: SemanticAppDiagnosticDomain;
+  /** Null only when the owning diagnostic product does not currently publish a phase. */
+  readonly phase: SemanticAppDiagnosticPhase | null;
   readonly diagnosticKind: string;
   readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority | 'semantic-runtime-product' | 'typescript';
   readonly frameworkErrorCode: string | null;
-  readonly frameworkRawErrorAuthority?: string | null;
+  readonly frameworkRawErrorAuthority: string | null;
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly summary: string;
-  readonly missingInput?: string | null;
-  readonly missingInputs?: readonly string[];
+  readonly missingInput: string | null;
+  readonly missingInputs: readonly string[];
   readonly source: SemanticSourceReference | null;
-  readonly subject?: SemanticDiagnosticSubject | null;
-  readonly relatedInformation?: readonly SemanticDiagnosticRelatedInformation[];
-  readonly suggestion?: SemanticTemplateCursorSuggestionRow | null;
+  readonly subject: SemanticDiagnosticSubject | null;
+  readonly relatedInformation: readonly SemanticDiagnosticRelatedInformation[];
+  readonly suggestion: SemanticTemplateCursorSuggestionRow | null;
   /** Boot-admitted source role when the diagnostic can be tied back to an authored project file. */
-  readonly sourceRole?: SourceFileRole | `${SourceFileRole}` | null;
+  readonly sourceRole: SourceFileRole | `${SourceFileRole}` | null;
   readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
   readonly handles?: {
-    readonly productHandle: ProductHandle;
-    readonly identityHandle: IdentityHandle;
+    readonly productHandle: ProductHandle | null;
+    readonly identityHandle: IdentityHandle | null;
     readonly ownerIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
-    readonly templateSourceAddressHandle?: AddressHandle | null;
-    readonly resourceDefinitionProductHandle?: ProductHandle | null;
+    readonly relatedSourceAddressHandles: readonly AddressHandle[];
+    readonly templateSourceAddressHandle: AddressHandle | null;
+    readonly resourceDefinitionProductHandle: ProductHandle | null;
   };
 }
 

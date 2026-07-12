@@ -84,9 +84,11 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
         rows: [{
           projectKey: "app",
           diagnosticDomain: "template",
+          phase: null,
           diagnosticKind: "missing-expression-member",
           diagnosticAuthority: "type-checker",
           frameworkErrorCode: null,
+          frameworkRawErrorAuthority: null,
           severity: "warning",
           summary: "Missing member",
           missingInput: "expression-member:selected-member-missing",
@@ -99,6 +101,13 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
             end: 10,
             role: "expression",
           },
+          subject: {
+            subjectKind: "template-member-access",
+            subjectName: "beta",
+            source: null,
+          },
+          relatedInformation: [],
+          suggestion: null,
           sourceRole: "template",
           relatedQueryKind: "template-diagnostics",
         }],
@@ -116,8 +125,10 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       semanticRuntime: {
         queryKind: "app-diagnostics",
         diagnosticDomain: "template",
+        phase: null,
         diagnosticKind: "missing-expression-member",
         missingInputs: ["expression-member:selected-member-missing"],
+        subject: { subjectName: "beta" },
       },
       [AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]: {
         diagnostics: {
@@ -145,9 +156,11 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
         rows: [{
           projectKey: "app",
           diagnosticDomain: "template",
+          phase: null,
           diagnosticKind: "template-expression-typescript-diagnostic",
           diagnosticAuthority: "typescript",
           frameworkErrorCode: null,
+          frameworkRawErrorAuthority: null,
           severity: "error",
           summary: "TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.",
           missingInput: "typescript:TS2345",
@@ -160,6 +173,9 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
             end: 10,
             role: "expression",
           },
+          subject: null,
+          relatedInformation: [],
+          suggestion: null,
           sourceRole: "template",
           relatedQueryKind: "template-diagnostics",
         }],

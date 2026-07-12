@@ -897,10 +897,18 @@ than identical to every semantic checker root. The Program may include evaluated
 observation and template analysis can ask the checker about Program-owned nodes, while ordinary TypeScript diagnostics
 only iterate the parsed tsconfig diagnostic source set when one exists. Semantic-runtime overlay sources are also
 checker roots, but their diagnostics stay hidden until a query can map a synthetic span back to authored Aurelia source.
-Config read/parse/option diagnostics are kept on the same surface, so public adapters do not need to shell out to `tsc` or build a second Program. It preserves
-`diagnosticDomain` and `relatedQueryKind` so callers can drill back into the owning query instead of treating app
-diagnostics as a separate semantic layer. The owning diagnostic rows are collected before the app-level page is applied;
-do not page a child query and then aggregate it, or pressure summaries will hide high-volume diagnostic classes.
+Config read/parse/option diagnostics are kept on the same surface, so public adapters do not need to shell out to `tsc`
+or build a second Program. This aggregation is a normalized index, not a replacement owner record. Every app diagnostic
+preserves the common facts available from its owning row: phase, raw framework authority, missing inputs, structured
+subject kind/name/source, related information, repair suggestion, and source role use explicit nullable or empty values
+rather than disappearing by domain. Phase is a closed union of the owning domain phase ontologies and must be
+interpreted with `diagnosticDomain`; aggregation must not widen it to an ungoverned string. At `detail: "handles"`, the
+normalized handle carrier preserves the owning issue product/identity/source route plus any modeled owner,
+related-source, template-source, or resource-definition routes;
+compact rows omit the handle carrier. Domain-specific payload remains on the owning query. `diagnosticDomain`
+and `relatedQueryKind` identify that query family so callers do not have to treat app diagnostics as a separate semantic
+layer or reverse-engineer ownership from wording. The owning diagnostic rows are collected before the app-level page is
+applied; do not page a child query and then aggregate it, or pressure summaries will hide high-volume diagnostic classes.
 `AppDiagnosticSummary` reads that same unpaged diagnostic row set, then clusters by diagnostic domain, kind, authority,
 framework code, severity, and owning query. Use it before raw rows when a large app needs dominant diagnostic classes
 rather than the first source-ordered page. App diagnostic row and summary answers also own compact `displayText` with
