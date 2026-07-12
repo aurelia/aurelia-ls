@@ -19,7 +19,7 @@
 import type { FeatureModule } from "../../core/feature-graph.js";
 import { DisposableStore } from "../../core/disposables.js";
 import type { ProtocolWorkspaceEdit, RenameFromTsResponse } from "../../types.js";
-import { assertWorkspaceEditVersionsCurrent } from "./workspace-edit-versions.js";
+import { assertWorkspaceEditVersionsCurrent } from "../../workspace-edit-versions.js";
 
 export const TsRenameFeature: FeatureModule = {
   id: "rename.tsPropagate",
@@ -76,11 +76,6 @@ export const TsRenameFeature: FeatureModule = {
           return tsEdit;
         }
 
-        assertWorkspaceEditVersionsCurrent(
-          ctx.vscode,
-          aureliaRename.workspaceEdit,
-          "Aurelia template rename propagation was blocked because editor documents changed",
-        );
         const convertWorkspaceEdit = ctx.rawClient.protocol2CodeConverter.asWorkspaceEdit as (
           workspaceEdit: ProtocolWorkspaceEdit,
           token: import("vscode").CancellationToken,
@@ -89,6 +84,11 @@ export const TsRenameFeature: FeatureModule = {
         if (templateEdit == null) {
           throw new Error("Aurelia template rename propagation returned no convertible workspace edit.");
         }
+        assertWorkspaceEditVersionsCurrent(
+          ctx.vscode,
+          aureliaRename.workspaceEdit,
+          "Aurelia template rename propagation was blocked because editor documents changed",
+        );
 
         // Step 3: Merge TS + template edits
         const merged = tsEdit ?? new vscode.WorkspaceEdit();

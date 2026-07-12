@@ -44,6 +44,11 @@ import {
   semanticSourceReferenceContainsOffset,
 } from "@aurelia-ls/semantic-runtime";
 import { canonicalDocumentUri, type DocumentUri } from "../utils/document-uri.js";
+import {
+  AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA,
+  type TemplateCodeActionResolveData,
+} from "../protocol.js";
+import { stableDigest } from "../utils/stable-hash.js";
 
 export interface SourceSpan {
   readonly start: number;
@@ -968,11 +973,142 @@ export function mapSemanticRuntimeTemplateCodeActions(
           queryKind: "template-code-actions",
           sourceDiagnostics: row.diagnostics,
           repairAffordance: row.repair,
+          actionIdentity: semanticRuntimeTemplateCodeActionIdentity(row),
         },
       },
     });
   }
   return actions.length === 0 ? null : actions;
+}
+
+export function mapSemanticRuntimeUnresolvedTemplateCodeActions(
+  answer: SemanticRuntimeAnswer<SemanticTemplateCodeActionsResult>,
+  lookupDocumentSnapshot: LookupDocumentSnapshotFn,
+  options: {
+    readonly workspaceRoot: string | null;
+    readonly originDocument: TextDocument;
+    readonly position: { readonly line: number; readonly character: number };
+    readonly diagnostics?: readonly Diagnostic[];
+    readonly onMappingFailure?: (
+      row: SemanticTemplateCodeActionsResult["rows"][number],
+      failures: readonly string[],
+    ) => void;
+  },
+): CodeAction[] | null {
+  const actions = mapSemanticRuntimeTemplateCodeActions(answer, lookupDocumentSnapshot, options);
+  return actions?.map((action) => {
+    const data = codeActionData(action.data);
+    const semanticRuntime = semanticRuntimeCodeActionData(data);
+    const actionIdentity = semanticRuntime?.["actionIdentity"];
+    if (semanticRuntime == null || typeof actionIdentity !== "string") {
+      throw new Error(`Code action '${action.title}' has no semantic resolution identity.`);
+    }
+    const unresolvedSemanticRuntime = { ...semanticRuntime };
+    delete unresolvedSemanticRuntime["actionIdentity"];
+    return {
+      ...action,
+      edit: undefined,
+      data: {
+        ...data,
+        semanticRuntime: {
+          ...unresolvedSemanticRuntime,
+          resolve: {
+            schema: AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA,
+            textDocument: { uri: options.originDocument.uri },
+            position: options.position,
+            actionIdentity,
+          } satisfies TemplateCodeActionResolveData,
+        },
+      },
+    };
+  }) ?? null;
+}
+
+export function semanticRuntimeTemplateCodeActionResolveData(
+  data: unknown,
+): TemplateCodeActionResolveData | null {
+  const semanticRuntime = semanticRuntimeCodeActionData(data);
+  const resolve = semanticRuntime?.["resolve"];
+  if (resolve == null || typeof resolve !== "object" || Array.isArray(resolve)) {
+    return null;
+  }
+  const candidate = resolve as Record<string, unknown>;
+  const textDocument = candidate["textDocument"];
+  const position = candidate["position"];
+  const line = position != null && typeof position === "object" && !Array.isArray(position)
+    ? (position as Record<string, unknown>)["line"]
+    : null;
+  const character = position != null && typeof position === "object" && !Array.isArray(position)
+    ? (position as Record<string, unknown>)["character"]
+    : null;
+  if (
+    candidate["schema"] !== AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA
+    || typeof candidate["actionIdentity"] !== "string"
+    || textDocument == null
+    || typeof textDocument !== "object"
+    || Array.isArray(textDocument)
+    || typeof (textDocument as Record<string, unknown>)["uri"] !== "string"
+    || position == null
+    || typeof position !== "object"
+    || Array.isArray(position)
+    || typeof line !== "number"
+    || !Number.isInteger(line)
+    || line < 0
+    || typeof character !== "number"
+    || !Number.isInteger(character)
+    || character < 0
+  ) {
+    return null;
+  }
+  return resolve as TemplateCodeActionResolveData;
+}
+
+export function semanticRuntimeTemplateCodeActionIdentityFromData(data: unknown): string | null {
+  const actionIdentity = semanticRuntimeCodeActionData(data)?.["actionIdentity"];
+  return typeof actionIdentity === "string" ? actionIdentity : null;
+}
+
+function semanticRuntimeTemplateCodeActionIdentity(
+  row: SemanticTemplateCodeActionsResult["rows"][number],
+): string {
+  const diagnostics = row.diagnostics
+    .map((diagnostic) => {
+      const source = semanticExactSourceReference(diagnostic.source);
+      return {
+        diagnosticKind: diagnostic.diagnosticKind,
+        diagnosticAuthority: diagnostic.diagnosticAuthority,
+        missingInput: diagnostic.missingInput,
+        selectedMemberName: diagnostic.selectedMemberName,
+        source: source == null
+          ? null
+          : {
+              path: source.path,
+              start: source.start,
+              end: source.end,
+            },
+      };
+    })
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  return `template-code-action:sha256:${stableDigest({
+    title: row.title,
+    kind: row.kind,
+    repair: row.repair,
+    editKinds: row.edits.map((edit) => edit.editKind),
+    diagnostics,
+  })}`;
+}
+
+function semanticRuntimeCodeActionData(data: unknown): Record<string, unknown> | null {
+  const semanticRuntime = codeActionData(data)["semanticRuntime"];
+  return semanticRuntime != null && typeof semanticRuntime === "object" && !Array.isArray(semanticRuntime)
+    ? semanticRuntime as Record<string, unknown>
+    : null;
+}
+
+function codeActionData(data: unknown): Record<string, unknown> {
+  return data != null && typeof data === "object" && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : {};
 }
 
 export function workspaceEditChanges(

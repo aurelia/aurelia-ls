@@ -5,7 +5,8 @@ high-volume semantic-runtime query/locus truth; extension-host E2E owns low-volu
 verification supports all three by checking reopened pressure-corpus product facts. This harness boots the real language server
 (`packages/language-server/out/main.js`) over stdio against a fixture workspace, drives standard
 LSP requests (rename, references, hover, completions, definition, documentHighlight, diagnostics, codeAction), applies the results to
-in-memory copies of the fixture, and snapshots before/after.
+in-memory copies of the fixture, and snapshots before/after. The `codeAction` lane resolves lazy actions through
+`codeAction/resolve` before validating and applying their versioned edits, matching the editor lifecycle.
 
 Add a lane probe when protocol projection, paging/draining, source mapping, refusal conversion, or `WorkspaceEdit`
 assembly is itself under question. Do not mirror the semantic matrix case-for-case. Stateful client behavior such as

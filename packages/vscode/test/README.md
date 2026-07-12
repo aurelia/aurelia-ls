@@ -19,7 +19,9 @@ Guidelines:
   copy of `fixtures/hello-world`: run `pnpm test:vscode:extension-host`.
   Keep this suite focused on client-boundary behavior that Vitest stubs cannot
   observe, such as multi-file edit application,
-  undo/redo grouping, dirty state, and diagnostics after rollback.
+  lazy code-action resolution, undo/redo grouping, dirty state, and diagnostics
+  after rollback. Set `AURELIA_LS_EXTENSION_HOST_GREP` to a Mocha grep pattern
+  when iterating on one host journey.
 - Extension-host E2E is the low-volume third layer of the IDE campaign. The
   semantic conformance matrix owns high-volume query truth and lane-harness
   owns medium-volume LSP projection, so do not reproduce either corpus here.

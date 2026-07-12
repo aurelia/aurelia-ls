@@ -66,7 +66,14 @@ export async function initialize(
     connection.sendRequest("initialize", {
       processId: process.pid,
       rootUri,
-      capabilities: {},
+      capabilities: {
+        textDocument: {
+          codeAction: {
+            dataSupport: true,
+            resolveSupport: { properties: ["edit"] },
+          },
+        },
+      },
     }).then(
       () => {
         clearTimeout(timer);

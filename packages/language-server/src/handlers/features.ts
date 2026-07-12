@@ -39,6 +39,7 @@ import { canonicalDocumentUri } from "../utils/document-uri.js";
 import {
   createCompletionGapMarker,
   mapSemanticRuntimeTemplateCodeActions,
+  mapSemanticRuntimeUnresolvedTemplateCodeActions,
   mapSemanticRuntimeTemplateDefinition,
   mapSemanticRuntimeTemplateHover,
   mapSemanticRuntimeTemplateCompletions,
@@ -46,6 +47,8 @@ import {
   mapSemanticRuntimeTemplatePrepareRename,
   mapSemanticRuntimeTemplateRenameEdit,
   mapSemanticRuntimeRouteNodeDefinition,
+  semanticRuntimeTemplateCodeActionIdentityFromData,
+  semanticRuntimeTemplateCodeActionResolveData,
   type LookupTextFn,
 } from "../mapping/lsp-types.js";
 import { handleSemanticTokensFull } from "./semantic-tokens.js";
@@ -384,14 +387,20 @@ export async function handleCodeAction(
       params.range.start,
       guard,
     );
-    return mapSemanticRuntimeTemplateCodeActions(response, (uri) => ctx.lookupDocumentSnapshot(uri), {
+    const mappingOptions = {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
       diagnostics: params.context.diagnostics,
-      onMappingFailure: (row, failures) => {
+      onMappingFailure: (row: { readonly title: string }, failures: readonly string[]) => {
         ctx.logger.warn(`[codeAction] skipped unsafe code action "${row.title}": ${failures.join(" ")}`);
       },
-    });
+    };
+    return ctx.clientSupportsCodeActionResolveEdit
+      ? mapSemanticRuntimeUnresolvedTemplateCodeActions(response, (uri) => ctx.lookupDocumentSnapshot(uri), {
+          ...mappingOptions,
+          position: params.range.start,
+        })
+      : mapSemanticRuntimeTemplateCodeActions(response, (uri) => ctx.lookupDocumentSnapshot(uri), mappingOptions);
   } catch (e) {
     if (logIfSemanticRuntimeRequestAborted(ctx, "codeAction", e, params.textDocument.uri)) {
       return null;
@@ -399,6 +408,58 @@ export async function handleCodeAction(
     const d = degradationFromError("codeAction", e);
     logDegradation(ctx, "codeAction", d, params.textDocument.uri);
     return null;
+  }
+}
+
+export async function handleCodeActionResolve(
+  ctx: ServerContext,
+  action: CodeAction,
+  guard: SemanticRuntimeLspRequestGuard,
+): Promise<CodeAction> {
+  const resolve = semanticRuntimeTemplateCodeActionResolveData(action.data);
+  if (resolve == null) {
+    return action;
+  }
+  const doc = ctx.ensureProgramDocument(resolve.textDocument.uri);
+  if (doc == null || !isTemplateDocument(doc)) {
+    ctx.logger.warn(`[codeAction/resolve] source document is no longer available: ${resolve.textDocument.uri}`);
+    return action;
+  }
+
+  try {
+    const response = await ctx.semanticRuntime.templateCodeActions(doc, resolve.position, guard);
+    const candidates = mapSemanticRuntimeTemplateCodeActions(
+      response,
+      (uri) => ctx.lookupDocumentSnapshot(uri),
+      {
+        workspaceRoot: ctx.workspaceRoot,
+        originDocument: doc,
+        diagnostics: action.diagnostics,
+        onMappingFailure: (row, failures) => {
+          ctx.logger.warn(`[codeAction/resolve] skipped unsafe code action "${row.title}": ${failures.join(" ")}`);
+        },
+      },
+    ) ?? [];
+    const matches = candidates.filter((candidate) =>
+      semanticRuntimeTemplateCodeActionIdentityFromData(candidate.data) === resolve.actionIdentity
+    );
+    if (matches.length !== 1 || matches[0]?.edit == null) {
+      ctx.logger.warn(
+        `[codeAction/resolve] action is no longer uniquely applicable: ${action.title} (${matches.length} current matches)`,
+      );
+      return action;
+    }
+    return {
+      ...action,
+      edit: matches[0].edit,
+    };
+  } catch (error) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "codeAction/resolve", error, resolve.textDocument.uri)) {
+      return action;
+    }
+    const degradation = degradationFromError("codeAction/resolve", error);
+    logDegradation(ctx, "codeAction/resolve", degradation, resolve.textDocument.uri);
+    return action;
   }
 }
 
@@ -415,6 +476,7 @@ export function registerFeatureHandlers(ctx: ServerContext): void {
   ctx.connection.onPrepareRename((params, token) => handlePrepareRename(ctx, params, requestGuard(ctx, token)));
   ctx.connection.onRenameRequest((params, token) => handleRename(ctx, params, requestGuard(ctx, token)));
   ctx.connection.onCodeAction((params, token) => handleCodeAction(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onCodeActionResolve((action, token) => handleCodeActionResolve(ctx, action, requestGuard(ctx, token)));
   ctx.connection.onDocumentSymbol((params, token) => handleDocumentSymbols(ctx, params, requestGuard(ctx, token)));
   ctx.connection.onWorkspaceSymbol((params, token) => handleWorkspaceSymbols(ctx, params, requestGuard(ctx, token)));
   ctx.connection.onCodeLens((params, token) => handleCodeLens(ctx, params, requestGuard(ctx, token)));

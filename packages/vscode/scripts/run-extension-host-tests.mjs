@@ -43,5 +43,8 @@ await runTests({
   ],
   extensionTestsEnv: {
     AURELIA_LS_EXTENSION_HOST_WORKSPACE: testWorkspace,
+    ...(process.env.AURELIA_LS_EXTENSION_HOST_GREP
+      ? { AURELIA_LS_EXTENSION_HOST_GREP: process.env.AURELIA_LS_EXTENSION_HOST_GREP }
+      : {}),
   },
 });

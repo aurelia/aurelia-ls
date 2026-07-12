@@ -34,7 +34,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "diagnosticCount": 1,
       "hasCommand": false,
-      "hasEdit": true,
+      "hasEdit": false,
       "isPreferred": true,
       "kind": "quickfix",
       "title": "Declare member 'titel' on GuidanceTruthCanaryApp"
@@ -130,6 +130,17 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "planKind": "source-member-declaration",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
+          },
+          "resolve": {
+            "actionIdentity": "template-code-action:sha256:c38f83d2fcfbcfcf692204a7067ddc4070cea8b168bafb1715dfe1665df804a7",
+            "position": {
+              "character": 6,
+              "line": 0
+            },
+            "schema": "aurelia.template-code-action-resolve/1",
+            "textDocument": {
+              "uri": "fixtures://pressure/guidance-truth-canaries/src/guidance-truth-canary-app.html"
+            }
           },
           "sourceDiagnostics": [
             {
@@ -247,6 +258,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "index": 0,
       "isPreferred": true,
       "kind": "quickfix",
+      "resolution": {
+        "error": null,
+        "hasCommand": false,
+        "hasEdit": true,
+        "outcome": "resolved"
+      },
       "title": "Declare member 'titel' on GuidanceTruthCanaryApp"
     }
   ]
@@ -465,7 +482,7 @@ _No in-memory diff._
     {
       "diagnosticCount": 1,
       "hasCommand": false,
-      "hasEdit": true,
+      "hasEdit": false,
       "isPreferred": true,
       "kind": "quickfix",
       "title": "Declare member '$ghostLocal' on GuidanceTruthCanaryApp"
@@ -561,6 +578,17 @@ _No in-memory diff._
             "planKind": "source-member-declaration",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
+          },
+          "resolve": {
+            "actionIdentity": "template-code-action:sha256:a83f90814f6ecac135fa9e5c43ec97caec71397244ece5ed978e55804bb0b7ad",
+            "position": {
+              "character": 22,
+              "line": 3
+            },
+            "schema": "aurelia.template-code-action-resolve/1",
+            "textDocument": {
+              "uri": "fixtures://pressure/guidance-truth-canaries/src/guidance-truth-canary-app.html"
+            }
           },
           "sourceDiagnostics": [
             {
@@ -678,6 +706,12 @@ _No in-memory diff._
       "index": 0,
       "isPreferred": true,
       "kind": "quickfix",
+      "resolution": {
+        "error": null,
+        "hasCommand": false,
+        "hasEdit": true,
+        "outcome": "resolved"
+      },
       "title": "Declare member '$ghostLocal' on GuidanceTruthCanaryApp"
     }
   ]

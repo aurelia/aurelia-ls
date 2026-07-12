@@ -34,7 +34,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "diagnosticCount": 1,
       "hasCommand": false,
-      "hasEdit": true,
+      "hasEdit": false,
       "isPreferred": true,
       "kind": "quickfix",
       "title": "Register RouterConfiguration for router.default-resources"
@@ -118,6 +118,17 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "planKind": "framework-capability-registration",
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
+          },
+          "resolve": {
+            "actionIdentity": "template-code-action:sha256:3e2ff54e819a7b096df77cdc4691dcdce37e15c6f9433ed664049773c6affb02",
+            "position": {
+              "character": 8,
+              "line": 0
+            },
+            "schema": "aurelia.template-code-action-resolve/1",
+            "textDocument": {
+              "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+            }
           },
           "sourceDiagnostics": [
             {
@@ -214,6 +225,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "index": 0,
       "isPreferred": true,
       "kind": "quickfix",
+      "resolution": {
+        "error": null,
+        "hasCommand": false,
+        "hasEdit": true,
+        "outcome": "resolved"
+      },
       "title": "Register RouterConfiguration for router.default-resources"
     }
   ]

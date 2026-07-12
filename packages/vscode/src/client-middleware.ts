@@ -1,10 +1,10 @@
-import type { CancellationToken, MarkdownString, SemanticTokens, TextDocument, WorkspaceEdit } from "vscode";
-import type { Middleware } from "vscode-languageclient/node";
+import type { CancellationToken, CodeAction, SemanticTokens, TextDocument } from "vscode";
+import type { CodeAction as ProtocolCodeAction, Middleware } from "vscode-languageclient/node";
+import { AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA } from "@aurelia-ls/language-server/protocol";
 import type { ClientLogger } from "./log.js";
 import type { VscodeApi } from "./vscode-api.js";
 import { applyDiagnosticsUxAugmentation } from "./features/diagnostics/taxonomy.js";
-import { assertWorkspaceEditVersionsCurrent } from "./features/rename/workspace-edit-versions.js";
-import type { ProtocolWorkspaceEdit } from "./types.js";
+import { workspaceEditVersionMismatches } from "./workspace-edit-versions.js";
 
 export type DiagnosticsUxState = {
   enabled: boolean;
@@ -19,11 +19,10 @@ type MiddlewareLanguageClient = {
   readonly client: {
     sendRequest<T>(method: string, params?: unknown, token?: CancellationToken): Promise<T>;
     code2ProtocolConverter: {
-      asTextDocumentIdentifier(document: TextDocument): { uri: string };
-      asPosition(position: unknown): unknown;
+      asCodeActionSync(action: CodeAction): ProtocolCodeAction;
     };
     protocol2CodeConverter: {
-      asWorkspaceEdit(workspaceEdit: ProtocolWorkspaceEdit, token: CancellationToken): Promise<WorkspaceEdit | undefined>;
+      asCodeAction(action: ProtocolCodeAction, token: CancellationToken): Promise<CodeAction | undefined>;
     };
   } | undefined;
   readonly inlayHintsEnabled: boolean;
@@ -43,41 +42,46 @@ export function createMiddleware(
       // Upgrade MarkdownString contents to enable command links and theme icons
       hover.contents = hover.contents.map((c) => {
         if (typeof c === "string" || !("value" in c)) return c;
-        const md = new vscode.MarkdownString(c.value) as MarkdownString;
+        const md = new vscode.MarkdownString(c.value);
         md.isTrusted = true;
         md.supportThemeIcons = true;
         return md;
       });
       return hover;
     },
-    provideRenameEdits: async (document, position, newName, token, next) => {
-      if (document.languageId !== "html") {
-        return next(document, position, newName, token);
+    resolveCodeAction: async (action, token, next) => {
+      if (!isAureliaTemplateCodeAction(action)) {
+        return next(action, token);
       }
       const rawClient = client.client;
       if (!rawClient) {
-        return next(document, position, newName, token);
+        return next(action, token);
       }
-      // Own the standard rename request so we can validate the protocol
-      // `documentChanges` versions before VS Code's provider API erases them.
-      const workspaceEdit = await rawClient.sendRequest<ProtocolWorkspaceEdit | null>(
-        "textDocument/rename",
-        {
-          textDocument: rawClient.code2ProtocolConverter.asTextDocumentIdentifier(document),
-          position: rawClient.code2ProtocolConverter.asPosition(position),
-          newName,
-        },
+      // VS Code resolves a lazy action immediately before applying it. Own the
+      // raw request so document versions remain available until after the final
+      // asynchronous protocol conversion.
+      const resolved = await rawClient.sendRequest<ProtocolCodeAction>(
+        "codeAction/resolve",
+        rawClient.code2ProtocolConverter.asCodeActionSync(action),
         token,
       );
-      if (workspaceEdit == null) {
-        return null;
+      if (token.isCancellationRequested) {
+        return action;
       }
-      assertWorkspaceEditVersionsCurrent(
-        vscode,
-        workspaceEdit,
-        "Aurelia rename was blocked because editor documents changed",
-      );
-      return rawClient.protocol2CodeConverter.asWorkspaceEdit(workspaceEdit, token);
+      const converted = await rawClient.protocol2CodeConverter.asCodeAction(resolved, token);
+      if (token.isCancellationRequested) {
+        return action;
+      }
+      if (resolved.edit == null || converted?.edit == null) {
+        refuseCodeAction(vscode, logger, action.title, "the action is no longer applicable");
+        return action;
+      }
+      const mismatches = workspaceEditVersionMismatches(vscode, resolved.edit);
+      if (mismatches.length > 0) {
+        refuseCodeAction(vscode, logger, action.title, `editor documents changed: ${mismatches.join("; ")}`);
+        return action;
+      }
+      return converted;
     },
     handleDiagnostics: (uri, diagnostics, next) => {
       if (diagnosticsUx.enabled) {
@@ -101,4 +105,32 @@ export function createMiddleware(
       return next(document, range, token);
     },
   };
+}
+
+function isAureliaTemplateCodeAction(action: CodeAction): boolean {
+  const data = (action as CodeAction & { readonly data?: unknown }).data;
+  if (data == null || typeof data !== "object" || Array.isArray(data)) {
+    return false;
+  }
+  const semanticRuntime = (data as Record<string, unknown>)["semanticRuntime"];
+  if (semanticRuntime == null || typeof semanticRuntime !== "object" || Array.isArray(semanticRuntime)) {
+    return false;
+  }
+  const resolve = (semanticRuntime as Record<string, unknown>)["resolve"];
+  return resolve != null
+    && typeof resolve === "object"
+    && !Array.isArray(resolve)
+    && (resolve as Record<string, unknown>)["schema"] === AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA;
+}
+
+function refuseCodeAction(
+  vscode: VscodeApi,
+  logger: ClientLogger,
+  title: string,
+  reason: string,
+): void {
+  logger.warn(`[codeAction] '${title}' was not applied because ${reason}`);
+  void vscode.window.showWarningMessage(
+    `Aurelia code action was not applied because ${reason}. Request the code action again.`,
+  );
 }

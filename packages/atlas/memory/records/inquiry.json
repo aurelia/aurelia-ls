@@ -936,7 +936,8 @@
         "Do not use actionability to mean an edit exists, and reserve any future autofix/fix-all vocabulary for batch or on-save-safe operations.",
         "Do not reintroduce a local suggestion.actionKind === declare-member shortcut for source edits. The planner must prove the target kind and exact source operation it edits.",
         "When attaching LSP diagnostics to CodeActions, match every contributing semantic diagnostic by authority, kind, and exact source range so Problems-panel quick fixes preserve which diagnostics the edit resolves.",
-        "Every semantic code-action edit must carry an exact source and non-null oldText; zero-length insertions use the empty string. LSP mapping validates every row and refuses the whole plan on an unmappable or stale edit rather than applying a partial WorkspaceEdit."
+      "Every semantic code-action edit must carry an exact source and non-null oldText; zero-length insertions use the empty string. LSP mapping validates every row and refuses the whole plan on an unmappable or stale edit rather than applying a partial WorkspaceEdit.",
+      "An edit-backed semantic plan is not an eagerly applied editor edit. LSP discovery returns an unresolved CodeAction with a repair identity and source locus; codeAction/resolve re-enters the same semantic planner against current snapshots, and the VS Code middleware validates protocol document versions after conversion immediately before VS Code applies the resolved edit."
       ],
       "anchors": [
         {
@@ -969,12 +970,22 @@
           "symbolName": "SemanticTemplateCodeActionEditRow",
           "summary": "Exact edit contract requiring source and oldText, including empty-string insertion validation."
         },
-        {
-          "kind": "source",
-          "filePath": "packages/language-server/src/mapping/lsp-types.ts",
-          "summary": "LSP adapter that maps only edit-backed semantic-runtime code actions and attaches matching diagnostics."
-        },
-        {
+      {
+        "kind": "source",
+        "filePath": "packages/language-server/src/mapping/lsp-types.ts",
+        "summary": "LSP adapter that maps only edit-backed semantic-runtime code actions and attaches matching diagnostics."
+      },
+      {
+        "kind": "source",
+        "filePath": "packages/language-server/src/handlers/features.ts",
+        "summary": "Lazy LSP resolution re-enters the semantic planner and only returns the uniquely matching current edit plan."
+      },
+      {
+        "kind": "source",
+        "filePath": "packages/vscode/src/client-middleware.ts",
+        "summary": "VS Code code-action resolution retains protocol document versions through conversion and refuses stale or inapplicable edits before application."
+      },
+      {
           "kind": "source",
           "filePath": "packages/lane-harness/scripts/run-lane.mjs",
           "summary": "CodeAction lane records context diagnostics, CodeAction data, validated in-memory application, and diffs."

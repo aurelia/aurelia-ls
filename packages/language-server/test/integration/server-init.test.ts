@@ -71,7 +71,7 @@ describe("Server initialization", () => {
       expect(capabilities.documentHighlightProvider).toBe(true);
       expect(capabilities.referencesProvider).toBe(true);
       expect(capabilities.renameProvider).toBeTruthy();
-      expect(capabilities.codeActionProvider).toBe(true);
+      expect(capabilities.codeActionProvider).toEqual({ resolveProvider: true });
       expect(capabilities.documentSymbolProvider).toBe(true);
       expect(capabilities.workspaceSymbolProvider).toBe(true);
       expect(capabilities.codeLensProvider).toEqual({ resolveProvider: false });

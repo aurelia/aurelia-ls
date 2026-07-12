@@ -4,6 +4,16 @@ import type {
   SemanticDiagnosticRelatedInformation,
 } from "@aurelia-ls/semantic-runtime";
 
+export const AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA = "aurelia.template-code-action-resolve/1" as const;
+
+export type TemplateCodeActionResolveData = {
+  readonly schema: typeof AURELIA_TEMPLATE_CODE_ACTION_RESOLVE_SCHEMA;
+  readonly textDocument: { readonly uri: string };
+  readonly position: { readonly line: number; readonly character: number };
+  /** Stable repair-plan identity; exact edit coordinates are deliberately re-planned at resolve time. */
+  readonly actionIdentity: string;
+};
+
 /** Wire vocabulary shared by the custom diagnostics server handler and the bundled VS Code client. */
 export type DiagnosticSeverity = "error" | "warning" | "info" | "hint";
 export type DiagnosticImpact = "blocking" | "degraded" | "informational";

@@ -199,6 +199,8 @@ async function retryStaleRefresh(
 
 export function handleInitialize(ctx: ServerContext, params: InitializeParams): InitializeResult {
   ctx.workspaceRoot = params.rootUri ? URI.parse(params.rootUri).fsPath : null;
+  ctx.clientSupportsCodeActionResolveEdit = params.capabilities.textDocument?.codeAction?.dataSupport === true
+    && params.capabilities.textDocument.codeAction.resolveSupport?.properties.includes("edit") === true;
   ctx.logger.info(`initialize: root=${ctx.workspaceRoot ?? "<cwd>"}`);
 
   return {
@@ -210,7 +212,7 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
       documentHighlightProvider: true,
       referencesProvider: true,
       renameProvider: { prepareProvider: true },
-      codeActionProvider: true,
+      codeActionProvider: { resolveProvider: true },
       documentSymbolProvider: true,
       workspaceSymbolProvider: true,
       codeLensProvider: { resolveProvider: false },
@@ -222,8 +224,6 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
         legend: SEMANTIC_TOKENS_LEGEND,
         full: true,
       },
-      // Post-PR-19 feature stubs — uncomment when workspace adds support:
-      // codeActionProvider: { resolveProvider: true },
     },
   };
 }

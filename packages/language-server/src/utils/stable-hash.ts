@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export function stableHash(value: unknown): string {
   const text = stableStringify(value);
   let hash = 0x811c9dc5;
@@ -8,9 +10,14 @@ export function stableHash(value: unknown): string {
   return hash.toString(16).padStart(8, "0");
 }
 
+/** Collision-resistant stable identity for protocol records that can select edits. */
+export function stableDigest(value: unknown): string {
+  return createHash("sha256").update(stableStringify(value)).digest("hex");
+}
+
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
+    return JSON.stringify(value) ?? "undefined";
   }
   if (Array.isArray(value)) {
     return `[${value.map(stableStringify).join(",")}]`;

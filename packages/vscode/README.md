@@ -16,6 +16,10 @@ Hover over any Aurelia construct to see what it is, what it accepts, and where i
 
 Real-time, source-linked diagnostics for unknown elements, unknown attributes, expression errors, and binding mismatches. Diagnostics are backed by the same semantic facts used by MCP and other runtime consumers.
 
+### Quick fixes — apply only current plans
+
+Edit-backed diagnostics offer conservative quick fixes for source operations the semantic runtime can prove, such as declaring a missing view-model member or registering an available framework capability. Edits are re-planned when selected and refused if an open target document changed before application.
+
 ### Completions — discover what's available
 
 Context-aware suggestions that reflect your actual project. Element tags, bindable attributes, binding commands, expression members, value converters, binding behaviors — all filtered by what's registered and visible in scope.

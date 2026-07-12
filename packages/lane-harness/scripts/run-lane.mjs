@@ -459,6 +459,10 @@ async function initializeServer(client, fixtureRoot, fixtureName) {
       workspaceFolders: [{ uri: rootUri, name: fixtureName }],
       capabilities: {
         textDocument: {
+          codeAction: {
+            dataSupport: true,
+            resolveSupport: { properties: ["edit"] },
+          },
           rename: {
             dynamicRegistration: false,
             prepareSupport: true,
@@ -843,6 +847,14 @@ async function runCodeActionProbe(client, fixtureRoot, probe, readFixtureText) {
   const actionResults = [];
   for (let index = 0; index < actions.length; index += 1) {
     const action = actions[index];
+    const shouldResolve = action?.edit == null
+      && action?.data?.semanticRuntime?.resolve?.schema === "aurelia.template-code-action-resolve/1";
+    const resolveResponse = shouldResolve
+      ? await client.request("codeAction/resolve", action)
+      : null;
+    const resolvedAction = resolveResponse?.error
+      ? action
+      : resolveResponse?.result ?? action;
     actionResults.push({
       index,
       title: String(action?.title ?? ""),
@@ -852,8 +864,9 @@ async function runCodeActionProbe(client, fixtureRoot, probe, readFixtureText) {
       command: normalizeSnapshotValue(action?.command ?? null),
       diagnosticCount: Array.isArray(action?.diagnostics) ? action.diagnostics.length : 0,
       data: normalizeSnapshotValue(action?.data ?? null),
+      resolution: summarizeCodeActionResolution(resolveResponse, resolvedAction),
       apply: await applyWorkspaceEdit({
-        workspaceEdit: action?.edit ?? null,
+        workspaceEdit: resolvedAction?.edit ?? null,
         fixtureRoot,
         readFixtureText,
         expectedOldTexts,
@@ -871,6 +884,22 @@ async function runCodeActionProbe(client, fixtureRoot, probe, readFixtureText) {
     codeActionDiagnostics,
     expectedOldTexts,
     actions: actionResults,
+  };
+}
+
+function summarizeCodeActionResolution(response, action) {
+  if (response == null) {
+    return {
+      outcome: "not-requested",
+      hasEdit: action?.edit != null,
+      hasCommand: action?.command != null,
+    };
+  }
+  return {
+    outcome: response.error ? "error" : action?.edit != null ? "resolved" : "no-edit",
+    hasEdit: action?.edit != null,
+    hasCommand: action?.command != null,
+    error: normalizeSnapshotValue(response.error ?? null),
   };
 }
 
@@ -1966,7 +1995,8 @@ function renderLaneSnapshotSections(lines, result) {
       lines.push(fencedJson({
         actionCount: result.actions.length,
         actions: result.actions.map((action) => {
-          const { apply, ...summary } = action;
+          const summary = { ...action };
+          delete summary.apply;
           return summary;
         }),
       }));

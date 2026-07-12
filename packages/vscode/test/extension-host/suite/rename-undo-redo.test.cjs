@@ -319,6 +319,61 @@ suite("extension-host IDE reliability", () => {
     await waitForDiagnosticsClean(affected, "after custom-attribute second rename");
   });
 
+  test("resolved code action re-plans a dirty target and remains one undo operation", async () => {
+    await openTrackedDocuments();
+    const template = await showDocument("src/my-app.html");
+    const affected = ["src/my-app.html", "src/my-app.ts"];
+
+    await replaceTextInDocument("src/my-app.html", "${heading}", "${titel}", "Introduce missing template member");
+    await insertTextBefore("src/my-app.ts", "export class MyApp", "// unsaved code-action offset pressure\n");
+    const beforeAction = await readDocuments(affected);
+
+    const editor = await vscode.window.showTextDocument(template, { preview: false });
+    const actionPosition = positionForNeedle(template, "${titel}", "titel");
+    editor.selection = new vscode.Selection(actionPosition, actionPosition);
+    const actionRange = new vscode.Range(actionPosition, actionPosition);
+    let unresolvedActions;
+    await waitFor(async () => {
+      unresolvedActions = await executeCodeActionProvider(template.uri, actionRange, 0);
+      return unresolvedActions.length > 0;
+    }, "registered provider should return the missing-member quick fix");
+    assert(Array.isArray(unresolvedActions) && unresolvedActions.length > 0,
+      "expected the registered provider to return the missing-member quick fix");
+    assert.strictEqual(unresolvedActions[0].edit, undefined,
+      "missing-member quick fix should defer its edit until resolution");
+    const resolvedActions = await executeCodeActionProvider(template.uri, actionRange, 1);
+    assert(resolvedActions?.[0]?.edit instanceof vscode.WorkspaceEdit,
+      "expected the registered provider to resolve the missing-member WorkspaceEdit");
+    await vscode.commands.executeCommand("editor.action.codeAction", {
+      kind: "quickfix",
+      apply: "first",
+      preferred: true,
+    });
+    await waitFor(async () => (await documentFor("src/my-app.ts")).getText().includes("titel!: unknown;"),
+      "missing-member code action should update my-app.ts");
+    await assertDocumentsContain("after missing-member code action", {
+      "src/my-app.html": ["${titel}"],
+      "src/my-app.ts": ["// unsaved code-action offset pressure", "titel!: unknown;"],
+    });
+    await waitForDiagnosticsClean(affected, "after missing-member code action");
+    const afterAction = await readDocuments(affected);
+
+    const target = await showDocument("src/my-app.ts");
+    changeLog = [];
+    await runEditorCommand("undo", target);
+    await waitForDocumentsEqual(affected, beforeAction, "after code-action undo");
+    await waitFor(async () => (await executeCodeActionProvider(template.uri, actionRange, 0)).length > 0,
+      "missing-member action should return after code-action undo");
+    assertUndoRedoReasons(["src/my-app.ts"], vscode.TextDocumentChangeReason.Undo, "code-action undo");
+
+    changeLog = [];
+    await runEditorCommand("redo", target);
+    await waitForDocumentsEqual(affected, afterAction, "after code-action redo");
+    await waitFor(async () => (await executeCodeActionProvider(template.uri, actionRange, 0)).length === 0,
+      "missing-member action should clear after code-action redo");
+    assertUndoRedoReasons(["src/my-app.ts"], vscode.TextDocumentChangeReason.Redo, "code-action redo");
+  });
+
   test("unsaved template type errors publish at the authored token and clear on undo", async () => {
     const rel = "src/my-app.html";
     const document = await showDocument(rel);
@@ -384,7 +439,7 @@ async function activateAureliaExtension() {
       uriFor("src/my-app.html"),
       positionForNeedle(await documentFor("src/my-app.html"), "state.searchText", "searchText"),
     );
-    return Array.isArray(hovers);
+    return Array.isArray(hovers) && hovers.length > 0;
   }, "Aurelia extension should answer language-feature requests");
 }
 
@@ -448,6 +503,20 @@ async function insertTextBefore(rel, needle, text) {
   edit.insert(uriFor(rel), doc.positionAt(offset), text);
   const applied = await vscode.workspace.applyEdit(edit, { label: `Insert test text in ${rel}` });
   assert.strictEqual(applied, true, `Expected insertion edit to apply in ${rel}`);
+}
+
+async function replaceTextInDocument(rel, oldText, newText, label) {
+  const doc = await documentFor(rel);
+  const offset = doc.getText().indexOf(oldText);
+  assert.notStrictEqual(offset, -1, `Could not find ${JSON.stringify(oldText)} in ${rel}`);
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(
+    doc.uri,
+    new vscode.Range(doc.positionAt(offset), doc.positionAt(offset + oldText.length)),
+    newText,
+  );
+  const applied = await vscode.workspace.applyEdit(edit, { label });
+  assert.strictEqual(applied, true, `${label}: expected edit to apply in ${rel}`);
 }
 
 async function openTrackedDocuments() {
@@ -559,6 +628,17 @@ async function waitForDiagnosticsClean(files, label) {
     }
     return diagnostics.length === 0;
   }, `${label}: expected no relevant diagnostics`);
+}
+
+async function executeCodeActionProvider(uri, range, itemResolveCount) {
+  const actions = await vscode.commands.executeCommand(
+    "vscode.executeCodeActionProvider",
+    uri,
+    range,
+    "quickfix",
+    itemResolveCount,
+  );
+  return Array.isArray(actions) ? actions : [];
 }
 
 function isRelevantDiagnostic(diagnostic) {

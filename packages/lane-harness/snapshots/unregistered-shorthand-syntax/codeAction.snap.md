@@ -34,7 +34,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "diagnosticCount": 1,
       "hasCommand": false,
-      "hasEdit": true,
+      "hasEdit": false,
       "isPreferred": true,
       "kind": "quickfix",
       "title": "Register ShortHandBindingSyntax for runtime-html.short-hand-binding-syntax"
@@ -118,6 +118,17 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "planKind": "framework-capability-registration",
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
+          },
+          "resolve": {
+            "actionIdentity": "template-code-action:sha256:cfa8577c92f9520c69ee8b8d8544c72b2002b9f493124e210531db0e8e51cea5",
+            "position": {
+              "character": 7,
+              "line": 0
+            },
+            "schema": "aurelia.template-code-action-resolve/1",
+            "textDocument": {
+              "uri": "fixtures://pressure/unregistered-shorthand-syntax/src/unregistered-shorthand-syntax-app.html"
+            }
           },
           "sourceDiagnostics": [
             {
@@ -214,6 +225,12 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "index": 0,
       "isPreferred": true,
       "kind": "quickfix",
+      "resolution": {
+        "error": null,
+        "hasCommand": false,
+        "hasEdit": true,
+        "outcome": "resolved"
+      },
       "title": "Register ShortHandBindingSyntax for runtime-html.short-hand-binding-syntax"
     }
   ]

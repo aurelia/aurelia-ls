@@ -19,6 +19,8 @@ export interface ServerContext {
   readonly semanticRuntime: SemanticRuntimeLspSession;
 
   workspaceRoot: string | null;
+  /** Client can preserve CodeAction.data and lazily resolve the edit property. */
+  clientSupportsCodeActionResolveEdit: boolean;
 
   ensureProgramDocument(uri: string): TextDocument | null;
   lookupDocumentSnapshot(uri: DocumentUri): DocumentSnapshot | null;
@@ -113,6 +115,7 @@ export function createServerContext(init: ServerContextInit): ServerContext {
       workspaceRoot = v;
       semanticRuntime.configureWorkspace(v);
     },
+    clientSupportsCodeActionResolveEdit: false,
 
     ensureProgramDocument,
     lookupDocumentSnapshot,

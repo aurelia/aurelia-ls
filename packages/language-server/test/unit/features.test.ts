@@ -4,6 +4,7 @@ import {
   COMPLETION_GAP_MARKER_LABEL,
   canonicalDocumentUri,
   handleCodeAction,
+  handleCodeActionResolve,
   handleCompletion,
   handleDefinition,
   handleHover,
@@ -419,6 +420,7 @@ function createMockCodeActionContext(input: { actions?: unknown[] } = {}) {
   ];
   return {
     workspaceRoot: "/app",
+    clientSupportsCodeActionResolveEdit: true,
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => document),
     semanticRuntime: {
@@ -645,7 +647,7 @@ describe("handleCodeAction", () => {
     context: { diagnostics: [] },
   };
 
-  test("maps semantic-runtime template code actions to LSP quickfixes", async () => {
+  test("maps semantic-runtime template code actions to unresolved LSP quickfixes", async () => {
     const ctx = createMockCodeActionContext();
 
     const result = await handleCodeAction(ctx as never, params, testRequestGuard);
@@ -671,15 +673,66 @@ describe("handleCodeAction", () => {
         }),
       }),
     }));
-    expect(result?.[0]?.edit?.changes).toBeUndefined();
-    expect(result?.[0]?.edit?.documentChanges).toEqual([
+    expect(result?.[0]?.edit).toBeUndefined();
+    expect(result?.[0]?.data).toEqual(expect.objectContaining({
+      semanticRuntime: expect.objectContaining({
+        resolve: expect.objectContaining({
+          schema: "aurelia.template-code-action-resolve/1",
+          textDocument: { uri: "file:///app/src/my-app.html" },
+          position: params.range.start,
+          actionIdentity: expect.any(String),
+        }),
+      }),
+    }));
+  });
+
+  test("re-plans and resolves a selected code action with current document versions", async () => {
+    const ctx = createMockCodeActionContext();
+    const actions = await handleCodeAction(ctx as never, params, testRequestGuard);
+
+    const resolved = await handleCodeActionResolve(ctx as never, actions![0]!, testRequestGuard);
+
+    expect(ctx.semanticRuntime.templateCodeActions).toHaveBeenCalledTimes(2);
+    expect(resolved.edit?.changes).toBeUndefined();
+    expect(resolved.edit?.documentChanges).toEqual([
       expect.objectContaining({
         textDocument: { uri: definitionLspUri, version: 9 },
       }),
     ]);
-    expect(workspaceEditChanges(result![0]!.edit!)[definitionLspUri]).toEqual([
+    expect(workspaceEditChanges(resolved.edit!)[definitionLspUri]).toEqual([
       expect.objectContaining({ newText: "\n  titel!: unknown;" }),
     ]);
+  });
+
+  test("keeps eager versioned edits for clients that cannot resolve CodeAction.edit", async () => {
+    const ctx = createMockCodeActionContext();
+    ctx.clientSupportsCodeActionResolveEdit = false;
+
+    const actions = await handleCodeAction(ctx as never, params, testRequestGuard);
+
+    expect(actions?.[0]?.edit?.documentChanges).toEqual([
+      expect.objectContaining({
+        textDocument: { uri: definitionLspUri, version: 9 },
+      }),
+    ]);
+    expect(actions?.[0]?.data.semanticRuntime.resolve).toBeUndefined();
+  });
+
+  test("leaves a prepared action unresolved when its semantic plan is no longer applicable", async () => {
+    const ctx = createMockCodeActionContext();
+    const actions = await handleCodeAction(ctx as never, params, testRequestGuard);
+    ctx.semanticRuntime.templateCodeActions.mockResolvedValueOnce({
+      schemaVersion: "0.1",
+      outcome: "hit",
+      closure: "complete",
+      summary: "mock semantic-runtime code actions answer",
+      value: { displayText: "0 template code action(s).", rows: [] },
+    });
+
+    const resolved = await handleCodeActionResolve(ctx as never, actions![0]!, testRequestGuard);
+
+    expect(resolved.edit).toBeUndefined();
+    expect(ctx.logger.warn).toHaveBeenCalledWith(expect.stringContaining("no longer uniquely applicable"));
   });
 
   test("returns null when semantic-runtime has no applicable code actions", async () => {
