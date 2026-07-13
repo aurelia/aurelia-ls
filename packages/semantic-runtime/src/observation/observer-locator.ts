@@ -32,6 +32,7 @@ import {
   RuntimeBindingTargetAccessStrategy,
   RuntimeBindingTargetKind,
   RuntimeBindingTargetTypeSource,
+  type RuntimeBindingTarget,
 } from '../template/runtime-binding.js';
 import {
   HtmlNamespaceKind,
@@ -135,6 +136,40 @@ export class ObserverLocatorLookupResult {
 
   get supportsCoercer(): boolean {
     return observerStrategySupportsCoercer(this.strategy);
+  }
+
+  /** Apply an observer supplied by binding-behavior bind before PropertyBinding performs its ordinary lookup. */
+  withTargetObserver(
+    strategy: RuntimeBindingTargetAccessStrategy | null,
+    eventNames: readonly string[] | null,
+  ): ObserverLocatorLookupResult {
+    const selectedStrategy = strategy ?? this.strategy;
+    const openReason = eventNames == null
+      ? 'Binding behavior target-observer event names depend on runtime expression values.'
+      : null;
+    let authority = this.authority;
+    if (openReason != null) {
+      authority = RuntimeBindingTargetAccessAuthority.Open;
+    } else if (strategy != null) {
+      authority = RuntimeBindingTargetAccessAuthority.FrameworkConfig;
+    }
+    return new ObserverLocatorLookupResult(
+      this.lookup,
+      this.targetKind,
+      this.targetProperty,
+      selectedStrategy,
+      eventNames ?? [],
+      this.targetType,
+      this.targetTypeSource,
+      this.propertyType,
+      this.propertyExists,
+      this.isWritable,
+      isSubscribableStrategy(selectedStrategy),
+      authority,
+      openReason,
+      null,
+      null,
+    );
   }
 }
 
@@ -869,6 +904,15 @@ export class ObserverLocator {
 
   getObserver(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
     return this.lookup(input.withLookup(RuntimeBindingTargetAccessLookup.Observer));
+  }
+
+  /** Whether updateTrigger can reconfigure the native observer for this exact runtime target/property pair. */
+  hasNodeObserverConfig(target: RuntimeBindingTarget, targetProperty: string): boolean {
+    if (target.targetKind !== RuntimeBindingTargetKind.Node || target.tagName == null) {
+      return false;
+    }
+    const tagName = runtimeNodeName(target.tagName, target.namespace ?? HtmlNamespaceKind.Html);
+    return this.nodeObserverLocator.getNodeObserverConfig(tagName, targetProperty) != null;
   }
 
   getExpressionObserver(): null {

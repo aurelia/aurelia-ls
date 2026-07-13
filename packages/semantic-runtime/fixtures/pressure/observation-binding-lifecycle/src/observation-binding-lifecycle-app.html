@@ -1,0 +1,15 @@
+<template>
+  <input data-case="reached-mode" value.to-view="message & twoWay">
+  <input data-case="invalid-outer-blocks-mode" value.to-view="message & twoWay & self">
+  <input data-case="missing-outer-blocks-mode" value.to-view="message & twoWay & missingBehavior">
+
+  <input data-case="mode-before-update-trigger" value.to-view="message & updateTrigger:'blur' & twoWay">
+  <input data-case="update-trigger-before-mode" value.to-view="message & twoWay & updateTrigger:'blur'">
+  <input data-case="dynamic-update-trigger" value.to-view="message & updateTrigger:eventName & twoWay">
+  <input data-case="attr-observer" value.to-view="message & attr">
+
+  <lifecycle-value-target value.to-view="reachedChildValue & twoWay"></lifecycle-value-target>
+  <p>${reachedChildValue}</p>
+  <lifecycle-value-target value.to-view="blockedChildValue & twoWay & self"></lifecycle-value-target>
+  <p>${blockedChildValue}</p>
+</template>

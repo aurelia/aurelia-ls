@@ -61,6 +61,8 @@ pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance -- --ca
 
 Aurelia domain vocabulary:
 
+- `observation-data-flow`: binding lifecycle reachability, effective mode, observer/accessor selection, native value
+  channels, source/target flow, converter writeback, and teardown;
 - `template-binding-syntax`: authored binding command, attribute-pattern, and binding-language syntax;
 - `template-controller-scope`: template controllers, locals, lexical scopes, and scope-introducing syntax;
 - `template-expression-typing`: template expression member/type behavior, overlays, completions, and weak/open answers;

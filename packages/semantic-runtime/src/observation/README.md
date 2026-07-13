@@ -250,11 +250,12 @@ static type surfaces rather than hydrated runtime values.
   when the runtime data-flow itself cannot be closed honestly. TypeChecker source-expression gaps, such as a missing
   projected view-model member, stay on the data-flow row as `sourceTypeOpenReason` instead of becoming a binding open
   seam.
-  Property-binding directions use the effective binding mode after rendered, resource-visible binding-mode behaviors
-  have executed. A default `.bind` with a visible `& fromView` is therefore target-to-source, and `.to-view` with a
-  visible `& twoWay` becomes two-way for the same data-flow, value-channel, and source-assignment checks that ordinary
-  command modes use. The row may still expose the static source expression type even when source-to-target flow is
-  inactive; direction-specific assignability fields say which side actually participates.
+  Property-binding directions spend the shared pre-bind behavior plan after rendered, resource-visible binding-mode
+  behaviors have executed. A default `.bind` with a reached `& fromView` is therefore target-to-source, and `.to-view`
+  with a reached `& twoWay` becomes two-way for the same data-flow, value-channel, and source-assignment checks that
+  ordinary command modes use. A missing or failing outer behavior blocks inner mode effects here exactly as it does for
+  controller target selection and converter phases. The row may still expose the static source expression type even
+  when source-to-target flow is inactive; direction-specific assignability fields say which side actually participates.
   Runtime source evaluation resolves scopes through `RuntimeInstructionScopeLookup`: a binding's render context selects
   the concrete runtime controller that rendered that binding before the lookup falls back to a definition-level
   unambiguous instruction scope. This is important because compiled instruction products are reused across recursive

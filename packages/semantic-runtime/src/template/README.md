@@ -332,8 +332,11 @@ classification, expression parsing, and instruction lowering converge on the sam
   `resolve(IViewFactory)` sites on resource view models; ordinary custom elements and custom attributes map those sites
   to `view_factory_provider_not_ready` (`AUR0755`) because runtime-html registers the not-ready provider there, while
   template controllers receive a prepared `IViewFactory`.
-- `runtime-binding-behavior.ts` and `runtime-binding-behavior-materializer.ts` own bind-time behavior application over
-  already-rendered binding products and `Controller.bind` target facts. The modeled built-ins are now
+- `runtime-binding-behavior-plan.ts` owns the outer-to-inner `astBind(...)` plan over rendered binding products before
+  scope construction or `Controller.bind` selects target access. It joins resource visibility, behavior-specific bind
+  checks, node-observer configuration, chain reachability, effective binding mode, and behavior-supplied target observers
+  once. `runtime-binding-behavior-materializer.ts` subsequently publishes application and issue products from that plan
+  after controller target facts exist; it does not replay behavior semantics. The modeled built-ins are now
   `SelfBindingBehavior` (`AUR0801` for non-listener bindings), `SignalBindingBehavior` (`AUR0817` for bindings without
   `handleChange`, `AUR0818` for missing signal names), `UpdateTriggerBindingBehavior` (`AUR0802`, `AUR0803`, and
   `AUR9992`), `AttrBindingBehavior` (`AUR9994` for non-`PropertyBinding` targets), and the shared throttle/debounce
@@ -355,11 +358,11 @@ classification, expression parsing, and instruction lowering converge on the sam
   `InterpolationPartBinding` expression for bind-time behavior and value-converter publication, rather than treating the
   outer interpolation string as an inert wrapper. Behavior application and issue products source to the exact behavior
   name span when the carrier comes from an admitted source file, not just the whole binding carrier span.
-  Binding-mode behaviors (`oneTime`, `toView`, `fromView`, and `twoWay`) are modeled as resource-visible framework
-  bind-time effects, not parser aliases. Their effective mode is shared through `runtime-binding-mode-behavior.ts` so
-  controller bind target access, value-converter phases, bound-controller values, template-controller source assignment,
-  and observation data-flow all see the same post-`astBind` mode without letting unresolved behavior syntax silently
-  mutate binding direction.
+  Binding-mode behaviors (`oneTime`, `toView`, `fromView`, and `twoWay`) are modeled as reached, resource-visible
+  framework bind-time effects, not parser aliases. Scope assignment, controller target access, value-converter phases,
+  bound-controller values, observation data-flow, and inlay hints all spend the same plan. A missing or failing outer
+  behavior therefore blocks every inner mode/converter effect instead of allowing a downstream AST scan to mutate
+  direction anyway. `runtime-binding-mode-behavior.ts` now retains only the shared mode-name and direction vocabulary.
 - `runtime-value-converter.ts` and `runtime-value-converter-materializer.ts` own the rendered value-converter
   application lifecycle from bind-time resource lookup through invocation. Unresolved authored uses retain an
   application with `resource: null` and publish `ast_converter_not_found` (`AUR0103`) in the `bind` phase instead of
@@ -379,7 +382,7 @@ classification, expression parsing, and instruction lowering converge on the sam
   template-controller source scope, including the no-runtime-binding fallback, so binding-behavior `bind(...)` handoff,
   rendering strict mode, and resource scope stay aligned with data-flow and router/composition source-value consumers.
 - `template-runtime-analysis.ts` owns the post-compiled-template runtime/checker phase: runtime Rendering dispatch,
-  template scope construction, `Controller.bind` emulation, i18n `TranslationBinding.create/bind` issue
+  pre-bind behavior planning, template scope construction, `Controller.bind` emulation, i18n `TranslationBinding.create/bind` issue
   materialization, binding-behavior/value-converter application,
   observer value-channel projection, and binding data-flow materialization. Runtime analysis runs after the project has
   compiled every template front door, and receives
@@ -441,6 +444,10 @@ classification, expression parsing, and instruction lowering converge on the sam
 - `runtime-controller-bind-materializer.ts` owns the explicit `Controller.bind` materialization layer. It asks
   `RuntimeControllerFrame.bind(...)` to walk controller-owned bindings, resolves the runtime target for each binding,
   then delegates product/source/open-seam publication to `runtime-controller-bind-publication.ts`.
+  Property bindings consume the pre-bind behavior plan before choosing their ordinary accessor/observer: reached
+  binding-mode behaviors select the lookup, while `attr` and `updateTrigger` spend their framework
+  `useTargetObserver(...)` effects, including exact static update-trigger event names. Runtime-dependent event arguments
+  remain an open target-access fact rather than retaining the default native events as if the behavior had not run.
   `PropertyBinding` and `InterpolationBinding` publish `ObserverLocator` / `NodeObserverLocator` target-access
   products; `AttributeBinding.updateTarget(...)` publishes direct target-operation products for `.class`, `.style`,
   and ordinary attribute writes, while `ContentBinding.updateTarget(...)` publishes text-content target operations for

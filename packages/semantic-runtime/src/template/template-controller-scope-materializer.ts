@@ -172,9 +172,9 @@ import {
 } from '../telemetry/phase.js';
 import { StateBindingScopeProjector } from '../state/state-binding-scope.js';
 import {
-  effectiveTemplateBindingMode,
   templateBindingModeIncludesTargetToSource,
 } from './runtime-binding-mode-behavior.js';
+import type { RuntimeBindingBehaviorPlan } from './runtime-binding-behavior-plan.js';
 import {
   CheckerExpressionTypeEvaluationResultKind,
 } from '../type-system/expression-type-evaluation.js';
@@ -242,6 +242,8 @@ export interface TemplateScopeConstructionRequest {
   readonly compiledTemplate: CompiledTemplateEmission;
   /** Runtime binding instances and scope effects emulated from renderer semantics. */
   readonly runtimeBindings: RuntimeRenderingEmission;
+  /** Reached behavior effects that determine assignment direction before scope projection. */
+  readonly bindingBehaviorPlan: RuntimeBindingBehaviorPlan;
   /** Project-level runtime-analysis context for controller/resource lookups owned by adjacent runtime phases. */
   readonly projectContext: TemplateRuntimeAnalysisProjectContext;
   /** Shared static evaluation available for runtime Scope value carriers. */
@@ -1210,7 +1212,7 @@ export class TemplateControllerScopeMaterializer {
     assignedValueTypeOverride: CheckerTypeReference | null | undefined = undefined,
     ownerBindables: readonly BindableDefinition[] = bindablesForInstruction(this.store, ownerInstruction),
   ): BindingScope | null {
-    if (ownerBindables.length === 0 || !bindingCanAssignToSource(this.store, binding, frame.input.resourceScope)) {
+    if (ownerBindables.length === 0 || !bindingCanAssignToSource(binding, frame.input.bindingBehaviorPlan)) {
       return null;
     }
     const parse = this.typeSupport.readParse(binding.expressionProductHandle);
@@ -2163,11 +2165,10 @@ function bindablesForInstruction(
 }
 
 function bindingCanAssignToSource(
-  store: KernelStore,
   binding: PropertyBindingInstruction,
-  resourceScope: TemplateResourceScope | null,
+  bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
 ): boolean {
-  const bindingMode = effectiveTemplateBindingMode(store, binding.bindingMode, binding.expressionProductHandle, resourceScope);
+  const bindingMode = bindingBehaviorPlan.effectiveMode(binding.bindingMode, binding.expressionProductHandle);
   return templateBindingModeIncludesTargetToSource(bindingMode);
 }
 

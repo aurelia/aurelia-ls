@@ -52,6 +52,11 @@ import {
   RuntimeBindingBehaviorMaterializer,
 } from './runtime-binding-behavior-materializer.js';
 import {
+  RuntimeBindingBehaviorPlan,
+  RuntimeBindingBehaviorPlanner,
+  RuntimeBindingBehaviorPlanningRequest,
+} from './runtime-binding-behavior-plan.js';
+import {
   RuntimeValueConverterEmission,
   RuntimeValueConverterMaterializationRequest,
   RuntimeValueConverterMaterializer,
@@ -129,6 +134,7 @@ export class TemplateRuntimeAnalysisRequest {
 
 export type TemplateRuntimeAnalysisPhaseName =
   | 'runtime-rendering'
+  | 'binding-behavior-plan'
   | 'scope-construction'
   | 'controller-bind'
   | 'i18n-translation-binding'
@@ -155,6 +161,8 @@ export class TemplateRuntimeAnalysisEmission {
     readonly analysisDepth: SemanticAppAnalysisDepth,
     /** Runtime renderer emulation over compiled-template target rows. */
     readonly runtimeRendering: RuntimeRenderingEmission,
+    /** Pre-bind behavior reachability and state mutations spent by every later binding phase. */
+    readonly bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
     /** Checker-backed binding scopes derived from controller/rendering scope effects. */
     readonly scopes: TemplateScopeConstructionEmission,
     /** Runtime Controller.bind target-side access and operation products. */
@@ -195,6 +203,7 @@ export class TemplateRuntimeAnalysisEmission {
  */
 export class TemplateRuntimeAnalysisMaterializer {
   private readonly runtimeRendering: RuntimeRenderingMaterializer;
+  private readonly bindingBehaviorPlan: RuntimeBindingBehaviorPlanner;
   private readonly templateScopes: TemplateControllerScopeMaterializer;
   private readonly controllerBind: RuntimeControllerBindMaterializer;
   private readonly i18nTranslationBinding: I18nTranslationBindingIssueMaterializer;
@@ -209,6 +218,7 @@ export class TemplateRuntimeAnalysisMaterializer {
     readonly store: KernelStore,
   ) {
     this.runtimeRendering = new RuntimeRenderingMaterializer(store);
+    this.bindingBehaviorPlan = new RuntimeBindingBehaviorPlanner(store);
     this.templateScopes = new TemplateControllerScopeMaterializer(store);
     this.controllerBind = new RuntimeControllerBindMaterializer(store);
     this.i18nTranslationBinding = new I18nTranslationBindingIssueMaterializer(store);
@@ -222,6 +232,7 @@ export class TemplateRuntimeAnalysisMaterializer {
   materialize(request: TemplateRuntimeAnalysisRequest): TemplateRuntimeAnalysisEmission {
     return new TemplateRuntimeAnalysisFrame(request, this.store, {
       runtimeRendering: this.runtimeRendering,
+      bindingBehaviorPlan: this.bindingBehaviorPlan,
       templateScopes: this.templateScopes,
       controllerBind: this.controllerBind,
       i18nTranslationBinding: this.i18nTranslationBinding,
@@ -236,6 +247,7 @@ export class TemplateRuntimeAnalysisMaterializer {
 
 interface TemplateRuntimeAnalysisServices {
   readonly runtimeRendering: RuntimeRenderingMaterializer;
+  readonly bindingBehaviorPlan: RuntimeBindingBehaviorPlanner;
   readonly templateScopes: TemplateControllerScopeMaterializer;
   readonly controllerBind: RuntimeControllerBindMaterializer;
   readonly i18nTranslationBinding: I18nTranslationBindingIssueMaterializer;
@@ -278,22 +290,27 @@ class TemplateRuntimeAnalysisFrame {
     const runtimeRendering = this.measure('runtime-rendering', () =>
       this.materializeRuntimeRendering()
     );
-    const scopes = this.measure('scope-construction', () =>
-      this.constructScopes(runtimeRendering)
+    const bindingBehaviorPlan = this.measure('binding-behavior-plan', () =>
+      this.planBindingBehaviors(runtimeRendering)
     );
-    const controllerBind = this.materializeControllerBindForDepth(runtimeRendering, scopes);
+    const scopes = this.measure('scope-construction', () =>
+      this.constructScopes(runtimeRendering, bindingBehaviorPlan)
+    );
+    const controllerBind = this.materializeControllerBindForDepth(runtimeRendering, bindingBehaviorPlan, scopes);
     const i18nTranslationBinding = this.materializeI18nTranslationBindingForDepth(runtimeRendering, scopes);
-    const bindingBehavior = this.materializeBindingBehaviorForDepth(runtimeRendering, controllerBind);
-    const valueConverter = this.materializeValueConverterForDepth(runtimeRendering, bindingBehavior);
+    const bindingBehavior = this.materializeBindingBehaviorForDepth(bindingBehaviorPlan, controllerBind);
+    const valueConverter = this.materializeValueConverterForDepth(runtimeRendering, bindingBehaviorPlan);
     const bindingValueChannel = this.materializeBindingValueChannelForDepth(runtimeRendering, controllerBind, scopes);
     const bindingDataFlow = this.materializeBindingDataFlowForDepth(
       runtimeRendering,
+      bindingBehaviorPlan,
       controllerBind,
       bindingValueChannel,
       scopes,
     );
     const runtimeComposition = this.materializeRuntimeCompositionForDepth(
       runtimeRendering,
+      bindingBehaviorPlan,
       controllerBind,
       bindingDataFlow,
       scopes,
@@ -307,6 +324,7 @@ class TemplateRuntimeAnalysisFrame {
     return new TemplateRuntimeAnalysisEmission(
       this.analysisDepth,
       runtimeRendering,
+      bindingBehaviorPlan,
       scopes,
       controllerBind,
       i18nTranslationBinding,
@@ -322,11 +340,12 @@ class TemplateRuntimeAnalysisFrame {
 
   private materializeControllerBindForDepth(
     runtimeRendering: RuntimeRenderingEmission,
+    bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
     scopes: TemplateScopeConstructionEmission,
   ): RuntimeControllerBindEmission {
     return semanticAppAnalysisDepthSatisfies(this.analysisDepth, SemanticAppAnalysisDepth.BindingTargets)
       ? this.measure('controller-bind', () =>
-        this.materializeControllerBind(runtimeRendering, scopes)
+        this.materializeControllerBind(runtimeRendering, bindingBehaviorPlan, scopes)
       )
       : skippedControllerBind(this.phases);
   }
@@ -355,49 +374,51 @@ class TemplateRuntimeAnalysisFrame {
   }
 
   private materializeBindingBehaviorForDepth(
-    runtimeRendering: RuntimeRenderingEmission,
+    bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
     controllerBind: RuntimeControllerBindEmission,
   ): RuntimeBindingBehaviorEmission {
     return semanticAppAnalysisDepthSatisfies(this.analysisDepth, SemanticAppAnalysisDepth.BindingTargets)
       ? this.measure('binding-behavior', () =>
-        this.materializeBindingBehavior(runtimeRendering, controllerBind)
+        this.materializeBindingBehavior(bindingBehaviorPlan, controllerBind)
       )
       : skippedBindingBehavior(this.phases);
   }
 
   private materializeValueConverterForDepth(
     runtimeRendering: RuntimeRenderingEmission,
-    bindingBehavior: RuntimeBindingBehaviorEmission,
+    bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
   ): RuntimeValueConverterEmission {
     return semanticAppAnalysisDepthSatisfies(this.analysisDepth, SemanticAppAnalysisDepth.BindingTargets)
       ? this.measure('value-converter', () =>
-        this.materializeValueConverter(runtimeRendering, bindingBehavior)
+        this.materializeValueConverter(runtimeRendering, bindingBehaviorPlan)
       )
       : skippedValueConverter(this.phases);
   }
 
   private materializeBindingDataFlowForDepth(
     runtimeRendering: RuntimeRenderingEmission,
+    bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
     controllerBind: RuntimeControllerBindEmission,
     bindingValueChannel: RuntimeBindingValueChannelEmission,
     scopes: TemplateScopeConstructionEmission,
   ): RuntimeBindingDataFlowEmission {
     return semanticAppAnalysisDepthSatisfies(this.analysisDepth, SemanticAppAnalysisDepth.BindingObservation)
       ? this.measure('binding-data-flow', () =>
-        this.materializeBindingDataFlow(runtimeRendering, controllerBind, bindingValueChannel, scopes)
+        this.materializeBindingDataFlow(runtimeRendering, bindingBehaviorPlan, controllerBind, bindingValueChannel, scopes)
       )
       : skippedBindingDataFlow(this.phases);
   }
 
   private materializeRuntimeCompositionForDepth(
     runtimeRendering: RuntimeRenderingEmission,
+    bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
     controllerBind: RuntimeControllerBindEmission,
     bindingDataFlow: RuntimeBindingDataFlowEmission,
     scopes: TemplateScopeConstructionEmission,
   ): RuntimeCompositionEmission {
     return semanticAppAnalysisDepthSatisfies(this.analysisDepth, SemanticAppAnalysisDepth.BindingObservation)
       ? this.measure('runtime-composition', () =>
-        this.materializeRuntimeComposition(runtimeRendering, controllerBind, bindingDataFlow, scopes)
+        this.materializeRuntimeComposition(runtimeRendering, bindingBehaviorPlan, controllerBind, bindingDataFlow, scopes)
       )
       : skippedRuntimeComposition(this.phases);
   }
@@ -418,14 +439,26 @@ class TemplateRuntimeAnalysisFrame {
     } satisfies RuntimeRenderingMaterializationRequest);
   }
 
+  private planBindingBehaviors(
+    runtimeRendering: RuntimeRenderingEmission,
+  ): RuntimeBindingBehaviorPlan {
+    return this.services.bindingBehaviorPlan.plan(new RuntimeBindingBehaviorPlanningRequest(
+      runtimeRendering,
+      this.request.compilerWorld.resourceScope,
+      this.request.compilerWorld.nodeObserverLocatorConfiguration,
+    ));
+  }
+
   private constructScopes(
     runtimeRendering: RuntimeRenderingEmission,
+    bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
   ): TemplateScopeConstructionEmission {
     return this.services.templateScopes.construct({
       localKey: this.request.localKey,
       definition: this.request.definition,
       compiledTemplate: this.request.compiledTemplate,
       runtimeBindings: runtimeRendering,
+      bindingBehaviorPlan,
       projectContext: this.request.projectContext,
       evaluation: this.request.evaluation,
       typeSystem: this.request.typeSystem,
@@ -440,14 +473,15 @@ class TemplateRuntimeAnalysisFrame {
 
   private materializeControllerBind(
     runtimeRendering: RuntimeRenderingEmission,
+    bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
     scopes: TemplateScopeConstructionEmission,
   ): RuntimeControllerBindEmission {
     return this.services.controllerBind.materialize({
       localKey: this.request.localKey,
       runtimeRendering,
+      bindingBehaviorPlan,
       scopes,
       typeSystem: this.request.typeSystem,
-      resourceScope: this.request.compilerWorld.resourceScope,
       nodeObserverLocatorConfiguration: this.request.compilerWorld.nodeObserverLocatorConfiguration,
       stateStores: this.expressionWorld.stateStores,
       isAppRootDefinition: this.request.definition.productHandle != null
@@ -472,14 +506,13 @@ class TemplateRuntimeAnalysisFrame {
   }
 
   private materializeBindingBehavior(
-    runtimeRendering: RuntimeRenderingEmission,
+    bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
     controllerBind: RuntimeControllerBindEmission,
   ): RuntimeBindingBehaviorEmission {
     return this.services.bindingBehavior.materialize(new RuntimeBindingBehaviorMaterializationRequest(
       this.request.localKey,
-      runtimeRendering,
+      bindingBehaviorPlan,
       controllerBind,
-      this.request.compilerWorld.resourceScope,
     ));
   }
 
@@ -498,19 +531,20 @@ class TemplateRuntimeAnalysisFrame {
 
   private materializeValueConverter(
     runtimeRendering: RuntimeRenderingEmission,
-    bindingBehavior: RuntimeBindingBehaviorEmission,
+    bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
   ): RuntimeValueConverterEmission {
     return this.services.valueConverter.materialize(new RuntimeValueConverterMaterializationRequest(
       this.request.localKey,
       runtimeRendering,
       this.request.compilerWorld.container,
       this.request.compilerWorld.resourceScope,
-      bindingBehavior,
+      bindingBehaviorPlan,
     ));
   }
 
   private materializeBindingDataFlow(
     runtimeRendering: RuntimeRenderingEmission,
+    bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
     controllerBind: RuntimeControllerBindEmission,
     bindingValueChannel: RuntimeBindingValueChannelEmission,
     scopes: TemplateScopeConstructionEmission,
@@ -518,6 +552,7 @@ class TemplateRuntimeAnalysisFrame {
     return this.services.bindingDataFlow.materialize(new RuntimeBindingDataFlowMaterializationRequest(
       this.request.localKey,
       runtimeRendering,
+      bindingBehaviorPlan,
       controllerBind,
       bindingValueChannel,
       scopes,
@@ -528,6 +563,7 @@ class TemplateRuntimeAnalysisFrame {
 
   private materializeRuntimeComposition(
     runtimeRendering: RuntimeRenderingEmission,
+    bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
     controllerBind: RuntimeControllerBindEmission,
     bindingDataFlow: RuntimeBindingDataFlowEmission,
     scopes: TemplateScopeConstructionEmission,
@@ -542,6 +578,7 @@ class TemplateRuntimeAnalysisFrame {
       },
       {
         runtimeRendering,
+        bindingBehaviorPlan,
         controllerBind,
         scopes,
         expressionWorld: this.expressionWorld,

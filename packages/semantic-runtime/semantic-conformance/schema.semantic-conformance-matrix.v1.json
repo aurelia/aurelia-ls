@@ -44,6 +44,7 @@
     "aureliaDomain": {
       "enum": [
         "bindable-contracts",
+        "observation-data-flow",
         "plugin-capability-admission",
         "resource-registration",
         "router-composition",

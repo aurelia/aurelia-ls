@@ -14035,6 +14035,95 @@
           ]
         }
       ]
+    },
+    {
+      "id": "observation-binding-lifecycle",
+      "fixture": "fixtures/pressure/observation-binding-lifecycle",
+      "aureliaDomain": "observation-data-flow",
+      "capability": "binding-lifecycle-and-target-observation",
+      "domainAxis": "runtime-lifecycle",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/observation-binding-lifecycle-app.html",
+      "requirement": "Binding behavior reachability determines effective mode and behavior-supplied target observers before target access, value-channel, and data-flow publication.",
+      "cases": [
+        {
+          "id": "outer-failure-blocks-inner-mode-effects",
+          "expectations": [
+            {
+              "name": "binding behavior reachability",
+              "query": { "kind": "binding-behavior-applications", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "behaviorName": "twoWay", "bindReachability": "reached", "bindOrder": 0 }, "source": { "marker": "value.to-view=\"message & twoWay\"", "token": "twoWay" }, "count": 1 },
+                { "fields": { "behaviorName": "self", "bindReachability": "reached", "bindOrder": 0 }, "source": { "marker": "value.to-view=\"message & twoWay & self\"", "token": "self" }, "count": 1 },
+                { "fields": { "behaviorName": "twoWay", "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "value.to-view=\"message & twoWay & self\"", "token": "twoWay" }, "count": 1 },
+                { "fields": { "behaviorName": "missingBehavior", "bindReachability": "reached", "bindOrder": 0, "resource": null }, "source": { "marker": "value.to-view=\"message & twoWay & missingBehavior\"", "token": "missingBehavior" }, "count": 1 },
+                { "fields": { "behaviorName": "twoWay", "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "value.to-view=\"message & twoWay & missingBehavior\"", "token": "twoWay" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "effective target lookup",
+              "query": { "kind": "binding-target-accesses", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "targetProperty": "value", "lookup": "observer", "strategy": "value-attribute-observer" }, "source": { "marker": "value.to-view=\"message & twoWay\"", "token": "value.to-view=\"message & twoWay\"" }, "count": 1 },
+                { "fields": { "targetProperty": "value", "lookup": "accessor" }, "source": { "marker": "value.to-view=\"message & twoWay & self\"", "token": "value.to-view=\"message & twoWay & self\"" }, "count": 1 },
+                { "fields": { "targetProperty": "value", "lookup": "accessor" }, "source": { "marker": "value.to-view=\"message & twoWay & missingBehavior\"", "token": "value.to-view=\"message & twoWay & missingBehavior\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "effective data-flow direction",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "targetProperty": "value", "direction": "two-way" }, "source": { "marker": "value.to-view=\"message & twoWay\"", "token": "value.to-view=\"message & twoWay\"" }, "count": 1 },
+                { "fields": { "targetProperty": "value", "direction": "source-to-target" }, "source": { "marker": "value.to-view=\"message & twoWay & self\"", "token": "value.to-view=\"message & twoWay & self\"" }, "count": 1 },
+                { "fields": { "targetProperty": "value", "direction": "source-to-target" }, "source": { "marker": "value.to-view=\"message & twoWay & missingBehavior\"", "token": "value.to-view=\"message & twoWay & missingBehavior\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "reached mode effects shape runtime assignment scopes",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<p>${reachedChildValue}</p>", "token": "reachedChildValue" } },
+              "equals": { "value.selectedMember.typeDisplay": "number" }
+            },
+            {
+              "name": "blocked mode effects do not shape runtime assignment scopes",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<p>${blockedChildValue}</p>", "token": "blockedChildValue" } },
+              "equals": { "value.selectedMember.typeDisplay": "string" }
+            },
+            {
+              "name": "inlay hints spend reached effective modes only",
+              "query": { "kind": "template-inlay-hints", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "targetProperty": "value", "authoredMode": "to-view", "effectiveMode": "two-way" }, "source": { "marker": "value.to-view=\"reachedChildValue & twoWay\"", "token": "value.to-view" }, "count": 1 },
+                { "fields": { "effectiveMode": "two-way" }, "source": { "marker": "value.to-view=\"blockedChildValue & twoWay & self\"", "token": "value.to-view" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "behavior-order-and-target-observer-effects",
+          "expectations": [
+            {
+              "name": "order-sensitive behavior diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "runtime-binding-behavior-framework-error", "frameworkErrorCode": "AUR0801" }, "source": { "marker": "message & twoWay & self", "token": "self" }, "count": 1 },
+                { "fields": { "diagnosticKind": "runtime-binding-behavior-framework-error", "frameworkErrorCode": "AUR0101" }, "source": { "marker": "message & twoWay & missingBehavior", "token": "missingBehavior" }, "count": 1 },
+                { "fields": { "diagnosticKind": "runtime-binding-behavior-framework-error", "frameworkErrorCode": "AUR0803" }, "source": { "marker": "message & twoWay & updateTrigger:'blur'", "token": "updateTrigger" }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0803" }, "source": { "marker": "message & updateTrigger:'blur' & twoWay", "token": "updateTrigger" }, "absent": true }
+              ]
+            },
+            {
+              "name": "behavior-supplied target observers",
+              "query": { "kind": "binding-target-accesses", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "targetProperty": "value", "lookup": "observer", "strategy": "value-attribute-observer", "eventNames": ["blur"] }, "source": { "marker": "value.to-view=\"message & updateTrigger:'blur' & twoWay\"", "token": "value.to-view=\"message & updateTrigger:'blur' & twoWay\"" }, "count": 1 },
+                { "fields": { "targetProperty": "value", "lookup": "observer", "strategy": "value-attribute-observer", "eventNames": [], "authority": "open", "openReason": "Binding behavior target-observer event names depend on runtime expression values." }, "source": { "marker": "value.to-view=\"message & updateTrigger:eventName & twoWay\"", "token": "value.to-view=\"message & updateTrigger:eventName & twoWay\"" }, "count": 1 },
+                { "fields": { "targetProperty": "value", "lookup": "accessor", "strategy": "data-attribute-accessor", "eventNames": [] }, "source": { "marker": "value.to-view=\"message & attr\"", "token": "value.to-view=\"message & attr\"" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

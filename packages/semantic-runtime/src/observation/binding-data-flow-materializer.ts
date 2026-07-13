@@ -152,6 +152,7 @@ import {
 } from './framework-error-code.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
+import type { RuntimeBindingBehaviorPlan } from '../template/runtime-binding-behavior-plan.js';
 import type { RuntimeBindingValueChannelEmission } from './binding-value-channel-materializer.js';
 import {
   sourceAddressForRuntimeExpressionBounds,
@@ -169,7 +170,6 @@ import {
   type RuntimeDataFlowBinding,
 } from './runtime-binding-expression.js';
 import {
-  effectivePropertyBindingMode,
   templateBindingModeIncludesSourceToTarget,
   templateBindingModeIncludesTargetToSource,
 } from '../template/runtime-binding-mode-behavior.js';
@@ -201,6 +201,8 @@ export class RuntimeBindingDataFlowMaterializationRequest {
     readonly localKey: string,
     /** Runtime binding products produced by renderer dispatch. */
     readonly runtimeBindings: RuntimeRenderingEmission,
+    /** Reached binding-behavior effects that determine runtime direction. */
+    readonly bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
     /** Controller.bind target-side products produced by binding-owned target setup. */
     readonly controllerBind: RuntimeControllerBindEmission,
     /** Value channels visible to runtime property, attribute, and interpolation bindings. */
@@ -621,6 +623,7 @@ export class RuntimeBindingDataFlowMaterializer {
       context.evaluator,
       context.sourceExpressionContexts,
       strictBinding,
+      input.bindingBehaviorPlan,
       context.resourceScope,
       local,
     );
@@ -989,10 +992,11 @@ class RuntimeBindingDataFlowDraftMaterializer {
     evaluator: CheckerExpressionTypeEvaluator,
     sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector,
     strictBinding: boolean | null,
+    bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
     resourceScope: TemplateResourceScope | null,
     local: string,
   ): DataFlowDraft {
-    const lifecycle = dataFlowLifecycleForBinding(this.store, binding, resourceScope);
+    const lifecycle = dataFlowLifecycleForBinding(binding, bindingBehaviorPlan);
     const direction = lifecycle.direction;
     const needsSourceWriteCapability = bindingDataFlowDirectionIncludesTargetToSource(direction);
     const sourceEvaluationConnectable = lifecycle.sourceEvaluationKind === RuntimeBindingSourceEvaluationKind.ConnectableRead;
@@ -1356,9 +1360,8 @@ type RuntimeBindingDataFlowLifecycle = {
 };
 
 function dataFlowLifecycleForBinding(
-  store: KernelStore,
   binding: RuntimeDataFlowBinding,
-  resourceScope: TemplateResourceScope | null,
+  bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
 ): RuntimeBindingDataFlowLifecycle {
   if (isRuntimeSourceOnlyDataFlowBinding(binding)) {
     return {
@@ -1369,7 +1372,7 @@ function dataFlowLifecycleForBinding(
     };
   }
   if (binding instanceof PropertyBinding) {
-    const bindingMode = effectivePropertyBindingMode(store, binding, resourceScope);
+    const bindingMode = bindingBehaviorPlan.effectivePropertyBindingMode(binding);
     return {
       direction: directionForBindingMode(bindingMode),
       sourceEvaluationKind: sourceEvaluationKindForBindingMode(bindingMode),

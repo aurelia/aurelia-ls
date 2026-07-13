@@ -133,9 +133,6 @@ import {
 import {
   PropertyBinding,
 } from '../template/runtime-binding.js';
-import {
-  effectivePropertyBindingMode,
-} from '../template/runtime-binding-mode-behavior.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import { sourceSpanFromBounds } from '../expression/source-span.js';
 import { isAureliaExpressionIdentifier } from '../expression/expression-scanner.js';
@@ -3410,7 +3407,7 @@ function templateInlayHintRows(
         return [];
       }
       const authoredMode = authoredTemplateBindingMode(binding);
-      const effectiveMode = effectivePropertyBindingMode(store, binding, resource.compilation.compilerWorld.resourceScope);
+      const effectiveMode = resource.runtimeAnalysis.bindingBehaviorPlan.effectivePropertyBindingMode(binding);
       if (authoredMode === effectiveMode || effectiveMode === TemplateBindingMode.Default) {
         return [];
       }

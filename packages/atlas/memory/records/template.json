@@ -1923,30 +1923,37 @@
         "semantic-runtime",
         "template",
         "binding",
+        "observation",
         "runtime-html",
         "framework-errors"
       ],
-      "summary": "RuntimeBindingBehaviorMaterializer owns bind-time binding-behavior application and issue products after renderer/controller bind facts exist.",
-      "rationale": "Binding-behavior diagnostics are not generic parser or API wording checks. They need rendered RuntimeBinding products, compiler resource scope, controller bind target access facts, and framework-grounded binding behavior semantics before spending runtime-html or validation-html error authority.",
+      "summary": "RuntimeBindingBehaviorPlanner owns pre-bind behavior reachability and state effects; RuntimeBindingBehaviorMaterializer publishes the resulting application and issue products after target access exists.",
+      "rationale": "Aurelia executes astBind before PropertyBinding selects an accessor or observer. Effective mode, target-observer overrides, scope assignment, converter reachability, and data-flow must therefore spend one pre-access plan. Replaying visible authored behaviors in downstream consumers loses outer-failure reachability and creates mutually inconsistent runtime products.",
       "guidance": [
-        "Start here when built-in binding-behavior effects, duplicate rate-limit/target-subscriber diagnostics, signal/update-trigger/self/attr/validate semantics, or binding behavior application products change.",
-        "Keep expression parsing and behavior expression extraction below bindingBehaviorExpressions and runtimeAcceptedBindingExpressionAstForParse; do not reparse expression text in app/API diagnostics.",
-        "Walk interpolation hole expressions when collecting binding-behavior applications: runtime-html binds each InterpolationPartBinding expression and lets behaviors such as & state call useScope(...) for that hole.",
-        "Source binding-behavior application and issue products to the exact behavior name span when the binding carrier has an admitted source file; broad binding-carrier spans should be fallback only.",
+        "Start at RuntimeBindingBehaviorPlanner when built-in behavior effects, duplicate rate-limit/target-subscriber diagnostics, signal/update-trigger/self/attr/validate semantics, effective binding mode, or behavior reachability change.",
+        "Keep expression parsing and resource occurrence extraction below bindingBehaviorResourceOccurrences; do not reparse expression text in planner, materializer, API, or diagnostics code.",
+        "Walk interpolation-hole chains outermost to innermost. A reached behavior failure blocks every inner behavior and value converter in that chain.",
+        "Resolve the runtime target and NodeObserverLocator configuration before ordinary target access so attr and updateTrigger can supply the target observer that PropertyBinding.bind actually uses.",
+        "Scope assignment, controller target access, value-converter phases, bound-controller values, binding data-flow, and inlay hints must consume RuntimeBindingBehaviorPlan. Do not restore independent AST/resource-visibility mode scans.",
+        "RuntimeBindingBehaviorMaterializer is a publication phase: retain authored applications, exact behavior-name sources, target-access references, and framework issues from the plan without re-running behavior state.",
         "Retain unresolved authored behavior applications with resource: null and publish ast_behavior_not_found / AUR0101 before behavior-specific effects run.",
         "Track applied behavior names in runtime-html astBind order so repeated authored names publish ast_behavior_duplicated / AUR0102 at the bind attempt that discovers the duplicate.",
-        "Keep bind-time target facts flowing through RuntimeControllerBindEmission and RuntimeBindingBehaviorBindEffectReader before publishing framework-error authority.",
-        "Binding-mode behaviors are resource-visible bind-time effects, not parser aliases: share the effective mode through runtime-binding-mode-behavior.ts so controller bind target access, value-converter phases, bound-controller values, template-controller source assignment, and observation data-flow do not grow separate mode interpreters or let unresolved behavior syntax mutate direction.",
-        "ValidationHtmlConfiguration admits ValidateBindingBehavior as a resource; validate-specific AUR4200-AUR4205 diagnostics must stay gated on resource visibility and closed parser-owned facts. AUR4206 is a malformed/foreign-AST fallback and should stay unclaimed until semantic-runtime admits that input surface.",
+        "Runtime-dependent updateTrigger event arguments make target-access events open; do not retain default node events as though the reached behavior had not executed.",
+        "ValidationHtmlConfiguration admits ValidateBindingBehavior as a resource; validate-specific AUR4200-AUR4205 diagnostics stay gated on resource visibility and closed parser-owned facts. AUR4206 remains an unclaimed malformed/foreign-AST fallback.",
         "Use appendRuntimeBindingProductValue for emission binding indexes shared with value-converter materialization."
       ],
       "anchors": [
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior-plan.ts",
+          "symbolName": "RuntimeBindingBehaviorPlanner",
+          "summary": "Single pre-bind authority for behavior reachability, effective mode, and target-observer effects."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior-materializer.ts",
           "symbolName": "RuntimeBindingBehaviorMaterializer",
-          "line": 150,
-          "summary": "Materializes binding-behavior applications and issues after controller bind."
+          "summary": "Publishes application and issue products from the pre-bind plan after target access exists."
         },
         {
           "kind": "source",
@@ -1958,13 +1965,19 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior-effect.ts",
           "symbolName": "RuntimeBindingBehaviorBindEffectReader",
-          "summary": "Reads framework-shaped bind effects for built-in binding behaviors."
+          "summary": "Reads source-backed direct target-subscriber effects for custom binding behaviors."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-binding-mode-behavior.ts",
+          "symbolName": "bindingModeForBindingBehaviorName",
+          "summary": "Shared binding-mode behavior vocabulary; lifecycle state lives in the plan."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-binding-product-index.ts",
           "symbolName": "appendRuntimeBindingProductValue",
-          "summary": "Shared binding-product index append helper for binding-behavior and value-converter emissions."
+          "summary": "Shared binding-product index append helper for behavior and converter emissions."
         },
         {
           "kind": "lens",
@@ -1989,10 +2002,17 @@
       "liveChecks": [
         {
           "kind": "product-large-class",
-          "className": "RuntimeBindingBehaviorMaterializer",
-          "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior-materializer.ts",
+          "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior-plan.ts",
+          "className": "RuntimeBindingBehaviorPlanner",
           "minLineCount": 200,
-          "minMethodCount": 8
+          "minMethodCount": 5
+        },
+        {
+          "kind": "product-large-class",
+          "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior-materializer.ts",
+          "className": "RuntimeBindingBehaviorMaterializer",
+          "minLineCount": 150,
+          "minMethodCount": 6
         },
         {
           "kind": "source-declaration-exists",
@@ -2001,7 +2021,7 @@
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-07-12"
+      "updatedAt": "2026-07-13"
     },
     {
       "id": "frontier:runtime-composition-materializer",

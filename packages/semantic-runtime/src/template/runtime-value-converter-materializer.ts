@@ -53,13 +53,10 @@ import {
 } from './runtime-value-converter.js';
 import { RuntimeHtmlAstFrameworkErrorCode } from '../type-system/framework-error-code.js';
 import {
-  effectivePropertyBindingMode,
-} from './runtime-binding-mode-behavior.js';
-import {
   valueConverterResourceOccurrences,
   type ExpressionResourceOccurrence,
 } from './expression-resource-occurrence.js';
-import type { RuntimeBindingBehaviorEmission } from './runtime-binding-behavior-materializer.js';
+import type { RuntimeBindingBehaviorPlan } from './runtime-binding-behavior-plan.js';
 import { RuntimeExpressionResourceBindReachability } from './runtime-expression-resource.js';
 
 export class RuntimeValueConverterMaterializationRequest {
@@ -68,7 +65,7 @@ export class RuntimeValueConverterMaterializationRequest {
     readonly runtimeRendering: RuntimeRenderingEmission,
     readonly container: Container,
     readonly resourceScope: TemplateResourceScope | null,
-    readonly bindingBehavior: RuntimeBindingBehaviorEmission,
+    readonly bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
   ) {}
 }
 
@@ -163,7 +160,7 @@ export class RuntimeValueConverterMaterializer {
         for (let converterIndex = 0; converterIndex < converters.length; converterIndex++) {
           const occurrence = converters[converterIndex]!;
           const converter = occurrence.expression;
-          const priorBehaviorFailureDepth = input.bindingBehavior.readFirstFailureDepth(
+          const priorBehaviorFailureDepth = input.bindingBehaviorPlan.readFirstFailureDepth(
             expressionProductHandle,
             occurrence.chainIndex,
           );
@@ -229,7 +226,7 @@ export class RuntimeValueConverterMaterializer {
       binding.sourceAddressHandle,
       converter.name.span,
     );
-    const applications = valueConverterApplicationPhasesForBinding(this.store, binding, input.resourceScope).map((phase) =>
+    const applications = valueConverterApplicationPhasesForBinding(binding, input.bindingBehaviorPlan).map((phase) =>
       this.applicationProduct(
         `${local}:phase:${phase}`,
         binding,
@@ -415,14 +412,13 @@ function recordsForIssue(
 }
 
 function valueConverterApplicationPhasesForBinding(
-  store: KernelStore,
   binding: RuntimeBinding,
-  resourceScope: TemplateResourceScope | null,
+  bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
 ): readonly RuntimeValueConverterApplicationPhase[] {
   if (!(binding instanceof PropertyBinding)) {
     return [RuntimeValueConverterApplicationPhase.ToView];
   }
-  switch (effectivePropertyBindingMode(store, binding, resourceScope)) {
+  switch (bindingBehaviorPlan.effectivePropertyBindingMode(binding)) {
     case TemplateBindingMode.FromView:
       return [RuntimeValueConverterApplicationPhase.FromView];
     case TemplateBindingMode.TwoWay:

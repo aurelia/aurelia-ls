@@ -52,6 +52,7 @@ const DOMAIN_AXES = new Set([
 
 const AURELIA_DOMAINS = new Set([
   'bindable-contracts',
+  'observation-data-flow',
   'plugin-capability-admission',
   'resource-registration',
   'router-composition',

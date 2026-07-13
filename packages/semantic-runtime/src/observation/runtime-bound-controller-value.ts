@@ -15,11 +15,9 @@ import {
   type RuntimeBinding,
 } from '../template/runtime-binding.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
+import type { RuntimeBindingBehaviorPlan } from '../template/runtime-binding-behavior-plan.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { TemplateScopeConstructionEmission } from '../template/template-controller-scope-materializer.js';
-import {
-  effectivePropertyBindingMode,
-} from '../template/runtime-binding-mode-behavior.js';
 import {
   instructionScopeLookup,
   isRuntimeExpressionBinding,
@@ -68,6 +66,7 @@ export interface RuntimeControllerDefinitionReference {
 
 export interface RuntimeBindingSourceValueRuntimeAnalysis {
   readonly runtimeRendering: RuntimeRenderingEmission;
+  readonly bindingBehaviorPlan: RuntimeBindingBehaviorPlan;
   readonly controllerBind: RuntimeControllerBindEmission;
   readonly scopes: TemplateScopeConstructionEmission;
   readonly expressionWorld: CheckerExpressionTypeWorld;
@@ -335,7 +334,10 @@ function boundControllerValuesForRuntimeAnalysis(
       continue;
     }
     const binding = bindingsByProductHandle.get(targetAccess.binding.productHandle) ?? null;
-    const expressionProductHandle = sourceExpressionProductHandleForBoundControllerBinding(store, binding, resourceScope);
+    const expressionProductHandle = sourceExpressionProductHandleForBoundControllerBinding(
+      binding,
+      analysis.bindingBehaviorPlan,
+    );
     if (binding == null || expressionProductHandle === undefined || !isRuntimeExpressionBinding(binding)) {
       continue;
     }
@@ -385,12 +387,11 @@ function controllerDefinitionsForRuntimeRendering(
 }
 
 function sourceExpressionProductHandleForBoundControllerBinding(
-  store: KernelStore,
   binding: RuntimeBinding | null,
-  resourceScope: TemplateResourceScope | null,
+  bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
 ): ProductHandle | null | undefined {
   if (binding instanceof PropertyBinding) {
-    return propertyBindingCarriesSourceToTarget(store, binding, resourceScope)
+    return propertyBindingCarriesSourceToTarget(binding, bindingBehaviorPlan)
       ? binding.expressionProductHandle
       : undefined;
   }
@@ -401,11 +402,10 @@ function sourceExpressionProductHandleForBoundControllerBinding(
 }
 
 function propertyBindingCarriesSourceToTarget(
-  store: KernelStore,
   binding: PropertyBinding,
-  resourceScope: TemplateResourceScope | null,
+  bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
 ): boolean {
-  switch (effectivePropertyBindingMode(store, binding, resourceScope)) {
+  switch (bindingBehaviorPlan.effectivePropertyBindingMode(binding)) {
     case TemplateBindingMode.OneTime:
     case TemplateBindingMode.ToView:
     case TemplateBindingMode.TwoWay:

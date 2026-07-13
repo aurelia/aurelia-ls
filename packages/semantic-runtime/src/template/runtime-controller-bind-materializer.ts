@@ -20,7 +20,6 @@ import {
 import { instructionScopeLookup } from '../observation/runtime-binding-expression.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
-import type { TemplateResourceScope } from './compiler-world.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import type { StateStoreConfiguration } from '../state/model.js';
 import {
@@ -56,9 +55,6 @@ import type {
   RuntimeRenderingEmission,
 } from './runtime-rendering-materializer.js';
 import type {
-  RuntimeBindingRenderContext,
-} from './runtime-rendered-instruction-recorder.js';
-import type {
   RuntimeControllerBindHost,
   RuntimeControllerFrame,
 } from './runtime-controller.js';
@@ -72,9 +68,11 @@ import {
   RuntimeControllerBindPublisher,
   type RuntimeControllerBindSourceSet,
 } from './runtime-controller-bind-publication.js';
+import type { RuntimeBindingBehaviorPlan } from './runtime-binding-behavior-plan.js';
 import {
-  effectivePropertyBindingMode,
-} from './runtime-binding-mode-behavior.js';
+  runtimeBindingAccessTarget,
+  runtimeBindingTargetController,
+} from './runtime-binding-target-resolution.js';
 import {
   RuntimeBindingIssueKind,
   RuntimeBindingIssuePhase,
@@ -88,12 +86,12 @@ export interface RuntimeControllerBindMaterializationRequest {
   readonly localKey: string;
   /** Runtime bindings and render contexts produced by renderer dispatch. */
   readonly runtimeRendering: RuntimeRenderingEmission;
+  /** Reached binding-behavior effects visible before PropertyBinding selects its target access. */
+  readonly bindingBehaviorPlan: RuntimeBindingBehaviorPlan;
   /** Checker-backed scopes available to binding.bind source observation. */
   readonly scopes: TemplateScopeConstructionEmission;
   /** Current TypeChecker epoch used by ObserverLocator lookup, when available. */
   readonly typeSystem: TypeSystemProject | null;
-  /** Compiler resource scope visible when binding.bind executes binding behaviors. */
-  readonly resourceScope: TemplateResourceScope | null;
   /** App-authored NodeObserverLocator service state visible to this runtime binding analysis. */
   readonly nodeObserverLocatorConfiguration?: NodeObserverLocatorConfiguration | null;
   /** App-authored @aurelia/state store configurations visible to binding-source operation analysis. */
@@ -203,7 +201,7 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
       return null;
     }
     const renderContext = this.input.runtimeRendering.readRenderContextForBinding(binding.productHandle);
-    const targetController = targetControllerForContext(renderContext);
+    const targetController = runtimeBindingTargetController(this.input.runtimeRendering, binding);
     this.targetControllerByBinding.set(binding.productHandle, targetController);
     const local = renderContext?.local
       ?? `${this.input.localKey}:controller:${controller.productHandle}:binding:${index}`;
@@ -213,7 +211,7 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
       binding instanceof SpreadValueBinding
         ? this.materializer.spreadValueTargetProperties(targetController)
         : [],
-      (propertyBinding) => effectivePropertyBindingMode(this.materializer.store, propertyBinding, this.input.resourceScope),
+      (propertyBinding) => this.input.bindingBehaviorPlan.effectivePropertyBindingMode(propertyBinding),
     );
   }
 
@@ -397,8 +395,12 @@ export class RuntimeControllerBindMaterializer {
     targetAccesses: RuntimeBindingTargetAccess[],
     openSeams: OpenSeam[],
   ): RuntimeBindingTargetAccess {
-    const target = this.targetAccessTarget(request.binding, targetController);
-    const lookup = this.resolveTargetAccess(this.targetAccessLookupRequest(input, request, target));
+    const target = runtimeBindingAccessTarget(this.store, request.binding, targetController);
+    const ordinaryLookup = this.resolveTargetAccess(this.targetAccessLookupRequest(input, request, target));
+    const targetObserver = input.bindingBehaviorPlan.readTargetObserverOverride(request.binding.productHandle);
+    const lookup = targetObserver == null
+      ? ordinaryLookup
+      : ordinaryLookup.withTargetObserver(targetObserver.strategy, targetObserver.eventNames);
     const publication = this.publisher.targetAccessPublication(`${request.localKey}:target-access`, request, target, lookup, source);
     if (lookup.openReason != null) {
       this.publisher.recordOpenSeam(
@@ -510,48 +512,6 @@ export class RuntimeControllerBindMaterializer {
     return definition instanceof CustomElementDefinition
       ? definition.bindables.map((bindable) => bindable.name)
       : [];
-  }
-
-  targetAccessTarget(
-    binding: RuntimeBinding,
-    targetController: RuntimeControllerFrame | null,
-  ): RuntimeBindingTarget {
-    // Runtime renderer getTarget(...) uses a controller view-model when renderer dispatch supplied a target controller.
-    // Otherwise the binding target is the authored host node, even when the tag name is dash-cased.
-    if ((binding instanceof PropertyBinding
-      || binding instanceof InterpolationBinding
-      || binding instanceof SpreadValueBinding)
-      && targetController != null) {
-      return new RuntimeBindingTarget(
-        RuntimeBindingTargetKind.ControllerViewModel,
-        null,
-        targetController.productHandle,
-        targetController.viewModel?.targetType ?? null,
-        null,
-        null,
-      );
-    }
-
-    const element = this.htmlElementFor(binding.node);
-    if (element == null) {
-      return new RuntimeBindingTarget(
-        RuntimeBindingTargetKind.Unknown,
-        null,
-        null,
-        null,
-        null,
-        null,
-      );
-    }
-
-    return new RuntimeBindingTarget(
-      RuntimeBindingTargetKind.Node,
-      binding.node,
-      null,
-      null,
-      element.tagName,
-      element.namespace,
-    );
   }
 
   targetOperationTarget(
@@ -804,15 +764,6 @@ export class RuntimeControllerBindMaterializer {
     return node instanceof HtmlElement || node instanceof HtmlText ? node : null;
   }
 
-}
-
-function targetControllerForContext(
-  context: RuntimeBindingRenderContext | null,
-): RuntimeControllerFrame | null {
-  if (context == null || context.targetController.productHandle === context.renderingController.productHandle) {
-    return null;
-  }
-  return context.targetController;
 }
 
 function sameNode(

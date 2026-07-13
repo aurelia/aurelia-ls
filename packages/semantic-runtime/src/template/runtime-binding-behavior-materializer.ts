@@ -19,87 +19,38 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
-import {
-  type BindingBehaviorExpression,
-  type IsAssign,
-} from '../expression/ast.js';
-import {
-  bindingBehaviorResourceOccurrences,
-  type ExpressionResourceOccurrence,
-} from './expression-resource-occurrence.js';
-import { bindingExpressionAstForProduct } from './expression-parse-product.js';
+import type { IsAssign } from '../expression/ast.js';
 import { TemplateProductDetails } from './product-details.js';
 import {
-  AttributeBinding,
-  ContentBinding,
-  InterpolationBinding,
-  LetBinding,
-  ListenerBinding,
-  RuntimeBindingTargetAccessStrategy,
-  RuntimeBindingTargetKind,
-  RefBinding,
-  PropertyBinding,
-  SpreadValueBinding,
   type RuntimeBinding,
   type RuntimeBindingTargetAccess,
 } from './runtime-binding.js';
-import { TemplateBindingMode } from './instruction-ir.js';
-import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import type { RuntimeControllerBindEmission } from './runtime-controller-bind-materializer.js';
-import type { TemplateResourceScope } from './compiler-world.js';
-import type { TemplateVisibleResource } from './compiler-world-reference.js';
 import {
-  AttrBindingBehavior,
-  DebounceBindingBehavior,
   RuntimeBindingBehaviorApplication,
   RuntimeBindingBehaviorApplicationPhase,
   RuntimeBindingBehaviorIssue,
-  RuntimeBindingBehaviorIssueKind,
   RuntimeBindingBehaviorIssuePhase,
-  SelfBindingBehavior,
-  SignalBindingBehavior,
-  ThrottleBindingBehavior,
-  UpdateTriggerBindingBehavior,
-  ValidateBindingBehavior,
-  ValidateBindingBehaviorArgumentKind,
-  ValidationController,
   type BuiltInBindingBehaviorBindIssue,
-  type ValidateBindingBehaviorArgument,
 } from './runtime-binding-behavior.js';
-import {
-  RuntimeBindingBehaviorBindEffectReader,
-  type RuntimeBindingBehaviorBindEffects,
-} from './runtime-binding-behavior-effect.js';
-import { RuntimeHtmlBindingBehaviorFrameworkErrorCode } from './framework-error-code.js';
-import { RuntimeHtmlAstFrameworkErrorCode } from '../type-system/framework-error-code.js';
-import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-expression-products.js';
 import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
 import { appendRuntimeBindingProductValue } from './runtime-binding-product-index.js';
-import {
-  bindingModeForBindingBehaviorName,
-} from './runtime-binding-mode-behavior.js';
-import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
-import { ResourceDefinitionKind } from '../resources/resource-kind.js';
-import { findVisibleTemplateResource } from './compiler-resource-lookup.js';
-import { RuntimeExpressionResourceBindReachability } from './runtime-expression-resource.js';
-
-type RateLimitBindingBehaviorName =
-  | BuiltInBindingBehaviorName.Debounce
-  | BuiltInBindingBehaviorName.Throttle;
+import type {
+  RuntimeBindingBehaviorPlan,
+  RuntimeBindingBehaviorPlanEntry,
+} from './runtime-binding-behavior-plan.js';
 
 export class RuntimeBindingBehaviorMaterializationRequest {
   constructor(
     readonly localKey: string,
-    readonly runtimeRendering: RuntimeRenderingEmission,
+    readonly bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
     readonly controllerBind: RuntimeControllerBindEmission,
-    readonly resourceScope: TemplateResourceScope | null,
   ) {}
 }
 
 export class RuntimeBindingBehaviorEmission {
   private readonly applicationsByBinding = new Map<string, RuntimeBindingBehaviorApplication[]>();
   private readonly issuesByBinding = new Map<string, RuntimeBindingBehaviorIssue[]>();
-  private readonly firstFailureDepthByExpressionChain = new Map<string, number>();
 
   constructor(
     readonly applications: readonly RuntimeBindingBehaviorApplication[],
@@ -118,20 +69,6 @@ export class RuntimeBindingBehaviorEmission {
       }
       appendRuntimeBindingProductValue(this.issuesByBinding, issue.binding.productHandle, issue);
     }
-    const applicationsByProduct = new Map(applications.map((application) => [application.productHandle, application]));
-    for (const issue of issues) {
-      const application = issue.application.productHandle == null
-        ? null
-        : applicationsByProduct.get(issue.application.productHandle) ?? null;
-      if (application == null) {
-        continue;
-      }
-      const key = expressionChainKey(application.expressionProductHandle, application.chainIndex);
-      const current = this.firstFailureDepthByExpressionChain.get(key);
-      if (current == null || application.chainDepth < current) {
-        this.firstFailureDepthByExpressionChain.set(key, application.chainDepth);
-      }
-    }
   }
 
   readApplicationsForBinding(productHandle: ProductHandle): readonly RuntimeBindingBehaviorApplication[] {
@@ -141,19 +78,6 @@ export class RuntimeBindingBehaviorEmission {
   readIssuesForBinding(productHandle: ProductHandle): readonly RuntimeBindingBehaviorIssue[] {
     return this.issuesByBinding.get(productHandle) ?? [];
   }
-
-  readFirstFailureDepth(
-    expressionProductHandle: ProductHandle,
-    chainIndex: number,
-  ): number | null {
-    return this.firstFailureDepthByExpressionChain.get(
-      expressionChainKey(expressionProductHandle, chainIndex),
-    ) ?? null;
-  }
-}
-
-function expressionChainKey(expressionProductHandle: ProductHandle, chainIndex: number): string {
-  return `${expressionProductHandle}:${chainIndex}`;
 }
 
 class RuntimeBindingBehaviorSourceSet {
@@ -172,70 +96,8 @@ class RuntimeBindingBehaviorPublication {
   ) {}
 }
 
-class BindingBehaviorBindState {
-  private rateLimitBehaviorName: RateLimitBindingBehaviorName | null = null;
-  private targetSubscriberBehaviorName: string | null = null;
-  private readonly appliedBehaviorNames = new Set<string>();
-
-  constructor(
-    private currentBindingMode: TemplateBindingMode | null,
-  ) {}
-
-  readBindingMode(): TemplateBindingMode | null {
-    return this.currentBindingMode;
-  }
-
-  setBindingMode(bindingMode: TemplateBindingMode): void {
-    this.currentBindingMode = bindingMode;
-  }
-
-  hasAppliedBehavior(behaviorName: string): boolean {
-    return this.appliedBehaviorNames.has(behaviorName);
-  }
-
-  markAppliedBehavior(behaviorName: string): void {
-    this.appliedBehaviorNames.add(behaviorName);
-  }
-
-  hasDifferentRateLimitBehavior(behaviorName: RateLimitBindingBehaviorName): boolean {
-    return this.rateLimitBehaviorName != null
-      && this.rateLimitBehaviorName !== behaviorName;
-  }
-
-  markRateLimitBehavior(behaviorName: RateLimitBindingBehaviorName): void {
-    this.rateLimitBehaviorName ??= behaviorName;
-  }
-
-  hasTargetSubscriber(): boolean {
-    return this.targetSubscriberBehaviorName != null;
-  }
-
-  markTargetSubscriber(behaviorName: string): void {
-    this.targetSubscriberBehaviorName ??= behaviorName;
-  }
-}
-
-class BindingBehaviorChainState {
-  readonly bindState: BindingBehaviorBindState;
-  blocked = false;
-  nextPhaseOrder = 0;
-
-  constructor(initialMode: TemplateBindingMode | null) {
-    this.bindState = new BindingBehaviorBindState(initialMode);
-  }
-}
-
-/** Materializes runtime binding-behavior applications after Controller.bind target facts exist. */
+/** Publishes runtime binding-behavior applications from the pre-bind plan after target facts exist. */
 export class RuntimeBindingBehaviorMaterializer {
-  private readonly attr = new AttrBindingBehavior();
-  private readonly debounce = new DebounceBindingBehavior();
-  private readonly self = new SelfBindingBehavior();
-  private readonly signal = new SignalBindingBehavior();
-  private readonly throttle = new ThrottleBindingBehavior();
-  private readonly updateTrigger = new UpdateTriggerBindingBehavior();
-  private readonly validate = new ValidateBindingBehavior();
-  private readonly validationController = new ValidationController();
-
   constructor(
     readonly store: KernelStore,
   ) {}
@@ -258,111 +120,62 @@ export class RuntimeBindingBehaviorMaterializer {
     input: RuntimeBindingBehaviorMaterializationRequest,
   ): RuntimeBindingBehaviorEmission {
     const source = this.recordsForSource(input.localKey);
-    const bindEffects = new RuntimeBindingBehaviorBindEffectReader(this.store);
     const applications: RuntimeBindingBehaviorApplication[] = [];
     const issues: RuntimeBindingBehaviorIssue[] = [];
     const records: KernelStoreRecord[] = [...source.records];
 
-    input.runtimeRendering.bindings.forEach((binding, bindingIndex) => {
-      const targetAccess = firstTargetAccess(input.controllerBind, binding);
-      expressionProductHandlesForRuntimeBinding(binding).forEach((expressionProductHandle, expressionIndex) => {
-        const ast = bindingExpressionAstForProduct(this.store, expressionProductHandle);
-        if (ast == null) {
-          return;
-        }
-        const chainStates = new Map<number, BindingBehaviorChainState>();
-        const behaviors = bindingBehaviorResourceOccurrences(ast);
-        for (let behaviorIndex = 0; behaviorIndex < behaviors.length; behaviorIndex++) {
-          const occurrence = behaviors[behaviorIndex]!;
-          const behavior = occurrence.expression;
-          let chainState = chainStates.get(occurrence.chainIndex);
-          if (chainState == null) {
-            chainState = new BindingBehaviorChainState(binding instanceof PropertyBinding ? binding.bindingMode : null);
-            chainStates.set(occurrence.chainIndex, chainState);
-          }
-          const reached = !chainState.blocked;
-          const phaseOrder = reached ? chainState.nextPhaseOrder++ : null;
-          const publication = this.bindingBehaviorPublication(
-            `${input.localKey}:binding:${bindingIndex}:expression:${expressionIndex}:behavior:${behaviorIndex}:${behavior.name.name}`,
-            binding,
-            targetAccess,
-            expressionProductHandle,
-            occurrence,
-            chainState.bindState,
-            bindEffects,
-            input.resourceScope,
-            reached,
-            phaseOrder,
-            source,
-          );
-          applications.push(publication.application);
-          issues.push(...publication.issues);
-          records.push(...publication.records);
-          if (reached && publication.issues.length > 0) {
-            chainState.blocked = true;
-          }
-        }
-      });
-    });
+    for (const entry of input.bindingBehaviorPlan.entries) {
+      const targetAccess = firstTargetAccess(input.controllerBind, entry.binding);
+      const publication = this.bindingBehaviorPublication(
+        `${input.localKey}:binding:${entry.bindingIndex}:expression:${entry.expressionIndex}:behavior:${entry.behaviorIndex}:${entry.occurrence.expression.name.name}`,
+        entry,
+        targetAccess,
+        source,
+      );
+      applications.push(publication.application);
+      issues.push(...publication.issues);
+      records.push(...publication.records);
+    }
 
     return new RuntimeBindingBehaviorEmission(applications, issues, records);
   }
 
   private bindingBehaviorPublication(
     local: string,
-    binding: RuntimeBinding,
+    entry: RuntimeBindingBehaviorPlanEntry,
     targetAccess: RuntimeBindingTargetAccess | null,
-    expressionProductHandle: ProductHandle,
-    occurrence: ExpressionResourceOccurrence<BindingBehaviorExpression>,
-    bindState: BindingBehaviorBindState,
-    bindEffects: RuntimeBindingBehaviorBindEffectReader,
-    resourceScope: TemplateResourceScope | null,
-    reached: boolean,
-    phaseOrder: number | null,
     source: RuntimeBindingBehaviorSourceSet,
   ): RuntimeBindingBehaviorPublication {
-    const behavior = occurrence.expression;
-    const resource = findVisibleTemplateResource(
-      resourceScope,
-      ResourceDefinitionKind.BindingBehavior,
-      behavior.name.name,
-    );
-    const issue = reached
-      ? this.issueForBindingBehavior(
-          binding,
-          targetAccess,
-          behavior,
-          bindState,
-          bindEffects.readEffects(resource),
-          resource != null,
-        )
-      : null;
+    const behavior = entry.occurrence.expression;
     const expressionSource = sourceAddressForRuntimeExpressionSpan(
       this.store,
       local,
-      binding.sourceAddressHandle,
+      entry.binding.sourceAddressHandle,
       behavior.name.span,
     );
     const application = this.applicationProduct(
       local,
-      binding,
-      resource,
+      entry,
       targetAccess,
-      expressionProductHandle,
-      occurrence,
-      reached,
-      phaseOrder,
       expressionSource.handle,
     );
-    const issueProduct = issue == null
+    const issueProduct = entry.issue == null
       ? null
-      : this.issueProduct(`${local}:issue:${issue.issueKind}`, application, binding, targetAccess, issue, expressionSource.handle, source);
+      : this.issueProduct(
+          `${local}:issue:${entry.issue.issueKind}`,
+          application,
+          entry.binding,
+          targetAccess,
+          entry.issue,
+          expressionSource.handle,
+          source,
+        );
     return new RuntimeBindingBehaviorPublication(
       application,
       issueProduct == null ? [] : [issueProduct],
       [
         ...expressionSource.records,
-        ...recordsForApplication(application, binding.identityHandle, source.provenanceHandle),
+        ...recordsForApplication(application, entry.binding.identityHandle, source.provenanceHandle),
         ...(issueProduct == null
           ? []
           : recordsForIssue(issueProduct, application.identityHandle, source.provenanceHandle)),
@@ -370,170 +183,29 @@ export class RuntimeBindingBehaviorMaterializer {
     );
   }
 
-  private issueForBindingBehavior(
-    binding: RuntimeBinding,
-    targetAccess: RuntimeBindingTargetAccess | null,
-    behavior: BindingBehaviorExpression,
-    bindState: BindingBehaviorBindState,
-    effects: RuntimeBindingBehaviorBindEffects,
-    resourceResolved: boolean,
-  ): BuiltInBindingBehaviorBindIssue | null {
-    if (!resourceResolved) {
-      return {
-        issueKind: RuntimeBindingBehaviorIssueKind.ResourceNotFound,
-        message: `Binding behavior '${behavior.name.name}' was not resolved through the current compiler resource scope.`,
-        frameworkErrorCode: RuntimeHtmlAstFrameworkErrorCode.AstBehaviorNotFound,
-      };
-    }
-    if (bindState.hasAppliedBehavior(behavior.name.name)) {
-      return {
-        issueKind: RuntimeBindingBehaviorIssueKind.DuplicateApplication,
-        message: `Binding behavior '${behavior.name.name}' is already applied to this binding.`,
-        frameworkErrorCode: RuntimeHtmlAstFrameworkErrorCode.AstBehaviorDuplicated,
-      };
-    }
-    bindState.markAppliedBehavior(behavior.name.name);
-    const bindingModeBehaviorMode = bindingModeForBindingBehaviorName(behavior.name.name);
-    if (bindingModeBehaviorMode != null) {
-      bindState.setBindingMode(bindingModeBehaviorMode);
-      return null;
-    }
-    switch (behavior.name.name) {
-      case BuiltInBindingBehaviorName.Attr:
-        return this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, this.attr.bind({
-          bindingIsPropertyBinding: binding instanceof PropertyBinding,
-        }));
-      case BuiltInBindingBehaviorName.Debounce:
-        return this.afterTargetSubscriberEffects(
-          behavior.name.name,
-          bindState,
-          effects,
-          this.rateLimitIssue(binding, bindState, this.debounce.name),
-        );
-      case BuiltInBindingBehaviorName.Self:
-        return this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, this.self.bind({
-          bindingIsListenerBinding: binding instanceof ListenerBinding,
-        }));
-      case BuiltInBindingBehaviorName.Signal:
-        return this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, this.signal.bind({
-          bindingCanHandleChange: bindingSupportsHandleChange(binding),
-          signalArgumentCount: behavior.args.length,
-        }));
-      case BuiltInBindingBehaviorName.Throttle:
-        return this.afterTargetSubscriberEffects(
-          behavior.name.name,
-          bindState,
-          effects,
-          this.rateLimitIssue(binding, bindState, this.throttle.name),
-        );
-      case BuiltInBindingBehaviorName.UpdateTrigger:
-        return this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, this.updateTrigger.bind({
-          eventArgumentCount: behavior.args.length,
-          bindingIsPropertyBinding: binding instanceof PropertyBinding,
-          bindingAllowsTargetToSource: binding instanceof PropertyBinding
-            && bindingModeAllowsTargetToSource(bindState.readBindingMode() ?? binding.bindingMode),
-          hasNodeObserverConfig: binding instanceof PropertyBinding
-            && bindingModeAllowsTargetToSource(bindState.readBindingMode() ?? binding.bindingMode)
-            ? targetAccessHasNodeObserverConfig(targetAccess)
-            : null,
-          targetProperty: binding instanceof PropertyBinding ? binding.target : null,
-        }));
-      case BuiltInBindingBehaviorName.Validate:
-        return this.afterValidateBindingEffects(behavior, bindState, effects, this.validate.bind({
-          bindingIsPropertyBinding: binding instanceof PropertyBinding,
-          targetIsNodeOrControllerViewModel: validateTargetIsNodeOrControllerViewModel(targetAccess),
-          argumentCount: behavior.args.length,
-          triggerArgument: validateTriggerArgument(behavior.args[0] ?? null),
-          controllerArgument: validateControllerArgument(behavior.args[1] ?? null),
-          preExtraneousArgumentsCannotThrow: validatePreExtraneousArgumentsCannotThrow(behavior),
-        }));
-      default:
-        return this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, null);
-    }
-  }
-
-  private afterTargetSubscriberEffects(
-    behaviorName: string,
-    bindState: BindingBehaviorBindState,
-    effects: RuntimeBindingBehaviorBindEffects,
-    previousIssue: BuiltInBindingBehaviorBindIssue | null,
-  ): BuiltInBindingBehaviorBindIssue | null {
-    if (previousIssue != null) {
-      return previousIssue;
-    }
-    if (effects.directTargetSubscriberCalls === 0) {
-      return null;
-    }
-    if (bindState.hasTargetSubscriber() || effects.directTargetSubscriberCalls > 1) {
-      return {
-        issueKind: RuntimeBindingBehaviorIssueKind.BindingAlreadyHasTargetSubscriber,
-        message: 'More than one binding behavior path provides a PropertyBinding target subscriber.',
-        frameworkErrorCode: RuntimeHtmlBindingBehaviorFrameworkErrorCode.BindingAlreadyHasTargetSubscriber,
-      };
-    }
-    bindState.markTargetSubscriber(behaviorName);
-    return null;
-  }
-
-  private afterValidateBindingEffects(
-    behavior: BindingBehaviorExpression,
-    bindState: BindingBehaviorBindState,
-    effects: RuntimeBindingBehaviorBindEffects,
-    previousIssue: BuiltInBindingBehaviorBindIssue | null,
-  ): BuiltInBindingBehaviorBindIssue | null {
-    const bindIssue = this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, previousIssue);
-    return bindIssue
-      ?? this.validationController.propertyExpressionIssue(validationControllerUnsupportedExpressionKind(behavior.expression));
-  }
-
-  private rateLimitIssue(
-    binding: RuntimeBinding,
-    bindState: BindingBehaviorBindState,
-    behaviorName: RateLimitBindingBehaviorName,
-  ): BuiltInBindingBehaviorBindIssue | null {
-    if (!bindingSupportsRateLimit(binding)) {
-      return null;
-    }
-    const behavior = behaviorName === this.debounce.name ? this.debounce : this.throttle;
-    const issue = behavior.bind({
-      rateLimitAlreadyApplied: bindState.hasDifferentRateLimitBehavior(behaviorName),
-    });
-    if (issue == null) {
-      bindState.markRateLimitBehavior(behaviorName);
-    }
-    return issue;
-  }
-
   private applicationProduct(
     local: string,
-    binding: RuntimeBinding,
-    resource: TemplateVisibleResource | null,
+    entry: RuntimeBindingBehaviorPlanEntry,
     targetAccess: RuntimeBindingTargetAccess | null,
-    expressionProductHandle: ProductHandle,
-    occurrence: ExpressionResourceOccurrence<BindingBehaviorExpression>,
-    reached: boolean,
-    phaseOrder: number | null,
     sourceAddressHandle: AddressHandle | null,
   ): RuntimeBindingBehaviorApplication {
-    const behavior = occurrence.expression;
+    const behavior = entry.occurrence.expression;
     return new RuntimeBindingBehaviorApplication(
       this.store.handles.product(local),
       this.store.handles.identity(local),
-      binding.toReference(),
-      resource?.toReference() ?? null,
+      entry.binding.toReference(),
+      entry.resource?.toReference() ?? null,
       targetAccess?.toReference() ?? null,
       RuntimeBindingBehaviorApplicationPhase.Bind,
       behavior.name.name,
       behavior.args.length,
       behavior.args.flatMap(staticArgumentValueForArg),
-      expressionProductHandle,
-      occurrence.chainIndex,
-      occurrence.chainDepth,
-      reached
-        ? RuntimeExpressionResourceBindReachability.Reached
-        : RuntimeExpressionResourceBindReachability.BlockedByOuterFailure,
-      reached ? occurrence.chainDepth : null,
-      phaseOrder,
+      entry.expressionProductHandle,
+      entry.occurrence.chainIndex,
+      entry.occurrence.chainDepth,
+      entry.bindReachability,
+      entry.bindOrder,
+      entry.phaseOrder,
       behavior.args.map((argument) => argument.span),
       sourceAddressHandle,
     );
@@ -571,7 +243,7 @@ export class RuntimeBindingBehaviorMaterializer {
           evidenceHandle,
           EvidenceKind.SemanticObservation,
           [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
-          'Runtime binding-behavior materialization from rendered bindings and Controller.bind target facts.',
+          'Runtime binding-behavior publication from the pre-bind plan and Controller.bind target facts.',
           null,
         ),
         new ProvenanceRecord(
@@ -636,152 +308,6 @@ function firstTargetAccess(
   binding: RuntimeBinding,
 ): RuntimeBindingTargetAccess | null {
   return controllerBind.readTargetAccessesForBinding(binding.productHandle)[0] ?? null;
-}
-
-function bindingModeAllowsTargetToSource(bindingMode: TemplateBindingMode): boolean {
-  return bindingMode === TemplateBindingMode.FromView
-    || bindingMode === TemplateBindingMode.TwoWay;
-}
-
-function bindingSupportsHandleChange(binding: RuntimeBinding): boolean {
-  return binding instanceof PropertyBinding
-    || binding instanceof AttributeBinding
-    || binding instanceof LetBinding
-    || binding instanceof InterpolationBinding
-    || binding instanceof RefBinding
-    || binding instanceof ContentBinding
-    || binding instanceof SpreadValueBinding;
-}
-
-function bindingSupportsRateLimit(binding: RuntimeBinding): boolean {
-  return bindingSupportsHandleChange(binding)
-    || binding instanceof ListenerBinding;
-}
-
-function targetAccessHasNodeObserverConfig(targetAccess: RuntimeBindingTargetAccess | null): boolean | null {
-  if (targetAccess == null) {
-    return null;
-  }
-  switch (targetAccess.strategy) {
-    case RuntimeBindingTargetAccessStrategy.CheckedObserver:
-    case RuntimeBindingTargetAccessStrategy.SelectValueObserver:
-    case RuntimeBindingTargetAccessStrategy.ValueAttributeObserver:
-      return true;
-    default:
-      return false;
-  }
-}
-
-function validateTargetIsNodeOrControllerViewModel(targetAccess: RuntimeBindingTargetAccess | null): boolean | null {
-  if (targetAccess == null) {
-    return null;
-  }
-  switch (targetAccess.targetKind) {
-    case RuntimeBindingTargetKind.Node:
-    case RuntimeBindingTargetKind.Host:
-    case RuntimeBindingTargetKind.ControllerViewModel:
-      return true;
-    case RuntimeBindingTargetKind.BindingContext:
-    case RuntimeBindingTargetKind.OverrideContext:
-    case RuntimeBindingTargetKind.Controller:
-    case RuntimeBindingTargetKind.StateStore:
-      return false;
-    case RuntimeBindingTargetKind.Unknown:
-      return null;
-  }
-}
-
-function validatePreExtraneousArgumentsCannotThrow(behavior: BindingBehaviorExpression): boolean {
-  return validateTriggerArgument(behavior.args[0] ?? null).kind !== ValidateBindingBehaviorArgumentKind.Unknown
-    && validateControllerArgument(behavior.args[1] ?? null).kind !== ValidateBindingBehaviorArgumentKind.Unknown;
-}
-
-function validateTriggerArgument(arg: IsAssign | null): ValidateBindingBehaviorArgument {
-  const staticValue = staticValidationArgumentValue(arg);
-  if (staticValue.kind === ValidateBindingBehaviorArgumentKind.Nullish
-    || staticValue.kind === ValidateBindingBehaviorArgumentKind.Unknown) {
-    return staticValue;
-  }
-  if (typeof staticValue.value === 'string') {
-    return {
-      kind: ValidateBindingBehaviorArgumentKind.TriggerString,
-      value: staticValue.value,
-    };
-  }
-  return {
-    kind: ValidateBindingBehaviorArgumentKind.InvalidStatic,
-    value: staticValue.value,
-  };
-}
-
-function validateControllerArgument(arg: IsAssign | null): ValidateBindingBehaviorArgument {
-  const staticValue = staticValidationArgumentValue(arg);
-  if (staticValue.kind === ValidateBindingBehaviorArgumentKind.Nullish
-    || staticValue.kind === ValidateBindingBehaviorArgumentKind.Unknown) {
-    return staticValue;
-  }
-  return {
-    kind: ValidateBindingBehaviorArgumentKind.InvalidStatic,
-    value: staticValue.value,
-  };
-}
-
-function staticValidationArgumentValue(arg: IsAssign | null): ValidateBindingBehaviorArgument {
-  if (arg == null) {
-    return {
-      kind: ValidateBindingBehaviorArgumentKind.Nullish,
-      value: null,
-    };
-  }
-  if (arg.$kind === 'PrimitiveLiteral') {
-    if (arg.value == null) {
-      return {
-        kind: ValidateBindingBehaviorArgumentKind.Nullish,
-        value: null,
-      };
-    }
-    return {
-      kind: ValidateBindingBehaviorArgumentKind.InvalidStatic,
-      value: String(arg.value),
-    };
-  }
-  if (arg.$kind === 'Template' && arg.expressions.length === 0 && arg.cooked.length === 1) {
-    return {
-      kind: ValidateBindingBehaviorArgumentKind.InvalidStatic,
-      value: arg.cooked[0] ?? '',
-    };
-  }
-  if (arg.$kind === 'ArrayLiteral' || arg.$kind === 'ObjectLiteral') {
-    return {
-      kind: ValidateBindingBehaviorArgumentKind.InvalidStatic,
-      value: arg.$kind,
-    };
-  }
-  return {
-    kind: ValidateBindingBehaviorArgumentKind.Unknown,
-    value: null,
-  };
-}
-
-function validationControllerUnsupportedExpressionKind(
-  expression: BindingBehaviorExpression['expression'],
-): string | null {
-  let current: BindingBehaviorExpression['expression'] | null = expression;
-  while (current != null && current.$kind !== 'AccessScope') {
-    switch (current.$kind) {
-      case 'BindingBehavior':
-      case 'ValueConverter':
-        current = current.expression;
-        break;
-      case 'AccessMember':
-      case 'AccessKeyed':
-        current = current.object;
-        break;
-      default:
-        return current.$kind;
-    }
-  }
-  return null;
 }
 
 function staticArgumentValueForArg(arg: IsAssign): readonly string[] {
