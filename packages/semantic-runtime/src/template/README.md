@@ -332,11 +332,13 @@ classification, expression parsing, and instruction lowering converge on the sam
   `resolve(IViewFactory)` sites on resource view models; ordinary custom elements and custom attributes map those sites
   to `view_factory_provider_not_ready` (`AUR0755`) because runtime-html registers the not-ready provider there, while
   template controllers receive a prepared `IViewFactory`.
-- `runtime-binding-behavior-plan.ts` owns the outer-to-inner `astBind(...)` plan over rendered binding products before
-  scope construction or `Controller.bind` selects target access. It joins resource visibility, behavior-specific bind
-  checks, node-observer configuration, chain reachability, effective binding mode, and behavior-supplied target observers
-  once. `runtime-binding-behavior-materializer.ts` subsequently publishes application and issue products from that plan
-  after controller target facts exist; it does not replay behavior semantics. The modeled built-ins are now
+- `runtime-expression-resource-plan.ts` owns one outer-to-inner `astBind(...)` plan over binding behaviors and value
+  converters before scope construction or `Controller.bind` selects target access. It joins resource visibility,
+  behavior-specific bind checks, node-observer configuration, chain reachability, effective binding mode,
+  behavior-supplied target observers, and behavior-projected converters once. Authored and effective runtime chain depth
+  remain separate because reached i18n behaviors insert converter wrappers during bind. The behavior and converter
+  materializers subsequently publish phase applications, lifecycle effects, and issues from that plan; neither rescans
+  the authored AST or reconstructs reachability. The modeled built-ins are now
   `SelfBindingBehavior` (`AUR0801` for non-listener bindings), `SignalBindingBehavior` (`AUR0817` for bindings without
   `handleChange`, `AUR0818` for missing signal names), `UpdateTriggerBindingBehavior` (`AUR0802`, `AUR0803`, and
   `AUR9992`), `AttrBindingBehavior` (`AUR9994` for non-`PropertyBinding` targets), and the shared throttle/debounce
@@ -360,8 +362,8 @@ classification, expression parsing, and instruction lowering converge on the sam
   name span when the carrier comes from an admitted source file, not just the whole binding carrier span.
   Binding-mode behaviors (`oneTime`, `toView`, `fromView`, and `twoWay`) are modeled as reached, resource-visible
   framework bind-time effects, not parser aliases. Scope assignment, controller target access, value-converter phases,
-  bound-controller values, observation data-flow, and inlay hints all spend the same plan. A missing or failing outer
-  behavior therefore blocks every inner mode/converter effect instead of allowing a downstream AST scan to mutate
+  bound-controller values, observation data-flow, and inlay hints all spend the same expression-resource plan. A missing
+  or failing outer behavior therefore blocks every inner mode/converter effect instead of allowing a downstream AST scan to mutate
   direction anyway. `runtime-binding-mode-behavior.ts` now retains only the shared mode-name and direction vocabulary.
   Property-binding renderer selection participates in the same target-observer handoff: a class accessor applies only
   when the rendered target is the native Node, reached binding behaviors may replace that strategy, and ordinary
@@ -370,8 +372,10 @@ classification, expression parsing, and instruction lowering converge on the sam
 - `runtime-value-converter.ts` and `runtime-value-converter-materializer.ts` own the rendered value-converter
   application lifecycle from bind-time resource lookup through invocation. Unresolved authored uses retain an
   application with `resource: null` and publish `ast_converter_not_found` (`AUR0103`) in the `bind` phase instead of
-  disappearing before diagnostics. Resolved application products distinguish `to-view` and `from-view` phases when
-  binding mode proves target-to-source writeback; data-flow owns the exact
+  disappearing before diagnostics. Applications publish `bind` and reachable `unbind` phases in addition to the
+  applicable `to-view` and `from-view` phases. Phase reachability comes from the shared plan, so an outer bind failure
+  blocks conversion and teardown without deleting the structural application. Resolved application products distinguish
+  `to-view` and `from-view` phases when binding mode proves target-to-source writeback; data-flow owns the exact
   `fromView` return-type projection and assignment strictness, while this materializer owns phase publication and
   converter-owned framework issues. The first modeled issue path is
   `SanitizeValueConverter.toView`: when the compiler resource scope resolves the built-in `sanitize` converter and the
@@ -385,6 +389,11 @@ classification, expression parsing, and instruction lowering converge on the sam
   Repeat locals and let values use `projectRuntimeBindingSourceValueContextInScope(...)` when they already own the
   template-controller source scope, including the no-runtime-binding fallback, so binding-behavior `bind(...)` handoff,
   rendering strict mode, and resource scope stay aligned with data-flow and router/composition source-value consumers.
+  Converter signal lifecycle is not definition metadata. Built-in resources carry exact auLink-backed signal constants;
+  app-owned converter instances read `signals` through the same `RuntimeBindingSourceValueEvaluator` used for static
+  `toView(...)` reduction. Closed arrays retain per-element source addresses, partial arrays keep known members plus open
+  pressure, and an absent property on a closed evaluator instance stays absent rather than becoming an unknown field.
+  Signal add/remove effects live only on reached bind/unbind applications; conversion phases do not duplicate them.
 - `template-runtime-analysis.ts` owns the post-compiled-template runtime/checker phase: runtime Rendering dispatch,
   pre-bind behavior planning, template scope construction, `Controller.bind` emulation, i18n `TranslationBinding.create/bind` issue
   materialization, binding-behavior/value-converter application,

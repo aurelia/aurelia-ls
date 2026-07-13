@@ -73,6 +73,7 @@ import {
   readEvaluationTruthiness,
   type EvaluationClassValue,
   type EvaluationFunctionValue,
+  type EvaluationInstanceValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
 import type { KernelStore } from '../kernel/store.js';
@@ -86,7 +87,11 @@ import {
 } from '../type-system/checker-type-member-surface.js';
 import {
   CheckerTypeMember,
+  CheckerTypeMemberKind,
+  CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
+import { readCheckerTypeShapeByProductHandle } from '../type-system/checker-type-shape-access.js';
+import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
 import {
   type RuntimeValueConverterMethodName,
   VALUE_CONVERTER_TO_VIEW_METHOD,
@@ -139,6 +144,31 @@ type RuntimeBindingSourceClassValueTargetRead = {
   readonly openReason: string;
 };
 
+export const enum RuntimeValueConverterInstancePropertyReadState {
+  /** Checker and evaluator agree that the instance property has no runtime value. */
+  Absent = 'absent',
+  /** The evaluator retained one exact final property value. */
+  Closed = 'closed',
+  /** The property may exist or change, while any retained value remains useful evidence. */
+  Open = 'open',
+}
+
+/** Raw converter-instance property evidence before a consumer applies domain-specific value policy. */
+export class RuntimeValueConverterInstancePropertyRead {
+  constructor(
+    readonly state: RuntimeValueConverterInstancePropertyReadState,
+    readonly value: EvaluationValue | null,
+    readonly property: EvaluationObjectProperty | null,
+    readonly openReasons: readonly string[],
+  ) {}
+}
+
+interface RuntimeValueConverterInstanceRead {
+  readonly instance: EvaluationInstanceValue | null;
+  readonly open: RuntimeBindingSourceValueEvaluation | null;
+  readonly openReasons: readonly string[];
+}
+
 /**
  * Evaluates Aurelia binding-source expressions against modeled runtime Scope plus the static ECMAScript evaluator.
  *
@@ -149,6 +179,7 @@ export class RuntimeBindingSourceValueEvaluator {
   private readonly evaluationFrame: RuntimeBindingSourceEvaluationFrame;
   private readonly arrayMethods: RuntimeBindingSourceArrayMethodEvaluator;
   private readonly memberValues: RuntimeBindingSourceMemberValueReader;
+  private readonly valueConverterInstances = new Map<string, RuntimeValueConverterInstanceRead>();
 
   constructor(
     readonly store: KernelStore,
@@ -177,6 +208,23 @@ export class RuntimeBindingSourceValueEvaluator {
       this.activationContext,
       activeContainer,
     );
+  }
+
+  /** Read one app-owned converter instance field without collapsing retained values when evaluation remains open. */
+  readValueConverterInstanceProperty(
+    definition: ValueConverterDefinition,
+    propertyName: string,
+    activeContainer: Container | null,
+  ): RuntimeValueConverterInstancePropertyRead {
+    return this.evaluationFrame.withActiveContainer(
+      activeContainer,
+      () => this.readValueConverterInstancePropertyInFrame(definition, propertyName, activeContainer),
+    );
+  }
+
+  /** Recover the evaluated source module that owns an evaluator-retained syntax node. */
+  readEvaluatedSourceForNode(node: ts.Node): EvaluatedProjectSource | null {
+    return this.evaluationFrame.sourceForNode(node);
   }
 
   evaluate(
@@ -313,12 +361,22 @@ export class RuntimeBindingSourceValueEvaluator {
       );
     }
 
-    const instanceRead = this.evaluateValueConverterInstance(definition);
-    if (instanceRead.kind === RuntimeBindingSourceValueEvaluationKind.Open || instanceRead.value == null) {
-      return instanceRead;
+    const instanceRead = this.readValueConverterInstance(
+      definition,
+      context.containerOrDefault(this.defaultActiveContainer),
+    );
+    if (instanceRead.open != null || instanceRead.instance == null) {
+      return instanceRead.open
+        ?? openBindingSourceNeedsRuntimeValue(`Value converter '${definition.name}' instance did not close.`);
+    }
+    if (instanceRead.openReasons.length > 0) {
+      return RuntimeBindingSourceValueEvaluation.open(
+        instanceRead.openReasons.join(' '),
+        [OpenSeamReasonKind.BindingSourceNeedsRuntimeValue],
+      );
     }
 
-    const methodRead = this.evaluateValueConverterMethod(instanceRead.value, VALUE_CONVERTER_TO_VIEW_METHOD);
+    const methodRead = this.evaluateValueConverterMethod(instanceRead.instance, VALUE_CONVERTER_TO_VIEW_METHOD);
     if (methodRead.kind === RuntimeBindingSourceValueEvaluationKind.Open || methodRead.value == null) {
       return methodRead;
     }
@@ -331,7 +389,7 @@ export class RuntimeBindingSourceValueEvaluator {
       );
     }
 
-    const withContext = this.valueConverterUsesCallerContext(instanceRead.value, definition);
+    const withContext = this.valueConverterUsesCallerContext(instanceRead.instance, definition);
     if (withContext.open != null) {
       return withContext.open;
     }
@@ -340,7 +398,7 @@ export class RuntimeBindingSourceValueEvaluator {
       ...(withContext.value ? [valueConverterCallerContext(expression)] : []),
       ...argumentsRead.values,
     ];
-    return this.evaluateValueConverterCall(definition, methodRead.value, instanceRead.value, callArguments);
+    return this.evaluateValueConverterCall(definition, methodRead.value, instanceRead.instance, callArguments);
   }
 
   private valueConverterDefinition(
@@ -354,45 +412,178 @@ export class RuntimeBindingSourceValueEvaluator {
       : null;
   }
 
-  private evaluateValueConverterInstance(
+  private readValueConverterInstance(
     definition: ValueConverterDefinition,
-  ): RuntimeBindingSourceValueEvaluation {
+    activeContainer: Container | null,
+  ): RuntimeValueConverterInstanceRead {
+    const cacheKey = `${definition.productHandle ?? definition.target.addressHandle ?? definition.name}:${activeContainer?.identityHandle ?? 'no-container'}`;
+    const cached = this.valueConverterInstances.get(cacheKey);
+    if (cached != null) {
+      return cached;
+    }
+    const read = this.readUncachedValueConverterInstance(definition);
+    this.valueConverterInstances.set(cacheKey, read);
+    return read;
+  }
+
+  private readUncachedValueConverterInstance(
+    definition: ValueConverterDefinition,
+  ): RuntimeValueConverterInstanceRead {
     if (definition.target.addressHandle == null) {
-      return openBindingSourceNeedsRuntimeValue(`Value converter '${definition.name}' target does not carry an authored value address.`);
+      return openValueConverterInstance(`Value converter '${definition.name}' target does not carry an authored value address.`);
     }
     const target = this.evaluationFrame.evaluateSourceAddressExpression(
       this.store,
       definition.target.addressHandle,
     );
     if (target == null) {
-      return openBindingSourceNeedsRuntimeValue(
-        `Value converter '${definition.name}' target was not part of static project evaluation.`,
-      );
+      return openValueConverterInstance(`Value converter '${definition.name}' target was not part of static project evaluation.`);
     }
-    const targetResult = bindingSourceValueEvaluationResult(target.value, target.openSeams.map((seam) => seam.summary));
-    if (targetResult.kind === RuntimeBindingSourceValueEvaluationKind.Open || targetResult.value == null) {
-      return targetResult;
+    const targetOpenReasons = target.openSeams.map((seam) => seam.summary);
+    if (target.value.kind === EvaluationValueKind.Instance) {
+      return {
+        instance: target.value,
+        open: null,
+        openReasons: targetOpenReasons,
+      };
     }
-    if (targetResult.value.kind === EvaluationValueKind.Instance) {
-      return targetResult;
+    if (target.value.kind !== EvaluationValueKind.Class) {
+      return openValueConverterInstance(`Value converter '${definition.name}' target did not reduce to an evaluator-local class or instance.`);
     }
-    if (targetResult.value.kind !== EvaluationValueKind.Class) {
-      return openBindingSourceNeedsRuntimeValue(
-        `Value converter '${definition.name}' target did not reduce to an evaluator-local class or instance.`,
-      );
-    }
-    const source = this.evaluationFrame.sourceForValue(targetResult.value);
+    const source = this.evaluationFrame.sourceForValue(target.value);
     if (source == null) {
-      return openBindingSourceMemberNoStaticValue(
-        `Value converter '${definition.name}' target class source module was not part of static project evaluation.`,
-      );
+      return openValueConverterInstance(`Value converter '${definition.name}' target class source module was not part of static project evaluation.`);
     }
     const instance = this.evaluationFrame.instantiateClassValue(
       source,
-      targetResult.value,
-      targetResult.value.node ?? targetResult.value.declaration,
+      target.value,
+      target.value.node ?? target.value.declaration,
     );
-    return bindingSourceValueEvaluationResult(instance.value, instance.openSeams.map((seam) => seam.summary));
+    return instance.value.kind === EvaluationValueKind.Instance
+      ? {
+          instance: instance.value,
+          open: null,
+          openReasons: [
+            ...targetOpenReasons,
+            ...instance.openSeams.map((seam) => seam.summary),
+          ],
+        }
+      : openValueConverterInstance(`Value converter '${definition.name}' constructor did not produce an evaluator-local instance.`);
+  }
+
+  private readValueConverterInstancePropertyInFrame(
+    definition: ValueConverterDefinition,
+    propertyName: string,
+    activeContainer: Container | null,
+  ): RuntimeValueConverterInstancePropertyRead {
+    const checker = this.readValueConverterCheckerProperty(definition, propertyName);
+    const instanceRead = this.readValueConverterInstance(definition, activeContainer);
+    if (instanceRead.instance == null) {
+      return checker.absenceProven
+        ? new RuntimeValueConverterInstancePropertyRead(
+            RuntimeValueConverterInstancePropertyReadState.Absent,
+            null,
+            null,
+            [],
+          )
+        : new RuntimeValueConverterInstancePropertyRead(
+            RuntimeValueConverterInstancePropertyReadState.Open,
+            null,
+            null,
+            [
+              instanceRead.open?.openReason
+                ?? checker.openReason
+                ?? `Value converter '${definition.name}' property '${propertyName}' could not be read from a static instance.`,
+            ],
+          );
+    }
+
+    const instance = instanceRead.instance;
+    const property = instance.properties.get(propertyName) ?? null;
+    const source = this.evaluationFrame.sourceForValue(instance);
+    if (source == null) {
+      return new RuntimeValueConverterInstancePropertyRead(
+        RuntimeValueConverterInstancePropertyReadState.Open,
+        property?.value ?? null,
+        property,
+        [
+          ...instanceRead.openReasons,
+          `Value converter '${definition.name}' instance source was not part of static project evaluation.`,
+        ],
+      );
+    }
+
+    const valueRead = this.evaluationFrame.readPropertyValue(
+      source,
+      instance,
+      propertyName,
+      property?.node ?? instance.node ?? source.sourceFile,
+    );
+    const openReasons = [
+      ...instanceRead.openReasons,
+      ...valueRead.openSeams.map((seam) => seam.summary),
+    ];
+    if ((valueRead.value.kind === EvaluationValueKind.Undefined || valueRead.value.kind === EvaluationValueKind.Null)
+      && openReasons.length === 0
+      && property?.state !== EvaluationObjectPropertyState.Open) {
+      return new RuntimeValueConverterInstancePropertyRead(
+        RuntimeValueConverterInstancePropertyReadState.Absent,
+        valueRead.value,
+        property,
+        [],
+      );
+    }
+    const valueIsOpen = valueRead.value.kind === EvaluationValueKind.Unknown
+      || valueRead.value.kind === EvaluationValueKind.BoundaryValue;
+    return new RuntimeValueConverterInstancePropertyRead(
+      openReasons.length > 0 || valueIsOpen || property?.state === EvaluationObjectPropertyState.Open
+        ? RuntimeValueConverterInstancePropertyReadState.Open
+        : RuntimeValueConverterInstancePropertyReadState.Closed,
+      valueRead.value,
+      property,
+      valueIsOpen
+        ? [
+            ...openReasons,
+            valueRead.value.kind === EvaluationValueKind.Unknown
+              ? valueRead.value.reason
+              : valueRead.value.reason,
+          ]
+        : openReasons,
+    );
+  }
+
+  private readValueConverterCheckerProperty(
+    definition: ValueConverterDefinition,
+    propertyName: string,
+  ): { readonly absenceProven: boolean; readonly openReason: string | null } {
+    const shape = readCheckerTypeShapeByProductHandle(
+      this.store,
+      definition.target.targetType?.productHandle,
+    );
+    if (shape == null
+      || shape.shapeKind === CheckerTypeShapeKind.Any
+      || shape.shapeKind === CheckerTypeShapeKind.Unknown
+      || shape.shapeKind === CheckerTypeShapeKind.TypeParameter
+      || shape.shapeKind === CheckerTypeShapeKind.Unclassified
+      || shape.shapeKind === CheckerTypeShapeKind.Union) {
+      return {
+        absenceProven: false,
+        openReason: `Value converter '${definition.name}' checker surface cannot prove whether '${propertyName}' is present.`,
+      };
+    }
+    const members = readOrProjectCheckerTypeMembers(
+      this.store,
+      shape,
+      `value-converter:${definition.productHandle ?? definition.name}:${propertyName}`,
+    );
+    const memberIsVisible = members.some((member) => member.name === propertyName);
+    const hasIndexSignature = members.some((member) => member.memberKind === CheckerTypeMemberKind.IndexSignature);
+    return {
+      absenceProven: !memberIsVisible && !hasIndexSignature,
+      openReason: memberIsVisible || !hasIndexSignature
+        ? null
+        : `Value converter '${definition.name}' has an open checker index surface for '${propertyName}'.`,
+    };
   }
 
   private evaluateValueConverterMethod(
@@ -1952,6 +2143,14 @@ function boundaryValueForOpenArgument(
     argument.openReason ?? `binding expression ${expression.$kind}`,
     null,
   );
+}
+
+function openValueConverterInstance(reason: string): RuntimeValueConverterInstanceRead {
+  return {
+    instance: null,
+    open: openBindingSourceNeedsRuntimeValue(reason),
+    openReasons: [reason],
+  };
 }
 
 function valueOrBoundaryForOpen(

@@ -1596,27 +1596,29 @@ for the same projection while callers migrate to the broader name.
 names return the custom attribute view-model, `controller` returns the controller product, and unsupported `view.ref`
 stays open. These rows are consumed by value-channel and data-flow projections as `ref-target` target-to-source flow.
 
-`BindingBehaviorApplications` exposes authored runtime binding-behavior application attempts after the
-compiler resource scope, rendered binding product, controller bind phase, and binding-behavior materializer have all had
-their say. Rows describe the application fact rather than replacing the issue lane: behavior name, owning binding kind,
-phase, argument count, static scalar/template literal argument values, structural `chainIndex`/`chainDepth`, bind
-reachability/order, behavior-phase order, exact argument sources, target kind/property, source address, and nullable
-resolved resource plus optional handles. `chainDepth` counts every expression-resource wrapper from outermost to
-innermost; `phaseOrder` is the nominal order within the behavior bind phase and is null when an outer bind failure
-blocks the application. A null resource is the retained cause of AUR0101. Source addresses prefer the exact binding-behavior name span, including names inside interpolation
-holes, and only fall back to the broader binding carrier when no source file can be recovered. Authoring
-verification uses this lane for fact-level effects such as "the generated validated form actually produced `& validate`
-applications" before deriving higher-level validation ownership taste.
+`BindingBehaviorApplications` exposes each authored runtime binding-behavior application in its `bind` and `unbind`
+phases after the shared expression-resource plan and controller target facts have had their say. Rows retain the
+behavior name, owning binding kind, exact arguments and sources, interpolation-hole `chainIndex`, authored and effective
+runtime chain depths, bind and phase reachability/order, target kind/property, exact behavior-name source, nullable
+resolved resource, and optional handles. The two depth fields stay distinct because reached behaviors such as i18n can
+project additional runtime resource wrappers that have no authored depth. A null resource is the retained cause of
+AUR0101; blocked rows remain structural facts while `phaseReachability` says whether framework execution reaches them.
+`lifecycleEffects` reports phase-local closed or open behavior effects such as binding-mode replacement/restoration,
+target-observer or subscriber installation, signal listeners, debounce/throttle state, listener self filtering,
+validation/state connections, and expression projection. Exact signal arguments and rate-limit values keep their own
+sources and framework defaults. It does not duplicate ordinary source observation: connectable source reads and target
+subscriptions remain owned by binding data-flow and target-access products.
 
-`ValueConverterApplications` mirrors that positive-materialization lane for authored `| converter` expressions. Rows
-report the nullable owning resource definition, binding kind, converter name, invocation phase (`to-view`/`from-view`),
-argument count, structural chain identity/depth, bind reachability/order, nominal phase order, exact argument sources,
-exact converter-name source address, and optional handles. `to-view` phase order runs inner-to-outer; `from-view` runs
-outer-to-inner. Phase order records the static order of a bind-reachable, resolved application, not a promise that no
-converter implementation will throw before a later phase step. A null resource preserves the attempted application
-whose separate issue product owns bind-phase AUR0103. Use this query when IDE/LSP, MCP, or
-future build/AOT consumers need to prove that a template actually applied a converter such as `featuredProducts`, rather
-than inferring converter usage from token coloring or diagnostics.
+`ValueConverterApplications` mirrors that execution lane for both authored `| converter` expressions and converters
+inserted by reached binding behaviors. Rows distinguish `bind`, `to-view`, `from-view`, and `unbind`, retain application
+origin plus authored/runtime depths, and use the same bind/phase reachability vocabulary as behaviors. `to-view` phase
+order runs inner-to-outer; `from-view` runs outer-to-inner. Phase order records the static order of a bind-reachable,
+resolved application, not a promise that an app converter cannot throw before a later step. Bind and unbind lifecycle
+effects retain value-converter signal subscriptions: built-ins spend auLink-backed exact signal constants, while
+app-owned converter instances use the shared static source-value evaluator and preserve the `signals` property source,
+each known array-element source, and honest open-array pressure. Conversion rows do not duplicate those lifecycle
+effects. A null resource preserves the attempted application whose issue product owns bind-phase AUR0103. Use this query
+when IDE/LSP, MCP, or future build/AOT consumers need execution facts rather than token-coloring or diagnostic inference.
 
 `BindingValueChannels` exposes the observer/accessor or direct-operation value shape that runtime data flow should use
 instead of blindly treating the raw DOM property as the transported value. Use `BindingValueChannelSummary` first when

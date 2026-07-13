@@ -546,7 +546,11 @@ export class TemplateControllerFlowScopeMaterializer {
       };
     }
 
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
+    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
+      this.store,
+      input.expressionWorld,
+      input.expressionResourcePlan,
+    );
     const projection = projectRuntimeBindingSourceExpressionInScope(input.runtimeBindings, bindingExpressionScopes, {
       binding,
       expression,

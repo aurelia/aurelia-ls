@@ -503,7 +503,11 @@ function routerResourceInstructionSite(
     return null;
   }
   const instructionScopes = instructionScopeLookup(runtimeAnalysis.scopes.instructionScopes);
-  const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(store, runtimeAnalysis.expressionWorld);
+  const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
+    store,
+    runtimeAnalysis.expressionWorld,
+    runtimeAnalysis.expressionResourcePlan,
+  );
   const host = htmlElementForInstruction(store, instruction);
   return {
     kind,

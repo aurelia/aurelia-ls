@@ -57,6 +57,7 @@ import {
 } from './runtime-binding-observation.js';
 import { runtimeBindingPrimitiveValueFromExpressionValue } from './runtime-binding-primitive-value.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
+import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import type { TypeSystemProject } from '../type-system/project.js';
@@ -86,6 +87,8 @@ export class RuntimeBindingValueChannelMaterializationRequest {
     readonly localKey: string,
     /** Runtime binding products produced by renderer dispatch. */
     readonly runtimeBindings: RuntimeRenderingEmission,
+    /** Reached expression-resource effects that determine runtime source projection. */
+    readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
     /** Controller.bind target-side products produced by binding-owned target setup. */
     readonly controllerBind: RuntimeControllerBindEmission,
     /** Runtime Scope applications visible to instruction-owned expressions. */
@@ -192,7 +195,11 @@ export class RuntimeBindingValueChannelMaterializer {
     records.push(...source.records);
     const instructionScopes = instructionScopeLookup(input.scopes.instructionScopes);
     const evaluator = input.expressionWorld.evaluator(input.resourceScope);
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
+    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
+      this.store,
+      input.expressionWorld,
+      input.expressionResourcePlan,
+    );
     const sourceExpressionContexts = new RuntimeBindingSourceExpressionContextProjector(
       input.runtimeBindings,
       instructionScopes,

@@ -4,10 +4,6 @@ import type {
   IsValueConverter,
 } from '../expression/ast.js';
 import { ValueConverterExpression } from '../expression/ast.js';
-import {
-  bindingBehaviorProjectsThroughValueConverter,
-  bindingBehaviorValueConverterProjection,
-} from '../expression/binding-behavior-bind-effects.js';
 import { unwrapExpressionAstNodeParens } from '../expression/parse-result-inspection.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import { auLink } from '../kernel/au-link.js';
@@ -17,6 +13,9 @@ import {
   StateBindingScopeProjector,
 } from '../state/state-binding-scope.js';
 import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
+import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
+import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
+import { RuntimeExpressionResourceBindReachability } from '../template/runtime-expression-resource.js';
 
 export class RuntimeBindingExpressionScopeProjection {
   constructor(
@@ -50,6 +49,7 @@ export class RuntimeBindingExpressionScopeProjector {
   constructor(
     readonly store: KernelStore,
     readonly expressionWorld: CheckerExpressionTypeWorld,
+    readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
   ) {
     this.stateScopes = new StateBindingScopeProjector(store, expressionWorld.stateStores);
   }
@@ -110,10 +110,17 @@ export class RuntimeBindingExpressionScopeProjector {
       return new RuntimeBindingExpressionScopeProjection(unwrapped, scope, null);
     }
 
-    const behaviorScope = unwrapped.name.name === STATE_BINDING_BEHAVIOR_NAME
+    const planEntry = this.expressionResourcePlan.readBindingBehaviorEntry(unwrapped);
+    const reached = planEntry != null
+      && planEntry.bindReachability === RuntimeExpressionResourceBindReachability.Reached
+      && planEntry.issue == null;
+    const behaviorScope = reached && planEntry.builtInResource?.name === BuiltInBindingBehaviorName.State
       ? this.projectStateBindingBehaviorScope(unwrapped, scope, localKey, sourceAddressHandle)
       : new RuntimeBindingExpressionScopeProjection(unwrapped.expression, scope, null);
-    if (bindingBehaviorProjectsThroughValueConverter(unwrapped)) {
+    const projectedConverter = reached
+      ? this.expressionResourcePlan.readProjectedConverterForBindingBehavior(unwrapped)
+      : null;
+    if (projectedConverter != null) {
       const projectedInput = this.projectAstBindEffects(
         unwrapped.expression,
         behaviorScope.scope,
@@ -121,7 +128,12 @@ export class RuntimeBindingExpressionScopeProjector {
         sourceAddressHandle,
       );
       return new RuntimeBindingExpressionScopeProjection(
-        bindingBehaviorValueConverterProjection(unwrapped, projectedInput.expression as IsValueConverter),
+        new ValueConverterExpression(
+          projectedConverter.expression.span,
+          projectedInput.expression as IsValueConverter,
+          projectedConverter.expression.name,
+          projectedConverter.expression.args,
+        ),
         projectedInput.scope,
         behaviorScope.openReason ?? projectedInput.openReason,
       );

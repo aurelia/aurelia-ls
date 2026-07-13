@@ -224,7 +224,13 @@ import type {
   RuntimeValueConverterApplicationPhase,
   RuntimeValueConverterIssuePhase,
 } from '../template/runtime-value-converter.js';
-import type { RuntimeExpressionResourceBindReachability } from '../template/runtime-expression-resource.js';
+import type {
+  RuntimeExpressionResourceApplicationOrigin,
+  RuntimeExpressionResourceBindReachability,
+  RuntimeExpressionResourceLifecycleEffectKind,
+  RuntimeExpressionResourcePhaseReachability,
+  RuntimeExpressionResourceValueState,
+} from '../template/runtime-expression-resource.js';
 import type { RuntimeBindingIssuePhase } from '../template/runtime-binding-issue.js';
 import type { RuntimeBindingScopeIssuePhase } from '../template/runtime-binding-scope-issue.js';
 import type { RuntimeControllerIssuePhase } from '../template/runtime-controller-issue.js';
@@ -4448,22 +4454,50 @@ export interface SemanticTemplateResourceReferenceRow {
   };
 }
 
+export interface SemanticExpressionResourceSignalRow {
+  readonly name: string;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticExpressionResourceLifecycleEffectsRow {
+  readonly effectKinds: readonly (
+    RuntimeExpressionResourceLifecycleEffectKind | `${RuntimeExpressionResourceLifecycleEffectKind}`
+  )[];
+  readonly signalState: RuntimeExpressionResourceValueState | `${RuntimeExpressionResourceValueState}`;
+  readonly signals: readonly SemanticExpressionResourceSignalRow[];
+  readonly rateLimitDelayMilliseconds: number | null;
+  readonly rateLimitDelayState: RuntimeExpressionResourceValueState | `${RuntimeExpressionResourceValueState}` | null;
+  readonly configurationSource: SemanticSourceReference | null;
+  readonly openReason: string | null;
+  readonly handles?: {
+    readonly configurationSourceAddressHandle: AddressHandle | null;
+  };
+}
+
 export interface SemanticBindingBehaviorApplicationRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
   readonly behaviorName: string;
   readonly resource: SemanticTemplateResourceReferenceRow | null;
   readonly phase: RuntimeBindingBehaviorApplicationPhase | `${RuntimeBindingBehaviorApplicationPhase}`;
+  readonly origin: RuntimeExpressionResourceApplicationOrigin | `${RuntimeExpressionResourceApplicationOrigin}`;
   readonly argumentCount: number;
   readonly staticArgumentValues: readonly string[];
   /** Interpolation-hole identity; zero for ordinary binding expressions. */
   readonly chainIndex: number;
-  /** Structural depth among all expression-resource wrappers, outermost first. */
-  readonly chainDepth: number;
+  /** Depth in the authored expression-resource chain. */
+  readonly authoredChainDepth: number;
+  /** Depth in the effective runtime chain after reached behavior projections. */
+  readonly runtimeChainDepth: number;
   readonly bindReachability: RuntimeExpressionResourceBindReachability | `${RuntimeExpressionResourceBindReachability}`;
+  readonly phaseReachability: RuntimeExpressionResourcePhaseReachability | `${RuntimeExpressionResourcePhaseReachability}`;
   readonly bindOrder: number | null;
   /** Nominal order within the binding-behavior bind phase. */
   readonly phaseOrder: number | null;
+  readonly lifecycleEffects: SemanticExpressionResourceLifecycleEffectsRow;
   readonly argumentSources: readonly (SemanticSourceReference | null)[];
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;
@@ -4487,15 +4521,20 @@ export interface SemanticValueConverterApplicationRow {
   readonly converterName: string;
   readonly resource: SemanticTemplateResourceReferenceRow | null;
   readonly phase: RuntimeValueConverterApplicationPhase | `${RuntimeValueConverterApplicationPhase}`;
+  readonly origin: RuntimeExpressionResourceApplicationOrigin | `${RuntimeExpressionResourceApplicationOrigin}`;
   readonly argumentCount: number;
   /** Interpolation-hole identity; zero for ordinary binding expressions. */
   readonly chainIndex: number;
-  /** Structural depth among all expression-resource wrappers, outermost first. */
-  readonly chainDepth: number;
+  /** Depth in the authored expression-resource chain, or null for a bind-time projection. */
+  readonly authoredChainDepth: number | null;
+  /** Depth in the effective runtime chain after reached behavior projections. */
+  readonly runtimeChainDepth: number;
   readonly bindReachability: RuntimeExpressionResourceBindReachability | `${RuntimeExpressionResourceBindReachability}`;
+  readonly phaseReachability: RuntimeExpressionResourcePhaseReachability | `${RuntimeExpressionResourcePhaseReachability}`;
   readonly bindOrder: number | null;
   /** Nominal execution order within this converter phase. */
   readonly phaseOrder: number | null;
+  readonly lifecycleEffects: SemanticExpressionResourceLifecycleEffectsRow;
   readonly argumentSources: readonly (SemanticSourceReference | null)[];
   readonly source: SemanticSourceReference | null;
   readonly handles?: {

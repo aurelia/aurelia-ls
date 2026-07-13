@@ -15,7 +15,7 @@ import {
   type RuntimeBinding,
 } from '../template/runtime-binding.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
-import type { RuntimeBindingBehaviorPlan } from '../template/runtime-binding-behavior-plan.js';
+import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { TemplateScopeConstructionEmission } from '../template/template-controller-scope-materializer.js';
 import {
@@ -66,7 +66,7 @@ export interface RuntimeControllerDefinitionReference {
 
 export interface RuntimeBindingSourceValueRuntimeAnalysis {
   readonly runtimeRendering: RuntimeRenderingEmission;
-  readonly bindingBehaviorPlan: RuntimeBindingBehaviorPlan;
+  readonly expressionResourcePlan: RuntimeExpressionResourcePlan;
   readonly controllerBind: RuntimeControllerBindEmission;
   readonly scopes: TemplateScopeConstructionEmission;
   readonly expressionWorld: CheckerExpressionTypeWorld;
@@ -323,7 +323,11 @@ function boundControllerValuesForRuntimeAnalysis(
   const controllersByProductHandle = new Map(analysis.runtimeRendering.controllers
     .map((controller) => [controller.productHandle, controller]));
   const scopes = instructionScopeLookup(analysis.scopes.instructionScopes);
-  const sourceBindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(store, analysis.expressionWorld);
+  const sourceBindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
+    store,
+    analysis.expressionWorld,
+    analysis.expressionResourcePlan,
+  );
   const values: RuntimeBoundControllerPropertyValue[] = [];
   for (const targetAccess of analysis.controllerBind.targetAccesses) {
     if (
@@ -336,7 +340,7 @@ function boundControllerValuesForRuntimeAnalysis(
     const binding = bindingsByProductHandle.get(targetAccess.binding.productHandle) ?? null;
     const expressionProductHandle = sourceExpressionProductHandleForBoundControllerBinding(
       binding,
-      analysis.bindingBehaviorPlan,
+      analysis.expressionResourcePlan,
     );
     if (binding == null || expressionProductHandle === undefined || !isRuntimeExpressionBinding(binding)) {
       continue;
@@ -388,10 +392,10 @@ function controllerDefinitionsForRuntimeRendering(
 
 function sourceExpressionProductHandleForBoundControllerBinding(
   binding: RuntimeBinding | null,
-  bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
+  expressionResourcePlan: RuntimeExpressionResourcePlan,
 ): ProductHandle | null | undefined {
   if (binding instanceof PropertyBinding) {
-    return propertyBindingCarriesSourceToTarget(binding, bindingBehaviorPlan)
+    return propertyBindingCarriesSourceToTarget(binding, expressionResourcePlan)
       ? binding.expressionProductHandle
       : undefined;
   }
@@ -403,9 +407,9 @@ function sourceExpressionProductHandleForBoundControllerBinding(
 
 function propertyBindingCarriesSourceToTarget(
   binding: PropertyBinding,
-  bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
+  expressionResourcePlan: RuntimeExpressionResourcePlan,
 ): boolean {
-  switch (bindingBehaviorPlan.effectivePropertyBindingMode(binding)) {
+  switch (expressionResourcePlan.effectivePropertyBindingMode(binding)) {
     case TemplateBindingMode.OneTime:
     case TemplateBindingMode.ToView:
     case TemplateBindingMode.TwoWay:

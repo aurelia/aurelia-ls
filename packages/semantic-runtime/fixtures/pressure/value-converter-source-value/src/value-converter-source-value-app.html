@@ -6,6 +6,12 @@
   <section repeat.for="dynamicFeatured of products | dynamicContextProducts">
     <span>${dynamicFeatured.id}</span>
   </section>
+  <section repeat.for="importedSignalProduct of products | importedSignalProducts">
+    <span>${importedSignalProduct.id}</span>
+  </section>
+  <section repeat.for="openSignalProduct of products | openSignalProducts">
+    <span>${openSignalProduct.id}</span>
+  </section>
   <section repeat.for="fallbackProduct of maybeCatalog.products || fallbackProducts">
     <span>${fallbackProduct.label}</span>
   </section>

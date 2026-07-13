@@ -16,6 +16,9 @@ export class LifecycleValueTarget {
 export class ObservationBindingLifecycleApp {
   message = 'Lifecycle';
   eventName = 'blur';
+  rateLimitDelay = 250;
   reachedChildValue = 'Reached';
   blockedChildValue = 'Blocked';
+
+  handleClick(_event: Event): void {}
 }

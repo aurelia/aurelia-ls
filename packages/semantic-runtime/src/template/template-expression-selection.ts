@@ -165,7 +165,11 @@ export function bindingSourceContextProjectionForTemplateExpressionParseAtOffset
   const bindings = ambientScope == null
     ? runtimeExpressionBindingsForTemplateExpressionParse(resource, expressionParse)
     : runtimeExpressionBindingsForTemplateExpressionParseInScope(resource, expressionParse, ambientScope);
-  const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(store, expressionWorld);
+  const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
+    store,
+    expressionWorld,
+    resource.runtimeAnalysis.expressionResourcePlan,
+  );
   const selection = selectRuntimeBindingSourceContextProjection({
     bindings,
     expression,

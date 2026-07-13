@@ -81,13 +81,13 @@ function resourceOccurrencesForChain(
   return [];
 }
 
-function isBindingBehaviorOccurrence(
+export function isBindingBehaviorOccurrence(
   occurrence: ExpressionResourceOccurrence,
 ): occurrence is ExpressionResourceOccurrence<BindingBehaviorExpression> {
   return occurrence.expression instanceof BindingBehaviorExpression;
 }
 
-function isValueConverterOccurrence(
+export function isValueConverterOccurrence(
   occurrence: ExpressionResourceOccurrence,
 ): occurrence is ExpressionResourceOccurrence<ValueConverterExpression> {
   return occurrence.expression instanceof ValueConverterExpression;

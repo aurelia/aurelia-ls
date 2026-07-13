@@ -3,6 +3,10 @@ import {
   type ICallerContext,
   valueConverter,
 } from '@aurelia/runtime-html';
+import {
+  runtimeConverterSignals,
+  sharedConverterSignals,
+} from './converter-signals';
 import template from './value-converter-source-value-app.html';
 
 export interface SourceValueProduct {
@@ -13,6 +17,8 @@ export interface SourceValueProduct {
 
 @valueConverter('featuredProducts')
 export class FeaturedProductsValueConverter {
+  readonly signals = ['featured-refresh'];
+
   toView(products: readonly SourceValueProduct[]): readonly SourceValueProduct[] {
     return products.filter((product) => product.featured);
   }
@@ -29,10 +35,33 @@ export class DynamicContextProductsValueConverter {
   }
 }
 
+@valueConverter('importedSignalProducts')
+export class ImportedSignalProductsValueConverter {
+  readonly signals = ['local-refresh', ...sharedConverterSignals];
+
+  toView(products: readonly SourceValueProduct[]): readonly SourceValueProduct[] {
+    return products;
+  }
+}
+
+@valueConverter('openSignalProducts')
+export class OpenSignalProductsValueConverter {
+  readonly signals = ['known-refresh', ...runtimeConverterSignals];
+
+  toView(products: readonly SourceValueProduct[]): readonly SourceValueProduct[] {
+    return products;
+  }
+}
+
 @customElement({
   name: 'value-converter-source-value-app',
   template,
-  dependencies: [FeaturedProductsValueConverter, DynamicContextProductsValueConverter],
+  dependencies: [
+    DynamicContextProductsValueConverter,
+    FeaturedProductsValueConverter,
+    ImportedSignalProductsValueConverter,
+    OpenSignalProductsValueConverter,
+  ],
   strict: false,
 })
 export class ValueConverterSourceValueApp {

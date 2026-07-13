@@ -4355,16 +4355,16 @@
               "name": "value converter applications",
               "query": { "kind": "value-converter-applications", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "converterName": "formatName" }, "source": { "marker": "${title | formatName}", "token": "formatName" }, "count": 1 },
-                { "fields": { "converterName": "fmtName" }, "source": { "marker": "${title | fmtName}", "token": "fmtName" }, "count": 1 }
+                { "fields": { "converterName": "formatName", "phase": "bind" }, "source": { "marker": "${title | formatName}", "token": "formatName" }, "count": 1 },
+                { "fields": { "converterName": "fmtName", "phase": "bind" }, "source": { "marker": "${title | fmtName}", "token": "fmtName" }, "count": 1 }
               ]
             },
             {
               "name": "binding behavior applications",
               "query": { "kind": "binding-behavior-applications", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "behaviorName": "trackEdit" }, "source": { "marker": "title & trackEdit", "token": "trackEdit" }, "count": 1 },
-                { "fields": { "behaviorName": "track" }, "source": { "marker": "title & track\"", "token": "track" }, "count": 1 }
+                { "fields": { "behaviorName": "trackEdit", "phase": "bind" }, "source": { "marker": "title & trackEdit", "token": "trackEdit" }, "count": 1 },
+                { "fields": { "behaviorName": "track", "phase": "bind" }, "source": { "marker": "title & track\"", "token": "track" }, "count": 1 }
               ]
             }
           ]
@@ -4376,16 +4376,16 @@
               "name": "value converter applications",
               "query": { "kind": "value-converter-applications", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "converterName": "formatName", "resource.resourceKind": "value-converter", "resource.name": "formatName" }, "source": { "marker": "${title | formatName}", "token": "formatName" }, "count": 1 },
-                { "fields": { "converterName": "fmtName", "resource.resourceKind": "value-converter", "resource.name": "formatName" }, "source": { "marker": "${title | fmtName}", "token": "fmtName" }, "count": 1 }
+                { "fields": { "converterName": "formatName", "phase": "bind", "resource.resourceKind": "value-converter", "resource.name": "formatName" }, "source": { "marker": "${title | formatName}", "token": "formatName" }, "count": 1 },
+                { "fields": { "converterName": "fmtName", "phase": "bind", "resource.resourceKind": "value-converter", "resource.name": "formatName" }, "source": { "marker": "${title | fmtName}", "token": "fmtName" }, "count": 1 }
               ]
             },
             {
               "name": "binding behavior applications",
               "query": { "kind": "binding-behavior-applications", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "behaviorName": "trackEdit", "resource.resourceKind": "binding-behavior", "resource.name": "trackEdit" }, "source": { "marker": "title & trackEdit", "token": "trackEdit" }, "count": 1 },
-                { "fields": { "behaviorName": "track", "resource.resourceKind": "binding-behavior", "resource.name": "trackEdit" }, "source": { "marker": "title & track\"", "token": "track" }, "count": 1 }
+                { "fields": { "behaviorName": "trackEdit", "phase": "bind", "resource.resourceKind": "binding-behavior", "resource.name": "trackEdit" }, "source": { "marker": "title & trackEdit", "token": "trackEdit" }, "count": 1 },
+                { "fields": { "behaviorName": "track", "phase": "bind", "resource.resourceKind": "binding-behavior", "resource.name": "trackEdit" }, "source": { "marker": "title & track\"", "token": "track" }, "count": 1 }
               ]
             }
           ]
@@ -4861,14 +4861,14 @@
               "name": "value converter applications",
               "query": { "kind": "value-converter-applications", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "converterName": "shared", "resource.resourceKind": "value-converter", "resource.name": "shared" }, "source": { "marker": "message | shared", "token": "shared" }, "count": 1 }
+                { "fields": { "converterName": "shared", "phase": "bind", "resource.resourceKind": "value-converter", "resource.name": "shared" }, "source": { "marker": "message | shared", "token": "shared" }, "count": 1 }
               ]
             },
             {
               "name": "binding behavior applications",
               "query": { "kind": "binding-behavior-applications", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "behaviorName": "shared", "resource.resourceKind": "binding-behavior", "resource.name": "shared" }, "source": { "marker": "& shared}", "token": "shared" }, "count": 1 }
+                { "fields": { "behaviorName": "shared", "phase": "bind", "resource.resourceKind": "binding-behavior", "resource.name": "shared" }, "source": { "marker": "& shared}", "token": "shared" }, "count": 1 }
               ]
             }
           ]
@@ -14078,21 +14078,27 @@
               "name": "converter applications",
               "query": { "kind": "value-converter-applications", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "converterName": "numberText", "phase": "to-view", "chainDepth": 1, "bindReachability": "reached", "bindOrder": 1, "phaseOrder": 0 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "numberText" }, "count": 1 },
-                { "fields": { "converterName": "textLength", "phase": "to-view", "chainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 1 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "textLength" }, "count": 1 },
-                { "fields": { "converterName": "textLength", "phase": "from-view", "chainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "value.two-way=\"count | numberText:prefix | textLength\"", "token": "textLength" }, "count": 1 },
-                { "fields": { "converterName": "numberText", "phase": "from-view", "chainDepth": 1, "bindReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "value.two-way=\"count | numberText:prefix | textLength\"", "token": "numberText" }, "count": 1 }
+                { "fields": { "converterName": "textLength", "phase": "bind", "origin": "authored", "authoredChainDepth": 0, "runtimeChainDepth": 0, "phaseReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "textLength" }, "count": 1 },
+                { "fields": { "converterName": "numberText", "phase": "bind", "origin": "authored", "authoredChainDepth": 1, "runtimeChainDepth": 1, "phaseReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "numberText" }, "count": 1 },
+                { "fields": { "converterName": "numberText", "phase": "to-view", "authoredChainDepth": 1, "runtimeChainDepth": 1, "bindReachability": "reached", "bindOrder": 1, "phaseOrder": 0 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "numberText" }, "count": 1 },
+                { "fields": { "converterName": "textLength", "phase": "to-view", "authoredChainDepth": 0, "runtimeChainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 1 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "textLength" }, "count": 1 },
+                { "fields": { "converterName": "textLength", "phase": "unbind", "phaseReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "textLength" }, "count": 1 },
+                { "fields": { "converterName": "numberText", "phase": "unbind", "phaseReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "numberText" }, "count": 1 },
+                { "fields": { "converterName": "textLength", "phase": "from-view", "authoredChainDepth": 0, "runtimeChainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "value.two-way=\"count | numberText:prefix | textLength\"", "token": "textLength" }, "count": 1 },
+                { "fields": { "converterName": "numberText", "phase": "from-view", "authoredChainDepth": 1, "runtimeChainDepth": 1, "bindReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "value.two-way=\"count | numberText:prefix | textLength\"", "token": "numberText" }, "count": 1 }
               ]
             },
             {
               "name": "behavior applications",
               "query": { "kind": "binding-behavior-applications", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "behaviorName": "outerAudit", "chainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "innerAudit:'inner' & outerAudit:'outer'", "token": "outerAudit" }, "count": 1 },
-                { "fields": { "behaviorName": "innerAudit", "chainDepth": 1, "bindReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "innerAudit:'inner' & outerAudit:'outer'", "token": "innerAudit" }, "count": 1 },
-                { "fields": { "behaviorName": "typedAudit", "argumentCount": 2 }, "source": { "marker": "typedAudit:'view':limit", "token": "typedAudit" }, "sourceField": "source", "count": 1 },
-                { "fields": { "behaviorName": "typedAudit" }, "source": { "marker": "typedAudit:'view':limit", "token": "'view'" }, "sourceField": "argumentSources.0", "count": 1 },
-                { "fields": { "behaviorName": "typedAudit" }, "source": { "marker": "typedAudit:'view':limit", "token": "limit" }, "sourceField": "argumentSources.1", "count": 1 }
+                { "fields": { "behaviorName": "outerAudit", "phase": "bind", "authoredChainDepth": 0, "runtimeChainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "innerAudit:'inner' & outerAudit:'outer'", "token": "outerAudit" }, "count": 1 },
+                { "fields": { "behaviorName": "innerAudit", "phase": "bind", "authoredChainDepth": 1, "runtimeChainDepth": 1, "bindReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "innerAudit:'inner' & outerAudit:'outer'", "token": "innerAudit" }, "count": 1 },
+                { "fields": { "behaviorName": "outerAudit", "phase": "unbind", "phaseReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "innerAudit:'inner' & outerAudit:'outer'", "token": "outerAudit" }, "count": 1 },
+                { "fields": { "behaviorName": "innerAudit", "phase": "unbind", "phaseReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "innerAudit:'inner' & outerAudit:'outer'", "token": "innerAudit" }, "count": 1 },
+                { "fields": { "behaviorName": "typedAudit", "phase": "bind", "argumentCount": 2 }, "source": { "marker": "typedAudit:'view':limit", "token": "typedAudit" }, "sourceField": "source", "count": 1 },
+                { "fields": { "behaviorName": "typedAudit", "phase": "bind" }, "source": { "marker": "typedAudit:'view':limit", "token": "'view'" }, "sourceField": "argumentSources.0", "count": 1 },
+                { "fields": { "behaviorName": "typedAudit", "phase": "bind" }, "source": { "marker": "typedAudit:'view':limit", "token": "limit" }, "sourceField": "argumentSources.1", "count": 1 }
               ]
             }
           ]
@@ -14121,23 +14127,35 @@
               "name": "blocked inner behavior attempt",
               "query": { "kind": "binding-behavior-applications", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "behaviorName": "missingBehavior", "chainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "innerAudit:'inner' & missingBehavior", "token": "missingBehavior" }, "count": 1 },
-                { "fields": { "behaviorName": "innerAudit", "chainDepth": 1, "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "innerAudit:'inner' & missingBehavior", "token": "innerAudit" }, "count": 1 }
+                { "fields": { "behaviorName": "missingBehavior", "phase": "bind", "authoredChainDepth": 0, "runtimeChainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "innerAudit:'inner' & missingBehavior", "token": "missingBehavior" }, "count": 1 },
+                { "fields": { "behaviorName": "innerAudit", "phase": "bind", "authoredChainDepth": 1, "runtimeChainDepth": 1, "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "innerAudit:'inner' & missingBehavior", "token": "innerAudit" }, "count": 1 },
+                { "fields": { "behaviorName": "missingBehavior", "phase": "unbind", "phaseReachability": "blocked-by-bind-failure", "phaseOrder": null }, "source": { "marker": "innerAudit:'inner' & missingBehavior", "token": "missingBehavior" }, "count": 1 },
+                { "fields": { "behaviorName": "innerAudit", "phase": "unbind", "phaseReachability": "blocked-by-outer-failure", "phaseOrder": null }, "source": { "marker": "innerAudit:'inner' & missingBehavior", "token": "innerAudit" }, "count": 1 }
               ]
             },
             {
               "name": "blocked inner converter attempt",
               "query": { "kind": "value-converter-applications", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "converterName": "missingConverter", "chainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": null }, "source": { "marker": "numberText:prefix | missingConverter", "token": "missingConverter" }, "count": 1 },
-                { "fields": { "converterName": "numberText", "chainDepth": 1, "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "numberText:prefix | missingConverter", "token": "numberText" }, "count": 1 }
+                { "fields": { "converterName": "missingConverter", "phase": "bind", "authoredChainDepth": 0, "runtimeChainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "numberText:prefix | missingConverter", "token": "missingConverter" }, "count": 1 },
+                { "fields": { "converterName": "numberText", "phase": "bind", "authoredChainDepth": 1, "runtimeChainDepth": 1, "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "numberText:prefix | missingConverter", "token": "numberText" }, "count": 1 },
+                { "fields": { "converterName": "missingConverter", "phase": "to-view", "phaseReachability": "blocked-by-bind-failure", "phaseOrder": null }, "source": { "marker": "numberText:prefix | missingConverter", "token": "missingConverter" }, "count": 1 },
+                { "fields": { "converterName": "numberText", "phase": "to-view", "phaseReachability": "blocked-by-outer-failure", "phaseOrder": null }, "source": { "marker": "numberText:prefix | missingConverter", "token": "numberText" }, "count": 1 },
+                { "fields": { "converterName": "missingConverter", "phase": "unbind", "phaseReachability": "blocked-by-bind-failure", "phaseOrder": null }, "source": { "marker": "numberText:prefix | missingConverter", "token": "missingConverter" }, "count": 1 },
+                { "fields": { "converterName": "numberText", "phase": "unbind", "phaseReachability": "blocked-by-outer-failure", "phaseOrder": null }, "source": { "marker": "numberText:prefix | missingConverter", "token": "numberText" }, "count": 1 },
+                { "fields": { "converterName": "sanitize", "phase": "bind", "authoredChainDepth": 0, "runtimeChainDepth": 0, "bindReachability": "reached", "phaseReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "missingConverter | sanitize", "token": "sanitize" }, "count": 1 },
+                { "fields": { "converterName": "missingConverter", "phase": "bind", "authoredChainDepth": 1, "runtimeChainDepth": 1, "bindReachability": "reached", "phaseReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "missingConverter | sanitize", "token": "missingConverter" }, "count": 1 },
+                { "fields": { "converterName": "sanitize", "phase": "to-view", "phaseReachability": "blocked-by-bind-failure", "phaseOrder": null }, "source": { "marker": "missingConverter | sanitize", "token": "sanitize" }, "count": 1 },
+                { "fields": { "converterName": "missingConverter", "phase": "to-view", "phaseReachability": "blocked-by-bind-failure", "phaseOrder": null }, "source": { "marker": "missingConverter | sanitize", "token": "missingConverter" }, "count": 1 }
               ]
             },
             {
               "name": "behavior failure blocks inner converter application",
               "query": { "kind": "value-converter-applications", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "converterName": "numberText", "chainDepth": 1, "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "numberText:prefix & missingBehavior", "token": "numberText" }, "count": 1 }
+                { "fields": { "converterName": "numberText", "phase": "bind", "authoredChainDepth": 1, "runtimeChainDepth": 1, "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "numberText:prefix & missingBehavior", "token": "numberText" }, "count": 1 },
+                { "fields": { "converterName": "numberText", "phase": "to-view", "phaseReachability": "blocked-by-outer-failure", "phaseOrder": null }, "source": { "marker": "numberText:prefix & missingBehavior", "token": "numberText" }, "count": 1 },
+                { "fields": { "converterName": "numberText", "phase": "unbind", "phaseReachability": "blocked-by-outer-failure", "phaseOrder": null }, "source": { "marker": "numberText:prefix & missingBehavior", "token": "numberText" }, "count": 1 }
               ]
             }
           ]
@@ -14153,8 +14171,95 @@
               "rows": [
                 { "fields": { "diagnosticKind": "runtime-binding-behavior-framework-error", "frameworkErrorCode": "AUR0102" }, "source": { "marker": "innerAudit:'first' & innerAudit:'second'", "token": "innerAudit", "occurrence": 1 }, "count": 1 },
                 { "fields": { "diagnosticKind": "runtime-value-converter-framework-error", "frameworkErrorCode": "AUR0103" }, "source": { "marker": "${count | missingConverter}", "token": "missingConverter" }, "count": 1 },
+                { "fields": { "diagnosticKind": "runtime-value-converter-framework-error", "frameworkErrorCode": "AUR0103" }, "source": { "marker": "missingConverter | sanitize", "token": "missingConverter" }, "count": 1 },
+                { "fields": { "diagnosticKind": "runtime-value-converter-framework-error", "frameworkErrorCode": "AUR0099" }, "source": { "marker": "missingConverter | sanitize", "token": "sanitize" }, "absent": true },
                 { "fields": { "diagnosticKind": "runtime-binding-behavior-framework-error", "frameworkErrorCode": "AUR0101" }, "source": { "marker": "${item.label & missingBehavior}", "token": "missingBehavior" }, "count": 1 },
                 { "fields": { "diagnosticKind": "expression-parse-error", "frameworkErrorCode": "AUR0156" }, "source": { "marker": "typedAudit:'reverse':limit | numberText", "token": "|" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "value-converter-observation-lifecycle",
+      "fixture": "fixtures/pressure/value-converter-source-value",
+      "aureliaDomain": "observation-data-flow",
+      "capability": "expression-resource-lifecycle",
+      "domainAxis": "runtime-lifecycle",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/value-converter-source-value-app.html",
+      "requirement": "App-owned value-converter signal subscriptions retain exact bind and unbind reachability, closed or open signal state, and per-signal authored provenance.",
+      "cases": [
+        {
+          "id": "app-converter-signals-preserve-lifecycle-and-provenance",
+          "expectations": [
+            {
+              "name": "converter signal lifecycle",
+              "query": { "kind": "value-converter-applications", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "converterName": "featuredProducts", "phase": "bind", "origin": "authored", "authoredChainDepth": 0, "runtimeChainDepth": 0, "phaseReachability": "reached", "lifecycleEffects.effectKinds": ["signal-subscription"], "lifecycleEffects.signalState": "closed", "lifecycleEffects.signals.0.name": "featured-refresh" }, "source": { "marker": "products | featuredProducts", "token": "featuredProducts" }, "count": 1 },
+                { "fields": { "converterName": "featuredProducts", "phase": "unbind", "phaseReachability": "reached", "lifecycleEffects.effectKinds": ["signal-subscription"], "lifecycleEffects.signalState": "closed" }, "source": { "marker": "products | featuredProducts", "token": "featuredProducts" }, "count": 1 },
+                { "fields": { "converterName": "dynamicContextProducts", "phase": "bind", "lifecycleEffects.effectKinds": [], "lifecycleEffects.signalState": "absent", "lifecycleEffects.openReason": null }, "source": { "marker": "products | dynamicContextProducts", "token": "dynamicContextProducts" }, "count": 1 },
+                { "fields": { "converterName": "importedSignalProducts", "phase": "bind", "lifecycleEffects.effectKinds": ["signal-subscription"], "lifecycleEffects.signalState": "closed", "lifecycleEffects.signals.0.name": "local-refresh", "lifecycleEffects.signals.1.name": "catalog-refresh", "lifecycleEffects.signals.2.name": "catalog-theme", "lifecycleEffects.openReason": null }, "source": { "marker": "products | importedSignalProducts", "token": "importedSignalProducts" }, "count": 1 },
+                { "fields": { "converterName": "importedSignalProducts", "phase": "unbind", "phaseReachability": "reached", "lifecycleEffects.signalState": "closed" }, "source": { "marker": "products | importedSignalProducts", "token": "importedSignalProducts" }, "count": 1 },
+                { "fields": { "converterName": "openSignalProducts", "phase": "bind", "lifecycleEffects.effectKinds": ["signal-subscription"], "lifecycleEffects.signalState": "open", "lifecycleEffects.signals.0.name": "known-refresh", "lifecycleEffects.openReason": "The signals array may contain additional runtime elements." }, "source": { "marker": "products | openSignalProducts", "token": "openSignalProducts" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "converter signal source precision",
+              "query": { "kind": "value-converter-applications", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "converterName": "featuredProducts", "phase": "bind" }, "sourceField": "lifecycleEffects.configurationSource", "source": { "sourceFile": "src/value-converter-source-value-app.ts", "marker": "readonly signals = ['featured-refresh']", "token": "signals" }, "count": 1 },
+                { "fields": { "converterName": "featuredProducts", "phase": "bind" }, "sourceField": "lifecycleEffects.signals.0.source", "source": { "sourceFile": "src/value-converter-source-value-app.ts", "marker": "readonly signals = ['featured-refresh']", "token": "featured-refresh" }, "count": 1 },
+                { "fields": { "converterName": "importedSignalProducts", "phase": "bind" }, "sourceField": "lifecycleEffects.configurationSource", "source": { "sourceFile": "src/value-converter-source-value-app.ts", "marker": "readonly signals = ['local-refresh', ...sharedConverterSignals]", "token": "signals" }, "count": 1 },
+                { "fields": { "converterName": "importedSignalProducts", "phase": "bind" }, "sourceField": "lifecycleEffects.signals.0.source", "source": { "sourceFile": "src/value-converter-source-value-app.ts", "marker": "readonly signals = ['local-refresh', ...sharedConverterSignals]", "token": "local-refresh" }, "count": 1 },
+                { "fields": { "converterName": "importedSignalProducts", "phase": "bind" }, "sourceField": "lifecycleEffects.signals.1.source", "source": { "sourceFile": "src/converter-signals.ts", "marker": "['catalog-refresh', 'catalog-theme']", "token": "catalog-refresh" }, "count": 1 },
+                { "fields": { "converterName": "importedSignalProducts", "phase": "bind" }, "sourceField": "lifecycleEffects.signals.2.source", "source": { "sourceFile": "src/converter-signals.ts", "marker": "['catalog-refresh', 'catalog-theme']", "token": "catalog-theme" }, "count": 1 },
+                { "fields": { "converterName": "openSignalProducts", "phase": "bind" }, "sourceField": "lifecycleEffects.configurationSource", "source": { "sourceFile": "src/value-converter-source-value-app.ts", "marker": "readonly signals = ['known-refresh', ...runtimeConverterSignals]", "token": "signals" }, "count": 1 },
+                { "fields": { "converterName": "openSignalProducts", "phase": "bind" }, "sourceField": "lifecycleEffects.signals.0.source", "source": { "sourceFile": "src/value-converter-source-value-app.ts", "marker": "readonly signals = ['known-refresh', ...runtimeConverterSignals]", "token": "known-refresh" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "i18n-expression-resource-lifecycle",
+      "fixture": "fixtures/pressure/registered-plugin-capabilities",
+      "aureliaDomain": "observation-data-flow",
+      "capability": "expression-resource-lifecycle",
+      "domainAxis": "runtime-lifecycle",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/registered-plugin-capabilities-app.html",
+      "requirement": "I18n binding behaviors retain authored structural identity while their reached runtime converter projection participates in converter order, signal subscription, conversion, and teardown.",
+      "cases": [
+        {
+          "id": "authored-and-projected-i18n-converters-remain-distinct",
+          "expectations": [
+            {
+              "name": "authored behavior identity",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": " & t\"", "token": "t" } },
+              "equals": { "value.selectedDefinition.resourceKind": "binding-behavior", "value.selectedDefinition.name": "t" }
+            },
+            {
+              "name": "i18n behavior lifecycle",
+              "query": { "kind": "binding-behavior-applications", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "behaviorName": "t", "phase": "bind", "origin": "authored", "authoredChainDepth": 0, "runtimeChainDepth": 0, "bindOrder": 0, "phaseOrder": 0, "lifecycleEffects.effectKinds": ["expression-projection"] }, "source": { "marker": " & t\"", "token": "t" }, "count": 1 },
+                { "fields": { "behaviorName": "t", "phase": "unbind", "phaseReachability": "reached", "lifecycleEffects.effectKinds": [] }, "source": { "marker": " & t\"", "token": "t" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "i18n converter lifecycle",
+              "query": { "kind": "value-converter-applications", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "converterName": "t", "phase": "bind", "origin": "authored", "authoredChainDepth": 0, "runtimeChainDepth": 0, "lifecycleEffects.effectKinds": ["signal-subscription"], "lifecycleEffects.signalState": "closed", "lifecycleEffects.signals.0.name": "aurelia-translation-signal" }, "source": { "marker": " | t}", "token": "t" }, "count": 1 },
+                { "fields": { "converterName": "t", "phase": "bind", "origin": "binding-behavior-projection", "authoredChainDepth": null, "runtimeChainDepth": 1, "bindOrder": 1, "phaseOrder": 1, "lifecycleEffects.effectKinds": ["signal-subscription"], "lifecycleEffects.signals.0.name": "aurelia-translation-signal" }, "source": { "marker": " & t\"", "token": "t" }, "count": 1 },
+                { "fields": { "converterName": "t", "phase": "to-view", "origin": "binding-behavior-projection", "authoredChainDepth": null, "runtimeChainDepth": 1, "phaseReachability": "reached", "phaseOrder": 0, "lifecycleEffects.effectKinds": [] }, "source": { "marker": " & t\"", "token": "t" }, "count": 1 },
+                { "fields": { "converterName": "t", "phase": "unbind", "origin": "binding-behavior-projection", "authoredChainDepth": null, "runtimeChainDepth": 1, "phaseReachability": "reached", "phaseOrder": 1, "lifecycleEffects.effectKinds": ["signal-subscription"] }, "source": { "marker": " & t\"", "token": "t" }, "count": 1 }
               ]
             }
           ]
@@ -14179,11 +14284,11 @@
               "name": "binding behavior reachability",
               "query": { "kind": "binding-behavior-applications", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "behaviorName": "twoWay", "bindReachability": "reached", "bindOrder": 0 }, "source": { "marker": "value.to-view=\"message & twoWay\"", "token": "twoWay" }, "count": 1 },
-                { "fields": { "behaviorName": "self", "bindReachability": "reached", "bindOrder": 0 }, "source": { "marker": "value.to-view=\"message & twoWay & self\"", "token": "self" }, "count": 1 },
-                { "fields": { "behaviorName": "twoWay", "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "value.to-view=\"message & twoWay & self\"", "token": "twoWay" }, "count": 1 },
-                { "fields": { "behaviorName": "missingBehavior", "bindReachability": "reached", "bindOrder": 0, "resource": null }, "source": { "marker": "value.to-view=\"message & twoWay & missingBehavior\"", "token": "missingBehavior" }, "count": 1 },
-                { "fields": { "behaviorName": "twoWay", "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "value.to-view=\"message & twoWay & missingBehavior\"", "token": "twoWay" }, "count": 1 }
+                { "fields": { "behaviorName": "twoWay", "phase": "bind", "bindReachability": "reached", "bindOrder": 0 }, "source": { "marker": "value.to-view=\"message & twoWay\"", "token": "twoWay" }, "count": 1 },
+                { "fields": { "behaviorName": "self", "phase": "bind", "bindReachability": "reached", "bindOrder": 0 }, "source": { "marker": "value.to-view=\"message & twoWay & self\"", "token": "self" }, "count": 1 },
+                { "fields": { "behaviorName": "twoWay", "phase": "bind", "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "value.to-view=\"message & twoWay & self\"", "token": "twoWay" }, "count": 1 },
+                { "fields": { "behaviorName": "missingBehavior", "phase": "bind", "bindReachability": "reached", "bindOrder": 0, "resource": null }, "source": { "marker": "value.to-view=\"message & twoWay & missingBehavior\"", "token": "missingBehavior" }, "count": 1 },
+                { "fields": { "behaviorName": "twoWay", "phase": "bind", "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "value.to-view=\"message & twoWay & missingBehavior\"", "token": "twoWay" }, "count": 1 }
               ]
             },
             {
@@ -14244,6 +14349,51 @@
                 { "fields": { "targetProperty": "value", "lookup": "observer", "strategy": "value-attribute-observer", "nodeObserverConfig.eventNames": ["blur"], "authority": "binding-behavior" }, "source": { "marker": "value.to-view=\"message & updateTrigger:'blur' & twoWay\"", "token": "value.to-view=\"message & updateTrigger:'blur' & twoWay\"" }, "count": 1 },
                 { "fields": { "targetProperty": "value", "lookup": "observer", "strategy": "value-attribute-observer", "nodeObserverConfig.eventNames": [], "nodeObserverConfig.fieldStates.events": "open", "nodeObserverConfig.openReason": "Binding behavior target-observer event names depend on runtime expression values.", "authority": "binding-behavior", "openReason": null }, "source": { "marker": "value.to-view=\"message & updateTrigger:eventName & twoWay\"", "token": "value.to-view=\"message & updateTrigger:eventName & twoWay\"" }, "count": 1 },
                 { "fields": { "targetProperty": "value", "lookup": "accessor", "strategy": "data-attribute-accessor", "nodeObserverConfig": null, "authority": "binding-behavior" }, "source": { "marker": "value.to-view=\"message & attr\"", "token": "value.to-view=\"message & attr\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "behavior-subscription-rate-limit-and-teardown-effects",
+          "expectations": [
+            {
+              "name": "signal and listener lifecycle",
+              "query": { "kind": "binding-behavior-applications", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "behaviorName": "self", "phase": "bind", "phaseReachability": "reached", "lifecycleEffects.effectKinds": ["listener-self-filter"] }, "source": { "marker": "handleClick($event) & self", "token": "self" }, "count": 1 },
+                { "fields": { "behaviorName": "self", "phase": "unbind", "phaseReachability": "reached", "lifecycleEffects.effectKinds": ["listener-self-filter"] }, "source": { "marker": "handleClick($event) & self", "token": "self" }, "count": 1 },
+                { "fields": { "behaviorName": "signal", "phase": "bind", "phaseReachability": "reached", "lifecycleEffects.effectKinds": ["signal-subscription"], "lifecycleEffects.signalState": "closed", "lifecycleEffects.signals.0.name": "refresh", "lifecycleEffects.signals.1.name": "theme" }, "source": { "marker": "message & signal:'refresh':'theme'", "token": "signal" }, "count": 1 },
+                { "fields": { "behaviorName": "signal", "phase": "unbind", "phaseReachability": "reached", "lifecycleEffects.effectKinds": ["signal-subscription"], "lifecycleEffects.signalState": "closed" }, "source": { "marker": "message & signal:'refresh':'theme'", "token": "signal" }, "count": 1 },
+                { "fields": { "behaviorName": "signal", "phase": "bind", "lifecycleEffects.signalState": "open", "lifecycleEffects.signals": [], "lifecycleEffects.openReason": "One or more signal names depend on runtime expression values." }, "source": { "marker": "message & signal:eventName", "token": "signal" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "behavior signal source precision",
+              "query": { "kind": "binding-behavior-applications", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "behaviorName": "signal", "phase": "bind" }, "sourceField": "lifecycleEffects.signals.0.source", "source": { "marker": "signal:'refresh':'theme'", "token": "'refresh'" }, "count": 1 },
+                { "fields": { "behaviorName": "signal", "phase": "bind" }, "sourceField": "lifecycleEffects.signals.1.source", "source": { "marker": "signal:'refresh':'theme'", "token": "'theme'" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "rate-limit setup and disposal",
+              "query": { "kind": "binding-behavior-applications", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "behaviorName": "debounce", "phase": "bind", "lifecycleEffects.effectKinds": ["rate-limit"], "lifecycleEffects.signalState": "absent", "lifecycleEffects.rateLimitDelayMilliseconds": 200, "lifecycleEffects.rateLimitDelayState": "closed" }, "source": { "marker": "message & debounce\"", "token": "debounce" }, "count": 1 },
+                { "fields": { "behaviorName": "debounce", "phase": "bind", "lifecycleEffects.effectKinds": ["rate-limit", "signal-subscription"], "lifecycleEffects.signalState": "closed", "lifecycleEffects.signals.0.name": "search", "lifecycleEffects.signals.1.name": "refresh", "lifecycleEffects.rateLimitDelayMilliseconds": 350, "lifecycleEffects.rateLimitDelayState": "closed" }, "source": { "marker": "debounce:350:['search','refresh']", "token": "debounce" }, "count": 1 },
+                { "fields": { "behaviorName": "debounce", "phase": "unbind", "phaseReachability": "reached", "lifecycleEffects.effectKinds": ["rate-limit", "signal-subscription"], "lifecycleEffects.rateLimitDelayMilliseconds": 350 }, "source": { "marker": "debounce:350:['search','refresh']", "token": "debounce" }, "count": 1 },
+                { "fields": { "behaviorName": "throttle", "phase": "bind", "lifecycleEffects.effectKinds": ["rate-limit", "signal-subscription"], "lifecycleEffects.signalState": "closed", "lifecycleEffects.signals.0.name": "flush", "lifecycleEffects.rateLimitDelayMilliseconds": 125, "lifecycleEffects.rateLimitDelayState": "closed" }, "source": { "marker": "throttle:125:'flush'", "token": "throttle" }, "count": 1 },
+                { "fields": { "behaviorName": "debounce", "phase": "bind", "lifecycleEffects.signalState": "open", "lifecycleEffects.signals.0.name": "known", "lifecycleEffects.rateLimitDelayMilliseconds": null, "lifecycleEffects.rateLimitDelayState": "open", "lifecycleEffects.openReason": "The rate-limit delay depends on a runtime expression value. The rate-limit signal list contains runtime-dependent values." }, "source": { "marker": "debounce:rateLimitDelay:['known',eventName]", "token": "debounce" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "rate-limit signal source precision",
+              "query": { "kind": "binding-behavior-applications", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "behaviorName": "debounce", "phase": "bind" }, "sourceField": "lifecycleEffects.signals.0.source", "source": { "marker": "debounce:350:['search','refresh']", "token": "'search'" }, "count": 1 },
+                { "fields": { "behaviorName": "debounce", "phase": "bind" }, "sourceField": "lifecycleEffects.signals.1.source", "source": { "marker": "debounce:350:['search','refresh']", "token": "'refresh'" }, "count": 1 },
+                { "fields": { "behaviorName": "throttle", "phase": "bind" }, "sourceField": "lifecycleEffects.signals.0.source", "source": { "marker": "throttle:125:'flush'", "token": "'flush'" }, "count": 1 },
+                { "fields": { "behaviorName": "debounce", "phase": "bind" }, "sourceField": "lifecycleEffects.signals.0.source", "source": { "marker": "debounce:rateLimitDelay:['known',eventName]", "token": "'known'" }, "count": 1 }
               ]
             }
           ]

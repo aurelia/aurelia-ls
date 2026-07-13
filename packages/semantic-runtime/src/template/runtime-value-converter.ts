@@ -22,25 +22,36 @@ import type {
 } from './runtime-binding.js';
 import type { TemplateVisibleResourceReference } from './compiler-world-reference.js';
 import type { SourceSpan } from '../expression/source-span.js';
-import { RuntimeExpressionResourceBindReachability } from './runtime-expression-resource.js';
+import {
+  RuntimeExpressionResourceApplicationOrigin,
+  RuntimeExpressionResourceBindReachability,
+  RuntimeExpressionResourceLifecycleEffects,
+  RuntimeExpressionResourcePhaseReachability,
+} from './runtime-expression-resource.js';
 
 export const enum RuntimeValueConverterApplicationPhase {
+  Bind = 'bind',
   ToView = 'to-view',
   FromView = 'from-view',
+  Unbind = 'unbind',
 }
 
 export type RuntimeValueConverterApplicationField =
   | 'binding'
   | 'resource'
   | 'phase'
+  | 'origin'
   | 'converterName'
   | 'argumentCount'
   | 'expressionProductHandle'
   | 'chainIndex'
-  | 'chainDepth'
+  | 'authoredChainDepth'
+  | 'runtimeChainDepth'
   | 'bindReachability'
+  | 'phaseReachability'
   | 'bindOrder'
   | 'phaseOrder'
+  | 'lifecycleEffects'
   | 'argumentSpans'
   | 'source';
 
@@ -64,14 +75,18 @@ export class RuntimeValueConverterApplication {
     readonly binding: RuntimeBindingReference,
     readonly resource: TemplateVisibleResourceReference | null,
     readonly phase: RuntimeValueConverterApplicationPhase,
+    readonly origin: RuntimeExpressionResourceApplicationOrigin,
     readonly converterName: string,
     readonly argumentCount: number,
     readonly expressionProductHandle: ProductHandle,
     readonly chainIndex: number,
-    readonly chainDepth: number,
+    readonly authoredChainDepth: number | null,
+    readonly runtimeChainDepth: number,
     readonly bindReachability: RuntimeExpressionResourceBindReachability,
+    readonly phaseReachability: RuntimeExpressionResourcePhaseReachability,
     readonly bindOrder: number | null,
     readonly phaseOrder: number | null,
+    readonly lifecycleEffects: RuntimeExpressionResourceLifecycleEffects,
     readonly argumentSpans: readonly SourceSpan[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeValueConverterApplicationField>[] = [],

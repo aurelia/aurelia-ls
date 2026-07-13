@@ -8,6 +8,14 @@
   <input data-case="dynamic-update-trigger" value.to-view="message & updateTrigger:eventName & twoWay">
   <input data-case="attr-observer" value.to-view="message & attr">
 
+  <button data-case="listener-self" click.trigger="handleClick($event) & self">Self</button>
+  <p data-case="static-signals">${message & signal:'refresh':'theme'}</p>
+  <p data-case="dynamic-signal">${message & signal:eventName}</p>
+  <input data-case="debounce-default" value.bind="message & debounce">
+  <input data-case="debounce-explicit" value.bind="message & debounce:350:['search','refresh']">
+  <input data-case="throttle-explicit" value.bind="message & throttle:125:'flush'">
+  <input data-case="rate-limit-open" value.bind="message & debounce:rateLimitDelay:['known',eventName]">
+
   <lifecycle-value-target value.to-view="reachedChildValue & twoWay"></lifecycle-value-target>
   <p>${reachedChildValue}</p>
   <lifecycle-value-target value.to-view="blockedChildValue & twoWay & self"></lifecycle-value-target>

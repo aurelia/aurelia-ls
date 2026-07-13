@@ -3,6 +3,7 @@ import {
   EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
+import { SourceSpanRole } from '../kernel/address.js';
 import type {
   AddressHandle,
   EvidenceHandle,
@@ -22,25 +23,27 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
+import ts from 'typescript';
 import {
-  type ValueConverterExpression,
-} from '../expression/ast.js';
-import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+  EvaluationArrayValue,
+  EvaluationValueKind,
+  isEvaluationPrimitiveValue,
+  readEvaluationPrimitive,
+} from '../evaluation/values.js';
 import { BuiltInValueConverterName } from '../resources/built-in-resources.js';
 import type { Container } from '../di/container.js';
-import type { TemplateResourceScope } from './compiler-world.js';
-import { findVisibleTemplateResource } from './compiler-resource-lookup.js';
+import {
+  RuntimeBindingSourceValueEvaluator,
+  RuntimeValueConverterInstancePropertyReadState,
+} from '../observation/binding-source-value-evaluator.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
-import { bindingExpressionAstForProduct } from './expression-parse-product.js';
 import { TemplateProductDetails } from './product-details.js';
 import {
   PropertyBinding,
   type RuntimeBinding,
 } from './runtime-binding.js';
-import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-expression-products.js';
 import { appendRuntimeBindingProductValue } from './runtime-binding-product-index.js';
 import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
-import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import { TemplateBindingMode } from './instruction-ir.js';
 import {
   RuntimeValueConverterApplication,
@@ -52,20 +55,28 @@ import {
   type RuntimeValueConverterIssueDraft,
 } from './runtime-value-converter.js';
 import { RuntimeHtmlAstFrameworkErrorCode } from '../type-system/framework-error-code.js';
+import { sourceSpanEvidenceForSite } from '../kernel/source-address.js';
+import { sourceSpanRangeForNode } from '../resources/resource-source-address.js';
+import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import type {
+  RuntimeExpressionResourcePlan,
+  RuntimeValueConverterPlanEntry,
+} from './runtime-expression-resource-plan.js';
 import {
-  valueConverterResourceOccurrences,
-  type ExpressionResourceOccurrence,
-} from './expression-resource-occurrence.js';
-import type { RuntimeBindingBehaviorPlan } from './runtime-binding-behavior-plan.js';
-import { RuntimeExpressionResourceBindReachability } from './runtime-expression-resource.js';
+  RuntimeExpressionResourceBindReachability,
+  RuntimeExpressionResourceLifecycleEffectKind,
+  RuntimeExpressionResourceLifecycleEffects,
+  RuntimeExpressionResourcePhaseReachability,
+  RuntimeExpressionResourceSignal,
+  RuntimeExpressionResourceValueState,
+} from './runtime-expression-resource.js';
 
 export class RuntimeValueConverterMaterializationRequest {
   constructor(
     readonly localKey: string,
-    readonly runtimeRendering: RuntimeRenderingEmission,
     readonly container: Container,
-    readonly resourceScope: TemplateResourceScope | null,
-    readonly bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
+    readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
+    readonly sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   ) {}
 }
 
@@ -117,6 +128,13 @@ class RuntimeValueConverterPublication {
   ) {}
 }
 
+class RuntimeValueConverterLifecyclePublication {
+  constructor(
+    readonly effects: RuntimeExpressionResourceLifecycleEffects,
+    readonly records: readonly KernelStoreRecord[],
+  ) {}
+}
+
 /** Materializes runtime value-converter applications after renderer dispatch has selected runtime bindings. */
 export class RuntimeValueConverterMaterializer {
   private readonly sanitize = new SanitizeValueConverter();
@@ -147,53 +165,18 @@ export class RuntimeValueConverterMaterializer {
     const issues: RuntimeValueConverterIssue[] = [];
     const records: KernelStoreRecord[] = [...source.records];
 
-    input.runtimeRendering.bindings.forEach((binding, bindingIndex) => {
-      expressionProductHandlesForRuntimeBinding(binding).forEach((expressionProductHandle, expressionIndex) => {
-        const ast = bindingExpressionAstForProduct(this.store, expressionProductHandle);
-        if (ast == null) {
-          return;
-        }
-        const converters = valueConverterResourceOccurrences(ast);
-        const converterCounts = occurrenceCountsByChain(converters);
-        const converterIndexes = new Map<number, number>();
-        const blockerDepths = new Map<number, number>();
-        for (let converterIndex = 0; converterIndex < converters.length; converterIndex++) {
-          const occurrence = converters[converterIndex]!;
-          const converter = occurrence.expression;
-          const priorBehaviorFailureDepth = input.bindingBehaviorPlan.readFirstFailureDepth(
-            expressionProductHandle,
-            occurrence.chainIndex,
-          );
-          if (priorBehaviorFailureDepth != null) {
-            blockerDepths.set(
-              occurrence.chainIndex,
-              Math.min(blockerDepths.get(occurrence.chainIndex) ?? Number.POSITIVE_INFINITY, priorBehaviorFailureDepth),
-            );
-          }
-          const blockerDepth = blockerDepths.get(occurrence.chainIndex) ?? null;
-          const reached = blockerDepth == null || occurrence.chainDepth <= blockerDepth;
-          const phaseIndex = converterIndexes.get(occurrence.chainIndex) ?? 0;
-          converterIndexes.set(occurrence.chainIndex, phaseIndex + 1);
-          const publication = this.valueConverterPublication(
-            `${input.localKey}:binding:${bindingIndex}:expression:${expressionIndex}:converter:${converterIndex}:${converter.name.name}`,
-            input,
-            binding,
-            expressionProductHandle,
-            occurrence,
-            reached,
-            phaseIndex,
-            converterCounts.get(occurrence.chainIndex) ?? 1,
-            source,
-          );
-          applications.push(...publication.applications);
-          issues.push(...publication.issues);
-          records.push(...publication.records);
-          if (reached && publication.applications.some((application) => application.resource == null)) {
-            blockerDepths.set(occurrence.chainIndex, occurrence.chainDepth);
-          }
-        }
-      });
-    });
+    for (const entry of input.expressionResourcePlan.converterEntries) {
+      const converter = entry.expression;
+      const publication = this.valueConverterPublication(
+        `${input.localKey}:binding:${entry.bindingIndex}:expression:${entry.expressionIndex}:converter:${entry.converterIndex}:${converter.name.name}`,
+        input,
+        entry,
+        source,
+      );
+      applications.push(...publication.applications);
+      issues.push(...publication.issues);
+      records.push(...publication.records);
+    }
 
     return new RuntimeValueConverterEmission(applications, issues, records);
   }
@@ -201,58 +184,55 @@ export class RuntimeValueConverterMaterializer {
   private valueConverterPublication(
     local: string,
     input: RuntimeValueConverterMaterializationRequest,
-    binding: RuntimeBinding,
-    expressionProductHandle: ProductHandle,
-    occurrence: ExpressionResourceOccurrence<ValueConverterExpression>,
-    reached: boolean,
-    phaseIndex: number,
-    converterCount: number,
+    entry: RuntimeValueConverterPlanEntry,
     source: RuntimeValueConverterSourceSet,
   ): RuntimeValueConverterPublication {
-    const converter = occurrence.expression;
-    const resource = findValueConverterResource(input.resourceScope, converter.name.name);
-    const issue = !reached
+    const converter = entry.expression;
+    const expressionSource = sourceAddressForRuntimeExpressionSpan(
+      this.store,
+      local,
+      entry.binding.sourceAddressHandle,
+      converter.name.span,
+    );
+    const phaseOrder = input.expressionResourcePlan.readValueConverterPhaseOrder(entry);
+    const lifecycle = this.lifecyclePublication(`${local}:lifecycle`, input, entry);
+    const applications = valueConverterApplicationPhasesForBinding(entry.binding, input.expressionResourcePlan).map((phase) => {
+      const phaseReachability = valueConverterPhaseReachability(input.expressionResourcePlan, entry, phase);
+      return this.applicationProduct(
+        `${local}:phase:${phase}`,
+        entry,
+        phase,
+        phaseReachability,
+        valueConverterPhaseOrder(entry, phase, phaseReachability, phaseOrder),
+        lifecycleEffectsForValueConverter(entry, phase, phaseReachability, lifecycle.effects),
+        expressionSource.handle,
+      );
+    });
+    const issueApplication = entry.resource == null
+      ? applications.find((application) =>
+          application.phase === RuntimeValueConverterApplicationPhase.Bind
+          && application.phaseReachability === RuntimeExpressionResourcePhaseReachability.Reached
+        ) ?? null
+      : applications.find((application) =>
+          application.phase === RuntimeValueConverterApplicationPhase.ToView
+          && application.phaseReachability === RuntimeExpressionResourcePhaseReachability.Reached
+        ) ?? null;
+    const issue = issueApplication == null
       ? null
-      : resource == null
+      : entry.resource == null
       ? {
           issueKind: RuntimeValueConverterIssueKind.ResourceNotFound,
           message: `Value converter '${converter.name.name}' was not resolved through the current compiler resource scope.`,
           frameworkErrorCode: RuntimeHtmlAstFrameworkErrorCode.AstConverterNotFound,
         }
-      : this.issueForValueConverter(input, converter);
-    const expressionSource = sourceAddressForRuntimeExpressionSpan(
-      this.store,
-      local,
-      binding.sourceAddressHandle,
-      converter.name.span,
-    );
-    const applications = valueConverterApplicationPhasesForBinding(binding, input.bindingBehaviorPlan).map((phase) =>
-      this.applicationProduct(
-        `${local}:phase:${phase}`,
-        binding,
-        resource,
-        expressionProductHandle,
-        occurrence,
-        phase,
-        reached,
-        resource == null || !reached
-          ? null
-          : valueConverterPhaseOrder(phase, phaseIndex, converterCount),
-        expressionSource.handle,
-      )
-    );
-    const issueApplication = resource == null
-      ? applications[0] ?? null
-      : applications.find((application) =>
-          application.phase === RuntimeValueConverterApplicationPhase.ToView
-        ) ?? null;
+      : this.issueForValueConverter(input, entry);
     const issueProduct = issue == null || issueApplication == null
       ? null
       : this.issueProduct(
           `${local}:issue:${issue.issueKind}`,
           issueApplication,
-          binding,
-          resource == null ? RuntimeValueConverterIssuePhase.Bind : RuntimeValueConverterIssuePhase.ToView,
+          entry.binding,
+          entry.resource == null ? RuntimeValueConverterIssuePhase.Bind : RuntimeValueConverterIssuePhase.ToView,
           issue,
           expressionSource.handle,
           source,
@@ -265,19 +245,178 @@ export class RuntimeValueConverterMaterializer {
       issueProduct == null ? [] : [issueProduct],
       [
         ...expressionSource.records,
+        ...lifecycle.records,
         ...applications.flatMap((application) =>
-          recordsForApplication(application, binding.identityHandle, source.provenanceHandle)
+          recordsForApplication(application, entry.binding.identityHandle, source.provenanceHandle)
         ),
         ...issueRecords,
       ],
     );
   }
 
+  private lifecyclePublication(
+    local: string,
+    input: RuntimeValueConverterMaterializationRequest,
+    entry: RuntimeValueConverterPlanEntry,
+  ): RuntimeValueConverterLifecyclePublication {
+    if (entry.builtInResource != null) {
+      const signals = entry.builtInResource.signalNames.map((name) =>
+        new RuntimeExpressionResourceSignal(name, null)
+      );
+      return new RuntimeValueConverterLifecyclePublication(
+        signals.length === 0
+          ? RuntimeExpressionResourceLifecycleEffects.none
+          : new RuntimeExpressionResourceLifecycleEffects(
+              [RuntimeExpressionResourceLifecycleEffectKind.SignalSubscription],
+              RuntimeExpressionResourceValueState.Closed,
+              signals,
+              null,
+              null,
+              null,
+              null,
+            ),
+        [],
+      );
+    }
+
+    const definition = entry.resource?.definition ?? null;
+    if (definition == null || definition.type !== ResourceDefinitionKind.ValueConverter) {
+      return openValueConverterLifecycle(
+        `Value converter '${entry.expression.name.name}' has no app-owned definition for instance lifecycle analysis.`,
+      );
+    }
+    if (input.sourceValueEvaluator == null) {
+      return openValueConverterLifecycle(
+        `Value converter '${entry.expression.name.name}' instance signals require static project evaluation.`,
+      );
+    }
+
+    const propertyRead = input.sourceValueEvaluator.readValueConverterInstanceProperty(
+      definition,
+      'signals',
+      input.container,
+    );
+    const propertySource = this.sourceEvidenceForNode(
+      `${local}:property`,
+      input.sourceValueEvaluator,
+      propertyRead.property?.node ?? null,
+      `Value converter '${definition.name}' signals property source.`,
+    );
+    if (propertyRead.state === RuntimeValueConverterInstancePropertyReadState.Absent) {
+      return new RuntimeValueConverterLifecyclePublication(
+        RuntimeExpressionResourceLifecycleEffects.none,
+        propertySource?.records ?? [],
+      );
+    }
+
+    const value = propertyRead.value;
+    if (!(value instanceof EvaluationArrayValue)) {
+      return new RuntimeValueConverterLifecyclePublication(
+        new RuntimeExpressionResourceLifecycleEffects(
+          [],
+          RuntimeExpressionResourceValueState.Open,
+          [],
+          null,
+          null,
+          propertySource?.addressHandle ?? null,
+          [
+            ...propertyRead.openReasons,
+            value == null
+              ? `Value converter '${definition.name}' signals value was not retained.`
+              : `Value converter '${definition.name}' signals value is not a statically closed string array.`,
+          ].join(' '),
+        ),
+        propertySource?.records ?? [],
+      );
+    }
+
+    const records: KernelStoreRecord[] = [...(propertySource?.records ?? [])];
+    const signals: RuntimeExpressionResourceSignal[] = [];
+    let hasNonStringElement = false;
+    for (const [index, element] of value.elements.entries()) {
+      const primitive = isEvaluationPrimitiveValue(element.value)
+        ? readEvaluationPrimitive(element.value)
+        : null;
+      if (typeof primitive !== 'string') {
+        hasNonStringElement = true;
+        continue;
+      }
+      const elementSource = this.sourceEvidenceForNode(
+        `${local}:signal:${index}`,
+        input.sourceValueEvaluator,
+        element.expression ?? element.value.node,
+        `Value converter '${definition.name}' signal '${primitive}' source.`,
+      );
+      records.push(...(elementSource?.records ?? []));
+      signals.push(new RuntimeExpressionResourceSignal(
+        primitive,
+        elementSource?.addressHandle ?? null,
+      ));
+    }
+    const state = propertyRead.state === RuntimeValueConverterInstancePropertyReadState.Open
+      || value.mayHaveUnknownElements
+      || hasNonStringElement
+      ? RuntimeExpressionResourceValueState.Open
+      : signals.length === 0
+      ? RuntimeExpressionResourceValueState.Absent
+      : RuntimeExpressionResourceValueState.Closed;
+    const openReasons = [
+      ...propertyRead.openReasons,
+      ...(value.mayHaveUnknownElements ? ['The signals array may contain additional runtime elements.'] : []),
+      ...(hasNonStringElement ? ['The signals array contains values that are not statically known strings.'] : []),
+    ];
+    return new RuntimeValueConverterLifecyclePublication(
+      new RuntimeExpressionResourceLifecycleEffects(
+        state === RuntimeExpressionResourceValueState.Absent
+          ? []
+          : [RuntimeExpressionResourceLifecycleEffectKind.SignalSubscription],
+        state,
+        signals,
+        null,
+        null,
+        propertySource?.addressHandle ?? null,
+        openReasons.length === 0 ? null : openReasons.join(' '),
+      ),
+      records,
+    );
+  }
+
+  private sourceEvidenceForNode(
+    local: string,
+    evaluator: RuntimeBindingSourceValueEvaluator,
+    node: ts.Node | null,
+    summary: string,
+  ): ReturnType<typeof sourceSpanEvidenceForSite> | null {
+    if (node == null) {
+      return null;
+    }
+    const source = evaluator.readEvaluatedSourceForNode(node);
+    if (source == null) {
+      return null;
+    }
+    const span = sourceSpanRangeForNode(source.sourceFile, node);
+    if (span == null) {
+      return null;
+    }
+    return sourceSpanEvidenceForSite(
+      this.store,
+      local,
+      {
+        sourceFileAddressHandle: source.admission.addressHandle,
+        start: span.start,
+        end: span.end,
+      },
+      SourceSpanRole.Value,
+      [EvidenceRole.TransformInput],
+      summary,
+    );
+  }
+
   private issueForValueConverter(
     input: RuntimeValueConverterMaterializationRequest,
-    converter: ValueConverterExpression,
+    entry: RuntimeValueConverterPlanEntry,
   ): RuntimeValueConverterIssueDraft | null {
-    switch (converter.name.name) {
+    switch (entry.builtInResource?.name) {
       case BuiltInValueConverterName.Sanitize:
         return this.sanitize.toView({
           hasCustomSanitizer: hasResolverForInterface(this.store, input.container, 'ISanitizer'),
@@ -289,32 +428,32 @@ export class RuntimeValueConverterMaterializer {
 
   private applicationProduct(
     local: string,
-    binding: RuntimeBinding,
-    resource: TemplateVisibleResource | null,
-    expressionProductHandle: ProductHandle,
-    occurrence: ExpressionResourceOccurrence<ValueConverterExpression>,
+    entry: RuntimeValueConverterPlanEntry,
     phase: RuntimeValueConverterApplicationPhase,
-    reached: boolean,
+    phaseReachability: RuntimeExpressionResourcePhaseReachability,
     phaseOrder: number | null,
+    lifecycleEffects: RuntimeExpressionResourceLifecycleEffects,
     sourceAddressHandle: AddressHandle | null,
   ): RuntimeValueConverterApplication {
-    const converter = occurrence.expression;
+    const converter = entry.expression;
     return new RuntimeValueConverterApplication(
       this.store.handles.product(local),
       this.store.handles.identity(local),
-      binding.toReference(),
-      resource?.toReference() ?? null,
+      entry.binding.toReference(),
+      entry.resource?.toReference() ?? null,
       phase,
+      entry.origin,
       converter.name.name,
       converter.args.length,
-      expressionProductHandle,
-      occurrence.chainIndex,
-      occurrence.chainDepth,
-      reached
-        ? RuntimeExpressionResourceBindReachability.Reached
-        : RuntimeExpressionResourceBindReachability.BlockedByOuterFailure,
-      reached ? occurrence.chainDepth : null,
+      entry.expressionProductHandle,
+      entry.chainIndex,
+      entry.authoredChainDepth,
+      entry.runtimeChainDepth,
+      entry.bindReachability,
+      phaseReachability,
+      entry.bindOrder,
       phaseOrder,
+      lifecycleEffects,
       converter.args.map((argument) => argument.span),
       sourceAddressHandle,
     );
@@ -413,12 +552,24 @@ function recordsForIssue(
 
 function valueConverterApplicationPhasesForBinding(
   binding: RuntimeBinding,
-  bindingBehaviorPlan: RuntimeBindingBehaviorPlan,
+  expressionResourcePlan: RuntimeExpressionResourcePlan,
+): readonly RuntimeValueConverterApplicationPhase[] {
+  const conversionPhases = valueConverterConversionPhasesForBinding(binding, expressionResourcePlan);
+  return [
+    RuntimeValueConverterApplicationPhase.Bind,
+    ...conversionPhases,
+    RuntimeValueConverterApplicationPhase.Unbind,
+  ];
+}
+
+function valueConverterConversionPhasesForBinding(
+  binding: RuntimeBinding,
+  expressionResourcePlan: RuntimeExpressionResourcePlan,
 ): readonly RuntimeValueConverterApplicationPhase[] {
   if (!(binding instanceof PropertyBinding)) {
     return [RuntimeValueConverterApplicationPhase.ToView];
   }
-  switch (bindingBehaviorPlan.effectivePropertyBindingMode(binding)) {
+  switch (expressionResourcePlan.effectivePropertyBindingMode(binding)) {
     case TemplateBindingMode.FromView:
       return [RuntimeValueConverterApplicationPhase.FromView];
     case TemplateBindingMode.TwoWay:
@@ -431,31 +582,67 @@ function valueConverterApplicationPhasesForBinding(
   }
 }
 
-function occurrenceCountsByChain(
-  occurrences: readonly ExpressionResourceOccurrence<ValueConverterExpression>[],
-): ReadonlyMap<number, number> {
-  const counts = new Map<number, number>();
-  for (const occurrence of occurrences) {
-    counts.set(occurrence.chainIndex, (counts.get(occurrence.chainIndex) ?? 0) + 1);
+function valueConverterPhaseReachability(
+  plan: RuntimeExpressionResourcePlan,
+  entry: RuntimeValueConverterPlanEntry,
+  phase: RuntimeValueConverterApplicationPhase,
+): RuntimeExpressionResourcePhaseReachability {
+  if (entry.bindReachability !== RuntimeExpressionResourceBindReachability.Reached) {
+    return RuntimeExpressionResourcePhaseReachability.BlockedByOuterFailure;
   }
-  return counts;
+  if (phase === RuntimeValueConverterApplicationPhase.Bind) {
+    return RuntimeExpressionResourcePhaseReachability.Reached;
+  }
+  return plan.readPostBindPhaseReachability(entry);
 }
 
 function valueConverterPhaseOrder(
+  entry: RuntimeValueConverterPlanEntry,
   phase: RuntimeValueConverterApplicationPhase,
-  outerToInnerIndex: number,
-  converterCount: number,
-): number {
-  return phase === RuntimeValueConverterApplicationPhase.ToView
-    ? converterCount - outerToInnerIndex - 1
-    : outerToInnerIndex;
+  reachability: RuntimeExpressionResourcePhaseReachability,
+  conversionOrder: ReturnType<RuntimeExpressionResourcePlan['readValueConverterPhaseOrder']>,
+): number | null {
+  if (reachability !== RuntimeExpressionResourcePhaseReachability.Reached) {
+    return null;
+  }
+  switch (phase) {
+    case RuntimeValueConverterApplicationPhase.Bind:
+    case RuntimeValueConverterApplicationPhase.Unbind:
+      return entry.bindOrder;
+    case RuntimeValueConverterApplicationPhase.ToView:
+      return conversionOrder?.toView ?? null;
+    case RuntimeValueConverterApplicationPhase.FromView:
+      return conversionOrder?.fromView ?? null;
+  }
 }
 
-function findValueConverterResource(
-  resourceScope: TemplateResourceScope | null,
-  name: string,
-): TemplateVisibleResource | null {
-  return findVisibleTemplateResource(resourceScope, ResourceDefinitionKind.ValueConverter, name);
+function lifecycleEffectsForValueConverter(
+  _entry: RuntimeValueConverterPlanEntry,
+  phase: RuntimeValueConverterApplicationPhase,
+  reachability: RuntimeExpressionResourcePhaseReachability,
+  configuredEffects: RuntimeExpressionResourceLifecycleEffects,
+): RuntimeExpressionResourceLifecycleEffects {
+  if (reachability !== RuntimeExpressionResourcePhaseReachability.Reached
+    || (phase !== RuntimeValueConverterApplicationPhase.Bind
+      && phase !== RuntimeValueConverterApplicationPhase.Unbind)) {
+    return RuntimeExpressionResourceLifecycleEffects.none;
+  }
+  return configuredEffects;
+}
+
+function openValueConverterLifecycle(reason: string): RuntimeValueConverterLifecyclePublication {
+  return new RuntimeValueConverterLifecyclePublication(
+    new RuntimeExpressionResourceLifecycleEffects(
+    [],
+    RuntimeExpressionResourceValueState.Open,
+    [],
+    null,
+    null,
+    null,
+      reason,
+    ),
+    [],
+  );
 }
 
 function hasResolverForInterface(

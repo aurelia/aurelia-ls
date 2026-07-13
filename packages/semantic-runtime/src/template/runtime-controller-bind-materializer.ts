@@ -69,7 +69,7 @@ import {
   RuntimeControllerBindPublisher,
   type RuntimeControllerBindSourceSet,
 } from './runtime-controller-bind-publication.js';
-import type { RuntimeBindingBehaviorPlan } from './runtime-binding-behavior-plan.js';
+import type { RuntimeExpressionResourcePlan } from './runtime-expression-resource-plan.js';
 import {
   runtimeBindingAccessTarget,
   runtimeBindingTargetController,
@@ -88,7 +88,7 @@ export interface RuntimeControllerBindMaterializationRequest {
   /** Runtime bindings and render contexts produced by renderer dispatch. */
   readonly runtimeRendering: RuntimeRenderingEmission;
   /** Reached binding-behavior effects visible before PropertyBinding selects its target access. */
-  readonly bindingBehaviorPlan: RuntimeBindingBehaviorPlan;
+  readonly expressionResourcePlan: RuntimeExpressionResourcePlan;
   /** Checker-backed scopes available to binding.bind source observation. */
   readonly scopes: TemplateScopeConstructionEmission;
   /** Current TypeChecker epoch used by ObserverLocator lookup, when available. */
@@ -212,7 +212,7 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
       binding instanceof SpreadValueBinding
         ? this.materializer.spreadValueTargetProperties(targetController)
         : [],
-      (propertyBinding) => this.input.bindingBehaviorPlan.effectivePropertyBindingMode(propertyBinding),
+      (propertyBinding) => this.input.expressionResourcePlan.effectivePropertyBindingMode(propertyBinding),
     );
   }
 
@@ -407,7 +407,7 @@ export class RuntimeControllerBindMaterializer {
         RuntimeBindingTargetAccessAuthority.RuntimeRendererImplementation,
       )
       : ordinaryLookup;
-    const targetObserver = input.bindingBehaviorPlan.readTargetObserverOverride(request.binding.productHandle);
+    const targetObserver = input.expressionResourcePlan.readTargetObserverOverride(request.binding.productHandle);
     const lookup = targetObserver == null
       ? rendererLookup
       : rendererLookup.withTargetObserver(

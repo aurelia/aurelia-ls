@@ -3407,7 +3407,7 @@ function templateInlayHintRows(
         return [];
       }
       const authoredMode = authoredTemplateBindingMode(binding);
-      const effectiveMode = resource.runtimeAnalysis.bindingBehaviorPlan.effectivePropertyBindingMode(binding);
+      const effectiveMode = resource.runtimeAnalysis.expressionResourcePlan.effectivePropertyBindingMode(binding);
       if (authoredMode === effectiveMode || effectiveMode === TemplateBindingMode.Default) {
         return [];
       }

@@ -1,18 +1,34 @@
 import type { ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
-import type { BindingBehaviorExpression, IsAssign } from '../expression/ast.js';
-import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
+import type {
+  BindingBehaviorExpression,
+  IsAssign,
+  ValueConverterExpression,
+} from '../expression/ast.js';
+import {
+  bindingBehaviorProjectsThroughValueConverter,
+  bindingBehaviorValueConverterProjection,
+} from '../expression/binding-behavior-bind-effects.js';
+import {
+  BuiltInBindingBehaviorName,
+  type BuiltInResource,
+} from '../resources/built-in-resources.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
   NodeObserverLocatorConfiguration,
   ObserverLocator,
 } from '../observation/observer-locator.js';
 import {
-  bindingBehaviorResourceOccurrences,
+  expressionResourceOccurrences,
+  isBindingBehaviorOccurrence,
+  isValueConverterOccurrence,
   type ExpressionResourceOccurrence,
 } from './expression-resource-occurrence.js';
 import { bindingExpressionAstForProduct } from './expression-parse-product.js';
-import { findVisibleTemplateResource } from './compiler-resource-lookup.js';
+import {
+  findVisibleTemplateResource,
+  readBuiltInVisibleTemplateResource,
+} from './compiler-resource-lookup.js';
 import type { TemplateResourceScope } from './compiler-world.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
 import { TemplateBindingMode } from './instruction-ir.js';
@@ -52,7 +68,11 @@ import { bindingModeForBindingBehaviorName } from './runtime-binding-mode-behavi
 import { RuntimeHtmlBindingBehaviorFrameworkErrorCode } from './framework-error-code.js';
 import { RuntimeHtmlAstFrameworkErrorCode } from '../type-system/framework-error-code.js';
 import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-expression-products.js';
-import { RuntimeExpressionResourceBindReachability } from './runtime-expression-resource.js';
+import {
+  RuntimeExpressionResourceApplicationOrigin,
+  RuntimeExpressionResourceBindReachability,
+  RuntimeExpressionResourcePhaseReachability,
+} from './runtime-expression-resource.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import {
   runtimeBindingAccessTarget,
@@ -62,6 +82,16 @@ import {
 type RateLimitBindingBehaviorName =
   | BuiltInBindingBehaviorName.Debounce
   | BuiltInBindingBehaviorName.Throttle;
+
+type BuiltInBindingBehaviorResource = Extract<
+  BuiltInResource,
+  { readonly resourceKind: ResourceDefinitionKind.BindingBehavior }
+>;
+
+type BuiltInValueConverterResource = Extract<
+  BuiltInResource,
+  { readonly resourceKind: ResourceDefinitionKind.ValueConverter }
+>;
 
 export class RuntimeBindingTargetObserverOverride {
   constructor(
@@ -73,14 +103,23 @@ export class RuntimeBindingTargetObserverOverride {
 }
 
 export class RuntimeBindingBehaviorPlanEntry {
+  readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
+  readonly origin = RuntimeExpressionResourceApplicationOrigin.Authored;
+
   constructor(
     readonly bindingIndex: number,
     readonly expressionIndex: number,
     readonly behaviorIndex: number,
     readonly binding: RuntimeBinding,
     readonly resource: TemplateVisibleResource | null,
+    readonly builtInResource: BuiltInBindingBehaviorResource | null,
+    readonly bindEffects: RuntimeBindingBehaviorBindEffects,
     readonly expressionProductHandle: ProductHandle,
     readonly occurrence: ExpressionResourceOccurrence<BindingBehaviorExpression>,
+    /** Depth in the authored AST, excluding any bind-time resource projection. */
+    readonly authoredChainDepth: number,
+    /** Depth in the runtime AST after reached binding-behavior projections. */
+    readonly runtimeChainDepth: number,
     readonly bindReachability: RuntimeExpressionResourceBindReachability,
     readonly bindOrder: number | null,
     readonly phaseOrder: number | null,
@@ -88,16 +127,57 @@ export class RuntimeBindingBehaviorPlanEntry {
   ) {}
 }
 
-/** One authority for binding-behavior bind reachability and the state mutations that downstream binding phases spend. */
-export class RuntimeBindingBehaviorPlan {
-  static readonly empty = new RuntimeBindingBehaviorPlan([], new Map(), new Map());
+export class RuntimeValueConverterPlanEntry {
+  readonly resourceKind = ResourceDefinitionKind.ValueConverter;
+
+  constructor(
+    readonly bindingIndex: number,
+    readonly expressionIndex: number,
+    readonly converterIndex: number,
+    readonly binding: RuntimeBinding,
+    readonly resource: TemplateVisibleResource | null,
+    readonly builtInResource: BuiltInValueConverterResource | null,
+    readonly expressionProductHandle: ProductHandle,
+    readonly expression: ValueConverterExpression,
+    /** Authored behavior that inserted this converter during bind, or null for an authored converter. */
+    readonly projectedByBehavior: BindingBehaviorExpression | null,
+    readonly chainIndex: number,
+    /** Null for a converter inserted by a reached binding behavior. */
+    readonly authoredChainDepth: number | null,
+    /** Depth in the runtime AST after reached binding-behavior projections. */
+    readonly runtimeChainDepth: number,
+    readonly origin: RuntimeExpressionResourceApplicationOrigin,
+    readonly bindReachability: RuntimeExpressionResourceBindReachability,
+    readonly bindOrder: number | null,
+  ) {}
+}
+
+export type RuntimeExpressionResourcePlanEntry =
+  | RuntimeBindingBehaviorPlanEntry
+  | RuntimeValueConverterPlanEntry;
+
+class RuntimeValueConverterPhaseOrder {
+  constructor(
+    readonly toView: number,
+    readonly fromView: number,
+  ) {}
+}
+
+/** One authority for runtime expression-resource order, reachability, and pre-access binding state. */
+export class RuntimeExpressionResourcePlan {
+  static readonly empty = new RuntimeExpressionResourcePlan([], new Map(), new Map());
 
   private readonly effectiveModesByExpression = new Map<ProductHandle, TemplateBindingMode>();
   private readonly targetObserverOverridesByBinding = new Map<ProductHandle, RuntimeBindingTargetObserverOverride>();
-  private readonly firstFailureDepthByExpressionChain = new Map<string, number>();
+  private readonly converterPhaseOrders = new Map<RuntimeValueConverterPlanEntry, RuntimeValueConverterPhaseOrder>();
+  private readonly failedBindChains = new Set<string>();
+  private readonly behaviorEntriesByExpression = new Map<BindingBehaviorExpression, RuntimeBindingBehaviorPlanEntry[]>();
+  private readonly projectedConvertersByBehavior = new Map<BindingBehaviorExpression, RuntimeValueConverterPlanEntry[]>();
+  readonly behaviorEntries: readonly RuntimeBindingBehaviorPlanEntry[];
+  readonly converterEntries: readonly RuntimeValueConverterPlanEntry[];
 
   constructor(
-    readonly entries: readonly RuntimeBindingBehaviorPlanEntry[],
+    readonly entries: readonly RuntimeExpressionResourcePlanEntry[],
     effectiveModesByExpression: ReadonlyMap<ProductHandle, TemplateBindingMode>,
     targetObserverOverridesByBinding: ReadonlyMap<ProductHandle, RuntimeBindingTargetObserverOverride>,
   ) {
@@ -107,15 +187,42 @@ export class RuntimeBindingBehaviorPlan {
     for (const [bindingProductHandle, override] of targetObserverOverridesByBinding) {
       this.targetObserverOverridesByBinding.set(bindingProductHandle, override);
     }
+    this.behaviorEntries = entries.filter(isBindingBehaviorPlanEntry);
+    this.converterEntries = entries.filter(isValueConverterPlanEntry);
+    for (const entry of this.behaviorEntries) {
+      appendPlanEntry(this.behaviorEntriesByExpression, entry.occurrence.expression, entry);
+    }
+    for (const entry of this.converterEntries) {
+      if (entry.projectedByBehavior != null) {
+        appendPlanEntry(this.projectedConvertersByBehavior, entry.projectedByBehavior, entry);
+      }
+    }
     for (const entry of entries) {
-      if (entry.issue == null) {
+      if (entry.bindReachability !== RuntimeExpressionResourceBindReachability.Reached
+        || (isBindingBehaviorPlanEntry(entry) && entry.issue != null)
+        || (isValueConverterPlanEntry(entry) && entry.resource == null)) {
+        this.failedBindChains.add(expressionChainKey(entry.expressionProductHandle, chainIndexForPlanEntry(entry)));
+      }
+    }
+    const convertersByChain = new Map<string, RuntimeValueConverterPlanEntry[]>();
+    for (const entry of this.converterEntries) {
+      const key = expressionChainKey(entry.expressionProductHandle, entry.chainIndex);
+      if (entry.bindReachability !== RuntimeExpressionResourceBindReachability.Reached
+        || entry.resource == null
+        || this.failedBindChains.has(key)) {
         continue;
       }
-      const key = expressionChainKey(entry.expressionProductHandle, entry.occurrence.chainIndex);
-      const current = this.firstFailureDepthByExpressionChain.get(key);
-      if (current == null || entry.occurrence.chainDepth < current) {
-        this.firstFailureDepthByExpressionChain.set(key, entry.occurrence.chainDepth);
-      }
+      const converters = convertersByChain.get(key) ?? [];
+      converters.push(entry);
+      convertersByChain.set(key, converters);
+    }
+    for (const converters of convertersByChain.values()) {
+      converters.forEach((entry, index) => {
+        this.converterPhaseOrders.set(
+          entry,
+          new RuntimeValueConverterPhaseOrder(converters.length - index - 1, index),
+        );
+      });
     }
   }
 
@@ -138,17 +245,42 @@ export class RuntimeBindingBehaviorPlan {
     return this.targetObserverOverridesByBinding.get(bindingProductHandle) ?? null;
   }
 
-  readFirstFailureDepth(
-    expressionProductHandle: ProductHandle,
-    chainIndex: number,
-  ): number | null {
-    return this.firstFailureDepthByExpressionChain.get(
-      expressionChainKey(expressionProductHandle, chainIndex),
-    ) ?? null;
+  readValueConverterPhaseOrder(
+    entry: RuntimeValueConverterPlanEntry,
+  ): RuntimeValueConverterPhaseOrder | null {
+    return this.converterPhaseOrders.get(entry) ?? null;
+  }
+
+  /** Reachability after the complete `astBind(...)` chain, before conversion or teardown can run. */
+  readPostBindPhaseReachability(
+    entry: RuntimeExpressionResourcePlanEntry,
+  ): RuntimeExpressionResourcePhaseReachability {
+    if (entry.bindReachability !== RuntimeExpressionResourceBindReachability.Reached) {
+      return RuntimeExpressionResourcePhaseReachability.BlockedByOuterFailure;
+    }
+    return this.failedBindChains.has(expressionChainKey(entry.expressionProductHandle, chainIndexForPlanEntry(entry)))
+      ? RuntimeExpressionResourcePhaseReachability.BlockedByBindFailure
+      : RuntimeExpressionResourcePhaseReachability.Reached;
+  }
+
+  /** Unique runtime application for one authored behavior AST, or null when reused applications disagree. */
+  readBindingBehaviorEntry(
+    expression: BindingBehaviorExpression,
+  ): RuntimeBindingBehaviorPlanEntry | null {
+    const entries = this.behaviorEntriesByExpression.get(expression) ?? [];
+    return entries.length === 1 ? entries[0]! : null;
+  }
+
+  /** Unique converter inserted by one reached binding behavior, if that behavior projected through a converter. */
+  readProjectedConverterForBindingBehavior(
+    expression: BindingBehaviorExpression,
+  ): RuntimeValueConverterPlanEntry | null {
+    const entries = this.projectedConvertersByBehavior.get(expression) ?? [];
+    return entries.length === 1 ? entries[0]! : null;
   }
 }
 
-export class RuntimeBindingBehaviorPlanningRequest {
+export class RuntimeExpressionResourcePlanningRequest {
   constructor(
     readonly runtimeRendering: RuntimeRenderingEmission,
     readonly resourceScope: TemplateResourceScope | null,
@@ -208,7 +340,8 @@ class BindingBehaviorBindState {
 class BindingBehaviorChainState {
   readonly bindState: BindingBehaviorBindState;
   blocked = false;
-  nextPhaseOrder = 0;
+  nextRuntimeChainDepth = 0;
+  nextBindOrder = 0;
 
   constructor(initialMode: TemplateBindingMode | null) {
     this.bindState = new BindingBehaviorBindState(initialMode);
@@ -216,7 +349,7 @@ class BindingBehaviorChainState {
 }
 
 /** Plans framework `astBind(...)` behavior effects before target observer/accessor selection. */
-export class RuntimeBindingBehaviorPlanner {
+export class RuntimeExpressionResourcePlanner {
   private readonly attr = new AttrBindingBehavior();
   private readonly debounce = new DebounceBindingBehavior();
   private readonly self = new SelfBindingBehavior();
@@ -228,8 +361,8 @@ export class RuntimeBindingBehaviorPlanner {
 
   constructor(readonly store: KernelStore) {}
 
-  plan(input: RuntimeBindingBehaviorPlanningRequest): RuntimeBindingBehaviorPlan {
-    const entries: RuntimeBindingBehaviorPlanEntry[] = [];
+  plan(input: RuntimeExpressionResourcePlanningRequest): RuntimeExpressionResourcePlan {
+    const entries: RuntimeExpressionResourcePlanEntry[] = [];
     const effectiveModesByExpression = new Map<ProductHandle, TemplateBindingMode>();
     const targetObserverOverridesByBinding = new Map<ProductHandle, RuntimeBindingTargetObserverOverride>();
     const bindEffects = new RuntimeBindingBehaviorBindEffectReader(this.store);
@@ -248,46 +381,129 @@ export class RuntimeBindingBehaviorPlanner {
           continue;
         }
         const chainStates = new Map<number, BindingBehaviorChainState>();
-        for (const [behaviorIndex, occurrence] of bindingBehaviorResourceOccurrences(ast).entries()) {
+        let behaviorIndex = 0;
+        let converterIndex = 0;
+        for (const occurrence of expressionResourceOccurrences(ast)) {
           let chainState = chainStates.get(occurrence.chainIndex);
           if (chainState == null) {
             chainState = new BindingBehaviorChainState(binding instanceof PropertyBinding ? binding.bindingMode : null);
             chainStates.set(occurrence.chainIndex, chainState);
           }
           const reached = !chainState.blocked;
-          const phaseOrder = reached ? chainState.nextPhaseOrder++ : null;
+          const runtimeChainDepth = chainState.nextRuntimeChainDepth++;
+          const bindOrder = reached ? chainState.nextBindOrder++ : null;
+          if (isBindingBehaviorOccurrence(occurrence)) {
+            const resource = findVisibleTemplateResource(
+              input.resourceScope,
+              ResourceDefinitionKind.BindingBehavior,
+              occurrence.expression.name.name,
+            );
+            const builtInResource = asBuiltInBindingBehaviorResource(
+              readBuiltInVisibleTemplateResource(this.store, resource),
+            );
+            const resourceBindEffects = bindEffects.readEffects(resource);
+            const issue = reached
+              ? this.issueForBindingBehavior(
+                  binding,
+                  target,
+                  observerLocator,
+                  occurrence,
+                  chainState.bindState,
+                  resourceBindEffects,
+                  resource,
+                  builtInResource,
+                )
+              : null;
+            entries.push(new RuntimeBindingBehaviorPlanEntry(
+              bindingIndex,
+              expressionIndex,
+              behaviorIndex++,
+              binding,
+              resource,
+              builtInResource,
+              resourceBindEffects,
+              expressionProductHandle,
+              occurrence,
+              occurrence.chainDepth,
+              runtimeChainDepth,
+              reached
+                ? RuntimeExpressionResourceBindReachability.Reached
+                : RuntimeExpressionResourceBindReachability.BlockedByOuterFailure,
+              bindOrder,
+              bindOrder,
+              issue,
+            ));
+            if (reached && issue != null) {
+              chainState.blocked = true;
+              continue;
+            }
+            if (reached
+              && builtInResource != null
+              && bindingBehaviorProjectsThroughValueConverter(occurrence.expression)) {
+              const projected = bindingBehaviorValueConverterProjection(occurrence.expression);
+              const projectedResource = findVisibleTemplateResource(
+                input.resourceScope,
+                ResourceDefinitionKind.ValueConverter,
+                projected.name.name,
+              );
+              const projectedBuiltInResource = asBuiltInValueConverterResource(
+                readBuiltInVisibleTemplateResource(this.store, projectedResource),
+              );
+              entries.push(new RuntimeValueConverterPlanEntry(
+                bindingIndex,
+                expressionIndex,
+                converterIndex++,
+                binding,
+                projectedResource,
+                projectedBuiltInResource,
+                expressionProductHandle,
+                projected,
+                occurrence.expression,
+                occurrence.chainIndex,
+                null,
+                chainState.nextRuntimeChainDepth++,
+                RuntimeExpressionResourceApplicationOrigin.BindingBehaviorProjection,
+                RuntimeExpressionResourceBindReachability.Reached,
+                chainState.nextBindOrder++,
+              ));
+              if (projectedResource == null) {
+                chainState.blocked = true;
+              }
+            }
+            continue;
+          }
+
+          if (!isValueConverterOccurrence(occurrence)) {
+            continue;
+          }
           const resource = findVisibleTemplateResource(
             input.resourceScope,
-            ResourceDefinitionKind.BindingBehavior,
+            ResourceDefinitionKind.ValueConverter,
             occurrence.expression.name.name,
           );
-          const issue = reached
-            ? this.issueForBindingBehavior(
-                binding,
-                target,
-                observerLocator,
-                occurrence,
-                chainState.bindState,
-                bindEffects.readEffects(resource),
-                resource != null,
-              )
-            : null;
-          entries.push(new RuntimeBindingBehaviorPlanEntry(
+          const builtInResource = asBuiltInValueConverterResource(
+            readBuiltInVisibleTemplateResource(this.store, resource),
+          );
+          entries.push(new RuntimeValueConverterPlanEntry(
             bindingIndex,
             expressionIndex,
-            behaviorIndex,
+            converterIndex++,
             binding,
             resource,
+            builtInResource,
             expressionProductHandle,
-            occurrence,
+            occurrence.expression,
+            null,
+            occurrence.chainIndex,
+            occurrence.chainDepth,
+            runtimeChainDepth,
+            RuntimeExpressionResourceApplicationOrigin.Authored,
             reached
               ? RuntimeExpressionResourceBindReachability.Reached
               : RuntimeExpressionResourceBindReachability.BlockedByOuterFailure,
-            reached ? occurrence.chainDepth : null,
-            phaseOrder,
-            issue,
+            bindOrder,
           ));
-          if (reached && issue != null) {
+          if (reached && resource == null) {
             chainState.blocked = true;
           }
         }
@@ -305,7 +521,7 @@ export class RuntimeBindingBehaviorPlanner {
       }
     }
 
-    return new RuntimeBindingBehaviorPlan(entries, effectiveModesByExpression, targetObserverOverridesByBinding);
+    return new RuntimeExpressionResourcePlan(entries, effectiveModesByExpression, targetObserverOverridesByBinding);
   }
 
   private issueForBindingBehavior(
@@ -315,10 +531,11 @@ export class RuntimeBindingBehaviorPlanner {
     occurrence: ExpressionResourceOccurrence<BindingBehaviorExpression>,
     bindState: BindingBehaviorBindState,
     effects: RuntimeBindingBehaviorBindEffects,
-    resourceResolved: boolean,
+    resource: TemplateVisibleResource | null,
+    builtInResource: BuiltInBindingBehaviorResource | null,
   ): BuiltInBindingBehaviorBindIssue | null {
     const behavior = occurrence.expression;
-    if (!resourceResolved) {
+    if (resource == null) {
       return {
         issueKind: RuntimeBindingBehaviorIssueKind.ResourceNotFound,
         message: `Binding behavior '${behavior.name.name}' was not resolved through the current compiler resource scope.`,
@@ -333,12 +550,15 @@ export class RuntimeBindingBehaviorPlanner {
       };
     }
     bindState.markAppliedBehavior(behavior.name.name);
-    const bindingMode = bindingModeForBindingBehaviorName(behavior.name.name);
+    if (builtInResource == null) {
+      return this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, null);
+    }
+    const bindingMode = bindingModeForBindingBehaviorName(builtInResource.name);
     if (bindingMode != null) {
       bindState.setBindingMode(bindingMode);
       return null;
     }
-    switch (behavior.name.name) {
+    switch (builtInResource.name) {
       case BuiltInBindingBehaviorName.Attr: {
         const issue = this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, this.attr.bind({
           bindingIsPropertyBinding: binding instanceof PropertyBinding,
@@ -457,8 +677,48 @@ export class RuntimeBindingBehaviorPlanner {
   }
 }
 
+function asBuiltInBindingBehaviorResource(
+  resource: BuiltInResource | null,
+): BuiltInBindingBehaviorResource | null {
+  return resource?.resourceKind === ResourceDefinitionKind.BindingBehavior ? resource : null;
+}
+
+function asBuiltInValueConverterResource(
+  resource: BuiltInResource | null,
+): BuiltInValueConverterResource | null {
+  return resource?.resourceKind === ResourceDefinitionKind.ValueConverter ? resource : null;
+}
+
+function isBindingBehaviorPlanEntry(
+  entry: RuntimeExpressionResourcePlanEntry,
+): entry is RuntimeBindingBehaviorPlanEntry {
+  return entry.resourceKind === ResourceDefinitionKind.BindingBehavior;
+}
+
+function isValueConverterPlanEntry(
+  entry: RuntimeExpressionResourcePlanEntry,
+): entry is RuntimeValueConverterPlanEntry {
+  return entry.resourceKind === ResourceDefinitionKind.ValueConverter;
+}
+
 function expressionChainKey(expressionProductHandle: ProductHandle, chainIndex: number): string {
   return `${expressionProductHandle}:${chainIndex}`;
+}
+
+function chainIndexForPlanEntry(entry: RuntimeExpressionResourcePlanEntry): number {
+  return isBindingBehaviorPlanEntry(entry)
+    ? entry.occurrence.chainIndex
+    : entry.chainIndex;
+}
+
+function appendPlanEntry<TKey, TValue>(
+  index: Map<TKey, TValue[]>,
+  key: TKey,
+  value: TValue,
+): void {
+  const values = index.get(key) ?? [];
+  values.push(value);
+  index.set(key, values);
 }
 
 function bindingModeAllowsTargetToSource(bindingMode: TemplateBindingMode): boolean {

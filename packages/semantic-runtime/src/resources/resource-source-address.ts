@@ -387,6 +387,15 @@ function readUnicodeEscape(
 }
 
 function sourceAddressNode(node: ts.Node): ts.Node {
+  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+    const target = node.left;
+    if (ts.isPropertyAccessExpression(target)) {
+      return target.name;
+    }
+    if (ts.isElementAccessExpression(target) && target.argumentExpression != null) {
+      return target.argumentExpression;
+    }
+  }
   if (
     (ts.isPropertyAssignment(node)
       || ts.isShorthandPropertyAssignment(node)

@@ -51,6 +51,7 @@ import {
 import type {
   RuntimeRenderingEmission,
 } from '../template/runtime-rendering-materializer.js';
+import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
 import {
   RuntimeBindingIssue,
   RuntimeBindingIssueKind,
@@ -84,6 +85,7 @@ export class I18nTranslationBindingIssueMaterializationRequest {
   constructor(
     readonly localKey: string,
     readonly runtimeRendering: RuntimeRenderingEmission,
+    readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
     readonly scopes: TemplateScopeConstructionEmission,
     readonly resourceScope: TemplateResourceScope | null,
     readonly expressionWorld: CheckerExpressionTypeWorld,
@@ -160,7 +162,11 @@ export class I18nTranslationBindingIssueMaterializer {
     const records: KernelStoreRecord[] = [...source.records];
     const issues: RuntimeBindingIssue[] = [];
     const instructionScopes = instructionScopeLookup(input.scopes.instructionScopes);
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
+    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
+      this.store,
+      input.expressionWorld,
+      input.expressionResourcePlan,
+    );
     const context: TranslationBindingIssueContext = {
       runtimeRendering: input.runtimeRendering,
       evaluator: input.expressionWorld.evaluator(input.resourceScope),

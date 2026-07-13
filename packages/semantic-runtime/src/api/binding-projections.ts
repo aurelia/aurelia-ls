@@ -21,6 +21,7 @@ import { runtimeAssignmentTargetAstForExpression } from '../expression/runtime-a
 import { bindingDataFlowDirectionIncludesTargetToSource } from '../observation/binding-data-flow-direction.js';
 import { completedTemplateExpressionAstForParse } from '../template/expression-parse-projection.js';
 import { ListenerBinding } from '../template/runtime-binding.js';
+import type { RuntimeExpressionResourceLifecycleEffects } from '../template/runtime-expression-resource.js';
 import type {
   SemanticBindingDataFlowRow,
   SemanticBindingDataFlowIssueKind,
@@ -39,6 +40,7 @@ import type {
   SemanticBindingValueChannelSummaryResult,
   SemanticBindingValueChannelSummaryRow,
   SemanticObservedMemberSourceState,
+  SemanticExpressionResourceLifecycleEffectsRow,
   SemanticTargetOperationRow,
   SemanticTemplateResourceReferenceRow,
   SemanticValueConverterApplicationRow,
@@ -212,13 +214,17 @@ export function readBindingBehaviorApplicationRows(
         behaviorName: application.behaviorName,
         resource: templateResourceReferenceRow(store, application.resource, handles),
         phase: application.phase,
+        origin: application.origin,
         argumentCount: application.argumentCount,
         staticArgumentValues: application.staticArgumentValues,
         chainIndex: application.chainIndex,
-        chainDepth: application.chainDepth,
+        authoredChainDepth: application.authoredChainDepth,
+        runtimeChainDepth: application.runtimeChainDepth,
         bindReachability: application.bindReachability,
+        phaseReachability: application.phaseReachability,
         bindOrder: application.bindOrder,
         phaseOrder: application.phaseOrder,
+        lifecycleEffects: expressionResourceLifecycleEffectsRow(store, application.lifecycleEffects, handles),
         argumentSources: expressionArgumentSources(source, application.argumentSpans),
         targetKind: application.targetAccess?.targetKind ?? null,
         targetProperty: application.targetAccess?.targetProperty ?? null,
@@ -236,8 +242,8 @@ export function readBindingBehaviorApplicationRows(
       })
     )
     .sort((left, right) =>
-      `${left.definitionName}:${left.behaviorName}:${left.targetProperty ?? ''}:${left.bindingKind}`
-        .localeCompare(`${right.definitionName}:${right.behaviorName}:${right.targetProperty ?? ''}:${right.bindingKind}`)
+      `${left.definitionName}:${left.behaviorName}:${left.phase}:${left.targetProperty ?? ''}:${left.bindingKind}`
+        .localeCompare(`${right.definitionName}:${right.behaviorName}:${right.phase}:${right.targetProperty ?? ''}:${right.bindingKind}`)
     );
 }
 
@@ -256,12 +262,16 @@ export function readValueConverterApplicationRows(
         converterName: application.converterName,
         resource: templateResourceReferenceRow(store, application.resource, handles),
         phase: application.phase,
+        origin: application.origin,
         argumentCount: application.argumentCount,
         chainIndex: application.chainIndex,
-        chainDepth: application.chainDepth,
+        authoredChainDepth: application.authoredChainDepth,
+        runtimeChainDepth: application.runtimeChainDepth,
         bindReachability: application.bindReachability,
+        phaseReachability: application.phaseReachability,
         bindOrder: application.bindOrder,
         phaseOrder: application.phaseOrder,
+        lifecycleEffects: expressionResourceLifecycleEffectsRow(store, application.lifecycleEffects, handles),
         argumentSources: expressionArgumentSources(source, application.argumentSpans),
         source,
         ...(handles ? {
@@ -279,6 +289,35 @@ export function readValueConverterApplicationRows(
       `${left.definitionName}:${left.converterName}:${left.phase}:${left.bindingKind}`
         .localeCompare(`${right.definitionName}:${right.converterName}:${right.phase}:${right.bindingKind}`)
     );
+}
+
+function expressionResourceLifecycleEffectsRow(
+  store: KernelStore,
+  effects: RuntimeExpressionResourceLifecycleEffects,
+  handles: boolean,
+): SemanticExpressionResourceLifecycleEffectsRow {
+  return {
+    effectKinds: effects.effectKinds,
+    signalState: effects.signalState,
+    signals: effects.signals.map((signal) => ({
+      name: signal.name,
+      source: describeAddress(store, signal.sourceAddressHandle),
+      ...(handles ? {
+        handles: {
+          sourceAddressHandle: signal.sourceAddressHandle,
+        },
+      } : {}),
+    })),
+    rateLimitDelayMilliseconds: effects.rateLimitDelayMilliseconds,
+    rateLimitDelayState: effects.rateLimitDelayState,
+    configurationSource: describeAddress(store, effects.configurationSourceAddressHandle),
+    openReason: effects.openReason,
+    ...(handles ? {
+      handles: {
+        configurationSourceAddressHandle: effects.configurationSourceAddressHandle,
+      },
+    } : {}),
+  };
 }
 
 function expressionArgumentSources(

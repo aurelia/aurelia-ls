@@ -380,7 +380,11 @@ export class TemplateTypeSystemOverlayBuilder {
         sourceExpressions: new RuntimeBindingSourceExpressionContextProjector(
           resource.runtimeAnalysis.runtimeRendering,
           instructionScopeLookup(resource.runtimeAnalysis.scopes.instructionScopes),
-          new RuntimeBindingExpressionScopeProjector(this.store, resource.runtimeAnalysis.expressionWorld),
+          new RuntimeBindingExpressionScopeProjector(
+            this.store,
+            resource.runtimeAnalysis.expressionWorld,
+            resource.runtimeAnalysis.expressionResourcePlan,
+          ),
         ),
       },
     };

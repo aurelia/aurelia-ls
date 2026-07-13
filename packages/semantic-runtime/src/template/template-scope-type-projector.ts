@@ -676,7 +676,11 @@ export class TemplateScopeTypeProjector {
     if (binding == null) {
       return CheckerExpressionTypeEvaluationContext.knownScope(expression, sourceScope, localKey, sourceAddressHandle);
     }
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
+    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
+      this.store,
+      input.expressionWorld,
+      input.expressionResourcePlan,
+    );
     const projection = projectRuntimeBindingSourceExpressionInScope(input.runtimeBindings, bindingExpressionScopes, {
       binding,
       expression,

@@ -16,5 +16,6 @@
   <p class="converter-after-behavior">${item.label & typedAudit:'reverse':limit | numberText:prefix}</p>
   <p class="missing-converter">${count | missingConverter}</p>
   <p class="converter-inner-behind-missing-outer">${count | numberText:prefix | missingConverter}</p>
+  <p class="converter-phase-error-blocked-by-inner-missing">${count | missingConverter | sanitize}</p>
   <p class="missing-behavior">${item.label & missingBehavior}</p>
 </template>

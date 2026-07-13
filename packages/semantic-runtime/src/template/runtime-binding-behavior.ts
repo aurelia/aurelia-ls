@@ -25,10 +25,16 @@ import type {
   RuntimeHtmlAstFrameworkErrorCode as RuntimeHtmlAstFrameworkErrorCodeValue,
 } from '../type-system/framework-error-code.js';
 import type { SourceSpan } from '../expression/source-span.js';
-import { RuntimeExpressionResourceBindReachability } from './runtime-expression-resource.js';
+import {
+  RuntimeExpressionResourceApplicationOrigin,
+  RuntimeExpressionResourceBindReachability,
+  RuntimeExpressionResourceLifecycleEffects,
+  RuntimeExpressionResourcePhaseReachability,
+} from './runtime-expression-resource.js';
 
 export const enum RuntimeBindingBehaviorApplicationPhase {
   Bind = 'bind',
+  Unbind = 'unbind',
 }
 
 export type RuntimeBindingBehaviorApplicationField =
@@ -36,15 +42,19 @@ export type RuntimeBindingBehaviorApplicationField =
   | 'resource'
   | 'targetAccess'
   | 'phase'
+  | 'origin'
   | 'behaviorName'
   | 'argumentCount'
   | 'staticArgumentValues'
   | 'expressionProductHandle'
   | 'chainIndex'
-  | 'chainDepth'
+  | 'authoredChainDepth'
+  | 'runtimeChainDepth'
   | 'bindReachability'
+  | 'phaseReachability'
   | 'bindOrder'
   | 'phaseOrder'
+  | 'lifecycleEffects'
   | 'argumentSpans'
   | 'source';
 
@@ -69,15 +79,19 @@ export class RuntimeBindingBehaviorApplication {
     readonly resource: TemplateVisibleResourceReference | null,
     readonly targetAccess: RuntimeBindingTargetAccessReference | null,
     readonly phase: RuntimeBindingBehaviorApplicationPhase,
+    readonly origin: RuntimeExpressionResourceApplicationOrigin,
     readonly behaviorName: string,
     readonly argumentCount: number,
     readonly staticArgumentValues: readonly string[],
     readonly expressionProductHandle: ProductHandle,
     readonly chainIndex: number,
-    readonly chainDepth: number,
+    readonly authoredChainDepth: number,
+    readonly runtimeChainDepth: number,
     readonly bindReachability: RuntimeExpressionResourceBindReachability,
+    readonly phaseReachability: RuntimeExpressionResourcePhaseReachability,
     readonly bindOrder: number | null,
     readonly phaseOrder: number | null,
+    readonly lifecycleEffects: RuntimeExpressionResourceLifecycleEffects,
     readonly argumentSpans: readonly SourceSpan[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingBehaviorApplicationField>[] = [],

@@ -447,6 +447,12 @@ static type surfaces rather than hydrated runtime values.
   branches. The value-converter source-value fixture proves both lanes: literal/static converter calls can publish
   representative repeat locals, while dynamic `withContext: boolean` keeps the local type but does not publish a
   representative static value.
+  The evaluator also owns app value-converter instance-property reads used by expression-resource lifecycle
+  materialization. One evaluator frame and per-container converter-instance cache therefore serve both `toView(...)`
+  reduction and `signals` discovery instead of constructing a second TypeScript/object evaluator in the template lane.
+  A closed evaluator instance proves an undeclared property absent, matching closed object-value semantics; partial
+  arrays preserve their known string elements and element sources while retaining unknown-tail pressure. Ordinary
+  connectable dependencies remain binding data-flow facts and are not republished as generic lifecycle subscriptions.
   `binding-source-value-expression-support.ts` is the source-value coverage map for the full Aurelia expression AST.
   It distinguishes value-reduced forms from scope lookups, transparent lifecycle wrappers, owner-handled syntax, and
   intentionally runtime-open forms such as assignments. Arrow callbacks are owner-handled by source-value call sites

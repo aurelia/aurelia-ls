@@ -798,33 +798,60 @@
         "template",
         "binding",
         "value-converter",
+        "observation",
         "diagnostics",
         "framework-errors"
       ],
-      "summary": "RuntimeValueConverterMaterializer owns rendered value-converter applications from bind-time resource lookup through toView/fromView invocation.",
-      "rationale": "Value-converter behavior is a runtime application lifecycle, not generic expression syntax. Keeping this materializer tracked prevents missing-resource and invocation errors from being deleted before diagnostics or reconstructed in API answer code.",
+      "summary": "RuntimeValueConverterMaterializer publishes planned bind/conversion/unbind applications, converter-owned issues, and signal lifecycle with exact or open provenance.",
+      "rationale": "Value-converter behavior is a runtime application lifecycle, not generic expression syntax or definition metadata. The shared expression-resource plan owns order and reachability, while one static source-value evaluator owns app converter instance closure. Keeping these boundaries explicit prevents behavior-projected converters, signal constants, missing resources, and provenance from being dropped or reconstructed in API answer code.",
       "guidance": [
-        "Start here when work touches built-in or custom value-converter invocation effects, converter-owned diagnostics, or expression ASTs that contain `ValueConverterExpression` nodes.",
-        "Walk interpolation hole expressions when collecting value-converter applications: runtime-html binds and evaluates each InterpolationPartBinding expression, not only the outer Interpolation AST.",
-        "Source value-converter application and issue products to the exact converter name span when the binding carrier has an admitted source file; broad binding-carrier spans should be fallback only.",
-        "Retain unresolved authored converter applications with resource: null and publish ast_converter_not_found / AUR0103 in the bind issue phase. Do not silently skip the application or reconstruct missing-resource errors in diagnostics.",
-        "Template overlays should call checker-visible converter `toView(...)` methods directly so overload order and argument diagnostics come from TypeScript's native call resolution; the generated identity helper is only for missing converters or converter targets without `toView`, and dynamic `withContext` should emit both strict-true runtime branches. Keep the overlay branch projection paired with the direct TypeChecker expression evaluator union proof.",
-        "The first modeled framework path is `SanitizeValueConverter.toView(...)`: visible `sanitize` plus no modeled app `ISanitizer` resolver claims runtime-html `method_not_implemented` / `AUR0099`, while app `ISanitizer` registrations suppress it.",
-        "Before adding another converter-owned framework code, inspect `framework.errors` usage rows and use `framework.resources` / `framework.rendering` to confirm the owning runtime concept."
+        "Start at RuntimeExpressionResourcePlanner for converter order, origin, bind blocking, and i18n behavior projection; start at RuntimeValueConverterMaterializer for phase publication, signal lifecycle, and converter-owned issues.",
+        "Walk interpolation-hole expressions and behavior-projected converters. Retain authoredChainDepth as null for projected converters and preserve runtimeChainDepth plus application origin.",
+        "Publish bind, applicable to-view/from-view, and unbind rows. Outer or own bind failure blocks conversion and teardown but does not erase structural applications.",
+        "Signal add/remove effects belong only to reached bind/unbind rows. Conversion rows must not duplicate them, and ordinary connectable dependencies remain owned by binding data flow.",
+        "Read app converter signals through RuntimeBindingSourceValueEvaluator.readValueConverterInstanceProperty. Do not add a converter-local TypeScript evaluator or widen ValueConverterDefinition with instance behavior.",
+        "Closed evaluator instances prove missing properties absent. Preserve each known signal array element and source when an imported spread or dynamic tail keeps the overall array open.",
+        "Spend resolved built-in header lineage before applying framework signal constants or built-in semantics; app resources shadowing built-in names must not inherit them.",
+        "Retain unresolved applications with resource: null and publish ast_converter_not_found / AUR0103 during bind. Source application and issue products to the exact converter-name span when possible.",
+        "Template overlays should call checker-visible converter toView methods directly so TypeScript owns overload resolution; dynamic withContext emits both runtime call branches. Keep this paired with direct checker expression projection.",
+        "SanitizeValueConverter.toView claims runtime-html method_not_implemented / AUR0099 only when the selected resource has built-in lineage and the active container has no app ISanitizer resolver.",
+        "Before adding another converter-owned framework code, inspect framework.errors and framework.resources to confirm the owning runtime concept."
       ],
       "anchors": [
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-expression-resource-plan.ts",
+          "symbolName": "RuntimeExpressionResourcePlanner",
+          "summary": "Owns converter order, behavior projection, and bind/phase reachability."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-value-converter-materializer.ts",
           "symbolName": "RuntimeValueConverterMaterializer",
-          "line": 106,
-          "summary": "Runtime value-converter materializer."
+          "summary": "Publishes value-converter applications, issues, lifecycle effects, and signal provenance."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-source-value-evaluator.ts",
+          "symbolName": "readValueConverterInstanceProperty",
+          "summary": "Shared app converter instance-property closure used for signals and source-value evaluation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-definition-lineage.ts",
+          "symbolName": "readBuiltInResourceForDefinition",
+          "summary": "Recovers built-in catalog identity only through actual converged header lineage."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-expression-resource.ts",
+          "symbolName": "RuntimeExpressionResourceLifecycleEffects",
+          "summary": "Shared lifecycle-effect, signal, and closed/open value vocabulary."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-value-converter.ts",
           "symbolName": "SanitizeValueConverter",
-          "line": 105,
           "summary": "Semantic-runtime model of Aurelia's SanitizeValueConverter.toView path."
         },
         {
@@ -849,12 +876,22 @@
           "kind": "product-large-class",
           "className": "RuntimeValueConverterMaterializer",
           "filePath": "packages/semantic-runtime/src/template/runtime-value-converter-materializer.ts",
-          "minLineCount": 100,
+          "minLineCount": 200,
           "minMethodCount": 5
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/binding-source-value-evaluator.ts",
+          "symbolName": "readValueConverterInstanceProperty"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/resources/resource-definition-lineage.ts",
+          "symbolName": "readBuiltInResourceForDefinition"
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-07-12"
+      "updatedAt": "2026-07-14"
     },
     {
       "id": "frontier:binding-command-lowering-materializer",
@@ -1927,51 +1964,53 @@
         "runtime-html",
         "framework-errors"
       ],
-      "summary": "RuntimeBindingBehaviorPlanner owns pre-bind behavior reachability and state effects; RuntimeBindingBehaviorMaterializer publishes the resulting application and issue products after target access exists.",
-      "rationale": "Aurelia executes astBind before PropertyBinding selects an accessor or observer. Effective mode, target-observer overrides, scope assignment, converter reachability, and data-flow must therefore spend one pre-access plan. Replaying visible authored behaviors in downstream consumers loses outer-failure reachability and creates mutually inconsistent runtime products.",
+      "summary": "RuntimeExpressionResourcePlanner owns pre-bind behavior/converter order, reachability, and state effects; the behavior materializer publishes phase applications, lifecycle effects, and issues from that plan.",
+      "rationale": "Aurelia executes one astBind chain before target access, and reached behaviors can rewrite that chain by inserting converters. Effective mode, target-observer overrides, projected converters, phase reachability, and downstream data flow must therefore spend one authority. Replaying authored behaviors or converters independently loses runtime order and creates mutually inconsistent products.",
       "guidance": [
-        "Start at RuntimeBindingBehaviorPlanner when built-in behavior effects, duplicate rate-limit/target-subscriber diagnostics, signal/update-trigger/self/attr/validate semantics, effective binding mode, or behavior reachability change.",
-        "Keep expression parsing and resource occurrence extraction below bindingBehaviorResourceOccurrences; do not reparse expression text in planner, materializer, API, or diagnostics code.",
-        "Walk interpolation-hole chains outermost to innermost. A reached behavior failure blocks every inner behavior and value converter in that chain.",
-        "Resolve the runtime target and NodeObserverLocator configuration before ordinary target access so attr and updateTrigger can supply the target observer that PropertyBinding.bind actually uses.",
-        "Scope assignment, controller target access, value-converter phases, bound-controller values, binding data-flow, and inlay hints must consume RuntimeBindingBehaviorPlan. Do not restore independent AST/resource-visibility mode scans.",
-        "RuntimeBindingBehaviorMaterializer is a publication phase: retain authored applications, exact behavior-name sources, target-access references, and framework issues from the plan without re-running behavior state.",
+        "Start at RuntimeExpressionResourcePlanner when built-in behavior effects, behavior-projected converters, duplicate/rate-limit/target-subscriber diagnostics, effective binding mode, target observer selection, or expression-resource reachability changes.",
+        "Keep expression parsing and structural occurrence extraction below expressionResourceOccurrences; do not reparse expression text in planner, materializers, API, or diagnostics code.",
+        "Walk each interpolation-hole chain once in astBind order, including converters inserted by reached i18n behaviors. Retain authored and runtime chain depth separately.",
+        "A reached resource-resolution or behavior-bind failure blocks every inner resource plus conversion and teardown phases; preserve blocked structural rows and report phaseReachability instead of deleting them.",
+        "Resolve the runtime target and NodeObserverLocator configuration before ordinary target access so attr and updateTrigger can supply the target observer that PropertyBinding.bind uses.",
+        "Scope assignment, controller target access, converter phases, bound-controller values, binding data flow, and inlay hints must consume RuntimeExpressionResourcePlan. Do not restore independent AST/resource-visibility scans.",
+        "RuntimeBindingBehaviorMaterializer is a publication phase. It emits bind/unbind applications, exact behavior and argument sources, phase-local lifecycle effects, and framework issues without re-running behavior state.",
+        "Do not add generic source/target subscription effects: connectable-read dependencies and selected target observers already own those facts. Lifecycle effects are for behavior-owned state such as signals, rate limits, mode, self, validation, state scope, target overrides, and expression projection.",
         "Retain unresolved authored behavior applications with resource: null and publish ast_behavior_not_found / AUR0101 before behavior-specific effects run.",
         "Track applied behavior names in runtime-html astBind order so repeated authored names publish ast_behavior_duplicated / AUR0102 at the bind attempt that discovers the duplicate.",
         "Runtime-dependent updateTrigger event arguments make target-access events open; do not retain default node events as though the reached behavior had not executed.",
         "ValidationHtmlConfiguration admits ValidateBindingBehavior as a resource; validate-specific AUR4200-AUR4205 diagnostics stay gated on resource visibility and closed parser-owned facts. AUR4206 remains an unclaimed malformed/foreign-AST fallback.",
-        "Use appendRuntimeBindingProductValue for emission binding indexes shared with value-converter materialization."
+        "Use appendRuntimeBindingProductValue for emission indexes shared with value-converter materialization."
       ],
       "anchors": [
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior-plan.ts",
-          "symbolName": "RuntimeBindingBehaviorPlanner",
-          "summary": "Single pre-bind authority for behavior reachability, effective mode, and target-observer effects."
+          "filePath": "packages/semantic-runtime/src/template/runtime-expression-resource-plan.ts",
+          "symbolName": "RuntimeExpressionResourcePlanner",
+          "summary": "Single pre-bind authority for effective expression-resource order, reachability, mode, and target-observer effects."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-expression-resource.ts",
+          "symbolName": "RuntimeExpressionResourceLifecycleEffects",
+          "summary": "Shared phase-local lifecycle-effect and signal epistemic vocabulary."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior-materializer.ts",
           "symbolName": "RuntimeBindingBehaviorMaterializer",
-          "summary": "Publishes application and issue products from the pre-bind plan after target access exists."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior.ts",
-          "symbolName": "ValidateBindingBehavior",
-          "summary": "Validation-html validate binding-behavior semantics."
+          "summary": "Publishes behavior phase applications, lifecycle effects, exact sources, and issues from the shared plan."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior-effect.ts",
           "symbolName": "RuntimeBindingBehaviorBindEffectReader",
-          "summary": "Reads source-backed direct target-subscriber effects for custom binding behaviors."
+          "summary": "Reads source-backed direct target-subscriber effects for app binding behaviors."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-binding-mode-behavior.ts",
           "symbolName": "bindingModeForBindingBehaviorName",
-          "summary": "Shared binding-mode behavior vocabulary; lifecycle state lives in the plan."
+          "summary": "Shared mode-name and direction vocabulary; lifecycle state lives in the expression-resource plan."
         },
         {
           "kind": "source",
@@ -2002,9 +2041,9 @@
       "liveChecks": [
         {
           "kind": "product-large-class",
-          "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior-plan.ts",
-          "className": "RuntimeBindingBehaviorPlanner",
-          "minLineCount": 200,
+          "filePath": "packages/semantic-runtime/src/template/runtime-expression-resource-plan.ts",
+          "className": "RuntimeExpressionResourcePlanner",
+          "minLineCount": 250,
           "minMethodCount": 5
         },
         {
@@ -2021,7 +2060,7 @@
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-07-13"
+      "updatedAt": "2026-07-14"
     },
     {
       "id": "frontier:runtime-composition-materializer",

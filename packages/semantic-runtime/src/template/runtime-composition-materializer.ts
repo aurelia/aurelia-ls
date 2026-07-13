@@ -121,6 +121,7 @@ import {
   type CompositionModelEvaluation,
 } from './runtime-composition-activation.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
+import type { RuntimeExpressionResourcePlan } from './runtime-expression-resource-plan.js';
 import type { TemplateRuntimeAnalysisProjectContext } from './template-runtime-analysis-context.js';
 import type { TemplateScopeConstructionEmission } from './template-controller-scope-materializer.js';
 import type { TemplateResourceScope } from './compiler-world.js';
@@ -134,6 +135,7 @@ export class RuntimeCompositionMaterializationRequest {
   constructor(
     readonly localKey: string,
     readonly runtimeRendering: RuntimeRenderingEmission,
+    readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
     readonly controllerBind: RuntimeControllerBindEmission,
     readonly bindingDataFlow: RuntimeBindingDataFlowEmission,
     readonly scopes: TemplateScopeConstructionEmission,
@@ -258,7 +260,11 @@ export class RuntimeCompositionMaterializer {
     const records: KernelStoreRecord[] = [...source.records];
     const bindingsByProduct = new Map(input.runtimeRendering.bindings.map((binding) => [binding.productHandle, binding]));
     const scopesByInstruction = instructionScopeLookup(input.scopes.instructionScopes);
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
+    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
+      this.store,
+      input.expressionWorld,
+      input.expressionResourcePlan,
+    );
     const sourceExpressionContexts = new RuntimeBindingSourceExpressionContextProjector(
       input.runtimeRendering,
       scopesByInstruction,

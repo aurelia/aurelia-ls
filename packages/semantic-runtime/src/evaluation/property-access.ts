@@ -232,7 +232,8 @@ export function readStaticValueProperty(
   if (receiver.kind === EvaluationValueKind.BoundaryValue) {
     return staticValueMemberValue(new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}.${propertyName}`, node));
   }
-  if (receiver.kind === EvaluationValueKind.Object && !receiver.mayHaveUnknownProperties) {
+  if ((receiver.kind === EvaluationValueKind.Object || receiver.kind === EvaluationValueKind.Instance)
+    && !receiver.mayHaveUnknownProperties) {
     return staticValueMemberValue(new EvaluationUndefinedValue(node));
   }
   if (
