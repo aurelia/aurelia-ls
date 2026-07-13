@@ -38,6 +38,7 @@ import {
 import type {
   KernelStore,
 } from '../kernel/store.js';
+import { RuntimeNodeObserverConfigFieldState } from '../template/runtime-binding.js';
 import {
   runtimeBindingPrimitiveValueAssignableToType,
   runtimeBindingStringPrimitiveDomain,
@@ -175,6 +176,8 @@ export class BindingDataFlowAssignabilityEvaluator {
       case RuntimeBindingValueChannelKind.EventHandlerInvocation:
         // ListenerBinding accepts any expression value and only invokes it when the runtime value is callable.
         return true;
+      case RuntimeBindingValueChannelKind.ValueAttributeObserverProperty:
+        return this.isValueAttributeObserverSourceAccepted(sourceType, targetType, valueChannel);
       case RuntimeBindingValueChannelKind.CustomMatcherFunction:
         return this.typeAccess.isCallableBooleanFunction(sourceType, 2);
       case RuntimeBindingValueChannelKind.SelectSingleOptionValue:
@@ -188,6 +191,35 @@ export class BindingDataFlowAssignabilityEvaluator {
       default:
         return null;
     }
+  }
+
+  private isValueAttributeObserverSourceAccepted(
+    sourceType: CheckerTypeReference,
+    targetType: CheckerTypeReference | null,
+    valueChannel: RuntimeBindingValueChannel,
+  ): boolean | null {
+    const sourceCarrier = this.typeAccess.readTypeShape(sourceType)?.carrier ?? null;
+    const targetCarrier = this.typeAccess.readTypeShape(targetType)?.carrier ?? null;
+    if (sourceCarrier == null || targetCarrier == null || sourceCarrier.checker !== targetCarrier.checker) {
+      return null;
+    }
+    const nonNullishSource = sourceCarrier.checker.getNonNullableType(sourceCarrier.type);
+    if ((nonNullishSource.flags & ts.TypeFlags.Never) === 0
+      && !checkerRawTypeAssignable(sourceCarrier.checker, nonNullishSource, targetCarrier.type)) {
+      return false;
+    }
+    if (checkerTypeNullishPresence(sourceCarrier.checker, sourceCarrier.type) === CheckerTypeNullishPresence.None) {
+      return true;
+    }
+    if (valueChannel.nullishDefaultState === RuntimeNodeObserverConfigFieldState.Open
+      || valueChannel.nullishDefault == null) {
+      return null;
+    }
+    return runtimeBindingPrimitiveValueAssignableToType(
+      valueChannel.nullishDefault,
+      targetCarrier.checker,
+      targetCarrier.type,
+    );
   }
 
   private isSyntheticObjectAssignableToStringIndexedTarget(

@@ -6493,8 +6493,8 @@
               "name": "binding target accesses",
               "query": { "kind": "binding-target-accesses", "options": { "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "targetProperty": "position", "lookup": "observer", "strategy": "value-attribute-observer", "eventNames": ["position-change"], "targetType": "HTMLElement" }, "source": { "marker": "native-observer-slider position.two-way=\"nativeObserverPosition\"", "token": "position.two-way=\"nativeObserverPosition\"" }, "count": 1 },
-                { "fields": { "targetProperty": "position", "lookup": "observer", "strategy": "setter-observer", "eventNames": [], "targetType": "HTMLElement" }, "source": { "marker": "inert-observer-slider position.two-way=\"inertObserverPosition\"", "token": "position.two-way=\"inertObserverPosition\"" }, "count": 1 }
+                { "fields": { "targetProperty": "position", "lookup": "observer", "strategy": "value-attribute-observer", "nodeObserverConfig.eventNames": ["position-change"], "targetType": "HTMLElement" }, "source": { "marker": "native-observer-slider position.two-way=\"nativeObserverPosition\"", "token": "position.two-way=\"nativeObserverPosition\"" }, "count": 1 },
+                { "fields": { "targetProperty": "position", "lookup": "observer", "strategy": "setter-observer", "nodeObserverConfig": null, "targetType": "HTMLElement" }, "source": { "marker": "inert-observer-slider position.two-way=\"inertObserverPosition\"", "token": "position.two-way=\"inertObserverPosition\"" }, "count": 1 }
               ]
             }
           ]
@@ -6536,6 +6536,131 @@
               "query": { "kind": "template-rename", "options": { "newName": "maximum-size" } },
               "outcomes": ["miss"],
               "equals": { "value.status": "not-available", "value.reason": "no-source-backed-member", "value.edits.length": 0 }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "native-observer-value-channels",
+      "fixture": "fixtures/pressure/template-native-target-precedence",
+      "aureliaDomain": "observation-data-flow",
+      "capability": "native-observer-value-channels",
+      "domainAxis": "data-flow",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/template-native-target-precedence-app.html",
+      "requirement": "Native and app-configured node observers preserve constructor/config epistemics, nullish defaulting, target-write suppression, renderer overrides, and effective transport without erasing source evaluation lifecycle.",
+      "cases": [
+        {
+          "id": "value-attribute-nullish-defaults",
+          "expectations": [
+            {
+              "name": "binding value channels",
+              "query": { "kind": "binding-value-channels", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "targetProperty": "value", "channelKind": "value-attribute-observer-property", "targetMutationKind": "writes-target", "nullishDefault.kind": "string", "nullishDefault.value": "", "nullishDefaultState": "closed" }, "source": { "marker": "value.bind=\"nullableTextValue\"", "token": "value.bind=\"nullableTextValue\"" }, "count": 1 },
+                { "fields": { "targetProperty": "valueAsNumber", "channelKind": "value-attribute-observer-property", "targetMutationKind": "writes-target", "nullishDefault.kind": "number", "nullishDefault.value": 0, "nullishDefaultState": "closed" }, "source": { "marker": "value-as-number.bind=\"nullableNumericValue\"", "token": "value-as-number.bind=\"nullableNumericValue\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "sourceName": "nullableTextValue", "targetProperty": "value", "direction": "two-way", "sourceEvaluationKind": "connectable-read", "targetMutationKind": "writes-target", "sourceToTargetAssignable": true, "targetToSourceAssignable": true }, "source": { "marker": "value.bind=\"nullableTextValue\"", "token": "value.bind=\"nullableTextValue\"" }, "count": 1 },
+                { "fields": { "sourceName": "nullableNumericValue", "targetProperty": "valueAsNumber", "direction": "two-way", "sourceEvaluationKind": "connectable-read", "targetMutationKind": "writes-target", "sourceToTargetAssignable": true, "targetToSourceAssignable": true }, "source": { "marker": "value-as-number.bind=\"nullableNumericValue\"", "token": "value-as-number.bind=\"nullableNumericValue\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "readonly-observer-transport",
+          "expectations": [
+            {
+              "name": "binding target accesses",
+              "query": { "kind": "binding-target-accesses", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "targetProperty": "files", "strategy": "value-attribute-observer", "nodeObserverConfig.readonlyValue": true, "nodeObserverConfig.fieldStates.readonly": "closed", "nodeObserverConfig.fieldStates.default": "absent" }, "source": { "marker": "files.bind=\"selectedFiles\"", "token": "files.bind=\"selectedFiles\"" }, "count": 1 },
+                { "fields": { "targetProperty": "title", "strategy": "value-attribute-observer", "nodeObserverConfig.readonlyValue": true, "nodeObserverConfig.defaultValue": "", "nodeObserverConfig.fieldStates.default": "closed" }, "source": { "marker": "title.two-way=\"readonlyTitle\"", "token": "title.two-way=\"readonlyTitle\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "binding value channels",
+              "query": { "kind": "binding-value-channels", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "targetProperty": "files", "channelKind": "value-attribute-observer-property", "targetMutationKind": "suppresses-target-write", "nullishDefault.kind": "undefined", "nullishDefaultState": "absent" }, "source": { "marker": "files.bind=\"selectedFiles\"", "token": "files.bind=\"selectedFiles\"" }, "count": 1 },
+                { "fields": { "targetProperty": "title", "channelKind": "value-attribute-observer-property", "targetMutationKind": "suppresses-target-write", "nullishDefault.kind": "string", "nullishDefault.value": "", "nullishDefaultState": "closed" }, "source": { "marker": "title.two-way=\"readonlyTitle\"", "token": "title.two-way=\"readonlyTitle\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "sourceName": "selectedFiles", "targetProperty": "files", "direction": "target-to-source", "sourceEvaluationKind": "connectable-read", "targetMutationKind": "suppresses-target-write", "sourceToTargetAssignable": null, "targetToSourceAssignable": true }, "source": { "marker": "files.bind=\"selectedFiles\"", "token": "files.bind=\"selectedFiles\"" }, "count": 1 },
+                { "fields": { "sourceName": "readonlyTitle", "targetProperty": "title", "direction": "target-to-source", "sourceEvaluationKind": "connectable-read", "targetMutationKind": "suppresses-target-write", "sourceToTargetAssignable": null, "targetToSourceAssignable": true }, "source": { "marker": "title.two-way=\"readonlyTitle\"", "token": "title.two-way=\"readonlyTitle\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "app-configured-observer-epistemics",
+          "expectations": [
+            {
+              "name": "binding target accesses",
+              "query": { "kind": "binding-target-accesses", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "targetProperty": "tabIndex", "strategy": "value-attribute-observer", "nodeObserverConfig.observerKind": "value-attribute", "nodeObserverConfig.fieldStates.type": "absent", "nodeObserverConfig.defaultValue": 0, "nodeObserverConfig.fieldStates.default": "closed" }, "source": { "marker": "tabindex.two-way=\"customDefaultTabIndex\"", "token": "tabindex.two-way=\"customDefaultTabIndex\"" }, "count": 1 },
+                { "fields": { "targetProperty": "lang", "strategy": "custom-node-observer", "nodeObserverConfig.observerKind": "custom", "nodeObserverConfig.observerConstructorName": "LanguageObserver", "nodeObserverConfig.fieldStates.type": "closed", "openReason": null }, "source": { "marker": "lang.two-way=\"customLanguage\"", "token": "lang.two-way=\"customLanguage\"" }, "count": 1 },
+                { "fields": { "targetProperty": "draggable", "strategy": "value-attribute-observer", "nodeObserverConfig.observerKind": "value-attribute", "nodeObserverConfig.observerConstructorName": "ValueAttributeObserver", "nodeObserverConfig.fieldStates.type": "closed", "nodeObserverConfig.eventNames": ["drag-state-change"], "openReason": null }, "source": { "marker": "draggable.two-way=\"isDraggable\"", "token": "draggable.two-way=\"isDraggable\"" }, "count": 1 },
+                { "fields": { "targetProperty": "dir", "strategy": "unknown", "nodeObserverConfig.observerKind": "open", "nodeObserverConfig.observerConstructorName": "ValueAttributeObserver", "nodeObserverConfig.eventNames": ["direction-change"], "nodeObserverConfig.fieldStates.type": "open", "nodeObserverConfig.fieldStates.events": "open", "nodeObserverConfig.fieldStates.readonly": "open", "nodeObserverConfig.fieldStates.default": "open", "authority": "open" }, "source": { "marker": "dir.two-way=\"openDirection\"", "token": "dir.two-way=\"openDirection\"" }, "count": 1 },
+                { "fields": { "targetProperty": "spellcheck", "strategy": "value-attribute-observer", "nodeObserverConfig.observerKind": "value-attribute", "nodeObserverConfig.observerConstructorName": "ValueAttributeObserver", "nodeObserverConfig.eventNames": ["spellcheck-change"], "nodeObserverConfig.readonlyValue": false, "nodeObserverConfig.defaultValue": false, "nodeObserverConfig.fieldStates.type": "closed", "nodeObserverConfig.fieldStates.events": "closed", "nodeObserverConfig.fieldStates.readonly": "closed", "nodeObserverConfig.fieldStates.default": "closed", "openReason": null }, "source": { "marker": "spellcheck.two-way=\"isSpellchecked\"", "token": "spellcheck.two-way=\"isSpellchecked\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "binding value channels",
+              "query": { "kind": "binding-value-channels", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "targetProperty": "tabIndex", "channelKind": "value-attribute-observer-property", "targetMutationKind": "writes-target", "nullishDefault.kind": "number", "nullishDefault.value": 0 }, "source": { "marker": "tabindex.two-way=\"customDefaultTabIndex\"", "token": "tabindex.two-way=\"customDefaultTabIndex\"" }, "count": 1 },
+                { "fields": { "targetProperty": "lang", "channelKind": "open", "targetMutationKind": "open", "openReason": "App-owned node observer 'LanguageObserver' has a closed target selection but unmodeled value transport semantics." }, "source": { "marker": "lang.two-way=\"customLanguage\"", "token": "lang.two-way=\"customLanguage\"" }, "count": 1 },
+                { "fields": { "targetProperty": "draggable", "channelKind": "value-attribute-observer-property", "targetMutationKind": "writes-target", "nullishDefault.kind": "undefined", "nullishDefaultState": "absent", "openReason": null }, "source": { "marker": "draggable.two-way=\"isDraggable\"", "token": "draggable.two-way=\"isDraggable\"" }, "count": 1 },
+                { "fields": { "targetProperty": "dir", "channelKind": "open", "targetMutationKind": "open" }, "source": { "marker": "dir.two-way=\"openDirection\"", "token": "dir.two-way=\"openDirection\"" }, "count": 1 },
+                { "fields": { "targetProperty": "spellcheck", "channelKind": "value-attribute-observer-property", "targetMutationKind": "writes-target", "nullishDefault.kind": "boolean", "nullishDefault.value": false, "nullishDefaultState": "closed", "openReason": null }, "source": { "marker": "spellcheck.two-way=\"isSpellchecked\"", "token": "spellcheck.two-way=\"isSpellchecked\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "renderer-class-target-observer",
+          "expectations": [
+            {
+              "name": "binding target accesses",
+              "query": { "kind": "binding-target-accesses", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "targetProperty": "class", "lookup": "accessor", "strategy": "class-attribute-accessor", "nodeObserverConfig": null, "authority": "runtime-renderer-implementation" }, "source": { "marker": "class.bind=\"classTokens\"", "token": "class.bind=\"classTokens\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "sourceName": "classTokens", "targetProperty": "class", "valueChannelKind": "class-attribute-tokens", "targetMutationKind": "writes-target", "sourceToTargetAssignable": true }, "source": { "marker": "class.bind=\"classTokens\"", "token": "class.bind=\"classTokens\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "native-observer-diagnostics-remain-quiet",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "selectedMemberName": "nullableTextValue" }, "source": { "marker": "value.bind=\"nullableTextValue\"", "token": "nullableTextValue" }, "absent": true },
+                { "fields": { "selectedMemberName": "nullableNumericValue" }, "source": { "marker": "value-as-number.bind=\"nullableNumericValue\"", "token": "nullableNumericValue" }, "absent": true },
+                { "fields": { "selectedMemberName": "selectedFiles" }, "source": { "marker": "files.bind=\"selectedFiles\"", "token": "selectedFiles" }, "absent": true },
+                { "fields": { "selectedMemberName": "readonlyTitle" }, "source": { "marker": "title.two-way=\"readonlyTitle\"", "token": "readonlyTitle" }, "absent": true }
+              ]
             }
           ]
         }
@@ -14116,9 +14241,9 @@
               "name": "behavior-supplied target observers",
               "query": { "kind": "binding-target-accesses", "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "targetProperty": "value", "lookup": "observer", "strategy": "value-attribute-observer", "eventNames": ["blur"] }, "source": { "marker": "value.to-view=\"message & updateTrigger:'blur' & twoWay\"", "token": "value.to-view=\"message & updateTrigger:'blur' & twoWay\"" }, "count": 1 },
-                { "fields": { "targetProperty": "value", "lookup": "observer", "strategy": "value-attribute-observer", "eventNames": [], "authority": "open", "openReason": "Binding behavior target-observer event names depend on runtime expression values." }, "source": { "marker": "value.to-view=\"message & updateTrigger:eventName & twoWay\"", "token": "value.to-view=\"message & updateTrigger:eventName & twoWay\"" }, "count": 1 },
-                { "fields": { "targetProperty": "value", "lookup": "accessor", "strategy": "data-attribute-accessor", "eventNames": [] }, "source": { "marker": "value.to-view=\"message & attr\"", "token": "value.to-view=\"message & attr\"" }, "count": 1 }
+                { "fields": { "targetProperty": "value", "lookup": "observer", "strategy": "value-attribute-observer", "nodeObserverConfig.eventNames": ["blur"], "authority": "binding-behavior" }, "source": { "marker": "value.to-view=\"message & updateTrigger:'blur' & twoWay\"", "token": "value.to-view=\"message & updateTrigger:'blur' & twoWay\"" }, "count": 1 },
+                { "fields": { "targetProperty": "value", "lookup": "observer", "strategy": "value-attribute-observer", "nodeObserverConfig.eventNames": [], "nodeObserverConfig.fieldStates.events": "open", "nodeObserverConfig.openReason": "Binding behavior target-observer event names depend on runtime expression values.", "authority": "binding-behavior", "openReason": null }, "source": { "marker": "value.to-view=\"message & updateTrigger:eventName & twoWay\"", "token": "value.to-view=\"message & updateTrigger:eventName & twoWay\"" }, "count": 1 },
+                { "fields": { "targetProperty": "value", "lookup": "accessor", "strategy": "data-attribute-accessor", "nodeObserverConfig": null, "authority": "binding-behavior" }, "source": { "marker": "value.to-view=\"message & attr\"", "token": "value.to-view=\"message & attr\"" }, "count": 1 }
               ]
             }
           ]

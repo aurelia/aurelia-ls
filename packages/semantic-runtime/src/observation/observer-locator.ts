@@ -30,6 +30,9 @@ import {
   RuntimeBindingTargetAccessAuthority,
   RuntimeBindingTargetAccessLookup,
   RuntimeBindingTargetAccessStrategy,
+  RuntimeNodeObserverConfig,
+  RuntimeNodeObserverConfigFieldState,
+  RuntimeNodeObserverKind,
   RuntimeBindingTargetKind,
   RuntimeBindingTargetTypeSource,
   type RuntimeBindingTarget,
@@ -98,7 +101,7 @@ export class ObserverLocatorLookupResult {
       input.targetKind,
       input.targetProperty,
       RuntimeBindingTargetAccessStrategy.Unknown,
-      [],
+      null,
       input.targetType,
       input.targetType == null ? null : RuntimeBindingTargetTypeSource.Reference,
       null,
@@ -117,7 +120,7 @@ export class ObserverLocatorLookupResult {
     readonly targetKind: RuntimeBindingTargetKind,
     readonly targetProperty: string,
     readonly strategy: RuntimeBindingTargetAccessStrategy,
-    readonly eventNames: readonly string[],
+    readonly nodeObserverConfig: RuntimeNodeObserverConfig | null,
     readonly targetType: CheckerTypeReference | null,
     readonly targetTypeSource: RuntimeBindingTargetTypeSource | null,
     readonly propertyType: CheckerTypeReference | null,
@@ -138,27 +141,32 @@ export class ObserverLocatorLookupResult {
     return observerStrategySupportsCoercer(this.strategy);
   }
 
-  /** Apply an observer supplied by binding-behavior bind before PropertyBinding performs its ordinary lookup. */
+  /** Apply a renderer- or binding-behavior-supplied target observer over ordinary ObserverLocator selection. */
   withTargetObserver(
     strategy: RuntimeBindingTargetAccessStrategy | null,
     eventNames: readonly string[] | null,
+    authority: RuntimeBindingTargetAccessAuthority,
   ): ObserverLocatorLookupResult {
     const selectedStrategy = strategy ?? this.strategy;
-    const openReason = eventNames == null
-      ? 'Binding behavior target-observer event names depend on runtime expression values.'
-      : null;
-    let authority = this.authority;
-    if (openReason != null) {
-      authority = RuntimeBindingTargetAccessAuthority.Open;
-    } else if (strategy != null) {
-      authority = RuntimeBindingTargetAccessAuthority.FrameworkConfig;
-    }
+    const nodeObserverConfig = strategy != null
+      ? null
+      : eventNames == null
+        ? this.nodeObserverConfig?.withEventNames(
+          [],
+          RuntimeNodeObserverConfigFieldState.Open,
+          'Binding behavior target-observer event names depend on runtime expression values.',
+        ) ?? null
+        : this.nodeObserverConfig?.withEventNames(
+          eventNames,
+          RuntimeNodeObserverConfigFieldState.Closed,
+          null,
+        ) ?? null;
     return new ObserverLocatorLookupResult(
       this.lookup,
       this.targetKind,
       this.targetProperty,
       selectedStrategy,
-      eventNames ?? [],
+      nodeObserverConfig,
       this.targetType,
       this.targetTypeSource,
       this.propertyType,
@@ -166,7 +174,7 @@ export class ObserverLocatorLookupResult {
       this.isWritable,
       isSubscribableStrategy(selectedStrategy),
       authority,
-      openReason,
+      this.openReason,
       null,
       null,
     );
@@ -195,13 +203,6 @@ type ComputedObserverExplicitDependency =
   | symbol
   | ((obj: unknown, observer?: unknown) => unknown);
 
-export type NodeObserverConfig = {
-  readonly type?: typeof ValueAttributeObserver | typeof CheckedObserver | typeof SelectValueObserver;
-  readonly events: readonly string[];
-  readonly readonly: boolean;
-  readonly default?: unknown;
-};
-
 export class NodeObserverLocatorNodeConfig {
   constructor(
     /** Runtime nodeName lane consumed by NodeObserverLocator.useConfig. */
@@ -209,7 +210,7 @@ export class NodeObserverLocatorNodeConfig {
     /** Target property key configured on the node. */
     readonly propertyName: string,
     /** Runtime observer config selected for the node/property pair. */
-    readonly config: NodeObserverConfig,
+    readonly config: RuntimeNodeObserverConfig,
   ) {}
 }
 
@@ -218,7 +219,7 @@ export class NodeObserverLocatorGlobalConfig {
     /** Target property key configured globally. */
     readonly propertyName: string,
     /** Runtime observer config selected for every node with this property. */
-    readonly config: NodeObserverConfig,
+    readonly config: RuntimeNodeObserverConfig,
   ) {}
 }
 
@@ -558,11 +559,20 @@ export class ValueAttributeObserver {
   private value: unknown = '';
   private oldValue: unknown = '';
   private hasChanges = false;
-  private config: NodeObserverConfig = { events: inputEvents, readonly: false, default: '' };
+  private config = frameworkNodeObserverConfig(
+    RuntimeNodeObserverKind.ValueAttribute,
+    'ValueAttributeObserver',
+    RuntimeNodeObserverConfigFieldState.Absent,
+    inputEvents,
+    false,
+    RuntimeNodeObserverConfigFieldState.Absent,
+    '',
+    RuntimeNodeObserverConfigFieldState.Closed,
+  );
 
   constructor() {}
 
-  useConfig(config: NodeObserverConfig): void {
+  useConfig(config: RuntimeNodeObserverConfig): void {
     this.config = config;
   }
 
@@ -575,9 +585,9 @@ export class ValueAttributeObserver {
       return;
     }
     this.oldValue = this.value;
-    this.value = newValue ?? this.config.default;
+    this.value = newValue ?? this.config.defaultValue;
     this.hasChanges = true;
-    if (!this.config.readonly) {
+    if (this.config.readonlyValue !== true) {
       this.flushChanges();
     }
   }
@@ -604,11 +614,16 @@ export class CheckedObserver {
   readonly oL: ObserverLocator | null = null;
   private value: unknown = undefined;
   private oldValue: unknown = undefined;
-  private config: NodeObserverConfig = { events: checkedEvents, readonly: false };
+  private config = frameworkNodeObserverConfig(
+    RuntimeNodeObserverKind.Checked,
+    'CheckedObserver',
+    RuntimeNodeObserverConfigFieldState.Closed,
+    checkedEvents,
+  );
 
   constructor() {}
 
-  useConfig(config: NodeObserverConfig): void {
+  useConfig(config: RuntimeNodeObserverConfig): void {
     this.config = config;
   }
 
@@ -642,16 +657,25 @@ export class SelectValueObserver {
   private value: unknown = undefined;
   private oldValue: unknown = undefined;
   private hasChanges = false;
-  private config: NodeObserverConfig = { events: selectEvents, readonly: false, default: '' };
+  private config = frameworkNodeObserverConfig(
+    RuntimeNodeObserverKind.Select,
+    'SelectValueObserver',
+    RuntimeNodeObserverConfigFieldState.Closed,
+    selectEvents,
+    false,
+    RuntimeNodeObserverConfigFieldState.Absent,
+    '',
+    RuntimeNodeObserverConfigFieldState.Closed,
+  );
 
   constructor() {}
 
-  useConfig(config: NodeObserverConfig): void {
+  useConfig(config: RuntimeNodeObserverConfig): void {
     this.config = config;
   }
 
   getValue(): unknown {
-    return this.value ?? this.config.default;
+    return this.value ?? this.config.defaultValue;
   }
 
   setValue(newValue: unknown): void {
@@ -694,6 +718,32 @@ const scrollEvents = ['scroll'] as const;
 const checkedEvents = ['change'] as const;
 const selectEvents = ['change'] as const;
 
+function frameworkNodeObserverConfig(
+  observerKind: RuntimeNodeObserverKind,
+  observerConstructorName: string,
+  typeState: RuntimeNodeObserverConfigFieldState,
+  eventNames: readonly string[],
+  readonlyValue = false,
+  readonlyState = RuntimeNodeObserverConfigFieldState.Absent,
+  defaultValue: RuntimeNodeObserverConfig['defaultValue'] = undefined,
+  defaultState = RuntimeNodeObserverConfigFieldState.Absent,
+): RuntimeNodeObserverConfig {
+  return new RuntimeNodeObserverConfig(
+    observerKind,
+    observerConstructorName,
+    eventNames,
+    readonlyValue,
+    defaultValue,
+    {
+      type: typeState,
+      events: RuntimeNodeObserverConfigFieldState.Closed,
+      readonly: readonlyState,
+      default: defaultState,
+    },
+    null,
+  );
+}
+
 /**
  * Semantic-runtime model of Aurelia's ObserverLocator.
  *
@@ -707,8 +757,8 @@ export class NodeObserverLocator {
   /** Aurelia defaults node observers to dirty-checking unknown native properties. */
   allowDirtyCheck = true;
 
-  private readonly events = new Map<string, Map<string, NodeObserverConfig>>();
-  private readonly globalEvents = new Map<string, NodeObserverConfig>();
+  private readonly events = new Map<string, Map<string, RuntimeNodeObserverConfig>>();
+  private readonly globalEvents = new Map<string, RuntimeNodeObserverConfig>();
   private readonly overrides = new Map<string, Set<string>>();
   private readonly globalOverrides = new Set<string>();
   private readonly svg = 'runtime-html:ISVGAnalyzer';
@@ -717,24 +767,81 @@ export class NodeObserverLocator {
     private readonly observerLocator: ObserverLocator,
     configuration: NodeObserverLocatorConfiguration = NodeObserverLocatorConfiguration.empty,
   ) {
-    const inputEventsConfig: NodeObserverConfig = { events: inputEvents, readonly: false, default: '' };
+    const inputEventsConfig = frameworkNodeObserverConfig(
+      RuntimeNodeObserverKind.ValueAttribute,
+      'ValueAttributeObserver',
+      RuntimeNodeObserverConfigFieldState.Absent,
+      inputEvents,
+      false,
+      RuntimeNodeObserverConfigFieldState.Absent,
+      '',
+      RuntimeNodeObserverConfigFieldState.Closed,
+    );
     this.useConfig({
       INPUT: {
         value: inputEventsConfig,
-        valueAsNumber: { events: inputEvents, readonly: false, default: 0 },
-        checked: { type: CheckedObserver, events: inputEvents, readonly: false },
-        files: { events: inputEvents, readonly: true },
+        valueAsNumber: frameworkNodeObserverConfig(
+          RuntimeNodeObserverKind.ValueAttribute,
+          'ValueAttributeObserver',
+          RuntimeNodeObserverConfigFieldState.Absent,
+          inputEvents,
+          false,
+          RuntimeNodeObserverConfigFieldState.Absent,
+          0,
+          RuntimeNodeObserverConfigFieldState.Closed,
+        ),
+        checked: frameworkNodeObserverConfig(
+          RuntimeNodeObserverKind.Checked,
+          'CheckedObserver',
+          RuntimeNodeObserverConfigFieldState.Closed,
+          inputEvents,
+        ),
+        files: frameworkNodeObserverConfig(
+          RuntimeNodeObserverKind.ValueAttribute,
+          'ValueAttributeObserver',
+          RuntimeNodeObserverConfigFieldState.Absent,
+          inputEvents,
+          true,
+          RuntimeNodeObserverConfigFieldState.Closed,
+        ),
       },
       SELECT: {
-        value: { type: SelectValueObserver, events: selectEvents, readonly: false, default: '' },
+        value: frameworkNodeObserverConfig(
+          RuntimeNodeObserverKind.Select,
+          'SelectValueObserver',
+          RuntimeNodeObserverConfigFieldState.Closed,
+          selectEvents,
+          false,
+          RuntimeNodeObserverConfigFieldState.Absent,
+          '',
+          RuntimeNodeObserverConfigFieldState.Closed,
+        ),
       },
       TEXTAREA: {
         value: inputEventsConfig,
       },
     });
 
-    const contentEventsConfig: NodeObserverConfig = { events: contentEvents, readonly: false, default: '' };
-    const scrollEventsConfig: NodeObserverConfig = { events: scrollEvents, readonly: false, default: 0 };
+    const contentEventsConfig = frameworkNodeObserverConfig(
+      RuntimeNodeObserverKind.ValueAttribute,
+      'ValueAttributeObserver',
+      RuntimeNodeObserverConfigFieldState.Absent,
+      contentEvents,
+      false,
+      RuntimeNodeObserverConfigFieldState.Absent,
+      '',
+      RuntimeNodeObserverConfigFieldState.Closed,
+    );
+    const scrollEventsConfig = frameworkNodeObserverConfig(
+      RuntimeNodeObserverKind.ValueAttribute,
+      'ValueAttributeObserver',
+      RuntimeNodeObserverConfigFieldState.Absent,
+      scrollEvents,
+      false,
+      RuntimeNodeObserverConfigFieldState.Absent,
+      0,
+      RuntimeNodeObserverConfigFieldState.Closed,
+    );
     this.useConfigGlobal({
       scrollTop: scrollEventsConfig,
       scrollLeft: scrollEventsConfig,
@@ -755,12 +862,12 @@ export class NodeObserverLocator {
     return input.targetKind === RuntimeBindingTargetKind.Node;
   }
 
-  useConfig(config: Record<string, Record<string, NodeObserverConfig>>): void;
-  useConfig(nodeName: string, key: string, events: NodeObserverConfig): void;
+  useConfig(config: Record<string, Record<string, RuntimeNodeObserverConfig>>): void;
+  useConfig(nodeName: string, key: string, events: RuntimeNodeObserverConfig): void;
   useConfig(
-    nodeNameOrConfig: string | Record<string, Record<string, NodeObserverConfig>>,
+    nodeNameOrConfig: string | Record<string, Record<string, RuntimeNodeObserverConfig>>,
     key?: string,
-    eventsConfig?: NodeObserverConfig,
+    eventsConfig?: RuntimeNodeObserverConfig,
   ): void {
     if (typeof nodeNameOrConfig === 'string') {
       this.setNodeConfig(nodeNameOrConfig, key ?? '', eventsConfig);
@@ -773,14 +880,14 @@ export class NodeObserverLocator {
     }
   }
 
-  useConfigGlobal(config: Record<string, NodeObserverConfig>): void;
-  useConfigGlobal(key: string, events: NodeObserverConfig): void;
+  useConfigGlobal(config: Record<string, RuntimeNodeObserverConfig>): void;
+  useConfigGlobal(key: string, events: RuntimeNodeObserverConfig): void;
   useConfigGlobal(
-    configOrKey: string | Record<string, NodeObserverConfig>,
-    eventsConfig?: NodeObserverConfig,
+    configOrKey: string | Record<string, RuntimeNodeObserverConfig>,
+    eventsConfig?: RuntimeNodeObserverConfig,
   ): void {
     if (typeof configOrKey === 'string') {
-      this.globalEvents.set(configOrKey, eventsConfig ?? { events: [], readonly: false, default: undefined });
+      this.globalEvents.set(configOrKey, eventsConfig ?? RuntimeNodeObserverConfig.open('Node observer global config was not provided.'));
       return;
     }
     for (const [key, config] of Object.entries(configOrKey)) {
@@ -819,7 +926,7 @@ export class NodeObserverLocator {
     return this.lookup(input.withLookup(RuntimeBindingTargetAccessLookup.Observer));
   }
 
-  getNodeObserverConfig(tagName: string, key: string): NodeObserverConfig | undefined {
+  getNodeObserverConfig(tagName: string, key: string): RuntimeNodeObserverConfig | undefined {
     return this.events.get(tagName)?.get(key)
       ?? this.globalEvents.get(key);
   }
@@ -847,7 +954,7 @@ export class NodeObserverLocator {
   private setNodeConfig(
     nodeName: string,
     key: string,
-    config: NodeObserverConfig | undefined,
+    config: RuntimeNodeObserverConfig | undefined,
   ): void {
     if (config == null || key === '') {
       return;
@@ -958,7 +1065,7 @@ export class ObserverLocator {
 
   createObserver(
     input: ObserverLocatorLookupRequest,
-    config: NodeObserverConfig | undefined,
+    config: RuntimeNodeObserverConfig | undefined,
     nodeAllowDirtyCheck: boolean,
     hasAccessorOverride: boolean,
   ): ObserverLocatorLookupResult {
@@ -995,7 +1102,7 @@ export class ObserverLocator {
       ? RuntimeHtmlObservationFrameworkErrorCode.NodeObserverStrategyNotFound
       : null;
     const openReason = frameworkErrorCode == null
-      ? targetAccessOpenReason(tagName, input.targetProperty, strategy)
+      ? targetAccessOpenReason(tagName, input.targetProperty, strategy, config)
       : null;
     const diagnosticReason = targetAccessDiagnosticReason(tagName, input.targetProperty, frameworkErrorCode);
 
@@ -1004,7 +1111,7 @@ export class ObserverLocator {
       input.targetKind,
       input.targetProperty,
       strategy,
-      nodeAccessEvents(strategy, config),
+      config ?? null,
       targetType?.reference ?? null,
       targetType?.source ?? null,
       property?.typeReference ?? null,
@@ -1028,7 +1135,7 @@ export class ObserverLocator {
       input.targetKind,
       input.targetProperty,
       strategy,
-      [],
+      null,
       input.targetType ?? targetType?.reference ?? null,
       input.targetType != null || targetType != null ? RuntimeBindingTargetTypeSource.Reference : null,
       property?.typeReference ?? null,
@@ -1166,7 +1273,7 @@ function nodeAccessStrategy(
   lookup: RuntimeBindingTargetAccessLookup,
   allowDirtyCheck: boolean,
   property: PropertyResolution | null,
-  config: NodeObserverConfig | undefined,
+  config: RuntimeNodeObserverConfig | undefined,
   hasAccessorOverride: boolean,
 ): RuntimeBindingTargetAccessStrategy {
   if (lookup === RuntimeBindingTargetAccessLookup.Observer
@@ -1182,7 +1289,7 @@ function nodeObserverStrategy(
   targetProperty: string,
   allowDirtyCheck: boolean,
   property: PropertyResolution | null,
-  config: NodeObserverConfig | undefined,
+  config: RuntimeNodeObserverConfig | undefined,
 ): RuntimeBindingTargetAccessStrategy {
   if (targetProperty === 'class') {
     return RuntimeBindingTargetAccessStrategy.ClassAttributeAccessor;
@@ -1232,9 +1339,12 @@ function targetAccessOpenReason(
   tagName: string,
   targetProperty: string,
   strategy: RuntimeBindingTargetAccessStrategy,
+  config: RuntimeNodeObserverConfig | undefined,
 ): string | null {
   return strategy === RuntimeBindingTargetAccessStrategy.Unknown
-    ? `NodeObserverLocator could not close '${tagName}.${targetProperty}' through built-in config or TypeChecker surface.`
+    ? config?.fieldState('type') === RuntimeNodeObserverConfigFieldState.Open
+      ? config.openReason ?? `NodeObserverLocator config for '${tagName}.${targetProperty}' did not close its observer constructor.`
+      : `NodeObserverLocator could not close '${tagName}.${targetProperty}' through built-in config or TypeChecker surface.`
     : null;
 }
 
@@ -1255,7 +1365,7 @@ function nodeObserverStrategyNotFound(
   lookup: RuntimeBindingTargetAccessLookup,
   allowDirtyCheck: boolean,
   property: PropertyResolution | null,
-  config: NodeObserverConfig | undefined,
+  config: RuntimeNodeObserverConfig | undefined,
   hasAccessorOverride: boolean,
 ): boolean {
   if (lookup !== RuntimeBindingTargetAccessLookup.Observer && !hasAccessorOverride) {
@@ -1318,27 +1428,18 @@ function isComputedObserverProperty(property: PropertyResolution | null): boolea
   return property?.exists === true && property.hasAccessorDescriptor === true;
 }
 
-function nodeObserverStrategyForConfig(config: NodeObserverConfig): RuntimeBindingTargetAccessStrategy {
-  if (config.type === CheckedObserver) {
-    return RuntimeBindingTargetAccessStrategy.CheckedObserver;
-  }
-  if (config.type === SelectValueObserver) {
-    return RuntimeBindingTargetAccessStrategy.SelectValueObserver;
-  }
-  return RuntimeBindingTargetAccessStrategy.ValueAttributeObserver;
-}
-
-function nodeAccessEvents(
-  strategy: RuntimeBindingTargetAccessStrategy,
-  config: NodeObserverConfig | undefined,
-): readonly string[] {
-  switch (strategy) {
-    case RuntimeBindingTargetAccessStrategy.CheckedObserver:
-    case RuntimeBindingTargetAccessStrategy.SelectValueObserver:
-    case RuntimeBindingTargetAccessStrategy.ValueAttributeObserver:
-      return config?.events ?? [];
-    default:
-      return [];
+function nodeObserverStrategyForConfig(config: RuntimeNodeObserverConfig): RuntimeBindingTargetAccessStrategy {
+  switch (config.observerKind) {
+    case RuntimeNodeObserverKind.ValueAttribute:
+      return RuntimeBindingTargetAccessStrategy.ValueAttributeObserver;
+    case RuntimeNodeObserverKind.Checked:
+      return RuntimeBindingTargetAccessStrategy.CheckedObserver;
+    case RuntimeNodeObserverKind.Select:
+      return RuntimeBindingTargetAccessStrategy.SelectValueObserver;
+    case RuntimeNodeObserverKind.Custom:
+      return RuntimeBindingTargetAccessStrategy.CustomNodeObserver;
+    case RuntimeNodeObserverKind.Open:
+      return RuntimeBindingTargetAccessStrategy.Unknown;
   }
 }
 
@@ -1404,6 +1505,7 @@ function isSubscribableStrategy(strategy: RuntimeBindingTargetAccessStrategy): b
     case RuntimeBindingTargetAccessStrategy.CollectionLengthObserver:
     case RuntimeBindingTargetAccessStrategy.CollectionSizeObserver:
     case RuntimeBindingTargetAccessStrategy.ComputedObserver:
+    case RuntimeBindingTargetAccessStrategy.CustomNodeObserver:
     case RuntimeBindingTargetAccessStrategy.DirtyCheck:
     case RuntimeBindingTargetAccessStrategy.SelectValueObserver:
     case RuntimeBindingTargetAccessStrategy.SetterObserver:

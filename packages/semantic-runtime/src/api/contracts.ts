@@ -179,6 +179,7 @@ import type {
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelCouplingKind,
   RuntimeBindingValueChannelKind,
+  RuntimeBindingValueChannelTargetMutationKind,
 } from '../observation/runtime-binding-observation.js';
 import type {
   ObservationIssueKind,
@@ -209,6 +210,8 @@ import type {
   RuntimeBindingTargetAccessStrategy,
   RuntimeBindingTargetKind,
   RuntimeBindingTargetTypeSource,
+  RuntimeNodeObserverConfigFieldState,
+  RuntimeNodeObserverKind,
   RuntimeBindingTargetOperationAuthority,
   RuntimeBindingTargetOperationKind,
   RuntimeTargetOperationOwnerKind,
@@ -4328,7 +4331,7 @@ export interface SemanticBindingTargetAccessRow {
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}`;
   readonly targetProperty: string;
   readonly strategy: RuntimeBindingTargetAccessStrategy | `${RuntimeBindingTargetAccessStrategy}`;
-  readonly eventNames: readonly string[];
+  readonly nodeObserverConfig: SemanticNodeObserverConfig | null;
   readonly targetType: string | null;
   readonly targetTypeSource: RuntimeBindingTargetTypeSource | `${RuntimeBindingTargetTypeSource}` | null;
   readonly propertyType: string | null;
@@ -4347,6 +4350,21 @@ export interface SemanticBindingTargetAccessRow {
     readonly propertyTypeProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
+}
+
+export interface SemanticNodeObserverConfig {
+  readonly observerKind: RuntimeNodeObserverKind | `${RuntimeNodeObserverKind}`;
+  readonly observerConstructorName: string | null;
+  readonly eventNames: readonly string[];
+  readonly readonlyValue: boolean | null;
+  readonly defaultValue: string | number | boolean | null | undefined;
+  readonly fieldStates: {
+    readonly type: RuntimeNodeObserverConfigFieldState | `${RuntimeNodeObserverConfigFieldState}`;
+    readonly events: RuntimeNodeObserverConfigFieldState | `${RuntimeNodeObserverConfigFieldState}`;
+    readonly readonly: RuntimeNodeObserverConfigFieldState | `${RuntimeNodeObserverConfigFieldState}`;
+    readonly default: RuntimeNodeObserverConfigFieldState | `${RuntimeNodeObserverConfigFieldState}`;
+  };
+  readonly openReason: string | null;
 }
 
 export interface SemanticBindingTargetAccessResult {
@@ -4501,6 +4519,9 @@ export interface SemanticBindingValueChannelRow {
   readonly sourceOperationKind: RuntimeBindingSourceOperationKind | `${RuntimeBindingSourceOperationKind}` | null;
   readonly channelKind: RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}`;
   readonly authority: RuntimeBindingValueChannelAuthority | `${RuntimeBindingValueChannelAuthority}`;
+  readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind | `${RuntimeBindingValueChannelTargetMutationKind}`;
+  readonly nullishDefault: RuntimeBindingPrimitiveValue | null;
+  readonly nullishDefaultState: RuntimeNodeObserverConfigFieldState | `${RuntimeNodeObserverConfigFieldState}` | null;
   readonly rawTargetPropertyType: string | null;
   readonly runtimeValueType: string | null;
   readonly valueDomain: readonly string[];
@@ -4606,6 +4627,7 @@ export interface SemanticBindingValueChannelSummaryRow {
   readonly channelKind: RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}`;
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;
+  readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind | `${RuntimeBindingValueChannelTargetMutationKind}`;
   readonly count: number;
   readonly bindingKinds: readonly (RuntimeBindingKind | `${RuntimeBindingKind}`)[];
   readonly authorities: readonly (RuntimeBindingValueChannelAuthority | `${RuntimeBindingValueChannelAuthority}`)[];
@@ -4646,6 +4668,7 @@ export interface SemanticBindingDataFlowRow {
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
   readonly direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`;
   readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind | `${RuntimeBindingSourceEvaluationKind}`;
+  readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind | `${RuntimeBindingValueChannelTargetMutationKind}`;
   readonly strictBinding: boolean | null;
   readonly expressionParseState: TemplateExpressionParseState | `${TemplateExpressionParseState}` | null;
   readonly expressionParseResultKind: ExpressionParseResultKind | `${ExpressionParseResultKind}` | null;
@@ -4712,6 +4735,7 @@ export interface SemanticNullableBooleanCountRow {
 export interface SemanticBindingDataFlowSummaryRow {
   readonly direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`;
   readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind | `${RuntimeBindingSourceEvaluationKind}`;
+  readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind | `${RuntimeBindingValueChannelTargetMutationKind}`;
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;
   readonly valueChannelKind: RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}` | null;

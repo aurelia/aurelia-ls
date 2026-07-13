@@ -23,6 +23,7 @@ import {
   EvaluationValueKind,
   EvaluationNumberValue,
   EvaluationObjectProperty,
+  EvaluationObjectPropertyState,
   EvaluationObjectValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
@@ -358,6 +359,7 @@ function frameworkRegistrationExternalImportValue(
           exportEntry.exportName,
           frameworkRegistrationObject(exportEntry.kind, entry.node),
           entry.node,
+          EvaluationObjectPropertyState.Closed,
         ),
       ])),
       entry.node,
@@ -480,7 +482,7 @@ function aliasedResourcesRegistryAliasArgumentsClosed(
 
 function objectProperty(name: string): [string, EvaluationObjectProperty] {
   const value = syntheticFunctions.get(name) ?? syntheticFunctions.get('register')!;
-  return [name, new EvaluationObjectProperty(name, value, value.declaration)];
+  return [name, new EvaluationObjectProperty(name, value, value.declaration, EvaluationObjectPropertyState.Closed)];
 }
 
 function isSyntheticDialogConfigurationObject(value: EvaluationObjectValue): boolean {
@@ -506,14 +508,14 @@ function bindingModeObject(node: ts.Node): EvaluationObjectValue {
       .filter(([name]) => name !== 'defaultMode')
       .map(([name, value]) => [
         name,
-        new EvaluationObjectProperty(name, new EvaluationNumberValue(value, node), node),
+        new EvaluationObjectProperty(name, new EvaluationNumberValue(value, node), node, EvaluationObjectPropertyState.Closed),
       ]),
   ), false, node);
 }
 
 function processObject(node: ts.Node): EvaluationBoundaryObjectValue {
   return new EvaluationBoundaryObjectValue(EvaluationBoundaryKind.HostEnvironment, 'process', new Map([
-    ['env', new EvaluationObjectProperty('env', ambientObject('process.env', node), node)],
+    ['env', new EvaluationObjectProperty('env', ambientObject('process.env', node), node, EvaluationObjectPropertyState.Closed)],
   ]), node);
 }
 

@@ -122,7 +122,7 @@ function expectKeyedDataFlow(message, sourceName) {
     targetKind: 'node',
     targetProperty: 'value',
     targetValueType: 'string',
-    valueChannelKind: 'raw-property',
+    valueChannelKind: 'value-attribute-observer-property',
     sourceWritable: true,
     sourceAssignmentKind: 'runtime-assignable',
     sourceAssignmentTargetSourcePath: 'src/dynamic-keyed-validation-app.ts',

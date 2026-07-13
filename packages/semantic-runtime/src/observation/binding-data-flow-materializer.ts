@@ -116,6 +116,7 @@ import {
   RuntimeBindingObservedDependency,
   type RuntimeBindingValueChannel,
   RuntimeBindingValueChannelKind,
+  RuntimeBindingValueChannelTargetMutationKind,
 } from './runtime-binding-observation.js';
 import {
   collectRuntimeConnectableObservedDependencyDrafts,
@@ -360,6 +361,7 @@ type DataFlowDraft = {
   readonly bindingScope: BindingScope | null;
   readonly direction: RuntimeBindingDataFlowDirection;
   readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind;
+  readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind;
   readonly strictBinding: boolean | null;
   readonly expressionProductHandle: ProductHandle | null;
   readonly sourceKind: RuntimeBindingDataFlowSourceKind;
@@ -402,6 +404,7 @@ function runtimeBindingDataFlowForDraft(
     draft.bindingScope?.toReference() ?? scope?.toReference() ?? null,
     draft.direction,
     draft.sourceEvaluationKind,
+    draft.targetMutationKind,
     draft.strictBinding,
     draft.sourceKind,
     draft.sourceName,
@@ -997,7 +1000,9 @@ class RuntimeBindingDataFlowDraftMaterializer {
     local: string,
   ): DataFlowDraft {
     const lifecycle = dataFlowLifecycleForBinding(binding, bindingBehaviorPlan);
-    const direction = lifecycle.direction;
+    const targetMutationKind = target.valueChannel?.targetMutationKind
+      ?? RuntimeBindingValueChannelTargetMutationKind.Open;
+    const direction = dataFlowDirectionForTargetMutation(lifecycle.direction, targetMutationKind);
     const needsSourceWriteCapability = bindingDataFlowDirectionIncludesTargetToSource(direction);
     const sourceEvaluationConnectable = lifecycle.sourceEvaluationKind === RuntimeBindingSourceEvaluationKind.ConnectableRead;
     const expressionFacts = this.dataFlowExpressionFacts(binding, scope, local);
@@ -1054,6 +1059,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
       expressionProductHandle: expressionFacts.expressionProductHandle,
       direction,
       sourceEvaluationKind: lifecycle.sourceEvaluationKind,
+      targetMutationKind,
       strictBinding,
       sourceKind: sourceProjection.sourceInfo.sourceKind,
       sourceName: sourceProjection.sourceInfo.sourceName,
@@ -1352,6 +1358,24 @@ function directionForBindingMode(bindingMode: TemplateBindingMode): RuntimeBindi
     return RuntimeBindingDataFlowDirection.TargetToSource;
   }
   return RuntimeBindingDataFlowDirection.Open;
+}
+
+function dataFlowDirectionForTargetMutation(
+  direction: RuntimeBindingDataFlowDirection,
+  targetMutationKind: RuntimeBindingValueChannelTargetMutationKind,
+): RuntimeBindingDataFlowDirection {
+  if (targetMutationKind !== RuntimeBindingValueChannelTargetMutationKind.SuppressesTargetWrite
+    && targetMutationKind !== RuntimeBindingValueChannelTargetMutationKind.NoTargetWrite) {
+    return direction;
+  }
+  switch (direction) {
+    case RuntimeBindingDataFlowDirection.SourceToTarget:
+      return RuntimeBindingDataFlowDirection.SourceRead;
+    case RuntimeBindingDataFlowDirection.TwoWay:
+      return RuntimeBindingDataFlowDirection.TargetToSource;
+    default:
+      return direction;
+  }
 }
 
 type RuntimeBindingDataFlowLifecycle = {

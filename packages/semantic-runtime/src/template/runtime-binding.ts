@@ -6,6 +6,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
+import type { ExpressionPrimitiveLiteralValue } from '../expression/ast.js';
 import type {
   BindingKindKey,
 } from '../kernel/vocabulary.js';
@@ -60,6 +61,7 @@ export const enum RuntimeBindingTargetAccessStrategy {
   ValueAttributeObserver = 'value-attribute-observer',
   CheckedObserver = 'checked-observer',
   SelectValueObserver = 'select-value-observer',
+  CustomNodeObserver = 'custom-node-observer',
   ElementPropertyAccessor = 'element-property-accessor',
   AttributeNSAccessor = 'attribute-ns-accessor',
   DataAttributeAccessor = 'data-attribute-accessor',
@@ -73,8 +75,98 @@ export const enum RuntimeBindingTargetAccessAuthority {
   FrameworkConfig = 'framework-config',
   TypeChecker = 'type-checker',
   FrameworkConfigAndTypeChecker = 'framework-config-and-type-checker',
+  RuntimeRendererImplementation = 'runtime-renderer-implementation',
+  BindingBehavior = 'binding-behavior',
   FrameworkErrorCode = 'framework-error-code',
   Open = 'open',
+}
+
+/** Observer constructor selected by one framework NodeObserverLocator configuration. */
+export const enum RuntimeNodeObserverKind {
+  /** Framework default observer used when a node config omits `type`. */
+  ValueAttribute = 'value-attribute',
+  /** Framework checked/model observer. */
+  Checked = 'checked',
+  /** Framework select value observer. */
+  Select = 'select',
+  /** App-supplied observer constructor whose transport semantics are not framework-owned. */
+  Custom = 'custom',
+  /** Observer constructor depends on a value static evaluation could not close. */
+  Open = 'open',
+}
+
+export const RUNTIME_NODE_OBSERVER_CONFIG_FIELDS = [
+  'type',
+  'events',
+  'readonly',
+  'default',
+] as const;
+
+export type RuntimeNodeObserverConfigField = typeof RUNTIME_NODE_OBSERVER_CONFIG_FIELDS[number];
+
+/** Epistemic state of one NodeObserverLocator configuration field. */
+export const enum RuntimeNodeObserverConfigFieldState {
+  /** Field is provably absent and framework fallback behavior applies. */
+  Absent = 'absent',
+  /** Field value is statically closed. */
+  Closed = 'closed',
+  /** Field may be present or its value could not be reduced without guessing. */
+  Open = 'open',
+}
+
+/**
+ * Effective node-observer configuration selected for one property.
+ *
+ * Field states keep absence distinct from an explicit `undefined` and from an unclosed object spread. That distinction
+ * controls constructor selection, event observation, target-write suppression, and nullish defaulting independently.
+ */
+export class RuntimeNodeObserverConfig {
+  static open(reason: string): RuntimeNodeObserverConfig {
+    return new RuntimeNodeObserverConfig(
+      RuntimeNodeObserverKind.Open,
+      null,
+      [],
+      null,
+      undefined,
+      {
+        type: RuntimeNodeObserverConfigFieldState.Open,
+        events: RuntimeNodeObserverConfigFieldState.Open,
+        readonly: RuntimeNodeObserverConfigFieldState.Open,
+        default: RuntimeNodeObserverConfigFieldState.Open,
+      },
+      reason,
+    );
+  }
+
+  constructor(
+    readonly observerKind: RuntimeNodeObserverKind,
+    readonly observerConstructorName: string | null,
+    readonly eventNames: readonly string[],
+    readonly readonlyValue: boolean | null,
+    readonly defaultValue: ExpressionPrimitiveLiteralValue,
+    readonly fieldStates: Readonly<Record<RuntimeNodeObserverConfigField, RuntimeNodeObserverConfigFieldState>>,
+    readonly openReason: string | null,
+  ) {}
+
+  fieldState(field: RuntimeNodeObserverConfigField): RuntimeNodeObserverConfigFieldState {
+    return this.fieldStates[field];
+  }
+
+  withEventNames(
+    eventNames: readonly string[],
+    state: RuntimeNodeObserverConfigFieldState,
+    openReason: string | null,
+  ): RuntimeNodeObserverConfig {
+    return new RuntimeNodeObserverConfig(
+      this.observerKind,
+      this.observerConstructorName,
+      eventNames,
+      this.readonlyValue,
+      this.defaultValue,
+      { ...this.fieldStates, events: state },
+      openReason ?? this.openReason,
+    );
+  }
 }
 
 export const enum RuntimeBindingTargetTypeSource {
@@ -146,6 +238,7 @@ export type RuntimeBindingField =
   | 'listenerStrategy'
   | 'eventModifier'
   | 'bindingKind'
+  | 'rendererTargetObserver'
   | 'isParameterContext'
   | 'scopeEffects'
   | 'source';
@@ -158,7 +251,7 @@ export type RuntimeBindingTargetAccessField =
   | 'targetController'
   | 'targetProperty'
   | 'strategy'
-  | 'events'
+  | 'nodeObserverConfig'
   | 'targetType'
   | 'targetTypeSource'
   | 'propertyType'
@@ -530,7 +623,7 @@ export class RuntimeBindingTargetAccess {
     readonly targetControllerProductHandle: ProductHandle | null,
     readonly targetProperty: string,
     readonly strategy: RuntimeBindingTargetAccessStrategy,
-    readonly eventNames: readonly string[],
+    readonly nodeObserverConfig: RuntimeNodeObserverConfig | null,
     readonly targetType: CheckerTypeReference | null,
     readonly targetTypeSource: RuntimeBindingTargetTypeSource | null,
     readonly propertyType: CheckerTypeReference | null,
@@ -645,6 +738,8 @@ export class PropertyBinding {
     readonly target: string,
     readonly expressionProductHandle: ProductHandle | null,
     readonly bindingMode: TemplateBindingMode,
+    /** Target observer supplied by PropertyBindingRenderer before bind, such as the class accessor override. */
+    readonly rendererTargetObserverStrategy: RuntimeBindingTargetAccessStrategy | null,
     readonly semanticBindingKindKey: BindingKindKey,
     readonly command: BindingCommandExecutableReference | null,
     readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],

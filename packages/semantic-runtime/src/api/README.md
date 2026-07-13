@@ -1573,6 +1573,11 @@ strategy; the row uses `diagnosticReason` for that closed framework rejection wh
 unresolved observer-locator semantics. `TemplateDiagnostics` and `AppDiagnostics` surface the closed rejection as
 `binding-target-access-framework-error` with a `configure-node-observer` suggestion that points at the observer-config
 boundary, and the value-channel row reports `rejected-target-access` rather than opening data-flow again.
+When node observer configuration participates, the row carries one nested config with observer kind/constructor,
+events, readonly policy, primitive default, and independent field states. `absent`, `closed`, and `open` distinguish an
+omitted field from a proved value and from a retained candidate that a later dynamic object write may replace. The
+target-access authority also identifies renderer or binding-behavior overrides so clients do not infer precedence from
+the selected strategy alone.
 
 `TargetOperations` exposes direct target updates that do not ask `ObserverLocator`. Rows include an owner lane:
 renderer-owned operations from `SetPropertyRenderer`, `SetAttributeRenderer`, `SetClassAttributeRenderer`, and
@@ -1648,6 +1653,10 @@ while `primitiveValueDomain`, `primitiveValueDomainKinds`, and `primitiveValueDo
 values such as `null`, booleans, and numbers from `model.bind` without string coercion. This matters for nullable
 select placeholders and radio groups because Aurelia compares model values directly; API consumers should use the
 primitive domain when explaining or repairing form value flow.
+Rows and summary groups also report `targetMutationKind`. This separates a normal target write, a readonly observer that
+suppresses target writes, a source-only operation, and unresolved mutation policy from the channel's value domain.
+Generic value-attribute channels additionally expose the nullish default plus its field state; consumers may explain or
+check nullish source transport only when that default is closed.
 Class/style value channels report `class.bind` and class interpolation token channels, `.class` toggle channels with
 their toggled class names, `style.bind` and style interpolation rule channels, and `.style` property channels with the
 targeted CSS property. Text interpolation through `ContentBinding` reports `text-content` channels backed by
@@ -1680,10 +1689,11 @@ assignability/writeback pressure, framework error codes, issue rollups, and the 
 target/value-channel family, or source root is known. Detailed rows report binding
 direction, source-evaluation lifecycle, parser publication state/result kind, value-site kind, source expression lane/name/root/type, raw target
 property type, observer/direct-operation runtime value type, TypeChecker source-type pressure, source writability for
-target-to-source flows, TypeChecker assignability checks in the active directions, optional framework error code, source
+target-to-source flows, target mutation policy, TypeChecker assignability checks in the active directions, optional framework error code, source
 address, exact `expressionSource`, optional handles, and row-local runtime data-flow open pressure. Flow direction records
 value transport; `sourceEvaluationKind` separately records whether Aurelia evaluates with a connectable, without one,
-or treats the source as an assignment target. This is the compact pressure signal for
+or treats the source as an assignment target. A suppressed target write does not erase source evaluation or the
+remaining target-to-source edge; these axes stay independent. This is the compact pressure signal for
 two-way form controls, setter-backed state, class/style presentation bindings, template-controller value bindings, and
 future validation/write diagnostics. Direct spread value bindings appear here as source-to-target flow from each spread
 object property into the corresponding target bindable, such as `featuredCardBindings.productId -> productId`.

@@ -8,6 +8,7 @@ import {
 const source = `
 import type DefaultType, { Foo, type RenamedType as LocalRenamedType } from './types';
 import { RuntimeThing, type RuntimeThingShape } from './runtime';
+import { ExternalThing as LocalExternalThing } from './external-runtime';
 import * as RuntimeNamespace from './runtime-namespace';
 import './side-effect';
 
@@ -36,6 +37,7 @@ const imports = record.imports.map((entry) => ({
   moduleSpecifier: entry.moduleSpecifier,
   localName: entry.localName,
   exportName: entry.exportName,
+  source: entry.node.getText(sourceFile),
 }));
 const exports = record.exports.map((entry) => ({
   exportKind: entry.exportKind,
@@ -53,6 +55,15 @@ const failures = [
   )
     ? null
     : 'Expected value named import RuntimeThing from ./runtime.',
+  imports.some((entry) =>
+    entry.importKind === EvaluationImportKind.Named
+    && entry.moduleSpecifier === './external-runtime'
+    && entry.localName === 'LocalExternalThing'
+    && entry.exportName === 'ExternalThing'
+    && entry.source === 'ExternalThing as LocalExternalThing'
+  )
+    ? null
+    : 'Expected aliased named import provenance to point at its exact import specifier.',
   imports.some((entry) =>
     entry.importKind === EvaluationImportKind.Namespace
     && entry.moduleSpecifier === './runtime-namespace'

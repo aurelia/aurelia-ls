@@ -203,6 +203,10 @@ static type surfaces rather than hydrated runtime values.
   exact `nodeName` lane: built-ins are registered as `INPUT`, `SELECT`, and `TEXTAREA`, and lookup uses the normalized
   runtime node name rather than an authored-tag heuristic. Lowercase app config for an HTML node is therefore not
   treated as equivalent to the built-in uppercase mapping.
+  Each config field carries independent absent/closed/open state. Evaluator object-property final-write state preserves
+  the difference between `{ events, ...runtime }` and `{ ...runtime, events }`; known values before an unknown spread
+  remain candidates but cannot masquerade as effective runtime values. Imported observer constructors are recognized
+  through evaluator identity, including aliased imports and shorthand properties, rather than by local spelling.
   `NodeObserverLocator.useConfig(...)` participates only when the framework path asks the node observer locator for an
   observer. A normal to-view `.bind` on an unknown host node may still close through `getAccessor(...)` and
   `ElementPropertyAccessor`; observer-forcing modes such as `.two-way` / `.from-view`, or app-authored
@@ -587,11 +591,23 @@ Target observers own the target-to-source edge for from-view/two-way bindings, w
 write edge. Keep those flow products separate from expression parsing so binding direction does not get flattened into
 ordinary read-expression semantics. Expression parsing says what was authored; observation data flow says how runtime
 binding will spend that expression against target-side products, value channels, and `Scope` lookup.
+Target observer selection follows framework bind order: a renderer-provided accessor can establish the initial target
+strategy, a reached binding behavior can replace it through `useTargetObserver(...)`, and ordinary observer-locator
+lookup is the fallback. The target-access product records which authority won; later value-channel and data-flow
+materializers consume that result rather than replaying renderer or behavior selection.
 `RuntimeBindingDataFlow.sourceEvaluationKind` keeps that lifecycle independent from transport direction: to-view and
 two-way sources are connectable reads, one-time/listener/state-dispatch sources are untracked reads, from-view sources
 are assignment-only, and unresolved default/open modes remain open. Observed-dependency rows exist only for connectable
 reads. Authored diagnostics and lexical references therefore consume parser structure plus materialized scope lookup;
 they must not manufacture observation facts merely to keep an untracked expression visible to tooling.
+
+Generic `ValueAttributeObserver` channels preserve the observer config's nullish default and readonly transport policy.
+A closed default participates in source-to-target assignability because Aurelia substitutes it for nullish source
+values; an absent default means the runtime's explicit `undefined` fallback, while an open default cannot justify a
+closed compatibility claim. Readonly observers still evaluate and connect a to-view/two-way source, but suppress the
+target write. Value transport direction, target mutation, and source-evaluation lifecycle are therefore separate facts:
+a readonly two-way binding can retain target-to-source transport and connectable source reads without claiming an
+initial target mutation.
 
 Select and checked observers are modeled in three layers. `observer-locator.ts` owns the framework-shaped
 `SelectValueObserver` and `CheckedObserver` target-access identities, `binding-value-channel-drafts.ts` owns the value

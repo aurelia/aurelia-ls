@@ -73,7 +73,17 @@ export function readBindingTargetAccessRows(
         targetKind: access.targetKind,
         targetProperty: access.targetProperty,
         strategy: access.strategy,
-        eventNames: access.eventNames,
+        nodeObserverConfig: access.nodeObserverConfig == null
+          ? null
+          : {
+            observerKind: access.nodeObserverConfig.observerKind,
+            observerConstructorName: access.nodeObserverConfig.observerConstructorName,
+            eventNames: access.nodeObserverConfig.eventNames,
+            readonlyValue: access.nodeObserverConfig.readonlyValue,
+            defaultValue: access.nodeObserverConfig.defaultValue,
+            fieldStates: access.nodeObserverConfig.fieldStates,
+            openReason: access.nodeObserverConfig.openReason,
+          },
         targetType: access.targetType?.display ?? null,
         targetTypeSource: access.targetTypeSource,
         propertyType: access.propertyType?.display ?? null,
@@ -328,6 +338,9 @@ export function readBindingValueChannelRows(
         sourceOperationKind: valueChannel.sourceOperation?.operationKind ?? null,
         channelKind: valueChannel.channelKind,
         authority: valueChannel.authority,
+        targetMutationKind: valueChannel.targetMutationKind,
+        nullishDefault: valueChannel.nullishDefault,
+        nullishDefaultState: valueChannel.nullishDefaultState,
         rawTargetPropertyType: valueChannel.rawTargetPropertyType?.display ?? null,
         runtimeValueType: valueChannel.runtimeValueType?.display ?? null,
         valueDomain: valueChannel.valueDomain,
@@ -468,6 +481,7 @@ function summarizeBindingValueChannels(
       row.channelKind,
       row.targetKind ?? '',
       row.targetProperty ?? '',
+      row.targetMutationKind,
       sortedValues(row.observerCouplings).join(','),
     ].join('|');
     let group = groups.get(key);
@@ -476,6 +490,7 @@ function summarizeBindingValueChannels(
         channelKind: row.channelKind,
         targetKind: row.targetKind,
         targetProperty: row.targetProperty,
+        targetMutationKind: row.targetMutationKind,
         count: 0,
         bindingKinds: new Set(),
         authorities: new Set(),
@@ -521,6 +536,7 @@ function summarizeBindingValueChannels(
       channelKind: group.channelKind,
       targetKind: group.targetKind,
       targetProperty: group.targetProperty,
+      targetMutationKind: group.targetMutationKind,
       count: group.count,
       bindingKinds: sortedValues(group.bindingKinds),
       authorities: sortedValues(group.authorities),
@@ -536,8 +552,8 @@ function summarizeBindingValueChannels(
       openReasonKinds: sortedValues(group.openReasonKinds),
     }))
     .sort((left, right) =>
-      `${left.channelKind}:${left.targetKind ?? ''}:${left.targetProperty ?? ''}:${left.observerCouplings.join(',')}`
-        .localeCompare(`${right.channelKind}:${right.targetKind ?? ''}:${right.targetProperty ?? ''}:${right.observerCouplings.join(',')}`)
+      `${left.channelKind}:${left.targetKind ?? ''}:${left.targetProperty ?? ''}:${left.targetMutationKind}:${left.observerCouplings.join(',')}`
+        .localeCompare(`${right.channelKind}:${right.targetKind ?? ''}:${right.targetProperty ?? ''}:${right.targetMutationKind}:${right.observerCouplings.join(',')}`)
     );
 }
 
@@ -584,6 +600,7 @@ interface BindingValueChannelSummaryAccumulator {
   readonly channelKind: SemanticBindingValueChannelSummaryRow['channelKind'];
   readonly targetKind: SemanticBindingValueChannelSummaryRow['targetKind'];
   readonly targetProperty: string | null;
+  readonly targetMutationKind: SemanticBindingValueChannelSummaryRow['targetMutationKind'];
   count: number;
   readonly bindingKinds: Set<SemanticBindingValueChannelSummaryRow['bindingKinds'][number]>;
   readonly authorities: Set<SemanticBindingValueChannelSummaryRow['authorities'][number]>;
@@ -633,6 +650,7 @@ function bindingDataFlowSummaryKey(row: SemanticBindingDataFlowRow): string {
   return [
     row.direction,
     row.sourceEvaluationKind,
+    row.targetMutationKind,
     row.targetKind ?? '',
     row.targetProperty ?? '',
     row.valueChannelKind ?? '',
@@ -646,6 +664,7 @@ function bindingDataFlowSummaryAccumulator(
   return {
     direction: row.direction,
     sourceEvaluationKind: row.sourceEvaluationKind,
+    targetMutationKind: row.targetMutationKind,
     targetKind: row.targetKind,
     targetProperty: row.targetProperty,
     valueChannelKind: row.valueChannelKind,
@@ -727,6 +746,7 @@ function bindingDataFlowSummaryRow(
   return {
     direction: group.direction,
     sourceEvaluationKind: group.sourceEvaluationKind,
+    targetMutationKind: group.targetMutationKind,
     targetKind: group.targetKind,
     targetProperty: group.targetProperty,
     valueChannelKind: group.valueChannelKind,
@@ -759,7 +779,7 @@ function bindingDataFlowSummaryRow(
 }
 
 function bindingDataFlowSummarySortKey(row: SemanticBindingDataFlowSummaryRow): string {
-  return `${row.direction}:${row.sourceEvaluationKind}:${row.valueChannelKind ?? ''}:${row.targetKind ?? ''}:${row.targetProperty ?? ''}:${row.sourceKind}`;
+  return `${row.direction}:${row.sourceEvaluationKind}:${row.targetMutationKind}:${row.valueChannelKind ?? ''}:${row.targetKind ?? ''}:${row.targetProperty ?? ''}:${row.sourceKind}`;
 }
 
 function summarizeBindingDataFlowIssues(
@@ -906,6 +926,7 @@ function bindingDataFlowIssueKinds(
 interface BindingDataFlowSummaryAccumulator {
   readonly direction: SemanticBindingDataFlowSummaryRow['direction'];
   readonly sourceEvaluationKind: SemanticBindingDataFlowSummaryRow['sourceEvaluationKind'];
+  readonly targetMutationKind: SemanticBindingDataFlowSummaryRow['targetMutationKind'];
   readonly targetKind: SemanticBindingDataFlowSummaryRow['targetKind'];
   readonly targetProperty: string | null;
   readonly valueChannelKind: SemanticBindingDataFlowSummaryRow['valueChannelKind'];
@@ -1287,6 +1308,7 @@ function bindingDataFlowRow(
     bindingKind: dataFlow.binding.bindingKind,
     direction: dataFlow.direction,
     sourceEvaluationKind: dataFlow.sourceEvaluationKind,
+    targetMutationKind: dataFlow.targetMutationKind,
     strictBinding: dataFlow.strictBinding,
     expressionParseState: parse?.state ?? null,
     expressionParseResultKind: parse?.resultKind ?? null,

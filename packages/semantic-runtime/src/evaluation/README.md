@@ -191,7 +191,10 @@ mapping or root admission policy; a large evaluated-source count only becomes ac
 attributed to app-authored code, source-shipped package code, workspace-external source, or asset modules.
 `module-graph.ts` is runtime-shaped, not TypeChecker-shaped. Type-only imports and type-only re-exports are not runtime
 edges and must stay out of the evaluator import/export graph. Otherwise ordinary type cycles can become artificial
-runtime cycles and turn closed class values into open import bindings during DI/source-value activation.
+runtime cycles and turn closed class values into open import bindings during DI/source-value activation. Import entries
+retain the exact local binding node, including named import specifiers and aliases, rather than only the enclosing
+declaration. Evaluated imported values can therefore carry canonical exported identity and exact local provenance
+through shorthand object properties without a consumer-local alias resolver.
 
 `declaration-instantiation.ts` owns ECMAScript declaration-instantiation shape for a source file or interpreted block:
 import bindings, function hoists, and top-level class lexical cells. Top-level class declarations are declared before
@@ -210,6 +213,11 @@ and unknown/boundary construction on `StaticEvaluator` so the extracted code doe
 spread accepts both boundary objects and boundary values as unresolved spread carriers; array spread only treats boundary
 values as unresolved iterable carriers and should keep boundary objects on the dynamic-mutation seam path unless a real
 ECMAScript-modeling reason changes that policy.
+Known object properties retain per-property final-write state. A later unknown computed key, unresolved spread, or
+unsupported member opens every property written before it because the runtime write may replace any key; a later exact
+property write closes that property again. Object spread and `Object.assign(...)` preserve the same source order instead
+of using object-wide `mayHaveUnknownProperties` as a substitute for effective-value certainty. Property readers must
+spend that state: an open retained property is a useful candidate, not a closed runtime value.
 
 `class-values.ts` owns static class property materialization, instance property materialization, parameter properties, and
 guarded constructor execution over evaluator-local class values. Keep class lifecycle details there while preserving the

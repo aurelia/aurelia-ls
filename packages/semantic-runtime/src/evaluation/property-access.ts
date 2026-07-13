@@ -21,6 +21,7 @@ import {
   EvaluationFunctionValue,
   EvaluationNumberValue,
   EvaluationObjectProperty,
+  EvaluationObjectPropertyState,
   EvaluationRegularExpressionValue,
   EvaluationStringValue,
   EvaluationUndefinedValue,
@@ -214,6 +215,12 @@ export function readStaticValueProperty(
 ): StaticValueMemberRead {
   const ownProperty = readStaticOwnProperty(receiver, propertyName);
   if (ownProperty != null) {
+    if (ownProperty.state === EvaluationObjectPropertyState.Open) {
+      return staticValueMemberOpen(
+        `Object property '${propertyName}' may be replaced by an unknown computed key or spread.`,
+        EvaluationOpenSeamKind.UnresolvedIdentifier,
+      );
+    }
     if (ownProperty.node != null && ts.isGetAccessorDeclaration(ownProperty.node) && ownProperty.value.kind === EvaluationValueKind.Function) {
       return staticValueMemberGetter(ownProperty.value, receiver);
     }
@@ -366,7 +373,7 @@ export function writeStaticOwnProperty(
     case EvaluationValueKind.Function:
     case EvaluationValueKind.Class:
     case EvaluationValueKind.Instance:
-      receiver.properties.set(name, new EvaluationObjectProperty(name, value, node));
+      receiver.properties.set(name, new EvaluationObjectProperty(name, value, node, EvaluationObjectPropertyState.Closed));
       return true;
     case EvaluationValueKind.BoundaryValue:
       return false;
@@ -385,27 +392,27 @@ function readStaticRegularExpressionProperty(
   }
   switch (name) {
     case 'source':
-      return new EvaluationObjectProperty(name, new EvaluationStringValue(receiver.pattern, node), node);
+      return new EvaluationObjectProperty(name, new EvaluationStringValue(receiver.pattern, node), node, EvaluationObjectPropertyState.Closed);
     case 'flags':
-      return new EvaluationObjectProperty(name, new EvaluationStringValue(receiver.flags, node), node);
+      return new EvaluationObjectProperty(name, new EvaluationStringValue(receiver.flags, node), node, EvaluationObjectPropertyState.Closed);
     case 'global':
-      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('g'), node), node);
+      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('g'), node), node, EvaluationObjectPropertyState.Closed);
     case 'ignoreCase':
-      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('i'), node), node);
+      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('i'), node), node, EvaluationObjectPropertyState.Closed);
     case 'multiline':
-      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('m'), node), node);
+      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('m'), node), node, EvaluationObjectPropertyState.Closed);
     case 'dotAll':
-      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('s'), node), node);
+      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('s'), node), node, EvaluationObjectPropertyState.Closed);
     case 'unicode':
-      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('u'), node), node);
+      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('u'), node), node, EvaluationObjectPropertyState.Closed);
     case 'unicodeSets':
-      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('v'), node), node);
+      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('v'), node), node, EvaluationObjectPropertyState.Closed);
     case 'sticky':
-      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('y'), node), node);
+      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('y'), node), node, EvaluationObjectPropertyState.Closed);
     case 'hasIndices':
-      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('d'), node), node);
+      return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('d'), node), node, EvaluationObjectPropertyState.Closed);
     case 'lastIndex':
-      return new EvaluationObjectProperty(name, new EvaluationNumberValue(0, node), node);
+      return new EvaluationObjectProperty(name, new EvaluationNumberValue(0, node), node, EvaluationObjectPropertyState.Closed);
     default:
       return null;
   }

@@ -5,16 +5,26 @@
 <div data-state.bind="dataState"></div>
 
 <input type="text" value.bind="textValue">
+<input type="text" value.bind="nullableTextValue">
 <input type="checkbox" value.bind="checkboxValue">
 <input type="checkbox" checked.bind="isChecked">
 <input type="number" value-as-number.bind="numericValue">
+<input type="number" value-as-number.bind="nullableNumericValue">
 <input type="date" value-as-date.bind="dateValue">
+<input type="file" files.bind="selectedFiles">
 <select value.bind="selectedValue"><option>first</option></select>
 <textarea value.bind="textAreaValue"></textarea>
 <div contenteditable textcontent.bind="editableText"></div>
 <div contenteditable innerhtml.bind="editableHtml"></div>
 <div scrolltop.bind="scrollOffset"></div>
 <button disabled.bind="isDisabled">Submit</button>
+<div tabindex.two-way="customDefaultTabIndex"></div>
+<div title.two-way="readonlyTitle"></div>
+<div lang.two-way="customLanguage"></div>
+<div draggable.two-way="isDraggable"></div>
+<div dir.two-way="openDirection"></div>
+<div spellcheck.two-way="isSpellchecked"></div>
+<div class.bind="classTokens"></div>
 
 <NaTiVe-SlIdEr PoSiTiOn.bind="sliderPosition"></NaTiVe-SlIdEr>
 <inert-slider position.bind="inertPosition"></inert-slider>

@@ -8,6 +8,7 @@ import {
   EvaluationBooleanValue,
   EvaluationNumberValue,
   EvaluationObjectProperty,
+  EvaluationObjectPropertyState,
   EvaluationStringPatternHole,
   EvaluationStringPatternValue,
   EvaluationStringValue,
@@ -152,7 +153,7 @@ function representativeObjectValue(
     if (node == null) {
       continue;
     }
-    properties.set(name, new EvaluationObjectProperty(name, propertyValue, node));
+    properties.set(name, new EvaluationObjectProperty(name, propertyValue, node, EvaluationObjectPropertyState.Closed));
   }
   return new EvaluationBoundaryObjectValue(
     EvaluationBoundaryKind.BindingScope,

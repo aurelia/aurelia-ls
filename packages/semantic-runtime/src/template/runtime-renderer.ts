@@ -62,6 +62,7 @@ import {
   RuntimeBindingReference,
   RuntimeBindingKind,
   RuntimeBindingScopeEffectKind,
+  RuntimeBindingTargetAccessStrategy,
   RuntimeBindingTargetKind,
   RuntimeBindingTargetOperationAuthority,
   RuntimeBindingTargetOperationKind,
@@ -1443,6 +1444,9 @@ function renderPropertyRuntimeBinding(input: RuntimeRendererInvocation): Runtime
         : instruction instanceof StylePropertyBindingInstruction
           ? TemplateBindingMode.ToView
           : instruction.bindingMode,
+      instruction.targetProperty === 'class'
+        ? RuntimeBindingTargetAccessStrategy.ClassAttributeAccessor
+        : null,
       semanticBindingKindKey,
       instruction instanceof PropertyBindingInstruction ? instruction.command : null,
       effect == null ? [] : [effect.toReference()],

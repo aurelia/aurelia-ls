@@ -17,6 +17,7 @@ import {
   EvaluationNullValue,
   EvaluationNumberValue,
   EvaluationObjectProperty,
+  EvaluationObjectPropertyState,
   EvaluationObjectValue,
   EvaluationRegularExpressionValue,
   EvaluationSetValue,
@@ -676,7 +677,7 @@ function mathConstantProperty(
   value: number,
   node: ts.Node | null,
 ): [string, EvaluationObjectProperty] {
-  return [name, new EvaluationObjectProperty(name, new EvaluationNumberValue(value, node), node)];
+  return [name, new EvaluationObjectProperty(name, new EvaluationNumberValue(value, node), node, EvaluationObjectPropertyState.Closed)];
 }
 
 function mathNumberOperation(
@@ -855,7 +856,7 @@ function evaluationValueFromHostValue(
       }
       return new EvaluationObjectValue(new Map(Object.entries(hostValue as Record<string, unknown>).map(([key, entry]) => [
         key,
-        new EvaluationObjectProperty(key, evaluationValueFromHostValue(entry, node), node),
+        new EvaluationObjectProperty(key, evaluationValueFromHostValue(entry, node), node, EvaluationObjectPropertyState.Closed),
       ])), false, node);
     default:
       return new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, typeof hostValue, node);

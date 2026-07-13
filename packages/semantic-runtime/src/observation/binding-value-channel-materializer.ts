@@ -42,6 +42,9 @@ import {
 } from '../type-system/checker-projector.js';
 import { ObservationProductDetails } from './product-details.js';
 import {
+  RuntimeBindingTargetAccessStrategy,
+  RuntimeBindingTargetOperationKind,
+  RuntimeNodeObserverConfigFieldState,
   SpreadValueBinding,
   type RuntimeBinding,
   type RuntimeBindingSourceOperation,
@@ -50,7 +53,9 @@ import {
 } from '../template/runtime-binding.js';
 import {
   RuntimeBindingValueChannel,
+  RuntimeBindingValueChannelTargetMutationKind,
 } from './runtime-binding-observation.js';
+import { runtimeBindingPrimitiveValueFromExpressionValue } from './runtime-binding-primitive-value.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
@@ -304,6 +309,8 @@ export class RuntimeBindingValueChannelMaterializer {
     target: ValueChannelTarget,
     draft: ValueChannelDraft,
   ): RuntimeBindingValueChannel {
+    const targetMutationKind = valueChannelTargetMutationKind(target);
+    const nullishDefault = valueAttributeNullishDefault(target.targetAccess);
     return new RuntimeBindingValueChannel(
       this.store.handles.product(local),
       this.store.handles.identity(local),
@@ -313,6 +320,9 @@ export class RuntimeBindingValueChannelMaterializer {
       target.sourceOperation?.toReference() ?? null,
       draft.channelKind,
       draft.authority,
+      targetMutationKind,
+      nullishDefault.value,
+      nullishDefault.state,
       target.targetAccess?.propertyType ?? null,
       draft.runtimeValueType,
       draft.valueDomain,
@@ -382,6 +392,57 @@ export class RuntimeBindingValueChannelMaterializer {
       provenanceHandle,
     };
   }
+}
+
+function valueChannelTargetMutationKind(
+  target: ValueChannelTarget,
+): RuntimeBindingValueChannelTargetMutationKind {
+  const targetAccess = target.targetAccess;
+  if (targetAccess != null) {
+    if (targetAccess.strategy === RuntimeBindingTargetAccessStrategy.ValueAttributeObserver) {
+      const config = targetAccess.nodeObserverConfig;
+      if (config == null || config.fieldState('readonly') === RuntimeNodeObserverConfigFieldState.Open) {
+        return RuntimeBindingValueChannelTargetMutationKind.Open;
+      }
+      return config.readonlyValue === true
+        ? RuntimeBindingValueChannelTargetMutationKind.SuppressesTargetWrite
+        : RuntimeBindingValueChannelTargetMutationKind.WritesTarget;
+    }
+    return targetAccess.strategy === RuntimeBindingTargetAccessStrategy.CustomNodeObserver
+      || targetAccess.strategy === RuntimeBindingTargetAccessStrategy.Unknown
+      ? RuntimeBindingValueChannelTargetMutationKind.Open
+      : RuntimeBindingValueChannelTargetMutationKind.WritesTarget;
+  }
+  if (target.targetOperation != null) {
+    return target.targetOperation.operationKind === RuntimeBindingTargetOperationKind.EventListenerAdd
+      ? RuntimeBindingValueChannelTargetMutationKind.NoTargetWrite
+      : RuntimeBindingValueChannelTargetMutationKind.WritesTarget;
+  }
+  return target.sourceOperation != null
+    ? RuntimeBindingValueChannelTargetMutationKind.NoTargetWrite
+    : RuntimeBindingValueChannelTargetMutationKind.Open;
+}
+
+function valueAttributeNullishDefault(
+  targetAccess: RuntimeBindingTargetAccess | null,
+): {
+  readonly value: RuntimeBindingValueChannel['nullishDefault'];
+  readonly state: RuntimeBindingValueChannel['nullishDefaultState'];
+} {
+  if (targetAccess?.strategy !== RuntimeBindingTargetAccessStrategy.ValueAttributeObserver) {
+    return { value: null, state: null };
+  }
+  const config = targetAccess.nodeObserverConfig;
+  if (config == null) {
+    return { value: null, state: RuntimeNodeObserverConfigFieldState.Open };
+  }
+  const state = config.fieldState('default');
+  return {
+    value: state === RuntimeNodeObserverConfigFieldState.Open
+      ? null
+      : runtimeBindingPrimitiveValueFromExpressionValue(config.defaultValue),
+    state,
+  };
 }
 
 function valueChannelTargetsForBinding(

@@ -263,7 +263,7 @@ export class RuntimeControllerBindPublisher {
       target.targetControllerProductHandle,
       request.targetProperty,
       lookup.strategy,
-      lookup.eventNames,
+      lookup.nodeObserverConfig,
       lookup.targetType,
       lookup.targetTypeSource,
       lookup.propertyType,

@@ -4,6 +4,7 @@ import {
   Aurelia,
   NodeObserverLocator,
   StandardConfiguration,
+  ValueAttributeObserver as AliasedValueAttributeObserver,
 } from '@aurelia/runtime-html';
 import { TemplateNativeTargetPrecedenceApp } from './template-native-target-precedence-app';
 
@@ -11,6 +12,50 @@ const appNodeObserverConfig = {
   events: ['position-change'],
   readonly: false,
   default: 0,
+};
+
+const customDefaultNodeObserverConfig = {
+  events: ['tab-index-change'],
+  default: 0,
+};
+
+const readonlyNodeObserverConfig = {
+  events: ['title-change'],
+  readonly: true,
+  default: '',
+};
+
+class LanguageObserver extends AliasedValueAttributeObserver {}
+
+const customConstructorNodeObserverConfig = {
+  type: LanguageObserver,
+  events: ['language-change'],
+};
+
+const type = AliasedValueAttributeObserver;
+const aliasedBuiltInNodeObserverConfig = {
+  type,
+  events: ['drag-state-change'],
+};
+
+const runtimeNodeObserverFields = (
+  globalThis as typeof globalThis & { __runtimeNodeObserverFields?: Record<string, unknown> }
+).__runtimeNodeObserverFields ?? {};
+
+const runtimeNodeObserverConfig = {
+  type: AliasedValueAttributeObserver,
+  events: ['direction-change'],
+  readonly: false,
+  default: '',
+  ...runtimeNodeObserverFields,
+};
+
+const closedAfterRuntimeNodeObserverConfig = {
+  ...runtimeNodeObserverFields,
+  type: AliasedValueAttributeObserver,
+  events: ['spellcheck-change'],
+  readonly: false,
+  default: false,
 };
 
 new Aurelia()
@@ -39,6 +84,12 @@ new Aurelia()
     AppTask.creating(NodeObserverLocator, (locator) => {
       locator.useConfig('NATIVE-OBSERVER-SLIDER', 'position', appNodeObserverConfig);
       locator.useConfig('inert-observer-slider', 'position', appNodeObserverConfig);
+      locator.useConfig('DIV', 'tabIndex', customDefaultNodeObserverConfig);
+      locator.useConfig('DIV', 'title', readonlyNodeObserverConfig);
+      locator.useConfig('DIV', 'lang', customConstructorNodeObserverConfig);
+      locator.useConfig('DIV', 'draggable', aliasedBuiltInNodeObserverConfig);
+      locator.useConfig('DIV', 'dir', runtimeNodeObserverConfig);
+      locator.useConfig('DIV', 'spellcheck', closedAfterRuntimeNodeObserverConfig);
     }),
   )
   .app({

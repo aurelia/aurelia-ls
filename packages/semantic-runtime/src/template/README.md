@@ -363,6 +363,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   bound-controller values, observation data-flow, and inlay hints all spend the same plan. A missing or failing outer
   behavior therefore blocks every inner mode/converter effect instead of allowing a downstream AST scan to mutate
   direction anyway. `runtime-binding-mode-behavior.ts` now retains only the shared mode-name and direction vocabulary.
+  Property-binding renderer selection participates in the same target-observer handoff: a class accessor applies only
+  when the rendered target is the native Node, reached binding behaviors may replace that strategy, and ordinary
+  observer-locator selection runs only when neither earlier authority supplied one. Keep this ordering in controller
+  bind; publication and value-channel consumers must not reconstruct it from instruction spelling.
 - `runtime-value-converter.ts` and `runtime-value-converter-materializer.ts` own the rendered value-converter
   application lifecycle from bind-time resource lookup through invocation. Unresolved authored uses retain an
   application with `resource: null` and publish `ast_converter_not_found` (`AUR0103`) in the `bind` phase instead of

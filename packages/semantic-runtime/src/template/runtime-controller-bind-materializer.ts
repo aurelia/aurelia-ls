@@ -37,6 +37,7 @@ import {
   type RuntimeBindingBindHost,
   RuntimeBindingBindContext,
   RuntimeBindingTargetAccess,
+  RuntimeBindingTargetAccessAuthority,
   RuntimeBindingTargetAccessLookup,
   RuntimeBindingTarget,
   type RuntimeBindingTargetAccessRequest,
@@ -397,10 +398,23 @@ export class RuntimeControllerBindMaterializer {
   ): RuntimeBindingTargetAccess {
     const target = runtimeBindingAccessTarget(this.store, request.binding, targetController);
     const ordinaryLookup = this.resolveTargetAccess(this.targetAccessLookupRequest(input, request, target));
+    const rendererLookup = request.binding instanceof PropertyBinding
+      && request.binding.rendererTargetObserverStrategy != null
+      && target.targetKind === RuntimeBindingTargetKind.Node
+      ? ordinaryLookup.withTargetObserver(
+        request.binding.rendererTargetObserverStrategy,
+        [],
+        RuntimeBindingTargetAccessAuthority.RuntimeRendererImplementation,
+      )
+      : ordinaryLookup;
     const targetObserver = input.bindingBehaviorPlan.readTargetObserverOverride(request.binding.productHandle);
     const lookup = targetObserver == null
-      ? ordinaryLookup
-      : ordinaryLookup.withTargetObserver(targetObserver.strategy, targetObserver.eventNames);
+      ? rendererLookup
+      : rendererLookup.withTargetObserver(
+        targetObserver.strategy,
+        targetObserver.eventNames,
+        RuntimeBindingTargetAccessAuthority.BindingBehavior,
+      );
     const publication = this.publisher.targetAccessPublication(`${request.localKey}:target-access`, request, target, lookup, source);
     if (lookup.openReason != null) {
       this.publisher.recordOpenSeam(

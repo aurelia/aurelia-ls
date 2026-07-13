@@ -73,6 +73,7 @@ import {
   EvaluationNullValue,
   EvaluationNumberValue,
   EvaluationObjectProperty,
+  EvaluationObjectPropertyState,
   EvaluationObjectValue,
   EvaluationRegularExpressionValue,
   EvaluationStringPatternBuilder,
@@ -720,7 +721,7 @@ export class StaticEvaluator {
       if (value.kind === EvaluationValueKind.Number) {
         nextNumber = value.value + 1;
       }
-      properties.set(name, new EvaluationObjectProperty(name, value, member));
+      properties.set(name, new EvaluationObjectProperty(name, value, member, EvaluationObjectPropertyState.Closed));
     }
     environment.initializeBinding(
       declaration.name.text,

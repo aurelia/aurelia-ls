@@ -43,8 +43,8 @@ const duplicateMappingIssues = configurationIssueRows.filter((row) =>
 const failures = [];
 if (customNodeValueObserver == null) {
   failures.push('Expected app-authored MY-ELEMENT value config to close an HTMLElement value binding through ValueAttributeObserver.');
-} else if (customNodeValueObserver.eventNames.length !== 1 || customNodeValueObserver.eventNames[0] !== 'change') {
-  failures.push(`Expected custom MY-ELEMENT value config to preserve ['change'] events, got [${customNodeValueObserver.eventNames.join(', ')}].`);
+} else if (customNodeValueObserver.nodeObserverConfig?.eventNames.length !== 1 || customNodeValueObserver.nodeObserverConfig.eventNames[0] !== 'change') {
+  failures.push(`Expected custom MY-ELEMENT value config to preserve ['change'] events, got [${customNodeValueObserver.nodeObserverConfig?.eventNames.join(', ') ?? ''}].`);
 }
 if (inputValueObserver == null) {
   failures.push('Expected built-in input value config to remain available after duplicate app config attempts.');
@@ -53,8 +53,8 @@ if (customNodeValueObservers.length !== 2) {
   failures.push(`Expected two custom HTMLElement value configs, including the AppTask.creating(IContainer, ...) container.get(NodeObserverLocator) path, got ${customNodeValueObservers.length}.`);
 }
 for (const observer of customNodeValueObservers) {
-  if (observer.eventNames.length !== 1 || observer.eventNames[0] !== 'change') {
-    failures.push(`Expected each custom HTMLElement value config to preserve ['change'] events, got [${observer.eventNames.join(', ')}].`);
+  if (observer.nodeObserverConfig?.eventNames.length !== 1 || observer.nodeObserverConfig.eventNames[0] !== 'change') {
+    failures.push(`Expected each custom HTMLElement value config to preserve ['change'] events, got [${observer.nodeObserverConfig?.eventNames.join(', ') ?? ''}].`);
   }
 }
 if (duplicateMappingIssues.length !== 3) {

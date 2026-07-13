@@ -6,19 +6,23 @@ import {
 } from '../evaluation/expression-reader.js';
 import {
   EvaluationValueKind,
+  EvaluationObjectPropertyState,
+  isEvaluationPrimitiveValue,
+  readEvaluationPrimitive,
   type EvaluationObjectValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
 import { readReferenceName } from '../evaluation/ts-syntax.js';
 import {
-  CheckedObserver,
   NodeObserverLocatorAccessorOverride,
   NodeObserverLocatorGlobalConfig,
   NodeObserverLocatorNodeConfig,
-  SelectValueObserver,
-  ValueAttributeObserver,
-  type NodeObserverConfig,
 } from './observer-locator.js';
+import {
+  RuntimeNodeObserverConfig,
+  RuntimeNodeObserverConfigFieldState,
+  RuntimeNodeObserverKind,
+} from '../template/runtime-binding.js';
 
 export function nodeObserverNodeConfigsFromUseConfigCall(
   call: ts.CallExpression,
@@ -135,68 +139,244 @@ export function nodeObserverGlobalAccessorOverridesFromCall(
 export function nodeObserverConfigFromExpression(
   expression: ts.Expression,
   reader: StaticEvaluationExpressionReader,
-): NodeObserverConfig | null {
+): RuntimeNodeObserverConfig {
   const value = reader.evaluateExpression(expression).value;
-  return value?.kind === EvaluationValueKind.Object
-    ? nodeObserverConfigFromValue(value)
-    : null;
+  return value == null
+    ? RuntimeNodeObserverConfig.open('Node observer config expression did not produce a static evaluation value.')
+    : nodeObserverConfigFromValue(value);
 }
 
 export function nodeObserverConfigFromValue(
   value: EvaluationValue,
-): NodeObserverConfig | null {
+): RuntimeNodeObserverConfig {
   if (value.kind !== EvaluationValueKind.Object) {
-    return null;
+    return RuntimeNodeObserverConfig.open('Node observer config did not reduce to an object value.');
   }
-  const eventsValue = value.properties.get('events')?.value ?? null;
-  const events = eventsValue == null ? [] : readStaticStringArrayValue(eventsValue);
-  if (events == null) {
-    return null;
-  }
-  const readonlyValue = value.properties.get('readonly')?.value ?? null;
-  const defaultValue = value.properties.get('default')?.value;
   const type = nodeObserverTypeFromConfig(value);
-  return {
-    ...(type == null ? {} : { type }),
-    events,
-    readonly: readonlyValue?.kind === EvaluationValueKind.Boolean ? readonlyValue.value : false,
-    default: defaultValue == null ? undefined : primitiveDefaultFromEvaluationValue(defaultValue),
-  };
+  const events = nodeObserverEventsFromConfig(value);
+  const readonlyValue = nodeObserverReadonlyFromConfig(value);
+  const defaultValue = nodeObserverDefaultFromConfig(value);
+  const openReasons = [type.openReason, events.openReason, readonlyValue.openReason, defaultValue.openReason]
+    .filter((reason): reason is string => reason != null);
+  return new RuntimeNodeObserverConfig(
+    type.observerKind,
+    type.observerConstructorName,
+    events.eventNames,
+    readonlyValue.value,
+    defaultValue.value,
+    {
+      type: type.state,
+      events: events.state,
+      readonly: readonlyValue.state,
+      default: defaultValue.state,
+    },
+    openReasons.length === 0 ? null : openReasons.join(' '),
+  );
+}
+
+interface NodeObserverTypeRead {
+  readonly observerKind: RuntimeNodeObserverKind;
+  readonly observerConstructorName: string | null;
+  readonly state: RuntimeNodeObserverConfigFieldState;
+  readonly openReason: string | null;
 }
 
 function nodeObserverTypeFromConfig(
   config: EvaluationObjectValue,
-): NodeObserverConfig['type'] | null {
+): NodeObserverTypeRead {
   const property = config.properties.get('type');
-  if (property?.node == null || !ts.isPropertyAssignment(property.node)) {
-    return null;
+  if (property == null) {
+    return config.mayHaveUnknownProperties
+      ? {
+        observerKind: RuntimeNodeObserverKind.Open,
+        observerConstructorName: null,
+        state: RuntimeNodeObserverConfigFieldState.Open,
+        openReason: 'Node observer type may be supplied by an unclosed config property.',
+      }
+      : {
+        observerKind: RuntimeNodeObserverKind.ValueAttribute,
+        observerConstructorName: 'ValueAttributeObserver',
+        state: RuntimeNodeObserverConfigFieldState.Absent,
+        openReason: null,
+      };
   }
-  const name = readReferenceName(property.node.initializer);
+  if (property.value.kind === EvaluationValueKind.Null || property.value.kind === EvaluationValueKind.Undefined) {
+    if (property.state === EvaluationObjectPropertyState.Open) {
+      return openNodeObserverType(
+        'ValueAttributeObserver',
+        'Node observer type may be replaced by a later unknown config property.',
+      );
+    }
+    return {
+      observerKind: RuntimeNodeObserverKind.ValueAttribute,
+      observerConstructorName: 'ValueAttributeObserver',
+      state: RuntimeNodeObserverConfigFieldState.Closed,
+      openReason: null,
+    };
+  }
+  const name = nodeObserverConstructorName(property.value, property.node);
+  if (name == null) {
+    return {
+      observerKind: RuntimeNodeObserverKind.Open,
+      observerConstructorName: null,
+      state: RuntimeNodeObserverConfigFieldState.Open,
+      openReason: 'Node observer constructor did not retain a static declaration or import identity.',
+    };
+  }
+  if (property.state === EvaluationObjectPropertyState.Open) {
+    return openNodeObserverType(
+      name,
+      'Node observer type may be replaced by a later unknown config property.',
+    );
+  }
   switch (name) {
     case 'ValueAttributeObserver':
-      return ValueAttributeObserver;
+      return closedNodeObserverType(RuntimeNodeObserverKind.ValueAttribute, name);
     case 'CheckedObserver':
-      return CheckedObserver;
+      return closedNodeObserverType(RuntimeNodeObserverKind.Checked, name);
     case 'SelectValueObserver':
-      return SelectValueObserver;
+      return closedNodeObserverType(RuntimeNodeObserverKind.Select, name);
     default:
-      return null;
+      return closedNodeObserverType(RuntimeNodeObserverKind.Custom, name);
   }
 }
 
-function primitiveDefaultFromEvaluationValue(value: EvaluationValue): unknown {
-  switch (value.kind) {
-    case EvaluationValueKind.String:
-    case EvaluationValueKind.Number:
-    case EvaluationValueKind.Boolean:
-      return value.value;
-    case EvaluationValueKind.Null:
-      return null;
-    case EvaluationValueKind.Undefined:
-      return undefined;
-    default:
-      return undefined;
+function openNodeObserverType(
+  observerConstructorName: string | null,
+  openReason: string,
+): NodeObserverTypeRead {
+  return {
+    observerKind: RuntimeNodeObserverKind.Open,
+    observerConstructorName,
+    state: RuntimeNodeObserverConfigFieldState.Open,
+    openReason,
+  };
+}
+
+function nodeObserverConstructorName(
+  value: EvaluationValue,
+  sourceNode: ts.Node | null,
+): string | null {
+  if (value.kind === EvaluationValueKind.Class) {
+    return value.declaration.name?.text ?? nodeObserverConstructorSourceName(sourceNode);
   }
+  if (value.kind === EvaluationValueKind.BoundaryValue) {
+    const boundaryNode = value.node;
+    if (boundaryNode != null && ts.isImportSpecifier(boundaryNode)) {
+      return boundaryNode.propertyName?.text ?? boundaryNode.name.text;
+    }
+    const boundaryName = boundaryNode != null && ts.isExpression(boundaryNode)
+      ? readReferenceName(boundaryNode)
+      : null;
+    return boundaryName ?? nodeObserverConstructorSourceName(sourceNode);
+  }
+  return nodeObserverConstructorSourceName(sourceNode);
+}
+
+function nodeObserverConstructorSourceName(node: ts.Node | null): string | null {
+  if (node == null) {
+    return null;
+  }
+  const expression = ts.isPropertyAssignment(node)
+    ? node.initializer
+    : ts.isShorthandPropertyAssignment(node)
+      ? node.name
+      : ts.isExpression(node)
+        ? node
+        : null;
+  return expression == null ? null : readReferenceName(expression);
+}
+
+function closedNodeObserverType(
+  observerKind: RuntimeNodeObserverKind,
+  observerConstructorName: string,
+): NodeObserverTypeRead {
+  return {
+    observerKind,
+    observerConstructorName,
+    state: RuntimeNodeObserverConfigFieldState.Closed,
+    openReason: null,
+  };
+}
+
+interface NodeObserverEventsRead {
+  readonly eventNames: readonly string[];
+  readonly state: RuntimeNodeObserverConfigFieldState;
+  readonly openReason: string | null;
+}
+
+function nodeObserverEventsFromConfig(config: EvaluationObjectValue): NodeObserverEventsRead {
+  const property = config.properties.get('events');
+  if (property == null) {
+    return config.mayHaveUnknownProperties
+      ? { eventNames: [], state: RuntimeNodeObserverConfigFieldState.Open, openReason: 'Node observer events may be supplied by an unclosed config property.' }
+      : { eventNames: [], state: RuntimeNodeObserverConfigFieldState.Absent, openReason: null };
+  }
+  const eventNames = knownStringArrayValues(property.value);
+  const closed = property.state === EvaluationObjectPropertyState.Closed
+    && property.value.kind === EvaluationValueKind.Array
+    && !property.value.mayHaveUnknownElements
+    && !property.value.mayHaveUnknownOrder
+    && eventNames.length === property.value.elements.length;
+  return closed
+    ? { eventNames, state: RuntimeNodeObserverConfigFieldState.Closed, openReason: null }
+    : {
+      eventNames,
+      state: RuntimeNodeObserverConfigFieldState.Open,
+      openReason: property.state === EvaluationObjectPropertyState.Open
+        ? 'Node observer event names may be replaced by a later unknown config property.'
+        : 'Node observer event names did not close to a static string array.',
+    };
+}
+
+function knownStringArrayValues(value: EvaluationValue): readonly string[] {
+  if (value.kind !== EvaluationValueKind.Array) {
+    return [];
+  }
+  return value.elements.flatMap((element) => {
+    const stringValue = readStaticStringValue(element.value);
+    return stringValue == null ? [] : [stringValue];
+  });
+}
+
+interface NodeObserverReadonlyRead {
+  readonly value: boolean | null;
+  readonly state: RuntimeNodeObserverConfigFieldState;
+  readonly openReason: string | null;
+}
+
+function nodeObserverReadonlyFromConfig(config: EvaluationObjectValue): NodeObserverReadonlyRead {
+  const property = config.properties.get('readonly');
+  if (property == null) {
+    return config.mayHaveUnknownProperties
+      ? { value: null, state: RuntimeNodeObserverConfigFieldState.Open, openReason: 'Node observer readonly policy may be supplied by an unclosed config property.' }
+      : { value: false, state: RuntimeNodeObserverConfigFieldState.Absent, openReason: null };
+  }
+  return property.value.kind === EvaluationValueKind.Boolean
+    ? property.state === EvaluationObjectPropertyState.Closed
+      ? { value: property.value.value, state: RuntimeNodeObserverConfigFieldState.Closed, openReason: null }
+      : { value: property.value.value, state: RuntimeNodeObserverConfigFieldState.Open, openReason: 'Node observer readonly policy may be replaced by a later unknown config property.' }
+    : { value: null, state: RuntimeNodeObserverConfigFieldState.Open, openReason: 'Node observer readonly policy did not close to a boolean.' };
+}
+
+interface NodeObserverDefaultRead {
+  readonly value: RuntimeNodeObserverConfig['defaultValue'];
+  readonly state: RuntimeNodeObserverConfigFieldState;
+  readonly openReason: string | null;
+}
+
+function nodeObserverDefaultFromConfig(config: EvaluationObjectValue): NodeObserverDefaultRead {
+  const property = config.properties.get('default');
+  if (property == null) {
+    return config.mayHaveUnknownProperties
+      ? { value: undefined, state: RuntimeNodeObserverConfigFieldState.Open, openReason: 'Node observer default may be supplied by an unclosed config property.' }
+      : { value: undefined, state: RuntimeNodeObserverConfigFieldState.Absent, openReason: null };
+  }
+  return isEvaluationPrimitiveValue(property.value)
+    ? property.state === EvaluationObjectPropertyState.Closed
+      ? { value: readEvaluationPrimitive(property.value), state: RuntimeNodeObserverConfigFieldState.Closed, openReason: null }
+      : { value: readEvaluationPrimitive(property.value), state: RuntimeNodeObserverConfigFieldState.Open, openReason: 'Node observer default may be replaced by a later unknown config property.' }
+    : { value: undefined, state: RuntimeNodeObserverConfigFieldState.Open, openReason: 'Node observer default did not close to a primitive value.' };
 }
 
 function staticStringFromExpression(

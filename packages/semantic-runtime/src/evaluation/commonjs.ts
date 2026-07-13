@@ -6,6 +6,7 @@ import {
 } from './environment.js';
 import {
   EvaluationObjectProperty,
+  EvaluationObjectPropertyState,
   EvaluationObjectValue,
   EvaluationValueKind,
   type EvaluationValue,
@@ -31,7 +32,7 @@ export function ensureStaticCommonJsExports(
   const exportsValue = new EvaluationObjectValue(new Map(), false, node);
   environment.initializeBinding('exports', exportsValue, EvaluationBindingKind.CommonJs, false, node);
   if (moduleValue?.kind === EvaluationValueKind.Object) {
-    moduleValue.properties.set('exports', new EvaluationObjectProperty('exports', exportsValue, node));
+    moduleValue.properties.set('exports', new EvaluationObjectProperty('exports', exportsValue, node, EvaluationObjectPropertyState.Closed));
   }
   return exportsValue;
 }
@@ -48,13 +49,14 @@ export function ensureStaticCommonJsModule(
         'exports',
         ensureStaticCommonJsExports(environment, node),
         node,
+        EvaluationObjectPropertyState.Closed,
       ));
     }
     return existing;
   }
   const exportsValue = ensureStaticCommonJsExports(environment, node);
   const moduleValue = new EvaluationObjectValue(new Map([
-    ['exports', new EvaluationObjectProperty('exports', exportsValue, node)],
+    ['exports', new EvaluationObjectProperty('exports', exportsValue, node, EvaluationObjectPropertyState.Closed)],
   ]), false, node);
   environment.initializeBinding('module', moduleValue, EvaluationBindingKind.CommonJs, false, node);
   return moduleValue;

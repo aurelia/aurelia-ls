@@ -14,6 +14,7 @@ import type {
   RuntimeBindingSourceOperationReference,
   RuntimeBindingTargetAccessReference,
   RuntimeBindingTargetOperationReference,
+  RuntimeNodeObserverConfigFieldState,
 } from '../template/runtime-binding.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { CheckerExpressionTypeOpenKind } from '../type-system/expression-type-evaluation.js';
@@ -21,6 +22,8 @@ import type { ObservationFrameworkErrorCode } from './framework-error-code.js';
 
 export const enum RuntimeBindingValueChannelKind {
   RawProperty = 'raw-property',
+  /** Property transport governed by ValueAttributeObserver nullish/default and readonly policy. */
+  ValueAttributeObserverProperty = 'value-attribute-observer-property',
   RefTarget = 'ref-target',
   ScopeSlot = 'scope-slot',
   TextContent = 'text-content',
@@ -58,6 +61,7 @@ export const enum RuntimeBindingValueChannelKind {
 /** Stable value list for runtime binding value-channel transport and catalog projections. */
 export const RUNTIME_BINDING_VALUE_CHANNEL_KINDS = [
   RuntimeBindingValueChannelKind.RawProperty,
+  RuntimeBindingValueChannelKind.ValueAttributeObserverProperty,
   RuntimeBindingValueChannelKind.RefTarget,
   RuntimeBindingValueChannelKind.ScopeSlot,
   RuntimeBindingValueChannelKind.TextContent,
@@ -100,6 +104,18 @@ export const enum RuntimeBindingValueChannelAuthority {
   BindingExpression = 'binding-expression',
   BindingExpressionAndTypeChecker = 'binding-expression-and-type-checker',
   ObserverSemantics = 'observer-semantics',
+  Open = 'open',
+}
+
+/** Source-value mutation policy selected by the target-side runtime transport. */
+export const enum RuntimeBindingValueChannelTargetMutationKind {
+  /** The selected accessor or observer writes source values into its target. */
+  WritesTarget = 'writes-target',
+  /** The selected observer accepts source updates but deliberately suppresses its target write. */
+  SuppressesTargetWrite = 'suppresses-target-write',
+  /** This channel does not transport source values into a target property. */
+  NoTargetWrite = 'no-target-write',
+  /** App-owned or unclosed observer behavior prevents a truthful target-mutation claim. */
   Open = 'open',
 }
 
@@ -234,6 +250,7 @@ export type RuntimeBindingDataFlowField =
   | 'scope'
   | 'direction'
   | 'sourceEvaluationKind'
+  | 'targetMutationKind'
   | 'strictBinding'
   | 'sourceKind'
   | 'sourceName'
@@ -304,6 +321,9 @@ export type RuntimeBindingValueChannelField =
   | 'sourceOperation'
   | 'channelKind'
   | 'authority'
+  | 'targetMutationKind'
+  | 'nullishDefault'
+  | 'nullishDefaultState'
   | 'rawTargetPropertyType'
   | 'runtimeValueType'
   | 'valueDomain'
@@ -376,6 +396,9 @@ export class RuntimeBindingValueChannel {
     readonly sourceOperation: RuntimeBindingSourceOperationReference | null,
     readonly channelKind: RuntimeBindingValueChannelKind,
     readonly authority: RuntimeBindingValueChannelAuthority,
+    readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind,
+    readonly nullishDefault: RuntimeBindingPrimitiveValue | null,
+    readonly nullishDefaultState: RuntimeNodeObserverConfigFieldState | null,
     readonly rawTargetPropertyType: CheckerTypeReference | null,
     readonly runtimeValueType: CheckerTypeReference | null,
     readonly valueDomain: readonly string[],
@@ -413,6 +436,7 @@ export class RuntimeBindingDataFlow {
     readonly bindingScope: BindingScopeReference | null,
     readonly direction: RuntimeBindingDataFlowDirection,
     readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind,
+    readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind,
     readonly strictBinding: boolean | null,
     readonly sourceKind: RuntimeBindingDataFlowSourceKind,
     readonly sourceName: string | null,

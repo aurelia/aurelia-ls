@@ -8,12 +8,14 @@ import {
   EvaluationObjectUncertaintyKind,
   EvaluationFunctionValue,
   EvaluationObjectProperty,
+  EvaluationObjectPropertyState,
   EvaluationObjectValue,
   EvaluationValueKind,
   evaluationArrayBoundarySpreadUncertainty,
   evaluationObjectBoundarySpreadUncertainty,
   mergeEvaluationArrayUncertainties,
   mergeEvaluationObjectUncertainties,
+  openEvaluationObjectProperties,
   type EvaluationArrayUncertainty,
   type EvaluationObjectUncertainty,
   type EvaluationUnknownValue,
@@ -112,6 +114,7 @@ export function evaluateStaticObjectLiteral(
       const name = host.readPropertyName(property.name, environment, moduleKey, depth + 1);
       if (name == null) {
         mayHaveUnknownProperties = true;
+        openEvaluationObjectProperties(properties);
         uncertainties.push({
           kind: EvaluationObjectUncertaintyKind.ComputedProperty,
           node: property.name,
@@ -123,6 +126,7 @@ export function evaluateStaticObjectLiteral(
         name,
         host.evaluateExpression(property.initializer, environment, moduleKey, depth + 1),
         property,
+        EvaluationObjectPropertyState.Closed,
       ));
       continue;
     }
@@ -132,6 +136,7 @@ export function evaluateStaticObjectLiteral(
         environment.readValue(property.name.text)
           ?? host.unknown(`Shorthand property '${property.name.text}' did not resolve to a binding.`, property.name, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier),
         property,
+        EvaluationObjectPropertyState.Closed,
       ));
       continue;
     }
@@ -139,10 +144,14 @@ export function evaluateStaticObjectLiteral(
       const spread = host.evaluateExpression(property.expression, environment, moduleKey, depth + 1);
       if (spread.kind === EvaluationValueKind.BoundaryValue || spread.kind === EvaluationValueKind.BoundaryObject) {
         mayHaveUnknownProperties = true;
+        openEvaluationObjectProperties(properties);
         uncertainties.push(evaluationObjectBoundarySpreadUncertainty(spread, property));
         continue;
       }
       if (spread.kind === EvaluationValueKind.Object) {
+        if (spread.mayHaveUnknownProperties) {
+          openEvaluationObjectProperties(properties);
+        }
         for (const [name, entry] of spread.properties) {
           properties.set(name, entry);
         }
@@ -151,6 +160,7 @@ export function evaluateStaticObjectLiteral(
         continue;
       }
       mayHaveUnknownProperties = true;
+      openEvaluationObjectProperties(properties);
       uncertainties.push({
         kind: EvaluationObjectUncertaintyKind.NonObjectSpread,
         node: property,
@@ -173,10 +183,12 @@ export function evaluateStaticObjectLiteral(
         name,
         new EvaluationFunctionValue(property, environment.clone(`${moduleKey}:method:${name}`), property),
         property,
+        EvaluationObjectPropertyState.Closed,
       ));
       continue;
     }
     mayHaveUnknownProperties = true;
+    openEvaluationObjectProperties(properties);
     uncertainties.push({
       kind: EvaluationObjectUncertaintyKind.UnsupportedMember,
       node: property,

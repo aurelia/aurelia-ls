@@ -403,7 +403,9 @@
         "Direct source calls to IObserverLocator/ObserverLocator.getObserver(...), getAccessor(...), or getExpressionObserver(...) are not the same product as binding target-access rows or ComputedObserverSource getter projection. Admit a source-level observer-lookup product before claiming runtime API/lifecycle errors or function-key lookup calls outside Observation.watch(...).",
         "Atlas framework corpus fixture seeds expose the framework ObserverLocator descriptor matrix through `classificationKey=observer-locator-descriptor-matrix`, and the setter-only branch through `classificationKey=observer-locator-setter-only-accessor` or `expectedEffectFilterField=includedDecision` with `setter-only-configurable-computed-observer`.",
         "The href/src/role/size/popover attr-accessor list belongs to NodeObserverLocator.getAccessor only. Observer-forcing bindings must not reuse that accessor branch; they follow getObserver, where known native properties may dirty-check or spend AUR0652 when dirty checking is disabled.",
-        "External app pressure that shows node element-property access with missing property types should be split by targetTypeSource before changing observer selection or diagnostics."
+        "External app pressure that shows node element-property access with missing property types should be split by targetTypeSource before changing observer selection or diagnostics.",
+        "Node observer configuration retains per-field absent/closed/open state for type, events, readonly, and default. Spend evaluator object-property final-write state so a later unknown spread opens prior values while a later exact field closes itself; do not replace this with config-wide certainty.",
+        "PropertyBinding target-observer precedence is renderer-provided access for a native Node, then reached binding-behavior useTargetObserver effects, then ordinary ObserverLocator fallback. Publish the winning authority once during controller bind; downstream channels and data flow must not replay it."
       ],
       "anchors": [
         {
@@ -443,6 +445,17 @@
           "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
           "symbolName": "RuntimeBindingValueChannelKind",
           "summary": "Value-channel kind vocabulary, including rejected target-access diagnostics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/node-observer-config-reader.ts",
+          "summary": "Observation-owned decoder for evaluator-backed node observer configuration and field certainty."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-binding.ts",
+          "symbolName": "RuntimeNodeObserverConfig",
+          "summary": "Node observer configuration product with independent field state and open cause."
         },
         {
           "kind": "lens",
@@ -494,7 +507,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-19"
+      "updatedAt": "2026-07-13"
     },
     {
       "id": "frontier:bound-controller-value-flow",
@@ -1372,7 +1385,9 @@
         "Matcher boolean-return checks mirror select/checked observer calls: framework observers invoke matchers with two comparison values. Data-flow source-to-target acceptance for custom-matcher-function channels should spend shared signature runtime-argument narrowing with two runtime values rather than trusting first-signature callReturnType metadata.",
         "Use runtime-binding-primitive-value.ts for primitive option/model/value facts: expression literal extraction through transparent parens, DOM value coercion, public row display, TypeScript literal display, uniqueness, and checker assignability should not grow local switch walkers. Parser-level primitive values should remain `ExpressionPrimitiveLiteralValue`, and checker assignability should spend `checkerPrimitiveLiteralType(...)`.",
         "When API, catalog, or app-builder surfaces need the complete runtime binding value-channel id set, consume `RUNTIME_BINDING_VALUE_CHANNEL_KINDS` from runtime-binding-observation instead of trying to enumerate const enum members locally.",
-        "Use the select/checked frontier for form-specific branch semantics, but keep the generic value-channel materializer as the publication boundary."
+        "Use the select/checked frontier for form-specific branch semantics, but keep the generic value-channel materializer as the publication boundary.",
+        "Generic ValueAttributeObserver channels retain nullish default value/state and target mutation policy. A closed default participates in nullish source assignability; absent means the runtime undefined fallback; open cannot close compatibility.",
+        "Keep target mutation, value transport direction, and source evaluation lifecycle independent. A readonly observer can suppress target writes while a two-way binding still connects its source and retains target-to-source transport."
       ],
       "anchors": [
         {
@@ -1423,6 +1438,12 @@
           "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
           "symbolName": "RUNTIME_BINDING_VALUE_CHANNEL_KINDS",
           "summary": "Stable value list for runtime binding value-channel transport and catalog projections."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
+          "symbolName": "RuntimeBindingValueChannelTargetMutationKind",
+          "summary": "Target mutation vocabulary kept separate from transport direction and source evaluation lifecycle."
         },
         {
           "kind": "source",
@@ -1507,7 +1528,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-12"
+      "updatedAt": "2026-07-13"
     },
     {
       "id": "frontier:binding-data-flow-materializer",

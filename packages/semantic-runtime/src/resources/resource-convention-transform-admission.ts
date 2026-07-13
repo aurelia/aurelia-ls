@@ -30,6 +30,7 @@ import {
   EvaluationBoundaryObjectValue,
   EvaluationBoundaryValue,
   EvaluationObjectProperty,
+  EvaluationObjectPropertyState,
   EvaluationObjectValue,
   EvaluationUndefined,
   EvaluationUndefinedValue,
@@ -286,7 +287,7 @@ class ConventionToolingEvaluationHost {
   private aureliaPluginModuleValue(moduleSpecifier: string, node: ts.Node): EvaluationObjectValue {
     const factory = this.aureliaPluginFactory(moduleSpecifier, node);
     return new EvaluationObjectValue(new Map([
-      ['default', new EvaluationObjectProperty('default', factory, node)],
+      ['default', new EvaluationObjectProperty('default', factory, node, EvaluationObjectPropertyState.Closed)],
     ]), false, node);
   }
 
@@ -303,7 +304,7 @@ class ConventionToolingEvaluationHost {
   private viteModuleValue(moduleSpecifier: string, node: ts.Node): EvaluationObjectValue {
     const defineConfig = this.defineConfigFactory(moduleSpecifier, node);
     return new EvaluationObjectValue(new Map([
-      ['defineConfig', new EvaluationObjectProperty('defineConfig', defineConfig, node)],
+      ['defineConfig', new EvaluationObjectProperty('defineConfig', defineConfig, node, EvaluationObjectPropertyState.Closed)],
     ]), false, node);
   }
 

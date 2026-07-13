@@ -58,6 +58,7 @@ export const PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS = new Set<string>([
   'source',
   'sources',
   'actionTargets',
+  'argumentSources',
   'sampleSources',
   'sampleSourceSites',
   'reasonSources',

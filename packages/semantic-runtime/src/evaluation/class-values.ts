@@ -16,6 +16,7 @@ import {
   EvaluationFunctionValue,
   EvaluationInstanceValue,
   EvaluationObjectProperty,
+  EvaluationObjectPropertyState,
   EvaluationUndefined,
   EvaluationValueKind,
   type EvaluationUnknownValue,
@@ -79,6 +80,7 @@ export function readStaticClassProperties(
         name,
         new EvaluationFunctionValue(member, environment.clone(`${moduleKey}:static:${name}`), member),
         member,
+        EvaluationObjectPropertyState.Closed,
       ));
       continue;
     }
@@ -87,6 +89,7 @@ export function readStaticClassProperties(
         name,
         host.evaluateExpression(member.initializer, environment, moduleKey, depth + 1),
         member,
+        EvaluationObjectPropertyState.Closed,
       ));
     }
   }
@@ -155,6 +158,7 @@ function readInstanceClassProperties(
         name,
         new EvaluationFunctionValue(member, environment.clone(`${moduleKey}:instance:${name}`), member),
         member,
+        EvaluationObjectPropertyState.Closed,
       ));
       continue;
     }
@@ -164,6 +168,7 @@ function readInstanceClassProperties(
         ? EvaluationUndefined
         : host.evaluateExpression(member.initializer, environment, moduleKey, depth + 1),
       member,
+      EvaluationObjectPropertyState.Closed,
     ));
   }
 }
@@ -184,6 +189,7 @@ function applyConstructorParameterProperties(
       name,
       argumentValues[index] ?? EvaluationUndefined,
       node,
+      EvaluationObjectPropertyState.Closed,
     ));
   }
 }

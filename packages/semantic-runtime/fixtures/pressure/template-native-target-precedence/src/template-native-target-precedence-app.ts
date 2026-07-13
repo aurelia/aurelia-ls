@@ -9,10 +9,13 @@ export class TemplateNativeTargetPrecedenceApp {
   isReadOnly = true;
   dataState = 'ready';
   textValue = '';
+  nullableTextValue: string | null = null;
   checkboxValue = 'selected';
   isChecked = false;
   numericValue = 0;
+  nullableNumericValue: number | null = null;
   dateValue: Date | null = null;
+  selectedFiles: FileList | null = null;
   selectedValue = 'first';
   textAreaValue = '';
   editableText = '';
@@ -30,4 +33,11 @@ export class TemplateNativeTargetPrecedenceApp {
   guardedColdPosition = 0;
   nativeObserverPosition = 0;
   inertObserverPosition = 0;
+  customDefaultTabIndex: number | null = null;
+  readonlyTitle = 'runtime-owned';
+  customLanguage = 'en';
+  isDraggable = true;
+  openDirection = 'ltr';
+  isSpellchecked = false;
+  classTokens = 'native-channel';
 }

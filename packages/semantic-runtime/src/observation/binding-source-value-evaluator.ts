@@ -59,6 +59,7 @@ import {
   EvaluationArrayValue,
   EvaluationNumberValue,
   EvaluationObjectProperty,
+  EvaluationObjectPropertyState,
   EvaluationObjectValue,
   EvaluationStringPatternBuilder,
   EvaluationStringValue,
@@ -756,7 +757,7 @@ export class RuntimeBindingSourceValueEvaluator {
         );
       }
       const name = String(expression.keys[index]);
-      properties.set(name, new EvaluationObjectProperty(name, value, null));
+      properties.set(name, new EvaluationObjectProperty(name, value, null, EvaluationObjectPropertyState.Closed));
     }
     return RuntimeBindingSourceValueEvaluation.value(new EvaluationObjectValue(properties, false, null));
   }
@@ -1267,6 +1268,7 @@ export class RuntimeBindingSourceValueEvaluator {
         bound.propertyName,
         value,
         value.node ?? instance.node ?? instance.classValue.node ?? instance.classValue.declaration,
+        EvaluationObjectPropertyState.Closed,
       ));
     }
   }
@@ -1782,7 +1784,7 @@ export class RuntimeBindingSourceValueEvaluator {
     const properties = new Map<string, EvaluationObjectProperty>();
     for (const slot of context.slots) {
       if (slot.staticValue != null) {
-        properties.set(slot.name, new EvaluationObjectProperty(slot.name, slot.staticValue, null));
+        properties.set(slot.name, new EvaluationObjectProperty(slot.name, slot.staticValue, null, EvaluationObjectPropertyState.Closed));
       }
     }
     return new EvaluationBoundaryObjectValue(
@@ -1921,6 +1923,7 @@ function valueConverterCallerContext(
           `value-converter.${expression.name.name}.caller.source`,
         ),
         null,
+        EvaluationObjectPropertyState.Closed,
       )],
       ['binding', new EvaluationObjectProperty(
         'binding',
@@ -1929,6 +1932,7 @@ function valueConverterCallerContext(
           `value-converter.${expression.name.name}.caller.binding`,
         ),
         null,
+        EvaluationObjectPropertyState.Closed,
       )],
     ]),
     false,

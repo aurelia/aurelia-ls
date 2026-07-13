@@ -9,6 +9,7 @@ import {
   SpreadValueBinding,
   StateDispatchBinding,
   RuntimeBindingTargetAccessStrategy,
+  RuntimeNodeObserverConfigFieldState,
   type RuntimeBindingSourceOperation,
   type RuntimeBindingTargetAccess,
   type RuntimeBindingTargetOperation,
@@ -135,12 +136,47 @@ class RuntimeBindingValueChannelDraftFrame {
         return this.selectValueObserverDraft(targetAccess);
       case RuntimeBindingTargetAccessStrategy.CheckedObserver:
         return this.checkedObserverDraft(targetAccess);
+      case RuntimeBindingTargetAccessStrategy.ValueAttributeObserver:
+        return this.valueAttributeObserverDraft(targetAccess);
+      case RuntimeBindingTargetAccessStrategy.CustomNodeObserver:
+        return this.customNodeObserverDraft(targetAccess);
       default:
         return this.frameworkCustomAttributeValueChannelDraft(targetAccess)
           ?? this.routerResourceValueChannelDraft(targetAccess)
           ?? this.templateControllerValueChannelDraft(targetAccess)
           ?? this.rawPropertyValueChannelDraft(targetAccess);
     }
+  }
+
+  private valueAttributeObserverDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft {
+    const config = targetAccess.nodeObserverConfig;
+    const transportOpen = config == null
+      || config.fieldState('readonly') === RuntimeNodeObserverConfigFieldState.Open
+      || config.fieldState('default') === RuntimeNodeObserverConfigFieldState.Open;
+    return {
+      channelKind: RuntimeBindingValueChannelKind.ValueAttributeObserverProperty,
+      authority: RuntimeBindingValueChannelAuthority.ObserverSemantics,
+      runtimeValueType: this.support.types.targetAccessRuntimeInputType(`${this.local}:value-attribute-observer-input`, targetAccess),
+      valueDomain: [],
+      isCollection: null,
+      openReason: transportOpen
+        ? 'ValueAttributeObserver target-write or nullish-default policy did not close from NodeObserverLocator configuration.'
+        : null,
+    };
+  }
+
+  private customNodeObserverDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft {
+    const constructorName = targetAccess.nodeObserverConfig?.observerConstructorName;
+    return {
+      channelKind: RuntimeBindingValueChannelKind.Open,
+      authority: RuntimeBindingValueChannelAuthority.Open,
+      runtimeValueType: targetAccess.propertyType,
+      valueDomain: [],
+      isCollection: null,
+      openReason: constructorName == null
+        ? 'App-owned node observer transport semantics are not statically modeled.'
+        : `App-owned node observer '${constructorName}' has a closed target selection but unmodeled value transport semantics.`,
+    };
   }
 
   private frameworkCustomAttributeValueChannelDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft | null {

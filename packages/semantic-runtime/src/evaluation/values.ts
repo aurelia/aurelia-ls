@@ -414,6 +414,13 @@ export class EvaluationMapValue {
 }
 
 /** One object property and the expression or method that produced it. */
+export const enum EvaluationObjectPropertyState {
+  /** No later unknown-key write can replace the retained value. */
+  Closed,
+  /** A later unknown computed key or spread may replace the retained value. */
+  Open,
+}
+
 export class EvaluationObjectProperty {
   constructor(
     /** Property name after local key evaluation. */
@@ -422,7 +429,24 @@ export class EvaluationObjectProperty {
     readonly value: EvaluationValue,
     /** Source node that produced this property. */
     readonly node: ts.Node | null,
+    /** Whether the retained value is the effective final write for this property. */
+    readonly state: EvaluationObjectPropertyState,
   ) {}
+
+  withState(state: EvaluationObjectPropertyState): EvaluationObjectProperty {
+    return state === this.state
+      ? this
+      : new EvaluationObjectProperty(this.name, this.value, this.node, state);
+  }
+}
+
+/** Mark retained property values open when a later unknown-key write may replace them. */
+export function openEvaluationObjectProperties(
+  properties: Map<string, EvaluationObjectProperty>,
+): void {
+  for (const [name, property] of properties) {
+    properties.set(name, property.withState(EvaluationObjectPropertyState.Open));
+  }
 }
 
 /** Object value with evaluator-local property values. */

@@ -72,6 +72,11 @@ const contractSuites = [
   ], 'contract-evaluation-import-meta-boundary.mjs', 'import.meta.env reduces to host-environment boundaries while dependency-array spreads keep known entries imprecisely.'),
   contract('evaluation', 'fast', [
     'evaluation',
+    'object-literal',
+    'epistemics',
+  ], 'contract-evaluation-object-property-state.mjs', 'Unknown object writes open earlier property values while later explicit writes remain closed through spread and Object.assign.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
     'package-source',
     'resources',
     'open-seams',

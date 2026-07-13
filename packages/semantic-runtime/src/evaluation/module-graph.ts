@@ -41,8 +41,8 @@ export class EvaluationImportEntry {
     readonly localName: string | null,
     /** Exported name imported from the target module, when one applies. */
     readonly exportName: string | null,
-    /** Import declaration or `require(...)` call node. */
-    readonly node: ts.ImportDeclaration | ts.CallExpression,
+    /** Exact import binding, side-effect declaration, or dynamic import/require call. */
+    readonly node: ts.Node,
   ) {}
 }
 
@@ -182,7 +182,7 @@ function readImportEntries(statement: ts.ImportDeclaration): readonly Evaluation
       moduleSpecifier,
       clause.name.text,
       'default',
-      statement,
+      clause.name,
     ));
   }
 
@@ -196,7 +196,7 @@ function readImportEntries(statement: ts.ImportDeclaration): readonly Evaluation
       moduleSpecifier,
       named.name.text,
       null,
-      statement,
+      named,
     ));
     return entries;
   }
@@ -210,7 +210,7 @@ function readImportEntries(statement: ts.ImportDeclaration): readonly Evaluation
       moduleSpecifier,
       element.name.text,
       element.propertyName?.text ?? element.name.text,
-      statement,
+      element,
     ));
   }
   return entries;

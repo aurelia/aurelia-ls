@@ -5,10 +5,12 @@ import {
   EvaluationArrayElement,
   EvaluationArrayValue,
   EvaluationObjectProperty,
+  EvaluationObjectPropertyState,
   EvaluationObjectValue,
   EvaluationStringValue,
   EvaluationUndefined,
   EvaluationValueKind,
+  openEvaluationObjectProperties,
   type EvaluationValue,
 } from '../values.js';
 import type { StaticIntrinsicEvaluationHost } from './contracts.js';
@@ -31,8 +33,12 @@ export function evaluateObjectAssign(
     const value = host.evaluateExpression(argument, environment, moduleKey, depth + 1);
     if (value.kind !== EvaluationValueKind.Object) {
       mayHaveUnknownProperties = true;
+      openEvaluationObjectProperties(properties);
       host.open(EvaluationOpenSeamKind.DynamicMutation, 'Object.assign argument did not reduce to a known object.', argument, moduleKey);
       continue;
+    }
+    if (value.mayHaveUnknownProperties) {
+      openEvaluationObjectProperties(properties);
     }
     for (const [name, property] of value.properties) {
       properties.set(name, property);
@@ -65,6 +71,7 @@ export function evaluateObjectValues(
     ),
     entries.mayHaveUnknownEntries,
     call,
+    entries.mayHaveUnknownEntries,
   );
 }
 
@@ -91,6 +98,7 @@ export function evaluateObjectKeys(
     ),
     entries.mayHaveUnknownEntries,
     call,
+    entries.mayHaveUnknownEntries,
   );
 }
 
@@ -123,6 +131,7 @@ export function evaluateObjectEntries(
     ),
     entries.mayHaveUnknownEntries,
     call,
+    entries.mayHaveUnknownEntries,
   );
 }
 
@@ -152,7 +161,10 @@ export function evaluateObjectFromEntries(
       host.open(EvaluationOpenSeamKind.DynamicCall, 'Object.fromEntries entry key did not reduce to a property key.', entry.node, moduleKey);
       continue;
     }
-    properties.set(key, new EvaluationObjectProperty(key, entry.value, entry.node));
+    properties.set(key, new EvaluationObjectProperty(key, entry.value, entry.node, EvaluationObjectPropertyState.Closed));
+  }
+  if (entries.mayHaveUnknownEntries) {
+    openEvaluationObjectProperties(properties);
   }
   return new EvaluationObjectValue(properties, mayHaveUnknownProperties, call);
 }
