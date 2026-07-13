@@ -2,6 +2,7 @@ import ts from 'typescript';
 import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { HtmlNamespaceKind } from '../template/html-ir.js';
+import { runtimeLocalName } from '../template/runtime-dom-name.js';
 import {
   CheckerTypeMemberProjectionPolicy,
   type CheckerTypeProjectionRequest,
@@ -86,12 +87,12 @@ export function resolveCheckerDomNodeTypeFromTagNameMap(
   namespace: HtmlNamespaceKind,
   location: ts.Node,
 ): ts.Type | null {
-  const lowerTagName = tagName.toLowerCase();
+  const localName = runtimeLocalName(tagName, namespace);
   for (const mapName of tagNameMapNames(namespace)) {
     const mapType = globalDeclaredType(typeSystem, mapName, location);
     const tagSymbol = mapType == null
       ? null
-      : typeSystem.checker.getPropertyOfType(mapType, lowerTagName) ?? null;
+      : typeSystem.checker.getPropertyOfType(mapType, localName) ?? null;
     if (tagSymbol != null) {
       return typeSystem.checker.getTypeOfSymbolAtLocation(
         tagSymbol,

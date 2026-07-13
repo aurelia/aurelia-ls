@@ -421,6 +421,8 @@
         "Duplicate NodeObserverLocator config/global config mappings are configuration-owned diagnostics: publish ConfigurationIssue products with exact runtime-html AUR0653 authority and keep the rest of the valid service state available to compiler-world observer lookup.",
         "Configuration customization owns duplicate NodeObserverLocator mappings (AUR0653) and the allowDirtyCheck service-state handoff. The sibling node_observer_strategy_not_found code (AUR0652) is spent by observation target-access diagnostics only when observer lookup models the exact dirty-check-disabled framework path; host-node controller codes remain outside this frontier.",
         "NodeObserverLocator.useConfig(...) service state is spent only when template/runtime binding semantics ask for an observer. Plain to-view .bind host-node access may still close through getAccessor/ElementPropertyAccessor unless an accessor override exists; two-way/from-view paths reach the configured observer.",
+        "AttrMapper useMapping/useGlobalMapping/useTwoWay keys are exact app-authored runtime keys. Project the template node and attribute through runtime-dom-name before lookup; never case-fold the app configuration into aliases that the framework would not spend.",
+        "Static AttrMapper useTwoWay recognition may spend only fully understood predicates. Reject unsupported conjunction terms rather than widening a conditional predicate; arbitrary predicate execution remains an explicit open capability.",
         "Attach ConfigurationIssue product details only after the issue kernel records are committed; sidecar details without materialized products are invalid.",
         "When recognition needs more expression closure, improve StaticEvaluator or the expression reader before adding ad hoc callback parsing."
       ],
@@ -443,6 +445,12 @@
           "linkId": "runtime-html:AttrMapper",
           "symbolName": "TemplateAttributeMapperService",
           "summary": "Compiler-world AttrMapper service that consumes recognized customization state."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-dom-name.ts",
+          "symbolName": "runtimeNodeName",
+          "summary": "Shared authored-to-browser DOM name projection consumed by AttrMapper, NodeObserverLocator, and TypeScript DOM lookup."
         },
         {
           "kind": "auLink",
@@ -472,6 +480,11 @@
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:node-observer-service-customization",
           "summary": "Focused contract for AppTask NodeObserverLocator service customization, duplicate AUR0653 issues, and observer-lookup consumption of valid custom config."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance -- --id template-native-target-precedence",
+          "summary": "AttrMapper exact-key, DOM-name, native-mode, SVG-type, inlay, and edit-refusal evidence with conditional predicate closure kept explicit."
         },
         {
           "kind": "lens",
@@ -521,10 +534,15 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/configuration/framework-error-code.ts",
           "symbolName": "ConfigurationFrameworkErrorCode"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-dom-name.ts",
+          "symbolName": "runtimeNodeName"
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-18"
+      "updatedAt": "2026-07-13"
     },
     {
       "id": "frontier:aurelia-app-world-composer",

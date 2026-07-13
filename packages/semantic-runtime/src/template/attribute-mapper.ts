@@ -6,6 +6,10 @@ import {
   normalizeHtmlTagName,
   type HtmlAttributeLike,
 } from './html-ir.js';
+import {
+  runtimeAttributeName,
+  runtimeNodeName,
+} from './runtime-dom-name.js';
 
 /** Minimal element shape consumed by AttrMapper without depending on DOM nodes. */
 export interface TemplateAttributeMapperNode {
@@ -16,9 +20,9 @@ export interface TemplateAttributeMapperNode {
 
 export class AttributeMapperMapping {
   constructor(
-    /** Runtime nodeName lane consumed by AttrMapper.map, normalized to the framework's uppercase HTML node names. */
+    /** Exact app-authored nodeName key consumed by AttrMapper.map. */
     readonly tagName: string | null,
-    /** Authored attribute key before binding-command lowering maps it to a target property. */
+    /** Exact app-authored attribute key consumed by AttrMapper.map. */
     readonly attributeName: string,
     /** Runtime property key selected for the attribute. */
     readonly propertyName: string,
@@ -37,8 +41,8 @@ export class AttributeMapperTwoWayRule {
     node: TemplateAttributeMapperNode,
     propertyName: string,
   ): boolean {
-    return (this.tagName == null || normalizeHtmlTagName(node.tagName) === normalizeHtmlTagName(this.tagName))
-      && (this.propertyName == null || propertyName === this.propertyName);
+    return (this.tagName == null || runtimeNodeName(node.tagName, node.namespace) === this.tagName)
+      && (this.propertyName == null || runtimeAttributeName(propertyName, node.namespace) === this.propertyName);
   }
 }
 
@@ -60,16 +64,15 @@ export class AttributeMapperConfiguration {
   ) {
     for (const mapping of mappings) {
       if (mapping.tagName == null) {
-        this.globalMappings.set(normalizeAttributeName(mapping.attributeName), mapping.propertyName);
+        this.globalMappings.set(mapping.attributeName, mapping.propertyName);
         continue;
       }
-      const tagName = normalizeHtmlTagName(mapping.tagName);
-      let tagMappings = this.mappingsByTag.get(tagName);
+      let tagMappings = this.mappingsByTag.get(mapping.tagName);
       if (tagMappings == null) {
         tagMappings = new Map();
-        this.mappingsByTag.set(tagName, tagMappings);
+        this.mappingsByTag.set(mapping.tagName, tagMappings);
       }
-      tagMappings.set(normalizeAttributeName(mapping.attributeName), mapping.propertyName);
+      tagMappings.set(mapping.attributeName, mapping.propertyName);
     }
   }
 
@@ -81,8 +84,8 @@ export class AttributeMapperConfiguration {
     element: TemplateAttributeMapperNode,
     attr: string,
   ): string | null {
-    const attributeName = normalizeAttributeName(attr);
-    return this.mappingsByTag.get(normalizeHtmlTagName(element.tagName))?.get(attributeName)
+    const attributeName = runtimeAttributeName(attr, element.namespace);
+    return this.mappingsByTag.get(runtimeNodeName(element.tagName, element.namespace))?.get(attributeName)
       ?? this.globalMappings.get(attributeName)
       ?? null;
   }
@@ -114,7 +117,7 @@ export function mapAttribute(
             : null;
   return tagMapping
     ?? globalAttributeMapping(lowerAttr)
-    ?? (isDataAttribute(element, attr) ? attr : null);
+    ?? (isDataAttribute(element, attr) ? runtimeAttributeName(attr, element.namespace) : null);
 }
 
 export function camelCaseAttributeName(value: string): string {
@@ -232,8 +235,4 @@ function attributeValue(
   name: string,
 ): string | null {
   return htmlAttributeValue(owner, name);
-}
-
-function normalizeAttributeName(value: string): string {
-  return value.toLowerCase();
 }

@@ -53,6 +53,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   because imported/factory-backed targets can point at a different authored site than the class body being scanned.
 - `html-ir.ts` models authored HTML before Aurelia syntax interpretation. It preserves source addresses and recovery
   observations without performing resource lookup.
+- `runtime-dom-name.ts` projects authored tag and attribute spelling into the browser DOM names consumed by framework
+  services and TypeScript DOM maps. HTML names normalize to their DOM casing; SVG element/attribute adjustments reuse
+  the generated framework SVG vocabulary while retaining the narrow browser-parser differential. AttrMapper and DOM
+  type lookup must share this projection with NodeObserverLocator rather than growing separate case heuristics.
 - `html-parse-materializer.ts` is the HTML materialization boundary. It spends a template compilation unit into authored
   HTML document/node/attribute products, records ownership claims, and keeps recovery local to the malformed syntax.
   It intentionally stops before Aurelia attribute-pattern parsing, resource lookup, or expression parsing. HTML space

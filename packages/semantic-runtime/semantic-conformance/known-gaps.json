@@ -71,6 +71,13 @@
       "failureBucket": "bindable-cursor-type-projection-data-loss",
       "firstObserved": "2026-07-09",
       "rationale": "Resource definition rows preserve bindable value type and call-signature facts, but SemanticTemplateCursorBindableRow drops them before hover and other cursor consumers can present the selected bindable's type."
+    },
+    {
+      "assertionId": "template-native-target-precedence/conditional-app-two-way-predicate",
+      "status": "known-gap",
+      "failureBucket": "attr-mapper-predicate-execution-open",
+      "firstObserved": "2026-07-13",
+      "rationale": "Aurelia executes arbitrary IAttrMapper.useTwoWay predicates against the live element. Semantic-runtime now rejects partially understood predicate conjunctions instead of widening them, but does not yet preserve an executable or open predicate product, so the valid live-attribute branch remains conservatively to-view."
     }
   ]
 }

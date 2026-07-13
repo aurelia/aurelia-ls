@@ -1,0 +1,33 @@
+<label for.bind="labelTarget">Native control</label>
+<input maxlength.bind="maximumLength">
+<table><tbody><tr><td rowspan.bind="tableRowSpan">Cell</td></tr></tbody></table>
+<input readonly.bind="isReadOnly">
+<div data-state.bind="dataState"></div>
+
+<input type="text" value.bind="textValue">
+<input type="checkbox" value.bind="checkboxValue">
+<input type="checkbox" checked.bind="isChecked">
+<input type="number" value-as-number.bind="numericValue">
+<input type="date" value-as-date.bind="dateValue">
+<select value.bind="selectedValue"><option>first</option></select>
+<textarea value.bind="textAreaValue"></textarea>
+<div contenteditable textcontent.bind="editableText"></div>
+<div contenteditable innerhtml.bind="editableHtml"></div>
+<div scrolltop.bind="scrollOffset"></div>
+<button disabled.bind="isDisabled">Submit</button>
+
+<NaTiVe-SlIdEr PoSiTiOn.bind="sliderPosition"></NaTiVe-SlIdEr>
+<inert-slider position.bind="inertPosition"></inert-slider>
+<attribute-case-slider position.bind="inertAttributePosition"></attribute-case-slider>
+<div focus-ring.bind="focusRingState"></div>
+<div inert-global.bind="inertGlobalState"></div>
+
+<svg>
+  <lineargradient viewbox.bind="gradientViewBox" gradientunits.bind="gradientUnits"></lineargradient>
+</svg>
+
+<guarded-slider live position.bind="guardedLivePosition"></guarded-slider>
+<guarded-slider position.bind="guardedColdPosition"></guarded-slider>
+
+<native-observer-slider position.two-way="nativeObserverPosition"></native-observer-slider>
+<inert-observer-slider position.two-way="inertObserverPosition"></inert-observer-slider>

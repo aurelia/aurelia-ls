@@ -35,8 +35,8 @@ import {
 } from '../template/runtime-binding.js';
 import {
   HtmlNamespaceKind,
-  normalizeHtmlTagName,
 } from '../template/html-ir.js';
+import { runtimeNodeName } from '../template/runtime-dom-name.js';
 import { isStandardSvgAttribute } from './svg-analyzer-data.generated.js';
 import { RuntimeHtmlObservationFrameworkErrorCode } from './framework-error-code.js';
 import {
@@ -790,7 +790,9 @@ export class NodeObserverLocator {
   }
 
   getNodeObserver(input: ObserverLocatorLookupRequest): RuntimeBindingTargetAccessStrategy | null {
-    const tagName = input.tagName == null ? null : normalizeHtmlTagName(input.tagName);
+    const tagName = input.tagName == null
+      ? null
+      : runtimeNodeName(input.tagName, input.namespace ?? HtmlNamespaceKind.Html);
     if (tagName == null) {
       return null;
     }
@@ -799,7 +801,9 @@ export class NodeObserverLocator {
   }
 
   private lookup(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
-    const tagName = input.tagName == null ? null : normalizeHtmlTagName(input.tagName);
+    const tagName = input.tagName == null
+      ? null
+      : runtimeNodeName(input.tagName, input.namespace ?? HtmlNamespaceKind.Html);
     const config = tagName == null ? undefined : this.getNodeObserverConfig(tagName, input.targetProperty);
     const hasAccessorOverride = tagName != null && this.hasAccessorOverride(tagName, input.targetProperty);
     return this.observerLocator.createObserver(input, config, this.allowDirtyCheck, hasAccessorOverride);
@@ -914,7 +918,9 @@ export class ObserverLocator {
     nodeAllowDirtyCheck: boolean,
     hasAccessorOverride: boolean,
   ): ObserverLocatorLookupResult {
-    const tagName = input.tagName == null ? null : normalizeHtmlTagName(input.tagName);
+    const tagName = input.tagName == null
+      ? null
+      : runtimeNodeName(input.tagName, input.namespace ?? HtmlNamespaceKind.Html);
     if (tagName == null) {
       return this.open(input, 'Native node target did not carry a closed HTML tag name.');
     }

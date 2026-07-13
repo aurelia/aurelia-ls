@@ -180,7 +180,10 @@ static type surfaces rather than hydrated runtime values.
   `AttributeNSAccessor` before the generic attribute path. `data-*`, `aria-*`, and SVG-standard attributes outside that
   namespace table close through the runtime-shaped `DataAttributeAccessor` lane instead of being treated as ordinary
   element properties. SVG attribute closure uses `svg-analyzer-data.generated.ts`, generated from Aurelia's own
-  `runtime-html` `SVGAnalyzer`, and only applies when the authored HTML IR node is in the SVG namespace.
+  `runtime-html` `SVGAnalyzer`, and only applies when the authored HTML IR node is in the SVG namespace. The same
+  generated bridge retains the canonical SVG element/attribute names that modern HTML foreign-content parsing exposes
+  to framework services; four historical analyzer property spellings that browsers leave lowercase are explicitly
+  excluded by the generator. Native DOM type and AttrMapper consumers spend that shared projection.
   The `href`/`src`/`role`/`size`/popover-style attr-accessor list is a `NodeObserverLocator.getAccessor(...)` branch:
   observer-forcing bindings such as `.two-way` still follow `getObserver(...)`, where a known native property with dirty
   checking disabled can throw `AUR0652`. Semantic-runtime therefore uses the framework `DataAttributeAccessor` mirror for

@@ -6384,6 +6384,144 @@
       ]
     },
     {
+      "id": "template-native-target-precedence",
+      "fixture": "fixtures/pressure/template-native-target-precedence",
+      "aureliaDomain": "template-binding-syntax",
+      "capability": "native-target-lowering",
+      "domainAxis": "template-syntax",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/template-native-target-precedence-app.html",
+      "requirement": "Native and app-configured attribute targets preserve Aurelia AttrMapper and NodeObserverLocator exact key semantics, property mapping, default binding mode, source precision, and non-resource edit refusal.",
+      "cases": [
+        {
+          "id": "built-in-attribute-property-mappings",
+          "expectations": [
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "sourceName": "labelTarget", "targetProperty": "htmlFor", "direction": "source-to-target" }, "source": { "marker": "for.bind=\"labelTarget\"", "token": "for.bind=\"labelTarget\"" }, "count": 1 },
+                { "fields": { "sourceName": "maximumLength", "targetProperty": "maxLength", "direction": "source-to-target" }, "source": { "marker": "maxlength.bind=\"maximumLength\"", "token": "maxlength.bind=\"maximumLength\"" }, "count": 1 },
+                { "fields": { "sourceName": "tableRowSpan", "targetProperty": "rowSpan", "direction": "source-to-target" }, "source": { "marker": "rowspan.bind=\"tableRowSpan\"", "token": "rowspan.bind=\"tableRowSpan\"" }, "count": 1 },
+                { "fields": { "sourceName": "isReadOnly", "targetProperty": "readOnly", "direction": "source-to-target" }, "source": { "marker": "readonly.bind=\"isReadOnly\"", "token": "readonly.bind=\"isReadOnly\"" }, "count": 1 },
+                { "fields": { "sourceName": "dataState", "targetProperty": "data-state", "direction": "source-to-target" }, "source": { "marker": "data-state.bind=\"dataState\"", "token": "data-state.bind=\"dataState\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "built-in-default-binding-modes",
+          "expectations": [
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "sourceName": "textValue", "targetProperty": "value", "direction": "two-way" }, "source": { "marker": "type=\"text\" value.bind=\"textValue\"", "token": "value.bind=\"textValue\"" }, "count": 1 },
+                { "fields": { "sourceName": "checkboxValue", "targetProperty": "value", "direction": "source-to-target" }, "source": { "marker": "type=\"checkbox\" value.bind=\"checkboxValue\"", "token": "value.bind=\"checkboxValue\"" }, "count": 1 },
+                { "fields": { "sourceName": "isChecked", "targetProperty": "checked", "direction": "two-way" }, "source": { "marker": "checked.bind=\"isChecked\"", "token": "checked.bind=\"isChecked\"" }, "count": 1 },
+                { "fields": { "sourceName": "numericValue", "targetProperty": "valueAsNumber", "direction": "two-way" }, "source": { "marker": "value-as-number.bind=\"numericValue\"", "token": "value-as-number.bind=\"numericValue\"" }, "count": 1 },
+                { "fields": { "sourceName": "dateValue", "targetProperty": "valueAsDate", "direction": "two-way" }, "source": { "marker": "value-as-date.bind=\"dateValue\"", "token": "value-as-date.bind=\"dateValue\"" }, "count": 1 },
+                { "fields": { "sourceName": "selectedValue", "targetProperty": "value", "direction": "two-way" }, "source": { "marker": "select value.bind=\"selectedValue\"", "token": "value.bind=\"selectedValue\"" }, "count": 1 },
+                { "fields": { "sourceName": "textAreaValue", "targetProperty": "value", "direction": "two-way" }, "source": { "marker": "textarea value.bind=\"textAreaValue\"", "token": "value.bind=\"textAreaValue\"" }, "count": 1 },
+                { "fields": { "sourceName": "editableText", "targetProperty": "textContent", "direction": "two-way" }, "source": { "marker": "textcontent.bind=\"editableText\"", "token": "textcontent.bind=\"editableText\"" }, "count": 1 },
+                { "fields": { "sourceName": "editableHtml", "targetProperty": "innerHTML", "direction": "two-way" }, "source": { "marker": "innerhtml.bind=\"editableHtml\"", "token": "innerhtml.bind=\"editableHtml\"" }, "count": 1 },
+                { "fields": { "sourceName": "scrollOffset", "targetProperty": "scrollTop", "direction": "two-way" }, "source": { "marker": "scrolltop.bind=\"scrollOffset\"", "token": "scrolltop.bind=\"scrollOffset\"" }, "count": 1 },
+                { "fields": { "sourceName": "isDisabled", "targetProperty": "disabled", "direction": "source-to-target" }, "source": { "marker": "disabled.bind=\"isDisabled\"", "token": "disabled.bind=\"isDisabled\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "app-attr-mapper-exact-key-semantics",
+          "expectations": [
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "sourceName": "sliderPosition", "targetProperty": "currentValue", "direction": "two-way" }, "source": { "marker": "NaTiVe-SlIdEr PoSiTiOn.bind=\"sliderPosition\"", "token": "PoSiTiOn.bind=\"sliderPosition\"" }, "count": 1 },
+                { "fields": { "sourceName": "inertPosition", "targetProperty": "position", "direction": "source-to-target" }, "source": { "marker": "inert-slider position.bind=\"inertPosition\"", "token": "position.bind=\"inertPosition\"" }, "count": 1 },
+                { "fields": { "sourceName": "inertAttributePosition", "targetProperty": "position", "direction": "source-to-target" }, "source": { "marker": "attribute-case-slider position.bind=\"inertAttributePosition\"", "token": "position.bind=\"inertAttributePosition\"" }, "count": 1 },
+                { "fields": { "sourceName": "focusRingState", "targetProperty": "focusRing", "direction": "source-to-target" }, "source": { "marker": "focus-ring.bind=\"focusRingState\"", "token": "focus-ring.bind=\"focusRingState\"" }, "count": 1 },
+                { "fields": { "sourceName": "inertGlobalState", "targetProperty": "inertGlobal", "direction": "source-to-target" }, "source": { "marker": "inert-global.bind=\"inertGlobalState\"", "token": "inert-global.bind=\"inertGlobalState\"" }, "count": 1 },
+                { "fields": { "sourceName": "gradientViewBox", "targetProperty": "gradientViewBox", "direction": "source-to-target" }, "source": { "marker": "viewbox.bind=\"gradientViewBox\"", "token": "viewbox.bind=\"gradientViewBox\"" }, "count": 1 },
+                { "fields": { "sourceName": "gradientUnits", "targetProperty": "gradientUnits", "targetPropertyType": "SVGAnimatedEnumeration", "direction": "source-to-target" }, "source": { "marker": "gradientunits.bind=\"gradientUnits\"", "token": "gradientunits.bind=\"gradientUnits\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "binding-mode-inlay-anchors",
+          "domainAxis": "source-precision",
+          "expectations": [
+            {
+              "name": "template inlay hints",
+              "query": { "kind": "template-inlay-hints", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "targetProperty": "value", "authoredMode": "default", "effectiveMode": "two-way" }, "source": { "marker": "type=\"text\" value.bind=\"textValue\"", "token": "value.bind" }, "count": 1 },
+                { "fields": { "targetProperty": "value", "authoredMode": "default", "effectiveMode": "to-view" }, "source": { "marker": "type=\"checkbox\" value.bind=\"checkboxValue\"", "token": "value.bind" }, "count": 1 },
+                { "fields": { "targetProperty": "currentValue", "authoredMode": "default", "effectiveMode": "two-way" }, "source": { "marker": "NaTiVe-SlIdEr PoSiTiOn.bind=\"sliderPosition\"", "token": "PoSiTiOn.bind" }, "count": 1 },
+                { "fields": { "targetProperty": "position", "authoredMode": "default", "effectiveMode": "to-view" }, "source": { "marker": "inert-slider position.bind=\"inertPosition\"", "token": "position.bind" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "node-observer-exact-key-semantics",
+          "expectations": [
+            {
+              "name": "binding target accesses",
+              "query": { "kind": "binding-target-accesses", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "targetProperty": "position", "lookup": "observer", "strategy": "value-attribute-observer", "eventNames": ["position-change"], "targetType": "HTMLElement" }, "source": { "marker": "native-observer-slider position.two-way=\"nativeObserverPosition\"", "token": "position.two-way=\"nativeObserverPosition\"" }, "count": 1 },
+                { "fields": { "targetProperty": "position", "lookup": "observer", "strategy": "setter-observer", "eventNames": [], "targetType": "HTMLElement" }, "source": { "marker": "inert-observer-slider position.two-way=\"inertObserverPosition\"", "token": "position.two-way=\"inertObserverPosition\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "conditional-app-two-way-predicate",
+          "expectations": [
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "sourceName": "guardedLivePosition", "targetProperty": "position", "direction": "two-way" }, "source": { "marker": "live position.bind=\"guardedLivePosition\"", "token": "position.bind=\"guardedLivePosition\"" }, "count": 1 },
+                { "fields": { "sourceName": "guardedColdPosition", "targetProperty": "position", "direction": "source-to-target" }, "source": { "marker": "guarded-slider position.bind=\"guardedColdPosition\"", "token": "position.bind=\"guardedColdPosition\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "native-target-is-not-a-resource-edit-surface",
+          "cursor": { "marker": "maxlength.bind=\"maximumLength\"", "token": "maxlength" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedDefinition": null,
+                "value.selectedBindable": null
+              }
+            },
+            {
+              "name": "references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "page": { "size": 50 } } },
+              "outcomes": ["miss"],
+              "equals": { "value.rows.length": 0 }
+            },
+            {
+              "name": "rename refusal",
+              "query": { "kind": "template-rename", "options": { "newName": "maximum-size" } },
+              "outcomes": ["miss"],
+              "equals": { "value.status": "not-available", "value.reason": "no-source-backed-member", "value.edits.length": 0 }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "built-in-attribute-pattern-definition-dispatch",
       "fixture": "fixtures/pressure/template-controller-built-ins",
       "aureliaDomain": "template-binding-syntax",

@@ -191,6 +191,11 @@ service, and as a container only when the key is `IContainer`; no-key tasks and 
 containers merely because their parameter is later used with `.get(...)`. If a new callback shape needs more expression closure, improve the ECMAScript evaluator or
 expression reader first; do not hide one-off callback parsing inside compiler-world, renderer, or observation
 materializers.
+`AttrMapper` configuration keys remain exact, as they do in the framework service. Template compilation projects
+authored HTML/SVG/MathML names into the browser's runtime `nodeName` and attribute spelling before lookup; it does not
+case-fold the app's `useMapping(...)`, `useGlobalMapping(...)`, or `useTwoWay(...)` constants into aliases that would be
+inert at runtime. Static `useTwoWay(...)` recognition admits only fully understood equality conjunctions. An unsupported
+predicate term rejects the static rule rather than widening a conditional predicate into a confident match.
 This does not mean every host-node binding consults the node observer configuration. The renderer still asks the
 framework-shaped binding for an accessor or observer according to binding mode and instruction kind. Custom
 `NodeObserverLocator.useConfig(...)` entries are spent by observer lookup paths such as `.two-way` / `.from-view`, while

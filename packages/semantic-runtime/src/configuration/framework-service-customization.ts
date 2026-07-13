@@ -141,11 +141,11 @@ class FrameworkServiceCustomizationDraft {
   readonly attributeMappings: AttributeMapperMapping[] = [];
   readonly attributeTwoWayRules: AttributeMapperTwoWayRule[] = [];
   readonly nodeConfigs: NodeObserverLocatorNodeConfig[] = [];
-    readonly globalNodeConfigs: NodeObserverLocatorGlobalConfig[] = [];
-    readonly nodeAccessorOverrides: NodeObserverLocatorAccessorOverride[] = [];
-    readonly globalAccessorOverrides: string[] = [];
-    readonly issues: ConfigurationIssue[] = [];
-    readonly records: KernelStoreRecord[] = [];
+  readonly globalNodeConfigs: NodeObserverLocatorGlobalConfig[] = [];
+  readonly nodeAccessorOverrides: NodeObserverLocatorAccessorOverride[] = [];
+  readonly globalAccessorOverrides: string[] = [];
+  readonly issues: ConfigurationIssue[] = [];
+  readonly records: KernelStoreRecord[] = [];
   nodeObserverLocatorAllowDirtyCheck: boolean | null = null;
 
   private readonly nodeConfigKeys = new Set<string>(builtInNodeObserverConfigKeys);
@@ -645,7 +645,7 @@ function readTwoWayRule(
     return null;
   }
   const facts = readTwoWayPredicateFacts(bodyExpression, reader, elementParameter, propertyParameter);
-  return facts.tagName == null && facts.propertyName == null
+  return facts == null || (facts.tagName == null && facts.propertyName == null)
     ? null
     : new AttributeMapperTwoWayRule(facts.tagName, facts.propertyName);
 }
@@ -669,22 +669,30 @@ function readTwoWayPredicateFacts(
   reader: StaticEvaluationExpressionReader,
   elementParameter: string | null,
   propertyParameter: string | null,
-): { readonly tagName: string | null; readonly propertyName: string | null } {
+): { readonly tagName: string | null; readonly propertyName: string | null } | null {
   const current = unwrapExpression(expression);
   if (ts.isBinaryExpression(current) && current.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
     const left = readTwoWayPredicateFacts(current.left, reader, elementParameter, propertyParameter);
     const right = readTwoWayPredicateFacts(current.right, reader, elementParameter, propertyParameter);
+    // Spending only part of a conjunction would widen the runtime predicate.
+    if (
+      left == null
+      || right == null
+      || (left.tagName != null && right.tagName != null && left.tagName !== right.tagName)
+      || (left.propertyName != null && right.propertyName != null && left.propertyName !== right.propertyName)
+    ) {
+      return null;
+    }
     return {
       tagName: left.tagName ?? right.tagName,
       propertyName: left.propertyName ?? right.propertyName,
     };
   }
   if (!ts.isBinaryExpression(current) || !isEqualityOperator(current.operatorToken.kind)) {
-    return { tagName: null, propertyName: null };
+    return null;
   }
   return readTwoWayEqualityFact(current.left, current.right, reader, elementParameter, propertyParameter)
-    ?? readTwoWayEqualityFact(current.right, current.left, reader, elementParameter, propertyParameter)
-    ?? { tagName: null, propertyName: null };
+    ?? readTwoWayEqualityFact(current.right, current.left, reader, elementParameter, propertyParameter);
 }
 
 function readTwoWayEqualityFact(
