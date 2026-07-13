@@ -386,8 +386,14 @@ classification, expression parsing, and instruction lowering converge on the sam
   `TemplateRuntimeAnalysisProjectContext` so controller products can be linked to already-known compiled templates.
   Recursive rendering intentionally exposes child bindings in a parent aggregate analysis as well as the child's own
   analysis. `runtime-resource-ownership.ts` is the shared source/controller ownership boundary used by public binding
-  projections and project-level source-owned producers; consumers must select resource-local rows there rather than
-  treating every recursively visible binding as a new authored fact.
+  projections and project-level source-owned producers. It also projects source-local dynamic instructions, expression
+  parses, and value sites from recursive aggregate render products. Cursor, diagnostics, semantic-token, completion,
+  capability-demand, and overlay consumers must select resource-local rows there rather than treating every recursively
+  visible child expression or instruction as a new fact authored by the parent. Instruction-to-scope replay may still
+  use aggregate render context through `template-expression-selection.ts`; source ownership and runtime reachability are
+  deliberately different questions. Runtime spread compilation retains its captured `AttrSyntax` product, so dynamic
+  sites and instructions spend that exact origin before falling back to source-span containment; this keeps nested
+  same-file local-template ranges from becoming an ownership heuristic.
   Custom-element controllers publish `configuration.controller-uses-compiled-template` claims; template-controller
   controllers publish `configuration.controller-uses-instruction-sequence` claims for their nested child sequence. Those
   controllers also materialize an `IViewFactory` product with a generated embedded custom-element definition, matching
@@ -861,8 +867,9 @@ than prelude helpers, so do not add empty prelude rows for constructs that emit 
 `template-type-system-overlay-expression-support.ts` is the compact ownership matrix for every semantic-runtime
 expression AST kind. Read that table before adding another `UnsupportedSyntax` branch: ordinary TypeScript-shaped
 expressions can copy authored source, scope-root expressions depend on BindingScope alias replay, value converters
-lower through modeled value-converter call surfaces, binding behaviors unwrap to their inner expression, `repeat.for`,
-interpolation, and binding patterns are owner-handled, `CustomExpression` currently belongs to i18n translation binding,
+lower through modeled value-converter call surfaces, binding behaviors unwrap to their inner expression, interpolation
+lowers through framework-equivalent ordered `String(...)` assembly while preserving each authored hole, `repeat.for`
+and binding patterns are owner-handled, `CustomExpression` currently belongs to i18n translation binding,
 and destructuring assignment remains a statement-emission frontier. When a TypeScript-shaped parent contains a modeled
 generated child expression, the projector now splices the child parts into the authored parent source while preserving
 source segments for diagnostics. This is a substrate capability, not an authoring grammar claim: framework value

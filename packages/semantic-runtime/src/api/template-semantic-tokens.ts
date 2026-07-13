@@ -37,10 +37,14 @@ import {
 } from '../configuration/scope.js';
 import {
   bindingScopeForTemplateExpressionParse,
-  capturedAttributeSyntaxForDynamicInstruction,
-  templateExpressionParsesForResource,
-  templateInstructionsForResource,
 } from '../template/template-expression-selection.js';
+import {
+  capturedAttributeSyntaxForDynamicInstruction,
+  resourceLocalBindingSourceOperations,
+  resourceLocalDynamicTemplateInstructions,
+  resourceLocalTemplateExpressionParses,
+  resourceLocalTemplateInstructions,
+} from '../template/runtime-resource-ownership.js';
 import {
   HydrateAttributeInstruction,
   ListenerBindingInstruction,
@@ -196,7 +200,7 @@ function instructionSemanticTokenRows(
   handles: boolean,
 ): readonly SemanticTemplateSemanticTokenRow[] {
   const rows: SemanticTemplateSemanticTokenRow[] = [];
-  for (const instruction of templateInstructionsForResource(resource)) {
+  for (const instruction of resourceLocalTemplateInstructions(store, resource)) {
     switch (instruction.instructionKind) {
       case TemplateInstructionKind.HydrateElement:
         if (instruction.definitionProductHandle == null) {
@@ -239,7 +243,7 @@ function dynamicInstructionSyntaxSemanticTokenRows(
   resource: TemplateResourceEmission,
   handles: boolean,
 ): readonly SemanticTemplateSemanticTokenRow[] {
-  return resource.runtimeAnalysis.runtimeRendering.dynamicInstructions.flatMap((instruction) => {
+  return resourceLocalDynamicTemplateInstructions(store, resource).flatMap((instruction) => {
     const syntax = capturedAttributeSyntaxForDynamicInstruction(store, instruction);
     if (syntax == null) {
       return [];
@@ -327,7 +331,7 @@ function refTargetSemanticTokenRows(
   if (source == null) {
     return [];
   }
-  const operation = resource.runtimeAnalysis.controllerBind.sourceOperations.find((candidate) =>
+  const operation = resourceLocalBindingSourceOperations(store, resource).find((candidate) =>
     candidate.instructionProductHandle === instruction.productHandle
   ) ?? null;
   const controller = operation == null
@@ -427,7 +431,7 @@ function expressionSemanticTokenRows(
   handles: boolean,
 ): readonly SemanticTemplateSemanticTokenRow[] {
   const rows: SemanticTemplateSemanticTokenRow[] = [];
-  const parses = templateExpressionParsesForResource(resource);
+  const parses = resourceLocalTemplateExpressionParses(store, resource);
   for (const parse of parses) {
     const parseSource = semanticExactSourceReference(describeAddress(store, parse.sourceAddressHandle));
     const root = expressionRoot(parse.result);

@@ -2365,7 +2365,7 @@
         "overlay"
       ],
       "summary": "Template TypeScript overlay expression projection has an explicit AST-kind support matrix, generated-child splice path, and owned prelude helper inventory.",
-      "rationale": "Overlay expression projection sits between Aurelia expression parsing and TypeScript checker overlays. It should not rediscover ownership from raw syntax. The support matrix names which AST kinds are TypeScript-shaped, scope-alias-backed, resource-lowered, transparent wrappers, owner-handled, statement-frontier, or opaque owner surfaces. Generated child expressions can now be spliced into TypeScript-shaped parent source while preserving authored source segments. The prelude table contains only reusable emitted helper declarations; promise-result locals, scope aliases, and temporary locals belong to overlay layer planning rather than empty helper rows. Treat template-controller semantics, binding/value flow, observer flow, checker projection, and framework resource admission as overlay substrate, not adjacent feature work: overlays should spend those products instead of rebuilding local TypeScript-only approximations.",
+      "rationale": "Overlay expression projection sits between Aurelia expression parsing and TypeScript checker overlays. It should not rediscover ownership from raw syntax. The support matrix names which AST kinds are TypeScript-shaped, scope-alias-backed, resource-lowered, runtime-expression-lowered, transparent wrappers, owner-handled, statement-frontier, or opaque owner surfaces. Generated child expressions can now be spliced into TypeScript-shaped parent source while preserving authored source segments. The prelude table contains only reusable emitted helper declarations; promise-result locals, scope aliases, and temporary locals belong to overlay layer planning rather than empty helper rows. Treat template-controller semantics, binding/value flow, observer flow, checker projection, and framework resource admission as overlay substrate, not adjacent feature work: overlays should spend those products instead of rebuilding local TypeScript-only approximations.",
       "guidance": [
         "Start with template-type-system-overlay-expression-support.ts before adding or removing an UnsupportedSyntax lane.",
         "The old unsupportedOverlayExpressionSyntax helper was retired; if that symbol still appears as the next work item, treat it as Atlas/Work Router hygiene and route to the support matrix rather than rebuilding a blacklist.",
@@ -2373,7 +2373,7 @@
         "Keep value-converter syntax lowered through RuntimeValueConverterMaterializer, direct checker-visible `toView(...)` calls, and the overlay prelude identity fallback; do not treat value converters as arbitrary JavaScript child expressions in authored templates. Dynamic checker-visible `withContext` must model both runtime strict-true branches rather than choosing one arity locally, and the generated overlay should agree with CheckerExpressionTypeEvaluator on the branch return union.",
         "Copied source expressions must consume the runtime binding projection's `strictBinding` axis. Strict-false read/call sites lower to optional-chain-shaped TypeScript so overlay diagnostics agree with Aurelia non-strict nullish `astEvaluate`; assignment targets opt out because writeability and assignability belong to binding data-flow/source assignment policy.",
         "Keep binding behaviors value-transparent in expression overlays; bind-time behavior effects and diagnostics belong to RuntimeBindingBehaviorMaterializer.",
-        "Keep ForOfStatement, Interpolation, BindingIdentifier, and binding patterns owner-handled. Repeat scope construction and interpolation hole binding should project their child value expressions.",
+        "Keep ForOfStatement, BindingIdentifier, and binding patterns owner-handled. Interpolation is a standalone runtime-expression lowering: emit framework-equivalent ordered String(...) assembly and preserve each authored hole as a generated child source segment.",
         "Treat CustomExpression as an owner surface, currently i18n TranslationBinding, rather than as generic unsupported TypeScript syntax.",
         "Treat DestructuringAssignment as statement-overlay pressure only if the semantic parser admits it. At the current checkpoint, semantic-runtime normalizes repeat destructuring into binding patterns; Atlas expression:coverage reports that class as normalized-unconstructed with dormant statement-frontier flags rather than an active overlay gap.",
         "TypeScript-shaped parents may splice generated child expression parts only when spans are source-backed and non-overlapping; preserve parent source segments for diagnostic mapping.",
@@ -2507,7 +2507,7 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-05-23"
+      "updatedAt": "2026-07-13"
     },
     {
       "id": "frontier:template-overlay-integration-hardening",

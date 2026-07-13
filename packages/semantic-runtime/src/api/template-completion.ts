@@ -157,12 +157,12 @@ import {
 import {
   resourceLocalBindingDataFlows,
   resourceLocalBindingTargetAccesses,
+  resourceLocalTemplateExpressionParses,
 } from '../template/runtime-resource-ownership.js';
 import {
   TemplateTypeSystemOverlayBuilder,
   type TemplateTypeSystemOverlayEmission,
 } from '../template/template-type-system-overlay.js';
-import { templateExpressionParsesForResource } from '../template/template-expression-selection.js';
 
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
 
@@ -847,7 +847,7 @@ function templateOverlayDiagnosticRow(
     missingInput,
     missingInputs: [missingInput],
     source,
-    subject: templateOverlayDiagnosticSubject(selection.resource, diagnostic, source),
+    subject: templateOverlayDiagnosticSubject(store, selection.resource, diagnostic, source),
     selectedMemberName: null,
     ownerTypeDisplay: null,
     ownerTypeShapeKind: null,
@@ -871,14 +871,16 @@ function templateOverlayDiagnosticRow(
 }
 
 function templateOverlayDiagnosticSubject(
+  store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
   diagnostic: TypeSystemOverlayDiagnostic,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
 ): SemanticDiagnosticSubject | null {
-  return templateExpressionDiagnosticSubject(resource, diagnostic.semanticProductHandle, source);
+  return templateExpressionDiagnosticSubject(store, resource, diagnostic.semanticProductHandle, source);
 }
 
 function templateExpressionDiagnosticSubject(
+  store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
   semanticProductHandle: ProductHandle | null,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
@@ -888,6 +890,7 @@ function templateExpressionDiagnosticSubject(
     return null;
   }
   const access = memberAccessSpanForDiagnosticRange(
+    store,
     resource,
     semanticProductHandle,
     source.start,
@@ -904,12 +907,13 @@ function templateExpressionDiagnosticSubject(
 }
 
 function memberAccessSpanForDiagnosticRange(
+  store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
   semanticProductHandle: ProductHandle | null,
   start: number,
   end: number,
 ): ExpressionMemberAccessSpan | null {
-  const parses = templateExpressionParsesForResource(resource);
+  const parses = resourceLocalTemplateExpressionParses(store, resource);
   const preferred = semanticProductHandle == null
     ? []
     : parses.filter((parse) => parse.productHandle === semanticProductHandle);
@@ -1060,7 +1064,7 @@ function templateDiagnosticRowsForSelection(
   if (source == null) {
     return [];
   }
-  return expressionMemberDiagnosticSites(selection.resource)
+  return expressionMemberDiagnosticSites(store, selection.resource)
     .flatMap((site) => templateDiagnosticRowsForMemberSite(store, selection, source, site, context));
 }
 
@@ -1182,6 +1186,7 @@ function bindingDataFlowDiagnosticRowsForSelection(
         siteKind: TemplateCompletionSiteKind.Expression,
         valueSiteKind: valueSiteKindForDataFlow(store, dataFlow.expressionProductHandle),
         subject: templateExpressionDiagnosticSubject(
+          store,
           selection.resource,
           dataFlow.expressionProductHandle,
           source,
@@ -1207,7 +1212,7 @@ function expressionRootDiagnosticRowsForSelection(
   if (authoredSource == null) {
     return [];
   }
-  return expressionRootDiagnosticSites(selection.resource).flatMap((site) => {
+  return expressionRootDiagnosticSites(store, selection.resource).flatMap((site) => {
     const span = site.access.name.span;
     const offset = span.start + Math.floor((span.end - span.start) / 2);
     if (offset < 0 || offset > authoredSource.text.length) {
@@ -1263,7 +1268,7 @@ function expressionRootDiagnosticRowsForSelection(
       }),
       siteKind: TemplateCompletionSiteKind.Expression,
       valueSiteKind: site.parse.site.siteKind,
-      subject: templateExpressionDiagnosticSubject(selection.resource, site.parse.productHandle, source),
+      subject: templateExpressionDiagnosticSubject(store, selection.resource, site.parse.productHandle, source),
       template: {
         compilationLane: selection.lane,
         source: describeAddress(store, selection.sourceAddressHandle),
@@ -1273,11 +1278,12 @@ function expressionRootDiagnosticRowsForSelection(
 }
 
 function expressionRootDiagnosticSites(
+  store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly ExpressionRootDiagnosticSite[] {
   const sites: ExpressionRootDiagnosticSite[] = [];
   const seen = new Set<string>();
-  for (const parse of templateExpressionParsesForResource(resource)) {
+  for (const parse of resourceLocalTemplateExpressionParses(store, resource)) {
     // Frontier subtrees support recovery/completion, but semantic absence would cascade from syntax not yet closed.
     if (!ExpressionParseResultInspector.hasCanonicalAst(parse.result)) {
       continue;
@@ -1375,7 +1381,7 @@ function expressionParseDiagnosticRowsForSelection(
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
-  return templateExpressionParsesForResource(selection.resource).flatMap((parse) => {
+  return resourceLocalTemplateExpressionParses(store, selection.resource).flatMap((parse) => {
     const payload = expressionParseDiagnosticPayload(parse);
     if (payload == null) {
       return [];
@@ -1945,11 +1951,12 @@ function templateSelectionSourceAddressHandle(
 }
 
 function expressionMemberDiagnosticSites(
+  store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly ExpressionMemberDiagnosticSite[] {
   const sites: ExpressionMemberDiagnosticSite[] = [];
   const seen = new Set<string>();
-  for (const parse of templateExpressionParsesForResource(resource)) {
+  for (const parse of resourceLocalTemplateExpressionParses(store, resource)) {
     for (const span of ExpressionParseResultInspector.memberAccessSpans(parse.result)) {
       const key = `${span.subjectKind}:${span.subjectSpan.start}:${span.subjectSpan.end}:${span.nameSpan.start}:${span.nameSpan.end}`;
       if (seen.has(key)) {

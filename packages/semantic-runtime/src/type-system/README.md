@@ -261,7 +261,10 @@ fixture view-model type, aliases root binding-context slots, replays authored te
 scope-projected `currentTarget`/`target` refinements when available, and
 repeat override locals such as `$index`, plus `with.bind`, promise result, state binding scope, importable
 value-converter `toView(...)`, missing-converter placeholder, and runtime-assignment slots that mirror `BindingScope`
-ancestry, and asks the checker for repeat-local, let-local, narrowed or non-narrowing branch, listener,
+ancestry. It also proves that projected custom-element content retains the outer authored scope, framework-managed
+repeat context slots reject template assignments, interpolation-backed `let` sources use framework-equivalent string
+assembly, and recursive child rendering does not make a parent overlay claim child-authored expressions. The contract
+asks the checker for repeat-local, let-local, narrowed or non-narrowing branch, listener,
 value-scope parent, value-converter, promise, state, and mapped diagnostic expression types. The same contract proves that overlay checker
 diagnostics remain hidden from ordinary project diagnostics while
 the explicit overlay-diagnostic lane maps copied generated segments back to exact authored template spans when
@@ -286,9 +289,10 @@ Known DOM events resolve through those event maps. Unknown names currently reach
 but the unbound declaration type parameter must eventually be instantiated as `unknown`; exposing `CustomEvent<T>` leaks
 a declaration-local type variable, while `any` would erase the uncertainty. Listener expressions themselves remain
 runtime-accepted regardless of their result type because Aurelia invokes the result only when it is callable.
-The template overlay path now has a selector/expression/plan/emitter split: `template-expression-selection.ts` owns the
-shared expression/value-site and expression-parse to runtime-scope lookup used by cursor inquiries, diagnostics, and
-overlays; `template-type-system-overlay-expression.ts` owns copied authored expression projection and named
+The template overlay path now has an ownership/selector/expression/plan/emitter split:
+`runtime-resource-ownership.ts` owns source-local expression/value-site/instruction projection from recursive aggregate
+render products; `template-expression-selection.ts` owns expression-parse to runtime-instruction and runtime-scope
+lookup where aggregate render context is semantically required; `template-type-system-overlay-expression.ts` owns copied authored expression projection and named
 unsupported-Aurelia-expression pressure; semantic product mapping lives in the template overlay builder; and
 `template-type-system-overlay-plan.ts` owns the typed overlay layers plus generated text emission. Keep those
 boundaries intact so future route/plugin/i18n constructs can add semantic facts before they become TypeScript text.
@@ -332,8 +336,10 @@ standalone expression probes. Built-in converters whose resource metadata lacks 
 their target type from checker carrier declarations. Missing converters use an unknown converter placeholder so
 TypeScript can still check the wrapped source expression and converter arguments while semantic diagnostics own the
 missing converter.
-Full app-pressure now reports zero template overlay skips across the in-repo pressure corpus; treat future skip
-reappearance as a signal to inspect the semantic owner first, not as a reason to add generated TypeScript fallbacks.
+App-pressure overlay skips are an explicit substrate inventory, not a zero-count success metric. Invalid fixtures may
+fail closed, and honest current frontiers include custom lifecycle code that constructs a `Scope` and local templates
+without an importable view-model identity. Treat a new or changed skip as a signal to inspect its semantic owner first,
+not as a reason to add generated TypeScript fallbacks or manufacture missing scope/type facts.
 Do not broaden this lane into a second `from-view`/`two-way` writeback authority. Source assignment is owned by binding
 data-flow because it has the binding direction, observer value channel, source write capability, target-to-source
 assignability, and framework `astAssign` policy. When a public diagnostic needs a precise user span, it should derive
@@ -358,6 +364,10 @@ TypeScript name-resolution failures. The overlay currently emits a typed resourc
 Nested repeat parent aliases carry a typed parent chain, so `$parent.$parent` can stay authored source text when the
 chain is available. Keep non-replayed binding-pattern current aliases as explicit skips until they can be derived from
 BindingScope ancestry without inventing TypeScript-only lookup rules.
+Framework parser callback depth and authored template ancestry are independent axes: arrow bodies increment the raw AST
+ancestor used for lexical lookup, while preserved `AuthoredScopePath` records whether the author actually wrote
+`$this` or `$parent`. Overlay lowering must subtract callback depth only for implicit scope lookup and spend the authored
+path directly for explicit qualifiers, including nested arrows.
 Template overlay diagnostics are now public only through the type-projection template diagnostic lane. That public
 projection is intentionally policy-filtered: the overlay source is generated TypeScript, so syntax/name-resolution and
 implicit-any diagnostics are substrate pressure unless the overlay can prove they came from an authored expression

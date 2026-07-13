@@ -1,8 +1,9 @@
 import { customElement } from 'aurelia';
 import { corpusItems, type CorpusItem } from './model';
+import { ProjectionPanel } from './projection-panel';
 import template from './scope-projections.html';
 
-@customElement({ name: 'scope-projections', template })
+@customElement({ name: 'scope-projections', template, dependencies: [ProjectionPanel] })
 export class ScopeProjections {
   readonly heading = 'Scope projection';
   readonly items = corpusItems;

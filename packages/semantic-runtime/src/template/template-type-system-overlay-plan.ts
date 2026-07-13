@@ -1,4 +1,5 @@
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import { BindingContextSlotAssignmentAccessKind } from '../configuration/scope.js';
 import { isJavaScriptIdentifierName } from '../javascript/identifier.js';
 import { TypeSystemOverlaySourceBuilder } from '../type-system/overlay.js';
 import { LetBindingTargetContext } from './runtime-binding.js';
@@ -42,6 +43,7 @@ export interface TemplateTypeSystemOverlayRepeatLayer {
   readonly declaration: TemplateTypeSystemOverlaySourceSlice;
   readonly iterable: readonly TemplateTypeSystemOverlayExpressionPart[];
   readonly previousKind: 'element-or-undefined' | 'undefined' | 'unknown';
+  readonly previousAssignmentAccessKind: BindingContextSlotAssignmentAccessKind | null;
   readonly currentAliasExpression: string | null;
   readonly parentAlias: TemplateTypeSystemOverlayScopeAlias | null;
 }
@@ -93,6 +95,7 @@ export interface TemplateTypeSystemOverlayContextSlotLocal {
   readonly name: string;
   readonly valueKind: TemplateTypeSystemOverlayContextSlotValueKind;
   readonly typeExpression: string | null;
+  readonly assignmentAccessKind: BindingContextSlotAssignmentAccessKind | null;
 }
 
 export type TemplateTypeSystemOverlayContextSlotValueKind =
@@ -218,7 +221,12 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
     this.depth += 1;
     const nestedIndent = this.indent;
     this.appendCapturedParentAlias(capturedParent, nestedIndent);
-    this.builder.appendLine(repeatPreviousDeclaration(layer.previousKind, valuesLocal, nestedIndent));
+    this.builder.appendLine(repeatPreviousDeclaration(
+      layer.previousKind,
+      layer.previousAssignmentAccessKind,
+      valuesLocal,
+      nestedIndent,
+    ));
     if (layer.currentAliasExpression != null) {
       this.builder.appendLine(`${nestedIndent}const $this = ${layer.currentAliasExpression};`);
     }
@@ -406,9 +414,10 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
   private appendContextSlotLayer(layer: TemplateTypeSystemOverlayContextSlotLayer): void {
     const indent = this.indent;
     for (const local of layer.locals) {
+      const declarationKeyword = contextSlotDeclarationKeyword(local.assignmentAccessKind);
       this.builder.appendLine(local.typeExpression == null
-        ? `${indent}let ${local.name} = ${contextSlotLocalInitializer(local.valueKind)};`
-        : `${indent}let ${local.name} = undefined as unknown as ${local.typeExpression};`);
+        ? `${indent}${declarationKeyword} ${local.name} = ${contextSlotLocalInitializer(local.valueKind)};`
+        : `${indent}${declarationKeyword} ${local.name} = undefined as unknown as ${local.typeExpression};`);
     }
   }
 
@@ -519,15 +528,25 @@ function contextSlotLocalInitializer(valueKind: TemplateTypeSystemOverlayContext
 
 function repeatPreviousDeclaration(
   kind: TemplateTypeSystemOverlayRepeatLayer['previousKind'],
+  assignmentAccessKind: BindingContextSlotAssignmentAccessKind | null,
   valuesLocal: string,
   indent: string,
 ): string {
+  const declarationKeyword = contextSlotDeclarationKeyword(assignmentAccessKind);
   switch (kind) {
     case 'element-or-undefined':
-      return `${indent}let $previous = undefined as (typeof ${valuesLocal} extends Iterable<infer T> ? T : never) | undefined;`;
+      return `${indent}${declarationKeyword} $previous = undefined as (typeof ${valuesLocal} extends Iterable<infer T> ? T : never) | undefined;`;
     case 'undefined':
-      return `${indent}let $previous = undefined;`;
+      return `${indent}${declarationKeyword} $previous = undefined;`;
     case 'unknown':
-      return `${indent}let $previous = undefined as unknown;`;
+      return `${indent}${declarationKeyword} $previous = undefined as unknown;`;
   }
+}
+
+function contextSlotDeclarationKeyword(
+  assignmentAccessKind: BindingContextSlotAssignmentAccessKind | null,
+): 'const' | 'let' {
+  return assignmentAccessKind === BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly
+    ? 'const'
+    : 'let';
 }

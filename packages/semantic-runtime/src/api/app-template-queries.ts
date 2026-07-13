@@ -107,6 +107,7 @@ import type {
   SemanticSourceReference,
 } from './source-reference.js';
 import {
+  capturedAttributeSyntaxForDynamicInstruction,
   resourceLocalBindingDataFlows,
   resourceLocalBindingObservedDependencies,
   resourceLocalBindingSourceOperations,
@@ -114,6 +115,8 @@ import {
   resourceLocalBindingTargetOperations,
   resourceLocalBindingValueChannels,
   resourceLocalRuntimeBindings,
+  resourceLocalDynamicTemplateInstructions,
+  resourceLocalTemplateExpressionParses,
 } from '../template/runtime-resource-ownership.js';
 import {
   HydrateAttributeInstruction,
@@ -150,9 +153,7 @@ import { TemplateSpecialAttributeName } from '../template/special-attribute-sour
 import { namedRefTargetController } from '../template/runtime-ref-target.js';
 import {
   bindingScopesForTemplateExpressionParse,
-  capturedAttributeSyntaxForDynamicInstruction,
   runtimeExpressionBindingsForTemplateExpressionParseInScope,
-  templateExpressionParsesForResource,
 } from '../template/template-expression-selection.js';
 import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
 import { expressionResourceOccurrences } from '../template/expression-resource-occurrence.js';
@@ -2708,7 +2709,7 @@ function attributeResourceReferenceRows(
           SemanticTemplateResourceUsageKind.AttributeTarget,
         )];
   });
-  const dynamicRows = resource.runtimeAnalysis.runtimeRendering.dynamicInstructions.flatMap((instruction): readonly SemanticTemplateReferenceRow[] => {
+  const dynamicRows = resourceLocalDynamicTemplateInstructions(store, resource).flatMap((instruction): readonly SemanticTemplateReferenceRow[] => {
     if (
       !(instruction instanceof HydrateAttributeInstruction)
       || instruction.definitionProductHandle == null
@@ -2778,7 +2779,7 @@ function expressionResourceReferenceRows(
   ) {
     return [];
   }
-  return templateExpressionParsesForResource(resource).flatMap((parse) => {
+  return resourceLocalTemplateExpressionParses(store, resource).flatMap((parse) => {
     const expression = runtimeAcceptedBindingExpressionAstForParse(parse);
     const source = describeAddress(store, parse.sourceAddressHandle);
     const sourcePath = source?.path;
@@ -2888,7 +2889,7 @@ function refTargetResourceReferenceRows(
   target: ResourceReferenceTarget,
   handles: boolean,
 ): readonly SemanticTemplateReferenceRow[] {
-  return resource.runtimeAnalysis.controllerBind.sourceOperations.flatMap((operation) => {
+  return resourceLocalBindingSourceOperations(store, resource).flatMap((operation) => {
     const controller = namedRefTargetController(resource.runtimeAnalysis.runtimeRendering, operation);
     if (
       controller?.definitionProductHandle == null
@@ -3097,7 +3098,7 @@ function authoredScopeReferenceRowsForTarget(
   handles: boolean,
 ): readonly SemanticTemplateReferenceRow[] {
   return uniqueSortedTemplateReferenceRows(resources.flatMap((resource) =>
-    templateExpressionParsesForResource(resource).flatMap((parse) => {
+    resourceLocalTemplateExpressionParses(store, resource).flatMap((parse) => {
       if (!ExpressionParseResultInspector.hasCanonicalAst(parse.result)) {
         return [];
       }

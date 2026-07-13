@@ -2,7 +2,6 @@ import type { BindingScope } from '../configuration/scope.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   instructionScopeLookup,
   isRuntimeExpressionBinding,
@@ -28,13 +27,8 @@ import {
   MultiAttrInstruction,
   type TemplateInstruction,
 } from './instruction-ir.js';
-import type { AttributeSyntax } from './attribute-syntax.js';
-import { TemplateProductDetails } from './product-details.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from './template-compilation-project-pass.js';
-import type {
-  TemplateExpressionParse,
-  TemplateValueSite,
-} from './value-site.js';
+import type { TemplateExpressionParse } from './value-site.js';
 import { templateScopeCanEvaluateSourceScope } from './template-scope-replay.js';
 
 export const enum RuntimeBindingSourceContextProjectionSelectionKind {
@@ -65,52 +59,14 @@ export type RuntimeBindingSourceContextProjectionSelectionResult =
  * products. Cursor inquiries, diagnostics, and TypeScript overlays should agree here instead of rediscovering the
  * expression-to-instruction-to-scope path locally.
  */
-export function templateExpressionParsesForResource(
-  resource: TemplateResourceRuntimeAnalysisEmission,
-): readonly TemplateExpressionParse[] {
-  return [
-    ...resource.runtimeAnalysis.runtimeRendering.dynamicExpressionParses,
-    ...resource.compilation.bindingCommandLowering.expressionParses,
-    ...resource.compilation.valueSites.parses,
-  ];
-}
-
-export function templateValueSitesForResource(
-  resource: TemplateResourceRuntimeAnalysisEmission,
-): readonly TemplateValueSite[] {
-  return [
-    ...resource.runtimeAnalysis.runtimeRendering.dynamicValueSites,
-    ...resource.compilation.bindingCommandLowering.valueSites,
-    ...resource.compilation.valueSites.sites,
-  ];
-}
-
-/** Compiler-front-door and runtime-spread instructions that realize one authored template resource. */
-export function templateInstructionsForResource(
+/** Compiler-front-door and recursive aggregate-render instructions available while analyzing one resource. */
+function templateInstructionsInRuntimeAnalysis(
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly TemplateInstruction[] {
   return [
     ...resource.compilation.compiledTemplate.instructions,
     ...resource.runtimeAnalysis.runtimeRendering.dynamicInstructions,
   ];
-}
-
-/** Exact captured AttrSyntax provenance published for one runtime-compiled spread instruction. */
-export function capturedAttributeSyntaxForDynamicInstruction(
-  store: KernelStore,
-  instruction: TemplateInstruction,
-): AttributeSyntax | null {
-  const syntaxHandles = new Set<ProductHandle>();
-  for (const claimHandle of store.readClaimsForSubject(instruction.productHandle)) {
-    const claim = store.readClaim(claimHandle);
-    if (claim?.predicateKey === KernelVocabulary.Instruction.DynamicInstructionOriginatesFromCapturedAttributeSyntax.key) {
-      syntaxHandles.add(claim.objectHandle as ProductHandle);
-    }
-  }
-  if (syntaxHandles.size !== 1) {
-    return null;
-  }
-  return store.productDetails.read(TemplateProductDetails.AttributeSyntax, [...syntaxHandles][0]!);
 }
 
 export function templateInstructionForExpressionParse(
@@ -124,7 +80,7 @@ export function templateInstructionForExpressionProductHandle(
   resource: TemplateResourceRuntimeAnalysisEmission,
   expressionProductHandle: ProductHandle,
 ): TemplateInstruction | null {
-  return templateInstructionsForResource(resource).find((candidate) =>
+  return templateInstructionsInRuntimeAnalysis(resource).find((candidate) =>
     expressionProductHandlesForInstruction(candidate).includes(expressionProductHandle)
   ) ?? null;
 }
@@ -155,7 +111,7 @@ function runtimeBindingOwnerInstructionForTemplateExpression(
   if (!(instruction instanceof MultiAttrInstruction)) {
     return instruction;
   }
-  return templateInstructionsForResource(resource).find((candidate) =>
+  return templateInstructionsInRuntimeAnalysis(resource).find((candidate) =>
     candidate instanceof IteratorBindingInstruction
     && candidate.tailInstructionProductHandles.includes(instruction.productHandle)
   ) ?? instruction;
@@ -351,7 +307,7 @@ export function templateInstructionForProductHandle(
   resource: TemplateResourceRuntimeAnalysisEmission,
   productHandle: ProductHandle,
 ): TemplateInstruction | null {
-  return templateInstructionsForResource(resource).find((candidate) =>
+  return templateInstructionsInRuntimeAnalysis(resource).find((candidate) =>
     candidate.productHandle === productHandle
   ) ?? null;
 }

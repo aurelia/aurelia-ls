@@ -1664,6 +1664,10 @@ expression still belongs to the parent usage template that authored the captured
 is only a fallback for rows that genuinely lack exact source spans. Project-level producers consume the same
 `runtime-resource-ownership` projection before publishing source-owned diagnostics; otherwise a child binding visible
 in both parent aggregate rendering and child analysis would produce duplicate semantic facts before the API is reached.
+Expression references, completions, semantic tokens, capability demands, and overlay diagnostics follow the same
+authored-resource rule for dynamic expression parses, value sites, and instructions. They must not enumerate a recursive
+aggregate render directly; runtime instruction/scope selection may inspect that aggregate only after the source-owned
+expression has been selected.
 `repeat.for` owner bindings use the `template-controller-iteration` value channel and Aurelia repeat-source
 compatibility rather than raw `Repeat.items` TypeScript assignability. Dynamic `model.bind` on `<option>` or `<input>`
 uses the `element-model-value` channel, because Aurelia's select and checked observers read the element's model value as

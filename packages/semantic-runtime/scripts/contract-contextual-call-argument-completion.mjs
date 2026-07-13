@@ -17,8 +17,8 @@ import {
 } from '../out/template/expression-parse-projection.js';
 import {
   bindingScopesForTemplateExpressionParse,
-  templateExpressionParsesForResource,
 } from '../out/template/template-expression-selection.js';
+import { resourceLocalTemplateExpressionParses } from '../out/template/runtime-resource-ownership.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/contextual-call-argument-completion');
@@ -173,7 +173,7 @@ function completionSummary(completion) {
 function evaluateTaggedTemplateExpression() {
   const resource = app.emission.templates.resources[0] ?? null;
   assert.ok(resource, 'Expected contextual-call fixture to compile one template resource.');
-  const parse = templateExpressionParsesForResource(resource)
+  const parse = resourceLocalTemplateExpressionParses(runtime.workspace.store, resource)
     .find((candidate) => findTaggedTemplateExpression(bindingExpressionAstForParse(candidate)) != null)
     ?? null;
   assert.ok(parse, 'Expected contextual-call fixture to contain a tagged-template expression.');

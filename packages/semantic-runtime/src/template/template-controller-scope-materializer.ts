@@ -663,6 +663,7 @@ export class TemplateControllerScopeMaterializer {
 
     if (instruction instanceof HydrateElementInstruction) {
       frame.flowState.clearBranch(currentScope);
+      this.constructElementProjectionScopes(frame, currentScope, instruction, localSuffix, controllerContext);
       const emission = this.measure(frame.input, 'child-element-scope', () =>
         this.constructChildElementScope(frame, currentScope, instruction, localSuffix, controllerContext)
       );
@@ -682,6 +683,28 @@ export class TemplateControllerScopeMaterializer {
 
     frame.flowState.clearBranch(currentScope);
     return currentScope;
+  }
+
+  private constructElementProjectionScopes(
+    frame: TemplateScopeConstructionFrame,
+    outerScope: BindingScope,
+    instruction: HydrateElementInstruction,
+    localSuffix: string,
+    controllerContext: RuntimeControllerFrame | null,
+  ): void {
+    instruction.projectionInstructionSequences.forEach((projection, index) => {
+      const sequence = frame.readSequence(projection.instructionSequenceProductHandle);
+      if (sequence == null) {
+        return;
+      }
+      this.constructInstructionSequence(
+        frame,
+        outerScope,
+        sequence,
+        `${localSuffix}:projection:${index}`,
+        controllerContext,
+      );
+    });
   }
 
   private constructTemplateControllerInstructionScope(
@@ -810,7 +833,7 @@ export class TemplateControllerScopeMaterializer {
         declaration?.targetIdentityHandle ?? null,
         declaration?.targetProductHandle ?? null,
         declaration?.targetType ?? null,
-        bindable.nameSourceAddressHandle ?? declaration?.sourceAddressHandle ?? bindable.sourceAddressHandle,
+        declaration?.sourceAddressHandle ?? bindable.nameSourceAddressHandle ?? bindable.sourceAddressHandle,
         declaration?.fieldProvenance ?? [],
         declaration?.staticValue ?? null,
         declaration?.memberTypes ?? [],

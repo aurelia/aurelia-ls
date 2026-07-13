@@ -7,6 +7,7 @@ import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   BindingContextKind,
+  BindingContextSlotAssignmentAccessKind,
   BindingScope,
   BindingScopeConditionPolarity,
   BindingScopeCreatorKind,
@@ -35,7 +36,6 @@ import {
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ValueConverterDefinition } from '../resources/value-converter-definition.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
-import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
   CheckerStrictTrueComparisonKind,
   readOrProjectCheckerTypeMembers,
@@ -79,6 +79,7 @@ import {
   IteratorBindingScopeEffect,
   LetBindingScopeEffect,
   LetBindingTargetContext,
+  type RuntimeBindingScopeEffect,
 } from './runtime-binding.js';
 import { TemplateProductDetails } from './product-details.js';
 import { readTemplateExpressionParse } from './expression-parse-product.js';
@@ -116,9 +117,9 @@ import {
   runtimeExpressionBindingsForTemplateExpressionProductHandleInScope,
   selectRuntimeBindingSourceContextProjection,
   templateInstructionForExpressionParse,
-  templateExpressionParsesForResource,
   templateInstructionForProductHandle,
 } from './template-expression-selection.js';
+import { resourceLocalTemplateExpressionParses } from './runtime-resource-ownership.js';
 import {
   templateRepeatScopeCurrentAliasExpression,
   templateScopeAliasSupport,
@@ -152,6 +153,8 @@ export const enum TemplateTypeSystemOverlaySkippedReason {
   MissingViewModelIdentity = 'missing-view-model-identity',
   /** A copied expression has no readable authored source slice in the current project epoch. */
   MissingExpressionSource = 'missing-expression-source',
+  /** A material template expression has no instruction-owned binding scope to replay. */
+  MissingBindingScope = 'missing-binding-scope',
   /** Scope replay encountered a BindingScope owner that has no overlay layer contract yet. */
   UnsupportedScopeOwner = 'unsupported-scope-owner',
   /** A repeated-item scope lacks the iterator scope effect that should have introduced it. */
@@ -387,17 +390,23 @@ export class TemplateTypeSystemOverlayBuilder {
     frame: TemplateTypeSystemOverlayBuildFrame,
   ): void {
     let index = 0;
-    for (const parse of templateExpressionParsesForResource(frame.resource)) {
+    for (const parse of resourceLocalTemplateExpressionParses(this.store, frame.resource)) {
       if (this.expressionParseIsTargetToSourceOnlyBindingTarget(frame.resource, parse)) {
         continue;
       }
       for (const expressionSpan of expressionSpansForOverlay(parse)) {
         const scopes = bindingScopesForTemplateExpressionParse(frame.resource, parse);
         const bindings = runtimeExpressionBindingsForTemplateExpressionParse(frame.resource, parse);
-        const expressionScopes = scopes.length === 0
-          ? [frame.resource.runtimeAnalysis.scopes.rootScope]
-          : scopes;
-        for (const scope of expressionScopes) {
+        if (scopes.length === 0) {
+          frame.skipped.push(skippedTemplateTypeSystemOverlayExpression(
+            TemplateTypeSystemOverlaySkippedReason.MissingBindingScope,
+            parse.productHandle,
+            expressionSpan.span,
+            'Template expression had no instruction-owned binding scope to replay.',
+          ));
+          continue;
+        }
+        for (const scope of scopes) {
           const scopedBindings = bindings.length === 0
             ? []
             : runtimeExpressionBindingsForTemplateExpressionParseInScope(frame.resource, parse, scope);
@@ -920,7 +929,7 @@ export class TemplateTypeSystemOverlayBuilder {
       }
 
       if (current.ownerKind === BindingScopeOwnerKind.RepeatedItem) {
-        const effect = repeatEffectForScope(resource, current);
+        const effect = repeatEffectForScope(this.store, current);
         if (effect == null) {
           skipped.push(skippedTemplateTypeSystemOverlayExpression(
             TemplateTypeSystemOverlaySkippedReason.MissingRepeatScopeEffect,
@@ -954,6 +963,7 @@ export class TemplateTypeSystemOverlayBuilder {
           declaration: repeat.declaration,
           iterable: repeat.iterable,
           previousKind: repeatPreviousOverlayKind(current),
+          previousAssignmentAccessKind: repeatPreviousAssignmentAccessKind(current),
           currentAliasExpression,
           parentAlias: aliases.parentAlias(),
         });
@@ -1079,21 +1089,6 @@ export class TemplateTypeSystemOverlayBuilder {
     return declaration == null
       ? null
       : { declaration, iterable: iterableParts };
-  }
-
-  private letEffectsForScope(
-    resource: TemplateResourceRuntimeAnalysisEmission,
-    scope: BindingScope,
-  ): readonly LetBindingScopeEffect[] {
-    const handles = new Set(scope.scopeCreators
-      .filter((creator) => creator.creatorKind === BindingScopeCreatorKind.RuntimeBindingScopeEffect)
-      .map((creator) => creator.productHandle));
-    if (handles.size === 0) {
-      return [];
-    }
-    return resource.runtimeAnalysis.runtimeRendering.scopeEffects.filter((effect): effect is LetBindingScopeEffect =>
-      effect instanceof LetBindingScopeEffect && handles.has(effect.productHandle)
-    );
   }
 
   private letSources(
@@ -1243,7 +1238,16 @@ export class TemplateTypeSystemOverlayBuilder {
     overlayFileName: string,
     parentAlias: TemplateTypeSystemOverlayScopeAlias | null,
   ): readonly TemplateTypeSystemOverlayScopeLayer[] | null {
-    const parentScope = scope.predecessor ?? scope.runtimeParent ?? resource.runtimeAnalysis.scopes.rootScope;
+    const parentScope = scope.predecessor ?? scope.runtimeParent;
+    if (parentScope == null) {
+      skipped.push(skippedTemplateTypeSystemOverlayExpression(
+        TemplateTypeSystemOverlaySkippedReason.MissingSyntheticScopeCreator,
+        parse.productHandle,
+        creator.sourceAddressHandle ?? sourceAddressHandle,
+        `Synthetic-view creator '${creator.creatorKind}' did not retain a predecessor or runtime parent scope.`,
+      ));
+      return null;
+    }
     // Source effects create same-level scope facts; later controller branches may read them, but effects cannot read themselves.
     switch (creator.creatorKind) {
       case BindingScopeCreatorKind.RuntimeBindingScopeEffect:
@@ -1406,7 +1410,13 @@ export class TemplateTypeSystemOverlayBuilder {
   ): readonly TemplateTypeSystemOverlayScopeLayer[] | null {
     const instruction = templateInstructionForProductHandle(resource, creator.productHandle);
     if (!(instruction instanceof HydrateTemplateControllerInstruction)) {
-      return [];
+      skipped.push(skippedTemplateTypeSystemOverlayExpression(
+        TemplateTypeSystemOverlaySkippedReason.UnsupportedSyntheticScope,
+        parse.productHandle,
+        creator.sourceAddressHandle ?? sourceAddressHandle,
+        `Template-controller branch creator '${creator.productHandle}' did not resolve to a hydrate-template-controller instruction.`,
+      ));
+      return null;
     }
     const semantics = frameworkTemplateControllerSemanticsForName(instruction.controllerName);
     if (semantics?.flowKind === BuiltInTemplateControllerFlowKind.SwitchCase
@@ -1458,9 +1468,7 @@ export class TemplateTypeSystemOverlayBuilder {
     baseExpressionContext: TemplateTypeSystemOverlayExpressionProjectionContext,
     overlayFileName: string,
   ): readonly TemplateTypeSystemOverlayScopeLayer[] | null {
-    const scopeEffect = resource.runtimeAnalysis.runtimeRendering.scopeEffects.find((effect) =>
-      effect.productHandle === creator.productHandle
-    ) ?? null;
+    const scopeEffect = runtimeBindingScopeEffectForCreator(this.store, creator);
     if (scopeEffect instanceof IteratorBindingScopeEffect) {
       const repeat = this.repeatSource(
         resource,
@@ -1485,6 +1493,7 @@ export class TemplateTypeSystemOverlayBuilder {
         declaration: repeat.declaration,
         iterable: repeat.iterable,
         previousKind: repeatPreviousOverlayKind(scope),
+        previousAssignmentAccessKind: repeatPreviousAssignmentAccessKind(scope),
         currentAliasExpression: templateRepeatScopeCurrentAliasExpression(scope),
         parentAlias: {
           bindingContextExpression: '$this',
@@ -1545,7 +1554,13 @@ export class TemplateTypeSystemOverlayBuilder {
   ): readonly TemplateTypeSystemOverlayScopeLayer[] | null {
     const instruction = templateInstructionForProductHandle(resource, creator.productHandle);
     if (!(instruction instanceof HydrateTemplateControllerInstruction)) {
-      return [];
+      skipped.push(skippedTemplateTypeSystemOverlayExpression(
+        TemplateTypeSystemOverlaySkippedReason.UnsupportedSyntheticScope,
+        parse.productHandle,
+        creator.sourceAddressHandle ?? sourceAddressHandle,
+        `Template-controller value-scope creator '${creator.productHandle}' did not resolve to a hydrate-template-controller instruction.`,
+      ));
+      return null;
     }
     const semantics = frameworkTemplateControllerSemanticsForName(instruction.controllerName);
     if (semantics?.flowKind === BuiltInTemplateControllerFlowKind.ValueScope) {
@@ -1994,19 +2009,12 @@ export class TemplateTypeSystemOverlayBuilder {
     scope: BindingScope,
     overlayFileName: string,
   ): readonly TemplateTypeSystemOverlayRuntimeAssignmentLocal[] {
-    const typeProductHandle = scope.bindingContext.contextType?.productHandle ?? null;
-    if (typeProductHandle == null) {
-      return [];
-    }
-    const typeShape = this.store.productDetails.read(TypeSystemProductDetails.TypeShape, typeProductHandle);
-    return typeShape == null
-      ? []
-      : readOrProjectCheckerTypeMembers(this.store, typeShape, typeProductHandle)
-        .filter((member) => isIdentifierName(member.name))
-        .map((member) => ({
-          name: member.name,
-          typeExpression: checkerMemberValueTypeExpression(member, { generatedFileName: overlayFileName }),
-        }));
+    return scope.bindingContext.slots
+      .filter((slot) => isIdentifierName(slot.name))
+      .map((slot) => ({
+        name: slot.name,
+        typeExpression: this.slotTypeExpression(slot, overlayFileName),
+      }));
   }
 
   private viewModelImport(
@@ -2068,7 +2076,7 @@ function expressionSpansForOverlay(parse: TemplateExpressionParse): readonly Ove
 }
 
 function repeatEffectForScope(
-  resource: TemplateResourceRuntimeAnalysisEmission,
+  store: KernelStore,
   scope: BindingScope,
 ): IteratorBindingScopeEffect | null {
   const creator = scope.scopeCreators.find((candidate) =>
@@ -2077,9 +2085,17 @@ function repeatEffectForScope(
   if (creator == null) {
     return null;
   }
-  return resource.runtimeAnalysis.runtimeRendering.scopeEffects.find((effect) =>
-    effect instanceof IteratorBindingScopeEffect && effect.productHandle === creator.productHandle
-  ) as IteratorBindingScopeEffect | undefined ?? null;
+  const effect = runtimeBindingScopeEffectForCreator(store, creator);
+  return effect instanceof IteratorBindingScopeEffect ? effect : null;
+}
+
+function runtimeBindingScopeEffectForCreator(
+  store: KernelStore,
+  creator: BindingScopeCreator,
+): RuntimeBindingScopeEffect | null {
+  return creator.creatorKind === BindingScopeCreatorKind.RuntimeBindingScopeEffect
+    ? store.productDetails.read(TemplateProductDetails.RuntimeBindingScopeEffect, creator.productHandle)
+    : null;
 }
 
 function valueConverterCallerContextKind(
@@ -2182,8 +2198,19 @@ function overlayContextSlotLocals(
       : checkerTypeReferenceTypeExpression(store, slot.targetType, { generatedFileName: overlayFileName });
     return valueKind == null
       ? []
-      : [{ name: slot.name, valueKind, typeExpression }];
+      : [{
+        name: slot.name,
+        valueKind,
+        typeExpression,
+        assignmentAccessKind: slot.assignmentAccessKind,
+      }];
   });
+}
+
+function repeatPreviousAssignmentAccessKind(
+  scope: BindingScope,
+): BindingContextSlotAssignmentAccessKind | null {
+  return scope.overrideContext.lookup('$previous')?.assignmentAccessKind ?? null;
 }
 
 function overlayEventMemberTypes(

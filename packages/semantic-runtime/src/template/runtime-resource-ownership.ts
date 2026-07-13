@@ -9,6 +9,7 @@ import {
   sourceSpanAddressForAddress,
 } from '../kernel/source-address.js';
 import type { KernelStore } from '../kernel/store.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type {
   RuntimeBindingDataFlow,
   RuntimeBindingObservedDependency,
@@ -21,6 +22,9 @@ import type {
   RuntimeBindingTargetAccess,
   RuntimeBindingTargetOperation,
 } from './runtime-binding.js';
+import type { AttributeSyntax } from './attribute-syntax.js';
+import type { TemplateInstruction } from './instruction-ir.js';
+import { TemplateProductDetails } from './product-details.js';
 import type { RuntimeBindingBehaviorApplication } from './runtime-binding-behavior.js';
 import type { RuntimeValueConverterApplication } from './runtime-value-converter.js';
 import {
@@ -28,6 +32,74 @@ import {
   type RuntimeControllerFrame,
 } from './runtime-controller.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from './template-compilation-project-pass.js';
+import type { TemplateExpressionParse, TemplateValueSite } from './value-site.js';
+
+/** Expression parses authored by this resource, excluding descendant rows from recursive aggregate rendering. */
+export function resourceLocalTemplateExpressionParses(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): readonly TemplateExpressionParse[] {
+  return [
+    ...resource.runtimeAnalysis.runtimeRendering.dynamicExpressionParses.filter((parse) =>
+      dynamicExpressionParseBelongsToResource(store, resource, parse)
+    ),
+    ...resource.compilation.bindingCommandLowering.expressionParses,
+    ...resource.compilation.valueSites.parses,
+  ];
+}
+
+/** Value sites authored by this resource, excluding descendant rows from recursive aggregate rendering. */
+export function resourceLocalTemplateValueSites(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): readonly TemplateValueSite[] {
+  return [
+    ...resource.runtimeAnalysis.runtimeRendering.dynamicValueSites.filter((site) =>
+      dynamicValueSiteBelongsToResource(store, resource, site)
+    ),
+    ...resource.compilation.bindingCommandLowering.valueSites,
+    ...resource.compilation.valueSites.sites,
+  ];
+}
+
+/** Runtime-compiled instructions authored by this resource, excluding descendant aggregate-render rows. */
+export function resourceLocalDynamicTemplateInstructions(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): readonly TemplateInstruction[] {
+  return resource.runtimeAnalysis.runtimeRendering.dynamicInstructions.filter((instruction) =>
+    dynamicInstructionBelongsToResource(store, resource, instruction)
+  );
+}
+
+/** Exact captured AttrSyntax provenance published for one runtime-compiled spread instruction. */
+export function capturedAttributeSyntaxForDynamicInstruction(
+  store: KernelStore,
+  instruction: TemplateInstruction,
+): AttributeSyntax | null {
+  const syntaxHandles = new Set<ProductHandle>();
+  for (const claimHandle of store.readClaimsForSubject(instruction.productHandle)) {
+    const claim = store.readClaim(claimHandle);
+    if (claim?.predicateKey === KernelVocabulary.Instruction.DynamicInstructionOriginatesFromCapturedAttributeSyntax.key) {
+      syntaxHandles.add(claim.objectHandle as ProductHandle);
+    }
+  }
+  if (syntaxHandles.size !== 1) {
+    return null;
+  }
+  return store.productDetails.read(TemplateProductDetails.AttributeSyntax, [...syntaxHandles][0]!);
+}
+
+/** Instructions authored by this resource, excluding descendant rows from recursive aggregate rendering. */
+export function resourceLocalTemplateInstructions(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): readonly TemplateInstruction[] {
+  return [
+    ...resource.compilation.compiledTemplate.instructions,
+    ...resourceLocalDynamicTemplateInstructions(store, resource),
+  ];
+}
 
 export function resourceLocalRuntimeBindings(
   store: KernelStore,
@@ -161,6 +233,44 @@ function sourceAddressBelongsToResourceTemplate(
   addressHandle: AddressHandle | null,
 ): boolean {
   return sourceAddressResourceOwnership(store, resource, addressHandle) === true;
+}
+
+function dynamicExpressionParseBelongsToResource(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  parse: TemplateExpressionParse,
+): boolean {
+  const site = store.productDetails.read(TemplateProductDetails.ValueSite, parse.site.productHandle);
+  return site == null
+    ? sourceAddressBelongsToResourceTemplate(store, resource, parse.sourceAddressHandle)
+    : dynamicValueSiteBelongsToResource(store, resource, site);
+}
+
+function dynamicValueSiteBelongsToResource(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  site: TemplateValueSite,
+): boolean {
+  if (site.syntax == null) {
+    return sourceAddressBelongsToResourceTemplate(store, resource, site.sourceAddressHandle);
+  }
+  const syntaxProductHandle = site.syntax.productHandle;
+  return resource.compilation.authoredAttributeSyntaxes.some((syntax) =>
+    syntax.productHandle === syntaxProductHandle
+  );
+}
+
+function dynamicInstructionBelongsToResource(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  instruction: TemplateInstruction,
+): boolean {
+  const syntax = capturedAttributeSyntaxForDynamicInstruction(store, instruction);
+  return syntax == null
+    ? sourceAddressBelongsToResourceTemplate(store, resource, instruction.sourceAddressHandle)
+    : resource.compilation.authoredAttributeSyntaxes.some((candidate) =>
+      candidate.productHandle === syntax.productHandle
+    );
 }
 
 function sourceAddressResourceOwnership(

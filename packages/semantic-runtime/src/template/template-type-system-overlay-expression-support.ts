@@ -9,6 +9,8 @@ export const enum TemplateTypeSystemOverlayExpressionSupportKind {
   TransparentRuntimeWrapper = 'transparent-runtime-wrapper',
   /** A modeled framework resource supplies a generated TypeScript call surface. */
   ResourceLoweredCall = 'resource-lowered-call',
+  /** Runtime expression semantics lower into generated TypeScript rather than copyable authored syntax. */
+  RuntimeExpressionLowering = 'runtime-expression-lowering',
   /** The expression is owned by a larger framework product rather than by standalone expression projection. */
   OwnerHandled = 'owner-handled',
   /** The expression needs statement-shaped generated TypeScript before it can be represented. */
@@ -28,8 +30,8 @@ export const enum TemplateTypeSystemOverlayExpressionOwner {
   ValueConverterMaterializer = 'runtime-value-converter-materializer',
   /** Repeat template-controller scope construction owns declaration locals and iterable source flow. */
   RepeatTemplateController = 'repeat-template-controller',
-  /** Runtime interpolation binding owns ordered hole expressions and target string assembly. */
-  InterpolationBinding = 'interpolation-binding',
+  /** Aurelia interpolation evaluation owns ordered hole expressions and string assembly for every binding kind. */
+  InterpolationEvaluation = 'interpolation-evaluation',
   /** Binding-pattern projection owns repeat/runtime-assignment destructuring locals. */
   BindingPatternProjection = 'binding-pattern-projection',
   /** Future statement overlay emission must own destructuring assignment as a statement surface. */
@@ -234,11 +236,11 @@ const supportByKind = {
     summary: '`repeat.for` owns declaration and iterable projection through iterator scope construction.',
   },
   Interpolation: {
-    supportKind: TemplateTypeSystemOverlayExpressionSupportKind.OwnerHandled,
-    owner: TemplateTypeSystemOverlayExpressionOwner.InterpolationBinding,
-    standaloneExpression: false,
-    canContainGeneratedChildren: false,
-    summary: 'Interpolation is an ordered binding owner; each hole expression is projected independently.',
+    supportKind: TemplateTypeSystemOverlayExpressionSupportKind.RuntimeExpressionLowering,
+    owner: TemplateTypeSystemOverlayExpressionOwner.InterpolationEvaluation,
+    standaloneExpression: true,
+    canContainGeneratedChildren: true,
+    summary: 'Interpolation lowers to framework-equivalent ordered string assembly while each hole remains independently projected.',
   },
   BindingPatternDefault: {
     supportKind: TemplateTypeSystemOverlayExpressionSupportKind.OwnerHandled,

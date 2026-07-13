@@ -56,8 +56,8 @@ import {
 } from '../out/template/expression-parse-projection.js';
 import {
   bindingScopesForTemplateExpressionParse,
-  templateExpressionParsesForResource,
 } from '../out/template/template-expression-selection.js';
+import { resourceLocalTemplateExpressionParses } from '../out/template/runtime-resource-ownership.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/typescript-project-diagnostics');
@@ -73,6 +73,9 @@ const boundControllerFixtureRoot = path.join(packageRoot, 'fixtures/pressure/tem
 const templateTypeErrorFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-type-errors');
 const stateSourceFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-state-binding-scope');
 const stateConditionBoundaryFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-controller-state-condition-boundary');
+const recursiveOwnershipFixtureRoot = path.join(packageRoot, 'fixtures/pressure/app-pattern-storefront');
+const scopePathFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-expression-resource-combinators');
+const letSourceFormFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-controller-scope-lab');
 const expectedOverlayExpressionKinds = [
   'Identifier',
   'BindingBehavior',
@@ -212,6 +215,9 @@ const generatedValueConverterEvaluator = await readGeneratedValueConverterEvalua
 const generatedBoundControllerOverlay = await readGeneratedBoundControllerOverlayProbe();
 const generatedStateSourceOverlay = await readGeneratedStateSourceOverlayProbe();
 const generatedStateConditionBoundaryOverlay = await readGeneratedStateConditionBoundaryOverlayProbe();
+const resourceLocalOverlayOwnership = await readResourceLocalOverlayOwnershipProbe();
+const authoredScopePathOverlay = await readAuthoredScopePathOverlayProbe();
+const letSourceFormOverlay = await readLetSourceFormOverlayProbe();
 const publicTemplateOverlayDiagnostics = await readPublicTemplateOverlayDiagnosticProbe();
 const publicTemplateOverlayCursorDiagnostics = await readPublicTemplateOverlayCursorDiagnosticProbe();
 const overlayExpressionSupportKinds = new Set(templateTypeSystemOverlayExpressionSupportMatrix.map((row) => row.expressionKind));
@@ -288,6 +294,12 @@ if (overlayExpressionSupportByKind.get('Custom')?.owner !== 'translation-binding
 }
 if (overlayExpressionSupportByKind.get('ForOfStatement')?.owner !== 'repeat-template-controller') {
   failures.push('Expected ForOfStatement overlay support to point at the repeat template-controller owner.');
+}
+if (
+  overlayExpressionSupportByKind.get('Interpolation')?.owner !== 'interpolation-evaluation'
+  || overlayExpressionSupportByKind.get('Interpolation')?.supportKind !== 'runtime-expression-lowering'
+) {
+  failures.push('Expected interpolation overlay support to be owned by framework-equivalent runtime expression lowering.');
 }
 if (overlaySourceFile == null) {
   failures.push('Expected additional overlay source to be a Program-owned source file.');
@@ -698,6 +710,40 @@ if (!generatedStateConditionBoundaryOverlay.hasOrdinaryChildStateBoundaryDiagnos
 if (generatedStateConditionBoundaryOverlay.stateBoundChildType !== 'string') {
   failures.push(`Expected child binding that also uses & state to infer selectedTask.title as string, observed ${generatedStateConditionBoundaryOverlay.stateBoundChildType ?? 'missing'}.`);
 }
+if (!resourceLocalOverlayOwnership.parentFound || !resourceLocalOverlayOwnership.childFound) {
+  failures.push('Expected the recursive-ownership fixture to publish storefront-app and checkout-form resources.');
+}
+if (
+  resourceLocalOverlayOwnership.parentSkippedExpressionCount !== 0
+  || resourceLocalOverlayOwnership.childSkippedExpressionCount !== 0
+) {
+  failures.push(`Expected source-owned parent and child overlays to cover their expressions without skips, observed parent=${resourceLocalOverlayOwnership.parentSkippedExpressionCount}, child=${resourceLocalOverlayOwnership.childSkippedExpressionCount}.`);
+}
+if (resourceLocalOverlayOwnership.parentOwnsChildExpressions) {
+  failures.push('Expected a parent recursive aggregate render to exclude child-authored checkout expressions from the parent TypeScript overlay.');
+}
+if (!resourceLocalOverlayOwnership.childOwnsCheckoutExpressions) {
+  failures.push('Expected the checkout-form TypeScript overlay to retain its own captured email and postal-code expressions.');
+}
+if (!authoredScopePathOverlay.resourceFound || authoredScopePathOverlay.skippedExpressionCount !== 0) {
+  failures.push(`Expected authored $this scope paths inside arrow callbacks to remain overlay-representable, observed resource=${authoredScopePathOverlay.resourceFound}, skipped=${authoredScopePathOverlay.skippedExpressionCount}.`);
+}
+if (!authoredScopePathOverlay.currentArrowProjected || !authoredScopePathOverlay.nestedArrowProjected) {
+  failures.push('Expected authored $this inside single and nested arrow callbacks to resolve to the current template binding context.');
+}
+if (!letSourceFormOverlay.resourceFound || letSourceFormOverlay.interpolationSkipped) {
+  failures.push(`Expected interpolation-backed <let> source evaluation to remain overlay-representable, observed resource=${letSourceFormOverlay.resourceFound}, skipped=${letSourceFormOverlay.interpolationSkipped}.`);
+}
+if (!letSourceFormOverlay.frameworkStringAssembly) {
+  failures.push('Expected interpolation-backed <let> source evaluation to lower through framework-equivalent String assembly.');
+}
+if (
+  letSourceFormOverlay.selectedLabelType !== 'string'
+  || letSourceFormOverlay.literalLabelType !== '"literal"'
+  || letSourceFormOverlay.interpolatedLabelType !== 'string'
+) {
+  failures.push(`Expected bound, literal, and interpolation-backed <let> slots to preserve string, \"literal\", and string types, observed ${letSourceFormOverlay.selectedLabelType ?? 'missing'}, ${letSourceFormOverlay.literalLabelType ?? 'missing'}, ${letSourceFormOverlay.interpolatedLabelType ?? 'missing'}.`);
+}
 if (publicTemplateOverlayDiagnostics.overlayRows !== 6) {
   failures.push(`Expected public template diagnostics to retain all six admitted TypeScript overlay facts, observed ${publicTemplateOverlayDiagnostics.overlayRows}.`);
 }
@@ -787,6 +833,9 @@ if (failures.length > 0) {
       ...generatedStateConditionBoundaryOverlay,
       expressionTypes: [...generatedStateConditionBoundaryOverlay.expressionTypes.entries()],
     },
+    resourceLocalOverlayOwnership,
+    authoredScopePathOverlay,
+    letSourceFormOverlay,
     publicTemplateOverlayDiagnostics,
     publicTemplateOverlayCursorDiagnostics,
   }, null, 2));
@@ -980,6 +1029,9 @@ if (failures.length > 0) {
         hasOrdinaryChildStateBoundaryDiagnostic: generatedStateConditionBoundaryOverlay.hasOrdinaryChildStateBoundaryDiagnostic,
         stateBoundChildType: generatedStateConditionBoundaryOverlay.stateBoundChildType,
       },
+      resourceLocalOverlayOwnership,
+      authoredScopePathOverlay,
+      letSourceFormOverlay,
       publicTemplateOverlayDiagnostics,
       publicTemplateOverlayCursorDiagnostics,
       projectDiagnosticRows: projectDiagnostics.length,
@@ -1683,7 +1735,7 @@ async function readGeneratedValueConverterEvaluatorProbe() {
   if (resource == null) {
     return { kind: 'missing-resource', display: null, openKind: null };
   }
-  const parse = templateExpressionParsesForResource(resource)
+  const parse = resourceLocalTemplateExpressionParses(runtime.workspace.store, resource)
     .find((candidate) =>
       findValueConverterExpression(bindingExpressionAstForParse(candidate), 'dynamicContextualWord') != null
     ) ?? null;
@@ -2066,6 +2118,119 @@ function readCustomElementBindingScopeSlotMember(store, resource, slotName) {
     typeSourceFile: typeSourceMember?.carrier?.declarations[0] == null
       ? null
       : path.basename(typeSourceMember.carrier.declarations[0].getSourceFile().fileName),
+  };
+}
+
+async function readResourceLocalOverlayOwnershipProbe() {
+  const runtime = await createSemanticRuntime({
+    workspaceRoot: recursiveOwnershipFixtureRoot,
+    storeKey: 'type-system-resource-local-overlay-ownership-contract',
+  });
+  const app = await runtime.openApp({
+    analysisDepth: 'binding-observation',
+  });
+  const parent = app.emission.templates.resources.find((resource) =>
+    resource.compilation.definition.name === 'storefront-app'
+  ) ?? null;
+  const child = app.emission.templates.resources.find((resource) =>
+    resource.compilation.definition.name === 'checkout-form'
+  ) ?? null;
+  const build = (resource, key) => resource == null
+    ? null
+    : new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+        .build(resource, key);
+  const parentOverlay = build(parent, 'contract-resource-local-parent-overlay');
+  const childOverlay = build(child, 'contract-resource-local-child-overlay');
+  const childExpressionNames = new Set([
+    'state.checkout.email',
+    'state.checkout.postalCode',
+  ]);
+  const parentExpressions = parentOverlay?.expressionProbes.map((probe) => probe.authoredExpressionText) ?? [];
+  const childExpressions = childOverlay?.expressionProbes.map((probe) => probe.authoredExpressionText) ?? [];
+  return {
+    parentFound: parent != null,
+    childFound: child != null,
+    parentExpressionProbeCount: parentExpressions.length,
+    childExpressionProbeCount: childExpressions.length,
+    parentSkippedExpressionCount: parentOverlay?.skippedExpressions.length ?? 0,
+    childSkippedExpressionCount: childOverlay?.skippedExpressions.length ?? 0,
+    parentOwnsChildExpressions: parentExpressions.some((expression) => childExpressionNames.has(expression)),
+    childOwnsCheckoutExpressions: [...childExpressionNames].every((expression) => childExpressions.includes(expression)),
+  };
+}
+
+async function readAuthoredScopePathOverlayProbe() {
+  const { resource, emission } = await buildResourceOverlayFixture(
+    scopePathFixtureRoot,
+    'scope-path-gallery',
+    'contract-authored-scope-path-arrow-overlay',
+  );
+  const expressions = emission?.expressionProbes.map((probe) => probe.authoredExpressionText) ?? [];
+  const source = emission?.overlaySource?.text ?? '';
+  return {
+    resourceFound: resource != null,
+    skippedExpressionCount: emission?.skippedExpressions.length ?? 0,
+    currentArrowExpressionPresent: expressions.includes("groups.map(group => $this.heading).join(', ')"),
+    nestedArrowExpressionPresent: expressions.includes("groups.map(group => group.items.map(item => $this.heading).join(', ')).join('; ')"),
+    currentArrowProjected: source.includes("groups.map(group => heading).join(', ')"),
+    nestedArrowProjected: source.includes("groups.map(group => group.items.map(item => heading).join(', ')).join('; ')"),
+  };
+}
+
+async function readLetSourceFormOverlayProbe() {
+  const { app, runtime, resource, emission } = await buildResourceOverlayFixture(
+    letSourceFormFixtureRoot,
+    'scope-lab-app',
+    'contract-let-source-form-overlay',
+  );
+  if (app == null || runtime == null || emission?.overlaySource == null) {
+    return {
+      resourceFound: resource != null,
+      interpolationSkipped: false,
+      frameworkStringAssembly: false,
+      selectedLabelType: null,
+      literalLabelType: null,
+      interpolatedLabelType: null,
+    };
+  }
+  const typeSystem = new TypeSystemProjectBuilder().build(
+    app.project,
+    app.emission.evaluation,
+    { overlaySources: [emission.overlaySource] },
+  );
+  const variableTypes = readOverlayVariableTypesByName(typeSystem, emission.overlaySource.fileName);
+  const htmlText = fs.readFileSync(path.join(letSourceFormFixtureRoot, 'src/scope-lab-app.html'), 'utf8');
+  const interpolationStart = htmlText.indexOf('${task.name}');
+  return {
+    resourceFound: resource != null,
+    interpolationSkipped: emission.skippedExpressions.some((skip) =>
+      skip.sourceStart === interpolationStart
+      && skip.sourceEnd === interpolationStart + '${task.name}'.length
+    ),
+    frameworkStringAssembly: emission.overlaySource.text.includes('globalThis.String(task.name)'),
+    selectedLabelType: variableTypes.get('selectedLabel') ?? null,
+    literalLabelType: variableTypes.get('literalLabel') ?? null,
+    interpolatedLabelType: variableTypes.get('interpolatedLabel') ?? null,
+  };
+}
+
+async function buildResourceOverlayFixture(fixtureRoot, definitionName, originKey) {
+  const runtime = await createSemanticRuntime({
+    workspaceRoot: fixtureRoot,
+    storeKey: originKey,
+  });
+  const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+  const resource = app.emission.templates.resources.find((candidate) =>
+    candidate.compilation.definition.name === definitionName
+  ) ?? null;
+  return {
+    app,
+    runtime,
+    resource,
+    emission: resource == null
+      ? null
+      : new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+          .build(resource, originKey),
   };
 }
 

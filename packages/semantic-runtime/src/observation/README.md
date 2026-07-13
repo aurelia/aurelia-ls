@@ -124,7 +124,10 @@ static type surfaces rather than hydrated runtime values.
   array method token. Runtime `LetBinding` participates in the same connectable/data-flow lane: its direct
   `bindingContext`/`overrideContext` property set is published as a `scope-slot` value channel, so template-local
   adaptation such as `<let product.bind="state.products.readProduct(productId)">` retains both the source expression
-  and the produced local slot target instead of only surfacing later `product.*` reads. Template method calls stay
+  and the produced local slot target instead of only surfacing later `product.*` reads. Framework-compiled static
+  `<let name="literal">` sources intentionally carry `literalValue` instead of an expression product;
+  `runtimeBindingSourceExpression(...)` is the shared decompression boundary that rehydrates that string as a synthetic
+  primitive AST for type/data-flow evaluation without claiming a fabricated authored expression span. Template method calls stay
   framework-shaped: undecorated source-method bodies are not proxy-observed by `astEvaluate`, so binding-owned observed
   dependencies should expose the called method and its receiver/argument reads, while only `@computed`/`@astTrack`
   methods add method-declaration dependency rows. The corresponding observation issue keeps declaration and hidden-read

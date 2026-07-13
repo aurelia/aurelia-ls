@@ -16,6 +16,7 @@ import {
   StateDispatchBinding,
   type RuntimeBinding,
 } from '../template/runtime-binding.js';
+import { resourceLocalRuntimeBindings } from '../template/runtime-resource-ownership.js';
 import {
   bindingBehaviorResourceOccurrences,
   staticStringLiteralExpression,
@@ -171,7 +172,7 @@ function templateStoreLookupSites(
     ...templates.resources,
     ...templates.authoringResources,
   ].flatMap((resource) =>
-    resource.runtimeAnalysis.runtimeRendering.bindings.flatMap((binding) =>
+    resourceLocalRuntimeBindings(store, resource).flatMap((binding) =>
       bindingStateStoreLookupSites(store, binding)
     )
   );

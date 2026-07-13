@@ -123,11 +123,15 @@ import { componentLifecycleHookName } from '../template/component-lifecycle-sour
 import {
   bindingSourceContextProjectionForTemplateExpressionParseAtOffset,
   bindingScopeForTemplateExpressionParse,
-  templateExpressionParsesForResource,
-  templateInstructionsForResource,
   templateScopeRangeAddressHandle,
-  templateValueSitesForResource,
 } from '../template/template-expression-selection.js';
+import {
+  resourceLocalBindingSourceOperations,
+  resourceLocalDynamicTemplateInstructions,
+  resourceLocalTemplateExpressionParses,
+  resourceLocalTemplateInstructions,
+  resourceLocalTemplateValueSites,
+} from '../template/runtime-resource-ownership.js';
 import { templateScopeChain } from '../template/template-scope-replay.js';
 import {
   checkerContextForRuntimeBindingSourceExpressionProjection,
@@ -738,7 +742,7 @@ class TemplateCompletionCursorContextBuilder {
     activeAttribute: HtmlAttribute | null,
   ): TemplateValueSite | null {
     const site = smallestContaining(
-      templateValueSitesForResource(this.input.resource),
+      resourceLocalTemplateValueSites(this.store, this.input.resource),
       offset,
       (site) => sourceSpanFor(this.store, site.sourceAddressHandle),
     );
@@ -751,7 +755,7 @@ class TemplateCompletionCursorContextBuilder {
   private expressionParseForValueSite(valueSite: TemplateValueSite | null): TemplateExpressionParse | null {
     return valueSite == null
       ? null
-      : templateExpressionParsesForResource(this.input.resource)
+      : resourceLocalTemplateExpressionParses(this.store, this.input.resource)
         .find((parse) => parse.site.productHandle === valueSite.productHandle) ?? null;
   }
 
@@ -3047,7 +3051,7 @@ function selectedDefinitionForCursor(
   if (dynamicAttribute != null) {
     return dynamicAttribute;
   }
-  const elementSelection = definitionForElement(resource, activeElement);
+  const elementSelection = definitionForElement(store, resource, activeElement);
   const classifiedProductHandle = classification?.bindable?.reference.ownerDefinitionProductHandle
     ?? classification?.resource?.definitionProductHandle
     ?? null;
@@ -3093,7 +3097,7 @@ function dynamicAttributeDefinitionForCursor(
   ) {
     return null;
   }
-  const instructions = resource.runtimeAnalysis.runtimeRendering.dynamicInstructions.filter((candidate): candidate is HydrateAttributeInstruction =>
+  const instructions = resourceLocalDynamicTemplateInstructions(store, resource).filter((candidate): candidate is HydrateAttributeInstruction =>
     candidate instanceof HydrateAttributeInstruction
     && candidate.attribute.productHandle === syntax.attribute.productHandle
     && candidate.definitionProductHandle != null
@@ -3111,7 +3115,7 @@ function namedRefTargetDefinitionForCursor(
   resource: TemplateResourceRuntimeAnalysisEmission,
   offset: number,
 ): TemplateDefinitionCursorSelection | null {
-  for (const operation of resource.runtimeAnalysis.controllerBind.sourceOperations) {
+  for (const operation of resourceLocalBindingSourceOperations(store, resource)) {
     if (!cursorTouchesSpan(sourceSpanFor(store, operation.sourceAddressHandle), offset)) {
       continue;
     }
@@ -3239,13 +3243,14 @@ function selectedBindableForDeclarationCursor(
 }
 
 function definitionForElement(
+  store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
   activeElement: HtmlElement | null,
 ): TemplateDefinitionCursorSelection | null {
   if (activeElement == null) {
     return null;
   }
-  const instruction = templateInstructionsForResource(resource).find((candidate) =>
+  const instruction = resourceLocalTemplateInstructions(store, resource).find((candidate) =>
     candidate instanceof HydrateElementInstruction
     && candidate.node.productHandle === activeElement.productHandle
   ) ?? null;

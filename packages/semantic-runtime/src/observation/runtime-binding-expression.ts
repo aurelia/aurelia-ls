@@ -1,5 +1,12 @@
 import type { BindingScope } from '../configuration/scope.js';
+import {
+  PrimitiveLiteralExpression,
+  type ExpressionAstNode,
+} from '../expression/ast.js';
+import { SourceSpan } from '../expression/source-span.js';
 import type { ProductHandle } from '../kernel/handles.js';
+import type { KernelStore } from '../kernel/store.js';
+import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
 import {
   AttributeBinding,
   ContentBinding,
@@ -83,6 +90,20 @@ export function expressionProductHandleForBinding(
     return binding.expressionProductHandles[0] ?? null;
   }
   return binding.expressionProductHandle;
+}
+
+/** Rehydrates the runtime source AST across parsed expressions and compressed framework literal sources. */
+export function runtimeBindingSourceExpression(
+  store: KernelStore,
+  binding: RuntimeExpressionBinding,
+): ExpressionAstNode | null {
+  const parsed = bindingExpressionAstForProduct(store, expressionProductHandleForBinding(binding));
+  if (parsed != null) {
+    return parsed;
+  }
+  return binding instanceof LetBinding && binding.literalValue != null
+    ? new PrimitiveLiteralExpression(new SourceSpan(0, 0, null), binding.literalValue)
+    : null;
 }
 
 /**

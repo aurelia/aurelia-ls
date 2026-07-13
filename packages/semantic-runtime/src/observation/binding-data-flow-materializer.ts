@@ -164,6 +164,7 @@ import {
   instructionScopeLookup,
   isRuntimeDataFlowBinding,
   isRuntimeSourceOnlyDataFlowBinding,
+  runtimeBindingSourceExpression,
   type RuntimeInstructionScopeLookup,
   type RuntimeDataFlowBinding,
 } from './runtime-binding-expression.js';
@@ -1111,7 +1112,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
     local: string,
   ): DataFlowExpressionFacts {
     const expressionProductHandle = expressionProductHandleForBinding(binding);
-    const ast = bindingExpressionAstForProduct(this.store, expressionProductHandle);
+    const ast = runtimeBindingSourceExpression(this.store, binding);
     return {
       expressionProductHandle,
       ast,
@@ -1462,7 +1463,7 @@ function openReasonForDataFlow(input: {
     reasons.push('Runtime instruction scope was not available for binding expression lookup.');
   }
   if (input.ast == null) {
-    reasons.push('Expression parser result did not expose an evaluable expression AST for binding data flow.');
+    reasons.push('Runtime binding source did not expose an evaluable expression AST for binding data flow.');
   }
   if (input.sourceOpenReason != null) {
     reasons.push(input.sourceOpenReason);

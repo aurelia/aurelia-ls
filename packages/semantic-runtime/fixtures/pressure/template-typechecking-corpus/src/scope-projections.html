@@ -4,12 +4,17 @@
       <span class="repeat-valid">${item.label}</span>
       <span class="repeat-invalid">${item.missingLabel}</span>
       <span class="repeat-index-valid">${$index.toFixed()}</span>
+      <span class="repeat-index-readonly">${$index = 1}</span>
       <span class="repeat-first-invalid">${$first.toUpperCase()}</span>
       <span class="repeat-callback-valid">${items.filter(candidate => candidate.id === item.id).length}</span>
       <span class="repeat-callback-invalid">${items.filter(candidate => candidate.missingFlag).length}</span>
       <let upper-label.bind="item.label.toUpperCase()"></let>
       <span class="let-valid">${upperLabel.toLowerCase()}</span>
       <span class="let-invalid">${upperLabel.missing}</span>
+      <projection-panel>
+        <span class="projected-valid">${item.label}</span>
+        <span class="projected-invalid">${item.missingProjectedLabel}</span>
+      </projection-panel>
       <ul>
         <li repeat.for="child of item.children">
           <span class="nested-valid">${child.label}</span>

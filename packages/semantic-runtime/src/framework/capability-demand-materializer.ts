@@ -91,9 +91,7 @@ import type {
   TemplateCompilationProjectEmission,
   TemplateResourceRuntimeAnalysisEmission,
 } from '../template/template-compilation-project-pass.js';
-import {
-  templateExpressionParsesForResource,
-} from '../template/template-expression-selection.js';
+import { resourceLocalTemplateExpressionParses } from '../template/runtime-resource-ownership.js';
 import {
   sourceAddressForRuntimeExpressionSpan,
 } from '../template/runtime-expression-source-address.js';
@@ -725,7 +723,7 @@ function expressionResourceCapabilityDemandSites(
   store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly CapabilityDemandSite[] {
-  return templateExpressionParsesForResource(resource).flatMap((parse, parseIndex) => {
+  return resourceLocalTemplateExpressionParses(store, resource).flatMap((parse, parseIndex) => {
     const expression = runtimeAcceptedBindingExpressionAstForParse(parse);
     if (expression == null) {
       return [];

@@ -77,6 +77,7 @@ import {
 } from '../type-system/checker-collection-types.js';
 import {
   expressionProductHandleForBinding,
+  runtimeBindingSourceExpression,
 } from './runtime-binding-expression.js';
 import {
   checkerContextForRuntimeBindingSourceExpressionProjection,
@@ -828,7 +829,7 @@ export class RuntimeBindingValueChannelDraftSupport {
     context: BindingValueChannelDraftContext,
     targetProperty: string | null = null,
   ): CheckerTypeReference | null {
-    const ast = this.bindingExpressionAst(expressionProductHandleForBinding(binding));
+    const ast = runtimeBindingSourceExpression(this.store, binding);
     if (ast == null) {
       return null;
     }
