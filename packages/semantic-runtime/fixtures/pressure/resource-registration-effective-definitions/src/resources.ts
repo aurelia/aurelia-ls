@@ -20,6 +20,7 @@ import {
   AttrSyntax,
   BindingCommand,
   type BindingCommandStaticAuDefinition,
+  OneTimeBindingCommand,
 } from '@aurelia/template-compiler';
 import { ImportedTargetCard } from './imported-target-card';
 
@@ -126,11 +127,13 @@ export class SharedCustomElement {
 
 @customAttribute({
   name: 'shared',
-  bindables: ['message'],
+  bindables: ['message', 'detail', 'patterned'],
   defaultProperty: 'message',
 })
 export class SharedCustomAttribute {
   message = '';
+  detail = '';
+  patterned = '';
 }
 
 @valueConverter('shared')
@@ -147,7 +150,15 @@ export class SharedBindingBehavior {
 }
 
 @bindingCommand('shared')
-export class SharedBindingCommand {}
+export class SharedBindingCommand {
+  static readonly inject = [OneTimeBindingCommand];
+
+  constructor(private readonly oneTime: OneTimeBindingCommand) {}
+
+  build(...args: Parameters<OneTimeBindingCommand['build']>): ReturnType<OneTimeBindingCommand['build']> {
+    return this.oneTime.build(...args);
+  }
+}
 
 export class StaticBindingCommand {
   static readonly $au: BindingCommandStaticAuDefinition = {

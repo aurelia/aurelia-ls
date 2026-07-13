@@ -5,14 +5,8 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type {
-  AddressHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
-import { SourceSpanRole } from '../kernel/address.js';
-import {
-  sourceSpanAddressForAddress,
-  sourceSpanAddressForSite,
-} from '../kernel/source-address.js';
 import {
   CompilerIdentity,
 } from '../kernel/identity.js';
@@ -35,9 +29,12 @@ import {
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   AttributeSyntax,
-  AttributePatternLiteralReference,
   type AttributeParserParseResult,
 } from './attribute-syntax.js';
+import {
+  attributeSyntaxPartSources,
+  type AttributeSyntaxPartSources,
+} from './attribute-syntax-source.js';
 import { BuiltInAttributeParserExecutionHost } from './attribute-parser-execution-host.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
@@ -75,15 +72,6 @@ class AttributeSyntaxPublication {
     readonly syntax: AttributeSyntax,
     readonly records: readonly KernelStoreRecord[],
     readonly claims: readonly SemanticClaim[],
-  ) {}
-}
-
-class AttributeSyntaxPartSources {
-  constructor(
-    readonly targetSourceAddressHandle: AddressHandle | null,
-    readonly commandSourceAddressHandle: AddressHandle | null,
-    readonly patternLiterals: readonly AttributePatternLiteralReference[],
-    readonly records: readonly KernelStoreRecord[],
   ) {}
 }
 
@@ -146,7 +134,7 @@ export class AttributeSyntaxMaterializer {
     attribute: HtmlAttribute,
   ): AttributeSyntaxPublication {
     const parse = input.compilerWorld.attributeParser.parse(attribute.rawName, attribute.rawValue, executionHost);
-    const partSources = this.partSources(local, attribute, parse);
+    const partSources = attributeSyntaxPartSources(this.store, local, attribute.nameAddressHandle, parse);
     const syntax = this.createAttributeSyntax(local, source, attribute, parse, partSources);
     const claims = this.claimsForAttributeSyntax(local, source, attribute, syntax, parse.executableProductHandle);
     return new AttributeSyntaxPublication(
@@ -168,6 +156,7 @@ export class AttributeSyntaxMaterializer {
     return bindProductDetailEnvelope(new AttributeSyntax(
       parse.execution.syntaxKind,
       parse.execution.rawName,
+      attribute.nameAddressHandle,
       parse.execution.rawValue,
       parse.execution.target,
       partSources.targetSourceAddressHandle,
@@ -186,67 +175,6 @@ export class AttributeSyntaxMaterializer {
       attribute.sourceAddressHandle,
       source.provenanceHandle,
     ));
-  }
-
-  private partSources(
-    local: string,
-    attribute: HtmlAttribute,
-    parse: AttributeParserParseResult,
-  ): AttributeSyntaxPartSources {
-    if (parse.execution.syntaxKind === 'plain') {
-      return new AttributeSyntaxPartSources(attribute.nameAddressHandle, null, [], []);
-    }
-    const nameSource = sourceSpanAddressForAddress(this.store, attribute.nameAddressHandle);
-    if (nameSource == null) {
-      return new AttributeSyntaxPartSources(null, null, [], []);
-    }
-    const records: KernelStoreRecord[] = [];
-    const targetStart = parse.execution.rawName.indexOf(parse.execution.target);
-    const targetSource = targetStart < 0
-      ? null
-      : sourceSpanAddressForSite(this.store, `${local}:target`, {
-        sourceFileAddressHandle: nameSource.fileHandle,
-        start: nameSource.start + targetStart,
-        end: nameSource.start + targetStart + parse.execution.target.length,
-      }, SourceSpanRole.Name);
-    if (targetSource != null) {
-      records.push(...targetSource.records);
-    }
-    const commandStart = parse.execution.command == null
-      ? -1
-      : parse.execution.rawName.lastIndexOf(parse.execution.command);
-    const commandSource = commandStart < 0 || parse.execution.command == null
-      ? null
-      : sourceSpanAddressForSite(this.store, `${local}:command`, {
-        sourceFileAddressHandle: nameSource.fileHandle,
-        start: nameSource.start + commandStart,
-        end: nameSource.start + commandStart + parse.execution.command.length,
-      }, SourceSpanRole.Name);
-    if (commandSource != null) {
-      records.push(...commandSource.records);
-    }
-    const symbolSet = new Set(parse.matchedPattern?.compiledPattern.symbols ?? []);
-    const patternLiterals = (parse.interpretation?.literalOccurrences ?? []).flatMap((occurrence, index) => {
-      if ([...occurrence.value].every((character) => symbolSet.has(character))) {
-        return [];
-      }
-      const source = sourceSpanAddressForSite(this.store, `${local}:pattern-literal:${index}`, {
-        sourceFileAddressHandle: nameSource.fileHandle,
-        start: nameSource.start + occurrence.start,
-        end: nameSource.start + occurrence.end,
-      }, SourceSpanRole.Name);
-      if (source == null) {
-        return [];
-      }
-      records.push(...source.records);
-      return [new AttributePatternLiteralReference(occurrence.tokenIndex, occurrence.value, source.handle)];
-    });
-    return new AttributeSyntaxPartSources(
-      targetSource?.handle ?? null,
-      commandSource?.handle ?? null,
-      patternLiterals,
-      records,
-    );
   }
 
   private claimsForAttributeSyntax(

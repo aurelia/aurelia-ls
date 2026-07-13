@@ -48,6 +48,10 @@ import {
   AttributeSyntax,
   type AttributeParserParseResult,
 } from './attribute-syntax.js';
+import {
+  attributeSyntaxPartSources,
+  type AttributeSyntaxPartSources,
+} from './attribute-syntax-source.js';
 import type {
   BindingCommandLoweringRequest,
 } from './binding-command-lowering-materializer.js';
@@ -449,18 +453,28 @@ export class BindingCommandLoweringPublisher {
     source: BindingCommandLoweringSourceSet,
     attribute: HtmlAttribute,
     parse: AttributeParserParseResult,
-    sourceAddressHandle: AddressHandle | null,
+    syntaxSourceAddressHandle: AddressHandle | null,
+    nameSource: AddressHandle | SourceSpanAddress | null,
   ): PublishedMultiBindingAttributeSyntax {
+    const nameSourceAddressHandle = nameSource instanceof SourceSpanAddress
+      ? nameSource.handle
+      : nameSource;
+    const partSources = attributeSyntaxPartSources(this.store, local, nameSource, parse);
     const syntax = this.createMultiBindingAttributeSyntax(
       this.attributeSyntaxHandles(`${local}:attribute-syntax`),
       source,
       attribute,
       parse,
-      sourceAddressHandle,
+      syntaxSourceAddressHandle,
+      nameSourceAddressHandle,
+      partSources,
     );
     return new PublishedMultiBindingAttributeSyntax(
       syntax,
-      this.recordsForMultiBindingAttributeSyntax(site, syntax, sourceAddressHandle),
+      [
+        ...partSources.records,
+        ...this.recordsForMultiBindingAttributeSyntax(site, syntax, syntaxSourceAddressHandle),
+      ],
       [],
     );
   }
@@ -595,7 +609,7 @@ export class BindingCommandLoweringPublisher {
       : this.createMultiBindingInterpolationInstruction(handles, owner, attribute, target, parse, sourceAddressHandle);
   }
 
-  segmentSourceAddress(
+  segmentSyntaxSourceAddress(
     local: string,
     addressHandle: AddressHandle | null,
     segment: ParsedMultiBindingSegment,
@@ -603,22 +617,29 @@ export class BindingCommandLoweringPublisher {
     readonly handle: AddressHandle | null;
     readonly record: SourceSpanAddress | null;
   } {
-    return this.segmentPartSourceAddress(local, addressHandle, segment.valueStart, segment.valueEnd, SourceSpanRole.Value);
+    return this.segmentPartSourceAddress(`${local}:syntax`, addressHandle, segment.start, segment.end, SourceSpanRole.Range);
   }
 
-  segmentTargetSourceAddress(
+  segmentNameSourceAddress(
     local: string,
     addressHandle: AddressHandle | null,
     segment: ParsedMultiBindingSegment,
-    syntax: AttributeSyntax,
   ): {
     readonly handle: AddressHandle | null;
     readonly record: SourceSpanAddress | null;
   } {
-    const targetSpan = targetSpanWithinSegmentName(segment, syntax.target) ?? segmentNameSpan(segment);
-    return targetSpan == null
-      ? { handle: null, record: null }
-      : this.segmentPartSourceAddress(`${local}:target`, addressHandle, targetSpan.start, targetSpan.end, SourceSpanRole.Name);
+    return this.segmentPartSourceAddress(`${local}:name`, addressHandle, segment.start, segment.nameEnd, SourceSpanRole.Name);
+  }
+
+  segmentValueSourceAddress(
+    local: string,
+    addressHandle: AddressHandle | null,
+    segment: ParsedMultiBindingSegment,
+  ): {
+    readonly handle: AddressHandle | null;
+    readonly record: SourceSpanAddress | null;
+  } {
+    return this.segmentPartSourceAddress(`${local}:value`, addressHandle, segment.valueStart, segment.valueEnd, SourceSpanRole.Value);
   }
 
   private segmentPartSourceAddress(
@@ -827,28 +848,31 @@ export class BindingCommandLoweringPublisher {
     source: BindingCommandLoweringSourceSet,
     attribute: HtmlAttribute,
     parse: AttributeParserParseResult,
-    sourceAddressHandle: AddressHandle | null,
+    syntaxSourceAddressHandle: AddressHandle | null,
+    nameSourceAddressHandle: AddressHandle | null,
+    partSources: AttributeSyntaxPartSources,
   ): AttributeSyntax {
     const execution = parse.execution;
     return bindProductDetailEnvelope(new AttributeSyntax(
       execution.syntaxKind,
       execution.rawName,
+      nameSourceAddressHandle,
       execution.rawValue,
       execution.target,
-      null,
+      partSources.targetSourceAddressHandle,
       execution.command,
-      null,
+      partSources.commandSourceAddressHandle,
       execution.parts,
       parse.pattern,
       parse.interpretation?.compiledPatternProductHandle ?? null,
-      [],
+      partSources.patternLiterals,
       attribute.toReference(),
       [],
     ), new MaterializedProduct(
       handles.productHandle,
       KernelVocabulary.Template.AttributeSyntax.key,
       handles.identityHandle,
-      sourceAddressHandle,
+      syntaxSourceAddressHandle,
       source.provenanceHandle,
     ));
   }
@@ -1049,31 +1073,6 @@ function multiBindingSegmentPublicationClaims(
     claimWithPredicate(claims, KernelVocabulary.Compiler.SplitsMultiBindingSegment.key),
     claimWithPredicate(claims, KernelVocabulary.Template.ParsesToAttributeSyntax.key),
   ].filter((claim): claim is SemanticClaim => claim != null);
-}
-
-function targetSpanWithinSegmentName(
-  segment: ParsedMultiBindingSegment,
-  target: string,
-): { readonly start: number; readonly end: number } | null {
-  if (target.length === 0) {
-    return null;
-  }
-  const targetStartInName = segment.rawName.indexOf(target);
-  if (targetStartInName < 0) {
-    return null;
-  }
-  return {
-    start: segment.start + targetStartInName,
-    end: segment.start + targetStartInName + target.length,
-  };
-}
-
-function segmentNameSpan(
-  segment: ParsedMultiBindingSegment,
-): { readonly start: number; readonly end: number } | null {
-  return segment.start < segment.nameEnd
-    ? { start: segment.start, end: segment.nameEnd }
-    : null;
 }
 
 function claimWithPredicate(

@@ -1154,20 +1154,17 @@ export class BindingCommandLoweringMaterializer {
     parsed: ParsedMultiBindingSegment,
     bindables: TemplateAttributeBindablesInfo,
   ): MaterializedMultiBindingSegment {
-    const segmentAddress = this.publisher.segmentSourceAddress(local, site.sourceAddressHandle, parsed);
+    const syntaxAddress = this.publisher.segmentSyntaxSourceAddress(local, site.sourceAddressHandle, parsed);
+    const nameAddress = this.publisher.segmentNameSourceAddress(local, site.sourceAddressHandle, parsed);
+    const valueAddress = this.publisher.segmentValueSourceAddress(local, site.sourceAddressHandle, parsed);
     const syntax = this.publisher.publishMultiBindingAttributeSyntax(
       local,
       site,
       source,
       attribute,
       parseAttributeSyntaxInWorld(compilerWorld, parsed.rawName, parsed.rawValue),
-      segmentAddress.handle,
-    );
-    const targetAddress = this.publisher.segmentTargetSourceAddress(
-      local,
-      site.sourceAddressHandle,
-      parsed,
-      syntax.syntax,
+      syntaxAddress.handle,
+      nameAddress.record ?? nameAddress.handle,
     );
     const selection = this.selectMultiBindingSegment(
       compilerWorld,
@@ -1182,8 +1179,8 @@ export class BindingCommandLoweringMaterializer {
       syntax.syntax,
       parsed,
       selection,
-      targetAddress.handle,
-      segmentAddress.handle,
+      syntax.syntax.targetSourceAddressHandle,
+      valueAddress.handle,
     );
 
     return new MaterializedMultiBindingSegment(
@@ -1191,12 +1188,13 @@ export class BindingCommandLoweringMaterializer {
       syntax.syntax,
       selection.bindable,
       selection.commandMatch,
-      targetAddress.handle,
-      segmentAddress.handle,
-      segmentAddress.record,
+      syntax.syntax.targetSourceAddressHandle,
+      valueAddress.handle,
+      valueAddress.record,
       [
-        ...(targetAddress.record == null ? [] : [targetAddress.record]),
-        ...(segmentAddress.record == null ? [] : [segmentAddress.record]),
+        ...(syntaxAddress.record == null ? [] : [syntaxAddress.record]),
+        ...(nameAddress.record == null ? [] : [nameAddress.record]),
+        ...(valueAddress.record == null ? [] : [valueAddress.record]),
         ...syntax.records,
         ...segment.records,
       ],

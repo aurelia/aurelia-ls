@@ -2016,7 +2016,7 @@
               "name": "cursor info",
               "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
               "equals": {
-                "value.siteKind": "attribute-value",
+                "value.siteKind": "attribute-name",
                 "value.selectedDefinition.name": "display-hint",
                 "value.selectedBindable.name": "labelText",
                 "value.selectedBindable.attribute": "display-label",
@@ -2042,7 +2042,7 @@
               "name": "cursor info",
               "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
               "equals": {
-                "value.siteKind": "attribute-value",
+                "value.siteKind": "attribute-name",
                 "value.selectedDefinition.name": "display-hint",
                 "value.selectedBindable.name": "tone",
                 "value.selectedBindable.attribute": "tone",
@@ -2389,6 +2389,87 @@
           ]
         },
         {
+          "id": "inline-multi-binding-target-navigation-and-edit",
+          "coverageIntent": "domain-contract",
+          "domainAxis": "source-precision",
+          "capability": "bindable-reference-context",
+          "cursor": { "marker": "display-hint=\"message.bind: statusMessage", "token": "message" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedBindable.name": "message",
+                "value.selectedBindable.attribute": "message",
+                "value.selectedDefinition.resourceKind": "custom-attribute",
+                "value.selectedDefinition.name": "display-hint"
+              }
+            },
+            {
+              "name": "references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "equals": { "value.selectedMemberName": "message" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/display-hint.ts", "marker": "@bindable message", "token": "message" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute" }, "source": { "marker": "display-hint=\"message.bind: statusMessage", "token": "message" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute" }, "source": { "marker": "display-hint=\"message.one-time: statusMessage", "token": "message" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute" }, "source": { "marker": "display-hint=\"message: Literal status", "token": "message" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "rename",
+              "query": { "kind": "template-rename", "options": { "newName": "content" } },
+              "equals": { "value.status": "available" },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "typescript-reference", "oldText": "message", "newText": "content" }, "source": { "sourceFile": "src/display-hint.ts", "marker": "@bindable message", "token": "message" }, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "bindable-attribute", "oldText": "message", "newText": "content" }, "source": { "marker": "display-hint=\"message.bind: statusMessage", "token": "message" }, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "bindable-attribute", "oldText": "message", "newText": "content" }, "source": { "marker": "display-hint=\"message.one-time: statusMessage", "token": "message" }, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "bindable-attribute", "oldText": "message", "newText": "content" }, "source": { "marker": "display-hint=\"message: Literal status", "token": "message" }, "oldTextMatchesSource": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inline-multi-binding-command-dispatch-and-completion",
+          "coverageIntent": "domain-contract",
+          "domainAxis": "template-syntax",
+          "capability": "binding-command-navigation",
+          "cursor": { "marker": "message.one-time: statusMessage", "token": "one-time" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "binding-command-name",
+                "value.selectedDefinition.resourceKind": "binding-command",
+                "value.selectedDefinition.name": "one-time"
+              }
+            },
+            {
+              "name": "command completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "binding-command", "name": "one-time" } }
+              ]
+            },
+            {
+              "name": "command references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 200 } } },
+              "equals": { "value.selectedMemberName": "one-time" },
+              "rows": [
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "binding-command-name", "name": "one-time" }, "source": { "marker": "message.one-time: statusMessage", "token": "one-time" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "rename refusal",
+              "query": { "kind": "template-rename", "options": { "newName": "flow" } },
+              "outcomes": ["miss"],
+              "equals": { "value.status": "not-available", "value.reason": "unsupported-resource-kind" }
+            }
+          ]
+        },
+        {
           "id": "top-level-bindable-semantic-tokens",
           "domainAxis": "source-precision",
           "capability": "template-semantic-tokens",
@@ -2416,9 +2497,11 @@
               "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "display-hint=\"message.bind: statusMessage", "token": "message" } },
+                { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "display-hint=\"message.one-time: statusMessage", "token": "message" } },
                 { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "display-hint=\"message.bind: statusMessage; display-label.bind: aliasLabel", "token": "display-label" } },
                 { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "tone.bind: accentTone", "markerOccurrence": 1, "token": "tone" } },
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "message.bind: statusMessage", "markerOccurrence": 1, "token": "bind" } },
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "message.one-time: statusMessage", "token": "one-time" } },
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "display-label.bind: aliasLabel", "token": "bind" } },
                 { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "tone.bind: accentTone", "markerOccurrence": 1, "token": "bind" } }
               ]
@@ -4869,12 +4952,47 @@
               }
             },
             {
+              "name": "inline command cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "detail.shared: message", "token": "shared" } },
+              "equals": {
+                "value.siteKind": "binding-command-name",
+                "value.selectedDefinition.resourceKind": "binding-command",
+                "value.selectedDefinition.name": "shared",
+                "value.selectedDefinition.targetName": "SharedBindingCommand"
+              }
+            },
+            {
               "name": "decorator command references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
               "equals": { "value.selectedMemberName": "shared" },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "@bindingCommand('shared')", "token": "shared" }, "count": 1 },
-                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "binding-command-name" }, "source": { "marker": "value.shared=", "token": "shared" }, "count": 1 }
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "binding-command-name" }, "source": { "marker": "value.shared=", "token": "shared" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "binding-command-name" }, "source": { "marker": "detail.shared: message", "token": "shared" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "inline command references",
+              "query": { "kind": "template-references", "cursor": { "marker": "detail.shared: message", "token": "shared" }, "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "shared" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "@bindingCommand('shared')", "token": "shared" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "binding-command-name" }, "source": { "marker": "value.shared=", "token": "shared" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "binding-command-name" }, "source": { "marker": "detail.shared: message", "token": "shared" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "inline command completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "detail.shared: message", "token": "shared" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "binding-command", "name": "shared" } }
+              ]
+            },
+            {
+              "name": "inline command semantic token",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "detail.shared: message", "token": "shared" }, "count": 1 }
               ]
             },
             {
@@ -4964,12 +5082,32 @@
               }
             },
             {
+              "name": "inline pattern cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "patterned.data: message", "token": "data" } },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedDefinition.resourceKind": "attribute-pattern",
+                "value.selectedDefinition.targetName": "DataAttributePattern"
+              }
+            },
+            {
               "name": "decorator pattern references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
               "equals": { "value.selectedMemberName": "DataAttributePattern" },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "export class DataAttributePattern", "token": "DataAttributePattern" }, "count": 1 },
-                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-pattern-literal", "name": "data" }, "source": { "marker": "title.data=", "token": "data" }, "count": 1 }
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-pattern-literal", "name": "data" }, "source": { "marker": "title.data=", "token": "data" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-pattern-literal", "name": "data" }, "source": { "marker": "patterned.data: message", "token": "data" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "inline pattern references",
+              "query": { "kind": "template-references", "cursor": { "marker": "patterned.data: message", "token": "data" }, "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "DataAttributePattern" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "export class DataAttributePattern", "token": "DataAttributePattern" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-pattern-literal", "name": "data" }, "source": { "marker": "title.data=", "token": "data" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-pattern-literal", "name": "data" }, "source": { "marker": "patterned.data: message", "token": "data" }, "count": 1 }
               ]
             },
             {
@@ -6240,6 +6378,48 @@
                   "source": { "marker": "$ghostLocal", "token": "$ghostLocal" }
                 }
               ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "built-in-attribute-pattern-definition-dispatch",
+      "fixture": "fixtures/pressure/template-controller-built-ins",
+      "aureliaDomain": "template-binding-syntax",
+      "capability": "attribute-pattern-navigation",
+      "domainAxis": "template-syntax",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/template-controller-built-ins-app.html",
+      "requirement": "Framework-owned attribute patterns remain definition-backed syntax resources for cursor dispatch, references, and explicit edit refusal.",
+      "cases": [
+        {
+          "id": "promise-resolve-pattern",
+          "cursor": { "marker": "promise.resolve=\"productPromise\"", "markerOccurrence": 1, "token": "resolve" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedDefinition.resourceKind": "attribute-pattern",
+                "value.selectedDefinition.targetName": "PromiseAttributePattern"
+              }
+            },
+            {
+              "name": "references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 200 } } },
+              "equals": { "value.selectedMemberName": "PromiseAttributePattern" },
+              "rows": [
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-pattern-literal", "name": "promise.resolve" }, "source": { "marker": "promise.resolve=\"productPromise\"", "markerOccurrence": 1, "token": "promise.resolve" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "rename refusal",
+              "query": { "kind": "template-rename", "options": { "newName": "settle" } },
+              "outcomes": ["miss"],
+              "equals": { "value.status": "not-available", "value.reason": "unsupported-resource-kind" }
             }
           ]
         }
@@ -8096,8 +8276,10 @@
             {
               "name": "built-in repeat references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
-              "outcomes": [ "miss" ],
-              "equals": { "value.rows.length": 0 }
+              "equals": { "value.selectedMemberName": "repeat", "value.rows.length": 7 },
+              "rows": [
+                { "fields": { "referenceKind": "resource-usage", "name": "repeat" }, "source": { "marker": "<section repeat.for=\"task of tasks", "token": "repeat" }, "count": 1 }
+              ]
             },
             {
               "name": "built-in repeat rename refusal",
@@ -8105,7 +8287,7 @@
               "outcomes": [ "miss" ],
               "equals": {
                 "value.status": "not-available",
-                "value.reason": "no-source-backed-member",
+                "value.reason": "resource-name-has-no-authored-source",
                 "value.edits.length": 0
               }
             }
@@ -9806,7 +9988,7 @@
       "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/routes/products-route.html",
-      "requirement": "Router framework resources expose precise cursor surfaces for load/href/au-viewport and their bindables, complete router-specific completions, and conservative references/rename refusal when the selected resource is framework-owned rather than workspace source-backed.",
+      "requirement": "Router framework resources expose precise cursor surfaces for load/href/au-viewport and their bindables, complete router-specific completions, authored usage references, and explicit rename refusal when the selected resource has no workspace-authored declaration.",
       "cases": [
         {
           "id": "load-attribute-cursor-selects-router-resource",
@@ -9836,7 +10018,7 @@
               "name": "cursor info",
               "query": { "kind": "template-cursor-info" },
               "equals": {
-                "value.siteKind": "attribute-value",
+                "value.siteKind": "attribute-name",
                 "value.valueSite.siteKind": "multi-binding-value",
                 "value.selectedDefinition.name": "load",
                 "value.selectedBindable.name": "route",
@@ -9853,7 +10035,7 @@
               "name": "cursor info",
               "query": { "kind": "template-cursor-info" },
               "equals": {
-                "value.siteKind": "attribute-value",
+                "value.siteKind": "attribute-name",
                 "value.selectedDefinition.name": "load",
                 "value.selectedBindable.name": "params",
                 "value.selectedBindable.attribute": "params",
@@ -9872,7 +10054,7 @@
               "name": "cursor info",
               "query": { "kind": "template-cursor-info" },
               "equals": {
-                "value.siteKind": "attribute-value",
+                "value.siteKind": "attribute-name",
                 "value.selectedDefinition.name": "load",
                 "value.selectedBindable.name": "active",
                 "value.selectedBindable.attribute": "active",
@@ -9951,18 +10133,20 @@
           ]
         },
         {
-          "id": "framework-load-references-refuse-source-backed-list",
+          "id": "framework-load-references-return-authored-usages",
           "cursor": { "marker": "load=\"route: product-detail; params.bind: { productId: 'espresso' }\"", "token": "load" },
           "expectations": [
             {
               "name": "template references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
-              "outcomes": [ "miss" ],
               "closure": "complete",
               "equals": {
-                "value.selectedMemberName": null,
-                "value.rows.length": 0
-              }
+                "value.selectedMemberName": "load",
+                "value.rows.length": 12
+              },
+              "rows": [
+                { "fields": { "referenceKind": "resource-usage", "name": "load" }, "source": { "marker": "load=\"route: product-detail; params.bind: { productId: 'espresso' }\"", "token": "load" }, "count": 1 }
+              ]
             }
           ]
         },
@@ -9977,25 +10161,27 @@
               "closure": "complete",
               "equals": {
                 "value.status": "not-available",
-                "value.reason": "no-source-backed-member",
+                "value.reason": "resource-name-has-no-authored-source",
                 "value.edits.length": 0
               }
             }
           ]
         },
         {
-          "id": "framework-viewport-references-refuse-source-backed-list",
+          "id": "framework-viewport-references-return-authored-usages",
           "cursor": { "marker": "<au-viewport name=\"details\">", "token": "au-viewport" },
           "expectations": [
             {
               "name": "template references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
-              "outcomes": [ "miss" ],
               "closure": "complete",
               "equals": {
-                "value.selectedMemberName": null,
-                "value.rows.length": 0
-              }
+                "value.selectedMemberName": "au-viewport",
+                "value.rows.length": 4
+              },
+              "rows": [
+                { "fields": { "referenceKind": "resource-usage", "name": "au-viewport" }, "source": { "marker": "<au-viewport name=\"details\">", "token": "au-viewport" }, "count": 1 }
+              ]
             }
           ]
         },
@@ -10050,7 +10236,7 @@
             {
               "name": "template completions",
               "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
-              "equals": { "value.siteKind": "attribute-value" },
+              "equals": { "value.siteKind": "attribute-name" },
               "rows": [
                 { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "route", "sourceKind": "resource-definition" } },
                 { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "params", "sourceKind": "resource-definition" } },
@@ -10564,8 +10750,10 @@
               "name": "binding data flows",
               "query": { "kind": "binding-data-flows", "options": { "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "sourceName": "homeActive" }, "source": { "marker": "active.bind: homeActive", "token": "homeActive" } },
-                { "fields": { "sourceName": "settingsActive" }, "source": { "marker": "active.bind: settingsActive", "token": "settingsActive" } }
+                { "fields": { "sourceName": "homeActive" }, "source": { "marker": "active.bind: homeActive", "token": "active.bind: homeActive" } },
+                { "fields": { "sourceName": "homeActive" }, "sourceField": "sourceAssignmentOccurrenceSource", "source": { "marker": "active.bind: homeActive", "token": "homeActive" } },
+                { "fields": { "sourceName": "settingsActive" }, "source": { "marker": "active.bind: settingsActive", "token": "active.bind: settingsActive" } },
+                { "fields": { "sourceName": "settingsActive" }, "sourceField": "sourceAssignmentOccurrenceSource", "source": { "marker": "active.bind: settingsActive", "token": "settingsActive" } }
               ]
             }
           ]

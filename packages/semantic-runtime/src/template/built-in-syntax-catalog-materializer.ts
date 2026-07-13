@@ -45,9 +45,13 @@ import {
   FrameworkRegistrationCapability,
   frameworkRegistrationCapabilitiesForKind,
 } from '../registration/framework-registration-manifest.js';
-import { ResourceTargetReference } from '../resources/resource-reference.js';
-import type { AttributePatternDefinition } from '../resources/attribute-pattern-definition.js';
-import type { BindingCommandDefinition } from '../resources/binding-command-definition.js';
+import {
+  ResourceAliasDefinition,
+  ResourceTargetReference,
+} from '../resources/resource-reference.js';
+import { AttributePatternDefinition } from '../resources/attribute-pattern-definition.js';
+import { BindingCommandDefinition } from '../resources/binding-command-definition.js';
+import { ResourceProductDetails } from '../resources/product-details.js';
 import {
   AttributePatternExecutable,
   AttributePatternExecutionKind,
@@ -113,7 +117,7 @@ export class BuiltInAttributePatternEmission implements CompilerAttributePattern
     readonly handler: BuiltInAttributePattern,
     readonly executable: AttributePatternExecutable,
     readonly compiledPatterns: readonly CompiledAttributePattern[],
-    readonly definition: AttributePatternDefinition | null = null,
+    readonly definition: AttributePatternDefinition,
     readonly registrationSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }
@@ -124,7 +128,7 @@ export class BuiltInBindingCommandEmission implements CompilerBindingCommandReso
     readonly catalogProductHandle: ProductHandle,
     readonly handler: BuiltInBindingCommand,
     readonly executable: BindingCommandExecutable,
-    readonly definition: BindingCommandDefinition | null = null,
+    readonly definition: BindingCommandDefinition,
     readonly registrationSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }
@@ -239,6 +243,15 @@ export class BuiltInSyntaxCatalogMaterializer {
         command.executable,
       );
     }
+    for (const syntaxResource of [...emission.attributePatterns, ...emission.bindingCommands]) {
+      if (syntaxResource.definition?.productHandle != null) {
+        this.store.productDetails.addIfAbsent(
+          ResourceProductDetails.Definition,
+          syntaxResource.definition.productHandle,
+          syntaxResource.definition,
+        );
+      }
+    }
     for (const pattern of emission.compiledPatterns) {
       this.store.productDetails.addIfAbsent(TemplateProductDetails.CompiledAttributePattern, pattern.productHandle, pattern);
     }
@@ -299,6 +312,7 @@ export class BuiltInSyntaxCatalogMaterializer {
       catalog,
       executableProductHandles,
       attributePatternEmissions,
+      bindingCommandEmissions,
       catalogClaims,
       source,
     ));
@@ -365,6 +379,10 @@ export class BuiltInSyntaxCatalogMaterializer {
     executableProductHandles: readonly ProductHandle[],
     attributePatterns: readonly {
       readonly compiledPatterns: readonly CompiledAttributePattern[];
+      readonly product: BuiltInAttributePatternEmission;
+    }[],
+    bindingCommands: readonly {
+      readonly product: BuiltInBindingCommandEmission;
     }[],
     catalogClaims: readonly SemanticClaim[],
     source: BuiltInSyntaxSourceSet,
@@ -387,7 +405,7 @@ export class BuiltInSyntaxCatalogMaterializer {
       new MaterializationRecord(
         this.store.handles.materialization(handles.local),
         handles.identityHandle,
-        syntaxCatalogMaterializedProductHandles(handles, executableProductHandles, attributePatterns),
+        syntaxCatalogMaterializedProductHandles(handles, executableProductHandles, attributePatterns, bindingCommands),
         catalogClaims.map((claim) => claim.handle),
       ),
     ];
@@ -408,6 +426,7 @@ export class BuiltInSyntaxCatalogMaterializer {
     const executableLocal = `${local}:executable`;
     const executableProductHandle = this.store.handles.product(executableLocal);
     const executableIdentityHandle = this.store.handles.identity(executableLocal);
+    const definitionProductHandle = this.store.handles.product(`${local}:definition`);
     const materializedHandler = materializeAttributePatternHandler(
       handler,
       executableProductHandle,
@@ -415,23 +434,41 @@ export class BuiltInSyntaxCatalogMaterializer {
       source.addressHandle,
       [],
     );
+    const target = new ResourceTargetReference(null, source.addressHandle, materializedHandler.targetName);
+    const definition = new AttributePatternDefinition(
+      definitionProductHandle,
+      executableIdentityHandle,
+      source.addressHandle,
+      target,
+      materializedHandler.patterns,
+    );
     const publication = this.executables.materializeAttributePattern({
       localKey: executableLocal,
       ownerIdentityHandle: catalogIdentityHandle,
-      definitionProductHandle: null,
-      target: new ResourceTargetReference(null, source.addressHandle, materializedHandler.targetName),
+      definitionProductHandle,
+      target,
       patterns: materializedHandler.patterns,
       executionKind: AttributePatternExecutionKind.BuiltIn,
       sourceAddressHandle: source.addressHandle,
       provenanceHandle: source.provenanceHandle,
     });
     return {
-      records: publication.records,
+      records: [
+        new MaterializedProduct(
+          definitionProductHandle,
+          KernelVocabulary.Resource.Definition.key,
+          executableIdentityHandle,
+          source.addressHandle,
+          source.provenanceHandle,
+        ),
+        ...publication.records,
+      ],
       product: new BuiltInAttributePatternEmission(
         catalogProductHandle,
         materializedHandler,
         publication.executable,
         publication.compiledPatterns,
+        definition,
       ),
       executable: publication.executable,
       compiledPatterns: publication.compiledPatterns,
@@ -452,6 +489,7 @@ export class BuiltInSyntaxCatalogMaterializer {
     const executableLocal = `${local}:executable`;
     const executableProductHandle = this.store.handles.product(executableLocal);
     const executableIdentityHandle = this.store.handles.identity(executableLocal);
+    const definitionProductHandle = this.store.handles.product(`${local}:definition`);
     const materializedHandler = materializeBindingCommandHandler(
       handler,
       executableProductHandle,
@@ -459,11 +497,23 @@ export class BuiltInSyntaxCatalogMaterializer {
       source.addressHandle,
       [],
     );
+    const target = new ResourceTargetReference(null, source.addressHandle, materializedHandler.targetName);
+    const definition = new BindingCommandDefinition(
+      definitionProductHandle,
+      executableIdentityHandle,
+      source.addressHandle,
+      target,
+      materializedHandler.name,
+      materializedHandler.aliases.map((alias) =>
+        new ResourceAliasDefinition(alias, source.addressHandle, source.provenanceHandle)
+      ),
+      materializedHandler.key,
+    );
     const publication = this.executables.materializeBindingCommand({
       localKey: executableLocal,
       ownerIdentityHandle: catalogIdentityHandle,
-      definitionProductHandle: null,
-      target: new ResourceTargetReference(null, source.addressHandle, materializedHandler.targetName),
+      definitionProductHandle,
+      target,
       name: materializedHandler.name,
       aliases: materializedHandler.aliases,
       key: materializedHandler.key,
@@ -473,11 +523,21 @@ export class BuiltInSyntaxCatalogMaterializer {
       provenanceHandle: source.provenanceHandle,
     });
     return {
-      records: publication.records,
+      records: [
+        new MaterializedProduct(
+          definitionProductHandle,
+          KernelVocabulary.Resource.Definition.key,
+          executableIdentityHandle,
+          source.addressHandle,
+          source.provenanceHandle,
+        ),
+        ...publication.records,
+      ],
       product: new BuiltInBindingCommandEmission(
         catalogProductHandle,
         materializedHandler,
         publication.executable,
+        definition,
       ),
       executable: publication.executable,
     };
@@ -924,6 +984,10 @@ function syntaxCatalogMaterializedProductHandles(
   executableProductHandles: readonly ProductHandle[],
   attributePatterns: readonly {
     readonly compiledPatterns: readonly CompiledAttributePattern[];
+    readonly product: BuiltInAttributePatternEmission;
+  }[],
+  bindingCommands: readonly {
+    readonly product: BuiltInBindingCommandEmission;
   }[],
 ): readonly ProductHandle[] {
   return [
@@ -932,6 +996,8 @@ function syntaxCatalogMaterializedProductHandles(
     ...attributePatterns.flatMap((emission) =>
       emission.compiledPatterns.map((pattern) => pattern.productHandle)
     ),
+    ...attributePatterns.map((emission) => emission.product.definition.productHandle).filter((handle): handle is ProductHandle => handle != null),
+    ...bindingCommands.map((emission) => emission.product.definition.productHandle).filter((handle): handle is ProductHandle => handle != null),
   ];
 }
 

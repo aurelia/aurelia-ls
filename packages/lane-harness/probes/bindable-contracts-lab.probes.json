@@ -51,6 +51,16 @@
         "verdict": "correct",
         "reason": "The effective definition-object bindable name, TypeScript field, child-template usage, and default-derived attribute are one property rename closure.",
         "note": "Retrospective witness for winning definition-object metadata."
+      },
+      {
+        "id": "inline-built-in-one-time-command-refusal",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "display-hint=\"message.one-time: statusMessage",
+        "at": "one-time",
+        "newName": "flow",
+        "verdict": "correct",
+        "reason": "The framework-owned one-time command is a real selected resource surface, but its external catalog declaration is not an authored workspace edit target, so rename must refuse explicitly.",
+        "note": "Phase-2 witness for definition-backed built-in syntax without a fabricated declaration location."
       }
     ],
     "references": [
@@ -98,6 +108,15 @@
         "verdict": "correct",
         "reason": "References must include the effective definition-object token, TypeScript field, child-template use, and default-derived attribute occurrence.",
         "note": "Same semantic subject as the paired rename probe."
+      },
+      {
+        "id": "inline-built-in-one-time-command-usage",
+        "file": "src/bindable-lab-app.html",
+        "anchor": "display-hint=\"message.one-time: statusMessage",
+        "at": "one-time",
+        "verdict": "correct",
+        "reason": "References on a framework-owned one-time command should enumerate its authored usage even though the external framework catalog has no mappable workspace declaration row.",
+        "note": "Phase-2 witness that external catalog provenance does not erase authored reference locations."
       }
     ],
     "definition": [

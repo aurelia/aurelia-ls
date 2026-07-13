@@ -76,6 +76,7 @@ export const enum AttributePatternTokenKind {
 
 export type AttributeSyntaxField =
   | 'rawName'
+  | 'nameSource'
   | 'rawValue'
   | 'target'
   | 'targetSource'
@@ -535,6 +536,8 @@ export class AttributeSyntax {
     readonly syntaxKind: AttributeSyntaxKind,
     /** Raw authored attribute name. */
     readonly rawName: string,
+    /** Exact authored source for the raw syntax name. */
+    readonly nameSourceAddressHandle: AddressHandle | null,
     /** Raw authored attribute value, before expression parsing. */
     readonly rawValue: string,
     /** Attribute parser target part such as `value` in `value.bind`. */

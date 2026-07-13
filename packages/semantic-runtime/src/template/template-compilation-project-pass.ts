@@ -52,6 +52,7 @@ import {
   type AttributeSyntaxParseEmission,
   type AttributeSyntaxParseRequest,
 } from './attribute-syntax-materializer.js';
+import type { AttributeSyntax } from './attribute-syntax.js';
 import {
   TemplateCompilerWorldConstructionRequest,
   TemplateCompilerWorldEmission,
@@ -122,6 +123,9 @@ import {
 
 /** Front-door template products produced for one compiler-visible custom element definition. */
 export class TemplateResourceCompilationEmission {
+  /** Top-level and secondary AttrSyntax products in compiler publication order. */
+  readonly authoredAttributeSyntaxes: readonly AttributeSyntax[];
+
   constructor(
     /** Store-local key shared by this resource's compiler and runtime phases. */
     readonly localKey: string,
@@ -143,7 +147,12 @@ export class TemplateResourceCompilationEmission {
     readonly bindingCommandLowering: BindingCommandLoweringEmission,
     /** Compiled template handoff: render targets, instruction rows, and visible compiler gaps. */
     readonly compiledTemplate: CompiledTemplateEmission,
-  ) {}
+  ) {
+    this.authoredAttributeSyntaxes = [
+      ...attributeSyntax.syntaxes,
+      ...bindingCommandLowering.attributeSyntaxes,
+    ];
+  }
 }
 
 /** Runtime/checker products produced after the project has admitted compiled template front doors. */

@@ -15,11 +15,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "external-value.bind=\"externalValue\"",
   "at": "external-value",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:37:24",
+  "displayPosition": "src/bindable-lab-app.html:38:24",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 23,
-    "line": 36
+    "line": 37
   },
   "occurrence": 1
 }
@@ -35,11 +35,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 37,
-          "line": 36
+          "line": 37
         },
         "start": {
           "character": 23,
-          "line": 36
+          "line": 37
         }
       },
       "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html"
@@ -99,11 +99,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 37,
-          "line": 36
+          "line": 37
         },
         "start": {
           "character": 23,
-          "line": 36
+          "line": 37
         }
       },
       "rangeText": "external-value",
@@ -170,11 +170,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "base-static.bind=\"inheritedStatic\"",
   "at": "base-static",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:29:27",
+  "displayPosition": "src/bindable-lab-app.html:30:27",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 26,
-    "line": 28
+    "line": 29
   },
   "occurrence": 1
 }
@@ -190,11 +190,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 37,
-          "line": 28
+          "line": 29
         },
         "start": {
           "character": 26,
-          "line": 28
+          "line": 29
         }
       },
       "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html"
@@ -254,11 +254,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 37,
-          "line": 28
+          "line": 29
         },
         "start": {
           "character": 26,
-          "line": 28
+          "line": 29
         }
       },
       "rangeText": "base-static",
@@ -325,11 +325,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "inherited-only.bind=\"precedenceInherited\"",
   "at": "inherited-only",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:33:5",
+  "displayPosition": "src/bindable-lab-app.html:34:5",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 32
+    "line": 33
   },
   "occurrence": 1
 }
@@ -345,11 +345,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 18,
-          "line": 32
+          "line": 33
         },
         "start": {
           "character": 4,
-          "line": 32
+          "line": 33
         }
       },
       "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html"
@@ -396,11 +396,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 18,
-          "line": 32
+          "line": 33
         },
         "start": {
           "character": 4,
-          "line": 32
+          "line": 33
         }
       },
       "rangeText": "inherited-only",
@@ -451,11 +451,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "static-only.bind=\"precedenceStatic\"",
   "at": "static-only",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:34:5",
+  "displayPosition": "src/bindable-lab-app.html:35:5",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 33
+    "line": 34
   },
   "occurrence": 1
 }
@@ -471,11 +471,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 15,
-          "line": 33
+          "line": 34
         },
         "start": {
           "character": 4,
-          "line": 33
+          "line": 34
         }
       },
       "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html"
@@ -535,11 +535,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 15,
-          "line": 33
+          "line": 34
         },
         "start": {
           "character": 4,
-          "line": 33
+          "line": 34
         }
       },
       "rangeText": "static-only",
@@ -606,11 +606,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "definition-only.bind=\"precedenceDefinition\"",
   "at": "definition-only",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:35:5",
+  "displayPosition": "src/bindable-lab-app.html:36:5",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 34
+    "line": 35
   },
   "occurrence": 1
 }
@@ -626,11 +626,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 19,
-          "line": 34
+          "line": 35
         },
         "start": {
           "character": 4,
-          "line": 34
+          "line": 35
         }
       },
       "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html"
@@ -690,11 +690,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 19,
-          "line": 34
+          "line": 35
         },
         "start": {
           "character": 4,
-          "line": 34
+          "line": 35
         }
       },
       "rangeText": "definition-only",
@@ -747,6 +747,74 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       },
       "rangeText": "definitionOnly",
       "uri": "fixtures://pressure/bindable-contracts-lab/src/binding-contract-surfaces.ts"
+    }
+  ]
+}
+```
+
+## inline-built-in-one-time-command-usage
+
+### Probe
+
+```json
+{
+  "anchor": "display-hint=\"message.one-time: statusMessage",
+  "at": "one-time",
+  "atOccurrence": 1,
+  "displayPosition": "src/bindable-lab-app.html:18:34",
+  "file": "src/bindable-lab-app.html",
+  "lspPosition": {
+    "character": 33,
+    "line": 17
+  },
+  "occurrence": 1
+}
+```
+
+### references
+
+```json
+{
+  "outcome": "result",
+  "result": [
+    {
+      "range": {
+        "end": {
+          "character": 41,
+          "line": 17
+        },
+        "start": {
+          "character": 33,
+          "line": 17
+        }
+      },
+      "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html"
+    }
+  ]
+}
+```
+
+### Resolved locations
+
+```json
+{
+  "locationCount": 1,
+  "locations": [
+    {
+      "anomaly": null,
+      "file": "src/bindable-lab-app.html",
+      "range": {
+        "end": {
+          "character": 41,
+          "line": 17
+        },
+        "start": {
+          "character": 33,
+          "line": 17
+        }
+      },
+      "rangeText": "one-time",
+      "uri": "fixtures://pressure/bindable-contracts-lab/src/bindable-lab-app.html"
     }
   ]
 }

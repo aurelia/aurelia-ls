@@ -84,13 +84,54 @@ function templateResourceSemanticTokenRows(
   const syntaxByAttributeProduct = new Map(resource.compilation.attributeSyntax.syntaxes
     .filter((syntax) => syntax.attribute.productHandle != null)
     .map((syntax) => [syntax.attribute.productHandle as ProductHandle, syntax]));
-  const syntaxByProduct = new Map(resource.compilation.attributeSyntax.syntaxes.map((syntax) => [syntax.productHandle, syntax]));
+  const syntaxByProduct = new Map(resource.compilation.authoredAttributeSyntaxes.map((syntax) => [syntax.productHandle, syntax]));
 
   rows.push(...instructionSemanticTokenRows(store, resource, elementsByProduct, attributesByProduct, syntaxByAttributeProduct, handles));
   rows.push(...classificationSemanticTokenRows(store, resource, attributesByProduct, syntaxByProduct, handles));
+  rows.push(...multiBindingSegmentSemanticTokenRows(store, resource, syntaxByProduct, handles));
   rows.push(...expressionSemanticTokenRows(store, resource, handles));
 
   return rows;
+}
+
+function multiBindingSegmentSemanticTokenRows(
+  store: KernelStore,
+  resource: TemplateResourceEmission,
+  syntaxByProduct: ReadonlyMap<ProductHandle, AttributeSyntax>,
+  handles: boolean,
+): readonly SemanticTemplateSemanticTokenRow[] {
+  return resource.compilation.bindingCommandLowering.multiBindingSegments.flatMap((segment) => {
+    const syntax = syntaxByProduct.get(segment.syntaxProductHandle) ?? null;
+    if (syntax == null) {
+      return [];
+    }
+    const rows: SemanticTemplateSemanticTokenRow[] = [];
+    const targetSource = targetSourceForSyntax(store, syntax);
+    if (segment.bindable != null && targetSource != null) {
+      rows.push(tokenRow(
+        'aureliaBindable',
+        [],
+        resource.compilation.definition.name,
+        targetSource,
+        segment.productHandle,
+        syntax.targetSourceAddressHandle,
+        handles,
+      ));
+    }
+    const commandSource = commandSourceForSyntax(store, syntax);
+    if (segment.command != null && commandSource != null) {
+      rows.push(tokenRow(
+        'aureliaCommand',
+        [],
+        resource.compilation.definition.name,
+        commandSource,
+        segment.productHandle,
+        syntax.commandSourceAddressHandle,
+        handles,
+      ));
+    }
+    return rows;
+  });
 }
 
 function instructionSemanticTokenRows(

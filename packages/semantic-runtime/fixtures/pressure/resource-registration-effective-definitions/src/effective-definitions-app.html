@@ -17,7 +17,7 @@
   <input value.bind="message & decorator-behavior-effective">
   <input value.define-command-effective="message">
 
-  <shared shared="message.bind: message"></shared>
+  <shared shared="message.bind: message; detail.shared: message; patterned.data: message"></shared>
   <span>${message | shared & shared}</span>
   <input value.shared="message">
   <input value.static-command="message">

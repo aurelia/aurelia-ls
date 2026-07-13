@@ -3,13 +3,6 @@
   "schemaVersion": "semantic-conformance-known-gaps.v1",
   "knownGaps": [
     {
-      "assertionId": "bindable-contracts-lab/inline-multi-binding-segment-semantic-tokens",
-      "status": "known-gap",
-      "failureBucket": "inline-multi-binding-segment-source-projection",
-      "firstObserved": "2026-07-09",
-      "rationale": "MultiBindingSegment preserves each target and raw command-bearing name, but TemplateSemanticTokens projects only the enclosing custom attribute plus segment value expressions, omitting all authored segment target and command tokens."
-    },
-    {
       "assertionId": "template-controller-scope-lab/registered-array-like-repeat-handler",
       "status": "known-gap",
       "failureBucket": "repeat-handler-admission-not-spent",
@@ -78,13 +71,6 @@
       "failureBucket": "bindable-cursor-type-projection-data-loss",
       "firstObserved": "2026-07-09",
       "rationale": "Resource definition rows preserve bindable value type and call-signature facts, but SemanticTemplateCursorBindableRow drops them before hover and other cursor consumers can present the selected bindable's type."
-    },
-    {
-      "assertionId": "bindable-contract-lowering-depth/inline-multi-binding-inlay-hints-use-segment-sources",
-      "status": "known-gap",
-      "failureBucket": "inline-multi-binding-segment-source-projection",
-      "firstObserved": "2026-07-09",
-      "rationale": "TemplateInlayHints ignores MultiBindingSegment target/raw-name sources and anchors every segment hint to the enclosing custom-attribute name, causing multiple unrelated hints to stack at one position."
     }
   ]
 }

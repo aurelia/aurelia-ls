@@ -976,7 +976,9 @@ export class SemanticAppTemplateQueries {
     const declarationSource = matchedAlias
       ? selectedDefinition?.matchedNameSource ?? null
       : selectedDefinition?.nameSource ?? selectedDefinition?.targetSource ?? selectedDefinition?.source ?? null;
-    const targetSource = semanticExactSourceReference(declarationSource);
+    const declarationTargetSource = semanticExactSourceReference(declarationSource);
+    const targetSource = declarationTargetSource
+      ?? semanticExactSourceReference(cursorInfo.value.activeSource);
     if (selectedDefinition == null || selectedName == null || targetSource == null) {
       return null;
     }
@@ -1009,11 +1011,11 @@ export class SemanticAppTemplateQueries {
       hasAuthoredDeclarationSource: matchedAlias
         ? selectedDefinition.matchedNameSource != null
         : selectedDefinition.nameSource != null,
-      declarationRows: [
+      declarationRows: declarationTargetSource == null ? [] : [
         templateReferenceDeclarationRow(
           declarationSource,
           selectedName,
-          targetSource,
+          declarationTargetSource,
           target.sourceAddressHandle,
           handles,
           matchedAlias
@@ -2756,7 +2758,7 @@ function bindingCommandResourceReferenceRows(
   if (target.resourceKind !== ResourceDefinitionKind.BindingCommand) {
     return [];
   }
-  return resource.compilation.attributeSyntax.syntaxes.flatMap((syntax): readonly SemanticTemplateReferenceRow[] => {
+  return resource.compilation.authoredAttributeSyntaxes.flatMap((syntax): readonly SemanticTemplateReferenceRow[] => {
     if (syntax.command == null) {
       return [];
     }
@@ -2789,7 +2791,7 @@ function attributePatternResourceReferenceRows(
   if (target.resourceKind !== ResourceDefinitionKind.AttributePattern || target.definitionProductHandle == null) {
     return [];
   }
-  return resource.compilation.attributeSyntax.syntaxes.flatMap((syntax): readonly SemanticTemplateReferenceRow[] => {
+  return resource.compilation.authoredAttributeSyntaxes.flatMap((syntax): readonly SemanticTemplateReferenceRow[] => {
     const compiledPattern = syntax.compiledPatternProductHandle == null
       ? null
       : store.productDetails.read(
@@ -3223,6 +3225,17 @@ function templateInlayHintRows(
   handles: boolean,
 ): readonly SemanticTemplateInlayHintRow[] {
   const attributesByProduct = new Map(resource.compilation.html.attributes.map((attribute) => [attribute.productHandle, attribute]));
+  const nestedSyntaxByProduct = new Map(resource.compilation.bindingCommandLowering.attributeSyntaxes
+    .map((syntax) => [syntax.productHandle, syntax]));
+  const segmentByBindingSource = new Map<AddressHandle, typeof resource.compilation.bindingCommandLowering.multiBindingSegments[number]>();
+  for (const segment of resource.compilation.bindingCommandLowering.multiBindingSegments) {
+    const syntax = nestedSyntaxByProduct.get(segment.syntaxProductHandle) ?? null;
+    for (const sourceAddressHandle of [segment.sourceAddressHandle, syntax?.sourceAddressHandle ?? null]) {
+      if (sourceAddressHandle != null) {
+        segmentByBindingSource.set(sourceAddressHandle, segment);
+      }
+    }
+  }
   return resourceLocalRuntimeBindings(store, resource)
     .flatMap((binding): readonly SemanticTemplateInlayHintRow[] => {
       if (!(binding instanceof PropertyBinding)) {
@@ -3240,12 +3253,21 @@ function templateInlayHintRows(
       const attribute = binding.attribute?.productHandle == null
         ? null
         : attributesByProduct.get(binding.attribute.productHandle) ?? null;
-      const sourceAddressHandle = attribute?.nameAddressHandle ?? null;
+      const segment = binding.sourceAddressHandle == null
+        ? null
+        : segmentByBindingSource.get(binding.sourceAddressHandle) ?? null;
+      const nestedSyntax = segment == null
+        ? null
+        : nestedSyntaxByProduct.get(segment.syntaxProductHandle) ?? null;
+      const sourceAddressHandle = nestedSyntax?.nameSourceAddressHandle ?? attribute?.nameAddressHandle ?? null;
       const source = describeAddress(store, sourceAddressHandle);
       if (source?.start == null || source.end == null) {
         return [];
       }
-      const attributeSourceAddressHandle = attribute?.sourceAddressHandle ?? binding.attribute?.addressHandle ?? null;
+      const attributeSourceAddressHandle = nestedSyntax?.sourceAddressHandle
+        ?? attribute?.sourceAddressHandle
+        ?? binding.attribute?.addressHandle
+        ?? null;
       return [{
         hintKind: SemanticTemplateInlayHintKind.BindingModeResolution,
         definitionName: resource.compilation.definition.name,
@@ -3320,7 +3342,7 @@ function templateCompilationRows(
       htmlNodes: resource.compilation.html.nodes.length,
       htmlAttributes: resource.compilation.html.attributes.length,
       recoveries: resource.compilation.html.recoveries.length,
-      attributeSyntaxes: resource.compilation.attributeSyntax.syntaxes.length,
+      attributeSyntaxes: resource.compilation.authoredAttributeSyntaxes.length,
       classifications: resource.compilation.attributeClassification.classifications.length,
       valueSites: resource.compilation.valueSites.sites.length + resource.compilation.bindingCommandLowering.valueSites.length,
       expressionParses: resource.compilation.valueSites.parses.length

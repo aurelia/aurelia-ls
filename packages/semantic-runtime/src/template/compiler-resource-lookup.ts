@@ -7,9 +7,11 @@ export function findVisibleTemplateResource(
   resourceKind: ResourceDefinitionKind,
   name: string,
 ): TemplateVisibleResource | null {
-  return resourceScope?.resources.find((resource) =>
+  return resourceScope == null ? null : [
+    ...resourceScope.resources,
+    ...resourceScope.syntaxResources,
+  ].find((resource) =>
     resource.resourceKind === resourceKind
     && (resource.name === name || resource.aliases.includes(name))
   ) ?? null;
 }
-

@@ -608,6 +608,11 @@ the TypeScript property and distinct bindable metadata names, with `bindableDecl
 form. Default-derived attribute spellings join through the bindable's property target, explicit aliases remain a
 separate public-name surface, and conventional `${name}Changed` propagation spends the converged callback target rather
 than reconstructing a class AST locally. Declaration rows are included only when `includeDeclaration` is true.
+Resource reference contexts do not require a mappable authored declaration in order to return authored usages.
+Framework/catalog resources anchor the query at the active usage and omit the nonexistent declaration row; their
+definition product remains the matching authority. Rename stays unavailable with
+`resource-name-has-no-authored-source`, which distinguishes a real selected resource with no workspace-owned name token
+from a cursor that selected no source-backed semantic surface at all.
 `TemplateCodeActions` is the conservative edit-planning projection for runtime-owned template diagnostics at a cursor.
 It reads the same diagnostic rows as `TemplateDiagnostics`, but only turns a suggestion into an edit when semantic-runtime
 can prove the authored target and exact insertion span. Supported edit families include `declare-view-model-member`

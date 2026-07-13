@@ -240,7 +240,7 @@
         "resources"
       ],
       "summary": "Built-in and app-registered attribute patterns and binding commands converge through one syntax-executable substrate before compiler-world visibility.",
-      "rationale": "Aurelia framework/plugin catalogs and app-owned compiler resources use different registration carriers but feed the same attribute-pattern and binding-command semantics. SyntaxResourceExecutableMaterializer owns their shared executable and compiled-pattern products; configured built-ins and admitted source registrations decide which entries reach an app compiler world.",
+      "rationale": "Aurelia framework/plugin catalogs and app-owned compiler resources use different registration carriers but feed the same attribute-pattern and binding-command semantics. SyntaxResourceExecutableMaterializer owns their shared executable and compiled-pattern products; built-ins and app-owned syntax also converge on ordinary Resource.Definition identities before cursor/reference inquiry, while configured catalogs and admitted source registrations decide which entries reach an app compiler world.",
       "guidance": [
         "Inspect built-in syntax catalog materialization before adding framework-owned binding commands, attribute patterns, or package-specific syntax availability.",
         "Keep raw catalog product materialization distinct from configured catalog selection; the configured companion is where registration/configuration pressure belongs.",
@@ -255,7 +255,10 @@
         "`builtInBindingCommandAttributeText(...)` is the product-free source serializer for generated binding-command attributes. Keep `target.command` formatting there so source producers and parser round-trip validation share the same built-in syntax substrate.",
         "`inlineMultiBindingValueSourceText(...)` is the product-free source serializer for inline custom-attribute multi-binding values. Keep generated `route: ...; params.bind: ...` segment formatting next to `parseInlineMultiBindingSegments(...)` so source producers do not invent a second multi-binding grammar.",
         "`authored-template-source.ts` owns product-free authored-template attribute, text-content, element, and child-node source serialization. Use it for generated `name=\"value\"` attributes, static attributes, plain visible text, structured template elements, mixed text/element children, and attribute append operations before adding app-builder-local source string helpers.",
-        "`binding-expression-source.ts` owns product-free authored binding-expression fragments for interpolation, iterator headers, binding behaviors, and value converters. Use it when generated source needs those forms instead of interpolating `${...}`, `item of items`, `expr & behavior`, or `expr | converter` locally."
+        "`binding-expression-source.ts` owns product-free authored binding-expression fragments for interpolation, iterator headers, binding behaviors, and value converters. Use it when generated source needs those forms instead of interpolating `${...}`, `item of items`, `expr & behavior`, or `expr | converter` locally.",
+        "Built-in attribute patterns and binding commands publish ordinary Resource.Definition products even when their only declaration locus is the external framework catalog. Cursor/reference consumers must keep that product identity, omit a fabricated declaration row, and anchor the query at the active authored usage.",
+        "Top-level and inline multi-binding AttrSyntax products share attributeSyntaxPartSources(...) for exact raw-name, target, command, and pattern-literal addresses. Use TemplateResourceCompilationEmission.authoredAttributeSyntaxes only for all-authored consumers; classification, precedence, and HTML-attribute ownership remain top-level-only.",
+        "TemplateResourceScope.resources and syntaxResources have distinct construction roles, but generic compiler-resource lookup must spend both. Do not recreate app-owned versus built-in dispatch by searching only one lane."
       ],
       "anchors": [
         {
@@ -363,6 +366,24 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/README.md",
           "summary": "Owning doctrine for compiler-visible syntax resources and their registration carriers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/attribute-syntax-source.ts",
+          "symbolName": "attributeSyntaxPartSources",
+          "summary": "Publishes exact authored name-part addresses for top-level and secondary AttrSyntax products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
+          "symbolName": "TemplateResourceCompilationEmission",
+          "summary": "Exposes the explicit all-authored AttributeSyntax projection while retaining phase-owned collections."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/compiler-resource-lookup.ts",
+          "symbolName": "findVisibleTemplateResource",
+          "summary": "Resolves generic compiler-resource identity across both ordinary and syntax-resource scope lanes."
         }
       ],
       "liveChecks": [
@@ -396,7 +417,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-11"
+      "updatedAt": "2026-07-13"
     },
     {
       "id": "frontier:template-compilation-project-pass",

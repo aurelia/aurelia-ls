@@ -64,7 +64,11 @@ classification, expression parsing, and instruction lowering converge on the sam
   pattern handler execution returns hydrated `AttrSyntax`-shaped results first; products and provenance are allocated
   by the attribute-syntax materializer that owns the HTML attribute site. Secondary multi-binding segments also become
   explicit `AttrSyntax` products when their authored value is split by lowering; they are not ordinary HTML attributes,
-  but they still use the same parser machine. `parseBuiltInAttributeSyntax(...)`
+  but they still use the same parser machine. `attribute-syntax-source.ts` publishes the raw-name, target, command, and
+  pattern-literal addresses for both strata from the syntax's authored name carrier; do not rescan inline segments in
+  downstream consumers. `TemplateResourceCompilationEmission.authoredAttributeSyntaxes` is the explicit all-authored
+  projection for references, tokens, capability demand, and other syntax-wide consumers. Classification, precedence,
+  and HTML-attribute ownership remain top-level-only. `parseBuiltInAttributeSyntax(...)`
   is the product-free helper for checking generated/source-lowering attributes
   against the built-in pattern inventory; configured compiler-world visibility
   still belongs to compiler-world materialization and the attribute-syntax
@@ -161,8 +165,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   target access can still map to `minLength`.
 - `binding-command-lowering-publication.ts` owns the product envelopes for that lowering phase: source/provenance/open
   seams, ordinary command build/lowering products, multi-binding segment/syntax/lowering products, instruction identity
-  publication, and the claims that connect command lowerings to produced instructions and expression parses. Keep
-  lowering decisions in the materializer and product/claim ceremony in this publication module.
+  publication, and the claims that connect command lowerings to produced instructions and expression parses. A segment
+  preserves separate full-syntax, raw-name, parsed-target, parsed-command, and value addresses; the secondary
+  `AttributeSyntax` owns the first four and `MultiBindingSegment.sourceAddressHandle` owns the value. Keep lowering
+  decisions in the materializer and product/claim ceremony in this publication module.
 - `multi-binding-segments.ts` owns the source-offset-preserving parser and source
   value serializer for inline custom-attribute multi-binding segments. Keep raw
   segment splitting and authored segment formatting there so command lowering
@@ -549,7 +555,10 @@ classification, expression parsing, and instruction lowering converge on the sam
 - `built-in-syntax.ts` records framework-provided attribute-pattern and binding-command handlers as concrete
   runtime-shaped model classes with `auLink` anchors.
 - `built-in-syntax-catalog-materializer.ts` materializes framework-owned syntax catalogs into kernel-backed catalog, executable,
-  and compiled-pattern products. It does not decide which catalogs are visible to a component compiler world; that
+  definition, and compiled-pattern products. Built-in attribute-pattern and binding-command executables are backed by
+  ordinary `Resource.Definition` products even when their declaration locus is an external framework-catalog address.
+  This lets cursor and reference inquiry dispatch by the same product identity as app-owned syntax without inventing an
+  authored declaration location. It does not decide which catalogs are visible to a component compiler world; that
   belongs to configuration, DI scope, and compiler-world materialization. The configured syntax-catalog materializer in the
   same file consumes explicit `FrameworkRegistrationKind` values from configuration/registration and records which
   built-in catalogs a known framework configuration or registration group made available. I18n translation syntax is
@@ -574,7 +583,9 @@ classification, expression parsing, and instruction lowering converge on the sam
 - Attribute patterns and binding commands are modeled as one configured syntax surface for compiler-world purposes.
   Runtime stores them differently for efficient attribute parsing and command lookup, but tooling should not let that
   implementation split make syntax visibility fundamentally container-specific unless a custom extension materializer
-  proves otherwise.
+  proves otherwise. `TemplateResourceScope.resources` and `syntaxResources` retain their distinct construction roles,
+  while generic resource lookup spends both lanes; consumers must not reproduce a built-in/app-owned split by searching
+  only one lane.
 - This is a semantic behavior exception, not a general ontology exception. Most runtime/compiler semantics should stay
   close to runtime shape; the product may split them into more granular records for provenance and inquiry, but should
   avoid inventing a coarser model that hides runtime-visible behavior.

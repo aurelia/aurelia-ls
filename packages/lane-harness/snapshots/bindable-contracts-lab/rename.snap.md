@@ -15,11 +15,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "external-value.bind=\"externalValue\"",
   "at": "external-value",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:37:24",
+  "displayPosition": "src/bindable-lab-app.html:38:24",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 23,
-    "line": 36
+    "line": 37
   },
   "newName": "externalState",
   "occurrence": 1
@@ -36,11 +36,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "range": {
       "end": {
         "character": 37,
-        "line": 36
+        "line": 37
       },
       "start": {
         "character": 23,
-        "line": 36
+        "line": 37
       }
     }
   }
@@ -108,11 +108,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "range": {
               "end": {
                 "character": 37,
-                "line": 36
+                "line": 37
               },
               "start": {
                 "character": 23,
-                "line": 36
+                "line": 37
               }
             }
           }
@@ -160,11 +160,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 37,
-          "line": 36
+          "line": 37
         },
         "start": {
           "character": 23,
-          "line": 36
+          "line": 37
         }
       },
       "source": "documentChanges",
@@ -231,7 +231,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
 --- a/src/bindable-lab-app.html
 +++ b/src/bindable-lab-app.html
-@@ -1,39 +1,39 @@
+@@ -1,40 +1,40 @@
  <template>
    <profile-card
      title.bind="titleText"
@@ -249,6 +249,7 @@ diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
    <profile-card title="Literal title" display-label="Literal public label"></profile-card>
 
    <section display-hint="message.bind: statusMessage; display-label.bind: aliasLabel; tone.bind: accentTone"></section>
+   <section display-hint="message.one-time: statusMessage"></section>
    <section display-hint="message: Literal status; tone: ${accentTone}"></section>
    <section display-hint.bind="statusMessage"></section>
    <section display-hint.bind="statusMessage ? accentTone : aliasLabel"></section>
@@ -416,11 +417,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
   "anchor": "base-static.bind=\"inheritedStatic\"",
   "at": "base-static",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:29:27",
+  "displayPosition": "src/bindable-lab-app.html:30:27",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 26,
-    "line": 28
+    "line": 29
   },
   "newName": "baseValue",
   "occurrence": 1
@@ -437,11 +438,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
     "range": {
       "end": {
         "character": 37,
-        "line": 28
+        "line": 29
       },
       "start": {
         "character": 26,
-        "line": 28
+        "line": 29
       }
     }
   }
@@ -509,11 +510,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
             "range": {
               "end": {
                 "character": 37,
-                "line": 28
+                "line": 29
               },
               "start": {
                 "character": 26,
-                "line": 28
+                "line": 29
               }
             }
           }
@@ -561,11 +562,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
       "range": {
         "end": {
           "character": 37,
-          "line": 28
+          "line": 29
         },
         "start": {
           "character": 26,
-          "line": 28
+          "line": 29
         }
       },
       "source": "documentChanges",
@@ -632,7 +633,7 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
 diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
 --- a/src/bindable-lab-app.html
 +++ b/src/bindable-lab-app.html
-@@ -1,39 +1,39 @@
+@@ -1,40 +1,40 @@
  <template>
    <profile-card
      title.bind="titleText"
@@ -650,6 +651,7 @@ diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
    <profile-card title="Literal title" display-label="Literal public label"></profile-card>
 
    <section display-hint="message.bind: statusMessage; display-label.bind: aliasLabel; tone.bind: accentTone"></section>
+   <section display-hint="message.one-time: statusMessage"></section>
    <section display-hint="message: Literal status; tone: ${accentTone}"></section>
    <section display-hint.bind="statusMessage"></section>
    <section display-hint.bind="statusMessage ? accentTone : aliasLabel"></section>
@@ -817,11 +819,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
   "anchor": "inherited-only.bind=\"precedenceInherited\"",
   "at": "inherited-only",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:33:5",
+  "displayPosition": "src/bindable-lab-app.html:34:5",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 32
+    "line": 33
   },
   "newName": "baseOnly",
   "occurrence": 1
@@ -838,11 +840,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
     "range": {
       "end": {
         "character": 18,
-        "line": 32
+        "line": 33
       },
       "start": {
         "character": 4,
-        "line": 32
+        "line": 33
       }
     }
   }
@@ -897,11 +899,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
             "range": {
               "end": {
                 "character": 18,
-                "line": 32
+                "line": 33
               },
               "start": {
                 "character": 4,
-                "line": 32
+                "line": 33
               }
             }
           }
@@ -949,11 +951,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
       "range": {
         "end": {
           "character": 18,
-          "line": 32
+          "line": 33
         },
         "start": {
           "character": 4,
-          "line": 32
+          "line": 33
         }
       },
       "source": "documentChanges",
@@ -1003,7 +1005,7 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
 diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
 --- a/src/bindable-lab-app.html
 +++ b/src/bindable-lab-app.html
-@@ -1,39 +1,39 @@
+@@ -1,40 +1,40 @@
  <template>
    <profile-card
      title.bind="titleText"
@@ -1021,6 +1023,7 @@ diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
    <profile-card title="Literal title" display-label="Literal public label"></profile-card>
 
    <section display-hint="message.bind: statusMessage; display-label.bind: aliasLabel; tone.bind: accentTone"></section>
+   <section display-hint="message.one-time: statusMessage"></section>
    <section display-hint="message: Literal status; tone: ${accentTone}"></section>
    <section display-hint.bind="statusMessage"></section>
    <section display-hint.bind="statusMessage ? accentTone : aliasLabel"></section>
@@ -1187,11 +1190,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
   "anchor": "static-only.bind=\"precedenceStatic\"",
   "at": "static-only",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:34:5",
+  "displayPosition": "src/bindable-lab-app.html:35:5",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 33
+    "line": 34
   },
   "newName": "configuredOnly",
   "occurrence": 1
@@ -1208,11 +1211,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
     "range": {
       "end": {
         "character": 15,
-        "line": 33
+        "line": 34
       },
       "start": {
         "character": 4,
-        "line": 33
+        "line": 34
       }
     }
   }
@@ -1280,11 +1283,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
             "range": {
               "end": {
                 "character": 15,
-                "line": 33
+                "line": 34
               },
               "start": {
                 "character": 4,
-                "line": 33
+                "line": 34
               }
             }
           }
@@ -1332,11 +1335,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
       "range": {
         "end": {
           "character": 15,
-          "line": 33
+          "line": 34
         },
         "start": {
           "character": 4,
-          "line": 33
+          "line": 34
         }
       },
       "source": "documentChanges",
@@ -1403,7 +1406,7 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
 diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
 --- a/src/bindable-lab-app.html
 +++ b/src/bindable-lab-app.html
-@@ -1,39 +1,39 @@
+@@ -1,40 +1,40 @@
  <template>
    <profile-card
      title.bind="titleText"
@@ -1421,6 +1424,7 @@ diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
    <profile-card title="Literal title" display-label="Literal public label"></profile-card>
 
    <section display-hint="message.bind: statusMessage; display-label.bind: aliasLabel; tone.bind: accentTone"></section>
+   <section display-hint="message.one-time: statusMessage"></section>
    <section display-hint="message: Literal status; tone: ${accentTone}"></section>
    <section display-hint.bind="statusMessage"></section>
    <section display-hint.bind="statusMessage ? accentTone : aliasLabel"></section>
@@ -1588,11 +1592,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
   "anchor": "definition-only.bind=\"precedenceDefinition\"",
   "at": "definition-only",
   "atOccurrence": 1,
-  "displayPosition": "src/bindable-lab-app.html:35:5",
+  "displayPosition": "src/bindable-lab-app.html:36:5",
   "file": "src/bindable-lab-app.html",
   "lspPosition": {
     "character": 4,
-    "line": 34
+    "line": 35
   },
   "newName": "declaredOnly",
   "occurrence": 1
@@ -1609,11 +1613,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
     "range": {
       "end": {
         "character": 19,
-        "line": 34
+        "line": 35
       },
       "start": {
         "character": 4,
-        "line": 34
+        "line": 35
       }
     }
   }
@@ -1681,11 +1685,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
             "range": {
               "end": {
                 "character": 19,
-                "line": 34
+                "line": 35
               },
               "start": {
                 "character": 4,
-                "line": 34
+                "line": 35
               }
             }
           }
@@ -1733,11 +1737,11 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
       "range": {
         "end": {
           "character": 19,
-          "line": 34
+          "line": 35
         },
         "start": {
           "character": 4,
-          "line": 34
+          "line": 35
         }
       },
       "source": "documentChanges",
@@ -1804,7 +1808,7 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
 diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
 --- a/src/bindable-lab-app.html
 +++ b/src/bindable-lab-app.html
-@@ -1,39 +1,39 @@
+@@ -1,40 +1,40 @@
  <template>
    <profile-card
      title.bind="titleText"
@@ -1822,6 +1826,7 @@ diff --git a/src/bindable-lab-app.html b/src/bindable-lab-app.html
    <profile-card title="Literal title" display-label="Literal public label"></profile-card>
 
    <section display-hint="message.bind: statusMessage; display-label.bind: aliasLabel; tone.bind: accentTone"></section>
+   <section display-hint="message.one-time: statusMessage"></section>
    <section display-hint="message: Literal status; tone: ${accentTone}"></section>
    <section display-hint.bind="statusMessage"></section>
    <section display-hint.bind="statusMessage ? accentTone : aliasLabel"></section>
@@ -1979,3 +1984,72 @@ diff --git a/src/binding-contract-surfaces.ts b/src/binding-contract-surfaces.ts
    statusDidChange(): void {}
  }
 ```
+
+## inline-built-in-one-time-command-refusal
+
+### Probe
+
+```json
+{
+  "anchor": "display-hint=\"message.one-time: statusMessage",
+  "at": "one-time",
+  "atOccurrence": 1,
+  "displayPosition": "src/bindable-lab-app.html:18:34",
+  "file": "src/bindable-lab-app.html",
+  "lspPosition": {
+    "character": 33,
+    "line": 17
+  },
+  "newName": "flow",
+  "occurrence": 1
+}
+```
+
+### prepareRename
+
+```json
+{
+  "outcome": "result",
+  "result": null
+}
+```
+
+### rename
+
+```json
+{
+  "error": {
+    "code": 0,
+    "message": "Resource 'one-time' is not renameable from this template position."
+  },
+  "outcome": "error"
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
+### In-memory apply
+
+```json
+{
+  "anomalies": [],
+  "editCount": 0,
+  "expectedOldTexts": [
+    "one"
+  ],
+  "filesTouched": [],
+  "outcome": "rename-error",
+  "validation": []
+}
+```
+
+### Applied diff
+
+_No in-memory diff._

@@ -622,7 +622,7 @@ function admissionStateForBoolean(
 function syntaxCapabilityDemandSites(
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly CapabilityDemandSite[] {
-  return resource.compilation.attributeSyntax.syntaxes.flatMap((syntax) => {
+  return resource.compilation.authoredAttributeSyntaxes.flatMap((syntax) => {
     const parsed = parseBuiltInAttributeSyntax(syntax.rawName, syntax.rawValue);
     if (parsed.handler == null) {
       return [];
@@ -638,7 +638,7 @@ function syntaxCapabilityDemandSites(
 function bindingCommandCapabilityDemandSites(
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly CapabilityDemandSite[] {
-  return resource.compilation.attributeSyntax.syntaxes.flatMap((syntax) => {
+  return resource.compilation.authoredAttributeSyntaxes.flatMap((syntax) => {
     const commandName = syntax.command?.toLowerCase() ?? null;
     if (commandName == null) {
       return [];

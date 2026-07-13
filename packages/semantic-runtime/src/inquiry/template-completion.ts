@@ -503,9 +503,11 @@ class TemplateCompletionCursorContextBuilder {
     const expressionFrontier = expressionResult == null
       ? null
       : expressionCompletionFrontier(expressionResult);
-    const syntax = this.syntaxForCursorAttribute(htmlAttribute);
-    const classification = this.classificationForCursorSyntax(syntax);
-    const multiBindingSegment = this.multiBindingSegmentForCursor(offset, valueSite);
+    const topLevelSyntax = this.syntaxForCursorAttribute(htmlAttribute);
+    const nestedSyntax = this.multiBindingSyntaxForCursor(offset);
+    const syntax = nestedSyntax ?? topLevelSyntax;
+    const classification = this.classificationForCursorSyntax(topLevelSyntax);
+    const multiBindingSegment = this.multiBindingSegmentForCursor(offset, valueSite, nestedSyntax);
     const activeElement = elementForCursorContext(this.input.resource.compilation.html.nodes, htmlNode, classification);
     const siteKind = this.siteKindForCursor(offset, htmlNode, activeElement, htmlAttribute, syntax, valueSite, expressionResult);
     const declarationSelection = sourceBackedScopeSlotDeclarationForCursor(
@@ -641,7 +643,12 @@ class TemplateCompletionCursorContextBuilder {
   private multiBindingSegmentForCursor(
     offset: number,
     valueSite: TemplateValueSite | null,
+    nestedSyntax: AttributeSyntax | null,
   ): MultiBindingSegment | null {
+    if (nestedSyntax != null) {
+      return this.input.resource.compilation.bindingCommandLowering.multiBindingSegments
+        .find((segment) => segment.syntaxProductHandle === nestedSyntax.productHandle) ?? null;
+    }
     const targetSegment = smallestContaining(
       this.input.resource.compilation.bindingCommandLowering.multiBindingSegments,
       offset,
@@ -661,6 +668,14 @@ class TemplateCompletionCursorContextBuilder {
       }
     }
     return null;
+  }
+
+  private multiBindingSyntaxForCursor(offset: number): AttributeSyntax | null {
+    return smallestContaining(
+      this.input.resource.compilation.bindingCommandLowering.attributeSyntaxes,
+      offset,
+      (syntax) => sourceSpanFor(this.store, syntax.nameSourceAddressHandle),
+    );
   }
 
   private multiBindingSegmentForValueOwner(productHandle: ProductHandle): MultiBindingSegment | null {
@@ -787,6 +802,7 @@ function activeTemplateSourceAddressHandle(
   const handles = [
     syntax?.targetSourceAddressHandle ?? null,
     syntax?.commandSourceAddressHandle ?? null,
+    syntax?.nameSourceAddressHandle ?? null,
     attribute?.nameAddressHandle ?? null,
     attribute?.valueAddressHandle ?? null,
     element?.tagNameAddressHandle ?? null,
@@ -2522,10 +2538,14 @@ function classifyTemplateCompletionSite(
   valueSite: TemplateValueSite | null,
   expressionResult: ExpressionParseResult | null,
 ): TemplateCompletionSiteKind {
+  if (isBindingCommandNameOffset(store, offset, syntax)) {
+    return TemplateCompletionSiteKind.BindingCommandName;
+  }
+  if (cursorTouchesSpan(sourceSpanFor(store, syntax?.nameSourceAddressHandle ?? null), offset)) {
+    return TemplateCompletionSiteKind.AttributeName;
+  }
   if (htmlAttribute != null && cursorTouchesSpan(sourceSpanFor(store, htmlAttribute.nameAddressHandle), offset)) {
-    return isBindingCommandNameOffset(store, offset, syntax)
-      ? TemplateCompletionSiteKind.BindingCommandName
-      : TemplateCompletionSiteKind.AttributeName;
+    return TemplateCompletionSiteKind.AttributeName;
   }
 
   if (valueSite != null) {
