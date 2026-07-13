@@ -119,6 +119,7 @@ function primitiveDisplayIsSafeTypeExpression(display: string | null): boolean {
     || display === 'boolean'
     || display === 'bigint'
     || display === 'symbol'
+    || display === 'object'
     || display === 'null'
     || display === 'undefined'
     || display === 'void'
@@ -199,16 +200,38 @@ function checkerCarrierConstituentTypeExpression(
   if (primitiveDisplayIsSafeTypeExpression(display) || /^(['"]).*\1$/u.test(display)) {
     return display;
   }
+  if (seen.has(type)) {
+    return null;
+  }
+  seen.add(type);
   const symbol = type.aliasSymbol ?? type.symbol ?? null;
   const resolved = symbol != null && (symbol.flags & ts.SymbolFlags.Alias) !== 0
     ? checker.getAliasedSymbol(symbol)
     : symbol;
   const declaration = namedExportedTypeDeclarationFromDeclarations(resolved?.declarations ?? []);
-  if (declaration != null) {
-    return typeExpressionForExportedDeclaration(declaration, context.generatedFileName);
-  }
+  const targetExpression = declaration != null
+    ? typeExpressionForExportedDeclaration(declaration, context.generatedFileName)
+    : null;
   const name = resolved?.getName() ?? symbol?.getName() ?? display;
-  return isKnownGlobalTypeReference(name, resolved) ? name : null;
+  const target = targetExpression ?? (isKnownGlobalTypeReference(name, resolved) ? name : null);
+  if (target == null) {
+    seen.delete(type);
+    return null;
+  }
+  const typeArguments = type.aliasTypeArguments
+    ?? ((type.flags & ts.TypeFlags.Object) !== 0
+      && ((type as ts.ObjectType).objectFlags & ts.ObjectFlags.Reference) !== 0
+        ? checker.getTypeArguments(type as ts.TypeReference)
+        : []);
+  const argumentExpressions = typeArguments.map((argument) =>
+    checkerCarrierConstituentTypeExpression(checker, argument, context, seen)
+  );
+  seen.delete(type);
+  return argumentExpressions.some((argument) => argument == null)
+    ? null
+    : argumentExpressions.length === 0
+      ? target
+      : `${target}<${argumentExpressions.join(', ')}>`;
 }
 
 function checkerTypeNodeExpression(

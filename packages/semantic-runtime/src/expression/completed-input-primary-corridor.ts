@@ -10,11 +10,12 @@ import {
   AccessGlobalExpression,
   AccessScopeExpression,
   AccessThisExpression,
+  AuthoredScopePath,
+  AuthoredScopePathKind,
   ArrayLiteralExpression,
   ObjectLiteralExpression,
   ParenExpression,
   PrimitiveLiteralExpression,
-  ScopeExpressionSyntaxOrigin,
 } from './ast.js';
 import type {
   Identifier,
@@ -225,8 +226,13 @@ export class CompletedInputPrimaryCorridor {
     const first = this.state.peekToken();
     this.state.nextToken();
     const start = first.start;
+    const firstQualifierSpan = this.state.spanFromToken(first);
 
     if (first.type === TokenType.KeywordDollarThis) {
+      const authoredScopePath = new AuthoredScopePath(
+        AuthoredScopePathKind.CurrentBindingContext,
+        [firstQualifierSpan],
+      );
       const dot = this.state.peekToken();
       if (dot.type === TokenType.Dot) {
         this.state.nextToken();
@@ -238,7 +244,8 @@ export class CompletedInputPrimaryCorridor {
             dot,
             new AccessThisExpression(
               this.state.span(start, first.end),
-              0,
+              this.state.scopeDepth,
+              authoredScopePath,
             ),
           );
         }
@@ -247,18 +254,23 @@ export class CompletedInputPrimaryCorridor {
         return new AccessScopeExpression(
           this.state.span(start, nameTok.end),
           this.deps.identifierFromToken(nameTok),
-          0,
-          ScopeExpressionSyntaxOrigin.CurrentBindingContext,
+          this.state.scopeDepth,
+          authoredScopePath,
         );
       }
 
       return new AccessThisExpression(
         this.state.span(start, first.end),
-        0,
+        this.state.scopeDepth,
+        authoredScopePath,
       );
     }
 
-    let ancestor = 1;
+    const qualifierSpans: SourceSpan[] = [firstQualifierSpan];
+    const authoredScopePath = (): AuthoredScopePath => new AuthoredScopePath(
+      AuthoredScopePathKind.AncestorBindingContext,
+      [...qualifierSpans],
+    );
 
     while (true) {
       const dot = this.state.peekToken();
@@ -276,7 +288,7 @@ export class CompletedInputPrimaryCorridor {
       const maybeParent = this.state.peekToken();
       if (maybeParent.type === TokenType.KeywordDollarParent) {
         this.state.nextToken();
-        ancestor++;
+        qualifierSpans.push(this.state.spanFromToken(maybeParent));
         continue;
       }
 
@@ -287,7 +299,8 @@ export class CompletedInputPrimaryCorridor {
           dot,
           new AccessThisExpression(
             this.state.span(start, dot.start),
-            ancestor,
+            this.state.scopeDepth + qualifierSpans.length,
+            authoredScopePath(),
           ),
         );
       }
@@ -296,14 +309,15 @@ export class CompletedInputPrimaryCorridor {
       return new AccessScopeExpression(
         this.state.span(start, maybeParent.end),
         this.deps.identifierFromToken(maybeParent),
-        ancestor,
-        ScopeExpressionSyntaxOrigin.AncestorBindingContext,
+        this.state.scopeDepth + qualifierSpans.length,
+        authoredScopePath(),
       );
     }
 
     return new AccessThisExpression(
       this.state.span(start, this.state.consumedEnd || first.end),
-      ancestor,
+      this.state.scopeDepth + qualifierSpans.length,
+      authoredScopePath(),
     );
   }
 
@@ -631,7 +645,6 @@ export class CompletedInputPrimaryCorridor {
     return new AccessScopeExpression(
       this.state.spanFromToken(token),
       identifier,
-      0,
     );
   }
 

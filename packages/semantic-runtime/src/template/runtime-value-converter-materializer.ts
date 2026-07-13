@@ -56,8 +56,11 @@ import {
   effectivePropertyBindingMode,
 } from './runtime-binding-mode-behavior.js';
 import {
-  valueConverterExpressions,
-} from './binding-behavior-expression.js';
+  valueConverterResourceOccurrences,
+  type ExpressionResourceOccurrence,
+} from './expression-resource-occurrence.js';
+import type { RuntimeBindingBehaviorEmission } from './runtime-binding-behavior-materializer.js';
+import { RuntimeExpressionResourceBindReachability } from './runtime-expression-resource.js';
 
 export class RuntimeValueConverterMaterializationRequest {
   constructor(
@@ -65,6 +68,7 @@ export class RuntimeValueConverterMaterializationRequest {
     readonly runtimeRendering: RuntimeRenderingEmission,
     readonly container: Container,
     readonly resourceScope: TemplateResourceScope | null,
+    readonly bindingBehavior: RuntimeBindingBehaviorEmission,
   ) {}
 }
 
@@ -152,19 +156,44 @@ export class RuntimeValueConverterMaterializer {
         if (ast == null) {
           return;
         }
-        const converters = valueConverterExpressions(ast);
+        const converters = valueConverterResourceOccurrences(ast);
+        const converterCounts = occurrenceCountsByChain(converters);
+        const converterIndexes = new Map<number, number>();
+        const blockerDepths = new Map<number, number>();
         for (let converterIndex = 0; converterIndex < converters.length; converterIndex++) {
-          const converter = converters[converterIndex]!;
+          const occurrence = converters[converterIndex]!;
+          const converter = occurrence.expression;
+          const priorBehaviorFailureDepth = input.bindingBehavior.readFirstFailureDepth(
+            expressionProductHandle,
+            occurrence.chainIndex,
+          );
+          if (priorBehaviorFailureDepth != null) {
+            blockerDepths.set(
+              occurrence.chainIndex,
+              Math.min(blockerDepths.get(occurrence.chainIndex) ?? Number.POSITIVE_INFINITY, priorBehaviorFailureDepth),
+            );
+          }
+          const blockerDepth = blockerDepths.get(occurrence.chainIndex) ?? null;
+          const reached = blockerDepth == null || occurrence.chainDepth <= blockerDepth;
+          const phaseIndex = converterIndexes.get(occurrence.chainIndex) ?? 0;
+          converterIndexes.set(occurrence.chainIndex, phaseIndex + 1);
           const publication = this.valueConverterPublication(
             `${input.localKey}:binding:${bindingIndex}:expression:${expressionIndex}:converter:${converterIndex}:${converter.name.name}`,
             input,
             binding,
-            converter,
+            expressionProductHandle,
+            occurrence,
+            reached,
+            phaseIndex,
+            converterCounts.get(occurrence.chainIndex) ?? 1,
             source,
           );
           applications.push(...publication.applications);
           issues.push(...publication.issues);
           records.push(...publication.records);
+          if (reached && publication.applications.some((application) => application.resource == null)) {
+            blockerDepths.set(occurrence.chainIndex, occurrence.chainDepth);
+          }
         }
       });
     });
@@ -176,11 +205,18 @@ export class RuntimeValueConverterMaterializer {
     local: string,
     input: RuntimeValueConverterMaterializationRequest,
     binding: RuntimeBinding,
-    converter: ValueConverterExpression,
+    expressionProductHandle: ProductHandle,
+    occurrence: ExpressionResourceOccurrence<ValueConverterExpression>,
+    reached: boolean,
+    phaseIndex: number,
+    converterCount: number,
     source: RuntimeValueConverterSourceSet,
   ): RuntimeValueConverterPublication {
+    const converter = occurrence.expression;
     const resource = findValueConverterResource(input.resourceScope, converter.name.name);
-    const issue = resource == null
+    const issue = !reached
+      ? null
+      : resource == null
       ? {
           issueKind: RuntimeValueConverterIssueKind.ResourceNotFound,
           message: `Value converter '${converter.name.name}' was not resolved through the current compiler resource scope.`,
@@ -194,7 +230,19 @@ export class RuntimeValueConverterMaterializer {
       converter.name.span,
     );
     const applications = valueConverterApplicationPhasesForBinding(this.store, binding, input.resourceScope).map((phase) =>
-      this.applicationProduct(`${local}:phase:${phase}`, binding, resource, converter, phase, expressionSource.handle, source)
+      this.applicationProduct(
+        `${local}:phase:${phase}`,
+        binding,
+        resource,
+        expressionProductHandle,
+        occurrence,
+        phase,
+        reached,
+        resource == null || !reached
+          ? null
+          : valueConverterPhaseOrder(phase, phaseIndex, converterCount),
+        expressionSource.handle,
+      )
     );
     const issueApplication = resource == null
       ? applications[0] ?? null
@@ -246,11 +294,14 @@ export class RuntimeValueConverterMaterializer {
     local: string,
     binding: RuntimeBinding,
     resource: TemplateVisibleResource | null,
-    converter: ValueConverterExpression,
+    expressionProductHandle: ProductHandle,
+    occurrence: ExpressionResourceOccurrence<ValueConverterExpression>,
     phase: RuntimeValueConverterApplicationPhase,
+    reached: boolean,
+    phaseOrder: number | null,
     sourceAddressHandle: AddressHandle | null,
-    source: RuntimeValueConverterSourceSet,
   ): RuntimeValueConverterApplication {
+    const converter = occurrence.expression;
     return new RuntimeValueConverterApplication(
       this.store.handles.product(local),
       this.store.handles.identity(local),
@@ -259,6 +310,15 @@ export class RuntimeValueConverterMaterializer {
       phase,
       converter.name.name,
       converter.args.length,
+      expressionProductHandle,
+      occurrence.chainIndex,
+      occurrence.chainDepth,
+      reached
+        ? RuntimeExpressionResourceBindReachability.Reached
+        : RuntimeExpressionResourceBindReachability.BlockedByOuterFailure,
+      reached ? occurrence.chainDepth : null,
+      phaseOrder,
+      converter.args.map((argument) => argument.span),
       sourceAddressHandle,
     );
   }
@@ -373,6 +433,26 @@ function valueConverterApplicationPhasesForBinding(
     case TemplateBindingMode.Open:
       return [RuntimeValueConverterApplicationPhase.ToView];
   }
+}
+
+function occurrenceCountsByChain(
+  occurrences: readonly ExpressionResourceOccurrence<ValueConverterExpression>[],
+): ReadonlyMap<number, number> {
+  const counts = new Map<number, number>();
+  for (const occurrence of occurrences) {
+    counts.set(occurrence.chainIndex, (counts.get(occurrence.chainIndex) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function valueConverterPhaseOrder(
+  phase: RuntimeValueConverterApplicationPhase,
+  outerToInnerIndex: number,
+  converterCount: number,
+): number {
+  return phase === RuntimeValueConverterApplicationPhase.ToView
+    ? converterCount - outerToInnerIndex - 1
+    : outerToInnerIndex;
 }
 
 function findValueConverterResource(

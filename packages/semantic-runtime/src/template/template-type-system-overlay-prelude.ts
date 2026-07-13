@@ -14,6 +14,8 @@ export const enum TemplateTypeSystemOverlayPreludeHelperKey {
   Repeat = 'repeat',
   /** Resource-call helper used by value-converter overlay projection. */
   ValueConverter = 'value-converter',
+  /** Bind-time argument helper used by binding-behavior overlay projection. */
+  BindingBehavior = 'binding-behavior',
   /** Listener event-map helper used by $event overlay scopes. */
   Event = 'event',
   /** Type-predicate helper used by switch/case overlay guards. */
@@ -25,6 +27,8 @@ export const enum TemplateTypeSystemOverlayPreludeHelperOwner {
   RepeatTemplateController = 'repeat-template-controller',
   /** Runtime value-converter materialization and useConverter-shaped toView calls. */
   RuntimeValueConverter = 'runtime-value-converter',
+  /** Runtime binding-behavior materialization and value-transparent bind calls. */
+  RuntimeBindingBehavior = 'runtime-binding-behavior',
   /** Runtime listener binding invocation and DOM event-map lookup. */
   ListenerBinding = 'listener-binding',
   /** Runtime-html Switch/Case matching and TypeChecker equality narrowing. */
@@ -66,6 +70,15 @@ export const templateTypeSystemOverlayPreludeHelpers: readonly TemplateTypeSyste
       'type __au_value_converter_caller_context = { readonly source?: unknown; readonly binding: unknown };',
       'declare const __au_value_converter_caller_context_value: __au_value_converter_caller_context;',
       'declare function __au_value_converter_to_view<V>(converter: unknown, value: V, ...args: readonly unknown[]): V;',
+    ],
+  },
+  {
+    key: TemplateTypeSystemOverlayPreludeHelperKey.BindingBehavior,
+    owner: TemplateTypeSystemOverlayPreludeHelperOwner.RuntimeBindingBehavior,
+    summary: 'Independent Aurelia binding-behavior bind-time argument witnesses.',
+    emittedNames: ['__au_binding_behavior_argument'],
+    lines: [
+      'declare function __au_binding_behavior_argument<T = unknown>(value: T): void;',
     ],
   },
   {

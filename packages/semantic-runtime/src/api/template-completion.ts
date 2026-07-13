@@ -36,6 +36,7 @@ import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js
 import {
   ExpressionParseResultInspector,
   type ExpressionMemberAccessSpan,
+  type ExpressionScopeAccess,
 } from '../expression/parse-result-inspection.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
@@ -93,13 +94,7 @@ import {
 } from '../type-system/type-shape.js';
 import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
 import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
-import {
-  type RuntimeBindingDataFlow,
-  type RuntimeBindingObservedDependency,
-} from '../observation/runtime-binding-observation.js';
-import {
-  isRuntimeObservedDependencyScopeOpenRoot,
-} from '../observation/observed-dependency-member-source.js';
+import type { RuntimeBindingDataFlow } from '../observation/runtime-binding-observation.js';
 import type { TemplateBindableReference } from '../template/compiler-world-reference.js';
 import {
   semanticClosureForInquiry,
@@ -161,7 +156,6 @@ import {
 } from './template-diagnostic-policy.js';
 import {
   resourceLocalBindingDataFlows,
-  resourceLocalBindingObservedDependencies,
   resourceLocalBindingTargetAccesses,
 } from '../template/runtime-resource-ownership.js';
 import {
@@ -239,6 +233,11 @@ interface ExpressionMemberDiagnosticSite {
   readonly span: ExpressionMemberAccessSpan;
   readonly semanticProductHandle: ProductHandle;
   readonly sourceAddressHandle: AddressHandle | null;
+}
+
+interface ExpressionRootDiagnosticSite {
+  readonly access: ExpressionScopeAccess;
+  readonly parse: TemplateExpressionParse;
 }
 
 export function readSemanticTemplateCompletions(
@@ -680,7 +679,7 @@ export function readTemplateDiagnosticRows(
     ...selections.flatMap((selection) => targetAccessDiagnosticRowsForSelection(store, selection, sourceFile, context)),
     ...typeProjectionTemplateDiagnosticRows(store, workspaceRootDir, emission, selections, context, projectionPolicy),
     ...selections.flatMap((selection) => bindingDataFlowDiagnosticRowsForSelection(store, selection, sourceFile, context)),
-    ...selections.flatMap((selection) => runtimeObservedDependencyRootDiagnosticRowsForSelection(store, emission, selection, sourceFile, context)),
+    ...selections.flatMap((selection) => expressionRootDiagnosticRowsForSelection(store, emission, selection, sourceFile, context)),
     ...templateOverlayTypeDiagnosticRows(store, emission, selections, sourceFile, context, projectionPolicy),
   ];
   return [...rows].sort((left, right) =>
@@ -1154,12 +1153,6 @@ function diagnosticRowMissingInputKey(
     : [...diagnostic.missingInputs].sort().join('+');
 }
 
-interface RuntimeObservedDependencyRootDiagnosticCandidate {
-  readonly dependency: RuntimeBindingObservedDependency;
-  readonly diagnostic: SemanticTemplateCursorDiagnosticRow;
-  readonly source: NonNullable<SemanticTemplateDiagnosticRow['source']>;
-}
-
 function bindingDataFlowDiagnosticRowsForSelection(
   store: KernelStore,
   selection: TemplateCompletionResourceSelection,
@@ -1203,19 +1196,59 @@ function bindingDataFlowDiagnosticRowsForSelection(
   });
 }
 
-function runtimeObservedDependencyRootDiagnosticRowsForSelection(
+function expressionRootDiagnosticRowsForSelection(
   store: KernelStore,
   emission: AureliaAppWorldProjectEmission,
   selection: TemplateCompletionResourceSelection,
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
-  return runtimeObservedDependencyRootDiagnosticCandidates(store, emission, selection).flatMap((candidate) => {
-    const source = candidate.source;
+  const authoredSource = templateSourceText(store, selection.resource, context.sourceTextCache);
+  if (authoredSource == null) {
+    return [];
+  }
+  return expressionRootDiagnosticSites(selection.resource).flatMap((site) => {
+    const span = site.access.name.span;
+    const offset = span.start + Math.floor((span.end - span.start) / 2);
+    if (offset < 0 || offset > authoredSource.text.length) {
+      return [];
+    }
+    const position = positionForOffset(authoredSource, offset);
+    const cursorContext = templateCompletionQueryForCursor(store, {
+      locus: new SourceCursorInquiryLocus(
+        new SourceTextCursor(authoredSource.sourcePath, position.line, position.character, offset),
+        selection.resource.compilation.unit.templateSource.sourceAddressHandle,
+      ),
+      resource: selection.resource,
+      page: new InquiryPageRequest(1, null),
+      routeConfigProductHandles: context.routeConfigProductHandles,
+      routeParameterEndpointPlans: context.routeParameterEndpointPlans,
+      i18nTranslationKeyProductHandles: context.i18nTranslationKeyProductHandles,
+    });
+    const cursorInfo = templateCursorInfoResult(
+      store,
+      selection,
+      cursorContext,
+      context.includeHandles,
+      [...new Set(cursorContext.missingInputs)],
+    );
+    if (cursorContext.selectedScopeSlot != null || cursorInfo.selectedMember != null) {
+      return [];
+    }
+    const source = sourceReferenceForParserSpan(
+      authoredSource.sourcePath,
+      span,
+      'name',
+      describeAddress(store, site.parse.sourceAddressHandle),
+    );
     if (!sourceReferenceMatchesFile(source, sourceFile)) {
       return [];
     }
-    const diagnostic = candidate.diagnostic;
+    const rootName = site.access.name.name;
+    const diagnostic = typeSystemGlobalThisValueExists(emission.typeSystem, rootName)
+      && !isAureliaExpressionGlobalName(rootName)
+      ? unsupportedExpressionGlobalDiagnostic(rootName, source)
+      : missingExpressionRootDiagnostic(rootName, source);
     const key = templateDiagnosticRowKey(diagnostic, source);
     if (context.seenRows.has(key)) {
       return [];
@@ -1225,12 +1258,12 @@ function runtimeObservedDependencyRootDiagnosticRowsForSelection(
       ...diagnostic,
       ...templateDiagnosticOriginFields(store, context.includeHandles, {
         phase: null,
-        semanticProductHandle: candidate.dependency.productHandle,
-        sourceAddressHandle: candidate.dependency.sourceAddressHandle,
+        semanticProductHandle: site.parse.productHandle,
+        sourceAddressHandle: site.parse.sourceAddressHandle,
       }),
       siteKind: TemplateCompletionSiteKind.Expression,
-      valueSiteKind: valueSiteKindForObservedDependency(store, candidate.dependency),
-      subject: templateExpressionDiagnosticSubject(selection.resource, candidate.dependency.expressionProductHandle, source),
+      valueSiteKind: site.parse.site.siteKind,
+      subject: templateExpressionDiagnosticSubject(selection.resource, site.parse.productHandle, source),
       template: {
         compilationLane: selection.lane,
         source: describeAddress(store, selection.sourceAddressHandle),
@@ -1239,30 +1272,30 @@ function runtimeObservedDependencyRootDiagnosticRowsForSelection(
   });
 }
 
-function runtimeObservedDependencyRootDiagnosticCandidates(
-  store: KernelStore,
-  emission: AureliaAppWorldProjectEmission,
-  selection: TemplateCompletionResourceSelection,
-): readonly RuntimeObservedDependencyRootDiagnosticCandidate[] {
-  return resourceLocalBindingObservedDependencies(store, selection.resource).flatMap((dependency) => {
-    if (!isRuntimeObservedDependencyScopeOpenRoot(dependency)) {
-      return [];
+function expressionRootDiagnosticSites(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): readonly ExpressionRootDiagnosticSite[] {
+  const sites: ExpressionRootDiagnosticSite[] = [];
+  const seen = new Set<string>();
+  for (const parse of templateExpressionParsesForResource(resource)) {
+    // Frontier subtrees support recovery/completion, but semantic absence would cascade from syntax not yet closed.
+    if (!ExpressionParseResultInspector.hasCanonicalAst(parse.result)) {
+      continue;
     }
-    const source = describeAddress(store, dependency.sourceAddressHandle);
-    const rootName = dependency.sourceRootName;
-    if (source == null || rootName == null) {
-      return [];
+    for (const access of ExpressionParseResultInspector.scopeAccesses(parse.result)) {
+      const key = `${parse.productHandle}:${access.name.span.start}:${access.name.span.end}:${access.name.name}:${access.ancestor}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      sites.push({ access, parse });
     }
-    const diagnostic = typeSystemGlobalThisValueExists(emission.typeSystem, rootName)
-      && !isAureliaExpressionGlobalName(rootName)
-      ? unsupportedExpressionGlobalDiagnostic(rootName, source)
-      : missingExpressionRootDiagnostic(rootName, source);
-    return [{
-      dependency,
-      diagnostic,
-      source,
-    }];
-  });
+  }
+  return sites.sort((left, right) =>
+    left.access.name.span.start - right.access.name.span.start
+    || left.access.name.span.end - right.access.name.span.end
+    || left.access.name.name.localeCompare(right.access.name.name)
+  );
 }
 
 function typeSystemGlobalThisValueExists(
@@ -1826,22 +1859,18 @@ function expressionParseDiagnosticPayload(
     case ExpressionParseResultKind.PropertyLikeFrontierPublication:
     case ExpressionParseResultKind.IteratorDegradedPublication:
     case ExpressionParseResultKind.IteratorFrontierPublication:
-      return result.frameworkErrorCode == null
-        ? null
-        : {
-            frameworkErrorCode: result.frameworkErrorCode,
-            message: result.diagnosticMessage ?? 'The expression parser stopped at an incomplete expression frontier.',
-            span: result.primarySpan,
-          };
+      return {
+        frameworkErrorCode: result.frameworkErrorCode,
+        message: result.diagnosticMessage ?? 'The expression parser stopped at an incomplete expression frontier.',
+        span: result.primarySpan,
+      };
     case ExpressionParseResultKind.InterpolationDegradedPublication:
     case ExpressionParseResultKind.InterpolationFrontierPublication:
-      return result.activeHole.frameworkErrorCode == null
-        ? null
-        : {
-            frameworkErrorCode: result.activeHole.frameworkErrorCode,
-            message: result.activeHole.diagnosticMessage ?? 'The interpolation parser stopped at an incomplete expression frontier.',
-            span: result.activeHole.holeSpan,
-          };
+      return {
+        frameworkErrorCode: result.activeHole.frameworkErrorCode,
+        message: result.activeHole.diagnosticMessage ?? 'The interpolation parser stopped at an incomplete expression frontier.',
+        span: result.activeHole.primarySpan,
+      };
     default:
       return null;
   }
@@ -1887,14 +1916,6 @@ function valueSiteKindForDataFlow(
   expressionProductHandle: ProductHandle | null,
 ): SemanticTemplateDiagnosticRow['valueSiteKind'] {
   const parse = readTemplateExpressionParse(store, expressionProductHandle);
-  return parse?.site.siteKind ?? null;
-}
-
-function valueSiteKindForObservedDependency(
-  store: KernelStore,
-  dependency: RuntimeBindingObservedDependency,
-): SemanticTemplateDiagnosticRow['valueSiteKind'] {
-  const parse = readTemplateExpressionParse(store, dependency.expressionProductHandle);
   return parse?.site.siteKind ?? null;
 }
 
@@ -2258,6 +2279,7 @@ function templateCursorInfoResult(
       missingInputs,
       cursorContext.selectedMemberName,
       selectedMember,
+      cursorContext.selectedScopeSlot != null,
       memberOwnerType,
       query.memberOwnerTypeProductHandle,
       cursorContext.memberOwnerTypeOpenSubject,

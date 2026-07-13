@@ -8,6 +8,7 @@ import {
   CallGlobalExpression,
   CallMemberExpression,
   CallScopeExpression,
+  expressionHasOptionalChain,
   NewExpression,
   TaggedTemplateExpression,
 } from './ast.js';
@@ -217,7 +218,7 @@ export class CompletedInputLeftHandSideCorridor {
         if (!allowCall) {
           break;
         }
-        if (this.hasOptionalChain(expr)) {
+        if (expressionHasOptionalChain(expr)) {
           return this.state.failures.hardError(
             'Invalid tagged template on optional chain',
             t,
@@ -279,6 +280,15 @@ export class CompletedInputLeftHandSideCorridor {
     }
 
     this.state.nextToken();
+    if (expr.$kind === 'AccessThis') {
+      return new AccessScopeExpression(
+        this.state.spanFrom(expr, next.end),
+        this.deps.identifierFromToken(next),
+        expr.ancestor,
+        expr.authoredScopePath?.withOptionalAccess(this.state.spanFromToken(questionDot)) ?? null,
+        true,
+      );
+    }
     return new AccessMemberExpression(
       this.state.spanFrom(expr, next.end),
       expr,
@@ -307,7 +317,8 @@ export class CompletedInputLeftHandSideCorridor {
         args,
         expr.ancestor,
         optional,
-        expr.syntaxOrigin,
+        expr.authoredScopePath,
+        expr.optional,
       );
     }
 
@@ -492,22 +503,4 @@ export class CompletedInputLeftHandSideCorridor {
     return expr.$kind === 'AccessMember';
   }
 
-  private hasOptionalChain(expr: IsLeftHandSide): boolean {
-    switch (expr.$kind) {
-      case 'AccessMember':
-        return expr.optional || this.hasOptionalChain(expr.object);
-      case 'AccessKeyed':
-        return expr.optional || this.hasOptionalChain(expr.object);
-      case 'CallFunction':
-        return expr.optional || this.hasOptionalChain(expr.func);
-      case 'CallMember':
-        return expr.optionalMember || expr.optionalCall || this.hasOptionalChain(expr.object);
-      case 'TaggedTemplate':
-        return this.hasOptionalChain(expr.func);
-      case 'New':
-        return this.hasOptionalChain(expr.func);
-      default:
-        return false;
-    }
-  }
 }

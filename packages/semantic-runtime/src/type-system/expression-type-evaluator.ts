@@ -186,6 +186,12 @@ export class CheckerExpressionTypeEvaluator {
     this.memberOwners = new CheckerExpressionMemberOwnerProjector({
       evaluateNode: (context) =>
         this.evaluate(context),
+      evaluateScopeOwner: (expression, context) =>
+        this.scopes.evaluateScopeOwner(
+          expression,
+          context.scope,
+          context.projectionLocalKey(),
+        ),
       arrowFunctionScope: (expression, context) =>
         this.contextualTypes.arrowFunctionScope(expression, context.scope, context.projectionLocalKey(), context.sourceAddressHandle, context.contextualType),
       contextualArgumentType: (expression, argumentIndex, context) =>
@@ -245,6 +251,12 @@ export class CheckerExpressionTypeEvaluator {
       input,
       context,
     );
+  }
+
+  contextualBindingBehaviorArgumentTypes(
+    context: CheckerExpressionTypeEvaluationContext<Extract<ExpressionAstNode, { readonly $kind: 'BindingBehavior' }>>,
+  ): readonly (CheckerTypeReference | null)[] | null {
+    return this.resources.contextualBindingBehaviorArgumentTypes(context.expression, context);
   }
 
   evaluateMemberOwnerAtOffset(
@@ -466,6 +478,14 @@ export class CheckerExpressionTypeEvaluator {
     expression: CallScopeExpression,
     context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
+    const optionalOwner = this.scopes.evaluateOptionalScopeOwnerShortCircuit(
+      expression,
+      context.scope,
+      context.projectionLocalKey(),
+    );
+    if (optionalOwner != null) {
+      return optionalOwner;
+    }
     const callee = this.evaluateCallScopeCallee(expression, context);
     if (callee.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return callee;
@@ -702,6 +722,7 @@ export class CheckerExpressionTypeEvaluator {
       expression.name.name,
       expression.ancestor,
       `${context.projectionLocalKey()}:callee:${expression.name.name}`,
+      false,
     );
   }
 

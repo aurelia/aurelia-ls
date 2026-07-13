@@ -6419,7 +6419,7 @@
           "expectations": [
             {
               "name": "binding data flows",
-              "query": { "kind": "binding-data-flows", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "sourceName": "labelTarget", "targetProperty": "htmlFor", "direction": "source-to-target" }, "source": { "marker": "for.bind=\"labelTarget\"", "token": "for.bind=\"labelTarget\"" }, "count": 1 },
                 { "fields": { "sourceName": "maximumLength", "targetProperty": "maxLength", "direction": "source-to-target" }, "source": { "marker": "maxlength.bind=\"maximumLength\"", "token": "maxlength.bind=\"maximumLength\"" }, "count": 1 },
@@ -6435,7 +6435,7 @@
           "expectations": [
             {
               "name": "binding data flows",
-              "query": { "kind": "binding-data-flows", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "sourceName": "textValue", "targetProperty": "value", "direction": "two-way" }, "source": { "marker": "type=\"text\" value.bind=\"textValue\"", "token": "value.bind=\"textValue\"" }, "count": 1 },
                 { "fields": { "sourceName": "checkboxValue", "targetProperty": "value", "direction": "source-to-target" }, "source": { "marker": "type=\"checkbox\" value.bind=\"checkboxValue\"", "token": "value.bind=\"checkboxValue\"" }, "count": 1 },
@@ -6457,7 +6457,7 @@
           "expectations": [
             {
               "name": "binding data flows",
-              "query": { "kind": "binding-data-flows", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "sourceName": "sliderPosition", "targetProperty": "currentValue", "direction": "two-way" }, "source": { "marker": "NaTiVe-SlIdEr PoSiTiOn.bind=\"sliderPosition\"", "token": "PoSiTiOn.bind=\"sliderPosition\"" }, "count": 1 },
                 { "fields": { "sourceName": "inertPosition", "targetProperty": "position", "direction": "source-to-target" }, "source": { "marker": "inert-slider position.bind=\"inertPosition\"", "token": "position.bind=\"inertPosition\"" }, "count": 1 },
@@ -6504,7 +6504,7 @@
           "expectations": [
             {
               "name": "binding data flows",
-              "query": { "kind": "binding-data-flows", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "sourceName": "guardedLivePosition", "targetProperty": "position", "direction": "two-way" }, "source": { "marker": "live position.bind=\"guardedLivePosition\"", "token": "position.bind=\"guardedLivePosition\"" }, "count": 1 },
                 { "fields": { "sourceName": "guardedColdPosition", "targetProperty": "position", "direction": "source-to-target" }, "source": { "marker": "guarded-slider position.bind=\"guardedColdPosition\"", "token": "position.bind=\"guardedColdPosition\"" }, "count": 1 }
@@ -10906,7 +10906,7 @@
             },
             {
               "name": "binding data flows",
-              "query": { "kind": "binding-data-flows", "options": { "page": { "size": 100 } } },
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "options": { "page": { "size": 100 } } },
               "rows": [
                 { "fields": { "sourceName": "homeActive" }, "source": { "marker": "active.bind: homeActive", "token": "active.bind: homeActive" } },
                 { "fields": { "sourceName": "homeActive" }, "sourceField": "sourceAssignmentOccurrenceSource", "source": { "marker": "active.bind: homeActive", "token": "homeActive" } },
@@ -13053,7 +13053,7 @@
           "expectations": [
             {
               "name": "spread member flows",
-              "query": { "kind": "binding-data-flows", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "query": { "kind": "binding-data-flows", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
                 { "fields": { "bindingKind": "spread-value", "targetProperty": "title", "sourceName": "spreadState.title", "sourceType": "string", "targetPropertyType": "string", "sourceToTargetAssignable": true }, "source": { "marker": "<spread-card ...spreadState>", "token": "spreadState" }, "count": 1 },
                 { "fields": { "bindingKind": "spread-value", "targetProperty": "count", "sourceName": "spreadState.count", "sourceType": "number", "targetPropertyType": "number", "sourceToTargetAssignable": true }, "source": { "marker": "<spread-card ...spreadState>", "token": "spreadState" }, "count": 1 },
@@ -13076,7 +13076,7 @@
           "expectations": [
             {
               "name": "structured spread sources",
-              "query": { "kind": "binding-data-flows", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "query": { "kind": "binding-data-flows", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
                 { "fields": { "targetProperty": "title", "sourceName": "spreadContainer.details.title", "sourceRootName": "spreadContainer", "sourceType": "string" }, "source": { "marker": "...spreadContainer.details", "token": "spreadContainer.details" }, "count": 1 },
                 { "fields": { "targetProperty": "count", "sourceName": "spreadContainer.details.count", "sourceRootName": "spreadContainer", "sourceType": "number" }, "source": { "marker": "...spreadContainer.details", "token": "spreadContainer.details" }, "count": 1 },
@@ -13095,7 +13095,7 @@
           "expectations": [
             {
               "name": "property matching",
-              "query": { "kind": "binding-data-flows", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "query": { "kind": "binding-data-flows", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
                 { "fields": { "targetProperty": "title", "sourceName": "aliasShaped.title", "sourceType": "string" }, "source": { "marker": "...aliasShaped", "token": "aliasShaped" }, "count": 1 },
                 { "fields": { "targetProperty": "internal", "sourceName": "spreadState.internal" }, "source": { "marker": "<spread-card ...spreadState>", "token": "spreadState" }, "absent": true },
@@ -13109,7 +13109,7 @@
           "expectations": [
             {
               "name": "runtime key admission",
-              "query": { "kind": "binding-data-flows", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "query": { "kind": "binding-data-flows", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
                 { "fields": { "targetProperty": "count", "sourceName": "aliasShaped.count" }, "source": { "marker": "...aliasShaped", "token": "aliasShaped" }, "absent": true },
                 { "fields": { "targetProperty": "tone", "sourceName": "aliasShaped.tone" }, "source": { "marker": "...aliasShaped", "token": "aliasShaped" }, "absent": true },
@@ -13163,7 +13163,7 @@
           "expectations": [
             {
               "name": "captured data flows",
-              "query": { "kind": "binding-data-flows", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "query": { "kind": "binding-data-flows", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
                 { "fields": { "bindingKind": "property", "direction": "two-way", "valueSiteKind": "captured-value", "sourceName": "capturedValue", "sourceType": "string", "targetProperty": "value", "targetPropertyType": "string" }, "source": { "marker": "value.bind=\"capturedValue\"", "markerOccurrence": 1, "token": "value.bind=\"capturedValue\"" }, "count": 1 },
                 { "fields": { "bindingKind": "attribute", "valueSiteKind": "captured-value", "sourceName": "isActive", "sourceType": "boolean", "targetProperty": "active" }, "source": { "marker": "active.class=\"isActive\"", "markerOccurrence": 1, "token": "active.class=\"isActive\"" }, "count": 1 },
@@ -13193,7 +13193,7 @@
           "expectations": [
             {
               "name": "ordinary excluded bindings",
-              "query": { "kind": "binding-data-flows", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "query": { "kind": "binding-data-flows", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
                 { "fields": { "bindingKind": "property", "valueSiteKind": "binding-command-value", "sourceName": "showCapture", "targetKind": "controller-view-model", "targetProperty": "value" }, "source": { "marker": "if.bind=\"showCapture\"", "token": "if.bind=\"showCapture\"" }, "count": 1 },
                 { "fields": { "bindingKind": "property", "valueSiteKind": "binding-command-value", "sourceName": "shellLabel", "targetKind": "controller-view-model", "targetProperty": "label" }, "source": { "marker": "label.bind=\"shellLabel\"", "token": "label.bind=\"shellLabel\"" }, "count": 1 }
@@ -13214,7 +13214,7 @@
             },
             {
               "name": "nested transfer flow",
-              "query": { "kind": "binding-data-flows", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "query": { "kind": "binding-data-flows", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
                 { "fields": { "bindingKind": "property", "valueSiteKind": "captured-value", "sourceName": "capturedValue", "targetProperty": "value", "direction": "two-way" }, "source": { "marker": "<nested-capture-shell value.bind=\"capturedValue\"", "token": "value.bind=\"capturedValue\"" }, "count": 1 }
               ]
@@ -13612,6 +13612,333 @@
                 { "fields": { "definitionName": "mode-panel", "tagName": "template", "childCount": 3 }, "count": 1 },
                 { "fields": { "definitionName": "nested-note", "tagName": "template", "childCount": 3 }, "count": 1 },
                 { "fields": { "definitionName": "local-icon", "tagName": "template", "childCount": 3 }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "template-expression-resource-combinators",
+      "fixture": "fixtures/pressure/template-expression-resource-combinators",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "expression-and-resource-semantics",
+      "domainAxis": "expression-semantics",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/expression-resource-combinators-app.html",
+      "requirement": "Aurelia expression grammar, scope paths, evaluation lifecycle, resource arguments, wrapper order, diagnostics, and authored provenance remain coherent across parser, TypeChecker, observation, and public query products.",
+      "cases": [
+        {
+          "id": "legal-expression-families-remain-clean",
+          "sourceFile": "src/expression-gallery.html",
+          "expectations": [
+            {
+              "name": "expression diagnostics",
+              "query": { "kind": "template-diagnostics", "sourceFile": "src/expression-gallery.html", "options": { "detail": "full", "page": { "size": 200 } } },
+              "equals": { "value.rows.length": 0 }
+            },
+            {
+              "name": "optional keyed member cursor",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/expression-gallery.html", "cursor": { "marker": "${maybeItem?.children?.[0]?.label}", "token": "label" } },
+              "equals": { "value.siteKind": "expression-member", "value.selectedMemberName": "label", "value.selectedMember.typeDisplay": "string" },
+              "rows": [
+                { "rowPath": "value.selectedMember", "source": { "sourceFile": "src/model.ts", "marker": "readonly label: string;", "markerOccurrence": 1, "token": "label" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "representative semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "sourceFile": "src/expression-gallery.html", "options": { "detail": "full", "page": { "size": 400 } } },
+              "rows": [
+                { "fields": { "tokenType": "function" }, "source": { "marker": "${format(item.label)}", "token": "format" }, "count": 1 },
+                { "fields": { "tokenType": "property" }, "source": { "marker": "${itemById[selectedId].label}", "token": "label" }, "count": 1 },
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "candidate => candidate.active", "token": "candidate" }, "atLeast": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "listener-sources-are-untracked-event-evaluations",
+          "sourceFile": "src/function-context-gallery.html",
+          "domainAxis": "observation",
+          "expectations": [
+            {
+              "name": "listener diagnostics",
+              "query": { "kind": "template-diagnostics", "sourceFile": "src/function-context-gallery.html", "options": { "detail": "full", "page": { "size": 200 } } },
+              "equals": { "value.rows.length": 0 }
+            },
+            {
+              "name": "listener root cursor is not masked by the event slot",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/function-context-gallery.html", "cursor": { "marker": "click.trigger=\"count += $event.detail\"", "token": "count" } },
+              "equals": { "value.siteKind": "expression", "value.selectedMemberName": "count", "value.selectedMember.typeDisplay": "number", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "listener data-flow lifecycle",
+              "query": { "kind": "binding-data-flows", "sourceFile": "src/function-context-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "bindingKind": "listener", "direction": "source-read", "sourceEvaluationKind": "untracked-read" }, "sourceField": "expressionSource", "source": { "marker": "click.trigger=\"count += $event.detail\"", "token": "count += $event.detail" }, "count": 1 },
+                { "fields": { "bindingKind": "listener", "direction": "source-read", "sourceEvaluationKind": "untracked-read" }, "sourceField": "expressionSource", "source": { "marker": "click.trigger=\"count++\"", "token": "count++" }, "count": 1 },
+                { "fields": { "bindingKind": "listener", "direction": "source-read", "sourceEvaluationKind": "untracked-read" }, "sourceField": "expressionSource", "source": { "marker": "click.trigger=\"--count\"", "token": "--count" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "listeners publish no observed dependencies",
+              "query": { "kind": "binding-observed-dependencies", "sourceFile": "src/function-context-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "bindingKind": "listener" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "optional-parent-preserves-exact-ancestor-scope",
+          "sourceFile": "src/scope-path-gallery.html",
+          "domainAxis": "expression-semantics",
+          "expectations": [
+            {
+              "name": "scope path diagnostics",
+              "query": { "kind": "template-diagnostics", "sourceFile": "src/scope-path-gallery.html", "options": { "detail": "full", "page": { "size": 200 } } },
+              "equals": { "value.rows.length": 0 }
+            },
+            {
+              "name": "reserved current-context member cursor",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/scope-path-gallery.html", "cursor": { "marker": "${$this.$parent.toFixed()}", "token": "$parent" } },
+              "equals": { "value.siteKind": "expression-member", "value.selectedMemberName": "$parent", "value.selectedMember.typeDisplay": "17" },
+              "rows": [
+                { "rowPath": "value.selectedMember", "source": { "sourceFile": "src/scope-path-gallery.ts", "marker": "readonly $parent = 17;", "token": "$parent" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "arrow current-context cursor",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/scope-path-gallery.html", "cursor": { "marker": "groups.map(group => $this.heading).join(', ')", "token": "heading" } },
+              "equals": { "value.siteKind": "expression-member", "value.selectedMemberName": "heading", "value.selectedMember.typeDisplay": "\"Scope paths\"" },
+              "rows": [
+                { "rowPath": "value.selectedMember", "source": { "sourceFile": "src/scope-path-gallery.ts", "marker": "readonly heading = 'Scope paths';", "token": "heading" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "nested arrow current-context cursor",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/scope-path-gallery.html", "cursor": { "marker": "group.items.map(item => $this.heading).join(', ')", "token": "heading" } },
+              "equals": { "value.siteKind": "expression-member", "value.selectedMemberName": "heading", "value.selectedMember.typeDisplay": "\"Scope paths\"" },
+              "rows": [
+                { "rowPath": "value.selectedMember", "source": { "sourceFile": "src/scope-path-gallery.ts", "marker": "readonly heading = 'Scope paths';", "token": "heading" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "optional parent group cursor",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/scope-path-gallery.html", "cursor": { "marker": "${$parent?.group.label}", "token": "group" } },
+              "equals": { "value.siteKind": "expression-member", "value.selectedMemberName": "group", "value.selectedMember.typeDisplay": "ExpressionGroup" }
+            },
+            {
+              "name": "optional parent leaf cursor",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/scope-path-gallery.html", "cursor": { "marker": "${$parent?.group.label}", "token": "label" } },
+              "equals": { "value.siteKind": "expression-member", "value.selectedMemberName": "label", "value.selectedMember.typeDisplay": "string" },
+              "rows": [
+                { "rowPath": "value.selectedMember", "source": { "sourceFile": "src/model.ts", "marker": "export interface ExpressionGroup", "token": "label" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "authored scope qualifier tokens",
+              "query": { "kind": "template-semantic-tokens", "sourceFile": "src/scope-path-gallery.html", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "${$parent?.group.label}", "token": "$parent" }, "count": 1 },
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "${$parent.$parent.heading}", "token": "$parent", "occurrence": 1 }, "count": 1 },
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "${$parent.$parent.heading}", "token": "$parent", "occurrence": 2 }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "parse-recovery-publishes-structural-gaps",
+          "sourceFile": "src/invalid-expression-gallery.html",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "recovery diagnostics",
+              "query": { "kind": "template-diagnostics", "sourceFile": "src/invalid-expression-gallery.html", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "expression-parse-error", "frameworkErrorCode": "AUR0167" }, "source": { "marker": "condition ? label", "position": "after-marker" }, "count": 1 },
+                { "fields": { "diagnosticKind": "expression-parse-error", "frameworkErrorCode": "AUR0151" }, "source": { "marker": "<template class=\"empty-iterator\" repeat.for=\"", "position": "after-marker" }, "count": 1 },
+                { "fields": { "diagnosticKind": "expression-parse-error", "frameworkErrorCode": "AUR0155" }, "source": { "marker": "item of", "position": "after-marker" }, "count": 1 },
+                { "fields": { "diagnosticKind": "expression-parse-error", "diagnosticAuthority": "semantic-authoring-policy", "frameworkErrorCode": null }, "source": { "marker": "before ${label", "position": "after-marker" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "resource-tail-errors-use-exact-authored-gaps",
+          "sourceFile": "src/invalid-expression-gallery.html",
+          "domainAxis": "source-precision",
+          "expectations": [
+            {
+              "name": "resource tail diagnostics",
+              "query": { "kind": "template-diagnostics", "sourceFile": "src/invalid-expression-gallery.html", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "frameworkErrorCode": "AUR0159" }, "source": { "marker": "${label |}", "position": "after-marker", "offsetDelta": -1 }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0159" }, "source": { "marker": "${label | 1}", "token": "1" }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0160" }, "source": { "marker": "${label &}", "position": "after-marker", "offsetDelta": -1 }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0160" }, "source": { "marker": "${label & 1}", "token": "1" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "framework-rejected-expression-syntax-stays-exact",
+          "sourceFile": "src/invalid-expression-gallery.html",
+          "domainAxis": "template-syntax",
+          "expectations": [
+            {
+              "name": "framework parser diagnostics",
+              "query": { "kind": "template-diagnostics", "sourceFile": "src/invalid-expression-gallery.html", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "frameworkErrorCode": "AUR0152" }, "source": { "marker": "click.trigger=\"...items\"", "token": "..." }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0158" }, "source": { "marker": "click.trigger=\"1 = label\"", "token": "=", "occurrence": 2 }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0158" }, "source": { "marker": "click.trigger=\"maybeItem?.label = label\"", "token": "=", "occurrence": 2 }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0161" }, "source": { "marker": "click.trigger=\"label of items\"", "token": "of" }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0162" }, "source": { "marker": "click.trigger=\"import('module')\"", "token": "import" }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0172" }, "source": { "marker": "click.trigger=\"maybeItem?.`label`\"", "token": "`" }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0168" }, "source": { "marker": "title.bind=\"#\"", "token": "#" }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0174" }, "source": { "marker": "(entry = label) => entry", "token": "=>" }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0175" }, "source": { "marker": "([entry]) => entry", "token": "=>" }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0176" }, "source": { "marker": "(...entries, entry) => entry", "token": "," }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0178" }, "source": { "marker": "entry => { entry }", "token": "{" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-array-pattern-matches-framework-grammar",
+          "sourceFile": "src/invalid-expression-gallery.html",
+          "domainAxis": "template-syntax",
+          "expectations": [
+            {
+              "name": "repeat pattern diagnostics",
+              "query": { "kind": "template-diagnostics", "sourceFile": "src/invalid-expression-gallery.html", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "frameworkErrorCode": "AUR0170" }, "source": { "marker": "[entry = label] of items", "token": "=" }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0170" }, "source": { "marker": "[...rest] of items", "token": "..." }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0170" }, "source": { "marker": "[[entry]] of items", "token": "[", "occurrence": 2 }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0112" }, "source": { "marker": "[...rest] of items", "token": "items" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "converter-chain-spends-to-view-and-from-view-shapes",
+          "sourceFile": "src/resource-combinator-gallery.html",
+          "domainAxis": "data-flow",
+          "expectations": [
+            {
+              "name": "converter writeback flow",
+              "query": { "kind": "binding-data-flows", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "bindingKind": "property", "direction": "two-way", "sourceName": "count", "sourceType": "number", "targetValueType": "number", "sourceToTargetAssignable": true, "targetToSourceAssignable": true }, "source": { "marker": "value.two-way=\"count | numberText:prefix | textLength\"", "token": "value.two-way=\"count | numberText:prefix | textLength\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "binding-behavior-arguments-use-bind-signature",
+          "sourceFile": "src/resource-combinator-gallery.html",
+          "domainAxis": "type-system",
+          "expectations": [
+            {
+              "name": "behavior argument diagnostics",
+              "query": { "kind": "template-diagnostics", "sourceFile": "src/resource-combinator-gallery.html", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic" }, "source": { "marker": "typedAudit:limit:'wrong'", "token": "limit" }, "count": 1 },
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic" }, "source": { "marker": "typedAudit:limit:'wrong'", "token": "'wrong'" }, "count": 1 },
+                { "fields": { "selectedMemberName": "missingLabel" }, "source": { "marker": "typedAudit:missingLabel:limit", "token": "missingLabel" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "resource-chain-order-reachability-and-argument-provenance",
+          "sourceFile": "src/resource-combinator-gallery.html",
+          "domainAxis": "runtime-lifecycle",
+          "expectations": [
+            {
+              "name": "converter applications",
+              "query": { "kind": "value-converter-applications", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "converterName": "numberText", "phase": "to-view", "chainDepth": 1, "bindReachability": "reached", "bindOrder": 1, "phaseOrder": 0 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "numberText" }, "count": 1 },
+                { "fields": { "converterName": "textLength", "phase": "to-view", "chainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 1 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "textLength" }, "count": 1 },
+                { "fields": { "converterName": "textLength", "phase": "from-view", "chainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "value.two-way=\"count | numberText:prefix | textLength\"", "token": "textLength" }, "count": 1 },
+                { "fields": { "converterName": "numberText", "phase": "from-view", "chainDepth": 1, "bindReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "value.two-way=\"count | numberText:prefix | textLength\"", "token": "numberText" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "behavior applications",
+              "query": { "kind": "binding-behavior-applications", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "behaviorName": "outerAudit", "chainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "innerAudit:'inner' & outerAudit:'outer'", "token": "outerAudit" }, "count": 1 },
+                { "fields": { "behaviorName": "innerAudit", "chainDepth": 1, "bindReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "innerAudit:'inner' & outerAudit:'outer'", "token": "innerAudit" }, "count": 1 },
+                { "fields": { "behaviorName": "typedAudit", "argumentCount": 2 }, "source": { "marker": "typedAudit:'view':limit", "token": "typedAudit" }, "sourceField": "source", "count": 1 },
+                { "fields": { "behaviorName": "typedAudit" }, "source": { "marker": "typedAudit:'view':limit", "token": "'view'" }, "sourceField": "argumentSources.0", "count": 1 },
+                { "fields": { "behaviorName": "typedAudit" }, "source": { "marker": "typedAudit:'view':limit", "token": "limit" }, "sourceField": "argumentSources.1", "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "authored-resource-occurrences-survive-outer-failure",
+          "sourceFile": "src/resource-combinator-gallery.html",
+          "domainAxis": "provenance",
+          "expectations": [
+            {
+              "name": "inner behavior cursor",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/resource-combinator-gallery.html", "cursor": { "marker": "innerAudit:'inner' & missingBehavior", "token": "innerAudit" } },
+              "equals": { "value.selectedDefinition.name": "innerAudit", "value.selectedDefinition.resourceKind": "binding-behavior" }
+            },
+            {
+              "name": "inner converter cursor",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/resource-combinator-gallery.html", "cursor": { "marker": "numberText:prefix | missingConverter", "token": "numberText" } },
+              "equals": { "value.selectedDefinition.name": "numberText", "value.selectedDefinition.resourceKind": "value-converter" }
+            },
+            {
+              "name": "converter behind missing behavior cursor",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/resource-combinator-gallery.html", "cursor": { "marker": "numberText:prefix & missingBehavior", "token": "numberText" } },
+              "equals": { "value.selectedDefinition.name": "numberText", "value.selectedDefinition.resourceKind": "value-converter" }
+            },
+            {
+              "name": "blocked inner behavior attempt",
+              "query": { "kind": "binding-behavior-applications", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "behaviorName": "missingBehavior", "chainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "innerAudit:'inner' & missingBehavior", "token": "missingBehavior" }, "count": 1 },
+                { "fields": { "behaviorName": "innerAudit", "chainDepth": 1, "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "innerAudit:'inner' & missingBehavior", "token": "innerAudit" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "blocked inner converter attempt",
+              "query": { "kind": "value-converter-applications", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "converterName": "missingConverter", "chainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": null }, "source": { "marker": "numberText:prefix | missingConverter", "token": "missingConverter" }, "count": 1 },
+                { "fields": { "converterName": "numberText", "chainDepth": 1, "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "numberText:prefix | missingConverter", "token": "numberText" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "behavior failure blocks inner converter application",
+              "query": { "kind": "value-converter-applications", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "converterName": "numberText", "chainDepth": 1, "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "numberText:prefix & missingBehavior", "token": "numberText" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "resource-runtime-errors-remain-first-class",
+          "sourceFile": "src/resource-combinator-gallery.html",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "resource diagnostics",
+              "query": { "kind": "template-diagnostics", "sourceFile": "src/resource-combinator-gallery.html", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "runtime-binding-behavior-framework-error", "frameworkErrorCode": "AUR0102" }, "source": { "marker": "innerAudit:'first' & innerAudit:'second'", "token": "innerAudit", "occurrence": 1 }, "count": 1 },
+                { "fields": { "diagnosticKind": "runtime-value-converter-framework-error", "frameworkErrorCode": "AUR0103" }, "source": { "marker": "${count | missingConverter}", "token": "missingConverter" }, "count": 1 },
+                { "fields": { "diagnosticKind": "runtime-binding-behavior-framework-error", "frameworkErrorCode": "AUR0101" }, "source": { "marker": "${item.label & missingBehavior}", "token": "missingBehavior" }, "count": 1 },
+                { "fields": { "diagnosticKind": "expression-parse-error", "frameworkErrorCode": "AUR0156" }, "source": { "marker": "typedAudit:'reverse':limit | numberText", "token": "|" }, "count": 1 }
               ]
             }
           ]

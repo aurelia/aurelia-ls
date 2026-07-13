@@ -415,6 +415,7 @@ class InterpolationPublicationFrame {
       return new InterpolationActiveHoleCompanion(
         holeIndex,
         absoluteHoleSpan,
+        expr.primarySpan,
         boundaryState,
         expr.frontierKind,
         expr.expectedContinuationClasses,
@@ -431,6 +432,7 @@ class InterpolationPublicationFrame {
     return new InterpolationActiveHoleCompanion(
       holeIndex,
       absoluteHoleSpan,
+      expr.primarySpan,
       boundaryState,
       expr.frontierKind,
       expr.expectedContinuationClasses,
@@ -451,10 +453,16 @@ class InterpolationPublicationFrame {
   ): InterpolationActiveHoleCompanion {
     const absoluteHoleSpan = this.resolveHoleSpan(hole);
     const boundaryState = this.createHoleBoundaryState(hole);
+    const closeGap = sourceSpanFromBounds(
+      absoluteHoleSpan.end,
+      absoluteHoleSpan.end,
+      absoluteHoleSpan.file ?? null,
+    );
 
     return new InterpolationActiveHoleCompanion(
       holeIndex,
       absoluteHoleSpan,
+      closeGap,
       boundaryState,
       ExpressionFrontierKind.AwaitingClosingDelimiter,
       [ExpressionExpectedContinuationClass.InterpolationHoleClose],
@@ -465,7 +473,7 @@ class InterpolationPublicationFrame {
       [
         new ExpressionGapDescriptor(
           ExpressionGapKind.MissingClosingDelimiter,
-          absoluteHoleSpan,
+          closeGap,
           ExpressionCompanionFrameKind.InterpolationHole,
           [ExpressionExpectedContinuationClass.InterpolationHoleClose],
         ),
@@ -490,6 +498,7 @@ class InterpolationPublicationFrame {
 
     return new InterpolationActiveHoleCompanion(
       holeIndex,
+      holeSpan,
       holeSpan,
       boundaryState,
       ExpressionFrontierKind.AmbiguousClosure,

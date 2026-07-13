@@ -316,6 +316,7 @@ export function sourceReferenceForParserSpan(
   filePath: string,
   span: SourceSpan,
   role: string = 'range',
+  carrier: SemanticSourceReference | null = null,
 ): SemanticSourceReference {
   return {
     kind: 'source-span-address',
@@ -324,6 +325,9 @@ export function sourceReferenceForParserSpan(
     start: span.start,
     end: span.end,
     role,
+    ...(carrier?.sourceWorkspaceKey == null ? {} : { sourceWorkspaceKey: carrier.sourceWorkspaceKey }),
+    ...(carrier?.sourceFileRole == null ? {} : { sourceFileRole: carrier.sourceFileRole }),
+    ...(carrier?.anchor == null ? {} : { anchor: carrier.anchor }),
   };
 }
 

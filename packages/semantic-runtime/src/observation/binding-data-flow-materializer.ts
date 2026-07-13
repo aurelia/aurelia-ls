@@ -93,10 +93,12 @@ import {
 import { TemplateProductDetails } from '../template/product-details.js';
 import { ObservationProductDetails } from './product-details.js';
 import {
+  ListenerBinding,
   PropertyBinding,
   RefBinding,
   RuntimeBindingTargetAccessStrategy,
   SpreadValueBinding,
+  StateDispatchBinding,
   type RuntimeBinding,
   type RuntimeBindingSourceOperation,
   type RuntimeBindingTargetAccess,
@@ -106,6 +108,7 @@ import {
   RuntimeBindingDataFlow,
   type RuntimeBindingDataFlowField,
   RuntimeBindingDataFlowDirection,
+  RuntimeBindingSourceEvaluationKind,
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceAssignmentReasonKind,
   RuntimeBindingDataFlowSourceKind,
@@ -187,7 +190,6 @@ import {
   sourceAssignmentForDataFlow,
 } from './binding-data-flow-source-assignment.js';
 import {
-  bindingDataFlowDirectionIncludesSourceEvaluation,
   bindingDataFlowDirectionIncludesSourceToTarget,
   bindingDataFlowDirectionIncludesTargetToSource,
 } from './binding-data-flow-direction.js';
@@ -354,6 +356,7 @@ type DataFlowDraft = {
   readonly ast: ExpressionAstNode | null;
   readonly bindingScope: BindingScope | null;
   readonly direction: RuntimeBindingDataFlowDirection;
+  readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind;
   readonly strictBinding: boolean | null;
   readonly expressionProductHandle: ProductHandle | null;
   readonly sourceKind: RuntimeBindingDataFlowSourceKind;
@@ -395,6 +398,7 @@ function runtimeBindingDataFlowForDraft(
     draft.expressionProductHandle,
     draft.bindingScope?.toReference() ?? scope?.toReference() ?? null,
     draft.direction,
+    draft.sourceEvaluationKind,
     draft.strictBinding,
     draft.sourceKind,
     draft.sourceName,
@@ -642,7 +646,7 @@ export class RuntimeBindingDataFlowMaterializer {
     draft: DataFlowDraft,
     context: BindingDataFlowContext,
   ): readonly RuntimeBindingObservedDependency[] {
-    if (draft.ast == null || !bindingDataFlowDirectionIncludesSourceEvaluation(draft.direction)) {
+    if (draft.ast == null || draft.sourceEvaluationKind !== RuntimeBindingSourceEvaluationKind.ConnectableRead) {
       return [];
     }
     const observedDependencyInputs = this.observedExpressionSites(
@@ -987,9 +991,10 @@ class RuntimeBindingDataFlowDraftMaterializer {
     resourceScope: TemplateResourceScope | null,
     local: string,
   ): DataFlowDraft {
-    const direction = directionForBinding(this.store, binding, resourceScope);
+    const lifecycle = dataFlowLifecycleForBinding(this.store, binding, resourceScope);
+    const direction = lifecycle.direction;
     const needsSourceWriteCapability = bindingDataFlowDirectionIncludesTargetToSource(direction);
-    const sourceEvaluationConnectable = bindingDataFlowDirectionIncludesSourceEvaluation(direction);
+    const sourceEvaluationConnectable = lifecycle.sourceEvaluationKind === RuntimeBindingSourceEvaluationKind.ConnectableRead;
     const expressionFacts = this.dataFlowExpressionFacts(binding, scope, local);
     const targetTypes = this.dataFlowTargetTypes(binding, target);
     const sourceProjection = this.sourceProjector.dataFlowSourceProjection(
@@ -1043,6 +1048,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
       bindingScope: sourceProjection.sourceScope,
       expressionProductHandle: expressionFacts.expressionProductHandle,
       direction,
+      sourceEvaluationKind: lifecycle.sourceEvaluationKind,
       strictBinding,
       sourceKind: sourceProjection.sourceInfo.sourceKind,
       sourceName: sourceProjection.sourceInfo.sourceName,
@@ -1343,21 +1349,56 @@ function directionForBindingMode(bindingMode: TemplateBindingMode): RuntimeBindi
   return RuntimeBindingDataFlowDirection.Open;
 }
 
-function directionForBinding(
+type RuntimeBindingDataFlowLifecycle = {
+  readonly direction: RuntimeBindingDataFlowDirection;
+  readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind;
+};
+
+function dataFlowLifecycleForBinding(
   store: KernelStore,
   binding: RuntimeDataFlowBinding,
   resourceScope: TemplateResourceScope | null,
-): RuntimeBindingDataFlowDirection {
+): RuntimeBindingDataFlowLifecycle {
   if (isRuntimeSourceOnlyDataFlowBinding(binding)) {
-    return RuntimeBindingDataFlowDirection.SourceRead;
+    return {
+      direction: RuntimeBindingDataFlowDirection.SourceRead,
+      sourceEvaluationKind: binding instanceof ListenerBinding || binding instanceof StateDispatchBinding
+        ? RuntimeBindingSourceEvaluationKind.UntrackedRead
+        : RuntimeBindingSourceEvaluationKind.ConnectableRead,
+    };
   }
   if (binding instanceof PropertyBinding) {
-    return directionForBindingMode(effectivePropertyBindingMode(store, binding, resourceScope));
+    const bindingMode = effectivePropertyBindingMode(store, binding, resourceScope);
+    return {
+      direction: directionForBindingMode(bindingMode),
+      sourceEvaluationKind: sourceEvaluationKindForBindingMode(bindingMode),
+    };
   }
   if (binding instanceof RefBinding) {
-    return RuntimeBindingDataFlowDirection.TargetToSource;
+    return {
+      direction: RuntimeBindingDataFlowDirection.TargetToSource,
+      sourceEvaluationKind: RuntimeBindingSourceEvaluationKind.AssignmentOnly,
+    };
   }
-  return RuntimeBindingDataFlowDirection.SourceToTarget;
+  return {
+    direction: RuntimeBindingDataFlowDirection.SourceToTarget,
+    sourceEvaluationKind: RuntimeBindingSourceEvaluationKind.ConnectableRead,
+  };
+}
+
+function sourceEvaluationKindForBindingMode(bindingMode: TemplateBindingMode): RuntimeBindingSourceEvaluationKind {
+  switch (bindingMode) {
+    case TemplateBindingMode.OneTime:
+      return RuntimeBindingSourceEvaluationKind.UntrackedRead;
+    case TemplateBindingMode.ToView:
+    case TemplateBindingMode.TwoWay:
+      return RuntimeBindingSourceEvaluationKind.ConnectableRead;
+    case TemplateBindingMode.FromView:
+      return RuntimeBindingSourceEvaluationKind.AssignmentOnly;
+    case TemplateBindingMode.Default:
+    case TemplateBindingMode.Open:
+      return RuntimeBindingSourceEvaluationKind.Open;
+  }
 }
 
 function dataFlowTargetsForBinding(

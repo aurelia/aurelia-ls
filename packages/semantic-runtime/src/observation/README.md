@@ -583,6 +583,11 @@ Target observers own the target-to-source edge for from-view/two-way bindings, w
 write edge. Keep those flow products separate from expression parsing so binding direction does not get flattened into
 ordinary read-expression semantics. Expression parsing says what was authored; observation data flow says how runtime
 binding will spend that expression against target-side products, value channels, and `Scope` lookup.
+`RuntimeBindingDataFlow.sourceEvaluationKind` keeps that lifecycle independent from transport direction: to-view and
+two-way sources are connectable reads, one-time/listener/state-dispatch sources are untracked reads, from-view sources
+are assignment-only, and unresolved default/open modes remain open. Observed-dependency rows exist only for connectable
+reads. Authored diagnostics and lexical references therefore consume parser structure plus materialized scope lookup;
+they must not manufacture observation facts merely to keep an untracked expression visible to tooling.
 
 Select and checked observers are modeled in three layers. `observer-locator.ts` owns the framework-shaped
 `SelectValueObserver` and `CheckedObserver` target-access identities, `binding-value-channel-drafts.ts` owns the value
@@ -682,7 +687,7 @@ first computed watcher `ProxyObservable` lane for property and collection depend
 dependency products remain a substrate frontier for vanilla class domain modeling, especially when fixture recipes start
 relying more heavily on composed state classes instead of view-model forwarding.
 
-Binding data-flow now publishes a binding-owned observed-dependency lane for source-to-target evaluation. Ordinary
+Binding data-flow publishes a binding-owned observed-dependency lane for connectable source evaluation. Ordinary
 `AccessScope`, `AccessMember`, and `AccessKeyed` reads become `binding-observed-dependencies` rows. Collection method
 calls such as `map(...)` become collection-read rows only when TypeChecker receiver facts can still be a runtime array,
 mirroring the framework `isArray(instance)` branch while staying open/permissive for weakly typed receivers. The
@@ -694,7 +699,7 @@ member and collection-read rows for the array call. Nested callback expressions 
 `items.map(item => item.tags.map(tag => item.name + tag.length))` does not add a bogus bare `item` scope dependency,
 while still observing `item.tags`, `item.name`, and `tag.length`. This is intentionally attached to
 `RuntimeBindingDataFlowMaterializer`, not a parallel framework mirror: the row exists only when a real runtime binding
-has target/value-channel/scope context and a source-to-target expression that a connectable would evaluate.
+has target/value-channel/scope context and a source expression that a connectable would evaluate.
 Dynamic keyed reads such as `items[selectedIndex]` preserve both `keyExpression` and the keyed source display;
 downstream reads below the keyed value keep their full route, and the keyed row can point to the owner source when
 there is no static member declaration to point at.

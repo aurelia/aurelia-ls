@@ -11,7 +11,7 @@ import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/han
 import type { KernelStore } from '../kernel/store.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
-import { staticStringLiteralExpression } from '../template/binding-behavior-expression.js';
+import { staticStringLiteralExpression } from '../template/expression-resource-occurrence.js';
 import type { StateStoreConfiguration } from './model.js';
 import {
   configuredStateStoreForName,

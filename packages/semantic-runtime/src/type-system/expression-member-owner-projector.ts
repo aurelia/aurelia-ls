@@ -1,8 +1,10 @@
 import type {
   AccessMemberExpression,
+  AccessScopeExpression,
   ArrowFunction,
   BinaryExpression,
   CallMemberExpression,
+  CallScopeExpression,
   ConditionalExpression,
   ExpressionAstNode,
 } from '../expression/ast.js';
@@ -15,6 +17,11 @@ import type { CheckerExpressionTypeEvaluationContext } from './expression-type-c
 
 export interface CheckerExpressionMemberOwnerProjectorHost {
   evaluateNode(
+    context: CheckerExpressionTypeEvaluationContext,
+  ): CheckerExpressionTypeEvaluation;
+
+  evaluateScopeOwner(
+    expression: AccessScopeExpression | CallScopeExpression,
     context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation;
 
@@ -83,6 +90,10 @@ export class CheckerExpressionMemberOwnerProjector {
           ? this.host.evaluateNode(context.child(expression.object, `owner:${expression.name.name}`))
           : this.evaluateAtOffset(context.child(expression.object, 'object'), offset)
             ?? this.evaluateArgumentListAtOffset(expression, expression.args, context, offset);
+      case 'AccessScope':
+        return this.memberNameContainsOffset(expression, offset)
+          ? this.host.evaluateScopeOwner(expression, context)
+          : null;
       case 'Paren':
       case 'Unary':
         return this.evaluateAtOffset(context.child(expression.expression, 'expression', context.contextualType), offset);
@@ -97,6 +108,9 @@ export class CheckerExpressionMemberOwnerProjector {
         return this.evaluateAtOffset(context.child(expression.func, 'func'), offset)
           ?? this.evaluateArgumentListAtOffset(expression, expression.args, context, offset);
       case 'CallScope':
+        return this.memberNameContainsOffset(expression, offset)
+          ? this.host.evaluateScopeOwner(expression, context)
+          : this.evaluateArgumentListAtOffset(expression, expression.args, context, offset);
       case 'CallGlobal':
         return this.evaluateArgumentListAtOffset(expression, expression.args, context, offset);
       case 'New':
@@ -165,7 +179,6 @@ export class CheckerExpressionMemberOwnerProjector {
           ?? this.evaluateAtOffset(context.child(expression.source, 'source'), offset);
       case 'AccessThis':
       case 'AccessBoundary':
-      case 'AccessScope':
       case 'AccessGlobal':
       case 'PrimitiveLiteral':
       case 'Identifier':
@@ -286,11 +299,12 @@ export class CheckerExpressionMemberOwnerProjector {
   }
 
   private memberNameContainsOffset(
-    expression: AccessMemberExpression | CallMemberExpression,
+    expression: AccessMemberExpression | CallMemberExpression | AccessScopeExpression | CallScopeExpression,
     offset: number,
   ): boolean {
-    return offset >= expression.object.span.end
-      && offset <= expression.name.span.end;
+    return expression.$kind === 'AccessMember' || expression.$kind === 'CallMember'
+      ? offset >= expression.object.span.end && offset <= expression.name.span.end
+      : this.expressionContainsOffset(expression.name, offset);
   }
 
   private expressionContainsOffset(

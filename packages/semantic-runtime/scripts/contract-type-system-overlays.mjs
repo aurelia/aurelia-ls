@@ -36,9 +36,10 @@ import {
 } from '../out/template/template-type-system-overlay-prelude.js';
 import {
   AccessScopeExpression,
+  AuthoredScopePath,
+  AuthoredScopePathKind,
   CallScopeExpression,
   Identifier,
-  ScopeExpressionSyntaxOrigin,
   ValueConverterExpression,
 } from '../out/expression/ast.js';
 import {
@@ -123,6 +124,11 @@ const expectedPreludeHelpers = [
       '__au_value_converter_caller_context_value',
       '__au_value_converter_to_view',
     ],
+  },
+  {
+    key: 'binding-behavior',
+    owner: 'runtime-binding-behavior',
+    emittedNames: ['__au_binding_behavior_argument'],
   },
   {
     key: 'event',
@@ -1740,12 +1746,10 @@ function readGeneratedChildSpliceOverlayProbe() {
   const message = new AccessScopeExpression(
     new SourceSpan(messageStart, messageStart + 'message'.length, file),
     new Identifier(new SourceSpan(messageStart, messageStart + 'message'.length, file), 'message'),
-    0,
   );
   const minimumCount = new AccessScopeExpression(
     new SourceSpan(minimumCountStart, generatedChildEnd, file),
     new Identifier(new SourceSpan(minimumCountStart, generatedChildEnd, file), 'minimumCount'),
-    0,
   );
   const valueConverter = new ValueConverterExpression(
     new SourceSpan(messageStart, generatedChildEnd, file),
@@ -1801,7 +1805,10 @@ function readNonStrictCurrentBindingCallProjectionProbe() {
     [],
     0,
     false,
-    ScopeExpressionSyntaxOrigin.CurrentBindingContext,
+    new AuthoredScopePath(
+      AuthoredScopePathKind.CurrentBindingContext,
+      [new SourceSpan(0, '$this'.length, file)],
+    ),
   );
   const projection = new TemplateTypeSystemOverlayExpressionProjector(scopeAliasFixtureRoot, {
     readFile(fileName) {

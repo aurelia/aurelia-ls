@@ -20,7 +20,7 @@ import type {
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
-import { SourceSpanAddress } from '../kernel/address.js';
+import { SourceSpanAddress, SourceSpanRole } from '../kernel/address.js';
 import type { MaterializedProduct } from '../kernel/materialization.js';
 import type { KernelStore } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
@@ -90,6 +90,7 @@ import {
   templateBindableReferences,
 } from '../template/compiler-world.js';
 import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
+import { expressionResourceOccurrences } from '../template/expression-resource-occurrence.js';
 import {
   TemplateVisibleResource,
   type TemplateBindableReference,
@@ -541,6 +542,7 @@ class TemplateCompletionCursorContextBuilder {
       syntax,
       classification,
       siteKind,
+      expressionResult,
       offset,
       declarationBindable,
     );
@@ -568,7 +570,7 @@ class TemplateCompletionCursorContextBuilder {
       expressionResult,
       bindingScope,
       valueSite,
-      missingInputs,
+      selectedScopeSlot == null ? missingInputs : [],
     );
     const selectedMemberName = selectedScopeSlot?.name
       ?? selectedMemberNameForCursor(siteKind, expressionResult, offset);
@@ -799,7 +801,7 @@ class TemplateCompletionCursorContextBuilder {
     valueSite: TemplateValueSite | null,
     missingInputs: string[],
   ): DerivedMemberOwnerType {
-    return siteKind === TemplateCompletionSiteKind.ExpressionMember
+    return expressionSiteSelectsMember(siteKind, expressionResult, offset)
       && bindingScope != null
       && expressionParse != null
       ? deriveMemberOwnerTypeForCursorExpression(
@@ -855,9 +857,30 @@ function selectedMemberNameForCursor(
   expressionResult: ExpressionParseResult | null,
   offset: number,
 ): string | null {
-  return siteKind === TemplateCompletionSiteKind.ExpressionMember && expressionResult != null
-    ? ExpressionParseResultInspector.memberNameAtOffset(expressionResult, offset)
+  if (expressionResult == null) {
+    return null;
+  }
+  if (siteKind === TemplateCompletionSiteKind.ExpressionMember) {
+    return ExpressionParseResultInspector.memberNameAtOffset(expressionResult, offset)
+      ?? ExpressionParseResultInspector.scopeAccessAtOffset(expressionResult, offset)?.name.name
+      ?? null;
+  }
+  return siteKind === TemplateCompletionSiteKind.Expression
+    ? ExpressionParseResultInspector.scopeAccessAtOffset(expressionResult, offset)?.name.name ?? null
     : null;
+}
+
+function expressionSiteSelectsMember(
+  siteKind: TemplateCompletionSiteKind,
+  expressionResult: ExpressionParseResult | null,
+  offset: number,
+): boolean {
+  return siteKind === TemplateCompletionSiteKind.ExpressionMember
+    || (
+      siteKind === TemplateCompletionSiteKind.Expression
+      && expressionResult != null
+      && ExpressionParseResultInspector.scopeAccessAtOffset(expressionResult, offset) != null
+    );
 }
 
 function selectedScopeSlotForCursor(
@@ -874,7 +897,13 @@ function selectedScopeSlotForCursor(
     return null;
   }
 
-  if (siteKind === TemplateCompletionSiteKind.Expression && expressionResult != null) {
+  if (
+    (
+      siteKind === TemplateCompletionSiteKind.Expression
+      || siteKind === TemplateCompletionSiteKind.ExpressionMember
+    )
+    && expressionResult != null
+  ) {
     const access = ExpressionParseResultInspector.scopeAccessAtOffset(expressionResult, offset);
     if (access != null) {
       return bindingScope.locate(access.name.name, access.ancestor).slot;
@@ -915,8 +944,11 @@ function sourceBackedScopeSlotDeclarationForCursor(
     ] as const) {
       for (const slot of slots) {
         const span = sourceSpanFor(store, slot.sourceAddressHandle);
+        // Slot sources can be broad causal carriers (for example a listener expression introducing `$event`).
+        // Only a name-role span proves that the cursor is on an authored declaration token.
         if (
           span?.fileHandle !== templateSourceHandle
+          || span.role !== SourceSpanRole.Name
           || !cursorTouchesSpan(span, offset)
           || predecessorHasScopeSlot(scope.predecessor, contextKind, slot)
         ) {
@@ -2707,6 +2739,10 @@ function completionSiteForExpressionOffset(
   if (ExpressionParseResultInspector.memberOwnerAtOffset(expressionResult, offset) != null) {
     return TemplateCompletionSiteKind.ExpressionMember;
   }
+  const scopeAccess = ExpressionParseResultInspector.scopeAccessAtOffset(expressionResult, offset);
+  if (scopeAccess?.authoredScopePath != null) {
+    return TemplateCompletionSiteKind.ExpressionMember;
+  }
   return expressionTailCompletionSiteForOffset(expressionResult, offset)
     ?? completionSiteForExpressionResult(expressionResult);
 }
@@ -2979,6 +3015,7 @@ function selectedDefinitionForCursor(
   syntax: AttributeSyntax | null,
   classification: AttributeClassification | null,
   siteKind: TemplateCompletionSiteKind,
+  expressionResult: ExpressionParseResult | null,
   offset: number,
   declarationBindable: TemplateBindableReference | null,
 ): TemplateDefinitionCursorSelection | null {
@@ -2986,7 +3023,7 @@ function selectedDefinitionForCursor(
     siteKind === TemplateCompletionSiteKind.ExpressionValueConverter
     || siteKind === TemplateCompletionSiteKind.ExpressionBindingBehavior
   ) {
-    return expressionResourceForCursor(store, resource, siteKind, offset);
+    return expressionResourceForCursor(resource, siteKind, expressionResult, offset);
   }
   if (siteKind === TemplateCompletionSiteKind.BindingCommandName && syntax?.command != null) {
     const command = findVisibleTemplateResource(
@@ -3137,35 +3174,35 @@ function definitionForDeclarationCursor(
 }
 
 function expressionResourceForCursor(
-  store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
   siteKind: TemplateCompletionSiteKind.ExpressionValueConverter | TemplateCompletionSiteKind.ExpressionBindingBehavior,
+  expressionResult: ExpressionParseResult | null,
   offset: number,
 ): TemplateDefinitionCursorSelection | null {
-  if (siteKind === TemplateCompletionSiteKind.ExpressionValueConverter) {
-    const application = smallestContaining(
-      resource.runtimeAnalysis.valueConverter.applications,
-      offset,
-      (application) => sourceSpanFor(store, application.sourceAddressHandle),
-    ) ?? null;
-    const productHandle = application?.resource?.definitionProductHandle
-      ?? application?.resource?.resourceProductHandle
-      ?? null;
-    return application == null || productHandle == null
-      ? null
-      : { productHandle, matchedName: application.converterName };
+  if (expressionResult == null || !ExpressionParseResultInspector.hasCanonicalAst(expressionResult)) {
+    return null;
   }
-  const application = smallestContaining(
-    resource.runtimeAnalysis.bindingBehavior.applications,
-    offset,
-    (application) => sourceSpanFor(store, application.sourceAddressHandle),
+  const resourceKind = siteKind === TemplateCompletionSiteKind.ExpressionValueConverter
+    ? ResourceDefinitionKind.ValueConverter
+    : ResourceDefinitionKind.BindingBehavior;
+  const occurrence = expressionResourceOccurrences(expressionResult.ast).find((candidate) =>
+    candidate.resourceKind === resourceKind
+    && expressionSpanContainsOffset(candidate.expression.name.span, offset)
   ) ?? null;
-  const productHandle = application?.resource?.definitionProductHandle
-    ?? application?.resource?.resourceProductHandle
+  if (occurrence == null) {
+    return null;
+  }
+  const visible = findVisibleTemplateResource(
+    resource.compilation.compilerWorld.resourceScope,
+    resourceKind,
+    occurrence.expression.name.name,
+  );
+  const productHandle = visible?.definitionProductHandle
+    ?? visible?.resourceProductHandle
     ?? null;
-  return application == null || productHandle == null
+  return productHandle == null
     ? null
-    : { productHandle, matchedName: application.behaviorName };
+    : { productHandle, matchedName: occurrence.expression.name.name };
 }
 
 function selectedBindableForCursor(

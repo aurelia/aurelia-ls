@@ -529,7 +529,12 @@ export class RuntimeBindingSourceValueEvaluator {
     expression: AccessScopeExpression,
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
-    return this.evaluateScopeName(expression.name.name, expression.ancestor, context);
+    return this.evaluateScopeName(
+      expression.name.name,
+      expression.ancestor,
+      context,
+      expression.optional,
+    );
   }
 
   private evaluateAccessGlobal(
@@ -570,10 +575,14 @@ export class RuntimeBindingSourceValueEvaluator {
     name: string,
     ancestor: number,
     context: RuntimeBindingSourceValueEvaluationContext,
+    optionalAccess: boolean = false,
   ): RuntimeBindingSourceValueEvaluation {
     const scope = context.scope;
     const lookup = scope.locate(name, ancestor);
     if (lookup.lookupKind === BindingScopeLookupKind.MissingAncestor) {
+      if (optionalAccess) {
+        return RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined);
+      }
       return openBindingSourceSlotNoStaticValue(`Could not resolve ancestor ${ancestor} for '${name}'.`);
     }
     if (lookup.slot == null) {
@@ -756,17 +765,26 @@ export class RuntimeBindingSourceValueEvaluator {
     expression: CallScopeExpression,
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
-    const target = this.evaluateScopeCallTarget(expression.name.name, expression.ancestor, context);
+    const target = this.evaluateScopeCallTarget(
+      expression.name.name,
+      expression.ancestor,
+      context,
+      expression.optionalAccess,
+    );
     if (target.callee.kind === RuntimeBindingSourceValueEvaluationKind.Open || target.callee.value == null) {
       return RuntimeBindingSourceValueEvaluation.open(
         target.callee.openReason ?? `CallScope '${expression.name.name}' callee did not close.`,
         target.callee.openReasonKinds,
       );
     }
-    if (expression.optional && isNullishValue(target.callee.value)) {
-      return RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined);
-    }
     if (isNullishValue(target.callee.value)) {
+      const nullishKind = target.nullishKind ?? RuntimeBindingSourceCallTargetNullishKind.Callee;
+      if (
+        (expression.optionalAccess && nullishKind === RuntimeBindingSourceCallTargetNullishKind.Owner)
+        || (expression.optional && nullishKind === RuntimeBindingSourceCallTargetNullishKind.Callee)
+      ) {
+        return RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined);
+      }
       return nullishSourceValueResult(
         context,
         `Aurelia strict astEvaluate rejects CallScope '${expression.name.name}' because the callee value is ${target.callee.value.kind}.`,
@@ -1576,9 +1594,15 @@ export class RuntimeBindingSourceValueEvaluator {
     name: string,
     ancestor: number,
     context: RuntimeBindingSourceValueEvaluationContext,
+    optionalAccess: boolean,
   ): RuntimeBindingSourceCallTargetEvaluation {
     const lookup = context.scope.locate(name, ancestor);
     if (lookup.lookupKind === BindingScopeLookupKind.MissingAncestor) {
+      if (optionalAccess) {
+        return RuntimeBindingSourceCallTargetEvaluation.nullishOwner(
+          RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined),
+        );
+      }
       return RuntimeBindingSourceCallTargetEvaluation.open(
         openBindingSourceSlotNoStaticValue(`Could not resolve ancestor ${ancestor} for '${name}'.`),
       );

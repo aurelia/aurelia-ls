@@ -24,8 +24,9 @@ import {
   type IsAssign,
 } from '../expression/ast.js';
 import {
-  bindingBehaviorExpressions,
-} from './binding-behavior-expression.js';
+  bindingBehaviorResourceOccurrences,
+  type ExpressionResourceOccurrence,
+} from './expression-resource-occurrence.js';
 import { bindingExpressionAstForProduct } from './expression-parse-product.js';
 import { TemplateProductDetails } from './product-details.js';
 import {
@@ -78,6 +79,9 @@ import {
   bindingModeForBindingBehaviorName,
 } from './runtime-binding-mode-behavior.js';
 import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
+import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import { findVisibleTemplateResource } from './compiler-resource-lookup.js';
+import { RuntimeExpressionResourceBindReachability } from './runtime-expression-resource.js';
 
 type RateLimitBindingBehaviorName =
   | BuiltInBindingBehaviorName.Debounce
@@ -95,6 +99,7 @@ export class RuntimeBindingBehaviorMaterializationRequest {
 export class RuntimeBindingBehaviorEmission {
   private readonly applicationsByBinding = new Map<string, RuntimeBindingBehaviorApplication[]>();
   private readonly issuesByBinding = new Map<string, RuntimeBindingBehaviorIssue[]>();
+  private readonly firstFailureDepthByExpressionChain = new Map<string, number>();
 
   constructor(
     readonly applications: readonly RuntimeBindingBehaviorApplication[],
@@ -113,6 +118,20 @@ export class RuntimeBindingBehaviorEmission {
       }
       appendRuntimeBindingProductValue(this.issuesByBinding, issue.binding.productHandle, issue);
     }
+    const applicationsByProduct = new Map(applications.map((application) => [application.productHandle, application]));
+    for (const issue of issues) {
+      const application = issue.application.productHandle == null
+        ? null
+        : applicationsByProduct.get(issue.application.productHandle) ?? null;
+      if (application == null) {
+        continue;
+      }
+      const key = expressionChainKey(application.expressionProductHandle, application.chainIndex);
+      const current = this.firstFailureDepthByExpressionChain.get(key);
+      if (current == null || application.chainDepth < current) {
+        this.firstFailureDepthByExpressionChain.set(key, application.chainDepth);
+      }
+    }
   }
 
   readApplicationsForBinding(productHandle: ProductHandle): readonly RuntimeBindingBehaviorApplication[] {
@@ -122,6 +141,19 @@ export class RuntimeBindingBehaviorEmission {
   readIssuesForBinding(productHandle: ProductHandle): readonly RuntimeBindingBehaviorIssue[] {
     return this.issuesByBinding.get(productHandle) ?? [];
   }
+
+  readFirstFailureDepth(
+    expressionProductHandle: ProductHandle,
+    chainIndex: number,
+  ): number | null {
+    return this.firstFailureDepthByExpressionChain.get(
+      expressionChainKey(expressionProductHandle, chainIndex),
+    ) ?? null;
+  }
+}
+
+function expressionChainKey(expressionProductHandle: ProductHandle, chainIndex: number): string {
+  return `${expressionProductHandle}:${chainIndex}`;
 }
 
 class RuntimeBindingBehaviorSourceSet {
@@ -183,6 +215,16 @@ class BindingBehaviorBindState {
   }
 }
 
+class BindingBehaviorChainState {
+  readonly bindState: BindingBehaviorBindState;
+  blocked = false;
+  nextPhaseOrder = 0;
+
+  constructor(initialMode: TemplateBindingMode | null) {
+    this.bindState = new BindingBehaviorBindState(initialMode);
+  }
+}
+
 /** Materializes runtime binding-behavior applications after Controller.bind target facts exist. */
 export class RuntimeBindingBehaviorMaterializer {
   private readonly attr = new AttrBindingBehavior();
@@ -216,7 +258,7 @@ export class RuntimeBindingBehaviorMaterializer {
     input: RuntimeBindingBehaviorMaterializationRequest,
   ): RuntimeBindingBehaviorEmission {
     const source = this.recordsForSource(input.localKey);
-    const bindEffects = new RuntimeBindingBehaviorBindEffectReader(this.store, input.resourceScope);
+    const bindEffects = new RuntimeBindingBehaviorBindEffectReader(this.store);
     const applications: RuntimeBindingBehaviorApplication[] = [];
     const issues: RuntimeBindingBehaviorIssue[] = [];
     const records: KernelStoreRecord[] = [...source.records];
@@ -228,24 +270,36 @@ export class RuntimeBindingBehaviorMaterializer {
         if (ast == null) {
           return;
         }
-        const bindState = new BindingBehaviorBindState(binding instanceof PropertyBinding ? binding.bindingMode : null);
-        const behaviors = bindingBehaviorExpressions(ast);
+        const chainStates = new Map<number, BindingBehaviorChainState>();
+        const behaviors = bindingBehaviorResourceOccurrences(ast);
         for (let behaviorIndex = 0; behaviorIndex < behaviors.length; behaviorIndex++) {
-          const behavior = behaviors[behaviorIndex]!;
+          const occurrence = behaviors[behaviorIndex]!;
+          const behavior = occurrence.expression;
+          let chainState = chainStates.get(occurrence.chainIndex);
+          if (chainState == null) {
+            chainState = new BindingBehaviorChainState(binding instanceof PropertyBinding ? binding.bindingMode : null);
+            chainStates.set(occurrence.chainIndex, chainState);
+          }
+          const reached = !chainState.blocked;
+          const phaseOrder = reached ? chainState.nextPhaseOrder++ : null;
           const publication = this.bindingBehaviorPublication(
             `${input.localKey}:binding:${bindingIndex}:expression:${expressionIndex}:behavior:${behaviorIndex}:${behavior.name.name}`,
             binding,
             targetAccess,
-            behavior,
-            bindState,
+            expressionProductHandle,
+            occurrence,
+            chainState.bindState,
             bindEffects,
+            input.resourceScope,
+            reached,
+            phaseOrder,
             source,
           );
           applications.push(publication.application);
           issues.push(...publication.issues);
           records.push(...publication.records);
-          if (publication.issues.length > 0) {
-            break;
+          if (reached && publication.issues.length > 0) {
+            chainState.blocked = true;
           }
         }
       });
@@ -258,21 +312,48 @@ export class RuntimeBindingBehaviorMaterializer {
     local: string,
     binding: RuntimeBinding,
     targetAccess: RuntimeBindingTargetAccess | null,
-    behavior: BindingBehaviorExpression,
+    expressionProductHandle: ProductHandle,
+    occurrence: ExpressionResourceOccurrence<BindingBehaviorExpression>,
     bindState: BindingBehaviorBindState,
     bindEffects: RuntimeBindingBehaviorBindEffectReader,
+    resourceScope: TemplateResourceScope | null,
+    reached: boolean,
+    phaseOrder: number | null,
     source: RuntimeBindingBehaviorSourceSet,
   ): RuntimeBindingBehaviorPublication {
-    const resource = bindEffects.findResource(behavior.name.name);
-    const effects = bindEffects.readEffects(resource);
-    const issue = this.issueForBindingBehavior(binding, targetAccess, behavior, bindState, effects, resource != null);
+    const behavior = occurrence.expression;
+    const resource = findVisibleTemplateResource(
+      resourceScope,
+      ResourceDefinitionKind.BindingBehavior,
+      behavior.name.name,
+    );
+    const issue = reached
+      ? this.issueForBindingBehavior(
+          binding,
+          targetAccess,
+          behavior,
+          bindState,
+          bindEffects.readEffects(resource),
+          resource != null,
+        )
+      : null;
     const expressionSource = sourceAddressForRuntimeExpressionSpan(
       this.store,
       local,
       binding.sourceAddressHandle,
       behavior.name.span,
     );
-    const application = this.applicationProduct(local, binding, resource, targetAccess, behavior, expressionSource.handle, source);
+    const application = this.applicationProduct(
+      local,
+      binding,
+      resource,
+      targetAccess,
+      expressionProductHandle,
+      occurrence,
+      reached,
+      phaseOrder,
+      expressionSource.handle,
+    );
     const issueProduct = issue == null
       ? null
       : this.issueProduct(`${local}:issue:${issue.issueKind}`, application, binding, targetAccess, issue, expressionSource.handle, source);
@@ -428,10 +509,13 @@ export class RuntimeBindingBehaviorMaterializer {
     binding: RuntimeBinding,
     resource: TemplateVisibleResource | null,
     targetAccess: RuntimeBindingTargetAccess | null,
-    behavior: BindingBehaviorExpression,
+    expressionProductHandle: ProductHandle,
+    occurrence: ExpressionResourceOccurrence<BindingBehaviorExpression>,
+    reached: boolean,
+    phaseOrder: number | null,
     sourceAddressHandle: AddressHandle | null,
-    source: RuntimeBindingBehaviorSourceSet,
   ): RuntimeBindingBehaviorApplication {
+    const behavior = occurrence.expression;
     return new RuntimeBindingBehaviorApplication(
       this.store.handles.product(local),
       this.store.handles.identity(local),
@@ -442,6 +526,15 @@ export class RuntimeBindingBehaviorMaterializer {
       behavior.name.name,
       behavior.args.length,
       behavior.args.flatMap(staticArgumentValueForArg),
+      expressionProductHandle,
+      occurrence.chainIndex,
+      occurrence.chainDepth,
+      reached
+        ? RuntimeExpressionResourceBindReachability.Reached
+        : RuntimeExpressionResourceBindReachability.BlockedByOuterFailure,
+      reached ? occurrence.chainDepth : null,
+      phaseOrder,
+      behavior.args.map((argument) => argument.span),
       sourceAddressHandle,
     );
   }

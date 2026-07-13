@@ -194,7 +194,9 @@ export function readBindingBehaviorApplicationRows(
 ): readonly SemanticBindingBehaviorApplicationRow[] {
   return bindingProjectionResources(emission)
     .flatMap((resource): readonly SemanticBindingBehaviorApplicationRow[] =>
-      resourceLocalBindingBehaviorApplications(store, resource).map((application) => ({
+      resourceLocalBindingBehaviorApplications(store, resource).map((application) => {
+        const source = describeAddress(store, application.sourceAddressHandle);
+        return {
         definitionName: resource.compilation.definition.name,
         bindingKind: application.binding.bindingKind,
         behaviorName: application.behaviorName,
@@ -202,18 +204,26 @@ export function readBindingBehaviorApplicationRows(
         phase: application.phase,
         argumentCount: application.argumentCount,
         staticArgumentValues: application.staticArgumentValues,
+        chainIndex: application.chainIndex,
+        chainDepth: application.chainDepth,
+        bindReachability: application.bindReachability,
+        bindOrder: application.bindOrder,
+        phaseOrder: application.phaseOrder,
+        argumentSources: expressionArgumentSources(source, application.argumentSpans),
         targetKind: application.targetAccess?.targetKind ?? null,
         targetProperty: application.targetAccess?.targetProperty ?? null,
-        source: describeAddress(store, application.sourceAddressHandle),
+        source,
         ...(handles ? {
           handles: {
             bindingProductHandle: application.binding.productHandle,
+            expressionProductHandle: application.expressionProductHandle,
             bindingBehaviorApplicationProductHandle: application.productHandle,
             targetAccessProductHandle: application.targetAccess?.productHandle ?? null,
             sourceAddressHandle: application.sourceAddressHandle,
           },
         } : {}),
-      }))
+        };
+      })
     )
     .sort((left, right) =>
       `${left.definitionName}:${left.behaviorName}:${left.targetProperty ?? ''}:${left.bindingKind}`
@@ -228,27 +238,48 @@ export function readValueConverterApplicationRows(
 ): readonly SemanticValueConverterApplicationRow[] {
   return bindingProjectionResources(emission)
     .flatMap((resource): readonly SemanticValueConverterApplicationRow[] =>
-      resourceLocalValueConverterApplications(store, resource).map((application) => ({
+      resourceLocalValueConverterApplications(store, resource).map((application) => {
+        const source = describeAddress(store, application.sourceAddressHandle);
+        return {
         definitionName: resource.compilation.definition.name,
         bindingKind: application.binding.bindingKind,
         converterName: application.converterName,
         resource: templateResourceReferenceRow(store, application.resource, handles),
         phase: application.phase,
         argumentCount: application.argumentCount,
-        source: describeAddress(store, application.sourceAddressHandle),
+        chainIndex: application.chainIndex,
+        chainDepth: application.chainDepth,
+        bindReachability: application.bindReachability,
+        bindOrder: application.bindOrder,
+        phaseOrder: application.phaseOrder,
+        argumentSources: expressionArgumentSources(source, application.argumentSpans),
+        source,
         ...(handles ? {
           handles: {
             bindingProductHandle: application.binding.productHandle,
+            expressionProductHandle: application.expressionProductHandle,
             valueConverterApplicationProductHandle: application.productHandle,
             sourceAddressHandle: application.sourceAddressHandle,
           },
         } : {}),
-      }))
+        };
+      })
     )
     .sort((left, right) =>
       `${left.definitionName}:${left.converterName}:${left.phase}:${left.bindingKind}`
         .localeCompare(`${right.definitionName}:${right.converterName}:${right.phase}:${right.bindingKind}`)
     );
+}
+
+function expressionArgumentSources(
+  source: SemanticSourceReference | null,
+  argumentSpans: readonly { readonly start: number; readonly end: number }[],
+): readonly (SemanticSourceReference | null)[] {
+  return argumentSpans.map((span) =>
+    source?.path == null
+      ? null
+      : sourceReferenceForParserSpan(source.path, span, 'argument')
+  );
 }
 
 function templateResourceReferenceRow(
@@ -601,6 +632,7 @@ function bindingDataFlowSummaryGroups(
 function bindingDataFlowSummaryKey(row: SemanticBindingDataFlowRow): string {
   return [
     row.direction,
+    row.sourceEvaluationKind,
     row.targetKind ?? '',
     row.targetProperty ?? '',
     row.valueChannelKind ?? '',
@@ -613,6 +645,7 @@ function bindingDataFlowSummaryAccumulator(
 ): BindingDataFlowSummaryAccumulator {
   return {
     direction: row.direction,
+    sourceEvaluationKind: row.sourceEvaluationKind,
     targetKind: row.targetKind,
     targetProperty: row.targetProperty,
     valueChannelKind: row.valueChannelKind,
@@ -693,6 +726,7 @@ function bindingDataFlowSummaryRow(
 ): SemanticBindingDataFlowSummaryRow {
   return {
     direction: group.direction,
+    sourceEvaluationKind: group.sourceEvaluationKind,
     targetKind: group.targetKind,
     targetProperty: group.targetProperty,
     valueChannelKind: group.valueChannelKind,
@@ -725,7 +759,7 @@ function bindingDataFlowSummaryRow(
 }
 
 function bindingDataFlowSummarySortKey(row: SemanticBindingDataFlowSummaryRow): string {
-  return `${row.direction}:${row.valueChannelKind ?? ''}:${row.targetKind ?? ''}:${row.targetProperty ?? ''}:${row.sourceKind}`;
+  return `${row.direction}:${row.sourceEvaluationKind}:${row.valueChannelKind ?? ''}:${row.targetKind ?? ''}:${row.targetProperty ?? ''}:${row.sourceKind}`;
 }
 
 function summarizeBindingDataFlowIssues(
@@ -871,6 +905,7 @@ function bindingDataFlowIssueKinds(
 
 interface BindingDataFlowSummaryAccumulator {
   readonly direction: SemanticBindingDataFlowSummaryRow['direction'];
+  readonly sourceEvaluationKind: SemanticBindingDataFlowSummaryRow['sourceEvaluationKind'];
   readonly targetKind: SemanticBindingDataFlowSummaryRow['targetKind'];
   readonly targetProperty: string | null;
   readonly valueChannelKind: SemanticBindingDataFlowSummaryRow['valueChannelKind'];
@@ -1251,6 +1286,7 @@ function bindingDataFlowRow(
     definitionName,
     bindingKind: dataFlow.binding.bindingKind,
     direction: dataFlow.direction,
+    sourceEvaluationKind: dataFlow.sourceEvaluationKind,
     strictBinding: dataFlow.strictBinding,
     expressionParseState: parse?.state ?? null,
     expressionParseResultKind: parse?.resultKind ?? null,
@@ -1287,6 +1323,7 @@ function bindingDataFlowRow(
     targetToSourceTypeMismatchKinds: dataFlow.targetToSourceTypeMismatchKinds,
     frameworkErrorCode: dataFlow.frameworkErrorCode,
     openReason: dataFlow.openReason,
+    expressionSource: describeAddress(store, parse?.sourceAddressHandle ?? null),
     source: describeAddress(store, dataFlow.sourceAddressHandle),
     ...(handles ? {
       handles: {

@@ -168,6 +168,7 @@ import type {
 } from '../template/instruction-ir.js';
 import type {
   RuntimeBindingDataFlowDirection,
+  RuntimeBindingSourceEvaluationKind,
   RuntimeObservedDependencyKind,
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceAssignmentReasonKind,
@@ -220,6 +221,7 @@ import type {
   RuntimeValueConverterApplicationPhase,
   RuntimeValueConverterIssuePhase,
 } from '../template/runtime-value-converter.js';
+import type { RuntimeExpressionResourceBindReachability } from '../template/runtime-expression-resource.js';
 import type { RuntimeBindingIssuePhase } from '../template/runtime-binding-issue.js';
 import type { RuntimeBindingScopeIssuePhase } from '../template/runtime-binding-scope-issue.js';
 import type { RuntimeControllerIssuePhase } from '../template/runtime-controller-issue.js';
@@ -4436,11 +4438,21 @@ export interface SemanticBindingBehaviorApplicationRow {
   readonly phase: RuntimeBindingBehaviorApplicationPhase | `${RuntimeBindingBehaviorApplicationPhase}`;
   readonly argumentCount: number;
   readonly staticArgumentValues: readonly string[];
+  /** Interpolation-hole identity; zero for ordinary binding expressions. */
+  readonly chainIndex: number;
+  /** Structural depth among all expression-resource wrappers, outermost first. */
+  readonly chainDepth: number;
+  readonly bindReachability: RuntimeExpressionResourceBindReachability | `${RuntimeExpressionResourceBindReachability}`;
+  readonly bindOrder: number | null;
+  /** Nominal order within the binding-behavior bind phase. */
+  readonly phaseOrder: number | null;
+  readonly argumentSources: readonly (SemanticSourceReference | null)[];
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly bindingProductHandle: ProductHandle | null;
+    readonly expressionProductHandle: ProductHandle;
     readonly bindingBehaviorApplicationProductHandle: ProductHandle;
     readonly targetAccessProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
@@ -4458,9 +4470,19 @@ export interface SemanticValueConverterApplicationRow {
   readonly resource: SemanticTemplateResourceReferenceRow | null;
   readonly phase: RuntimeValueConverterApplicationPhase | `${RuntimeValueConverterApplicationPhase}`;
   readonly argumentCount: number;
+  /** Interpolation-hole identity; zero for ordinary binding expressions. */
+  readonly chainIndex: number;
+  /** Structural depth among all expression-resource wrappers, outermost first. */
+  readonly chainDepth: number;
+  readonly bindReachability: RuntimeExpressionResourceBindReachability | `${RuntimeExpressionResourceBindReachability}`;
+  readonly bindOrder: number | null;
+  /** Nominal execution order within this converter phase. */
+  readonly phaseOrder: number | null;
+  readonly argumentSources: readonly (SemanticSourceReference | null)[];
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly bindingProductHandle: ProductHandle | null;
+    readonly expressionProductHandle: ProductHandle;
     readonly valueConverterApplicationProductHandle: ProductHandle;
     readonly sourceAddressHandle: AddressHandle | null;
   };
@@ -4623,6 +4645,7 @@ export interface SemanticBindingDataFlowRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
   readonly direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`;
+  readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind | `${RuntimeBindingSourceEvaluationKind}`;
   readonly strictBinding: boolean | null;
   readonly expressionParseState: TemplateExpressionParseState | `${TemplateExpressionParseState}` | null;
   readonly expressionParseResultKind: ExpressionParseResultKind | `${ExpressionParseResultKind}` | null;
@@ -4654,6 +4677,9 @@ export interface SemanticBindingDataFlowRow {
   readonly targetToSourceTypeMismatchKinds: readonly (RuntimeBindingDataFlowTypeMismatchKind | `${RuntimeBindingDataFlowTypeMismatchKind}`)[];
   readonly frameworkErrorCode: string | null;
   readonly openReason: string | null;
+  /** Authored expression value evaluated or assigned by this binding edge. */
+  readonly expressionSource: SemanticSourceReference | null;
+  /** Authored binding carrier that owns the runtime edge. */
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly bindingProductHandle: ProductHandle | null;
@@ -4685,6 +4711,7 @@ export interface SemanticNullableBooleanCountRow {
 
 export interface SemanticBindingDataFlowSummaryRow {
   readonly direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`;
+  readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind | `${RuntimeBindingSourceEvaluationKind}`;
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;
   readonly valueChannelKind: RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}` | null;

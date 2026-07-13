@@ -32,14 +32,19 @@ const KNOWN_BOOLEAN_FLAGS = new Set([
 ]);
 
 const DOMAIN_AXES = new Set([
+  'data-flow',
   'diagnostics',
   'edit-plan',
+  'expression-semantics',
+  'observation',
   'open-honesty',
   'overlays',
   'plugin-capabilities',
+  'provenance',
   'query-contract',
   'query-locus',
   'resources',
+  'runtime-lifecycle',
   'source-precision',
   'template-syntax',
   'type-system',

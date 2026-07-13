@@ -24,6 +24,7 @@ import {
 import {
   sourceAddressHandleForRuntimeExpressionSpan,
 } from './runtime-expression-source-address.js';
+import { bindingBehaviorResourceOccurrences } from './expression-resource-occurrence.js';
 
 export const enum TemplateTypeSystemOverlayExpressionProjectionKind {
   /** Authored source text can be copied directly into the generated TypeScript overlay. */
@@ -88,6 +89,10 @@ export interface TemplateTypeSystemOverlayExpressionProjectionContext {
   /** Disables read-position lowering for assignment targets where optional-chain output would be invalid TypeScript. */
   readonly lowerNonStrictAccess?: boolean;
 
+  bindingBehaviorArgumentTypeExpressions?(
+    expression: Extract<ExpressionAstNode, { readonly $kind: 'BindingBehavior' }>,
+  ): readonly (string | null)[] | null;
+
   valueConverterCallSurface(
     expression: Extract<ExpressionAstNode, { readonly $kind: 'ValueConverter' }>,
     semanticProductHandle: ProductHandle | null,
@@ -97,6 +102,8 @@ export interface TemplateTypeSystemOverlayExpressionProjectionContext {
 export interface TemplateTypeSystemOverlayExpressionScopeAliases {
   readonly currentBindingContext: boolean;
   readonly parentBindingContextDepth: number;
+  /** Current Scope's override-first named-lookup expression for reserved-name collision avoidance. */
+  readonly currentNamedLookupExpression?: string | null;
 }
 
 interface ProjectedOverlayExpressionChild {
@@ -181,6 +188,55 @@ export class TemplateTypeSystemOverlayExpressionProjector {
     return this.projectExpression(expression, context, semanticProductHandle);
   }
 
+  /** Adds independent bind-time argument witnesses around an already-projected source value. */
+  withBindingBehaviorArguments(
+    expression: ExpressionAstNode,
+    input: TemplateTypeSystemOverlayExpressionProjection,
+    context: TemplateTypeSystemOverlayExpressionProjectionContext,
+    semanticProductHandle: ProductHandle | null = null,
+  ): TemplateTypeSystemOverlayExpressionProjection {
+    const checks: (readonly TemplateTypeSystemOverlayExpressionPart[])[] = [];
+    for (const { expression: behavior } of bindingBehaviorResourceOccurrences(expression)) {
+      const expectedTypes = context.bindingBehaviorArgumentTypeExpressions?.(behavior)
+        ?? behavior.args.map(() => null);
+      for (const [index, argument] of behavior.args.entries()) {
+        const projected = this.copyableExpression(argument, context, semanticProductHandle);
+        if (!projectionCanBecomeGeneratedChild(projected)) {
+          return TemplateTypeSystemOverlayExpressionProjection.unsupported(unsupported(
+            TemplateTypeSystemOverlayExpressionUnsupportedKind.StatementShape,
+            `Binding behavior '${behavior.name.name}' argument ${index + 1} is not representable in a TypeScript overlay yet.`,
+          ));
+        }
+        const expectedType = expectedTypes[index] ?? null;
+        checks.push([
+          {
+            kind: 'text',
+            text: expectedType == null
+              ? '__au_binding_behavior_argument('
+              : `__au_binding_behavior_argument<${expectedType}>(`,
+          },
+          ...projected.parts.map((part) => part.kind === 'source'
+            ? { ...part, label: `binding behavior ${behavior.name.name} argument ${index + 1}` }
+            : part),
+          { kind: 'text', text: ')' },
+        ]);
+      }
+    }
+    if (checks.length === 0) {
+      return input;
+    }
+    return TemplateTypeSystemOverlayExpressionProjection.generated([
+      { kind: 'text', text: '(' },
+      ...checks.flatMap((parts, index) => [
+        ...(index === 0 ? [] : [{ kind: 'text' as const, text: ', ' }]),
+        ...parts,
+      ]),
+      { kind: 'text', text: ', ' },
+      ...input.parts,
+      { kind: 'text', text: ')' },
+    ]);
+  }
+
   sourceSlice(
     span: SourceSpan,
     semanticProductHandle: ProductHandle | null = null,
@@ -221,22 +277,13 @@ export class TemplateTypeSystemOverlayExpressionProjector {
     if (input.kind === TemplateTypeSystemOverlayExpressionProjectionKind.MissingSource) {
       return input;
     }
-    let argumentFailed = false;
-    const argumentParts: TemplateTypeSystemOverlayExpressionPart[] = [];
-    expression.args.forEach((arg, index) => {
-      const projection = this.copyableExpression(arg, context, semanticProductHandle);
-      if (projection.kind !== TemplateTypeSystemOverlayExpressionProjectionKind.CopySource
-        && projection.kind !== TemplateTypeSystemOverlayExpressionProjectionKind.Generated) {
-        argumentFailed = true;
-        return;
-      }
-      argumentParts.push({ kind: 'text', text: ', ' }, ...projection.parts.map((part) =>
-        part.kind === 'source'
-          ? { ...part, label: `value converter ${expression.name.name} argument ${index + 1}` }
-          : part
-      ));
-    });
-    if (argumentFailed) {
+    const argumentParts = this.resourceArgumentParts(
+      expression.args,
+      context,
+      semanticProductHandle,
+      `value converter ${expression.name.name}`,
+    );
+    if (argumentParts == null) {
       return TemplateTypeSystemOverlayExpressionProjection.unsupported(unsupported(
         TemplateTypeSystemOverlayExpressionUnsupportedKind.ValueConverter,
         `Value converter '${expression.name.name}' has an argument that is not representable in a TypeScript overlay yet.`,
@@ -246,6 +293,28 @@ export class TemplateTypeSystemOverlayExpressionProjector {
       ? this.directValueConverterCallParts(expression.name.name, surface, input.parts, argumentParts)
       : this.runtimeIdentityValueConverterCallParts(expression.name.name, surface, input.parts, argumentParts);
     return TemplateTypeSystemOverlayExpressionProjection.generated(parts);
+  }
+
+  private resourceArgumentParts(
+    args: readonly ExpressionAstNode[],
+    context: TemplateTypeSystemOverlayExpressionProjectionContext | null,
+    semanticProductHandle: ProductHandle | null,
+    label: string,
+  ): readonly TemplateTypeSystemOverlayExpressionPart[] | null {
+    const parts: TemplateTypeSystemOverlayExpressionPart[] = [];
+    for (const [index, arg] of args.entries()) {
+      const projection = this.copyableExpression(arg, context, semanticProductHandle);
+      if (projection.kind !== TemplateTypeSystemOverlayExpressionProjectionKind.CopySource
+        && projection.kind !== TemplateTypeSystemOverlayExpressionProjectionKind.Generated) {
+        return null;
+      }
+      parts.push({ kind: 'text', text: ', ' }, ...projection.parts.map((part) =>
+        part.kind === 'source'
+          ? { ...part, label: `${label} argument ${index + 1}` }
+          : part
+      ));
+    }
+    return parts;
   }
 
   private directValueConverterCallParts(
@@ -327,7 +396,7 @@ export class TemplateTypeSystemOverlayExpressionProjector {
     const support = templateTypeSystemOverlayExpressionSupport(expression.$kind);
     switch (expression.$kind) {
       case 'BindingBehavior':
-        // Runtime astEvaluate returns the inner expression; bind-time behavior effects are modeled by behavior products.
+        // astEvaluate is value-transparent; bind-time arguments are emitted separately from lifecycle projection.
         return this.projectExpression(expression.expression, context, semanticProductHandle);
       case 'ValueConverter':
         return this.valueConverterExpression(expression, context, semanticProductHandle);
@@ -339,7 +408,7 @@ export class TemplateTypeSystemOverlayExpressionProjector {
             : TemplateTypeSystemOverlayExpressionProjection.unsupported(unsupportedSyntax);
         }
         if (scopeExpressionWasAuthoredFromCurrentBindingContext(expression)) {
-          return this.currentNamedAccessScopeExpression(expression, semanticProductHandle);
+          return this.currentNamedAccessScopeExpression(expression, context, semanticProductHandle);
         }
         return this.copySourceProjection(
           expression,
@@ -559,23 +628,34 @@ export class TemplateTypeSystemOverlayExpressionProjector {
       return TemplateTypeSystemOverlayExpressionProjection.missingSource();
     }
     return TemplateTypeSystemOverlayExpressionProjection.generated([
-      { kind: 'text', text: `${ancestorNamedLookupAlias(expression.ancestor)}.` },
+      {
+        kind: 'text',
+        text: `${ancestorNamedLookupAlias(expression.ancestor)}${expression.optional ? '?.' : '.'}`,
+      },
       { kind: 'source', source: name, label: `ancestor scope member ${expression.name.name}` },
     ]);
   }
 
   private currentNamedAccessScopeExpression(
     expression: Extract<ExpressionAstNode, { readonly $kind: 'AccessScope' }>,
+    context: TemplateTypeSystemOverlayExpressionProjectionContext | null,
     semanticProductHandle: ProductHandle | null,
   ): TemplateTypeSystemOverlayExpressionProjection {
     const name = this.sourceSlice(expression.name.span, semanticProductHandle);
-    return name == null
-      ? TemplateTypeSystemOverlayExpressionProjection.missingSource()
+    if (name == null) {
+      return TemplateTypeSystemOverlayExpressionProjection.missingSource();
+    }
+    const lookup = context?.scopeAliases?.currentNamedLookupExpression ?? null;
+    return lookup != null && (expression.name.name === '$this' || expression.name.name === '$parent')
+      ? TemplateTypeSystemOverlayExpressionProjection.generated([
+          { kind: 'text', text: `(${lookup}).` },
+          { kind: 'source', source: name, label: `current named scope member ${expression.name.name}` },
+        ])
       : TemplateTypeSystemOverlayExpressionProjection.generated([{
-        kind: 'source',
-        source: name,
-        label: `current named scope member ${expression.name.name}`,
-      }]);
+          kind: 'source',
+          source: name,
+          label: `current named scope member ${expression.name.name}`,
+        }]);
   }
 
   private ancestorCallScopeExpression(
@@ -596,9 +676,12 @@ export class TemplateTypeSystemOverlayExpressionProjector {
       ));
     }
     return TemplateTypeSystemOverlayExpressionProjection.generated([
-      { kind: 'text', text: `${ancestorNamedLookupAlias(expression.ancestor)}.` },
+      {
+        kind: 'text',
+        text: `${ancestorNamedLookupAlias(expression.ancestor)}${expression.optionalAccess ? '?.' : '.'}`,
+      },
       { kind: 'source', source: name, label: `ancestor scope call ${expression.name.name}` },
-      { kind: 'text', text: nonStrict ? '?.(' : '(' },
+      { kind: 'text', text: nonStrict || expression.optional ? '?.(' : '(' },
       ...args,
       { kind: 'text', text: ')' },
     ]);

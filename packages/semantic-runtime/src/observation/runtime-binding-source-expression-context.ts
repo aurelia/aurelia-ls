@@ -29,6 +29,10 @@ export const enum RuntimeBindingSourceExpressionProjectionKind {
 
 export interface RuntimeBindingSourceExpressionContextProjection {
   readonly kind: RuntimeBindingSourceExpressionProjectionKind.Context;
+  /** Authored expression before binding-behavior bind-time scope handoff strips wrappers. */
+  readonly authoredExpression: ExpressionAstNode;
+  /** Instruction Scope passed to binding-behavior arguments during `astBind`. */
+  readonly bindScope: BindingScope;
   /** Binding source expression after bind-time scope-changing behavior handoff has been applied. */
   readonly expression: ExpressionAstNode;
   /** Runtime Scope that Aurelia will use for this source expression. */
@@ -233,6 +237,26 @@ export function checkerContextForRuntimeBindingSourceExpressionProjection(
   );
 }
 
+/** Creates the non-connectable original-scope context Aurelia uses for binding-behavior arguments at bind time. */
+export function checkerContextForRuntimeBindingBehaviorArguments(
+  projection: RuntimeBindingSourceExpressionContextProjection,
+  contextualType: CheckerTypeReference | null = null,
+  localSuffix: string | null = null,
+): CheckerExpressionTypeEvaluationContext {
+  return CheckerExpressionTypeEvaluationContext.knownScope(
+    projection.authoredExpression,
+    projection.bindScope,
+    localSuffix == null ? projection.localKey : `${projection.localKey}:${localSuffix}`,
+    projection.sourceAddressHandle,
+    contextualType,
+    checkerExpressionTypeRuntimeContext(
+      false,
+      projection.strictBinding,
+      CheckerExpressionTypeBindingBehaviorEvaluation.AstEvaluateOnly,
+    ),
+  );
+}
+
 /** Binding-behavior evaluation lifecycle used by Aurelia for a rendered runtime binding source. */
 export function bindingBehaviorEvaluationForRuntimeBindingSource(
   binding: RuntimeExpressionBinding,
@@ -267,6 +291,8 @@ export function projectRuntimeSourceExpressionWithLifecycle(
   }
   return {
     kind: RuntimeBindingSourceExpressionProjectionKind.Context,
+    authoredExpression: input.expression,
+    bindScope: input.sourceScope,
     expression: projected.expression,
     scope: projected.scope,
     strictBinding: input.strictBinding,
@@ -283,6 +309,8 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
   if (input.bindingBehavior === CheckerExpressionTypeBindingBehaviorEvaluation.AstEvaluateOnly) {
     return evaluateOnlySourceExpressions(input.expression).map((expression, index) => ({
       kind: RuntimeBindingSourceExpressionProjectionKind.Context,
+      authoredExpression: input.expression,
+      bindScope: input.sourceScope,
       expression,
       scope: input.sourceScope,
       strictBinding: input.strictBinding,
@@ -306,6 +334,8 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
       }
     : {
         kind: RuntimeBindingSourceExpressionProjectionKind.Context,
+        authoredExpression: input.expression,
+        bindScope: input.sourceScope,
         expression: projected.expression,
         scope: projected.scope,
         strictBinding: input.strictBinding,

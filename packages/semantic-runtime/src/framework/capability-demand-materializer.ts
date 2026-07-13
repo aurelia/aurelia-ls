@@ -73,9 +73,9 @@ import {
   type BuiltInBindingCommand,
 } from '../template/built-in-syntax.js';
 import {
-  bindingBehaviorExpressions,
-  valueConverterExpressions,
-} from '../template/binding-behavior-expression.js';
+  bindingBehaviorResourceOccurrences,
+  valueConverterResourceOccurrences,
+} from '../template/expression-resource-occurrence.js';
 import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
 import {
   runtimeAcceptedBindingExpressionAstForParse,
@@ -731,7 +731,7 @@ function expressionResourceCapabilityDemandSites(
       return [];
     }
     return [
-      ...valueConverterExpressions(expression).flatMap((converter, converterIndex) =>
+      ...valueConverterResourceOccurrences(expression).flatMap(({ expression: converter }, converterIndex) =>
         siteForExpressionResource(
           store,
           resource,
@@ -743,7 +743,7 @@ function expressionResourceCapabilityDemandSites(
           `parse:${parseIndex}:value-converter:${converterIndex}`,
         )
       ),
-      ...bindingBehaviorExpressions(expression).flatMap((behavior, behaviorIndex) =>
+      ...bindingBehaviorResourceOccurrences(expression).flatMap(({ expression: behavior }, behaviorIndex) =>
         siteForExpressionResource(
           store,
           resource,

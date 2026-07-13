@@ -158,6 +158,18 @@ export const enum RuntimeBindingDataFlowDirection {
   Open = 'open',
 }
 
+/** Runtime `astEvaluate` lifecycle for the binding source expression. */
+export const enum RuntimeBindingSourceEvaluationKind {
+  /** Source reads are collected by the binding's active connectable. */
+  ConnectableRead = 'connectable-read',
+  /** Source is evaluated without dependency collection, such as an event handler or one-time binding. */
+  UntrackedRead = 'untracked-read',
+  /** Source syntax is used as an assignment target rather than evaluated for a value during binding. */
+  AssignmentOnly = 'assignment-only',
+  /** The binding lifecycle did not prove how the source expression is evaluated. */
+  Open = 'open',
+}
+
 export const enum RuntimeBindingDataFlowSourceKind {
   ScopeName = 'scope-name',
   Member = 'member',
@@ -221,6 +233,7 @@ export type RuntimeBindingDataFlowField =
   | 'expression'
   | 'scope'
   | 'direction'
+  | 'sourceEvaluationKind'
   | 'strictBinding'
   | 'sourceKind'
   | 'sourceName'
@@ -399,6 +412,7 @@ export class RuntimeBindingDataFlow {
     readonly expressionProductHandle: ProductHandle | null,
     readonly bindingScope: BindingScopeReference | null,
     readonly direction: RuntimeBindingDataFlowDirection,
+    readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind,
     readonly strictBinding: boolean | null,
     readonly sourceKind: RuntimeBindingDataFlowSourceKind,
     readonly sourceName: string | null,

@@ -8,6 +8,7 @@ import type {
   AccessGlobalExpression,
   AccessScopeExpression,
   AccessThisExpression,
+  CallScopeExpression,
   ExpressionAstNode,
 } from '../expression/ast.js';
 import type { AddressHandle } from '../kernel/handles.js';
@@ -72,7 +73,61 @@ export class CheckerExpressionScopeProjector {
     scope: BindingScope,
     localKey: string,
   ): CheckerExpressionTypeEvaluation {
-    return this.evaluateScopeName(expression, scope, expression.name.name, expression.ancestor, localKey);
+    return this.evaluateScopeName(
+      expression,
+      scope,
+      expression.name.name,
+      expression.ancestor,
+      localKey,
+      expression.optional,
+    );
+  }
+
+  evaluateScopeOwner(
+    expression: AccessScopeExpression | CallScopeExpression,
+    scope: BindingScope,
+    localKey: string,
+  ): CheckerExpressionTypeEvaluation {
+    const lookup = scope.lookup(expression.name.name, expression.ancestor);
+    if (lookup.lookupKind === BindingScopeLookupKind.MissingAncestor) {
+      return this.support.open(
+        CheckerExpressionTypeOpenKind.MissingAncestor,
+        expression,
+        `Could not resolve ancestor ${expression.ancestor} for '${expression.name.name}'.`,
+      );
+    }
+    if (lookup.context == null) {
+      return this.support.open(
+        CheckerExpressionTypeOpenKind.MissingContext,
+        expression,
+        `No binding or override context was available for '${expression.name.name}'.`,
+      );
+    }
+    return this.resolveContextType(
+      expression,
+      lookup.context,
+      `${localKey}:scope-owner:${expression.name.name}`,
+    );
+  }
+
+  evaluateOptionalScopeOwnerShortCircuit(
+    expression: CallScopeExpression,
+    scope: BindingScope,
+    localKey: string,
+  ): CheckerExpressionTypeEvaluation | null {
+    if (!expression.optionalAccess) {
+      return null;
+    }
+    const lookup = scope.lookup(expression.name.name, expression.ancestor);
+    return lookup.lookupKind === BindingScopeLookupKind.MissingAncestor
+      ? this.support.projectPrimitive(
+          expression,
+          scope,
+          `${localKey}:optional-owner:undefined`,
+          'undefined',
+          null,
+        )
+      : null;
   }
 
   evaluateAccessGlobal(
@@ -98,9 +153,19 @@ export class CheckerExpressionScopeProjector {
     name: string,
     ancestor: number,
     localKey: string,
+    optionalAccess: boolean = false,
   ): CheckerExpressionTypeEvaluation {
     const lookup = scope.lookup(name, ancestor);
     if (lookup.lookupKind === BindingScopeLookupKind.MissingAncestor) {
+      if (optionalAccess) {
+        return this.support.projectPrimitive(
+          expression,
+          scope,
+          `${localKey}:optional-ancestor:undefined`,
+          'undefined',
+          null,
+        );
+      }
       return this.support.open(
         CheckerExpressionTypeOpenKind.MissingAncestor,
         expression,

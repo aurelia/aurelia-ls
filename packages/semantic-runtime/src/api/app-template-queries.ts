@@ -6,6 +6,7 @@ import {
 } from '../kernel/authored-source-text.js';
 import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
+import type { BindingContextSlot } from '../configuration/scope.js';
 import {
   diagnosticRepairAffordanceForSuggestion,
 } from '../diagnostic-action/action.js';
@@ -135,6 +136,7 @@ import {
 import { TemplateProductDetails } from '../template/product-details.js';
 import { sourceSpanFromBounds } from '../expression/source-span.js';
 import { isAureliaExpressionIdentifier } from '../expression/expression-scanner.js';
+import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
 import { bindableAttributeNameForProperty } from '../resources/bindable-attribute.js';
 import type { BindableDefinitionReference } from '../resources/bindable-definition.js';
 import {
@@ -143,11 +145,17 @@ import {
 } from '../resources/resource-kind.js';
 import { TypeSystemHotDetails } from '../type-system/product-details.js';
 import { checkerTypeMemberValueSourceAddressHandle } from '../type-system/checker-type-member-source.js';
-import type { TemplateVisibleResourceReference } from '../template/compiler-world-reference.js';
 import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
 import { TemplateSpecialAttributeName } from '../template/special-attribute-source.js';
 import { namedRefTargetController } from '../template/runtime-ref-target.js';
-import { capturedAttributeSyntaxForDynamicInstruction } from '../template/template-expression-selection.js';
+import {
+  bindingScopesForTemplateExpressionParse,
+  capturedAttributeSyntaxForDynamicInstruction,
+  runtimeExpressionBindingsForTemplateExpressionParseInScope,
+  templateExpressionParsesForResource,
+} from '../template/template-expression-selection.js';
+import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
+import { expressionResourceOccurrences } from '../template/expression-resource-occurrence.js';
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
@@ -1042,10 +1050,12 @@ export class SemanticAppTemplateQueries {
           target.targetSource,
           handles,
         );
-    const observed = this.observedReferenceRowsForTarget(
+    const references = this.referenceRowsForTarget(
       target.selectedMemberName,
       target.targetSource,
       target.observedTargetSources ?? [target.targetSource],
+      target.targetIdentityHandle,
+      target.declarationSourceAddressHandle,
       handles,
     );
     const bindableAttributeRows = target.bindableAttributeTarget != null
@@ -1057,7 +1067,7 @@ export class SemanticAppTemplateQueries {
         )
       : [];
     const templateUsageRows = uniqueSortedTemplateReferenceRows([
-      ...observed.templateUsageRows,
+      ...references.templateUsageRows,
       ...bindableAttributeRows,
     ]);
     return templateReferenceContextFromRows({
@@ -1078,7 +1088,7 @@ export class SemanticAppTemplateQueries {
         ...bindableEvidence.metadataDeclarationRows,
       ],
       templateUsageRows,
-      candidateRows: observed.candidateRows,
+      candidateRows: references.candidateRows,
     });
   }
 
@@ -1146,12 +1156,14 @@ export class SemanticAppTemplateQueries {
     };
   }
 
-  private observedReferenceRowsForTarget(
+  private referenceRowsForTarget(
     selectedMemberName: string,
     targetSource: SemanticSourceReference,
     observedTargetSources: readonly SemanticSourceReference[],
+    targetIdentityHandle: IdentityHandle | null,
+    targetSourceAddressHandle: AddressHandle | null,
     handles: boolean,
-  ): ObservedReferenceRowsForTarget {
+  ): ReferenceRowsForTarget {
     const observedRows = readBindingObservedDependencyRows(this.emission, this.store, handles);
     const observedUsageRows = observedRows
       .filter((row) =>
@@ -1174,8 +1186,22 @@ export class SemanticAppTemplateQueries {
         && !sourceReferencesMatchExactSpan(row.sourceAssignmentOccurrenceSource, targetSource)
       )
       .map((row) => templateReferenceRowForSourceAssignment(row, selectedMemberName, targetSource, handles));
+    const authoredScopeUsageRows = authoredScopeReferenceRowsForTarget(
+      this.store,
+      [...this.emission.templates.resources, ...this.emission.templates.authoringResources],
+      selectedMemberName,
+      targetSource,
+      observedTargetSources,
+      targetIdentityHandle,
+      targetSourceAddressHandle,
+      handles,
+    );
     return {
-      templateUsageRows: uniqueSortedTemplateReferenceRows([...observedUsageRows, ...assignmentUsageRows]),
+      templateUsageRows: uniqueSortedTemplateReferenceRows([
+        ...observedUsageRows,
+        ...assignmentUsageRows,
+        ...authoredScopeUsageRows,
+      ]),
       candidateRows: unprovenSameNameCandidateRows(observedRows, selectedMemberName, targetSource, handles),
     };
   }
@@ -1241,10 +1267,12 @@ export class SemanticAppTemplateQueries {
       return null;
     }
     const selectedMemberName = activeIdentifier.getText(sourceFile);
-    const observed = this.observedReferenceRowsForTarget(
+    const references = this.referenceRowsForTarget(
       selectedMemberName,
       targetSource,
       effectiveTargetSources,
+      null,
+      null,
       handles,
     );
     const bindableEvidence = this.bindablePropertyReferenceEvidence(
@@ -1272,11 +1300,11 @@ export class SemanticAppTemplateQueries {
       activeSource,
       templateUsageRows: uniqueSortedTemplateReferenceRows([
         ...bindableEvidence.metadataDeclarationRows,
-        ...observed.templateUsageRows,
+        ...references.templateUsageRows,
         ...bindableAttributeRows,
       ]),
       bindableConventionCallbackTargetSources: bindableEvidence.callbackTargetSources,
-      candidateRows: observed.candidateRows,
+      candidateRows: references.candidateRows,
     };
   }
 }
@@ -1375,7 +1403,7 @@ interface ResourceReferenceTarget {
   readonly sourceAddressHandle: NonNullable<SemanticTemplateReferenceRow['handles']>['sourceAddressHandle'];
 }
 
-interface ObservedReferenceRowsForTarget {
+interface ReferenceRowsForTarget {
   readonly templateUsageRows: readonly SemanticTemplateReferenceRow[];
   readonly candidateRows: readonly SemanticTemplateReferenceRow[];
 }
@@ -2715,6 +2743,7 @@ function resourceUsageReferenceRow(
   handles: boolean,
   resourceUsageKind: SemanticTemplateResourceUsageKind,
   bindingProductHandle: ProductHandle | null = null,
+  expressionProductHandle: ProductHandle | null = null,
 ): SemanticTemplateReferenceRow {
   return {
     referenceKind: SemanticTemplateReferenceKind.ResourceUsage,
@@ -2728,7 +2757,7 @@ function resourceUsageReferenceRow(
     ...(handles ? {
       handles: {
         observedDependencyProductHandle: null,
-        expressionProductHandle: null,
+        expressionProductHandle,
         bindingProductHandle,
         sourceAddressHandle,
         targetSourceAddressHandle: target.sourceAddressHandle,
@@ -2743,39 +2772,44 @@ function expressionResourceReferenceRows(
   target: ResourceReferenceTarget,
   handles: boolean,
 ): readonly SemanticTemplateReferenceRow[] {
-  if (target.resourceKind === ResourceDefinitionKind.ValueConverter) {
-    return resource.runtimeAnalysis.valueConverter.applications.flatMap((application) =>
-      application.resource != null && visibleResourceReferenceMatchesTarget(store, application.resource, target)
-        ? [resourceUsageReferenceRow(
-            resource,
-            target,
-            application.converterName,
-            describeAddress(store, application.sourceAddressHandle),
-            application.sourceAddressHandle,
-            handles,
-            SemanticTemplateResourceUsageKind.ExpressionName,
-            application.binding.productHandle,
-          )]
-        : []
-    );
+  if (
+    target.resourceKind !== ResourceDefinitionKind.ValueConverter
+    && target.resourceKind !== ResourceDefinitionKind.BindingBehavior
+  ) {
+    return [];
   }
-  if (target.resourceKind === ResourceDefinitionKind.BindingBehavior) {
-    return resource.runtimeAnalysis.bindingBehavior.applications.flatMap((application) =>
-      application.resource != null && visibleResourceReferenceMatchesTarget(store, application.resource, target)
-        ? [resourceUsageReferenceRow(
-            resource,
-            target,
-            application.behaviorName,
-            describeAddress(store, application.sourceAddressHandle),
-            application.sourceAddressHandle,
-            handles,
-            SemanticTemplateResourceUsageKind.ExpressionName,
-            application.binding.productHandle,
-          )]
-        : []
-    );
-  }
-  return [];
+  return templateExpressionParsesForResource(resource).flatMap((parse) => {
+    const expression = runtimeAcceptedBindingExpressionAstForParse(parse);
+    const source = describeAddress(store, parse.sourceAddressHandle);
+    const sourcePath = source?.path;
+    if (expression == null || sourcePath == null) {
+      return [];
+    }
+    return expressionResourceOccurrences(expression).flatMap((occurrence) => {
+      if (occurrence.resourceKind !== target.resourceKind) {
+        return [];
+      }
+      const visible = findVisibleTemplateResource(
+        resource.compilation.compilerWorld.resourceScope,
+        occurrence.resourceKind,
+        occurrence.expression.name.name,
+      );
+      if (visible == null || !visibleResourceMatchesTarget(store, visible, target)) {
+        return [];
+      }
+      return [resourceUsageReferenceRow(
+        resource,
+        target,
+        occurrence.expression.name.name,
+        sourceReferenceForParserSpan(sourcePath, occurrence.expression.name.span, 'name'),
+        null,
+        handles,
+        SemanticTemplateResourceUsageKind.ExpressionName,
+        null,
+        parse.productHandle,
+      )];
+    });
+  });
 }
 
 function bindingCommandResourceReferenceRows(
@@ -2874,21 +2908,6 @@ function refTargetResourceReferenceRows(
       operation.binding.productHandle,
     )];
   });
-}
-
-function visibleResourceReferenceMatchesTarget(
-  store: KernelStore,
-  resource: TemplateVisibleResourceReference,
-  target: ResourceReferenceTarget,
-): boolean {
-  return resourceIdentityMatchesTarget(
-    store,
-    resource.resourceKind,
-    [resource.name],
-    resource.definitionProductHandle,
-    resource.sourceAddressHandle,
-    target,
-  );
 }
 
 function visibleResourceMatchesTarget(
@@ -3065,6 +3084,97 @@ function sourceSlice(
     sourceSpanFromBounds(start, end),
     role,
   );
+}
+
+function authoredScopeReferenceRowsForTarget(
+  store: KernelStore,
+  resources: readonly TemplateResourceEmission[],
+  selectedMemberName: string,
+  targetSource: SemanticSourceReference,
+  targetSources: readonly SemanticSourceReference[],
+  targetIdentityHandle: IdentityHandle | null,
+  targetSourceAddressHandle: AddressHandle | null,
+  handles: boolean,
+): readonly SemanticTemplateReferenceRow[] {
+  return uniqueSortedTemplateReferenceRows(resources.flatMap((resource) =>
+    templateExpressionParsesForResource(resource).flatMap((parse) => {
+      if (!ExpressionParseResultInspector.hasCanonicalAst(parse.result)) {
+        return [];
+      }
+      const carrier = semanticExactSourceReference(describeAddress(store, parse.sourceAddressHandle));
+      const sourcePath = carrier?.path;
+      if (sourcePath == null) {
+        return [];
+      }
+      const scopes = bindingScopesForTemplateExpressionParse(resource, parse);
+      if (scopes.length === 0) {
+        return [];
+      }
+      const bindings = scopes.flatMap((scope) =>
+        runtimeExpressionBindingsForTemplateExpressionParseInScope(resource, parse, scope)
+      );
+      const bindingKinds = new Set(bindings.map((binding) => binding.bindingKind));
+      const bindingProductHandles = new Set(bindings.map((binding) => binding.productHandle));
+      const bindingKind = bindingKinds.size === 1 ? [...bindingKinds][0]! : null;
+      const bindingProductHandle = bindingProductHandles.size === 1 ? [...bindingProductHandles][0]! : null;
+      return ExpressionParseResultInspector.scopeAccesses(parse.result).flatMap((access): readonly SemanticTemplateReferenceRow[] => {
+        if (access.name.name !== selectedMemberName) {
+          return [];
+        }
+        const slots = scopes.map((scope) => scope.locate(access.name.name, access.ancestor).slot);
+        if (
+          slots.some((slot) => slot == null)
+          || !slots.every((slot) => scopeSlotMatchesReferenceTarget(
+            store,
+            slot!,
+            targetSources,
+            targetIdentityHandle,
+          ))
+        ) {
+          return [];
+        }
+        const source = sourceReferenceForParserSpan(sourcePath, access.name.span, 'name', carrier);
+        if (sourceReferencesMatchExactSpan(source, targetSource)) {
+          return [];
+        }
+        return [{
+          referenceKind: SemanticTemplateReferenceKind.TemplateUsage,
+          name: access.name.name,
+          definitionName: resource.compilation.definition.name,
+          bindingKind,
+          dependencyKind: null,
+          source,
+          targetSource,
+          ...(handles ? {
+            handles: {
+              observedDependencyProductHandle: null,
+              expressionProductHandle: parse.productHandle,
+              bindingProductHandle,
+              sourceAddressHandle: null,
+              targetSourceAddressHandle,
+            },
+          } : {}),
+        }];
+      });
+    })
+  ));
+}
+
+function scopeSlotMatchesReferenceTarget(
+  store: KernelStore,
+  slot: BindingContextSlot,
+  targetSources: readonly SemanticSourceReference[],
+  targetIdentityHandle: IdentityHandle | null,
+): boolean {
+  if (
+    targetIdentityHandle != null
+    && slot.targetIdentityHandle != null
+    && slot.targetIdentityHandle === targetIdentityHandle
+  ) {
+    return true;
+  }
+  const slotSource = semanticExactSourceReference(describeAddress(store, slot.sourceAddressHandle));
+  return slotSource != null && targetSources.some((source) => sourceReferencesMatchExactSpan(slotSource, source));
 }
 
 function templateReferenceRowForObservedDependency(

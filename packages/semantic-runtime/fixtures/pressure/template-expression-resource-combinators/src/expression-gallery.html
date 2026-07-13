@@ -1,0 +1,24 @@
+<template>
+  <p class="scope-member">${item.label}</p>
+  <p class="keyed-member">${itemById[selectedId].label}</p>
+  <p class="optional-member">${maybeItem?.label}</p>
+  <p class="optional-keyed">${maybeItem?.children?.[0]?.label}</p>
+  <p class="scope-call">${format(item.label)}</p>
+  <p class="optional-call">${maybeItem?.label?.toUpperCase?.()}</p>
+  <p class="global-call">${Math.max(count, limit)}</p>
+  <p class="construct-call">${new Date(timestamp).getUTCFullYear()}</p>
+  <p class="tagged-template">${tag`Item: ${item.label}`}</p>
+  <p class="multi-hole-interpolation">${item.label} / ${count}</p>
+  <p class="escaped-interpolation" title="literal \${item.label}; actual ${item.label}"></p>
+  <p class="unary-binary">${!item.active || item.score + count * 2 >= limit}</p>
+  <p class="conditional">${item.active ? item.label : fallback}</p>
+  <p class="array-literal">${[item.label, fallback][0]}</p>
+  <p class="object-literal">${({ label: item.label, score: item.score }).label}</p>
+  <p class="template-literal">${`Item: ${item.label}`}</p>
+  <p class="arrow-chain">${items.filter(candidate => candidate.active).map(candidate => candidate.label).join(', ')}</p>
+  <p class="intrinsic-string">${String(item.score)}</p>
+  <button class="assignment" click.trigger="count = count + 1">${count}</button>
+  <template repeat.for="[tupleLabel,,tupleScore] of tuples">
+    <p class="array-pattern-with-hole">${tupleLabel}: ${tupleScore}</p>
+  </template>
+</template>

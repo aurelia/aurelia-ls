@@ -21,6 +21,8 @@ import type {
   RuntimeBindingReference,
 } from './runtime-binding.js';
 import type { TemplateVisibleResourceReference } from './compiler-world-reference.js';
+import type { SourceSpan } from '../expression/source-span.js';
+import { RuntimeExpressionResourceBindReachability } from './runtime-expression-resource.js';
 
 export const enum RuntimeValueConverterApplicationPhase {
   ToView = 'to-view',
@@ -33,6 +35,13 @@ export type RuntimeValueConverterApplicationField =
   | 'phase'
   | 'converterName'
   | 'argumentCount'
+  | 'expressionProductHandle'
+  | 'chainIndex'
+  | 'chainDepth'
+  | 'bindReachability'
+  | 'bindOrder'
+  | 'phaseOrder'
+  | 'argumentSpans'
   | 'source';
 
 export class RuntimeValueConverterApplicationReference {
@@ -57,6 +66,13 @@ export class RuntimeValueConverterApplication {
     readonly phase: RuntimeValueConverterApplicationPhase,
     readonly converterName: string,
     readonly argumentCount: number,
+    readonly expressionProductHandle: ProductHandle,
+    readonly chainIndex: number,
+    readonly chainDepth: number,
+    readonly bindReachability: RuntimeExpressionResourceBindReachability,
+    readonly bindOrder: number | null,
+    readonly phaseOrder: number | null,
+    readonly argumentSpans: readonly SourceSpan[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeValueConverterApplicationField>[] = [],
   ) {}

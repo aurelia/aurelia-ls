@@ -171,8 +171,8 @@ state, with special corridors split out by ownership:
   delimiter publication carries `AUR0167` so paren, indexed-access, call,
   arrow-head, and binding-pattern close gaps keep the framework parser code
   visible without duplicating it at every caller. Scope-special roots preserve
-  authored `$this.member` and `$parent.member` origin in
-  `ScopeExpressionSyntaxOrigin` even when the runtime-shaped AST lowers them to
+  ordered `$this`/`$parent` qualifier spans, exact-ancestor lookup, and optional
+  access in `AuthoredScopePath` even when the runtime-shaped AST lowers them to
   `AccessScope`/`CallScope`; downstream consumers should spend that syntax provenance
   instead of re-reading source text for `$this.` or `$parent.` prefixes.
 - `completed-input-left-hand-side-corridor.ts`
@@ -187,8 +187,8 @@ state, with special corridors split out by ownership:
   tagged-template tails resume only after the `NewExpression` is closed. This
   keeps `new Foo()` from becoming a call-shaped constructor target and prevents
   runtime AST diagnostics from seeing class construction as an ordinary call.
-  Call-scope lowering copies `AccessScope.syntaxOrigin`, so `$this.method()` and
-  `$parent.method()` keep their authored scope origin after the call transform.
+  Call-scope lowering copies `AccessScope.authoredScopePath`, so `$this.method()` and
+  `$parent.method()` keep every authored qualifier and optional-access fact after the call transform.
 - `completed-input-tail-corridor.ts`
   Value-converter and binding-behavior tails.
 - `completed-input-arrow-corridor.ts`

@@ -4,6 +4,7 @@ import type {
   AccessScopeExpression,
   ArrowFunction,
   CallMemberExpression,
+  CallScopeExpression,
   ExpressionAstNode,
 } from '../expression/ast.js';
 import {
@@ -127,7 +128,7 @@ function collectObservedDependencies(
       expression.args.forEach((arg) => collectObservedDependencies(arg, rows, context));
       return;
     case 'CallScope':
-      if (context.collectTemplateReads && !context.callbackLocalNames.has(expression.name.name)) {
+      if (context.collectTemplateReads && !isCallbackLocalScopeAccess(expression, context.callbackLocalNames)) {
         rows.push(observedDependencyDraft(
           RuntimeObservedDependencyKind.TemplateExpressionRead,
           expression.$kind,
@@ -195,7 +196,7 @@ function collectAccessScopeObservedDependency(
   rows: RuntimeConnectableObservedDependencyDraft[],
   context: ObservedDependencyCollectionContext,
 ): void {
-  if (context.callbackLocalNames.has(expression.name.name)) {
+  if (isCallbackLocalScopeAccess(expression, context.callbackLocalNames)) {
     return;
   }
   if (!context.collectTemplateReads) {
@@ -211,6 +212,15 @@ function collectAccessScopeObservedDependency(
     null,
     expression,
   ));
+}
+
+function isCallbackLocalScopeAccess(
+  expression: AccessScopeExpression | CallScopeExpression,
+  callbackLocalNames: ReadonlySet<string>,
+): boolean {
+  return expression.ancestor === 0
+    && expression.authoredScopePath == null
+    && callbackLocalNames.has(expression.name.name);
 }
 
 function collectAccessMemberObservedDependency(

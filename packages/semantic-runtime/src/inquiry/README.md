@@ -365,6 +365,11 @@ selection to be exact, but file/app loci now aggregate the same cursor-info diag
 `SemanticAppQueryKind.TemplateDiagnostics`. Use that batch answer when the product question is editor diagnostics, CI,
 or agent review over a whole template file; use cursor pressure when the question is whether a specific source offset
 selects the right semantic site.
+Source-backed slot declaration selection is stricter than source containment. Runtime-created slots may retain a broad
+instruction or expression source as causal provenance; `$event`, for example, uses the listener carrier but has no
+authored declaration token. Only a template-local slot source with `SourceSpanRole.Name` can activate declaration-site
+dispatch. This keeps synthetic contextual slots visible at their usage tokens without letting their carrier mask every
+neighboring member in hover, completion, diagnostics, references, or rename.
 Cursor-info also carries template compiler diagnostics at the active cursor offset. Some malformed or recovery-heavy
 source positions are not completion sites and may still classify as `unknown`, but they should surface the exact
 framework-code diagnostic and syntax-rewrite suggestion instead of becoming a silent completion miss.

@@ -142,8 +142,10 @@ import {
   RuntimeBindingExpressionScopeProjector,
 } from '../observation/runtime-binding-expression-scope.js';
 import {
+  checkerContextForRuntimeBindingBehaviorArguments,
   RuntimeBindingSourceExpressionContextProjector,
 } from '../observation/runtime-binding-source-expression-context.js';
+import { CheckerExpressionTypeBindingBehaviorEvaluation } from '../type-system/expression-type-context.js';
 
 export const enum TemplateTypeSystemOverlaySkippedReason {
   /** The component resource lacks an importable view-model declaration for generated overlay code. */
@@ -544,6 +546,24 @@ export class TemplateTypeSystemOverlayBuilder {
     builder: TypeSystemOverlaySourceBuilder,
   ): TemplateTypeSystemOverlayExpressionProjectionContext {
     const helpers = new Map<string, string>();
+    const resourceHelper = (
+      resourceKind: ResourceDefinitionKind,
+      name: string,
+      target: ResourceTargetReference,
+    ): string | null => {
+      const targetType = this.resourceTargetTypeExpression(target, overlayFileName);
+      if (targetType == null) {
+        return null;
+      }
+      const helperKey = `${resourceKind}\0${targetType.typeExpression}\0${name}`;
+      let helperName = helpers.get(helperKey);
+      if (helperName == null) {
+        helperName = `__au_resource_${helpers.size}_${sanitizeIdentifierPart(name)}`;
+        helpers.set(helperKey, helperName);
+        builder.appendLine(`const ${helperName} = undefined as unknown as ${targetType.typeExpression};`);
+      }
+      return helperName;
+    };
     return {
       valueConverterCallSurface: (expression, semanticProductHandle) => {
         const converterNameSource = this.expressions.sourceSlice(expression.name.span, semanticProductHandle);
@@ -564,16 +584,9 @@ export class TemplateTypeSystemOverlayBuilder {
             callerContextKind: TemplateTypeSystemOverlayValueConverterCallerContextKind.None,
           };
         }
-        const targetType = this.resourceTargetTypeExpression(definition, overlayFileName);
-        if (targetType == null) {
-          return null;
-        }
-        const helperKey = `${targetType.typeExpression}\0${definition.name}`;
-        let helperName = helpers.get(helperKey);
+        const helperName = resourceHelper(definition.type, definition.name, definition.target);
         if (helperName == null) {
-          helperName = `__au_vc_${helpers.size}_${sanitizeIdentifierPart(definition.name)}`;
-          helpers.set(helperKey, helperName);
-          builder.appendLine(`const ${helperName} = undefined as unknown as ${targetType.typeExpression};`);
+          return null;
         }
         const callSurface = this.valueConverterCallSurface(definition);
         return {
@@ -603,7 +616,13 @@ export class TemplateTypeSystemOverlayBuilder {
   private valueConverterTargetMembers(
     definition: ValueConverterDefinition,
   ): readonly CheckerTypeMember[] {
-    const targetType = definition.target.targetType;
+    return this.resourceTargetMembers(definition.target);
+  }
+
+  private resourceTargetMembers(
+    target: ResourceTargetReference,
+  ): readonly CheckerTypeMember[] {
+    const targetType = target.targetType;
     if (targetType?.productHandle == null) {
       return [];
     }
@@ -635,7 +654,13 @@ export class TemplateTypeSystemOverlayBuilder {
   }
 
   private expressionScopeAliases(scope: BindingScope): TemplateTypeSystemOverlayExpressionScopeAliases {
-    return templateScopeAliasSupport(scope);
+    return {
+      ...templateScopeAliasSupport(scope),
+      currentNamedLookupExpression: namedScopeLookupAliasExpression(
+        '$this',
+        scope.overrideContext.slots.map((slot) => slot.name).filter(isIdentifierName),
+      ),
+    };
   }
 
   private copyRuntimeSourceExpression(
@@ -699,11 +724,46 @@ export class TemplateTypeSystemOverlayBuilder {
     ) {
       return copied;
     }
-    return this.wrapRuntimeSourceExpression(
+    const wrapped = this.wrapRuntimeSourceExpression(
       copied,
       ambientScope,
       projection.scope,
       overlayFileName,
+    );
+    if (
+      wrapped.kind === TemplateTypeSystemOverlayExpressionProjectionKind.UnsupportedSyntax
+      || projection.bindingBehavior !== CheckerExpressionTypeBindingBehaviorEvaluation.AstBindThenEvaluate
+    ) {
+      return wrapped;
+    }
+    const argumentCheckerContext = checkerContextForRuntimeBindingBehaviorArguments(
+      projection,
+      null,
+      'overlay-binding-behavior-arguments',
+    );
+    const evaluator = resource.runtimeAnalysis.expressionWorld.evaluator(
+      resource.compilation.compilerWorld.resourceScope,
+    );
+    const argumentExpressionContext: TemplateTypeSystemOverlayExpressionProjectionContext = {
+      ...this.expressionProjectionContextForRuntimeSource(
+        baseExpressionContext,
+        projection.bindScope,
+        projection.strictBinding,
+      ),
+      bindingBehaviorArgumentTypeExpressions: (behavior) => {
+        const references = evaluator.contextualBindingBehaviorArgumentTypes(
+          argumentCheckerContext.child(behavior, `behavior:${behavior.name.name}`),
+        );
+        return (references ?? behavior.args.map(() => null)).map((reference) => reference == null
+          ? null
+          : checkerTypeReferenceTypeExpression(this.store, reference, { generatedFileName: overlayFileName }));
+      },
+    };
+    return this.expressions.withBindingBehaviorArguments(
+      projection.authoredExpression,
+      wrapped,
+      argumentExpressionContext,
+      expressionProductHandle,
     );
   }
 
@@ -805,25 +865,25 @@ export class TemplateTypeSystemOverlayBuilder {
   }
 
   private resourceTargetTypeExpression(
-    definition: ValueConverterDefinition,
+    target: ResourceTargetReference,
     overlayFileName: string,
   ): OverlayTypeExpression | null {
-    const fromIdentity = resourceTargetTypeExpressionFromIdentity(this.store, definition.target, overlayFileName, this.typeSystem.project.rootDir);
+    const fromIdentity = resourceTargetTypeExpressionFromIdentity(this.store, target, overlayFileName, this.typeSystem.project.rootDir);
     if (fromIdentity != null) {
       return fromIdentity;
     }
-    const fromType = resourceTargetTypeExpressionFromType(this.store, definition.target.targetType, overlayFileName);
+    const fromType = resourceTargetTypeExpressionFromType(this.store, target.targetType, overlayFileName);
     if (fromType != null) {
       return fromType;
     }
-    if (definition.target.moduleKey == null || definition.target.localName == null || !isIdentifierName(definition.target.localName)) {
+    if (target.moduleKey == null || target.localName == null || !isIdentifierName(target.localName)) {
       return null;
     }
     return {
       typeExpression: typeImportExpression(
         overlayFileName,
-        path.resolve(this.typeSystem.project.rootDir, definition.target.moduleKey),
-        definition.target.localName,
+        path.resolve(this.typeSystem.project.rootDir, target.moduleKey),
+        target.localName,
       ),
     };
   }

@@ -827,8 +827,9 @@ the preserved syntax origin is source provenance, not a binding-context-only loo
 `{ key, entry }`, and nested repeat parent aliases carry a typed `$parent` chain so `$parent.$parent.*` follows Aurelia
 ancestor lookup. Non-replayed binding-pattern
 context shapes remain explicit skips rather than hidden generated-TypeScript name-resolution diagnostics. The parser
-preserves lowered `AccessScope`/`CallScope` scope-special origin through `ScopeExpressionSyntaxOrigin`; overlay projection
-should spend that fact before copying or lowering source text, especially in non-strict call-scope lowering. `with.bind`
+preserves lowered `AccessScope`/`CallScope` qualifier tokens, exact ancestor depth, and optional access through
+`AuthoredScopePath`; overlay projection should spend those facts before copying or lowering source text, especially in
+non-strict call-scope lowering. `with.bind`
 captures the outer `$this`, evaluates the source expression once, casts the generated binding context through
 `NonNullable<typeof source>`, and then projects ordinary local declarations such as `label` from the materialized
 binding-context slots; listener-event scopes nested under that value scope retain the generated `$parent` alias so
@@ -848,6 +849,12 @@ promoting source details. `TemplateTypeSystemOverlaySkippedReason` is an emitted
 wishlist: add a skip reason only when the builder can actually emit it and the owner/substrate gap is understood.
 Binding behaviors are value-transparent for overlay expression checking: framework `astEvaluate` returns the wrapped
 expression, while bind-time behavior effects and diagnostics are owned by `runtime-binding-behavior-materializer.ts`.
+App-owned behavior arguments are nevertheless projected through checker-visible `bind(scope, binding, ...args)`
+signatures. Direct checker projection derives the contextual types after the two framework-owned parameters; generated
+overlays emit one independent `__au_binding_behavior_argument<T>(arg)` witness per authored argument. This preserves
+exact argument source mapping and TypeScript diagnostics without pretending to invoke lifecycle code, requiring
+checker-visible values for `Scope`/`IBinding`, or changing the wrapped expression value. Missing behaviors and absent
+`bind` methods leave argument expressions checker-visible without inventing a parameter contract.
 `template-type-system-overlay-prelude.ts` contains only emitted helper declarations, each with an owner and emitted-name
 inventory. Runtime-assignment locals, `$this`/`$parent` aliases, and temporary scope locals are generated layer facts rather
 than prelude helpers, so do not add empty prelude rows for constructs that emit no reusable declaration.
@@ -862,8 +869,8 @@ source segments for diagnostics. This is a substrate capability, not an authorin
 converters are chain expressions, so app fixtures should not invent arbitrary `foo(value | converter)` template syntax.
 Named helper declarations still belong in `template-type-system-overlay-prelude.ts`; add helpers there rather than
 embedding ad hoc declarations in expression projection.
-The copied-expression projector may therefore unwrap the behavior node for value typing, but should not inline
-behavior-specific bind semantics into generated TypeScript. Value converters are intentionally different because
+The copied-expression projector may therefore preserve the behavior's value-transparent result, but should not emulate
+behavior-specific side effects in generated TypeScript. Value converters are intentionally different because
 `astEvaluate` delegates to `useConverter(...)` and the converter can change the value; the overlay represents them only
 when resource recognition supplies an importable converter target. Checker-visible `toView(value, ...args)` methods
 emit as direct converter method calls so TypeScript's native overload and argument rules are the diagnostic surface.

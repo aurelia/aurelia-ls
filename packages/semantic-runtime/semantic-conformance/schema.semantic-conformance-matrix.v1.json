@@ -23,14 +23,19 @@
   "$defs": {
     "domainAxis": {
       "enum": [
+        "data-flow",
         "diagnostics",
         "edit-plan",
+        "expression-semantics",
+        "observation",
         "open-honesty",
         "overlays",
         "plugin-capabilities",
+        "provenance",
         "query-contract",
         "query-locus",
         "resources",
+        "runtime-lifecycle",
         "source-precision",
         "template-syntax",
         "type-system"

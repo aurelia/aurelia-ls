@@ -1,0 +1,15 @@
+<template>
+  <p class="reserved-this-member">${$this.$this.toUpperCase()}</p>
+  <p class="reserved-parent-member">${$this.$parent.toFixed()}</p>
+  <p class="arrow-current-scope">${groups.map(group => $this.heading).join(', ')}</p>
+  <p class="nested-arrow-current-scope">${groups.map(group => group.items.map(item => $this.heading).join(', ')).join('; ')}</p>
+  <section repeat.for="group of groups">
+    <article repeat.for="item of group.items">
+      <p class="current-local">${$this.item.label}</p>
+      <p class="parent-local">${$parent.group.label}</p>
+      <p class="optional-parent-local">${$parent?.group.label}</p>
+      <p class="root-member">${$parent.$parent.heading}</p>
+      <p class="parent-call">${$parent.$parent.heading.toUpperCase()}</p>
+    </article>
+  </section>
+</template>

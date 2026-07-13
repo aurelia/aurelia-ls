@@ -79,6 +79,12 @@ export class BindingDataFlowSourceWriteCapabilityProjector {
     expression: AccessScopeExpression,
     scope: BindingScope,
   ): SourceWriteCapability {
+    if (expression.optional) {
+      return sourceWriteCapabilityRuntimeUnassignable(
+        'Aurelia binding expressions do not assign through an optional scope path.',
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.RuntimeExpressionUnassignable,
+      );
+    }
     if (isHostAccessScope(expression)) {
       return sourceWriteCapabilityRuntimeUnassignable(
         "Aurelia astAssign rejects assignment to the reserved '$host' access scope.",

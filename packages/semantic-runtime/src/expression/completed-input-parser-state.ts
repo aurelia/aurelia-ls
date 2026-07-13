@@ -46,6 +46,7 @@ export class CompletedInputParserState {
   readonly prefixRefs: CompletedInputPrefixRefBuilder;
   readonly failures: CompletedInputFailureTracker;
   private lastTokenEnd = 0;
+  private currentScopeDepth = 0;
 
   constructor(source: string, baseSpan: SourceSpan | null = null) {
     this.source = source;
@@ -58,6 +59,20 @@ export class CompletedInputParserState {
 
   get consumedEnd(): number {
     return this.lastTokenEnd;
+  }
+
+  /** Runtime Scope offset applied by the framework parser while parsing an Aurelia arrow callback body. */
+  get scopeDepth(): number {
+    return this.currentScopeDepth;
+  }
+
+  inArrowCallbackScope<T>(read: () => T): T {
+    this.currentScopeDepth += 1;
+    try {
+      return read();
+    } finally {
+      this.currentScopeDepth -= 1;
+    }
   }
 
   setConsumedEnd(end: number): void {

@@ -1,0 +1,20 @@
+<template>
+  <p class="converter-chain-valid">${count | numberText:prefix | textLength}</p>
+  <p class="converter-input-invalid">${count | textLength}</p>
+  <p class="converter-argument-invalid">${count | numberText:limit}</p>
+  <p class="converter-identity">${item | identityValue}</p>
+  <p class="converter-behavior-combined">${count | numberText:prefix & typedAudit:'combined':limit}</p>
+  <numeric-target class="converter-writeback-chain" value.two-way="count | numberText:prefix | textLength"></numeric-target>
+
+  <p class="behavior-arguments-valid">${item.label & typedAudit:'view':limit}</p>
+  <p class="behavior-argument-types-invalid">${item.label & typedAudit:limit:'wrong'}</p>
+  <p class="behavior-argument-member-invalid">${item.label & typedAudit:missingLabel:limit}</p>
+  <p class="behavior-chain-order">${item.label & innerAudit:'inner' & outerAudit:'outer'}</p>
+  <p class="behavior-duplicate">${item.label & innerAudit:'first' & innerAudit:'second'}</p>
+  <p class="behavior-inner-behind-missing-outer">${item.label & innerAudit:'inner' & missingBehavior}</p>
+  <p class="converter-behind-missing-behavior">${count | numberText:prefix & missingBehavior}</p>
+  <p class="converter-after-behavior">${item.label & typedAudit:'reverse':limit | numberText:prefix}</p>
+  <p class="missing-converter">${count | missingConverter}</p>
+  <p class="converter-inner-behind-missing-outer">${count | numberText:prefix | missingConverter}</p>
+  <p class="missing-behavior">${item.label & missingBehavior}</p>
+</template>

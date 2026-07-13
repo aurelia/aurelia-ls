@@ -4,8 +4,8 @@ import {
   type BindingBehaviorExpression,
 } from '../expression/ast.js';
 import {
-  bindingBehaviorExpressions,
-} from './binding-behavior-expression.js';
+  bindingBehaviorResourceOccurrences,
+} from './expression-resource-occurrence.js';
 import {
   TemplateBindingMode,
 } from './instruction-ir.js';
@@ -92,5 +92,7 @@ export function bindingModeBehaviorExpressionsForExpressionProduct(
   expressionProductHandle: ProductHandle | null,
 ): readonly BindingBehaviorExpression[] {
   const ast = bindingExpressionAstForProduct(store, expressionProductHandle);
-  return ast == null ? [] : bindingBehaviorExpressions(ast);
+  return ast == null
+    ? []
+    : bindingBehaviorResourceOccurrences(ast).map((occurrence) => occurrence.expression);
 }

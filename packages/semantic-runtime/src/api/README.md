@@ -583,6 +583,8 @@ keeps the owner type available for completion and diagnostics, and distinguishes
 from the TypeScript `declarationSource` reached by its identity. The owner type row likewise exposes both the template/expression projection source and the TypeScript
 declaration source. Hover/explanation can point at the projection source when answering "why this type here?", while
 definition and owner-type repair planning should prefer the declaration source when the checker can name one.
+A resolved scope slot proves a root symbol independently; member-owner projection is optional enrichment in that case,
+so an unavailable owner context must not turn otherwise complete scope completions into an open answer.
 Cursor answers also expose `activeSource` as the narrowest authored token locus proven by the owning parser or
 materialized HTML product. HTML elements preserve separate opening- and closing-tag name addresses, while attributes
 preserve name and value addresses; those durable lexical fields carry source-observation evidence and field provenance
@@ -590,6 +592,13 @@ in addition to their broader node/attribute carrier. Expression tokens remain pa
 `SemanticSourceReference`: allocating one hot kernel address per expression token would reverse the kernel-compression
 boundary without adding a more durable product fact. IDE adapters should consume these loci and refuse invalid offsets,
 not rescan document text or clamp stale spans into apparently valid ranges.
+File diagnostics use the parser's canonical scope-access inventory for missing roots and unsupported host globals;
+they do not infer roots from observed-dependency rows. Listener and dispatch sources are intentionally untracked, but
+their names still require diagnostics, navigation, and repair. Scope slots and checker-projected members decide whether
+one of those structural roots is proven. Parser frontier subtrees remain available for completion and recovery, while
+root-absence diagnostics wait for a canonical AST so one syntax error does not cascade into false missing-member rows.
+When a parser token narrows a broader expression carrier, source projection retains that carrier's workspace, file-role,
+and authored anchor metadata instead of trading provenance for token precision.
 Those member declarations may come from app source, source-shipped packages, or Program-only declaration files. The API
 should surface the source reference when the TypeChecker can name the declaration. If the cursor is on a member of an
 index-signature-only owner, cursor-info may report that selected member as an index-signature access with the indexed
@@ -608,6 +617,11 @@ the TypeScript property and distinct bindable metadata names, with `bindableDecl
 form. Default-derived attribute spellings join through the bindable's property target, explicit aliases remain a
 separate public-name surface, and conventional `${name}Changed` propagation spends the converged callback target rather
 than reconstructing a class AST locally. Declaration rows are included only when `includeDeclaration` is true.
+Lexical scope references join parser-owned scope-access occurrences to the materialized `BindingScope`; they do not
+require a runtime observed-dependency row. That distinction keeps listener, dispatch, one-time, and other intentionally
+untracked reads navigable. When an observed row and a structural scope row cover the same token, the observed row wins
+because it carries richer runtime binding/dependency evidence; the structural row is the authored-closure fallback.
+An occurrence equal to its slot's authored declaration locus is not emitted again as a usage.
 Resource reference contexts do not require a mappable authored declaration in order to return authored usages.
 Framework/catalog resources anchor the query at the active usage and omit the nonexistent declaration row; their
 definition product remains the matching authority. Rename stays unavailable with
@@ -1580,16 +1594,22 @@ stays open. These rows are consumed by value-channel and data-flow projections a
 `BindingBehaviorApplications` exposes authored runtime binding-behavior application attempts after the
 compiler resource scope, rendered binding product, controller bind phase, and binding-behavior materializer have all had
 their say. Rows describe the application fact rather than replacing the issue lane: behavior name, owning binding kind,
-phase, argument count, static scalar/template literal argument values, target kind/property, source address, and
-nullable resolved resource plus optional handles. A null resource is the retained cause of AUR0101. Source addresses prefer the exact binding-behavior name span, including names inside interpolation
+phase, argument count, static scalar/template literal argument values, structural `chainIndex`/`chainDepth`, bind
+reachability/order, behavior-phase order, exact argument sources, target kind/property, source address, and nullable
+resolved resource plus optional handles. `chainDepth` counts every expression-resource wrapper from outermost to
+innermost; `phaseOrder` is the nominal order within the behavior bind phase and is null when an outer bind failure
+blocks the application. A null resource is the retained cause of AUR0101. Source addresses prefer the exact binding-behavior name span, including names inside interpolation
 holes, and only fall back to the broader binding carrier when no source file can be recovered. Authoring
 verification uses this lane for fact-level effects such as "the generated validated form actually produced `& validate`
 applications" before deriving higher-level validation ownership taste.
 
 `ValueConverterApplications` mirrors that positive-materialization lane for authored `| converter` expressions. Rows
 report the nullable owning resource definition, binding kind, converter name, invocation phase (`to-view`/`from-view`),
-argument count, exact converter-name source address when available, and optional handles. A null resource preserves the
-attempted application whose separate issue product owns bind-phase AUR0103. Use this query when IDE/LSP, MCP, or
+argument count, structural chain identity/depth, bind reachability/order, nominal phase order, exact argument sources,
+exact converter-name source address, and optional handles. `to-view` phase order runs inner-to-outer; `from-view` runs
+outer-to-inner. Phase order records the static order of a bind-reachable, resolved application, not a promise that no
+converter implementation will throw before a later phase step. A null resource preserves the attempted application
+whose separate issue product owns bind-phase AUR0103. Use this query when IDE/LSP, MCP, or
 future build/AOT consumers need to prove that a template actually applied a converter such as `featuredProducts`, rather
 than inferring converter usage from token coloring or diagnostics.
 
@@ -1654,10 +1674,12 @@ Use `BindingDataFlowSummary` first when a client needs a compact explanation of 
 assignability/writeback pressure, framework error codes, issue rollups, and the source roots involved. Pass
 `page.size: 0` for an issue-rollup-only first read, then page summary or raw data-flow rows after the issue kind,
 target/value-channel family, or source root is known. Detailed rows report binding
-direction, parser publication state/result kind, value-site kind, source expression lane/name/root/type, raw target
+direction, source-evaluation lifecycle, parser publication state/result kind, value-site kind, source expression lane/name/root/type, raw target
 property type, observer/direct-operation runtime value type, TypeChecker source-type pressure, source writability for
 target-to-source flows, TypeChecker assignability checks in the active directions, optional framework error code, source
-address, optional handles, and row-local runtime data-flow open pressure. This is the compact pressure signal for
+address, exact `expressionSource`, optional handles, and row-local runtime data-flow open pressure. Flow direction records
+value transport; `sourceEvaluationKind` separately records whether Aurelia evaluates with a connectable, without one,
+or treats the source as an assignment target. This is the compact pressure signal for
 two-way form controls, setter-backed state, class/style presentation bindings, template-controller value bindings, and
 future validation/write diagnostics. Direct spread value bindings appear here as source-to-target flow from each spread
 object property into the corresponding target bindable, such as `featuredCardBindings.productId -> productId`.

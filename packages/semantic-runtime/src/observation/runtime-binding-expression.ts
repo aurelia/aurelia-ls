@@ -70,7 +70,9 @@ export function isRuntimeDataFlowBinding(
 
 /** Identifies binding data-flow rows that expose source expression reads without generic accessor/observer targets. */
 export function isRuntimeSourceOnlyDataFlowBinding(binding: RuntimeDataFlowBinding): boolean {
-  return binding instanceof TranslationBinding && binding.bindingKind === RuntimeBindingKind.TranslationParameters;
+  return binding instanceof ListenerBinding
+    || binding instanceof StateDispatchBinding
+    || (binding instanceof TranslationBinding && binding.bindingKind === RuntimeBindingKind.TranslationParameters);
 }
 
 export function expressionProductHandleForBinding(

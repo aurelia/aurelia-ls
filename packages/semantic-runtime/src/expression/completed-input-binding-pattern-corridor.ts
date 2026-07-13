@@ -170,7 +170,7 @@ export class CompletedInputBindingPatternCorridor {
     const start = open.start;
 
     const elements: BindingPattern[] = [];
-    let rest: BindingPattern | null = null;
+    const rest: BindingPattern | null = null;
 
     while (true) {
       const t = this.state.peekToken();
@@ -204,21 +204,20 @@ export class CompletedInputBindingPatternCorridor {
       }
 
       if (t.type === TokenType.Ellipsis) {
-        if (rest) {
-          return this.state.failures.error('Only one rest element is allowed in an array pattern', t);
-        }
-
-        const parsedRest = this.parseArrayBindingRest(start, elements, rest);
-        if (isParseFailure(parsedRest)) {
-          return parsedRest;
-        }
-        rest = parsedRest;
-        break;
+        return this.state.failures.error(
+          'Array repeat declarations support identifiers and holes only',
+          t,
+          ExpressionFrameworkErrorCode.ParseUnexpectedTokenDestructuring,
+        );
       }
 
-      const element = this.parseArrayBindingElement(start, elements, rest);
+      const element = this.parseBindingIdentifier();
       if (isParseFailure(element)) {
-        return element;
+        return this.state.failures.error(
+          'Array repeat declarations support identifiers and holes only',
+          t,
+          ExpressionFrameworkErrorCode.ParseUnexpectedTokenDestructuring,
+        );
       }
       elements.push(element);
 
@@ -236,79 +235,6 @@ export class CompletedInputBindingPatternCorridor {
       elements,
       rest,
     );
-  }
-
-  private parseArrayBindingRest(
-    start: number,
-    elements: readonly BindingPattern[],
-    rest: BindingPattern | null,
-  ): ParsedBindingPattern {
-    const ellipsis = this.state.nextToken();
-    const parsedRest = this.parseBindingPatternBase(
-      ExpressionFrameworkErrorCode.ParseUnexpectedTokenDestructuring,
-    );
-    if (isParseFailure(parsedRest)) {
-      if (isParseCompanionFailure(parsedRest)) {
-        return this.companionBuilder.widenFailureToFrame(
-          parsedRest,
-          ExpressionCompanionFrameKind.IteratorDeclaration,
-          this.state.span(start, this.state.failurePreservedEnd(parsedRest)),
-          this.state.prefixRefs.optional(this.state.prefixRefs.arrayBindingPattern(start, elements, rest)),
-        );
-      }
-
-      return this.companionBuilder.missingBindingDeclarationFailure(
-        parsedRest,
-        ellipsis,
-        this.state.span(start, ellipsis.end),
-        this.state.prefixRefs.optional(this.state.prefixRefs.arrayBindingPattern(start, elements, rest)),
-      );
-    }
-
-    const afterRest = this.state.peekToken();
-    if (afterRest.type === TokenType.Comma) {
-      return this.state.failures.error('Rest element must be in the last position of an array pattern', afterRest);
-    }
-    if (afterRest.type === TokenType.CloseBracket) {
-      this.closeArrayBindingPattern();
-      return parsedRest;
-    }
-    if (afterRest.type === TokenType.EOF || afterRest.type === TokenType.KeywordOf) {
-      return this.companionBuilder.missingClosingDelimiterFailure(
-        "Expected ']' after array pattern rest element",
-        afterRest,
-        ExpressionCompanionFrameKind.IteratorDeclaration,
-        ExpressionExpectedContinuationClass.CloseBracket,
-        this.state.span(start, this.state.localEnd(parsedRest)),
-        this.state.prefixRefs.optional(this.state.prefixRefs.arrayBindingPattern(start, elements, parsedRest)),
-      );
-    }
-    return this.state.failures.error(
-      "Expected ']' after array pattern rest element",
-      afterRest,
-      ExpressionFrameworkErrorCode.ParseUnexpectedTokenDestructuring,
-    );
-  }
-
-  private parseArrayBindingElement(
-    start: number,
-    elements: readonly BindingPattern[],
-    rest: BindingPattern | null,
-  ): ParsedBindingPattern {
-    const element = this.parseBindingPatternWithOptionalDefault(
-      ExpressionFrameworkErrorCode.ParseUnexpectedTokenDestructuring,
-    );
-    if (!isParseFailure(element)) {
-      return element;
-    }
-    return isParseCompanionFailure(element)
-      ? this.companionBuilder.widenFailureToFrame(
-          element,
-          ExpressionCompanionFrameKind.IteratorDeclaration,
-          this.state.span(start, this.state.failurePreservedEnd(element)),
-          this.state.prefixRefs.optional(this.state.prefixRefs.arrayBindingPattern(start, elements, rest)),
-        )
-      : element;
   }
 
   private parseArrayBindingSeparator(

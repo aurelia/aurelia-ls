@@ -1,6 +1,7 @@
 import type {
   AccessMemberExpression,
   AccessScopeExpression,
+  AuthoredScopePath,
   BindingIdentifier,
   CallScopeExpression,
   CallMemberExpression,
@@ -175,10 +176,21 @@ export class ExpressionParseResultInspector {
     return accessSpans;
   }
 
+  /** Authored scope roots, excluding arrow parameters whose identity is local to the expression. */
+  static scopeAccesses(
+    result: ExpressionParseResult,
+  ): readonly ExpressionScopeAccess[] {
+    const accesses: ExpressionScopeAccess[] = [];
+    for (const expression of stableExpressionRoots(result)) {
+      collectScopeAccesses(expression, accesses);
+    }
+    return accesses;
+  }
+
   static scopeAccessAtOffset(
     result: ExpressionParseResult,
     offset: number,
-  ): ScopeAccessExpression | null {
+  ): ExpressionScopeAccess | null {
     return this.hasCanonicalAst(result)
       ? scopeAccessExpressionForNodeOffset(result.ast, offset)
       : null;
@@ -293,6 +305,8 @@ export interface ExpressionMemberAccessSpan {
   readonly nameSpan: SourceSpan;
 }
 
+export type ExpressionScopeAccess = AccessScopeExpression | CallScopeExpression;
+
 function stableExpressionRoots(result: ExpressionParseResult): readonly ExpressionAstNode[] {
   switch (result.kind) {
     case ExpressionParseResultKind.ExpressionSuccess:
@@ -384,13 +398,39 @@ function collectMemberAccessSpans(
   });
 }
 
+function collectScopeAccesses(
+  expression: ExpressionAstNode,
+  accesses: ExpressionScopeAccess[],
+  lexicalNames: ReadonlySet<string> = new Set(),
+): void {
+  if (
+    isScopeAccessExpression(expression)
+    && expression.name.name.length > 0
+    && !scopeAccessIsLexicalLocal(expression, lexicalNames)
+  ) {
+    accesses.push(expression);
+  }
+  const childLexicalNames = expression.$kind === 'ArrowFunction'
+    ? new Set([...lexicalNames, ...expression.args.map((argument) => argument.name.name)])
+    : lexicalNames;
+  findInExpressionChildren(expression, (child) => {
+    collectScopeAccesses(child, accesses, childLexicalNames);
+    return null;
+  });
+}
+
+function scopeAccessIsLexicalLocal(
+  expression: ExpressionScopeAccess,
+  lexicalNames: ReadonlySet<string>,
+): boolean {
+  return expression.ancestor === 0
+    && expression.authoredScopePath == null
+    && lexicalNames.has(expression.name.name);
+}
+
 type MemberAccessExpression =
   | AccessMemberExpression
   | CallMemberExpression;
-
-type ScopeAccessExpression =
-  | AccessScopeExpression
-  | CallScopeExpression;
 
 function firstMemberOwnerExpression(expression: ExpressionAstNode): ExpressionAstNode | null {
   return findInExpression(expression, (candidate) =>
@@ -415,9 +455,12 @@ function memberAccessExpressionForNodeOffset(
 function scopeAccessExpressionForNodeOffset(
   expression: ExpressionAstNode,
   offset: number,
-): ScopeAccessExpression | null {
+): ExpressionScopeAccess | null {
   return findInExpressionAtOffset(expression, offset, (candidate) =>
-    isScopeAccessExpression(candidate) && expressionSpanContainsOffset(candidate.name.span, offset)
+    isScopeAccessExpression(candidate) && (
+      (candidate.name.name.length > 0 && expressionSpanContainsOffset(candidate.name.span, offset))
+      || scopeQualifierSpanAtOffset(candidate.authoredScopePath, offset) != null
+    )
       ? candidate
       : null
   );
@@ -442,8 +485,14 @@ function authoredTokenSpanForExpressionAtOffset(
     switch (candidate.$kind) {
       case 'AccessMember':
       case 'CallMember':
+        return expressionSpanContainsOffset(candidate.name.span, offset)
+          ? candidate.name.span
+          : null;
       case 'AccessScope':
       case 'CallScope':
+        return expressionSpanContainsOffset(candidate.name.span, offset)
+          ? candidate.name.span
+          : scopeQualifierSpanAtOffset(candidate.authoredScopePath, offset);
       case 'AccessGlobal':
       case 'CallGlobal':
       case 'BindingBehavior':
@@ -453,6 +502,8 @@ function authoredTokenSpanForExpressionAtOffset(
           ? candidate.name.span
           : null;
       case 'AccessThis':
+        return scopeQualifierSpanAtOffset(candidate.authoredScopePath, offset)
+          ?? (expressionSpanContainsOffset(candidate.span, offset) ? candidate.span : null);
       case 'AccessBoundary':
         return expressionSpanContainsOffset(candidate.span, offset)
           ? candidate.span
@@ -465,6 +516,13 @@ function authoredTokenSpanForExpressionAtOffset(
         return null;
     }
   });
+}
+
+function scopeQualifierSpanAtOffset(
+  path: AuthoredScopePath | null,
+  offset: number,
+): SourceSpan | null {
+  return path?.qualifierSpans.find((span) => expressionSpanContainsOffset(span, offset)) ?? null;
 }
 
 function findInExpression<T>(
@@ -643,7 +701,7 @@ function memberAccessSpan(
 
 function isScopeAccessExpression(
   expression: ExpressionAstNode,
-): expression is ScopeAccessExpression {
+): expression is ExpressionScopeAccess {
   return expression.$kind === 'AccessScope' || expression.$kind === 'CallScope';
 }
 

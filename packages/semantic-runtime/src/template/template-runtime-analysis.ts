@@ -284,7 +284,7 @@ class TemplateRuntimeAnalysisFrame {
     const controllerBind = this.materializeControllerBindForDepth(runtimeRendering, scopes);
     const i18nTranslationBinding = this.materializeI18nTranslationBindingForDepth(runtimeRendering, scopes);
     const bindingBehavior = this.materializeBindingBehaviorForDepth(runtimeRendering, controllerBind);
-    const valueConverter = this.materializeValueConverterForDepth(runtimeRendering);
+    const valueConverter = this.materializeValueConverterForDepth(runtimeRendering, bindingBehavior);
     const bindingValueChannel = this.materializeBindingValueChannelForDepth(runtimeRendering, controllerBind, scopes);
     const bindingDataFlow = this.materializeBindingDataFlowForDepth(
       runtimeRendering,
@@ -367,10 +367,11 @@ class TemplateRuntimeAnalysisFrame {
 
   private materializeValueConverterForDepth(
     runtimeRendering: RuntimeRenderingEmission,
+    bindingBehavior: RuntimeBindingBehaviorEmission,
   ): RuntimeValueConverterEmission {
     return semanticAppAnalysisDepthSatisfies(this.analysisDepth, SemanticAppAnalysisDepth.BindingTargets)
       ? this.measure('value-converter', () =>
-        this.materializeValueConverter(runtimeRendering)
+        this.materializeValueConverter(runtimeRendering, bindingBehavior)
       )
       : skippedValueConverter(this.phases);
   }
@@ -497,12 +498,14 @@ class TemplateRuntimeAnalysisFrame {
 
   private materializeValueConverter(
     runtimeRendering: RuntimeRenderingEmission,
+    bindingBehavior: RuntimeBindingBehaviorEmission,
   ): RuntimeValueConverterEmission {
     return this.services.valueConverter.materialize(new RuntimeValueConverterMaterializationRequest(
       this.request.localKey,
       runtimeRendering,
       this.request.compilerWorld.container,
       this.request.compilerWorld.resourceScope,
+      bindingBehavior,
     ));
   }
 

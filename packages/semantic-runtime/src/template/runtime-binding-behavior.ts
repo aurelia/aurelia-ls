@@ -24,6 +24,8 @@ import type { TemplateVisibleResourceReference } from './compiler-world-referenc
 import type {
   RuntimeHtmlAstFrameworkErrorCode as RuntimeHtmlAstFrameworkErrorCodeValue,
 } from '../type-system/framework-error-code.js';
+import type { SourceSpan } from '../expression/source-span.js';
+import { RuntimeExpressionResourceBindReachability } from './runtime-expression-resource.js';
 
 export const enum RuntimeBindingBehaviorApplicationPhase {
   Bind = 'bind',
@@ -37,6 +39,13 @@ export type RuntimeBindingBehaviorApplicationField =
   | 'behaviorName'
   | 'argumentCount'
   | 'staticArgumentValues'
+  | 'expressionProductHandle'
+  | 'chainIndex'
+  | 'chainDepth'
+  | 'bindReachability'
+  | 'bindOrder'
+  | 'phaseOrder'
+  | 'argumentSpans'
   | 'source';
 
 export class RuntimeBindingBehaviorApplicationReference {
@@ -63,6 +72,13 @@ export class RuntimeBindingBehaviorApplication {
     readonly behaviorName: string,
     readonly argumentCount: number,
     readonly staticArgumentValues: readonly string[],
+    readonly expressionProductHandle: ProductHandle,
+    readonly chainIndex: number,
+    readonly chainDepth: number,
+    readonly bindReachability: RuntimeExpressionResourceBindReachability,
+    readonly bindOrder: number | null,
+    readonly phaseOrder: number | null,
+    readonly argumentSpans: readonly SourceSpan[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingBehaviorApplicationField>[] = [],
   ) {}

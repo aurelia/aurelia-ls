@@ -29,6 +29,7 @@ import {
   BinaryExpression,
   BindingIdentifier,
   ConditionalExpression,
+  expressionHasOptionalChain,
   Identifier,
   PrimitiveLiteralExpression,
   UnaryExpression,
@@ -394,6 +395,7 @@ export class CompletedInputParser {
           this.state.prefixRefs.root(test),
           this.state.prefixRefs.child(yes),
         ],
+        ExpressionFrameworkErrorCode.ParseMissingExpectedToken,
       );
     }
     this.state.nextToken(); // ':'
@@ -497,6 +499,18 @@ export class CompletedInputParser {
         );
       }
       const span = this.state.spanFrom(t.start, operand);
+      if (op === '++' || op === '--') {
+        const target = this.ensureAssignable(operand, t);
+        if (isParseFailure(target)) {
+          return target;
+        }
+        return new UnaryExpression(
+          span,
+          op,
+          target as IsLeftHandSide,
+          0,
+        );
+      }
       const unary: UnaryExpression = new UnaryExpression(
         span,
         op,
@@ -694,22 +708,24 @@ export class CompletedInputParser {
     expr: IsBinary | ConditionalExpression | IsLeftHandSide,
     opToken: Token,
   ): ParsedAssignable {
-    switch ((expr as { $kind?: string } | null | undefined)?.$kind) {
+    switch (expr.$kind) {
       case "AccessScope":
       case "AccessKeyed":
       case "AccessMember":
-      case "Assign":
-        return expr as
-          | AccessScopeExpression
-          | AccessKeyedExpression
-          | AccessMemberExpression
-          | AssignExpression;
+        return expressionHasOptionalChain(expr)
+          ? this.state.failures.error(
+              "Left-hand side is not assignable",
+              opToken,
+              ExpressionFrameworkErrorCode.ParseLeftHandSideNotAssignable,
+            )
+          : expr;
       default:
-        return this.state.failures.error(
-          "Left-hand side is not assignable",
-          opToken,
-          ExpressionFrameworkErrorCode.ParseLeftHandSideNotAssignable,
-        );
+        break;
     }
+    return this.state.failures.error(
+      "Left-hand side is not assignable",
+      opToken,
+      ExpressionFrameworkErrorCode.ParseLeftHandSideNotAssignable,
+    );
   }
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { ExpressionParser } from '../out/expression/expression-parser.js';
-import { ScopeExpressionSyntaxOrigin } from '../out/expression/ast.js';
+import { AuthoredScopePathKind } from '../out/expression/ast.js';
 import { ExpressionParseResultKind } from '../out/expression/parse-result-algebra.js';
 import { ExpressionParseResultInspector } from '../out/expression/parse-result-inspection.js';
 
@@ -25,11 +25,35 @@ const adjacentIdentifier = parser.parse('{a b}', 'IsProperty');
 assert.equal(adjacentIdentifier.kind, ExpressionParseResultKind.CompleteInputParseError);
 assert.match(adjacentIdentifier.message, /Expected ',' or '}'/);
 
-assertScopeExpressionOrigin('title', 'AccessScope', ScopeExpressionSyntaxOrigin.Ordinary, 0);
-assertScopeExpressionOrigin('$this.title', 'AccessScope', ScopeExpressionSyntaxOrigin.CurrentBindingContext, 0);
-assertScopeExpressionOrigin('$this.titleLength()', 'CallScope', ScopeExpressionSyntaxOrigin.CurrentBindingContext, 0);
-assertScopeExpressionOrigin('$parent.title', 'AccessScope', ScopeExpressionSyntaxOrigin.AncestorBindingContext, 1);
-assertScopeExpressionOrigin('$parent.$parent.titleLength()', 'CallScope', ScopeExpressionSyntaxOrigin.AncestorBindingContext, 2);
+assertScopeExpressionPath('title', 'AccessScope', null, 0, [], false);
+assertScopeExpressionPath('$this.title', 'AccessScope', AuthoredScopePathKind.CurrentBindingContext, 0, ['$this'], false);
+assertScopeExpressionPath('$this.titleLength()', 'CallScope', AuthoredScopePathKind.CurrentBindingContext, 0, ['$this'], false);
+assertScopeExpressionPath('$parent.title', 'AccessScope', AuthoredScopePathKind.AncestorBindingContext, 1, ['$parent'], false);
+assertScopeExpressionPath('$parent.$parent.titleLength()', 'CallScope', AuthoredScopePathKind.AncestorBindingContext, 2, ['$parent', '$parent'], false);
+assertScopeExpressionPath('$parent?.title', 'AccessScope', AuthoredScopePathKind.AncestorBindingContext, 1, ['$parent'], true);
+assertArrowScopeExpressionPath(
+  'items.map(item => $this.heading)',
+  (ast) => ast.args[0].body,
+  AuthoredScopePathKind.CurrentBindingContext,
+  1,
+  ['$this'],
+);
+assertArrowScopeExpressionPath(
+  'items.map(item => items.map(inner => $parent.heading))',
+  (ast) => ast.args[0].body.args[0].body,
+  AuthoredScopePathKind.AncestorBindingContext,
+  3,
+  ['$parent'],
+);
+assertArrowScopeExpressionPath(
+  'items.map(item => item.label)',
+  (ast) => ast.args[0].body.object,
+  null,
+  0,
+  [],
+);
+assertNotAssignable('maybeItem?.score++');
+assertNotAssignable('++maybeItem?.score');
 
 console.log(JSON.stringify({ ok: true, contract: 'expression-object-literal-shorthand' }));
 
@@ -42,8 +66,8 @@ function assertObjectLiteralShorthand(expression, expectedKeys, expectedAccessNa
   assert.deepEqual(result.ast.values.map((value) => value.$kind), expectedAccessNames.map(() => 'AccessScope'), expression);
   assert.deepEqual(result.ast.values.map((value) => value.name.name), expectedAccessNames, expression);
   assert.deepEqual(
-    result.ast.values.map((value) => value.syntaxOrigin),
-    expectedAccessNames.map(() => ScopeExpressionSyntaxOrigin.Ordinary),
+    result.ast.values.map((value) => value.authoredScopePath),
+    expectedAccessNames.map(() => null),
     expression,
   );
 }
@@ -76,10 +100,42 @@ function assertObjectLiteralFrontierKeyContext(expression, expectedKeys, expecte
   assert.equal(context.objectDepth, expectedDepth, `${expression}@${expression.length}`);
 }
 
-function assertScopeExpressionOrigin(expression, expectedKind, expectedOrigin, expectedAncestor) {
+function assertScopeExpressionPath(expression, expectedKind, expectedPathKind, expectedAncestor, expectedQualifiers, expectedOptionalAccess) {
   const result = parser.parse(expression, 'IsProperty');
   assert.equal(result.kind, ExpressionParseResultKind.ExpressionSuccess, expression);
   assert.equal(result.ast.$kind, expectedKind, expression);
-  assert.equal(result.ast.syntaxOrigin, expectedOrigin, expression);
+  assert.equal(result.ast.authoredScopePath?.pathKind ?? null, expectedPathKind, expression);
   assert.equal(result.ast.ancestor, expectedAncestor, expression);
+  assert.deepEqual(
+    result.ast.authoredScopePath?.qualifierSpans.map((span) => expression.slice(span.start, span.end)) ?? [],
+    expectedQualifiers,
+    expression,
+  );
+  assert.equal(
+    result.ast.$kind === 'CallScope'
+      ? result.ast.optionalAccess
+      : result.ast.optional,
+    expectedOptionalAccess,
+    expression,
+  );
+}
+
+function assertArrowScopeExpressionPath(expression, select, expectedPathKind, expectedAncestor, expectedQualifiers) {
+  const result = parser.parse(expression, 'IsProperty');
+  assert.equal(result.kind, ExpressionParseResultKind.ExpressionSuccess, expression);
+  const scopeExpression = select(result.ast);
+  assert.equal(scopeExpression.$kind, 'AccessScope', expression);
+  assert.equal(scopeExpression.authoredScopePath?.pathKind ?? null, expectedPathKind, expression);
+  assert.equal(scopeExpression.ancestor, expectedAncestor, expression);
+  assert.deepEqual(
+    scopeExpression.authoredScopePath?.qualifierSpans.map((span) => expression.slice(span.start, span.end)) ?? [],
+    expectedQualifiers,
+    expression,
+  );
+}
+
+function assertNotAssignable(expression) {
+  const result = parser.parse(expression, 'IsFunction');
+  assert.equal(result.kind, ExpressionParseResultKind.CompleteInputParseError, expression);
+  assert.equal(result.frameworkErrorCode, 'AUR0158', expression);
 }

@@ -461,9 +461,15 @@ function collectExpressionTokens(
   visitExpression(expression, (node) => {
     switch (node.$kind) {
       case 'AccessScope':
+        for (const qualifierSpan of node.authoredScopePath?.qualifierSpans ?? []) {
+          pushExpressionToken(rows, 'variable', ['defaultLibrary'], qualifierSpan, parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
+        }
         pushExpressionToken(rows, 'variable', modifiersForScopeName(node.name.name, scope), node.name.span, parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
         break;
       case 'CallScope':
+        for (const qualifierSpan of node.authoredScopePath?.qualifierSpans ?? []) {
+          pushExpressionToken(rows, 'variable', ['defaultLibrary'], qualifierSpan, parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
+        }
         pushExpressionToken(rows, 'function', modifiersForScopeName(node.name.name, scope), node.name.span, parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
         break;
       case 'AccessGlobal':
@@ -479,7 +485,9 @@ function collectExpressionTokens(
         pushExpressionToken(rows, 'function', [], node.name.span, parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
         break;
       case 'AccessThis':
-        pushExpressionToken(rows, 'variable', ['defaultLibrary'], sliceExpressionSpan(node.span, node.span.start, node.span.start + (node.ancestor === 0 ? '$this'.length : '$parent'.length)), parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
+        for (const qualifierSpan of node.authoredScopePath?.qualifierSpans ?? []) {
+          pushExpressionToken(rows, 'variable', ['defaultLibrary'], qualifierSpan, parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
+        }
         break;
       case 'AccessBoundary':
         pushExpressionToken(rows, 'variable', ['defaultLibrary'], sliceExpressionSpan(node.span, node.span.start, node.span.start + '$host'.length), parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);

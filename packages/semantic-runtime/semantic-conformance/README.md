@@ -47,6 +47,8 @@ Source loci are also validated before any runtime query or known-gap classificat
 selects the one-based occurrence of `token` after that anchor; it does not select the marker. Ambiguous loci are test
 infrastructure defects and abort the run, so they cannot be hidden by a known-gap row. Prefer a more specific marker
 when it communicates the semantic witness; use an explicit occurrence for deliberately repeated gallery examples.
+Corpus-wide row assertions must set `query.fetchAllPages: true`. Public answers can hit the JSON byte budget before the
+requested row-count limit, so asserting against only the first page makes conformance depend on unrelated DTO growth.
 
 Focused examples:
 
@@ -68,6 +70,18 @@ Aurelia domain vocabulary:
 - `runtime-composition`: runtime-html dynamic composition surfaces such as `au-compose`;
 - `plugin-capability-admission`: framework capability detection, missing plugin registrations, and plugin-owned resources;
 - `runtime-api-boundary`: semantic-runtime API/catalog assertions that are not themselves Aurelia framework semantics.
+
+Semantic pressure axes:
+
+- `expression-semantics`: parser grammar, AST meaning, scope paths, evaluation contexts, and expression recovery;
+- `data-flow`: value transport and directional assignability between source and target;
+- `observation`: dependency collection and connectable versus untracked source evaluation;
+- `runtime-lifecycle`: runtime phase order, reachability, setup, teardown, and writeback effects;
+- `provenance`: authored and derived source identity retained across kernel and public products;
+- `template-syntax`, `type-system`, `overlays`, and `resources`: syntax lowering, checked shapes, TypeScript projection,
+  and resource identity/application semantics respectively;
+- `diagnostics`, `source-precision`, `query-locus`, `query-contract`, `edit-plan`, `open-honesty`,
+  and `plugin-capabilities`: public answer and boundary honesty concerns.
 
 Coverage intents:
 

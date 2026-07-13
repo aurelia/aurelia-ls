@@ -96,6 +96,7 @@ export function cursorDiagnosticRows(
   missingInputs: readonly string[],
   selectedMemberName: string | null,
   selectedMember: SemanticTemplateCursorMemberRow | null,
+  selectedScopeSlotResolved: boolean,
   memberOwnerType: SemanticTemplateCursorInfoResult['memberOwnerType'],
   memberOwnerTypeProductHandle: TemplateCompletionCursorContext['query']['memberOwnerTypeProductHandle'],
   memberOwnerTypeOpenSubject: CheckerExpressionTypeOpenSubject | null,
@@ -109,6 +110,9 @@ export function cursorDiagnosticRows(
 
   const ownerType = readOwnerType(store, memberOwnerTypeProductHandle);
   if (ownerType == null) {
+    if (selectedScopeSlotResolved) {
+      return [];
+    }
     return missingOwnerTypeDiagnostic(
       store,
       missingInputs,

@@ -16,7 +16,10 @@ import {
   StateDispatchBinding,
   type RuntimeBinding,
 } from '../template/runtime-binding.js';
-import { bindingBehaviorExpressions, staticStringLiteralExpression } from '../template/binding-behavior-expression.js';
+import {
+  bindingBehaviorResourceOccurrences,
+  staticStringLiteralExpression,
+} from '../template/expression-resource-occurrence.js';
 import type { TemplateCompilationProjectEmission } from '../template/template-compilation-project-pass.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
@@ -227,7 +230,7 @@ function stateBindingBehaviorStoreLookupSites(
       return [];
     }
     const sourceAddressHandle = parse.sourceAddressHandle;
-    return bindingBehaviorExpressions(ast).flatMap((behavior) => {
+    return bindingBehaviorResourceOccurrences(ast).flatMap(({ expression: behavior }) => {
       if (behavior.name.name !== BuiltInBindingBehaviorName.State) {
         return [];
       }

@@ -25,6 +25,10 @@ import {
   CheckerExpressionCallProjector,
 } from './expression-call-projector.js';
 import {
+  BINDING_BEHAVIOR_BIND_METHOD,
+  BINDING_BEHAVIOR_FRAMEWORK_ARGUMENT_COUNT,
+} from './binding-behavior-call-surface.js';
+import {
   CheckerStrictTrueComparisonKind,
 } from './checker-type-member-surface.js';
 import {
@@ -47,6 +51,7 @@ import {
 import { CheckerExpressionTypeSupport } from './expression-type-support.js';
 import {
   CheckerTypeMemberKind,
+  type CheckerTypeReference,
   type CheckerTypeShape,
 } from './type-shape.js';
 
@@ -274,6 +279,71 @@ export class CheckerExpressionResourceProjector {
       return this.evaluateBindingBehaviorValueConverterProjection(expression, inner, context);
     }
     return inner;
+  }
+
+  contextualBindingBehaviorArgumentTypes(
+    expression: BindingBehaviorExpression,
+    context: CheckerExpressionTypeEvaluationContext,
+  ): readonly (CheckerTypeReference | null)[] | null {
+    const method = this.bindingBehaviorBindMethod(expression, context);
+    if (method?.kind !== CheckerExpressionTypeEvaluationResultKind.Type) {
+      return null;
+    }
+    const localKey = `${context.projectionLocalKey()}:behavior:${expression.name.name}:bind`;
+    const unknown = this.support.synthesis.unknownTypeReference(`${localKey}:framework-argument`, context.sourceAddressHandle);
+    const unknownEvaluation = this.support.resolveReference(
+      expression,
+      unknown,
+      `${localKey}:framework-argument`,
+      CheckerExpressionTypeOpenKind.MissingChecker,
+      'Binding-behavior framework argument type could not be hydrated.',
+    );
+    const args: CheckerExpressionCallArgument[] = [
+      ...Array.from({ length: BINDING_BEHAVIOR_FRAMEWORK_ARGUMENT_COUNT }, (_, index) => ({
+        expression,
+        localSuffix: `${localKey}:framework-argument:${index}`,
+        precomputedEvaluation: unknownEvaluation,
+      })),
+      ...checkerExpressionCallArguments(expression.args, `${localKey}:authored-argument`),
+    ];
+    return this.calls.contextualCallArgumentTypes(
+      method.typeShape,
+      args,
+      context,
+      localKey,
+      method.sourceAddressHandle,
+    )?.slice(BINDING_BEHAVIOR_FRAMEWORK_ARGUMENT_COUNT) ?? null;
+  }
+
+  private bindingBehaviorBindMethod(
+    expression: BindingBehaviorExpression,
+    context: CheckerExpressionTypeEvaluationContext,
+  ): CheckerExpressionTypeEvaluation | null {
+    const definition = this.findBindingBehaviorDefinition(expression.name.name);
+    if (definition?.target.targetType == null) {
+      return null;
+    }
+    const localKey = `${context.projectionLocalKey()}:behavior:${expression.name.name}`;
+    const behaviorType = this.support.resolveReference(
+      expression,
+      definition.target.targetType,
+      `${localKey}:target`,
+      CheckerExpressionTypeOpenKind.MissingChecker,
+      `Binding behavior '${definition.name}' target type could not be hydrated.`,
+    );
+    if (behaviorType.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+      return behaviorType;
+    }
+    const method = this.access.evaluateMemberOnType(
+      expression,
+      behaviorType.typeShape,
+      BINDING_BEHAVIOR_BIND_METHOD,
+      `${localKey}:bind`,
+    );
+    return method.kind === CheckerExpressionTypeEvaluationResultKind.Open
+      && method.openKind === CheckerExpressionTypeOpenKind.MissingMember
+      ? null
+      : method;
   }
 
   private evaluateBindingBehaviorValueConverterProjection(

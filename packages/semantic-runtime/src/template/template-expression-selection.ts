@@ -418,12 +418,15 @@ function runtimeBindingSourceContextProjectionsMatch(
   right: RuntimeBindingSourceExpressionContextProjection,
 ): boolean {
   return left.scope.productHandle === right.scope.productHandle
+    && left.bindScope.productHandle === right.bindScope.productHandle
     && left.strictBinding === right.strictBinding
     && left.sourceAddressHandle === right.sourceAddressHandle
     && left.localKey === right.localKey
     && left.bindingBehavior === right.bindingBehavior
     && left.expression.$kind === right.expression.$kind
-    && expressionSpansMatch(left.expression, right.expression);
+    && expressionSpansMatch(left.expression, right.expression)
+    && left.authoredExpression.$kind === right.authoredExpression.$kind
+    && expressionSpansMatch(left.authoredExpression, right.authoredExpression);
 }
 
 function expressionSpansMatch(

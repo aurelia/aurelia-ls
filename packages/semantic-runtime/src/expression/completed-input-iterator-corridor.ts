@@ -113,7 +113,11 @@ export class CompletedInputIteratorCorridor {
   private iteratorOpeningPublication(): IteratorParseResult | null {
     const first = this.state.peekToken();
     if (first.type === TokenType.EOF) {
-      return this.iteratorDeclarationFrontier('Expected iterator declaration', first);
+      return this.iteratorDeclarationFrontier(
+        'Expected iterator declaration',
+        first,
+        ExpressionFrameworkErrorCode.ParseInvalidStart,
+      );
     }
     if (this.canStartIteratorDeclaration(first)) {
       return null;
@@ -140,6 +144,7 @@ export class CompletedInputIteratorCorridor {
   private iteratorDeclarationFrontier(
     message: string,
     token: Token,
+    frameworkErrorCode: string | null = null,
   ): IteratorParseResult {
     return this.iteratorFrontierPublication(
       message,
@@ -153,6 +158,8 @@ export class CompletedInputIteratorCorridor {
       null,
       [],
       null,
+      null,
+      frameworkErrorCode,
     );
   }
 
@@ -272,6 +279,7 @@ export class CompletedInputIteratorCorridor {
               [ExpressionExpectedContinuationClass.Expression],
             ),
           ],
+          ExpressionFrameworkErrorCode.ParseUnexpectedEnd,
         );
     return CompletedInputPublication.toIteratorResult(
       iteratorIterableFailure,
@@ -454,6 +462,7 @@ export class CompletedInputIteratorCorridor {
     iterableClosedSubtreeRefs: readonly ClosedSubtreeRef[],
     trailingSplit: IteratorTrailingSplitState | null,
     declaration: BindingPattern | null = null,
+    frameworkErrorCode: string | null = null,
   ): IteratorParseResult {
     return CompletedInputPublication.toIteratorResult(
       this.state.failures.frontierOnlyFailure(
@@ -463,6 +472,8 @@ export class CompletedInputIteratorCorridor {
         expectedContinuationClasses,
         CompletedInputPublication.iteratorRegionToFrameKind(activeRegionKind),
         strongestStablePrefixSpan,
+        [],
+        frameworkErrorCode,
       ),
       activeRegionKind,
       declaration,
