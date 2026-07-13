@@ -11,6 +11,7 @@ import {
   type DocumentSymbolParams,
   type Range,
 } from "vscode-languageserver/node";
+import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import type {
   SemanticResourceDefinitionBindableRow,
@@ -21,6 +22,10 @@ import {
   type SemanticSourceReference,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
+import {
+  semanticSourceRangeForDocument,
+  semanticSourceReferenceFilePath,
+} from "../mapping/source-locations.js";
 import {
   logIfSemanticRuntimeRequestAborted,
 } from "./request-guard.js";
@@ -79,20 +84,23 @@ export async function handleDocumentSymbols(
 function documentSymbolForResource(
   workspaceRoot: string | null,
   requested: string,
-  doc: { getText(): string; positionAt(offset: number): { line: number; character: number } },
+  doc: Pick<TextDocument, "getText" | "positionAt">,
   definition: SemanticResourceDefinitionRow,
 ): DocumentSymbol | null {
   if (definition.name == null || !DOCUMENT_SYMBOL_RESOURCE_KINDS.has(definition.resourceKind)) {
     return null;
   }
-  const source = definition.targetSource ?? definition.source;
-  if (!sourceMatches(workspaceRoot, requested, source)) {
+  const selectionSource = semanticExactSourceReference(definition.targetSource ?? definition.source);
+  const declarationSource = semanticExactSourceReference(definition.targetDeclarationSource);
+  if (!sourceMatches(workspaceRoot, requested, selectionSource)) {
     return null;
   }
-  const classRange = rangeForSource(doc, semanticExactSourceReference(source));
+  const selectionRange = semanticSourceRangeForDocument(selectionSource, doc);
+  const declarationRange = sourceMatches(workspaceRoot, requested, declarationSource)
+    ? semanticSourceRangeForDocument(declarationSource, doc)
+    : null;
   const className = definition.targetName ?? definition.name;
-  const selectionRange = rangeForClassName(doc, className, classRange) ?? classRange;
-  if (classRange == null || selectionRange == null) {
+  if (selectionRange == null) {
     return null;
   }
 
@@ -100,7 +108,7 @@ function documentSymbolForResource(
     name: className,
     detail: resourceDetail(definition),
     kind: RESOURCE_SYMBOL_KIND[definition.resourceKind] ?? SymbolKind.Class,
-    range: classRange,
+    range: declarationRange ?? selectionRange,
     selectionRange,
     children: bindableSymbols(workspaceRoot, requested, doc, definition.bindables),
   };
@@ -109,16 +117,18 @@ function documentSymbolForResource(
 function bindableSymbols(
   workspaceRoot: string | null,
   requested: string,
-  doc: { positionAt(offset: number): { line: number; character: number } },
+  doc: Pick<TextDocument, "getText" | "positionAt">,
   bindables: readonly SemanticResourceDefinitionBindableRow[],
 ): DocumentSymbol[] {
   const symbols: DocumentSymbol[] = [];
   for (const bindable of bindables) {
-    if (!sourceMatches(workspaceRoot, requested, bindable.source)) {
+    const source = semanticExactSourceReference(
+      bindable.propertySource ?? bindable.nameSource ?? bindable.source,
+    );
+    if (!sourceMatches(workspaceRoot, requested, source)) {
       continue;
     }
-    const source = semanticExactSourceReference(bindable.source);
-    const range = rangeForSource(doc, source);
+    const range = semanticSourceRangeForDocument(source, doc);
     if (range == null) continue;
     symbols.push({
       name: bindable.name,
@@ -150,42 +160,8 @@ function sourceMatches(
   requested: string,
   source: SemanticSourceReference | null,
 ): boolean {
-  const filePath = filePathForSource(workspaceRoot, source);
+  const filePath = semanticSourceReferenceFilePath(source, workspaceRoot);
   return filePath != null && normalizedFilePath(filePath) === requested;
-}
-
-function rangeForSource(
-  doc: { positionAt(offset: number): { line: number; character: number } },
-  source: SemanticSourceReference | null,
-): Range | null {
-  if (source?.start == null || source.end == null) return null;
-  return {
-    start: doc.positionAt(source.start),
-    end: doc.positionAt(source.end),
-  };
-}
-
-function rangeForClassName(
-  doc: { getText(): string; positionAt(offset: number): { line: number; character: number } },
-  className: string,
-  container: Range | null,
-): Range | null {
-  const text = doc.getText();
-  const match = new RegExp(`\\bclass\\s+${escapeRegExp(className)}\\b`).exec(text);
-  if (!match) return null;
-  const startOffset = match.index + match[0].lastIndexOf(className);
-  const endOffset = startOffset + className.length;
-  const range = {
-    start: doc.positionAt(startOffset),
-    end: doc.positionAt(endOffset),
-  };
-  if (container == null) return range;
-  return rangeWithin(range, container) ? range : null;
-}
-
-function rangeWithin(range: Range, container: Range): boolean {
-  return comparePositions(container.start, range.start) <= 0
-    && comparePositions(range.end, container.end) <= 0;
 }
 
 function compareRanges(left: Range, right: Range): number {
@@ -199,34 +175,6 @@ function comparePositions(
   return left.line - right.line || left.character - right.character;
 }
 
-function filePathForSource(
-  workspaceRoot: string | null,
-  source: SemanticSourceReference | null,
-): string | undefined {
-  const sourcePath = sourceReferencePath(source);
-  if (sourcePath == null) {
-    return undefined;
-  }
-  if (sourcePath.startsWith("file://")) {
-    return URI.parse(sourcePath).fsPath;
-  }
-  if (path.isAbsolute(sourcePath)) {
-    return sourcePath;
-  }
-  return workspaceRoot == null ? sourcePath : path.resolve(workspaceRoot, sourcePath);
-}
-
-function sourceReferencePath(source: SemanticSourceReference | null): string | null {
-  if (source == null) {
-    return null;
-  }
-  return source.path ?? sourceReferencePath(source.anchor ?? null);
-}
-
 function normalizedFilePath(filePath: string): string {
   return path.normalize(filePath).toLowerCase();
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

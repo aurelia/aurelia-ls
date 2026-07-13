@@ -13,6 +13,7 @@ import {
   FieldProvenance,
   compactFieldProvenance,
 } from '../kernel/provenance.js';
+import type { SourceSpanEvidencePublication } from '../kernel/source-address.js';
 import {
   authoredStringLiteralNode,
   EvaluationRead,
@@ -65,7 +66,6 @@ import {
   sourceSpanEvidenceForNode,
   sourceSpanAddressForNode,
   templateCarrierExpression,
-  type SourceSpanEvidenceSet,
 } from './resource-source-address.js';
 
 export interface BindableRead {
@@ -144,7 +144,7 @@ class ClassBindableDecoratorFrame {
   private readObjectConfiguration(
     value: EvaluationObjectValue,
     argument: ts.Expression,
-    source: SourceSpanEvidenceSet | null,
+    source: SourceSpanEvidencePublication | null,
   ): BindableEntryRead {
     const nameProperty = value.properties.get('name') ?? null;
     const name = nameProperty == null ? null : readStaticStringValue(nameProperty.value);
@@ -550,7 +550,7 @@ function bindableEntry(
   propertyName: string,
   partial: EvaluationObjectValue | null,
   contributionKind: BindableContributionKind,
-  source: SourceSpanEvidenceSet | null,
+  source: SourceSpanEvidencePublication | null,
   setterOverride: BindableSetterDefinition | null = null,
 ): BindableEntryRead {
   const attribute = readObjectString(partial, 'attribute') ?? bindableAttributeNameForProperty(propertyName);
@@ -614,7 +614,7 @@ function readObjectStringFieldSource(
   local: string,
   value: EvaluationObjectValue | null,
   propertyName: string,
-): SourceSpanEvidenceSet | null {
+): SourceSpanEvidencePublication | null {
   const property = value?.properties.get(propertyName) ?? null;
   if (property == null || property.value.kind !== EvaluationValueKind.String) {
     return null;
@@ -631,7 +631,7 @@ function readObjectFieldSource(
   local: string,
   value: EvaluationObjectValue | null,
   propertyName: string,
-): SourceSpanEvidenceSet | null {
+): SourceSpanEvidencePublication | null {
   const property = value?.properties.get(propertyName) ?? null;
   const sourceNode = property?.node == null
     ? property?.value.node ?? null
@@ -642,7 +642,7 @@ function readObjectFieldSource(
 }
 
 function bindableSourceRecords(
-  ...sources: readonly (SourceSpanEvidenceSet | null)[]
+  ...sources: readonly (SourceSpanEvidencePublication | null)[]
 ): readonly KernelStoreRecord[] {
   const seen = new Set<string>();
   const records: KernelStoreRecord[] = [];
@@ -657,12 +657,12 @@ function bindableSourceRecords(
 }
 
 function bindableFieldProvenance(
-  source: SourceSpanEvidenceSet | null,
-  nameSource: SourceSpanEvidenceSet | null,
-  attributeSource: SourceSpanEvidenceSet | null,
-  callbackSource: SourceSpanEvidenceSet | null,
-  modeSource: SourceSpanEvidenceSet | null,
-  setSource: SourceSpanEvidenceSet | null,
+  source: SourceSpanEvidencePublication | null,
+  nameSource: SourceSpanEvidencePublication | null,
+  attributeSource: SourceSpanEvidencePublication | null,
+  callbackSource: SourceSpanEvidencePublication | null,
+  modeSource: SourceSpanEvidencePublication | null,
+  setSource: SourceSpanEvidencePublication | null,
 ): readonly FieldProvenance<BindableDefinitionField>[] {
   return compactFieldProvenance<BindableDefinitionField>([
     nameSource == null || nameSource.provenanceHandle === source?.provenanceHandle

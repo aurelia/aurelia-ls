@@ -142,7 +142,7 @@ function readDecoratorResource(
   const definitionExpression = decoratorDefinitionExpression(decorator);
   const read = readNamedResourceDefinition(
     resourceKind,
-    new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
+    new ResourceTargetObservation(target.localName, target.node, target.declarationNode),
     definitionExpression,
     expressionReader,
     decorator,
@@ -204,7 +204,7 @@ function recognizeEvaluatedClassBindings(
       binding.value.declaration,
       wantedKind,
       reader,
-      new EvaluationTargetRead(binding.name, binding.declaration.name, true),
+      new EvaluationTargetRead(binding.name, binding.declaration.name, binding.declaration),
     ));
   }
   return observations;
@@ -257,7 +257,7 @@ function recognizeStaticAu(
 
   const read = readNamedResourceDefinition(
     resourceKind,
-    new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
+    new ResourceTargetObservation(target.localName, target.node, target.declarationNode),
     initializer,
     context.expressionReader,
     initializer,
@@ -312,7 +312,7 @@ function recognizeConventions(
       null,
       createNamedResourceDefinitionHeader(
         convention.resourceKind,
-        new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
+        new ResourceTargetObservation(target.localName, target.node, target.declarationNode),
         convention.name,
         [],
       ),
@@ -416,8 +416,8 @@ function generatedDefineCallTarget(
     && ts.isVariableDeclaration(declaration)
     && declaration.initializer === carrier
     && ts.isIdentifier(declaration.name)
-    ? new ResourceTargetObservation(declaration.name.text, declaration.name, true)
-    : new ResourceTargetObservation(null, call, false);
+    ? new ResourceTargetObservation(declaration.name.text, declaration.name, declaration)
+    : new ResourceTargetObservation(null, call, null);
 }
 
 function resourceTargetObservation(
@@ -425,7 +425,7 @@ function resourceTargetObservation(
 ): ResourceTargetObservation | null {
   return target == null
     ? null
-    : new ResourceTargetObservation(target.localName, target.node, target.isDeclaration);
+    : new ResourceTargetObservation(target.localName, target.node, target.declarationNode);
 }
 
 function readDefineCallResourceKind(

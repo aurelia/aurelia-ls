@@ -305,6 +305,23 @@ describe("runtime-backed scope resources", () => {
     expect(result?.scopeId).toBe("app-root selected");
     expect(result?.resources.map((item) => item.name)).toEqual(["in-scope"]);
   });
+
+  test("refuses when the requested template has no compiler world", async () => {
+    const ctx = createMockContext({
+      visibility: [
+        visibility({ resourceKind: "custom-element", name: "unrelated" }),
+      ],
+      compilations: [],
+    });
+
+    const result = await handleGetScopeResources(
+      ctx as never,
+      { uri: componentUri },
+      testRequestGuard,
+    );
+
+    expect(result).toBeNull();
+  });
 });
 
 describe("runtime-backed related file lookup", () => {

@@ -57,6 +57,7 @@ function cursorInfo(input: {
     expressionFrontier: null,
     missingInputs: [],
     template: { compilationLane: "app-runtime", source: source(0, text.length) },
+    activeSource: source(openTagStart, openTagEnd),
     html: {
       nodeKind: "element",
       tagName: input.tagName ?? "my-card",
@@ -64,6 +65,8 @@ function cursorInfo(input: {
       attributeValue: null,
       source: source(input.sourceStart ?? elementStart, input.sourceEnd ?? elementEnd),
       attributeSource: null,
+      tagNameSource: input.tagName === "input" ? source(inputStart + 1, inputStart + 6) : source(openTagStart, openTagEnd),
+      closingTagNameSource: input.tagName === "input" ? null : source(closeTagStart, closeTagEnd),
     },
     valueSite: null,
     selectedDefinition: null,

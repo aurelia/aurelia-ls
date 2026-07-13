@@ -504,19 +504,32 @@
         "ide"
       ],
       "summary": "Authored source-token facts should publish source address, evidence, and provenance together.",
-      "rationale": "The bindable alias canary showed that carrying only SourceSpanAddressHandle fields is enough for editor spans but not enough for the kernel provenance and future invalidation story. Field-specific source facts need a single witness unit: the authored source span address, evidence that observes that span, and provenance that points at that evidence. Otherwise IDE surfaces and kernel fieldProvenance can drift into parallel islands.",
+      "rationale": "The bindable alias and HTML source-locus canaries showed that carrying only SourceSpanAddressHandle fields is enough for editor spans but not enough for the kernel provenance and future invalidation story. Field-specific source facts need a single witness unit: the authored source span address, evidence that observes that span, and provenance that points at that evidence. Otherwise IDE surfaces and kernel fieldProvenance can drift into parallel islands.",
       "guidance": [
-        "Use a shared address/evidence/provenance source-span helper when an authored token becomes a durable product fact, edit target, or fieldProvenance witness.",
-        "Keep address-only helpers for consumers that only need a span and do not publish product field provenance.",
+        "Use sourceSpanEvidenceForSite when an authored token becomes a durable product fact, edit target, or fieldProvenance witness; syntax-specific helpers should derive a SourceSpanSite and delegate to that kernel publication primitive.",
+        "Keep address-only helpers for carriers whose product provenance already explains the field, or consumers that only need a span and do not publish product field provenance.",
         "Do not mechanically add fieldProvenance entries that repeat the owning source provenance; fieldProvenance should identify distinct field witnesses or intentional field presence.",
+        "HTML element tag names and attribute name/value fields have narrower authored witnesses than their node or attribute carriers, so they publish distinct field provenance; parser-owned expression tokens remain lightweight projected spans unless they become durable product fields.",
         "Treat this as a bridge rule for the grand incremental compiler: source addresses locate authored facts, evidence/provenance explain why the fact exists, and epoch/session invalidation remains a separate freshness policy until dependency coverage is complete."
       ],
       "anchors": [
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/source-address.ts",
+          "symbolName": "sourceSpanEvidenceForSite",
+          "summary": "Shared kernel publication primitive for exact source address, evidence, and provenance records."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-source-address.ts",
           "symbolName": "sourceSpanEvidenceForNode",
-          "summary": "Resource-layer helper that publishes address, evidence, and provenance records for authored TypeScript source spans."
+          "summary": "TypeScript resource-source adapter that derives a source site and delegates to the kernel publication primitive."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/html-parse-materializer.ts",
+          "symbolName": "HtmlParseTreeMaterializer",
+          "summary": "HTML materializer publishes distinct tag-name and attribute-field witnesses while retaining broader node carriers."
         },
         {
           "kind": "source",
@@ -534,14 +547,24 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/bindable-convergence.ts",
           "symbolName": "bindableFieldProvenance",
-          "summary": "First migrated canary: bindable alias field provenance points at the same witness as attributeSourceAddressHandle."
+          "summary": "Bindable source fields point at the same witnesses as their exact source-address handles."
         }
       ],
       "liveChecks": [
         {
           "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/source-address.ts",
+          "symbolName": "sourceSpanEvidenceForSite"
+        },
+        {
+          "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/resources/resource-source-address.ts",
           "symbolName": "sourceSpanEvidenceForNode"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/html-parse-materializer.ts",
+          "symbolName": "HtmlParseTreeMaterializer"
         },
         {
           "kind": "source-declaration-exists",
@@ -555,7 +578,7 @@
         }
       ],
       "createdAt": "2026-07-08",
-      "updatedAt": "2026-07-08"
+      "updatedAt": "2026-07-13"
     }
   ]
 }

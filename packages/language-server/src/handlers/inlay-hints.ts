@@ -20,6 +20,7 @@ import type {
   SemanticTemplateInlayHintRow,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
+import { semanticSourceOffsetRangeForDocument } from "../mapping/source-locations.js";
 import {
   logIfSemanticRuntimeRequestAborted,
 } from "./request-guard.js";
@@ -61,12 +62,9 @@ function mapSemanticRuntimeTemplateInlayHint(
   doc: { readonly getText: () => string; readonly positionAt: (offset: number) => { line: number; character: number } },
   params: InlayHintParams,
 ): InlayHint | null {
-  if (row.source?.start == null || row.source.end == null) {
-    return null;
-  }
-  const length = doc.getText().length;
-  const offset = Math.max(0, Math.min(row.source.end, length));
-  const position = doc.positionAt(offset);
+  const source = semanticSourceOffsetRangeForDocument(row.source, doc);
+  if (source == null) return null;
+  const position = doc.positionAt(source.end);
   if (position.line < params.range.start.line || position.line > params.range.end.line) {
     return null;
   }

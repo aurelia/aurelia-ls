@@ -13,6 +13,7 @@ import {
   mapSemanticRuntimeTemplateCodeActions,
   mapSemanticRuntimeTemplateDefinition,
   mapSemanticRuntimeTemplateHover,
+  mapSemanticRuntimeTemplateRenameEdit,
   spanToRange,
   toLspUri,
   type LookupTextFn,
@@ -307,6 +308,45 @@ describe("mapSemanticRuntimeTemplateCodeActions", () => {
   });
 });
 
+describe("source-backed edit mapping", () => {
+  test("rejects zero-width insertions beyond the current document", () => {
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.ts",
+      "typescript",
+      7,
+      "export class Component {}",
+    );
+    const invalidOffset = doc.getText().length + 1;
+
+    const mapping = mapSemanticRuntimeTemplateRenameEdit({
+      value: {
+        status: "available",
+        edits: [{
+          editKind: "typescript-reference",
+          source: {
+            kind: "source-span-address",
+            label: `src/component.ts@${invalidOffset}..${invalidOffset}`,
+            path: doc.uri,
+            start: invalidOffset,
+            end: invalidOffset,
+            role: "insertion",
+          },
+          oldText: "",
+          newText: "declare member;",
+        }],
+      },
+    } as never, () => null, {
+      workspaceRoot: "C:/projects/app",
+      originDocument: doc,
+    });
+
+    expect(mapping.edit).toBeNull();
+    expect(mapping.failures).toEqual([
+      expect.stringContaining("span outside the current document text"),
+    ]);
+  });
+});
+
 describe("createCompletionGapMarker", () => {
   test("appends a canonical gap marker and sets isIncomplete", () => {
     const list = createCompletionGapMarker([{ label: "summary-panel" }]);
@@ -513,7 +553,7 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
     });
 
     expect(mapped).toEqual([{
-      targetUri: definitionLspUri,
+      targetUri: definitionUri,
       targetRange: {
         start: { line: 1, character: 2 },
         end: { line: 1, character: 9 },

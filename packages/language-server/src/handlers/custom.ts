@@ -20,6 +20,7 @@ import type {
 } from "@aurelia-ls/semantic-runtime";
 import {
   diagnosticRepairAffordanceForSuggestion,
+  semanticExactSourceReference,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import type {
@@ -40,6 +41,10 @@ import type {
 import { canonicalDocumentUri } from "../utils/document-uri.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
 import { mapSemanticRuntimeTemplateRenameEdit, semanticRuntimeDiagnosticCode } from "../mapping/lsp-types.js";
+import {
+  semanticSourceReferenceFilePath,
+  semanticSourceReferencePath,
+} from "../mapping/source-locations.js";
 import {
   logIfSemanticRuntimeRequestAborted,
   semanticRuntimeRequestGuard,
@@ -87,7 +92,7 @@ function toRuntimeSnapshotItem(
   row: SemanticAppDiagnosticRow,
   status: DiagnosticStatus = "canonical",
 ): DiagnosticsSnapshotItem {
-  const file = filePathForSource(workspaceRoot, row.source);
+  const file = semanticSourceReferenceFilePath(row.source, workspaceRoot) ?? undefined;
   const span = sourceSpanForSource(row.source);
   const code = semanticRuntimeDiagnosticCode(row);
   return {
@@ -133,7 +138,7 @@ function runtimeDiagnosticRelatedInformation(
   relatedInformation: NonNullable<SemanticAppDiagnosticRow["relatedInformation"]>,
 ): readonly DiagnosticsSnapshotRelated[] {
   return relatedInformation.map((related): DiagnosticsSnapshotRelated => {
-    const file = filePathForSource(workspaceRoot, related.source);
+    const file = semanticSourceReferenceFilePath(related.source, workspaceRoot) ?? undefined;
     const span = sourceSpanForSource(related.source);
     return {
       ...(related.code == null ? {} : { code: related.code }),
@@ -198,14 +203,15 @@ function runtimeDiagnosticSubject(
   workspaceRoot: string | null,
   subject: NonNullable<SemanticAppDiagnosticRow["subject"]>,
 ): NonNullable<DiagnosticsSnapshotPresentationGroup["subject"]> {
-  const file = filePathForSource(workspaceRoot, subject.source);
+  const source = semanticExactSourceReference(subject.source);
+  const file = semanticSourceReferenceFilePath(subject.source, workspaceRoot) ?? undefined;
   return {
     subjectKind: subject.subjectKind,
     subjectName: subject.subjectName,
     ...(file == null ? {} : { uri: pathToFileURL(file).toString() }),
-    ...(subject.source?.start == null || subject.source.end == null
+    ...(source?.start == null || source.end == null
       ? {}
-      : { span: { start: subject.source.start, end: subject.source.end } }),
+      : { span: { start: source.start, end: source.end } }),
   };
 }
 
@@ -246,12 +252,13 @@ function runtimeDiagnosticCategory(row: SemanticAppDiagnosticRow): DiagnosticCat
 }
 
 function sourceSpanForSource(source: SemanticSourceReference | null): SourceSpan | undefined {
-  if (source?.start == null || source.end == null) {
+  const exact = semanticExactSourceReference(source);
+  if (exact?.start == null || exact.end == null) {
     return undefined;
   }
   return {
-    start: source.start,
-    end: source.end,
+    start: exact.start,
+    end: exact.end,
   };
 }
 
@@ -397,7 +404,7 @@ function buildRuntimeResourceExplorerResponse(
       name: definition.name,
       kind: definition.resourceKind,
       className: definition.targetName ?? undefined,
-      file: filePathForSource(workspaceRoot, source),
+      file: semanticSourceReferenceFilePath(source, workspaceRoot) ?? undefined,
       package: packageNameForSource(source),
       bindableCount: definition.bindables.length,
       bindables: definition.bindables.map((bindable): ResourceExplorerBindable => ({
@@ -425,7 +432,7 @@ function buildRuntimeResourceExplorerResponse(
     resources.set(key, {
       name: row.name,
       kind: row.resourceKind,
-      file: filePathForSource(workspaceRoot, row.source),
+      file: semanticSourceReferenceFilePath(row.source, workspaceRoot) ?? undefined,
       package: packageNameForSource(row.source),
       bindableCount: 0,
       bindables: [],
@@ -442,7 +449,7 @@ function buildRuntimeResourceExplorerResponse(
     fingerprint: `semantic-runtime:${definitions.length}:${visibility.length}:${compilations.length}`,
     resources: rows,
     templateCount: countDistinct(
-      appTemplateRows.map((row) => sourceReferencePath(row.source) ?? row.definitionName),
+      appTemplateRows.map((row) => semanticSourceReferencePath(row.source) ?? row.definitionName),
     ),
     inlineTemplateCount: appTemplateRows.filter((row) => row.templateSourceKind.toLowerCase().includes("inline")).length,
   };
@@ -502,7 +509,7 @@ function originForSource(source: SemanticSourceReference | null): ResourceOrigin
   if (isFrameworkCatalogSource(source)) {
     return "builtin";
   }
-  return sourceReferencePath(source) == null && source?.kind !== "external-address"
+  return semanticSourceReferencePath(source) == null && source?.kind !== "external-address"
     ? undefined
     : "source";
 }
@@ -511,35 +518,11 @@ function packageNameForSource(source: SemanticSourceReference | null): string | 
   if (isFrameworkCatalogSource(source)) {
     return undefined;
   }
-  const sourcePath = sourceReferencePath(source);
+  const sourcePath = semanticSourceReferencePath(source);
   if (sourcePath == null) {
     return undefined;
   }
   return packageNameFromNodeModulesPath(sourcePath);
-}
-
-function filePathForSource(
-  workspaceRoot: string | null,
-  source: SemanticSourceReference | null,
-): string | undefined {
-  const sourcePath = sourceReferencePath(source);
-  if (sourcePath == null) {
-    return undefined;
-  }
-  if (sourcePath.startsWith("file://")) {
-    return URI.parse(sourcePath).fsPath;
-  }
-  if (path.isAbsolute(sourcePath)) {
-    return sourcePath;
-  }
-  return workspaceRoot == null ? sourcePath : path.resolve(workspaceRoot, sourcePath);
-}
-
-function sourceReferencePath(source: SemanticSourceReference | null): string | null {
-  if (source == null) {
-    return null;
-  }
-  return source.path ?? sourceReferencePath(source.anchor ?? null);
 }
 
 function isFrameworkCatalogSource(source: SemanticSourceReference | null): boolean {
@@ -753,9 +736,8 @@ export async function handleGetScopeResources(
       ctx.semanticRuntime.resourceVisibility(guard),
     ]);
     const compilerWorlds = new Set(compilations.value.rows.map((row) => row.compilerWorld));
-    const rows = compilerWorlds.size === 0
-      ? visibility.value.rows
-      : visibility.value.rows.filter((row) => compilerWorlds.has(row.compilerWorld));
+    if (compilerWorlds.size === 0) return null;
+    const rows = visibility.value.rows.filter((row) => compilerWorlds.has(row.compilerWorld));
     const resources = scopeResourcesForVisibility(ctx.workspaceRoot, rows);
     const [scopeLabel] = compilerWorlds;
     return {
@@ -789,7 +771,7 @@ function scopeResourcesForVisibility(
       name: row.name,
       kind: row.resourceKind,
       origin: originForSource(row.source),
-      file: filePathForSource(workspaceRoot, row.source),
+      file: semanticSourceReferenceFilePath(row.source, workspaceRoot) ?? undefined,
       package: packageNameForSource(row.source),
       bindableCount: 0,
       scope: scopeEntryForVisibility(row).scope === "global" ? "global" : "local",
@@ -977,8 +959,14 @@ export async function handleGetRelatedFile(
       if (definition.resourceKind !== "custom-element") {
         continue;
       }
-      const componentFile = filePathForSource(ctx.workspaceRoot, definition.targetSource ?? definition.source);
-      const templateFile = filePathForSource(ctx.workspaceRoot, definition.template?.source ?? null);
+      const componentFile = semanticSourceReferenceFilePath(
+        definition.targetSource ?? definition.source,
+        ctx.workspaceRoot,
+      ) ?? undefined;
+      const templateFile = semanticSourceReferenceFilePath(
+        definition.template?.source ?? null,
+        ctx.workspaceRoot,
+      ) ?? undefined;
       if (componentFile == null || templateFile == null) {
         continue;
       }

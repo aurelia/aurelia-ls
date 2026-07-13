@@ -60,7 +60,10 @@ import {
 } from './resource-kind.js';
 import { toAureliaResourceDeclarationKind } from './named-resource-kind.js';
 import { ResourceTargetReference } from './resource-reference.js';
-import { sourceSpanRangeForNode } from './resource-source-address.js';
+import {
+  sourceSpanAddressForNode,
+  sourceSpanRangeForNode,
+} from './resource-source-address.js';
 
 class ResourceIdentityPublication {
   constructor(
@@ -117,13 +120,36 @@ export class ResourceRecognitionPublicationSupport {
       return new ResourceTargetPublication([], null, null);
     }
 
-    const addressHandle = this.store.handles.address(`resource-target:${local}`);
+    const targetSource = sourceSpanAddressForNode(
+      this.store,
+      context,
+      target.node,
+      `resource-target:${local}`,
+      SourceSpanRole.Name,
+    );
+    const declarationSource = sourceSpanAddressForNode(
+      this.store,
+      context,
+      target.declarationNode,
+      `resource-target-declaration:${local}`,
+      SourceSpanRole.Range,
+    );
     const identityHandle = this.targetIdentityHandle(target, local);
-    const targetReference = this.targetReferenceForObservation(context, target, local, addressHandle, identityHandle);
+    const moduleKey = this.targetModuleKey(context, target);
+    const targetReference = this.targetReferenceForObservation(
+      context,
+      target,
+      local,
+      targetSource?.addressHandle ?? null,
+      declarationSource?.addressHandle ?? null,
+      identityHandle,
+      moduleKey,
+    );
     return new ResourceTargetPublication(
       [
-        this.targetAddress(context, target, addressHandle),
-        ...this.recordsForTargetIdentity(context, target, addressHandle, identityHandle),
+        ...(targetSource?.records ?? []),
+        ...(declarationSource?.records ?? []),
+        ...this.recordsForTargetIdentity(target, targetSource?.addressHandle ?? null, identityHandle, moduleKey),
       ],
       targetReference,
       identityHandle,
@@ -190,23 +216,36 @@ export class ResourceRecognitionPublicationSupport {
     target: ResourceTargetObservation,
     local: string,
   ): IdentityHandle | null {
-    return target.localName == null || !target.isDeclaration
+    return target.localName == null || target.declarationNode == null
       ? null
       : this.store.handles.identity(`resource-target:${local}`);
+  }
+
+  private targetModuleKey(
+    context: ResourceRecognitionContext,
+    target: ResourceTargetObservation,
+  ): string | null {
+    return target.declarationNode == null
+      ? null
+      : context.readAdmittedNodeContext(target.declarationNode)?.moduleKey ?? null;
   }
 
   private targetReferenceForObservation(
     context: ResourceRecognitionContext,
     target: ResourceTargetObservation,
     local: string,
-    addressHandle: AddressHandle,
+    addressHandle: AddressHandle | null,
+    declarationSourceAddressHandle: AddressHandle | null,
     identityHandle: IdentityHandle | null,
+    moduleKey: string | null,
   ): ResourceTargetReference {
     return new ResourceTargetReference(
       identityHandle,
       addressHandle,
       target.localName,
       this.targetTypeReference(context, target, local, addressHandle, identityHandle),
+      moduleKey,
+      declarationSourceAddressHandle,
     );
   }
 
@@ -214,7 +253,7 @@ export class ResourceRecognitionPublicationSupport {
     context: ResourceRecognitionContext,
     target: ResourceTargetObservation,
     local: string,
-    addressHandle: AddressHandle,
+    addressHandle: AddressHandle | null,
     identityHandle: IdentityHandle | null,
   ): CheckerTypeReference | null {
     return this.recordPhase('kernel-emission:target-type-projection', () =>
@@ -232,32 +271,18 @@ export class ResourceRecognitionPublicationSupport {
     );
   }
 
-  private targetAddress(
-    context: ResourceRecognitionContext,
-    target: ResourceTargetObservation,
-    addressHandle: AddressHandle,
-  ): SourceSpanAddress {
-    return new SourceSpanAddress(
-      addressHandle,
-      context.sourceFileAddressHandle,
-      target.node.getStart(context.sourceFile),
-      target.node.end,
-      SourceSpanRole.Name,
-    );
-  }
-
   private recordsForTargetIdentity(
-    context: ResourceRecognitionContext,
     target: ResourceTargetObservation,
-    addressHandle: AddressHandle,
+    addressHandle: AddressHandle | null,
     identityHandle: IdentityHandle | null,
+    moduleKey: string | null,
   ): readonly TypeScriptDeclarationIdentity[] {
     return identityHandle == null
       ? []
       : [
         new TypeScriptDeclarationIdentity(
           identityHandle,
-          context.moduleKey,
+          moduleKey,
           null,
           target.localName,
           addressHandle,
@@ -564,7 +589,7 @@ function projectTargetType(
   typeSystem: TypeSystemProject,
   node: ts.Node,
   local: string,
-  sourceAddressHandle: AddressHandle,
+  sourceAddressHandle: AddressHandle | null,
   ownerIdentityHandle: IdentityHandle | null,
   display: string | null,
 ): CheckerTypeReference | null {

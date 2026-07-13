@@ -64,8 +64,11 @@ describe("runtime-backed document symbols", () => {
       "export class CurrencyValueConverter {}",
     ].join("\n");
     const productClassStart = text.indexOf("ProductCard");
+    const productDeclarationStart = text.indexOf("export class ProductCard");
+    const productDeclarationEnd = text.indexOf("}\nexport class") + 1;
     const productNameStart = text.indexOf("product");
     const converterClassStart = text.indexOf("CurrencyValueConverter");
+    const converterDeclarationStart = text.indexOf("export class CurrencyValueConverter");
     const ctx = createMockContext({
       text,
       definitions: [
@@ -74,6 +77,7 @@ describe("runtime-backed document symbols", () => {
           name: "product-card",
           targetName: "ProductCard",
           targetSource: source("src/resources.ts", productClassStart, productClassStart + "ProductCard".length),
+          targetDeclarationSource: source("src/resources.ts", productDeclarationStart, productDeclarationEnd),
           source: source("src/resources.ts", productClassStart, productClassStart + "ProductCard".length),
           bindables: [
             {
@@ -97,6 +101,7 @@ describe("runtime-backed document symbols", () => {
           name: "currency",
           targetName: "CurrencyValueConverter",
           targetSource: source("src/resources.ts", converterClassStart, converterClassStart + "CurrencyValueConverter".length),
+          targetDeclarationSource: source("src/resources.ts", converterDeclarationStart, text.length),
           source: source("src/resources.ts", converterClassStart, converterClassStart + "CurrencyValueConverter".length),
           bindables: [],
         },
@@ -110,6 +115,10 @@ describe("runtime-backed document symbols", () => {
       name: "ProductCard",
       detail: "custom-element: product-card",
       kind: SymbolKind.Class,
+      range: {
+        start: { line: 0, character: 0 },
+        end: { line: 2, character: 1 },
+      },
       selectionRange: {
         start: { line: 0, character: 13 },
         end: { line: 0, character: 24 },
@@ -130,6 +139,14 @@ describe("runtime-backed document symbols", () => {
       name: "CurrencyValueConverter",
       detail: "value-converter: currency",
       kind: SymbolKind.Function,
+      range: {
+        start: { line: 3, character: 0 },
+        end: { line: 3, character: 38 },
+      },
+      selectionRange: {
+        start: { line: 3, character: 13 },
+        end: { line: 3, character: 35 },
+      },
     });
     expect(ctx.semanticRuntime.resourceDefinitions).toHaveBeenCalledTimes(1);
   });

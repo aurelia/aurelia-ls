@@ -4,7 +4,6 @@
  * VS Code uses these for "expand selection". Keep the ladder quiet and
  * source-backed: active token, value site, attribute, node, then template.
  */
-import path from "node:path";
 import {
   type Position,
   type Range,
@@ -15,12 +14,12 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import type {
   SemanticTemplateCursorInfoResult,
 } from "@aurelia-ls/semantic-runtime";
-import {
-  semanticExactSourceReference,
-  type SemanticSourceReference,
-} from "@aurelia-ls/semantic-runtime";
+import type { SemanticSourceReference } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
-import { canonicalDocumentUri, toFileUri } from "../utils/document-uri.js";
+import {
+  semanticSourceOffsetRangeForDocument,
+  semanticSourceReferenceMatchesDocument,
+} from "../mapping/source-locations.js";
 import {
   logIfSemanticRuntimeRequestAborted,
 } from "./request-guard.js";
@@ -73,18 +72,7 @@ function selectionRangeForCursor(
   const cursorOffset = doc.offsetAt(position);
   const candidates: OffsetRange[] = [];
 
-  const semanticContainer = firstOffsetRange(ctx, doc, [
-    value.valueSite?.source ?? null,
-    value.memberOwnerType?.source ?? null,
-    value.html.attributeSource,
-    value.html.source,
-    value.template.source,
-  ]);
-  const token = semanticContainer == null
-    ? null
-    : identifierRangeAtOffset(doc.getText(), cursorOffset, semanticContainer);
-  addCandidate(candidates, token, cursorOffset);
-
+  addSourceCandidate(ctx, doc, candidates, cursorOffset, value.activeSource);
   addSourceCandidate(ctx, doc, candidates, cursorOffset, value.memberOwnerType?.source ?? null);
   addSourceCandidate(ctx, doc, candidates, cursorOffset, value.valueSite?.source ?? null);
   for (const diagnostic of value.diagnostics) {
@@ -105,18 +93,6 @@ function selectionRangeForCursor(
     };
   }
   return current ?? null;
-}
-
-function firstOffsetRange(
-  ctx: ServerContext,
-  doc: TextDocument,
-  sources: readonly (SemanticSourceReference | null)[],
-): OffsetRange | null {
-  for (const source of sources) {
-    const range = offsetRangeForSource(ctx, doc, source);
-    if (range != null) return range;
-  }
-  return null;
 }
 
 function addSourceCandidate(
@@ -146,66 +122,8 @@ function offsetRangeForSource(
   doc: TextDocument,
   source: SemanticSourceReference | null,
 ): OffsetRange | null {
-  const exact = semanticExactSourceReference(source);
-  if (exact?.start == null || exact.end == null) return null;
-  if (!sourceMatchesDocument(ctx.workspaceRoot, exact, doc.uri)) return null;
-
-  const length = doc.getText().length;
-  const start = clampOffset(exact.start, length);
-  const end = Math.max(start, clampOffset(exact.end, length));
-  return { start, end };
-}
-
-function sourceMatchesDocument(
-  workspaceRoot: string | null,
-  source: SemanticSourceReference,
-  documentUri: string,
-): boolean {
-  const sourcePath = sourceReferencePath(source);
-  if (sourcePath == null) return false;
-  const uri = sourcePath.startsWith("file:")
-    ? sourcePath
-    : path.isAbsolute(sourcePath)
-      ? toFileUri(sourcePath)
-      : workspaceRoot == null
-        ? null
-        : toFileUri(path.resolve(workspaceRoot, sourcePath));
-  return uri != null
-    && canonicalDocumentUri(uri).uri === canonicalDocumentUri(documentUri).uri;
-}
-
-function sourceReferencePath(source: SemanticSourceReference | null): string | null {
-  if (source == null) return null;
-  return source.path ?? sourceReferencePath(source.anchor ?? null);
-}
-
-function identifierRangeAtOffset(
-  text: string,
-  offset: number,
-  container: OffsetRange,
-): OffsetRange | null {
-  const boundedOffset = Math.max(container.start, Math.min(offset, container.end));
-  let probe = boundedOffset;
-  if (!isIdentifierChar(text.charAt(probe)) && probe > container.start) {
-    probe -= 1;
-  }
-  if (!isIdentifierChar(text.charAt(probe))) {
-    return null;
-  }
-
-  let start = probe;
-  while (start > container.start && isIdentifierChar(text.charAt(start - 1))) {
-    start -= 1;
-  }
-  let end = probe + 1;
-  while (end < container.end && isIdentifierChar(text.charAt(end))) {
-    end += 1;
-  }
-  return end > start ? { start, end } : null;
-}
-
-function isIdentifierChar(value: string): boolean {
-  return /^[A-Za-z0-9_$-]$/.test(value);
+  if (!semanticSourceReferenceMatchesDocument(source, ctx.workspaceRoot, doc.uri)) return null;
+  return semanticSourceOffsetRangeForDocument(source, doc);
 }
 
 function buildContainingChain(candidates: readonly OffsetRange[]): OffsetRange[] {
@@ -247,8 +165,4 @@ function containsOffset(range: OffsetRange, offset: number): boolean {
 
 function sameRange(left: OffsetRange, right: OffsetRange): boolean {
   return left.start === right.start && left.end === right.end;
-}
-
-function clampOffset(offset: number, length: number): number {
-  return Math.max(0, Math.min(offset, length));
 }

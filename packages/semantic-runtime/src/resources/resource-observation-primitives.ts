@@ -5,10 +5,10 @@ export class ResourceTargetObservation {
   constructor(
     /** Best local name for the target, when one is visible without checker hydration. */
     readonly localName: string | null,
-    /** Source node that names or declares the target. */
+    /** Exact source node that names or references the target. */
     readonly node: ts.Node,
-    /** Whether the node is an actual declaration/name site rather than a reference expression. */
-    readonly isDeclaration: boolean,
+    /** Full declaration that owns the target, when recognition proved one. */
+    readonly declarationNode: ts.Declaration | null,
   ) {}
 }
 
@@ -22,16 +22,12 @@ export class ResourceAliasObservation {
 
 /** Resolve the class declaration/expression represented by a resource target node when one is statically visible. */
 export function resourceTargetClassLikeNode(
-  target: { readonly node: ts.Node } | null,
+  target: { readonly declarationNode: ts.Declaration | null } | null,
 ): ts.ClassLikeDeclarationBase | null {
-  if (target == null) {
-    return null;
-  }
-  if (ts.isClassDeclaration(target.node) || ts.isClassExpression(target.node)) {
-    return target.node;
-  }
-  const parent = target.node.parent;
-  return ts.isClassDeclaration(parent) || ts.isClassExpression(parent) ? parent : null;
+  const declaration = target?.declarationNode ?? null;
+  return declaration != null && (ts.isClassDeclaration(declaration) || ts.isClassExpression(declaration))
+    ? declaration
+    : null;
 }
 
 /** One concrete AttributePattern.create(...) entry. */

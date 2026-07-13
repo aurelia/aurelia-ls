@@ -4,7 +4,6 @@
  * This projects semantic-runtime ResourceDefinitions into VS Code's native
  * "Go to Symbol in Workspace" surface without adding a custom command.
  */
-import path from "node:path";
 import {
   SymbolKind,
   type SymbolInformation,
@@ -20,7 +19,11 @@ import {
   type SemanticSourceReference,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
-import { canonicalDocumentUri, toFileUri } from "../utils/document-uri.js";
+import { canonicalDocumentUri } from "../utils/document-uri.js";
+import {
+  semanticSourceRangeForDocument,
+  semanticSourceReferenceUri,
+} from "../mapping/source-locations.js";
 import {
   logIfSemanticRuntimeRequestAborted,
 } from "./request-guard.js";
@@ -92,7 +95,7 @@ function workspaceSymbolForResource(
   const source = semanticExactSourceReference(definition.targetSource ?? definition.source);
   if (source == null) return null;
 
-  const uri = sourceReferenceUri(ctx.workspaceRoot, source);
+  const uri = semanticSourceReferenceUri(source, ctx.workspaceRoot);
   if (uri == null) return null;
 
   const canonicalUri = canonicalDocumentUri(uri).uri;
@@ -100,7 +103,7 @@ function workspaceSymbolForResource(
   if (text == null) return null;
 
   const document = TextDocument.create(canonicalUri, guessLanguage(canonicalUri), 0, text);
-  const range = rangeForSource(document, source);
+  const range = semanticSourceRangeForDocument(source, document);
   if (range == null) return null;
 
   return {
@@ -126,40 +129,6 @@ function resourceContainer(definition: SemanticResourceDefinitionRow): string {
   return definition.name == null
     ? definition.resourceKind
     : `${definition.resourceKind}: ${definition.name}`;
-}
-
-function rangeForSource(
-  doc: { positionAt(offset: number): { line: number; character: number } },
-  source: SemanticSourceReference,
-) {
-  if (source.start == null || source.end == null) return null;
-  return {
-    start: doc.positionAt(source.start),
-    end: doc.positionAt(source.end),
-  };
-}
-
-function sourceReferenceUri(
-  workspaceRoot: string | null,
-  source: SemanticSourceReference,
-): string | null {
-  const sourcePath = sourceReferencePath(source);
-  if (sourcePath == null) return null;
-  if (sourcePath.startsWith("file://")) {
-    return sourcePath;
-  }
-  if (path.isAbsolute(sourcePath)) {
-    return toFileUri(sourcePath);
-  }
-  if (workspaceRoot == null) {
-    return null;
-  }
-  return toFileUri(path.resolve(workspaceRoot, sourcePath));
-}
-
-function sourceReferencePath(source: SemanticSourceReference | null): string | null {
-  if (source == null) return null;
-  return source.path ?? sourceReferencePath(source.anchor ?? null);
 }
 
 function guessLanguage(uri: string): string {

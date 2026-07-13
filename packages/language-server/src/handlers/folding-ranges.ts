@@ -1,4 +1,3 @@
-import path from "node:path";
 import {
   type FoldingRange,
   type FoldingRangeParams,
@@ -7,12 +6,12 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import type {
   SemanticTemplateFoldingRangeRow,
 } from "@aurelia-ls/semantic-runtime";
-import {
-  semanticExactSourceReference,
-  type SemanticSourceReference,
-} from "@aurelia-ls/semantic-runtime";
+import type { SemanticSourceReference } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
-import { canonicalDocumentUri, toFileUri } from "../utils/document-uri.js";
+import {
+  semanticSourceOffsetRangeForDocument,
+  semanticSourceReferenceMatchesDocument,
+} from "../mapping/source-locations.js";
 import {
   logIfSemanticRuntimeRequestAborted,
 } from "./request-guard.js";
@@ -77,39 +76,7 @@ function offsetRangeForSource(
   doc: TextDocument,
   source: SemanticSourceReference | null,
 ): OffsetRange | null {
-  const exact = semanticExactSourceReference(source);
-  if (exact?.start == null || exact.end == null) return null;
-  if (!sourceMatchesDocument(ctx.workspaceRoot, exact, doc.uri)) return null;
-
-  const length = doc.getText().length;
-  const start = clampOffset(exact.start, length);
-  const end = Math.max(start, clampOffset(exact.end, length));
-  return end > start ? { start, end } : null;
-}
-
-function sourceMatchesDocument(
-  workspaceRoot: string | null,
-  source: SemanticSourceReference,
-  documentUri: string,
-): boolean {
-  const sourcePath = sourceReferencePath(source);
-  if (sourcePath == null) return false;
-  const uri = sourcePath.startsWith("file:")
-    ? sourcePath
-    : path.isAbsolute(sourcePath)
-      ? toFileUri(sourcePath)
-      : workspaceRoot == null
-        ? null
-        : toFileUri(path.resolve(workspaceRoot, sourcePath));
-  return uri != null
-    && canonicalDocumentUri(uri).uri === canonicalDocumentUri(documentUri).uri;
-}
-
-function sourceReferencePath(source: SemanticSourceReference | null): string | null {
-  if (source == null) return null;
-  return source.path ?? sourceReferencePath(source.anchor ?? null);
-}
-
-function clampOffset(offset: number, length: number): number {
-  return Math.max(0, Math.min(offset, length));
+  if (!semanticSourceReferenceMatchesDocument(source, ctx.workspaceRoot, doc.uri)) return null;
+  const range = semanticSourceOffsetRangeForDocument(source, doc);
+  return range != null && range.end > range.start ? range : null;
 }

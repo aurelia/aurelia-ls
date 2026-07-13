@@ -34,8 +34,10 @@ export class EvaluationRead<TValue> {
 export class EvaluationTargetRead {
   constructor(
     readonly localName: string | null,
+    /** Exact authored target token or expression. */
     readonly node: ts.Node,
-    readonly isDeclaration: boolean,
+    /** Full declaration that owns the target, when static evaluation proved one. */
+    readonly declarationNode: ts.Declaration | null,
     readonly openSeams: readonly EvaluationOpenSeam[] = [],
   ) {}
 }
@@ -111,7 +113,7 @@ export function readClassTarget(
   return new EvaluationTargetRead(
     classNode.name?.text ?? null,
     classNode.name ?? classNode,
-    true,
+    classNode,
     openSeams,
   );
 }
@@ -124,7 +126,7 @@ export function readSyntaxTarget(
   return new EvaluationTargetRead(
     readReferenceName(current),
     current,
-    false,
+    null,
     openSeams,
   );
 }

@@ -2161,6 +2161,7 @@ function missingTemplateCursorInfo(
 ): SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult> {
   const value: Omit<SemanticTemplateCursorInfoResult, 'displayText'> = {
     siteKind: TemplateCompletionSiteKind.Unknown,
+    activeSource: null,
     expressionFrontier: null,
     missingInputs: read.value.missingInputs,
     template: read.value.template,
@@ -2209,8 +2210,18 @@ function templateCursorInfoResult(
     query.locus.kind === InquiryLocusKind.SourceCursor ? query.locus.cursor.offset : null,
     valueSite?.siteKind ?? null,
   );
+  const activeSource = cursorContext.activeExpressionSpan == null
+    ? describeAddress(store, cursorContext.activeSourceAddressHandle)
+    : query.locus.kind === InquiryLocusKind.SourceCursor
+      ? sourceReferenceForParserSpan(
+          query.locus.cursor.filePath,
+          cursorContext.activeExpressionSpan,
+          'active-template-token',
+        )
+      : null;
   const value: Omit<SemanticTemplateCursorInfoResult, 'displayText'> = {
     siteKind: query.siteKind,
+    activeSource,
     expressionFrontier: cursorContext.expressionFrontier == null
       ? null
       : {
@@ -2247,6 +2258,11 @@ function templateCursorInfoResult(
       expectedValueType?.display ?? null,
       expectedValueType?.source ?? null,
     ),
+    ...(includeHandles ? {
+      handles: {
+        activeSourceAddressHandle: cursorContext.activeSourceAddressHandle,
+      },
+    } : {}),
   };
   return {
     displayText: semanticTemplateCursorInfoDisplayText(value),
@@ -2262,6 +2278,8 @@ function cursorHtmlRow(
   const node = readHtmlNode(store, cursorContext.htmlNodeProductHandle);
   const attribute = readHtmlAttribute(store, cursorContext.htmlAttributeProductHandle);
   const nodeSourceAddressHandle = node?.sourceAddressHandle ?? null;
+  const tagNameSourceAddressHandle = node instanceof HtmlElement ? node.tagNameAddressHandle : null;
+  const closingTagNameSourceAddressHandle = node instanceof HtmlElement ? node.closingTagNameAddressHandle : null;
   const attributeSourceAddressHandle = attribute?.sourceAddressHandle ?? null;
   return {
     nodeKind: node?.nodeKind ?? null,
@@ -2269,12 +2287,16 @@ function cursorHtmlRow(
     attributeName: attribute?.rawName ?? null,
     attributeValue: attribute?.rawValue ?? null,
     source: describeAddress(store, nodeSourceAddressHandle),
+    tagNameSource: describeAddress(store, tagNameSourceAddressHandle),
+    closingTagNameSource: describeAddress(store, closingTagNameSourceAddressHandle),
     attributeSource: describeAddress(store, attributeSourceAddressHandle),
     ...(includeHandles ? {
       handles: {
         nodeProductHandle: cursorContext.htmlNodeProductHandle,
         attributeProductHandle: cursorContext.htmlAttributeProductHandle,
         nodeSourceAddressHandle,
+        tagNameSourceAddressHandle,
+        closingTagNameSourceAddressHandle,
         attributeSourceAddressHandle,
       },
     } : {}),
@@ -2566,6 +2588,8 @@ function emptyCursorHtmlRow(): SemanticTemplateCursorHtmlRow {
     attributeName: null,
     attributeValue: null,
     source: null,
+    tagNameSource: null,
+    closingTagNameSource: null,
     attributeSource: null,
   };
 }

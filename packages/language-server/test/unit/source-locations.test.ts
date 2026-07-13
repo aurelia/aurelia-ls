@@ -1,0 +1,49 @@
+import { describe, expect, test } from "vitest";
+import { TextDocument } from "vscode-languageserver-textdocument";
+import {
+  canonicalDocumentUri,
+  semanticSourceOffsetRangeForDocument,
+  semanticSourceReferenceMatchesDocument,
+  semanticSourceReferenceUri,
+} from "@aurelia-ls/language-server/api";
+
+const uri = canonicalDocumentUri("file:///C:/projects/app/src/app.html").uri;
+const document = TextDocument.create(uri, "html", 1, "<p>value</p>");
+
+function source(start: number, end: number) {
+  return {
+    kind: "source-span-address" as const,
+    label: `src/app.html@${start}..${end}`,
+    path: "src/app.html",
+    start,
+    end,
+    role: "range",
+  };
+}
+
+describe("semantic source locations", () => {
+  test("preserves exact spans and valid zero-width insertions", () => {
+    expect(semanticSourceOffsetRangeForDocument(source(3, 8), document)).toEqual({ start: 3, end: 8 });
+    const end = document.getText().length;
+    expect(semanticSourceOffsetRangeForDocument(source(end, end), document)).toEqual({ start: end, end });
+  });
+
+  test("rejects negative, reversed, non-integer, and stale spans", () => {
+    expect(semanticSourceOffsetRangeForDocument(source(-1, 2), document)).toBeNull();
+    expect(semanticSourceOffsetRangeForDocument(source(8, 3), document)).toBeNull();
+    expect(semanticSourceOffsetRangeForDocument(source(0.5, 2), document)).toBeNull();
+    expect(semanticSourceOffsetRangeForDocument(source(0, document.getText().length + 1), document)).toBeNull();
+  });
+
+  test("follows authored anchors and resolves relative paths through the workspace", () => {
+    const anchored = {
+      kind: "generated-address" as const,
+      label: "generated",
+      anchor: source(3, 8),
+    };
+    const workspaceRoot = "C:/projects/app";
+
+    expect(semanticSourceReferenceUri(anchored, workspaceRoot)).toBe(uri);
+    expect(semanticSourceReferenceMatchesDocument(anchored, workspaceRoot, uri)).toBe(true);
+  });
+});

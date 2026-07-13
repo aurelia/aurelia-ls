@@ -21,6 +21,7 @@ import {
   BindingCommand,
   type BindingCommandStaticAuDefinition,
 } from '@aurelia/template-compiler';
+import { ImportedTargetCard } from './imported-target-card';
 
 @alias('annotation-alias')
 @customElement({
@@ -108,6 +109,11 @@ export const AnonymousCard = CustomElement.define({
   name: 'anonymous-card',
   template: '<template>anonymous</template>',
 });
+
+export const ImportedTargetCardDefinition = CustomElement.define({
+  name: 'imported-target-card',
+  template: '<template>${value}</template>',
+}, ImportedTargetCard);
 
 @customElement({
   name: 'shared',

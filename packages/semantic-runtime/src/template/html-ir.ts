@@ -54,6 +54,7 @@ export type HtmlDocumentField =
 
 export type HtmlElementField =
   | 'tagName'
+  | 'closingTagName'
   | 'namespace'
   | 'attributes'
   | 'children'
@@ -218,6 +219,10 @@ export class HtmlElement {
     readonly attributes: readonly HtmlAttributeReference[],
     readonly children: readonly HtmlNodeReference[],
     readonly selfClosing: boolean,
+    /** Exact authored opening-tag name address; the element source remains the full carrier span. */
+    readonly tagNameAddressHandle: AddressHandle | null,
+    /** Exact authored closing-tag name address, absent for void, self-closing, or recovered unclosed elements. */
+    readonly closingTagNameAddressHandle: AddressHandle | null,
     readonly recoveries: readonly HtmlRecovery[] = [],
     readonly fieldProvenance: readonly FieldProvenance<HtmlElementField>[] = [],
   ) {}

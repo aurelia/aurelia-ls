@@ -7,6 +7,9 @@ import {
   readSemanticAppQueryCatalog,
   SemanticAppQueryKind,
 } from '../out/index.js';
+import { readFieldProvenance } from '../out/kernel/provenance.js';
+import { HtmlAttribute, HtmlElement } from '../out/template/html-ir.js';
+import { TemplateProductDetails } from '../out/template/product-details.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/app-builder-part-source-gallery');
@@ -53,19 +56,42 @@ expectToken('<input value.bind="draft.title">', 'draft', 'variable');
 expectToken('<input value.bind="draft.title">', 'title', 'property');
 expectToken('<input value.bind="draft.title & debounce">', 'debounce', 'aureliaBehavior');
 expectToken('<span>${descriptionHtml | sanitize}</span>', 'sanitize', 'aureliaConverter');
+expectToken('<au-compose></au-compose>', 'au-compose', 'aureliaElement', [], 1);
+expectToken('<au-compose></au-compose>', 'au-compose', 'aureliaElement', [], 2);
+
+const store = runtime.workspace.store;
+const htmlDetails = store.productDetails.readBySlot(TemplateProductDetails.HtmlNode).map((entry) => entry.detail);
+const firstComposeStart = templateText.indexOf('<au-compose>') + 1;
+const firstCompose = htmlDetails.find((detail) =>
+  detail instanceof HtmlElement
+  && detail.tagName === 'au-compose'
+  && store.readAddress(detail.tagNameAddressHandle)?.start === firstComposeStart
+);
+assert.ok(firstCompose instanceof HtmlElement, 'Expected the first au-compose HTML element detail.');
+expectFieldWitness(firstCompose, 'tagName', firstCompose.tagNameAddressHandle);
+expectFieldWitness(firstCompose, 'closingTagName', firstCompose.closingTagNameAddressHandle);
+
+const htmlAttributes = store.productDetails.readBySlot(TemplateProductDetails.HtmlAttribute).map((entry) => entry.detail);
+const firstValueBind = htmlAttributes.find((detail) => detail instanceof HtmlAttribute && detail.rawName === 'value.bind');
+assert.ok(firstValueBind instanceof HtmlAttribute, 'Expected a value.bind HTML attribute detail.');
+expectFieldWitness(firstValueBind, 'name', firstValueBind.nameAddressHandle);
+expectFieldWitness(firstValueBind, 'value', firstValueBind.valueAddressHandle);
 
 console.log(`Template semantic tokens contract passed (${rows.length} row(s)).`);
 
-function expectToken(mark, tokenText, tokenType, modifiers = []) {
-  const token = tokenForSlice(mark, tokenText, tokenType, modifiers);
+function expectToken(mark, tokenText, tokenType, modifiers = [], occurrence = 1) {
+  const token = tokenForSlice(mark, tokenText, tokenType, modifiers, occurrence);
   assert.ok(token, `Expected ${tokenType} token '${tokenText}' near ${mark}.`);
   assert.equal(templateText.slice(token.source.start, token.source.end), tokenText);
 }
 
-function tokenForSlice(mark, tokenText, tokenType, modifiers) {
+function tokenForSlice(mark, tokenText, tokenType, modifiers, occurrence) {
   const markOffset = templateText.indexOf(mark);
   assert.notEqual(markOffset, -1, `Fixture marker not found: ${mark}`);
-  const start = templateText.indexOf(tokenText, markOffset);
+  let start = markOffset - 1;
+  for (let index = 0; index < occurrence; index += 1) {
+    start = templateText.indexOf(tokenText, start + 1);
+  }
   assert.notEqual(start, -1, `Fixture token text not found after ${mark}: ${tokenText}`);
   const end = start + tokenText.length;
   const wantedModifiers = [...modifiers].sort().join(',');
@@ -75,4 +101,14 @@ function tokenForSlice(mark, tokenText, tokenType, modifiers) {
     && row.source?.start === start
     && row.source?.end === end
   ) ?? null;
+}
+
+function expectFieldWitness(detail, field, addressHandle) {
+  assert.ok(addressHandle, `Expected ${field} to carry an exact source address.`);
+  const provenanceHandle = readFieldProvenance(detail.fieldProvenance, field);
+  assert.ok(provenanceHandle, `Expected ${field} field provenance.`);
+  const provenance = store.readProvenance(provenanceHandle);
+  assert.equal(provenance?.evidenceHandles.length, 1, `Expected one direct witness for ${field}.`);
+  const evidence = store.readEvidence(provenance.evidenceHandles[0]);
+  assert.equal(evidence?.addressHandle, addressHandle, `Expected ${field} provenance to witness its exact source address.`);
 }

@@ -76,7 +76,7 @@ function recognizeAttributePatternDecorators(
     }
 
     const definition = new AttributePatternDefinitionHeader(
-      new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
+      new ResourceTargetObservation(target.localName, target.node, target.declarationNode),
       patterns,
     );
     observations.push(new ResourceRecognitionObservation(
@@ -124,7 +124,7 @@ function recognizeAttributePatternCreate(
   }
 
   const definition = new AttributePatternDefinitionHeader(
-    target == null ? null : new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
+    target == null ? null : new ResourceTargetObservation(target.localName, target.node, target.declarationNode),
     patterns?.value ?? [],
   );
   return new ResourceRecognitionObservation(

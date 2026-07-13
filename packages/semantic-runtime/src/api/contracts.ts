@@ -1838,7 +1838,10 @@ export interface SemanticResourceDefinitionRow {
   readonly patterns: readonly SemanticResourceDefinitionPatternRow[];
   readonly source: SemanticSourceReference | null;
   readonly nameSource: SemanticSourceReference | null;
+  /** Exact target/name token used for navigation and edits. */
   readonly targetSource: SemanticSourceReference | null;
+  /** Full authored target declaration used by hierarchy and outline consumers. */
+  readonly targetDeclarationSource: SemanticSourceReference | null;
   readonly handles?: {
     readonly definitionProductHandle: ProductHandle | null;
     readonly identityHandle: IdentityHandle | null;
@@ -1846,6 +1849,7 @@ export interface SemanticResourceDefinitionRow {
     readonly sourceAddressHandle: AddressHandle | null;
     readonly nameSourceAddressHandle: AddressHandle | null;
     readonly targetAddressHandle: AddressHandle | null;
+    readonly targetDeclarationSourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -3548,11 +3552,17 @@ export interface SemanticTemplateCursorHtmlRow {
   readonly attributeName: string | null;
   readonly attributeValue: string | null;
   readonly source: SemanticSourceReference | null;
+  /** Exact authored opening-tag name source, distinct from the full element carrier. */
+  readonly tagNameSource: SemanticSourceReference | null;
+  /** Exact authored closing-tag name source when a matching close tag exists. */
+  readonly closingTagNameSource: SemanticSourceReference | null;
   readonly attributeSource: SemanticSourceReference | null;
   readonly handles?: {
     readonly nodeProductHandle: ProductHandle | null;
     readonly attributeProductHandle: ProductHandle | null;
     readonly nodeSourceAddressHandle: AddressHandle | null;
+    readonly tagNameSourceAddressHandle: AddressHandle | null;
+    readonly closingTagNameSourceAddressHandle: AddressHandle | null;
     readonly attributeSourceAddressHandle: AddressHandle | null;
   };
 }
@@ -4023,6 +4033,8 @@ export interface SemanticTemplateFoldingRangesResult {
 export interface SemanticTemplateCursorInfoResult {
   readonly displayText: string;
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
+  /** Exact authored token selected by the cursor, or null when the cursor is between semantic tokens. */
+  readonly activeSource: SemanticSourceReference | null;
   readonly expressionFrontier: SemanticTemplateCompletionFrontierRow | null;
   readonly missingInputs: readonly string[];
   readonly template: {
@@ -4051,6 +4063,10 @@ export interface SemanticTemplateCursorInfoResult {
     };
   } | null;
   readonly diagnostics: readonly SemanticTemplateCursorDiagnosticRow[];
+  readonly handles?: {
+    /** Null for parser-span expression tokens, which intentionally avoid one kernel address per token. */
+    readonly activeSourceAddressHandle: AddressHandle | null;
+  };
 }
 
 export type SemanticRuntimeControllerHydrationHandoffKind =

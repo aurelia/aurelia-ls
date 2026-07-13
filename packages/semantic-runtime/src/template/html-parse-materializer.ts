@@ -28,8 +28,16 @@ import {
   requireProductDetailEnvelope,
 } from '../kernel/product-details.js';
 import {
+  compactFieldProvenance,
+  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
+import {
+  sourceSpanAddressForSite,
+  sourceSpanEvidenceForSite,
+  type SourceSpanSite,
+  type SourceSpanEvidencePublication,
+} from '../kernel/source-address.js';
 import {
   KernelStoreBatch,
   type KernelStore,
@@ -120,6 +128,31 @@ export class ParsedHtmlNodeDraft {
     readonly selfClosing: boolean,
     readonly text: string | null,
     readonly recoveries: readonly HtmlRecoveryDraft[],
+    readonly tagNames: ParsedHtmlElementTagNamesDraft | null = null,
+  ) {}
+}
+
+export class ParsedHtmlElementTagNamesDraft {
+  constructor(
+    readonly openingStart: number,
+    readonly openingEnd: number,
+    readonly closingStart: number | null,
+    readonly closingEnd: number | null,
+  ) {}
+}
+
+class ParsedHtmlEndTagDraft {
+  constructor(
+    readonly name: string,
+    readonly start: number,
+    readonly end: number,
+  ) {}
+}
+
+class ParsedHtmlNodeSequenceDraft {
+  constructor(
+    readonly nodes: readonly ParsedHtmlNodeDraft[],
+    readonly closingTag: ParsedHtmlEndTagDraft | null,
   ) {}
 }
 
@@ -173,7 +206,9 @@ class HtmlAttributeMaterializationFrame {
     readonly identityHandle: IdentityHandle,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly nameAddressHandle: AddressHandle | null,
+    readonly nameProvenanceHandle: ProvenanceHandle | null,
     readonly valueAddressHandle: AddressHandle | null,
+    readonly valueProvenanceHandle: ProvenanceHandle | null,
     readonly recoveries: readonly HtmlRecovery[],
   ) {}
 }
@@ -433,14 +468,41 @@ class HtmlParseTreeMaterializer {
       this.materializeAttribute(input, state, attribute, frame.productHandle, frame.identityHandle, `${frame.pathKey}:attr:${index}`)
     );
     const children = draft.children.map((child) => this.materializeNode(input, state, child, frame.productHandle));
+    const tagNameSource = draft.tagNames == null
+      ? null
+      : this.sourceSpanEvidence(
+          state,
+          `${frame.local}:tag-name`,
+          draft.tagNames.openingStart,
+          draft.tagNames.openingEnd,
+          SourceSpanRole.Name,
+          'Authored HTML opening-tag name.',
+        );
+    const closingTagNameSource = draft.tagNames?.closingStart == null || draft.tagNames.closingEnd == null
+      ? null
+      : this.sourceSpanEvidence(
+          state,
+          `${frame.local}:closing-tag-name`,
+          draft.tagNames.closingStart,
+          draft.tagNames.closingEnd,
+          SourceSpanRole.Name,
+          'Authored HTML closing-tag name.',
+        );
     return this.bindHtmlNodeProduct(new HtmlElement(
       draft.tagName ?? '',
       draft.namespace,
       attributes,
       children,
       draft.selfClosing,
+      tagNameSource?.addressHandle ?? null,
+      closingTagNameSource?.addressHandle ?? null,
       frame.recoveries,
-      [],
+      compactFieldProvenance([
+        tagNameSource == null ? null : new FieldProvenance('tagName', tagNameSource.provenanceHandle),
+        closingTagNameSource == null
+          ? null
+          : new FieldProvenance('closingTagName', closingTagNameSource.provenanceHandle),
+      ]),
     ), state, frame);
   }
 
@@ -523,15 +585,33 @@ class HtmlParseTreeMaterializer {
       this.materializeRecovery(state, recovery, `${local}:recovery:${index}`)
     );
     state.recoveries.push(...recoveries);
+    const nameSource = this.sourceSpanEvidence(
+      state,
+      `${local}:name`,
+      draft.nameStart,
+      draft.nameEnd,
+      SourceSpanRole.Name,
+      'Authored HTML attribute name.',
+    );
+    const valueSource = draft.valueStart == null || draft.valueEnd == null
+      ? null
+      : this.sourceSpanEvidence(
+          state,
+          `${local}:value`,
+          draft.valueStart,
+          draft.valueEnd,
+          SourceSpanRole.Value,
+          'Authored HTML attribute value.',
+        );
     return new HtmlAttributeMaterializationFrame(
       local,
       this.store.handles.product(local),
       this.store.handles.identity(local),
       this.sourceSpanAddress(state, `${local}:source`, draft.start, draft.end, SourceSpanRole.Range),
-      this.sourceSpanAddress(state, `${local}:name`, draft.nameStart, draft.nameEnd, SourceSpanRole.Name),
-      draft.valueStart == null || draft.valueEnd == null
-        ? null
-        : this.sourceSpanAddress(state, `${local}:value`, draft.valueStart, draft.valueEnd, SourceSpanRole.Value),
+      nameSource?.addressHandle ?? null,
+      nameSource?.provenanceHandle ?? null,
+      valueSource?.addressHandle ?? null,
+      valueSource?.provenanceHandle ?? null,
       recoveries,
     );
   }
@@ -547,7 +627,14 @@ class HtmlParseTreeMaterializer {
       frame.nameAddressHandle,
       frame.valueAddressHandle,
       frame.recoveries,
-      [],
+      compactFieldProvenance([
+        frame.nameProvenanceHandle == null
+          ? null
+          : new FieldProvenance('name', frame.nameProvenanceHandle),
+        frame.valueProvenanceHandle == null
+          ? null
+          : new FieldProvenance('value', frame.valueProvenanceHandle),
+      ]),
     ), new MaterializedProduct(
       frame.productHandle,
       KernelVocabulary.Template.HtmlAttribute.key,
@@ -615,6 +702,40 @@ class HtmlParseTreeMaterializer {
     end: number,
     role: SourceSpanRole,
   ): AddressHandle | null {
+    const site = this.sourceSpanSite(state, start, end);
+    if (site == null) return null;
+    const publication = sourceSpanAddressForSite(this.store, local, site, role);
+    state.records.push(...publication.records);
+    return publication.handle;
+  }
+
+  private sourceSpanEvidence(
+    state: HtmlMaterializationState,
+    local: string,
+    start: number,
+    end: number,
+    role: SourceSpanRole,
+    summary: string,
+  ): SourceSpanEvidencePublication | null {
+    const site = this.sourceSpanSite(state, start, end);
+    if (site == null) return null;
+    const publication = sourceSpanEvidenceForSite(
+      this.store,
+      local,
+      site,
+      role,
+      [EvidenceRole.TransformInput],
+      summary,
+    );
+    state.records.push(...publication.records);
+    return publication;
+  }
+
+  private sourceSpanSite(
+    state: HtmlMaterializationState,
+    start: number,
+    end: number,
+  ): SourceSpanSite | null {
     if (state.source.sourceAddressHandle == null) {
       return null;
     }
@@ -628,15 +749,11 @@ class HtmlParseTreeMaterializer {
     }
     const sourceStart = mapped?.start ?? sourceAddress.start + start;
     const sourceEnd = mapped?.end ?? sourceAddress.start + end;
-    const handle = this.store.handles.address(local);
-    state.records.push(new SourceSpanAddress(
-      handle,
-      sourceAddress.fileHandle,
-      sourceStart,
-      sourceEnd,
-      role,
-    ));
-    return handle;
+    return {
+      sourceFileAddressHandle: sourceAddress.fileHandle,
+      start: sourceStart,
+      end: sourceEnd,
+    };
   }
 
   private templateNodeAddress(
@@ -690,31 +807,31 @@ class HtmlScanner {
   ) {}
 
   parseDocument(): ParsedHtmlDocumentDraft {
-    const rootNodes = this.parseNodes(null, HtmlNamespaceKind.Html, []);
-    return new ParsedHtmlDocumentDraft(rootNodes, this.recoveries);
+    const root = this.parseNodes(null, HtmlNamespaceKind.Html, []);
+    return new ParsedHtmlDocumentDraft(root.nodes, this.recoveries);
   }
 
   private parseNodes(
     parentTag: string | null,
     namespace: HtmlNamespaceKind,
     pathPrefix: readonly number[],
-  ): ParsedHtmlNodeDraft[] {
+  ): ParsedHtmlNodeSequenceDraft {
     const nodes: ParsedHtmlNodeDraft[] = [];
     while (!this.eof()) {
       if (this.startsWith('</')) {
         const endStart = this.pos;
         const tag = this.readEndTag();
-        if (parentTag != null && tag.toLowerCase() === parentTag.toLowerCase()) {
-          return nodes;
+        if (parentTag != null && tag.name.toLowerCase() === parentTag.toLowerCase()) {
+          return new ParsedHtmlNodeSequenceDraft(nodes, tag);
         }
         this.recoveries.push(new HtmlRecoveryDraft(
           HtmlRecoveryKind.UnexpectedEndTag,
-          `Unexpected closing tag ${tag.length === 0 ? '</>' : `</${tag}>`}.`,
+          `Unexpected closing tag ${tag.name.length === 0 ? '</>' : `</${tag.name}>`}.`,
           endStart,
           this.pos,
         ));
         if (this.recoveryPolicy === TemplateRecoveryPolicy.Strict && parentTag != null) {
-          return nodes;
+          return new ParsedHtmlNodeSequenceDraft(nodes, null);
         }
         continue;
       }
@@ -736,7 +853,7 @@ class HtmlScanner {
       nodes.push(this.parseText(path));
     }
 
-    return nodes;
+    return new ParsedHtmlNodeSequenceDraft(nodes, null);
   }
 
   private parseText(path: readonly number[]): ParsedHtmlNodeDraft {
@@ -866,11 +983,12 @@ class HtmlScanner {
       }
     }
 
-    const children = selfClosing || isHtmlVoidElement(tagName)
-      ? []
+    const childSequence = selfClosing || isHtmlVoidElement(tagName)
+      ? new ParsedHtmlNodeSequenceDraft([], null)
       : this.parseNodes(tagName, namespace, path);
+    const children = childSequence.nodes;
     const end = this.pos;
-    if (!selfClosing && !isHtmlVoidElement(tagName) && this.eof() && !this.endsWithEndTag(tagName)) {
+    if (!selfClosing && !isHtmlVoidElement(tagName) && childSequence.closingTag == null) {
       recoveries.push(new HtmlRecoveryDraft(HtmlRecoveryKind.MissingEndTag, `Missing closing tag </${tagName}>.`, tagStart, end));
     }
 
@@ -886,6 +1004,12 @@ class HtmlScanner {
       selfClosing,
       null,
       recoveries,
+      new ParsedHtmlElementTagNamesDraft(
+        tagStart,
+        tagStart + tagName.length,
+        childSequence.closingTag?.start ?? null,
+        childSequence.closingTag?.end ?? null,
+      ),
     );
   }
 
@@ -944,17 +1068,19 @@ class HtmlScanner {
     );
   }
 
-  private readEndTag(): string {
+  private readEndTag(): ParsedHtmlEndTagDraft {
     this.pos += 2;
     this.skipWhitespace();
-    const tag = this.readName();
+    const nameStart = this.pos;
+    const name = this.readName();
+    const nameEnd = this.pos;
     while (!this.eof() && this.peek() !== '>') {
       this.pos++;
     }
     if (this.peek() === '>') {
       this.pos++;
     }
-    return tag;
+    return new ParsedHtmlEndTagDraft(name, nameStart, nameEnd);
   }
 
   private readName(): string {
@@ -973,10 +1099,6 @@ class HtmlScanner {
 
   private startsWith(value: string): boolean {
     return this.text.startsWith(value, this.pos);
-  }
-
-  private endsWithEndTag(tagName: string): boolean {
-    return this.text.slice(0, this.pos).toLowerCase().endsWith(`</${tagName.toLowerCase()}>`);
   }
 
   private peek(): string {

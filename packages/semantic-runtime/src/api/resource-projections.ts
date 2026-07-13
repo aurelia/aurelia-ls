@@ -100,6 +100,7 @@ function resourceDefinitionRow(
     source: describeAddress(store, definition.sourceAddressHandle),
     nameSource: describeAddress(store, readDefinitionNameSourceAddressHandle(definition)),
     targetSource: describeAddress(store, definition.target.addressHandle),
+    targetDeclarationSource: describeAddress(store, definition.target.declarationSourceAddressHandle),
     ...(handles ? {
       handles: {
         definitionProductHandle: definition.productHandle,
@@ -108,6 +109,7 @@ function resourceDefinitionRow(
         sourceAddressHandle: definition.sourceAddressHandle,
         nameSourceAddressHandle: readDefinitionNameSourceAddressHandle(definition),
         targetAddressHandle: definition.target.addressHandle,
+        targetDeclarationSourceAddressHandle: definition.target.declarationSourceAddressHandle,
       },
     } : {}),
   };

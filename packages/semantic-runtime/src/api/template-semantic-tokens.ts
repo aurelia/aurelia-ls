@@ -108,10 +108,10 @@ function instructionSemanticTokenRows(
         if (instruction.definitionProductHandle == null) {
           break;
         }
-        rows.push(...elementTagRows(store, resource, elementsByProduct, instruction.node, 'aureliaElement', instruction.productHandle, instruction.sourceAddressHandle, handles));
+        rows.push(...elementTagRows(store, resource, elementsByProduct, instruction.node, 'aureliaElement', instruction.productHandle, handles));
         break;
       case TemplateInstructionKind.HydrateLetElement:
-        rows.push(...elementTagRows(store, resource, elementsByProduct, instruction.node, 'aureliaMetaElement', instruction.productHandle, instruction.sourceAddressHandle, handles));
+        rows.push(...elementTagRows(store, resource, elementsByProduct, instruction.node, 'aureliaMetaElement', instruction.productHandle, handles));
         break;
       case TemplateInstructionKind.LetBinding:
         rows.push(...attributeTargetAndCommandRows(store, resource, attributesByProduct, syntaxByAttributeProduct, instruction.attribute, {
@@ -356,26 +356,28 @@ function elementTagRows(
   node: HtmlNodeReference,
   tokenType: SemanticTemplateSemanticTokenType,
   semanticProductHandle: ProductHandle,
-  sourceAddressHandle: AddressHandle | null,
   handles: boolean,
 ): readonly SemanticTemplateSemanticTokenRow[] {
   const element = node.productHandle == null ? null : elementsByProduct.get(node.productHandle) ?? null;
   if (element == null) {
     return [];
   }
-  const openSource = elementTagNameSource(store, resource, element, false);
-  const closeSource = element.selfClosing ? null : elementTagNameSource(store, resource, element, true);
-  return [openSource, closeSource]
-    .filter((source): source is SemanticSourceReference => source != null)
-    .map((source) => tokenRow(
-      tokenType,
-      [],
-      resource.compilation.definition.name,
-      source,
-      semanticProductHandle,
-      sourceAddressHandle,
-      handles,
-    ));
+  return ([
+    [element.tagNameAddressHandle, 'tag-name'],
+    [element.closingTagNameAddressHandle, 'close-tag-name'],
+  ] as const)
+    .flatMap(([addressHandle, role]) => {
+      const source = semanticExactSourceReference(describeAddress(store, addressHandle));
+      return source == null ? [] : [tokenRow(
+        tokenType,
+        [],
+        resource.compilation.definition.name,
+        { ...source, role },
+        semanticProductHandle,
+        addressHandle,
+        handles,
+      )];
+    });
 }
 
 function attributeTargetAndCommandRows(
@@ -445,68 +447,6 @@ function tokenTypeForClassification(
         ? 'aureliaController'
         : null;
   }
-}
-
-function elementTagNameSource(
-  store: KernelStore,
-  resource: TemplateResourceEmission,
-  element: HtmlElement,
-  closing: boolean,
-): SemanticSourceReference | null {
-  const source = semanticExactSourceReference(describeAddress(store, element.sourceAddressHandle));
-  const templateSource = semanticExactSourceReference(describeAddress(store, resource.compilation.unit.templateSource.sourceAddressHandle));
-  const markup = resource.compilation.unit.templateSource.markup;
-  if (source?.start == null || source.end == null || markup == null) {
-    return null;
-  }
-
-  const baseStart = templateSource?.start ?? 0;
-  const localStart = source.start - baseStart;
-  const localEnd = source.end - baseStart;
-  if (localStart < 0 || localEnd > markup.length || localStart >= localEnd) {
-    return null;
-  }
-
-  const tagName = element.tagName;
-  const nameStart = closing
-    ? closingTagNameStart(markup, tagName, localStart, localEnd)
-    : openingTagNameStart(markup, tagName, localStart, localEnd);
-  if (nameStart == null) {
-    return null;
-  }
-
-  return sourceSlice(source, baseStart + nameStart, baseStart + nameStart + tagName.length, closing ? 'close-tag-name' : 'tag-name');
-}
-
-function openingTagNameStart(
-  markup: string,
-  tagName: string,
-  localStart: number,
-  localEnd: number,
-): number | null {
-  const open = markup.indexOf('<', localStart);
-  if (open < localStart || open >= localEnd) {
-    return null;
-  }
-  const nameStart = open + 1;
-  return markup.slice(nameStart, nameStart + tagName.length).toLowerCase() === tagName.toLowerCase()
-    ? nameStart
-    : null;
-}
-
-function closingTagNameStart(
-  markup: string,
-  tagName: string,
-  localStart: number,
-  localEnd: number,
-): number | null {
-  const lowerMarkup = markup.toLowerCase();
-  const needle = `</${tagName.toLowerCase()}`;
-  const close = lowerMarkup.lastIndexOf(needle, localEnd);
-  if (close < localStart || close >= localEnd) {
-    return null;
-  }
-  return close + 2;
 }
 
 function commandSourceForSyntax(
@@ -620,24 +560,6 @@ function modifiersForScopeName(
     creator.creatorKind === BindingScopeCreatorKind.ListenerEvent
   );
   return repeatContextual || listenerContextual ? ['defaultLibrary'] : [];
-}
-
-function sourceSlice(
-  base: SemanticSourceReference,
-  start: number,
-  end: number,
-  role: string,
-): SemanticSourceReference | null {
-  if (start >= end) {
-    return null;
-  }
-  return {
-    ...base,
-    label: `${base.path ?? base.label}@${start}..${end}`,
-    start,
-    end,
-    role,
-  };
 }
 
 function tokenRow(

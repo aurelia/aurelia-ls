@@ -18,7 +18,13 @@ import type {
   SemanticSourceReference,
   SemanticValueConverterApplicationRow,
 } from "@aurelia-ls/semantic-runtime";
+import { semanticExactSourceReference } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
+import {
+  semanticSourceOffsetRangeForDocument,
+  semanticSourceReferenceFilePath,
+  semanticSourceReferencePath,
+} from "../mapping/source-locations.js";
 import {
   logIfSemanticRuntimeRequestAborted,
 } from "./request-guard.js";
@@ -68,40 +74,34 @@ export async function handleCodeLens(
     const controllers = controllerAnswer.value.rows;
     const bindingBehaviors = behaviorAnswer.value.rows;
     const valueConverters = converterAnswer.value.rows;
-    const text = doc.getText();
     const lenses: CodeLens[] = [];
 
     for (const definition of definitionsAnswer.value.rows) {
       if (!isCodeLensResourceDefinition(definition)) {
         continue;
       }
-      const resourceFile = filePathForSource(ctx.workspaceRoot, definition.targetSource ?? definition.source);
+      const targetSource = semanticExactSourceReference(definition.targetSource ?? definition.source);
+      const resourceFile = semanticSourceReferenceFilePath(targetSource, ctx.workspaceRoot);
       if (resourceFile == null || normalizedFilePath(resourceFile) !== requested) {
         continue;
       }
-      const className = definition.targetName ?? definition.name;
-      if (className == null) {
-        continue;
-      }
-      const classPattern = new RegExp(`\\bclass\\s+${escapeRegExp(className)}\\b`);
-      const match = classPattern.exec(text);
-      if (!match) {
-        continue;
-      }
+      const targetRange = semanticSourceOffsetRangeForDocument(targetSource, doc);
+      if (targetRange == null || targetRange.start >= targetRange.end) continue;
 
-      const pos = doc.positionAt(match.index);
+      const targetPosition = doc.positionAt(targetRange.start);
+      const lensPosition = { line: targetPosition.line, character: 0 };
       const usageCount = templateUsageCount(definition, controllers, bindingBehaviors, valueConverters);
       const title = codeLensTitle(definition, usageCount);
       lenses.push({
         range: {
-          start: { line: pos.line, character: 0 },
-          end: { line: pos.line, character: 0 },
+          start: lensPosition,
+          end: lensPosition,
         },
         command: usageCount > 0
           ? {
               title,
               command: "editor.action.findReferences",
-              arguments: [uri, pos],
+              arguments: [uri, targetPosition],
             }
           : { title, command: "" },
       });
@@ -182,7 +182,7 @@ function templateUsageCount(
 function countDistinctSourcePaths(sources: readonly (SemanticSourceReference | null)[]): number {
   const keys = new Set<string>();
   for (const source of sources) {
-    const key = sourceReferencePath(source) ?? source?.label ?? null;
+    const key = semanticSourceReferencePath(source) ?? source?.label ?? null;
     if (key != null) {
       keys.add(key);
     }
@@ -190,34 +190,6 @@ function countDistinctSourcePaths(sources: readonly (SemanticSourceReference | n
   return keys.size;
 }
 
-function filePathForSource(
-  workspaceRoot: string | null,
-  source: SemanticSourceReference | null,
-): string | undefined {
-  const sourcePath = sourceReferencePath(source);
-  if (sourcePath == null) {
-    return undefined;
-  }
-  if (sourcePath.startsWith("file://")) {
-    return URI.parse(sourcePath).fsPath;
-  }
-  if (path.isAbsolute(sourcePath)) {
-    return sourcePath;
-  }
-  return workspaceRoot == null ? sourcePath : path.resolve(workspaceRoot, sourcePath);
-}
-
-function sourceReferencePath(source: SemanticSourceReference | null): string | null {
-  if (source == null) {
-    return null;
-  }
-  return source.path ?? sourceReferencePath(source.anchor ?? null);
-}
-
 function normalizedFilePath(filePath: string): string {
   return path.normalize(filePath).toLowerCase();
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

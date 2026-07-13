@@ -583,6 +583,13 @@ keeps the owner type available for completion and diagnostics, and distinguishes
 from the TypeScript `declarationSource` reached by its identity. The owner type row likewise exposes both the template/expression projection source and the TypeScript
 declaration source. Hover/explanation can point at the projection source when answering "why this type here?", while
 definition and owner-type repair planning should prefer the declaration source when the checker can name one.
+Cursor answers also expose `activeSource` as the narrowest authored token locus proven by the owning parser or
+materialized HTML product. HTML elements preserve separate opening- and closing-tag name addresses, while attributes
+preserve name and value addresses; those durable lexical fields carry source-observation evidence and field provenance
+in addition to their broader node/attribute carrier. Expression tokens remain parser-owned spans projected directly to
+`SemanticSourceReference`: allocating one hot kernel address per expression token would reverse the kernel-compression
+boundary without adding a more durable product fact. IDE adapters should consume these loci and refuse invalid offsets,
+not rescan document text or clamp stale spans into apparently valid ranges.
 Those member declarations may come from app source, source-shipped packages, or Program-only declaration files. The API
 should surface the source reference when the TypeChecker can name the declaration. If the cursor is on a member of an
 index-signature-only owner, cursor-info may report that selected member as an index-signature access with the indexed
@@ -626,7 +633,8 @@ where an LSP client should place the hint; broader attribute and runtime binding
 stable LSP-facing token legend exported from the public contract. Tokens are conservative, source-linked facts derived
 from compiled templates and parsed expressions: resolved Aurelia elements, bindables, commands, template controllers,
 custom attributes, `<let>` declarations, interpolation/value-expression identifiers, value converters, and binding
-behaviors. Token rows are presentation evidence only; edit, rename, and repair features should use cursor-info,
+behaviors. Element rows use the exact materialized opening and closing tag-name addresses rather than rediscovering names
+inside the broader element carrier. Token rows are presentation evidence only; edit, rename, and repair features should use cursor-info,
 references, diagnostics, and future edit-policy answers rather than inferring authority from coloring.
 `TemplateFoldingRanges` is the shared IDE folding projection. Rows are source-file filterable and carry exact authored
 element spans derived from compiled HTML structure, with tag name, definition name, child count, and self-closing state
@@ -1282,6 +1290,11 @@ dependencies, template shape, watch metadata, attribute-pattern entries, custom-
 optional kernel handles. Declaration modes preserve the convergence carrier mechanism, so public analysis and future
 generation policy can distinguish decorator, static, definition-object/factory, and current convention resource styles
 without re-reading source.
+Resource source loci are intentionally not interchangeable: `source` is the metadata carrier that produced the
+definition, `targetSource` is the exact target token used for navigation and edits, and `targetDeclarationSource` is
+the full class or variable declaration used by hierarchy/outline consumers. Imported define-call targets retain the
+target module's source ownership for both target loci; consumers must not re-anchor target offsets to the module that
+contains the resource definition call.
 Public `resourceKind` fields are author-facing taxonomy; consumers that need framework registration-key joins should
 derive registration identity with `registrationResourceKindFor(...)`.
 Watch rows expose the metadata shape that resource convergence can statically close: expression kind/property key,

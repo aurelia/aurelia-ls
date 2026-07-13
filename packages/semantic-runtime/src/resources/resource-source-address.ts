@@ -8,12 +8,12 @@ import {
   EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
-import type {
-  AddressHandle,
-  EvidenceHandle,
-  ProvenanceHandle,
-} from '../kernel/handles.js';
+import type { AddressHandle } from '../kernel/handles.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
+import {
+  sourceSpanEvidenceForSite,
+  type SourceSpanEvidencePublication,
+} from '../kernel/source-address.js';
 import type {
   KernelStore,
   KernelStoreRecord,
@@ -36,15 +36,6 @@ export class SourceSpanAddressSet {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly addressHandle: AddressHandle,
-  ) {}
-}
-
-export class SourceSpanEvidenceSet {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly addressHandle: AddressHandle,
-    readonly evidenceHandle: EvidenceHandle,
-    readonly provenanceHandle: ProvenanceHandle,
   ) {}
 }
 
@@ -164,7 +155,7 @@ export function sourceSpanEvidenceForNode(
   role: SourceSpanRole,
   evidenceRoles: readonly EvidenceRole[] = [EvidenceRole.Declaration],
   summary = 'Authored resource metadata source span.',
-): SourceSpanEvidenceSet | null {
+): SourceSpanEvidencePublication | null {
   if (node == null) {
     return null;
   }
@@ -177,33 +168,17 @@ export function sourceSpanEvidenceForNode(
   if (span == null) {
     return null;
   }
-  const addressHandle = store.handles.address(`${local}:source`);
-  const evidenceHandle = store.handles.evidence(local);
-  const provenanceHandle = store.handles.provenance(local);
-  return new SourceSpanEvidenceSet(
-    [
-      new SourceSpanAddress(
-        addressHandle,
-        sourceFileAddressHandle,
-        span.start,
-        span.end,
-        role,
-      ),
-      new EvidenceRecord(
-        evidenceHandle,
-        EvidenceKind.SourceObservation,
-        evidenceRoles,
-        summary,
-        addressHandle,
-      ),
-      new ProvenanceRecord(
-        provenanceHandle,
-        [evidenceHandle],
-      ),
-    ],
-    addressHandle,
-    evidenceHandle,
-    provenanceHandle,
+  return sourceSpanEvidenceForSite(
+    store,
+    local,
+    {
+      sourceFileAddressHandle,
+      start: span.start,
+      end: span.end,
+    },
+    role,
+    evidenceRoles,
+    summary,
   );
 }
 

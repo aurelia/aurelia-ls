@@ -12,7 +12,7 @@ import {
   ExpressionParseResultInspector,
   type ExpressionObjectLiteralKeyContext,
 } from '../expression/parse-result-inspection.js';
-import { expressionSpanContainsOffset } from '../expression/source-span.js';
+import { expressionSpanContainsOffset, type SourceSpan } from '../expression/source-span.js';
 import type {
   AddressHandle,
   ClaimHandle,
@@ -386,6 +386,10 @@ export class TemplateCompletionCursorContext {
     readonly memberOwnerTypeOpenSubject: CheckerExpressionTypeOpenSubject | null,
     /** Source route that produced the member-owner value type, when narrower than the reusable type product. */
     readonly memberOwnerTypeSourceAddressHandle: AddressHandle | null,
+    /** Exact materialized authored token address selected by the cursor, when the token has a kernel address. */
+    readonly activeSourceAddressHandle: AddressHandle | null,
+    /** Exact parser-owned expression token span selected by the cursor; kept span-only to avoid per-token kernel growth. */
+    readonly activeExpressionSpan: SourceSpan | null,
     /** Extra context gaps found while turning a cursor into product handles. */
     readonly missingInputs: readonly string[] = [],
   ) {}
@@ -482,6 +486,8 @@ class TemplateCompletionCursorContextBuilder {
       null,
       null,
       null,
+      null,
+      null,
       ['source-offset'],
     );
   }
@@ -550,6 +556,20 @@ class TemplateCompletionCursorContextBuilder {
     );
     const selectedMemberName = selectedScopeSlot?.name
       ?? selectedMemberNameForCursor(siteKind, expressionResult, offset);
+    const activeExpressionSpan = expressionResult == null
+      ? null
+      : ExpressionParseResultInspector.authoredTokenSpanAtOffset(expressionResult, offset);
+    const activeSourceAddressHandle = activeExpressionSpan == null
+      ? activeTemplateSourceAddressHandle(
+          this.store,
+          offset,
+          syntax,
+          htmlAttribute,
+          activeElement,
+          declarationSelection,
+          valueSite,
+        )
+      : null;
 
     return new TemplateCompletionCursorContext(
       new TemplateCompletionQuery(
@@ -577,6 +597,8 @@ class TemplateCompletionCursorContextBuilder {
       expressionFrontier,
       memberOwnerType.openSubject,
       memberOwnerType.sourceAddressHandle,
+      activeSourceAddressHandle,
+      activeExpressionSpan,
       uniqueValues(missingInputs),
     );
   }
@@ -751,6 +773,28 @@ class TemplateCompletionCursorContextBuilder {
       )
       : missingDerivedMemberOwnerType();
   }
+}
+
+function activeTemplateSourceAddressHandle(
+  store: KernelStore,
+  offset: number,
+  syntax: AttributeSyntax | null,
+  attribute: HtmlAttribute | null,
+  element: HtmlElement | null,
+  declarationSelection: SourceBackedScopeSlotDeclarationSelection | null,
+  valueSite: TemplateValueSite | null,
+): AddressHandle | null {
+  const handles = [
+    syntax?.targetSourceAddressHandle ?? null,
+    syntax?.commandSourceAddressHandle ?? null,
+    attribute?.nameAddressHandle ?? null,
+    attribute?.valueAddressHandle ?? null,
+    element?.tagNameAddressHandle ?? null,
+    element?.closingTagNameAddressHandle ?? null,
+    declarationSelection?.sourceSpan.handle ?? null,
+    valueSite?.sourceAddressHandle ?? null,
+  ];
+  return handles.find((handle) => cursorTouchesSpan(sourceSpanFor(store, handle), offset)) ?? null;
 }
 
 function selectedMemberNameForCursor(

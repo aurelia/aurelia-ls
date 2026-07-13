@@ -244,6 +244,7 @@
       "guidance": [
         "Start here when resource recognition needs target identities, TypeChecker-backed target types, resource identities, aliases, attribute-pattern identities, or recognition open seams.",
         "Keep carrier recognizers and field readers out of kernel publication; use the emitter and publication support as the boundary.",
+        "Keep resource metadata carrier, exact target token, and full target declaration as distinct source loci. Publish target nodes through their owning ResourceRecognitionContext so cross-module define calls never combine declaration offsets with the recognizing module's source-file address.",
         "Resource target type projection should stay lazy over members. Recognition publishes the target type reference and checker carrier; member enumeration belongs to expression access, diagnostics, completions, or authoring answers that explicitly need it.",
         "Do not treat a recognized definition header as compiler-visible full metadata; converge it through ResourceDefinitionConverger when metadata matters."
       ],
@@ -285,7 +286,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-19"
+      "updatedAt": "2026-07-13"
     },
     {
       "id": "frontier:built-in-resource-catalog-materializer",

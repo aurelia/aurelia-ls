@@ -6,6 +6,7 @@
  * happens in the handler layer (handlers/features.ts); this module
  * handles the T → LSP mapping for successful results.
  */
+import { pathToFileURL } from "node:url";
 import {
   CompletionItemKind,
   DiagnosticSeverity,
@@ -20,9 +21,7 @@ import {
   type DiagnosticRelatedInformation,
   type Range,
 } from "vscode-languageserver/node";
-import path from "node:path";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { pathToFileURL } from "node:url";
 import type {
   SemanticAppDiagnosticRow,
   SemanticAppDiagnosticsResult,
@@ -49,6 +48,11 @@ import {
   type TemplateCodeActionResolveData,
 } from "../protocol.js";
 import { stableDigest } from "../utils/stable-hash.js";
+import {
+  semanticSourceRangeForDocument,
+  semanticSourceReferencePath,
+  semanticSourceReferenceUri,
+} from "./source-locations.js";
 
 export interface SourceSpan {
   readonly start: number;
@@ -268,7 +272,7 @@ function semanticRuntimeRelatedInformationForSource(
 ): readonly DiagnosticRelatedInformation[] {
   const exact = semanticExactSourceReference(source);
   if (exact == null) return [];
-  const uri = semanticRuntimeSourceReferenceUri(exact, workspaceRoot);
+  const uri = semanticSourceReferenceUri(exact, workspaceRoot);
   if (uri == null) return [];
   const canonical = canonicalDocumentUri(uri).uri;
   const originCanonical = canonicalDocumentUri(document.uri).uri;
@@ -279,7 +283,7 @@ function semanticRuntimeRelatedInformationForSource(
   const targetDocument = canonical === originCanonical
     ? document
     : TextDocument.create(canonical, guessLanguage(canonical), 0, text);
-  const range = semanticRuntimeRangeForSource(exact, targetDocument);
+  const range = semanticSourceRangeForDocument(exact, targetDocument);
   if (range == null) return [];
   return [{
     location: {
@@ -296,59 +300,11 @@ function semanticRuntimeDiagnosticRange(
 ): Range | null {
   const exact = semanticExactSourceReference(source);
   if (exact?.start != null && exact.end != null) {
-    const length = document.getText().length;
-    const start = Math.max(0, Math.min(exact.start, length));
-    const end = Math.max(start, Math.min(exact.end, length));
-    return {
-      start: document.positionAt(start),
-      end: document.positionAt(end),
-    };
+    return semanticSourceRangeForDocument(exact, document);
   }
   return source == null ? null : {
     start: { line: 0, character: 0 },
     end: { line: 0, character: 0 },
-  };
-}
-
-function semanticRuntimeSourceReferencePath(
-  source: SemanticSourceReference | null,
-): string | null {
-  if (source == null) return null;
-  if (source.path != null && source.path.length > 0) return source.path;
-  return semanticRuntimeSourceReferencePath(source.anchor ?? null);
-}
-
-function semanticRuntimeSourceReferenceUri(
-  source: SemanticSourceReference,
-  workspaceRoot: string | null,
-): string | null {
-  const sourcePath = semanticRuntimeSourceReferencePath(source);
-  if (sourcePath == null) return null;
-  if (sourcePath.startsWith("file:")) {
-    return sourcePath;
-  }
-  if (path.isAbsolute(sourcePath)) {
-    return pathToFileURL(sourcePath).toString();
-  }
-  if (workspaceRoot == null) {
-    return null;
-  }
-  return pathToFileURL(path.resolve(workspaceRoot, sourcePath)).toString();
-}
-
-function semanticRuntimeRangeForSource(
-  source: SemanticSourceReference,
-  document: TextDocument,
-): Range | null {
-  if (source.start == null || source.end == null) {
-    return null;
-  }
-  const length = document.getText().length;
-  const start = Math.max(0, Math.min(source.start, length));
-  const end = Math.max(start, Math.min(source.end, length));
-  return {
-    start: document.positionAt(start),
-    end: document.positionAt(end),
   };
 }
 
@@ -608,7 +564,7 @@ export function mapSemanticRuntimeTemplateDefinition(
     return null;
   }
 
-  const targetUri = semanticRuntimeSourceReferenceUri(target, options.workspaceRoot);
+  const targetUri = semanticSourceReferenceUri(target, options.workspaceRoot);
   if (targetUri == null) {
     return null;
   }
@@ -628,7 +584,7 @@ export function mapSemanticRuntimeTemplateDefinition(
     0,
     targetText,
   );
-  const targetRange = semanticRuntimeRangeForSource(target, targetDocument);
+  const targetRange = semanticSourceRangeForDocument(target, targetDocument);
   if (targetRange == null) {
     return null;
   }
@@ -668,7 +624,7 @@ export function mapSemanticRuntimeRouteNodeDefinition(
     if (!semanticSourceReferenceContainsOffset(originSource, cursorOffset)) {
       continue;
     }
-    const originUri = semanticRuntimeSourceReferenceUri(originSource, options.workspaceRoot);
+    const originUri = semanticSourceReferenceUri(originSource, options.workspaceRoot);
     if (originUri == null || canonicalDocumentUri(originUri).uri !== originCanonical) {
       continue;
     }
@@ -706,7 +662,7 @@ function firstSemanticRuntimeExactSourceReference(
 ): SemanticSourceReference | null {
   for (const source of sources) {
     const exact = semanticExactSourceReference(source);
-    if (exact != null && semanticRuntimeSourceReferencePath(exact) != null) {
+    if (exact != null && semanticSourceReferencePath(exact) != null) {
       return exact;
     }
   }
@@ -720,7 +676,7 @@ function locationLinkForSemanticSource(
   originDocument: TextDocument,
   originSource?: SemanticSourceReference | null,
 ): LocationLink | null {
-  const targetUri = semanticRuntimeSourceReferenceUri(target, workspaceRoot);
+  const targetUri = semanticSourceReferenceUri(target, workspaceRoot);
   if (targetUri == null) {
     return null;
   }
@@ -740,14 +696,14 @@ function locationLinkForSemanticSource(
     0,
     targetText,
   );
-  const targetRange = semanticRuntimeRangeForSource(target, targetDocument);
+  const targetRange = semanticSourceRangeForDocument(target, targetDocument);
   if (targetRange == null) {
     return null;
   }
 
   const originSelectionRange = originSource == null
     ? null
-    : semanticRuntimeRangeForSource(originSource, originDocument);
+    : semanticSourceRangeForDocument(originSource, originDocument);
 
   return {
     targetUri,
@@ -773,7 +729,7 @@ export function mapSemanticRuntimeTemplateReferences(
     if (source == null) {
       continue;
     }
-    const uri = semanticRuntimeSourceReferenceUri(source, options.workspaceRoot);
+    const uri = semanticSourceReferenceUri(source, options.workspaceRoot);
     if (uri == null) {
       continue;
     }
@@ -790,7 +746,7 @@ export function mapSemanticRuntimeTemplateReferences(
       0,
       text,
     );
-    const range = semanticRuntimeRangeForSource(source, document);
+    const range = semanticSourceRangeForDocument(source, document);
     if (range == null) {
       continue;
     }
@@ -814,14 +770,14 @@ export function mapSemanticRuntimeTemplatePrepareRename(
   if (source == null) {
     return null;
   }
-  const uri = semanticRuntimeSourceReferenceUri(source, options.workspaceRoot);
+  const uri = semanticSourceReferenceUri(source, options.workspaceRoot);
   if (uri == null) {
     return null;
   }
   if (canonicalDocumentUri(uri).uri !== canonicalDocumentUri(options.originDocument.uri).uri) {
     return null;
   }
-  const range = semanticRuntimeRangeForSource(source, options.originDocument);
+  const range = semanticSourceRangeForDocument(source, options.originDocument);
   return range == null ? null : { range, placeholder: answer.value.placeholder };
 }
 
@@ -886,7 +842,7 @@ function mapSemanticRuntimeWorkspaceEditRows(
       failures.push(`Edit ${rowLabel} has no exact authored source span.`);
       continue;
     }
-    const uri = semanticRuntimeSourceReferenceUri(source, options.workspaceRoot);
+    const uri = semanticSourceReferenceUri(source, options.workspaceRoot);
     if (uri == null) {
       failures.push(`Edit ${rowLabel} cannot be resolved to a workspace document.`);
       continue;
@@ -905,7 +861,7 @@ function mapSemanticRuntimeWorkspaceEditRows(
       snapshot.version ?? 0,
       snapshot.text,
     );
-    const range = semanticRuntimeRangeForSource(source, document);
+    const range = semanticSourceRangeForDocument(source, document);
     if (range == null) {
       failures.push(`Edit ${rowLabel} has a span outside the current document text.`);
       continue;
@@ -1175,7 +1131,7 @@ function semanticRuntimeTemplateCodeActionDiagnosticMatches(
   }
   const range = sourceDiagnostic.source == null
     ? null
-    : semanticRuntimeRangeForSource(sourceDiagnostic.source, originDocument);
+    : semanticSourceRangeForDocument(sourceDiagnostic.source, originDocument);
   return range == null || rangesEqual(diagnostic.range, range);
 }
 

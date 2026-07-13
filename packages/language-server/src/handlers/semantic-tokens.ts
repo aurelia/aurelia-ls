@@ -12,10 +12,10 @@ import type {
 import {
   SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS,
   SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES,
-  semanticExactSourceReference,
   type SemanticTemplateSemanticTokenRow,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
+import { semanticSourceOffsetRangeForDocument } from "../mapping/source-locations.js";
 import {
   logIfSemanticRuntimeRequestAborted,
 } from "./request-guard.js";
@@ -82,8 +82,8 @@ export function encodeTokens(tokens: readonly SemanticTemplateSemanticTokenRow[]
   for (const token of tokens) {
     const typeIndex = TYPE_INDEX.get(token.tokenType);
     if (typeIndex === undefined) continue;
-    const source = semanticExactSourceReference(token.source);
-    if (source?.start == null || source.end == null) continue;
+    const source = semanticSourceOffsetRangeForDocument(token.source, { getText: () => text });
+    if (source == null) continue;
     const length = source.end - source.start;
     if (length <= 0) continue;
     const start = positionAtOffset(text, source.start);
@@ -125,15 +125,13 @@ function encodeModifiers(modifiers?: readonly string[]): number {
 }
 
 function positionAtOffset(text: string, offset: number): { line: number; character: number } {
-  const length = text.length;
-  const clamped = Math.max(0, Math.min(offset, length));
   const lineStarts = computeLineStarts(text);
   let line = 0;
-  while (line + 1 < lineStarts.length && (lineStarts[line + 1] ?? Number.POSITIVE_INFINITY) <= clamped) {
+  while (line + 1 < lineStarts.length && (lineStarts[line + 1] ?? Number.POSITIVE_INFINITY) <= offset) {
     line += 1;
   }
   const lineStart = lineStarts[line] ?? 0;
-  return { line, character: clamped - lineStart };
+  return { line, character: offset - lineStart };
 }
 
 function computeLineStarts(text: string): number[] {

@@ -1263,7 +1263,60 @@
               "name": "semantic tokens",
               "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "tokenType": "aureliaElement" }, "source": { "marker": "<au-compose></au-compose>", "token": "au-compose" } }
+                { "fields": { "tokenType": "aureliaElement" }, "source": { "marker": "<au-compose></au-compose>", "token": "au-compose", "occurrence": 1 } },
+                { "fields": { "tokenType": "aureliaElement" }, "source": { "marker": "<au-compose></au-compose>", "token": "au-compose", "occurrence": 2 } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "compose-opening-tag-cursor-source",
+          "aureliaDomain": "runtime-composition",
+          "domainAxis": "query-locus",
+          "capability": "template-cursor-info",
+          "cursor": { "marker": "<au-compose></au-compose>", "token": "au-compose", "occurrence": 1 },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": { "value.siteKind": "element-name", "value.html.tagName": "au-compose" },
+              "rows": [
+                { "rowPath": "value", "sourceField": "activeSource", "source": { "marker": "<au-compose></au-compose>", "token": "au-compose", "occurrence": 1 }, "count": 1 },
+                { "rowPath": "value.html", "sourceField": "tagNameSource", "source": { "marker": "<au-compose></au-compose>", "token": "au-compose", "occurrence": 1 }, "count": 1 },
+                { "rowPath": "value.html", "sourceField": "closingTagNameSource", "source": { "marker": "<au-compose></au-compose>", "token": "au-compose", "occurrence": 2 }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "compose-closing-tag-cursor-source",
+          "aureliaDomain": "runtime-composition",
+          "domainAxis": "query-locus",
+          "capability": "template-cursor-info",
+          "cursor": { "marker": "<au-compose></au-compose>", "token": "au-compose", "occurrence": 2 },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": { "value.html.tagName": "au-compose" },
+              "rows": [
+                { "rowPath": "value", "sourceField": "activeSource", "source": { "marker": "<au-compose></au-compose>", "token": "au-compose", "occurrence": 2 }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "expression-member-cursor-source",
+          "domainAxis": "query-locus",
+          "capability": "template-cursor-info",
+          "cursor": { "marker": "<input value.bind=\"draft.title\">", "token": "title" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": { "value.siteKind": "expression-member", "value.selectedMemberName": "title", "value.handles.activeSourceAddressHandle": null },
+              "rows": [
+                { "rowPath": "value", "sourceField": "activeSource", "source": { "marker": "<input value.bind=\"draft.title\">", "token": "title" }, "count": 1 }
               ]
             }
           ]
@@ -3576,6 +3629,40 @@
               ]
             }
           ]
+        },
+        {
+          "id": "inline-template-expression-cursor-source",
+          "domainAxis": "query-locus",
+          "capability": "template-cursor-info",
+          "cursor": { "marker": "template: '<span>${label}: ${enabled}</span>'", "token": "label" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": { "value.siteKind": "expression", "value.selectedMemberName": "label", "value.handles.activeSourceAddressHandle": null },
+              "rows": [
+                { "rowPath": "value", "sourceField": "activeSource", "source": { "marker": "template: '<span>${label}: ${enabled}</span>'", "token": "label" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inline-template-element-tag-cursor-sources",
+          "domainAxis": "query-locus",
+          "capability": "template-cursor-info",
+          "cursor": { "marker": "template: '<boundary-card enabled.two-way=\"enabled\" label.bind=\"label\"></boundary-card>'", "token": "boundary-card", "occurrence": 1 },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": { "value.siteKind": "element-name", "value.html.tagName": "boundary-card" },
+              "rows": [
+                { "rowPath": "value", "sourceField": "activeSource", "source": { "marker": "template: '<boundary-card enabled.two-way=\"enabled\" label.bind=\"label\"></boundary-card>'", "token": "boundary-card", "occurrence": 1 }, "count": 1 },
+                { "rowPath": "value.html", "sourceField": "tagNameSource", "source": { "marker": "template: '<boundary-card enabled.two-way=\"enabled\" label.bind=\"label\"></boundary-card>'", "token": "boundary-card", "occurrence": 1 }, "count": 1 },
+                { "rowPath": "value.html", "sourceField": "closingTagNameSource", "source": { "marker": "template: '<boundary-card enabled.two-way=\"enabled\" label.bind=\"label\"></boundary-card>'", "token": "boundary-card", "occurrence": 2 }, "count": 1 }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -4552,6 +4639,59 @@
                 "value.selectedDefinition.resourceKind": "custom-element",
                 "value.selectedDefinition.name": "inline-anonymous-card"
               }
+            }
+          ]
+        },
+        {
+          "id": "resource-targets-preserve-selection-and-declaration-loci",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "decorator-effective", "targetName": "DecoratorOverStatic" },
+                  "sourceField": "targetDeclarationSource",
+                  "source": { "sourceFile": "src/resources.ts", "startMarker": "@customElement('decorator-effective')", "endMarker": "  };\n}", "endMarkerOccurrence": 1 },
+                  "count": 1
+                },
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "define-effective", "targetName": "DefineOverDecorator" },
+                  "sourceField": "targetDeclarationSource",
+                  "source": { "sourceFile": "src/resources.ts", "token": "@customElement('decorator-shadowed')\nexport class DefineOverDecorator {}" },
+                  "count": 1
+                },
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "anonymous-card", "targetName": "AnonymousCard" },
+                  "sourceField": "targetDeclarationSource",
+                  "source": { "sourceFile": "src/resources.ts", "token": "AnonymousCard = CustomElement.define({\n  name: 'anonymous-card',\n  template: '<template>anonymous</template>',\n})" },
+                  "count": 1
+                },
+                {
+                  "fields": { "resourceKind": "binding-command", "name": "static-command", "targetName": "StaticBindingCommand" },
+                  "sourceField": "targetDeclarationSource",
+                  "source": { "sourceFile": "src/resources.ts", "startMarker": "export class StaticBindingCommand", "endMarker": "  };\n}" },
+                  "count": 1
+                },
+                {
+                  "fields": { "resourceKind": "attribute-pattern", "targetName": "DataAttributePattern" },
+                  "sourceField": "targetDeclarationSource",
+                  "source": { "sourceFile": "src/resources.ts", "startMarker": "@attributePattern({ pattern: 'PART.data', symbols: '.' })", "endMarker": "  }\n}", "endMarkerOccurrence": 1 },
+                  "count": 1
+                },
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "imported-target-card", "targetName": "ImportedTargetCard" },
+                  "sourceField": "targetSource",
+                  "source": { "sourceFile": "src/imported-target-card.ts", "token": "ImportedTargetCard" },
+                  "count": 1
+                },
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "imported-target-card", "targetName": "ImportedTargetCard" },
+                  "sourceField": "targetDeclarationSource",
+                  "source": { "sourceFile": "src/imported-target-card.ts", "token": "export class ImportedTargetCard {\n  value = '';\n}" },
+                  "count": 1
+                }
+              ]
             }
           ]
         },
@@ -5553,6 +5693,12 @@
                   "fields": { "resourceKind": "custom-element", "name": "convention-card", "targetName": "ConventionCard", "declarationModes.0": "convention", "nameSource": null },
                   "sourceField": "targetSource",
                   "source": { "sourceFile": "src/convention-card.ts", "marker": "class ConventionCard", "token": "ConventionCard" },
+                  "count": 1
+                },
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "convention-card", "targetName": "ConventionCard", "declarationModes.0": "convention", "nameSource": null },
+                  "sourceField": "targetDeclarationSource",
+                  "source": { "sourceFile": "src/convention-card.ts", "token": "export class ConventionCard {\n  message = 'convention';\n}" },
                   "count": 1
                 }
               ]

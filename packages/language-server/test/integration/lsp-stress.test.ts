@@ -2,6 +2,7 @@ import { test, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { TOKEN_TYPES } from "@aurelia-ls/language-server/api";
 import {
   applyWorkspaceEditToTrackedDocuments,
   changeDocument,
@@ -11,6 +12,7 @@ import {
   fileUri,
   initialize,
   normalizedUriPath,
+  offsetAt,
   openDocument,
   pathFromFileUri,
   positionAt,
@@ -22,6 +24,54 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const helloWorldFixture = path.join(repoRoot, "fixtures", "hello-world");
+
+interface LspPosition {
+  readonly line: number;
+  readonly character: number;
+}
+
+interface LspRange {
+  readonly start: LspPosition;
+  readonly end: LspPosition;
+}
+
+interface LspDocumentSymbol {
+  readonly name: string;
+  readonly range: LspRange;
+  readonly selectionRange: LspRange;
+  readonly children?: readonly LspDocumentSymbol[];
+}
+
+interface LspCodeLens {
+  readonly range: LspRange;
+  readonly command?: {
+    readonly command: string;
+    readonly arguments?: readonly unknown[];
+  };
+}
+
+interface LspSelectionRange {
+  readonly range: LspRange;
+  readonly parent?: LspSelectionRange;
+}
+
+interface LspInlayHint {
+  readonly position: LspPosition;
+  readonly label: string;
+}
+
+interface LspFoldingRange {
+  readonly startLine: number;
+  readonly startCharacter?: number;
+  readonly endLine: number;
+  readonly endCharacter?: number;
+}
+
+interface DecodedSemanticToken {
+  readonly text: string;
+  readonly type: string | null;
+  readonly range: LspRange;
+}
 
 function addHintPanelFixtureFiles(fixture: string): void {
   fs.writeFileSync(path.join(fixture, "src/components/hint-panel.ts"), [
@@ -85,18 +135,38 @@ test("synced TypeScript documents feed source intelligence without claiming temp
 
     const symbols = await connection.sendRequest("textDocument/documentSymbol", {
       textDocument: { uri: productCardTs.uri },
-    });
+    }) as LspDocumentSymbol[];
     const symbolJson = JSON.stringify(symbols);
     expect(symbolJson).toContain("ProductCard");
     expect(symbolJson).toContain("item");
     expect(symbolJson).toContain("display-label");
+    const productCardSymbol = symbols.find((symbol) => symbol.name === "ProductCard");
+    expect(productCardSymbol).toBeDefined();
+    expect(textForRange(productCardTs.text, productCardSymbol!.selectionRange)).toBe("ProductCard");
+    expect(textForRange(productCardTs.text, productCardSymbol!.range)).toBe(
+      productCardTs.text.slice(productCardTs.text.indexOf("@customElement")).trimEnd(),
+    );
+    const itemSymbol = productCardSymbol!.children?.find((symbol) => symbol.name === "item");
+    expect(itemSymbol).toBeDefined();
+    expect(textForRange(productCardTs.text, itemSymbol!.selectionRange)).toBe("item");
+    expect(offsetAt(productCardTs.text, productCardSymbol!.range.start)).toBeLessThanOrEqual(
+      offsetAt(productCardTs.text, itemSymbol!.range.start),
+    );
+    expect(offsetAt(productCardTs.text, productCardSymbol!.range.end)).toBeGreaterThanOrEqual(
+      offsetAt(productCardTs.text, itemSymbol!.range.end),
+    );
 
     const codeLens = await connection.sendRequest("textDocument/codeLens", {
       textDocument: { uri: productCardTs.uri },
-    });
+    }) as LspCodeLens[];
     const lensJson = JSON.stringify(codeLens);
     expect(lensJson).toContain("element");
     expect(lensJson).toContain("bindable");
+    const referenceLens = codeLens.find((lens) => lens.command?.command === "editor.action.findReferences");
+    expect(referenceLens).toBeDefined();
+    expect(referenceLens!.command!.arguments?.[1]).toEqual(
+      positionAt(productCardTs.text, productCardTs.text.indexOf("ProductCard")),
+    );
   } finally {
     diagnostics.dispose();
     dispose();
@@ -259,35 +329,48 @@ test("secondary template lanes stay usable after a live TypeScript source refres
     const inlayHints = await connection.sendRequest("textDocument/inlayHint", {
       textDocument: { uri: myApp.uri },
       range: fullRange,
-    }) as unknown[];
+    }) as LspInlayHint[];
     expect(Array.isArray(inlayHints)).toBe(true);
     expect(JSON.stringify(inlayHints)).toContain(":");
+    const firstValueBindEnd = myApp.text.indexOf("value.bind") + "value.bind".length;
+    expect(inlayHints).toContainEqual(expect.objectContaining({
+      position: positionAt(myApp.text, firstValueBindEnd),
+    }));
 
     const foldingRanges = await connection.sendRequest("textDocument/foldingRange", {
       textDocument: { uri: myApp.uri },
-    }) as unknown[];
+    }) as LspFoldingRange[];
     expect(Array.isArray(foldingRanges)).toBe(true);
     expect(foldingRanges.length).toBeGreaterThan(0);
+    expect(foldingRanges.some((range) => textForFoldingRange(myApp.text, range).startsWith("<main"))).toBe(true);
 
     const selectionRanges = await connection.sendRequest("textDocument/selectionRange", {
       textDocument: { uri: myApp.uri },
       positions: [memberPosition],
-    }) as unknown[];
+    }) as LspSelectionRange[];
     expect(Array.isArray(selectionRanges)).toBe(true);
     expect(selectionRanges.length).toBe(1);
     expect(JSON.stringify(selectionRanges[0])).toContain("parent");
+    expect(textForRange(myApp.text, selectionRanges[0]!.range)).toBe("searchText");
 
     const linkedEditing = await connection.sendRequest("textDocument/linkedEditingRange", {
       textDocument: { uri: myApp.uri },
       position: tagPosition,
-    }) as { ranges?: unknown[] } | null;
+    }) as { ranges?: LspRange[] } | null;
     expect(linkedEditing?.ranges?.length).toBe(2);
+    expect(linkedEditing?.ranges?.map((range) => textForRange(myApp.text, range))).toEqual([
+      "product-card",
+      "product-card",
+    ]);
 
     const semanticTokens = await connection.sendRequest("textDocument/semanticTokens/full", {
       textDocument: { uri: myApp.uri },
-    }) as { data?: unknown[] };
+    }) as { data?: number[] };
     expect(Array.isArray(semanticTokens.data)).toBe(true);
     expect(semanticTokens.data!.length).toBeGreaterThan(0);
+    const productCardTokens = decodeSemanticTokens(myApp.text, semanticTokens.data!)
+      .filter((token) => token.text === "product-card" && token.type === "aureliaElement");
+    expect(productCardTokens).toHaveLength(2);
   } finally {
     diagnostics.dispose();
     dispose();
@@ -296,6 +379,41 @@ test("secondary template lanes stay usable after a live TypeScript source refres
     fs.rmSync(fixture, { recursive: true, force: true });
   }
 }, 30000);
+
+function textForRange(text: string, range: LspRange): string {
+  return text.slice(offsetAt(text, range.start), offsetAt(text, range.end));
+}
+
+function textForFoldingRange(text: string, range: LspFoldingRange): string {
+  return textForRange(text, {
+    start: { line: range.startLine, character: range.startCharacter ?? 0 },
+    end: { line: range.endLine, character: range.endCharacter ?? 0 },
+  });
+}
+
+function decodeSemanticTokens(text: string, data: readonly number[]): DecodedSemanticToken[] {
+  expect(data.length % 5).toBe(0);
+  const rows: DecodedSemanticToken[] = [];
+  let line = 0;
+  let character = 0;
+  for (let index = 0; index < data.length; index += 5) {
+    const deltaLine = data[index]!;
+    const deltaCharacter = data[index + 1]!;
+    const length = data[index + 2]!;
+    const typeIndex = data[index + 3]!;
+    line += deltaLine;
+    character = deltaLine === 0 ? character + deltaCharacter : deltaCharacter;
+    const start = { line, character };
+    const startOffset = offsetAt(text, start);
+    const end = positionAt(text, startOffset + length);
+    rows.push({
+      text: text.slice(startOffset, startOffset + length),
+      type: TOKEN_TYPES[typeIndex] ?? null,
+      range: { start, end },
+    });
+  }
+  return rows;
+}
 
 function openTrackedDocument(
   connection: ReturnType<typeof startServer>["connection"],

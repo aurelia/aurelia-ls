@@ -4,8 +4,19 @@ import {
   type SourceFileAddress,
   type SemanticAddress,
 } from './address.js';
-import type { AddressHandle, IdentityHandle } from './handles.js';
+import {
+  EvidenceKind,
+  EvidenceRecord,
+  type EvidenceRole,
+} from './evidence.js';
+import type {
+  AddressHandle,
+  EvidenceHandle,
+  IdentityHandle,
+  ProvenanceHandle,
+} from './handles.js';
 import type { SemanticIdentity } from './identity.js';
+import { ProvenanceRecord } from './provenance.js';
 import type {
   KernelStore,
   KernelStoreRecord,
@@ -30,6 +41,15 @@ export class SourceSpanAddressPublication {
   constructor(
     readonly handle: AddressHandle,
     readonly records: readonly KernelStoreRecord[],
+  ) {}
+}
+
+export class SourceSpanEvidencePublication {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly addressHandle: AddressHandle,
+    readonly evidenceHandle: EvidenceHandle,
+    readonly provenanceHandle: ProvenanceHandle,
   ) {}
 }
 
@@ -62,6 +82,36 @@ export function sourceSpanAddressForSite(
         role,
       ),
     ],
+  );
+}
+
+/** Publish an exact authored span together with the witness used by durable field provenance. */
+export function sourceSpanEvidenceForSite(
+  store: KernelStore,
+  localKey: string,
+  site: SourceSpanSite,
+  role: SourceSpanRole,
+  evidenceRoles: readonly EvidenceRole[],
+  summary: string,
+): SourceSpanEvidencePublication {
+  const source = sourceSpanAddressForSite(store, localKey, site, role);
+  const evidenceHandle = store.handles.evidence(localKey);
+  const provenanceHandle = store.handles.provenance(localKey);
+  return new SourceSpanEvidencePublication(
+    [
+      ...source.records,
+      new EvidenceRecord(
+        evidenceHandle,
+        EvidenceKind.SourceObservation,
+        evidenceRoles,
+        summary,
+        source.handle,
+      ),
+      new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
+    ],
+    source.handle,
+    evidenceHandle,
+    provenanceHandle,
   );
 }
 

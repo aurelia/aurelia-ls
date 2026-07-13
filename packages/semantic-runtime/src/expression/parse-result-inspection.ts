@@ -193,6 +193,17 @@ export class ExpressionParseResultInspector {
       : null;
   }
 
+  /** Exact authored identifier-like token selected by a cursor without allocating per-token kernel addresses. */
+  static authoredTokenSpanAtOffset(
+    result: ExpressionParseResult,
+    offset: number,
+  ): SourceSpan | null {
+    if (!this.hasCanonicalAst(result)) {
+      return null;
+    }
+    return authoredTokenSpanForExpressionAtOffset(result.ast, offset);
+  }
+
   static objectLiteralKeyContextAtOffset(
     result: ExpressionParseResult,
     offset: number,
@@ -421,6 +432,39 @@ function bindingIdentifierForNodeOffset(
       ? candidate
       : null
   );
+}
+
+function authoredTokenSpanForExpressionAtOffset(
+  expression: ExpressionAstNode,
+  offset: number,
+): SourceSpan | null {
+  return findInExpressionAtOffset(expression, offset, (candidate) => {
+    switch (candidate.$kind) {
+      case 'AccessMember':
+      case 'CallMember':
+      case 'AccessScope':
+      case 'CallScope':
+      case 'AccessGlobal':
+      case 'CallGlobal':
+      case 'BindingBehavior':
+      case 'ValueConverter':
+      case 'BindingIdentifier':
+        return expressionSpanContainsOffset(candidate.name.span, offset)
+          ? candidate.name.span
+          : null;
+      case 'AccessThis':
+      case 'AccessBoundary':
+        return expressionSpanContainsOffset(candidate.span, offset)
+          ? candidate.span
+          : null;
+      case 'ObjectLiteral': {
+        const keyIndex = candidate.keySpans.findIndex((span) => expressionSpanContainsOffset(span, offset));
+        return keyIndex < 0 ? null : candidate.keySpans[keyIndex] ?? null;
+      }
+      default:
+        return null;
+    }
+  });
 }
 
 function findInExpression<T>(

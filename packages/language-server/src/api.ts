@@ -15,6 +15,7 @@ export * from "./handlers/linked-editing-ranges.js";
 export * from "./handlers/folding-ranges.js";
 export * from "./handlers/request-guard.js";
 export * from "./mapping/lsp-types.js";
+export * from "./mapping/source-locations.js";
 export { SemanticRuntimeLspRequestAbortedError } from "./runtime/semantic-runtime-session.js";
 export {
   spanToDocumentRange,

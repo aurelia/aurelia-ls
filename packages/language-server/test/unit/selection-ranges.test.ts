@@ -50,6 +50,7 @@ function cursorInfo(overrides: Record<string, unknown> = {}) {
     expressionFrontier: null,
     missingInputs: [],
     template: { compilationLane: "app-runtime", source: source(0, text.length) },
+    activeSource: source(titleStart, titleEnd),
     html: {
       nodeKind: "element",
       tagName: "input",
@@ -57,6 +58,8 @@ function cursorInfo(overrides: Record<string, unknown> = {}) {
       attributeValue: "title",
       source: source(elementStart, elementEnd),
       attributeSource: source(attributeStart, attributeEnd),
+      tagNameSource: source(elementStart + 1, elementStart + 6),
+      closingTagNameSource: null,
     },
     valueSite: {
       siteKind: "attribute",
@@ -115,6 +118,7 @@ describe("runtime-backed selection ranges", () => {
   test("returns null when runtime has no source-backed active-document span", async () => {
     const ctx = createMockContext(cursorInfo({
       template: { compilationLane: "app-runtime", source: null },
+      activeSource: null,
       html: {
         nodeKind: null,
         tagName: null,
@@ -122,6 +126,8 @@ describe("runtime-backed selection ranges", () => {
         attributeValue: null,
         source: null,
         attributeSource: null,
+        tagNameSource: null,
+        closingTagNameSource: null,
       },
       valueSite: null,
       selectedMemberName: null,
