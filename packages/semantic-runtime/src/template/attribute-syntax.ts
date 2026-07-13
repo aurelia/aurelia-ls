@@ -83,6 +83,7 @@ export type AttributeSyntaxField =
   | 'command'
   | 'commandSource'
   | 'parts'
+  | 'patternParts'
   | 'pattern'
   | 'compiledPattern'
   | 'patternLiterals'
@@ -149,9 +150,20 @@ export class AttributePatternLiteralOccurrence {
   ) {}
 }
 
+/** Relative authored occurrence of one interpreted pattern part. */
+export class AttributePatternPartOccurrence {
+  constructor(
+    readonly partIndex: number,
+    readonly value: string,
+    readonly start: number,
+    readonly end: number,
+  ) {}
+}
+
 export class AttributePatternMatch {
   constructor(
     readonly parts: readonly string[],
+    readonly partOccurrences: readonly AttributePatternPartOccurrence[],
     readonly literalOccurrences: readonly AttributePatternLiteralOccurrence[],
   ) {}
 }
@@ -236,10 +248,29 @@ function matchAttributePattern(
   symbols: readonly string[],
 ): AttributePatternMatch | null {
   const parts: string[] = [];
+  const partOccurrences: AttributePatternPartOccurrence[] = [];
   const literalOccurrences: AttributePatternLiteralOccurrence[] = [];
   const symbolSet = new Set(symbols);
   let pos = 0;
   let currentPart = '';
+  let currentPartStart: number | null = null;
+
+  const appendPartText = (value: string, start: number): void => {
+    if (currentPartStart == null) {
+      currentPartStart = start;
+    }
+    currentPart += value;
+  };
+  const flushPart = (end: number): void => {
+    if (currentPartStart == null || currentPart.length === 0) {
+      return;
+    }
+    const partIndex = parts.length;
+    parts.push(currentPart);
+    partOccurrences.push(new AttributePatternPartOccurrence(partIndex, currentPart, currentPartStart, end));
+    currentPart = '';
+    currentPartStart = null;
+  };
 
   for (const [tokenIndex, token] of tokens.entries()) {
     if (token.tokenKind === AttributePatternTokenKind.Literal) {
@@ -251,14 +282,12 @@ function matchAttributePattern(
         literalOccurrences.push(new AttributePatternLiteralOccurrence(tokenIndex, value, pos, pos + value.length));
       }
 
-      for (const ch of value) {
+      for (let index = 0; index < value.length; index++) {
+        const ch = value[index]!;
         if (symbolSet.has(ch)) {
-          if (currentPart.length > 0) {
-            parts.push(currentPart);
-            currentPart = '';
-          }
+          flushPart(pos + index);
         } else {
-          currentPart += ch;
+          appendPartText(ch, pos + index);
         }
       }
       pos += value.length;
@@ -270,14 +299,12 @@ function matchAttributePattern(
       if (pos === start) {
         return null;
       }
-      currentPart += input.slice(start, pos);
+      appendPartText(input.slice(start, pos), start);
     }
   }
 
-  if (currentPart.length > 0) {
-    parts.push(currentPart);
-  }
-  return pos === input.length ? new AttributePatternMatch(parts, literalOccurrences) : null;
+  flushPart(pos);
+  return pos === input.length ? new AttributePatternMatch(parts, partOccurrences, literalOccurrences) : null;
 }
 
 /** Runtime CompiledPattern model used by SyntaxInterpreter. */
@@ -324,6 +351,8 @@ export class AttributePatternInterpretation {
     readonly compiledPatternProductHandle: ProductHandle | null,
     /** Relative literal-token occurrences retained from the winning match. */
     readonly literalOccurrences: readonly AttributePatternLiteralOccurrence[] = [],
+    /** Relative interpreted-part occurrences retained from the winning match. */
+    readonly partOccurrences: readonly AttributePatternPartOccurrence[] = [],
   ) {}
 }
 
@@ -354,6 +383,7 @@ export function interpretCompiledAttributePatterns(
       bestMatch?.parts ?? [],
       bestPattern.productHandle,
       bestMatch?.literalOccurrences ?? [],
+      bestMatch?.partOccurrences ?? [],
     );
 }
 
@@ -550,6 +580,8 @@ export class AttributeSyntax {
     readonly commandSourceAddressHandle: AddressHandle | null,
     /** Additional pattern parts in runtime order. */
     readonly parts: readonly string[],
+    /** Exact authored occurrences of every interpreted pattern part. */
+    readonly patternParts: readonly AttributePatternPartReference[],
     /** Attribute pattern definition entry that matched this syntax, when known. */
     readonly pattern: AttributePatternDefinitionEntry | null,
     /** Winning compiled pattern selected by the parser, when one matched. */
@@ -581,6 +613,14 @@ export class AttributeSyntax {
 export class AttributePatternLiteralReference {
   constructor(
     readonly tokenIndex: number,
+    readonly value: string,
+    readonly sourceAddressHandle: AddressHandle,
+  ) {}
+}
+
+export class AttributePatternPartReference {
+  constructor(
+    readonly partIndex: number,
     readonly value: string,
     readonly sourceAddressHandle: AddressHandle,
   ) {}

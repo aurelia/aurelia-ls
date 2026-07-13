@@ -103,6 +103,7 @@ import { TemplateValueSiteKind } from '../template/value-site.js';
 import type { TemplateSource } from '../template/compilation-unit.js';
 import type { AttributeClassification, AttributeSyntax } from '../template/attribute-syntax.js';
 import { HydrateElementInstruction } from '../template/instruction-ir.js';
+import { namedRefTargetController } from '../template/runtime-ref-target.js';
 import {
   HtmlAttribute,
   HtmlElement,
@@ -495,7 +496,7 @@ class TemplateCompletionCursorContextBuilder {
   private contextForOffset(offset: number): TemplateCompletionCursorContext {
     const htmlNode = this.htmlNodeForOffset(offset);
     const htmlAttribute = this.htmlAttributeForOffset(offset);
-    const valueSite = this.valueSiteForOffset(offset);
+    const valueSite = this.valueSiteForOffset(offset, htmlAttribute);
     const expressionParse = this.expressionParseForValueSite(valueSite);
     const expressionResult = expressionParse == null
       ? null
@@ -504,7 +505,7 @@ class TemplateCompletionCursorContextBuilder {
       ? null
       : expressionCompletionFrontier(expressionResult);
     const topLevelSyntax = this.syntaxForCursorAttribute(htmlAttribute);
-    const nestedSyntax = this.multiBindingSyntaxForCursor(offset);
+    const nestedSyntax = this.multiBindingSyntaxForCursor(offset, htmlAttribute);
     const syntax = nestedSyntax ?? topLevelSyntax;
     const classification = this.classificationForCursorSyntax(topLevelSyntax);
     const multiBindingSegment = this.multiBindingSegmentForCursor(offset, valueSite, nestedSyntax);
@@ -670,12 +671,20 @@ class TemplateCompletionCursorContextBuilder {
     return null;
   }
 
-  private multiBindingSyntaxForCursor(offset: number): AttributeSyntax | null {
-    return smallestContaining(
+  private multiBindingSyntaxForCursor(
+    offset: number,
+    activeAttribute: HtmlAttribute | null,
+  ): AttributeSyntax | null {
+    const syntax = smallestContaining(
       this.input.resource.compilation.bindingCommandLowering.attributeSyntaxes,
       offset,
       (syntax) => sourceSpanFor(this.store, syntax.nameSourceAddressHandle),
     );
+    return syntax != null
+      && activeAttribute != null
+      && syntax.attribute.productHandle === activeAttribute.productHandle
+      ? syntax
+      : null;
   }
 
   private multiBindingSegmentForValueOwner(productHandle: ProductHandle): MultiBindingSegment | null {
@@ -708,12 +717,19 @@ class TemplateCompletionCursorContextBuilder {
     );
   }
 
-  private valueSiteForOffset(offset: number): TemplateValueSite | null {
-    return smallestContaining(
+  private valueSiteForOffset(
+    offset: number,
+    activeAttribute: HtmlAttribute | null,
+  ): TemplateValueSite | null {
+    const site = smallestContaining(
       templateValueSitesForResource(this.input.resource),
       offset,
       (site) => sourceSpanFor(this.store, site.sourceAddressHandle),
     );
+    if (site?.attribute?.productHandle == null) {
+      return activeAttribute == null ? site : null;
+    }
+    return site.attribute.productHandle === activeAttribute?.productHandle ? site : null;
   }
 
   private expressionParseForValueSite(valueSite: TemplateValueSite | null): TemplateExpressionParse | null {
@@ -800,6 +816,7 @@ function activeTemplateSourceAddressHandle(
   valueSite: TemplateValueSite | null,
 ): AddressHandle | null {
   const handles = [
+    ...(syntax?.patternParts.map((part) => part.sourceAddressHandle) ?? []),
     syntax?.targetSourceAddressHandle ?? null,
     syntax?.commandSourceAddressHandle ?? null,
     syntax?.nameSourceAddressHandle ?? null,
@@ -2482,14 +2499,23 @@ function smallestContaining<TValue>(
   offset: number,
   readSpan: (value: TValue) => SourceSpanAddress | null,
 ): TValue | null {
-  let best: { readonly value: TValue; readonly span: SourceSpanAddress } | null = null;
+  let best: {
+    readonly value: TValue;
+    readonly span: SourceSpanAddress;
+    readonly ownsCharacter: boolean;
+  } | null = null;
   for (const value of values) {
     const span = readSpan(value);
     if (!cursorTouchesSpan(span, offset) || span == null) {
       continue;
     }
-    if (best == null || spanLength(span) < spanLength(best.span)) {
-      best = { value, span };
+    const ownsCharacter = span.start <= offset && offset < span.end;
+    if (
+      best == null
+      || (ownsCharacter && !best.ownsCharacter)
+      || (ownsCharacter === best.ownsCharacter && spanLength(span) < spanLength(best.span))
+    ) {
+      best = { value, span, ownsCharacter };
     }
   }
   return best?.value ?? null;
@@ -2949,6 +2975,10 @@ function selectedDefinitionForCursor(
       return { productHandle: command.definitionProductHandle, matchedName: syntax.command };
     }
   }
+  const refTarget = namedRefTargetDefinitionForCursor(store, resource, offset);
+  if (refTarget != null) {
+    return refTarget;
+  }
   const attributePattern = attributePatternDefinitionForCursor(store, syntax, offset);
   if (attributePattern != null) {
     return attributePattern;
@@ -2968,6 +2998,26 @@ function selectedDefinitionForCursor(
     return { productHandle: classifiedProductHandle, matchedName };
   }
   return elementSelection ?? definitionForDeclarationCursor(store, resource, offset);
+}
+
+function namedRefTargetDefinitionForCursor(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  offset: number,
+): TemplateDefinitionCursorSelection | null {
+  for (const operation of resource.runtimeAnalysis.controllerBind.sourceOperations) {
+    if (!cursorTouchesSpan(sourceSpanFor(store, operation.sourceAddressHandle), offset)) {
+      continue;
+    }
+    const controller = namedRefTargetController(resource.runtimeAnalysis.runtimeRendering, operation);
+    if (controller?.definitionProductHandle != null) {
+      return {
+        productHandle: controller.definitionProductHandle,
+        matchedName: operation.targetName,
+      };
+    }
+  }
+  return null;
 }
 
 function attributePatternDefinitionForCursor(

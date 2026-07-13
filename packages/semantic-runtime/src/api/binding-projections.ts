@@ -20,6 +20,7 @@ import { sourceSpanFromBounds } from '../expression/source-span.js';
 import { runtimeAssignmentTargetAstForExpression } from '../expression/runtime-assignment.js';
 import { bindingDataFlowDirectionIncludesTargetToSource } from '../observation/binding-data-flow-direction.js';
 import { completedTemplateExpressionAstForParse } from '../template/expression-parse-projection.js';
+import { ListenerBinding } from '../template/runtime-binding.js';
 import type {
   SemanticBindingDataFlowRow,
   SemanticBindingDataFlowIssueKind,
@@ -50,6 +51,7 @@ import {
   resourceLocalBindingTargetAccesses,
   resourceLocalBindingTargetOperations,
   resourceLocalBindingValueChannels,
+  resourceLocalRuntimeBindings,
   resourceLocalValueConverterApplications,
 } from '../template/runtime-resource-ownership.js';
 
@@ -106,32 +108,45 @@ export function readTargetOperationRows(
   handles: boolean,
 ): readonly SemanticTargetOperationRow[] {
   return bindingProjectionResources(emission)
-    .flatMap((resource): readonly SemanticTargetOperationRow[] =>
-      resourceLocalBindingTargetOperations(store, resource).map((operation) => ({
-        definitionName: resource.compilation.definition.name,
-        ownerKind: operation.ownerKind,
-        bindingKind: operation.binding?.bindingKind ?? null,
-        rendererKind: operation.renderer?.rendererKind ?? null,
-        targetKind: operation.targetKind,
-        targetAttribute: operation.targetAttribute,
-        targetProperty: operation.targetProperty,
-        staticValue: operation.value,
-        operationKind: operation.operationKind,
-        affectedNames: operation.affectedNames,
-        authority: operation.authority,
-        openReason: operation.openReason,
-        source: describeAddress(store, operation.sourceAddressHandle),
-        ...(handles ? {
-          handles: {
-            bindingProductHandle: operation.binding?.productHandle ?? null,
-            rendererProductHandle: operation.renderer?.productHandle ?? null,
-            instructionProductHandle: operation.instructionProductHandle,
-            targetOperationProductHandle: operation.productHandle,
-            sourceAddressHandle: operation.sourceAddressHandle,
-          },
-        } : {}),
-      }))
-    )
+    .flatMap((resource): readonly SemanticTargetOperationRow[] => {
+      const bindingByProductHandle = new Map(
+        resourceLocalRuntimeBindings(store, resource).map((binding) => [binding.productHandle, binding] as const),
+      );
+      return resourceLocalBindingTargetOperations(store, resource).map((operation) => {
+        const binding = operation.binding?.productHandle == null
+          ? null
+          : bindingByProductHandle.get(operation.binding.productHandle) ?? null;
+        const listener = binding instanceof ListenerBinding ? binding : null;
+        return {
+          definitionName: resource.compilation.definition.name,
+          ownerKind: operation.ownerKind,
+          bindingKind: operation.binding?.bindingKind ?? null,
+          rendererKind: operation.renderer?.rendererKind ?? null,
+          targetKind: operation.targetKind,
+          targetAttribute: operation.targetAttribute,
+          targetProperty: operation.targetProperty,
+          staticValue: operation.value,
+          operationKind: operation.operationKind,
+          affectedNames: operation.affectedNames,
+          listenerStrategy: listener?.strategy ?? null,
+          eventModifier: listener?.eventModifier ?? null,
+          eventModifierSource: describeAddress(store, listener?.eventModifierSourceAddressHandle ?? null),
+          authority: operation.authority,
+          openReason: operation.openReason,
+          source: describeAddress(store, operation.sourceAddressHandle),
+          ...(handles ? {
+            handles: {
+              bindingProductHandle: operation.binding?.productHandle ?? null,
+              rendererProductHandle: operation.renderer?.productHandle ?? null,
+              instructionProductHandle: operation.instructionProductHandle,
+              targetOperationProductHandle: operation.productHandle,
+              sourceAddressHandle: operation.sourceAddressHandle,
+              eventModifierSourceAddressHandle: listener?.eventModifierSourceAddressHandle ?? null,
+            },
+          } : {}),
+        };
+      });
+    })
     .sort((left, right) =>
       `${left.definitionName}:${left.ownerKind}:${left.targetAttribute}:${left.targetProperty}:${left.operationKind}`
         .localeCompare(`${right.definitionName}:${right.ownerKind}:${right.targetAttribute}:${right.targetProperty}:${right.operationKind}`)

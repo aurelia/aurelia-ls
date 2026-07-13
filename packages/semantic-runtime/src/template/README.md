@@ -69,8 +69,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   by the attribute-syntax materializer that owns the HTML attribute site. Secondary multi-binding segments also become
   explicit `AttrSyntax` products when their authored value is split by lowering; they are not ordinary HTML attributes,
   but they still use the same parser machine. `attribute-syntax-source.ts` publishes the raw-name, target, command, and
-  pattern-literal addresses for both strata from the syntax's authored name carrier; do not rescan inline segments in
-  downstream consumers. `TemplateResourceCompilationEmission.authoredAttributeSyntaxes` is the explicit all-authored
+  pattern-part addresses for both strata from the syntax's authored name carrier. Every interpreted pattern part keeps
+  its relative occurrence before semantic transforms such as deprecated `view-model.ref` to `component.ref`, so
+  listener modifiers and authored ref targets retain exact loci without rescanning the attribute name downstream.
+  `TemplateResourceCompilationEmission.authoredAttributeSyntaxes` is the explicit all-authored
   projection for references, tokens, capability demand, and other syntax-wide consumers. Classification, precedence,
   and HTML-attribute ownership remain top-level-only. `parseBuiltInAttributeSyntax(...)`
   is the product-free helper for checking generated/source-lowering attributes
@@ -439,7 +441,11 @@ classification, expression parsing, and instruction lowering converge on the sam
   text interpolation and `ListenerBinding.bind(...)` publishes event-listener subscription operations.
   `RefBinding.updateSource(...)` publishes source-operation products for resolved ref targets instead of masquerading as
   a DOM target update; `element.ref` resolves through TypeChecker-backed HTML tag maps, while
-  component/custom-attribute/controller refs resolve through the renderer-created controller tree. Target-access rows
+  component/custom-attribute/controller refs resolve through the renderer-created controller tree. Bind-time
+  publications preserve request-owned event, modifier, and ref-target addresses rather than replacing them with the
+  enclosing binding carrier. Named ref targets also retain the resolved same-node controller relation, which resource
+  navigation, references, and rename consume as an ordinary resource usage; `element`, `controller`, `component`, and
+  `view` remain ref API targets rather than resource identities. Target-access rows
   record whether
   bind-time asks for an accessor or observer, whether the target is a native node or controller view-model, and the
   selected built-in access strategy for common form controls and presentation targets such as input value, checkbox

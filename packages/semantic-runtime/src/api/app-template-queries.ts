@@ -145,6 +145,7 @@ import { checkerTypeMemberValueSourceAddressHandle } from '../type-system/checke
 import type { TemplateVisibleResourceReference } from '../template/compiler-world-reference.js';
 import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
 import { TemplateSpecialAttributeName } from '../template/special-attribute-source.js';
+import { namedRefTargetController } from '../template/runtime-ref-target.js';
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
@@ -2321,6 +2322,8 @@ function templateRenameEditKindForReferenceRow(
         return SemanticTemplateRenameEditKind.ResourceAsElementValue;
       case SemanticTemplateResourceUsageKind.ExpressionName:
         return SemanticTemplateRenameEditKind.ResourceExpressionName;
+      case SemanticTemplateResourceUsageKind.RefTarget:
+        return SemanticTemplateRenameEditKind.ResourceRefTarget;
       case SemanticTemplateResourceUsageKind.ElementTag:
       case null:
       case undefined:
@@ -2572,6 +2575,7 @@ function resourceReferenceRows(
     ...expressionResourceReferenceRows(store, resource, target, handles),
     ...bindingCommandResourceReferenceRows(store, resource, target, handles),
     ...attributePatternResourceReferenceRows(store, resource, target, handles),
+    ...refTargetResourceReferenceRows(store, resource, target, handles),
   ]));
 }
 
@@ -2816,6 +2820,34 @@ function attributePatternResourceReferenceRows(
       handles,
       SemanticTemplateResourceUsageKind.AttributePatternLiteral,
     ));
+  });
+}
+
+function refTargetResourceReferenceRows(
+  store: KernelStore,
+  resource: TemplateResourceEmission,
+  target: ResourceReferenceTarget,
+  handles: boolean,
+): readonly SemanticTemplateReferenceRow[] {
+  return resource.runtimeAnalysis.controllerBind.sourceOperations.flatMap((operation) => {
+    const controller = namedRefTargetController(resource.runtimeAnalysis.runtimeRendering, operation);
+    if (
+      controller?.definitionProductHandle == null
+      || target.definitionProductHandle == null
+      || controller.definitionProductHandle !== target.definitionProductHandle
+    ) {
+      return [];
+    }
+    return [resourceUsageReferenceRow(
+      resource,
+      target,
+      operation.targetName,
+      describeAddress(store, operation.sourceAddressHandle),
+      operation.sourceAddressHandle,
+      handles,
+      SemanticTemplateResourceUsageKind.RefTarget,
+      operation.binding.productHandle,
+    )];
   });
 }
 

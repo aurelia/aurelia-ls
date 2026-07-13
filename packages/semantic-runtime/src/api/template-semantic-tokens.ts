@@ -36,8 +36,12 @@ import {
 } from '../configuration/scope.js';
 import { bindingScopeForTemplateExpressionParse } from '../template/template-expression-selection.js';
 import {
+  ListenerBindingInstruction,
+  RefBindingInstruction,
   TemplateInstructionKind,
 } from '../template/instruction-ir.js';
+import { RuntimeControllerCreationKind } from '../template/runtime-controller.js';
+import { namedRefTargetController } from '../template/runtime-ref-target.js';
 import {
   describeAddress,
   semanticExactSourceReference,
@@ -169,12 +173,111 @@ function instructionSemanticTokenRows(
           semanticProductHandle: instruction.productHandle,
           sourceAddressHandle: instruction.sourceAddressHandle,
         }, handles));
+        rows.push(...refTargetSemanticTokenRows(store, resource, syntaxByAttributeProduct, instruction, handles));
+        break;
+      case TemplateInstructionKind.ListenerBinding:
+        rows.push(...listenerSemanticTokenRows(store, resource, instruction, handles));
         break;
       default:
         break;
     }
   }
   return rows;
+}
+
+function listenerSemanticTokenRows(
+  store: KernelStore,
+  resource: TemplateResourceEmission,
+  instruction: ListenerBindingInstruction,
+  handles: boolean,
+): readonly SemanticTemplateSemanticTokenRow[] {
+  const eventSource = semanticExactSourceReference(describeAddress(store, instruction.eventNameSourceAddressHandle));
+  const modifierSource = semanticExactSourceReference(describeAddress(store, instruction.eventModifierSourceAddressHandle));
+  return [
+    eventSource == null ? null : tokenRow(
+      'aureliaEvent',
+      [],
+      resource.compilation.definition.name,
+      { ...eventSource, role: 'listener-event' },
+      instruction.productHandle,
+      instruction.eventNameSourceAddressHandle,
+      handles,
+    ),
+    modifierSource == null ? null : tokenRow(
+      'aureliaModifier',
+      [],
+      resource.compilation.definition.name,
+      { ...modifierSource, role: 'listener-modifier' },
+      instruction.productHandle,
+      instruction.eventModifierSourceAddressHandle,
+      handles,
+    ),
+  ].filter((row): row is SemanticTemplateSemanticTokenRow => row != null);
+}
+
+function refTargetSemanticTokenRows(
+  store: KernelStore,
+  resource: TemplateResourceEmission,
+  syntaxByAttributeProduct: ReadonlyMap<ProductHandle, AttributeSyntax>,
+  instruction: RefBindingInstruction,
+  handles: boolean,
+): readonly SemanticTemplateSemanticTokenRow[] {
+  const syntax = instruction.attribute.productHandle == null
+    ? null
+    : syntaxByAttributeProduct.get(instruction.attribute.productHandle) ?? null;
+  if (
+    syntax == null
+    || instruction.targetSourceAddressHandle == null
+    || instruction.targetSourceAddressHandle === syntax.commandSourceAddressHandle
+  ) {
+    return [];
+  }
+  const source = semanticExactSourceReference(describeAddress(store, instruction.targetSourceAddressHandle));
+  if (source == null) {
+    return [];
+  }
+  const operation = resource.runtimeAnalysis.controllerBind.sourceOperations.find((candidate) =>
+    candidate.instructionProductHandle === instruction.productHandle
+  ) ?? null;
+  const controller = operation == null
+    ? null
+    : namedRefTargetController(resource.runtimeAnalysis.runtimeRendering, operation);
+  const tokenType = controller == null
+    ? specialRefTargetTokenType(instruction.target)
+    : controller.creationKind === RuntimeControllerCreationKind.CustomElement
+      ? 'aureliaElement'
+      : controller.creationKind === RuntimeControllerCreationKind.TemplateController
+        ? 'aureliaController'
+        : 'aureliaAttribute';
+  if (tokenType == null) {
+    return [];
+  }
+  const authoredTarget = syntax.patternParts.find((part) =>
+    part.sourceAddressHandle === instruction.targetSourceAddressHandle
+  )?.value ?? instruction.target;
+  return [tokenRow(
+    tokenType,
+    authoredTarget === 'view-model' ? ['deprecated'] : [],
+    resource.compilation.definition.name,
+    { ...source, role: 'ref-target' },
+    instruction.productHandle,
+    instruction.targetSourceAddressHandle,
+    handles,
+  )];
+}
+
+function specialRefTargetTokenType(
+  target: string,
+): SemanticTemplateSemanticTokenType | null {
+  switch (target) {
+    case 'element':
+    case 'controller':
+    case 'component':
+    case 'view':
+      return 'keyword';
+    default:
+      return null;
+  }
 }
 
 function classificationSemanticTokenRows(

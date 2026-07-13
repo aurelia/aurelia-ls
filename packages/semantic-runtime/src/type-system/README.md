@@ -282,6 +282,10 @@ member provenance truthful.
 `dom-node-type.ts` owns DOM tag-name and event-map vocabulary. `$event` scope construction, listener handler-reference
 value channels, and generated overlay event helpers should spend that vocabulary instead of spelling
 `GlobalEventHandlersEventMap`/`HTMLElementEventMap` fallback policy locally.
+Known DOM events resolve through those event maps. Unknown names currently reach the generic `CustomEvent` declaration,
+but the unbound declaration type parameter must eventually be instantiated as `unknown`; exposing `CustomEvent<T>` leaks
+a declaration-local type variable, while `any` would erase the uncertainty. Listener expressions themselves remain
+runtime-accepted regardless of their result type because Aurelia invokes the result only when it is callable.
 The template overlay path now has a selector/expression/plan/emitter split: `template-expression-selection.ts` owns the
 shared expression/value-site and expression-parse to runtime-scope lookup used by cursor inquiries, diagnostics, and
 overlays; `template-type-system-overlay-expression.ts` owns copied authored expression projection and named

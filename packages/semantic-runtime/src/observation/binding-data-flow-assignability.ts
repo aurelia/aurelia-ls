@@ -172,6 +172,9 @@ export class BindingDataFlowAssignabilityEvaluator {
       return null;
     }
     switch (valueChannel.channelKind) {
+      case RuntimeBindingValueChannelKind.EventHandlerInvocation:
+        // ListenerBinding accepts any expression value and only invokes it when the runtime value is callable.
+        return true;
       case RuntimeBindingValueChannelKind.CustomMatcherFunction:
         return this.typeAccess.isCallableBooleanFunction(sourceType, 2);
       case RuntimeBindingValueChannelKind.SelectSingleOptionValue:

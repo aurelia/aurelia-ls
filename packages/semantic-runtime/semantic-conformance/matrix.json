@@ -939,7 +939,7 @@
           "expectations": [
             {
               "name": "semantic tokens",
-              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "tokenType": "aureliaMetaElement" }, "source": { "marker": "<let item.bind=\"selectedItem\"></let>", "token": "let" } }
               ]
@@ -6608,7 +6608,7 @@
                     "missingInput": "template-compiler:AUR0713",
                     "suggestion.actionKind": "rewrite-template-syntax"
                   },
-                  "source": { "marker": "click.delegate=\"enabled = !enabled\"", "token": "click.delegate=\"enabled = !enabled\"" }
+                  "source": { "marker": "click.delegate=\"enabled = !enabled\"", "token": "delegate" }
                 }
               ]
             }
@@ -12766,6 +12766,251 @@
               "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "diagnosticKind": "binding-target-assignment-strictness", "missingInput": "binding-target-assignment:source-to-target-type-mismatch", "selectedMemberName": "item.score" }, "source": { "marker": "required-text.bind=\"item.score\"", "token": "item.score" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "template-ref-listener-semantics",
+      "fixture": "fixtures/pressure/template-ref-listener-semantics",
+      "aureliaDomain": "template-binding-syntax",
+      "capability": "ref-listener-semantics",
+      "domainAxis": "template-syntax",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/template-ref-listener-semantics-app.html",
+      "requirement": "Ref and listener lowering preserve framework target resolution, assignment and event typing, exact authored loci, diagnostics, and IDE resource operations.",
+      "cases": [
+        {
+          "id": "ref-target-source-operations",
+          "expectations": [
+            {
+              "name": "ref assignment operations",
+              "query": { "kind": "binding-source-operations", "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "bindingKind": "ref", "targetKind": "node", "targetName": "element", "targetType": "HTMLInputElement", "operationKind": "ref-assign-target", "authority": "runtime-binding-implementation" }, "source": { "marker": "<input ref=\"plainElement\">", "token": "ref" }, "count": 1 },
+                { "fields": { "bindingKind": "ref", "targetKind": "node", "targetName": "element", "targetType": "HTMLInputElement", "operationKind": "ref-assign-target" }, "source": { "marker": "element.ref=\"explicitElement\"", "token": "element" }, "count": 1 },
+                { "fields": { "targetKind": "controller-view-model", "targetName": "component", "targetType": "RefPanel" }, "source": { "marker": "component.ref=\"panelComponent\"", "token": "component" }, "count": 1 },
+                { "fields": { "targetKind": "controller", "targetName": "controller" }, "source": { "marker": "controller.ref=\"panelController\"", "token": "controller" }, "count": 1 },
+                { "fields": { "targetKind": "controller-view-model", "targetName": "component", "targetType": "RefPanel" }, "source": { "marker": "view-model.ref=\"legacyPanel\"", "token": "view-model" }, "count": 1 },
+                { "fields": { "targetKind": "controller-view-model", "targetName": "focus-ring", "targetType": "FocusRing" }, "source": { "marker": "focus-ring.ref=\"focusRingController\"", "token": "focus-ring" }, "count": 1 },
+                { "fields": { "targetKind": "controller-view-model", "targetName": "ref-panel", "targetType": "RefPanel" }, "source": { "marker": "ref-panel.ref=\"namedPanel\"", "token": "ref-panel" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "invalid-ref-target-diagnostics-use-target-loci",
+          "expectations": [
+            {
+              "name": "renderer diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "runtime-renderer-framework-error", "frameworkErrorCode": "AUR0750", "selectedMemberName": "view" }, "source": { "marker": "view.ref=\"unsupportedView\"", "token": "view" }, "count": 1 },
+                { "fields": { "diagnosticKind": "runtime-renderer-framework-error", "frameworkErrorCode": "AUR0762", "selectedMemberName": "component" }, "source": { "marker": "component.ref=\"missingComponent\"", "token": "component" }, "count": 1 },
+                { "fields": { "diagnosticKind": "runtime-renderer-framework-error", "frameworkErrorCode": "AUR0751", "selectedMemberName": "missing" }, "source": { "marker": "missing.ref=\"missingNamedTarget\"", "token": "missing" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "ref-assignment-strictness",
+          "expectations": [
+            {
+              "name": "assignment diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "binding-source-assignment-strictness", "selectedMemberName": "readonlyElement" }, "source": { "marker": "ref=\"readonlyElement\"", "token": "readonlyElement" }, "count": 1 },
+                { "fields": { "diagnosticKind": "binding-source-assignment-strictness", "selectedMemberName": "wrongElement" }, "source": { "marker": "ref=\"wrongElement\"", "token": "wrongElement" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "listener-event-types",
+          "expectations": [
+            { "name": "click event", "query": { "kind": "template-cursor-info", "cursor": { "marker": "click.trigger:prevent=\"handleMouse($event)\"", "token": "$event" } }, "equals": { "value.selectedMemberName": "$event", "value.selectedMember.typeDisplay": "PointerEvent", "value.diagnostics.length": 0 } },
+            { "name": "keyboard event", "query": { "kind": "template-cursor-info", "cursor": { "marker": "handleKeyboard($event)", "token": "$event" } }, "equals": { "value.selectedMemberName": "$event", "value.selectedMember.typeDisplay": "KeyboardEvent", "value.diagnostics.length": 0 } },
+            { "name": "pointer event", "query": { "kind": "template-cursor-info", "cursor": { "marker": "handlePointer($event)", "token": "$event" } }, "equals": { "value.selectedMemberName": "$event", "value.selectedMember.typeDisplay": "PointerEvent", "value.diagnostics.length": 0 } }
+          ]
+        },
+        {
+          "id": "custom-event-fallback-honesty",
+          "expectations": [
+            {
+              "name": "custom event",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "handleCustom($event)", "token": "$event" } },
+              "equals": { "value.selectedMemberName": "$event", "value.selectedMember.typeDisplay": "CustomEvent<unknown>", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "listener-target-operations-preserve-modifiers",
+          "expectations": [
+            {
+              "name": "listener operations",
+              "query": { "kind": "binding-target-operations", "cursor": false, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "bindingKind": "listener", "targetAttribute": "click", "targetProperty": "click", "operationKind": "event-listener-add", "affectedNames.1": "prevent", "listenerStrategy": "trigger", "eventModifier": "prevent" }, "source": { "marker": "click.trigger:prevent=\"handleMouse($event)\"", "token": "click" }, "count": 1 },
+                { "fields": { "bindingKind": "listener", "targetAttribute": "click", "eventModifier": "prevent" }, "sourceField": "eventModifierSource", "source": { "marker": "click.trigger:prevent=\"handleMouse($event)\"", "token": "prevent" }, "count": 1 },
+                { "fields": { "bindingKind": "listener", "targetAttribute": "keydown", "targetProperty": "keydown", "operationKind": "event-listener-add", "affectedNames.1": "ctrl+enter", "listenerStrategy": "trigger", "eventModifier": "ctrl+enter" }, "source": { "marker": "keydown.trigger:ctrl+enter=\"handleKeyboard($event)\"", "token": "keydown" }, "count": 1 },
+                { "fields": { "bindingKind": "listener", "targetAttribute": "pointerdown", "targetProperty": "pointerdown", "operationKind": "event-listener-add", "affectedNames.1": "stop", "listenerStrategy": "capture", "eventModifier": "stop" }, "source": { "marker": "pointerdown.capture:stop=\"handlePointer($event)\"", "token": "pointerdown" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "handler-reference-follows-listener-runtime-semantics",
+          "expectations": [
+            {
+              "name": "no false assignment diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "source": { "marker": "click.trigger=\"handlerReference\"", "token": "handlerReference" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "ref-listener-semantic-token-roles",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "tokenType": "keyword", "tokenModifiers.0": "deprecated" }, "source": { "marker": "view-model.ref=\"legacyPanel\"", "token": "view-model" }, "count": 1 },
+                { "fields": { "tokenType": "aureliaAttribute" }, "source": { "marker": "focus-ring.ref=\"focusRingController\"", "token": "focus-ring" }, "count": 1 },
+                { "fields": { "tokenType": "aureliaElement" }, "source": { "marker": "ref-panel.ref=\"namedPanel\"", "token": "ref-panel" }, "count": 1 },
+                { "fields": { "tokenType": "aureliaEvent" }, "source": { "marker": "click.trigger:prevent=\"handleMouse($event)\"", "token": "click" }, "count": 1 },
+                { "fields": { "tokenType": "aureliaModifier" }, "source": { "marker": "click.trigger:prevent=\"handleMouse($event)\"", "token": "prevent" }, "count": 1 },
+                { "fields": { "tokenType": "aureliaModifier" }, "source": { "marker": "keydown.trigger:ctrl+enter=\"handleKeyboard($event)\"", "token": "ctrl+enter" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "listener-invalid-forms",
+          "expectations": [
+            {
+              "name": "self behavior diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "runtime-binding-behavior-framework-error", "frameworkErrorCode": "AUR0801" }, "source": { "marker": "& self", "markerOccurrence": 2, "token": "self" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "removed delegate diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0713" }, "source": { "marker": "click.delegate=\"handleMouse($event)\"", "token": "delegate" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "event member diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2339" }, "source": { "marker": "$event.missing", "token": "missing" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "custom-attribute-ref-target-references-and-rename",
+          "cursor": { "marker": "focus-ring.ref=\"focusRingController\"", "token": "focus-ring" },
+          "expectations": [
+            {
+              "name": "cursor resource selection",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition.name": "focus-ring", "value.selectedDefinition.resourceKind": "custom-attribute", "value.selectedDefinition.matchedName": "focus-ring" }
+            },
+            {
+              "name": "token-start cursor precedence",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "focus-ring.ref=\"focusRingController\"", "position": "before-marker" } },
+              "equals": { "value.selectedDefinition.name": "focus-ring", "value.selectedBindable": null, "value.activeSource.start": 191, "value.activeSource.end": 201 }
+            },
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "equals": { "value.selectedMemberName": "focus-ring" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/focus-ring.ts", "marker": "@customAttribute('focus-ring')", "token": "focus-ring" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-target" }, "source": { "marker": "focus-ring\n  focus-ring.ref", "token": "focus-ring" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "ref-target" }, "source": { "marker": "focus-ring.ref=\"focusRingController\"", "token": "focus-ring" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "focus-halo" } },
+              "equals": { "value.status": "available", "value.selectedMemberName": "focus-ring" },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-name-declaration", "oldText": "focus-ring", "newText": "focus-halo" }, "source": { "sourceFile": "src/focus-ring.ts", "marker": "@customAttribute('focus-ring')", "token": "focus-ring" }, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-attribute-target", "oldText": "focus-ring", "newText": "focus-halo" }, "source": { "marker": "focus-ring\n  focus-ring.ref", "token": "focus-ring" }, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-ref-target", "oldText": "focus-ring", "newText": "focus-halo" }, "source": { "marker": "focus-ring.ref=\"focusRingController\"", "token": "focus-ring" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "custom-element-ref-target-references-and-rename",
+          "cursor": { "marker": "ref-panel.ref=\"namedPanel\"", "token": "ref-panel" },
+          "expectations": [
+            {
+              "name": "cursor resource selection",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition.name": "ref-panel", "value.selectedDefinition.resourceKind": "custom-element", "value.selectedDefinition.matchedName": "ref-panel" }
+            },
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/ref-panel.ts", "marker": "name: 'ref-panel'", "token": "ref-panel" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "ref-target" }, "source": { "marker": "ref-panel.ref=\"namedPanel\"", "token": "ref-panel" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "reference-panel" } },
+              "equals": { "value.status": "available" },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-ref-target", "oldText": "ref-panel", "newText": "reference-panel" }, "source": { "marker": "ref-panel.ref=\"namedPanel\"", "token": "ref-panel" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "ref-target-completion-context",
+          "expectations": [
+            {
+              "name": "ref target completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "element.ref=\"explicitElement\"", "token": "element" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "component", "candidateKind": "ref-target" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "listener-event-completion-context",
+          "expectations": [
+            {
+              "name": "event completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "click.trigger:prevent=\"handleMouse($event)\"", "token": "click" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "click", "candidateKind": "event" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "listener-modifier-completion-context",
+          "expectations": [
+            {
+              "name": "modifier completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "click.trigger:pre", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "prevent", "candidateKind": "event-modifier" }, "count": 1 }
               ]
             }
           ]

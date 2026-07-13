@@ -52,6 +52,7 @@ import type { RuntimeBindingBehaviorIssue } from '../template/runtime-binding-be
 import type { RuntimeValueConverterIssue } from '../template/runtime-value-converter.js';
 import type { RuntimeControllerIssue } from '../template/runtime-controller-issue.js';
 import type { RuntimeRendererIssue } from '../template/runtime-renderer-issue.js';
+import { RefBindingInstruction } from '../template/instruction-ir.js';
 import type { RouterIssueModel } from '../router/model.js';
 import type { RouteParameterEndpointPlan } from '../router/route-instruction-materialization.js';
 import {
@@ -1504,7 +1505,9 @@ function runtimeRendererIssueDiagnosticRowsForSelection(
     if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
       return [];
     }
-    const diagnostic = runtimeRendererIssueDiagnostic(issue, source);
+    const instruction = store.productDetails.read(TemplateProductDetails.Instruction, issue.instructionProductHandle);
+    const selectedMemberName = instruction instanceof RefBindingInstruction ? instruction.target : null;
+    const diagnostic = runtimeRendererIssueDiagnostic(issue, source, selectedMemberName);
     const key = templateDiagnosticRowKey(diagnostic, source);
     if (context.seenRows.has(key)) {
       return [];
@@ -1516,6 +1519,13 @@ function runtimeRendererIssueDiagnosticRowsForSelection(
         phase: issue.phase,
         semanticProductHandle: issue.productHandle,
         sourceAddressHandle: issue.sourceAddressHandle,
+      }),
+      ...(selectedMemberName == null ? {} : {
+        subject: {
+          subjectKind: 'template-syntax' as const,
+          subjectName: selectedMemberName,
+          source,
+        },
       }),
       siteKind: TemplateCompletionSiteKind.AttributeValue,
       valueSiteKind: null,

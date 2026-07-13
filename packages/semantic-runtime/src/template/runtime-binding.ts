@@ -458,6 +458,7 @@ export class RuntimeBindingBindContext {
     targetProperty: string,
     operationKind: RuntimeBindingTargetOperationKind,
     affectedNames: readonly string[],
+    sourceAddressHandle: AddressHandle | null,
   ): RuntimeBindingBindContribution {
     const targetOperation = this.host.materializeTargetOperation(new RuntimeBindingTargetOperationRequest(
       this.localKey,
@@ -466,7 +467,7 @@ export class RuntimeBindingBindContext {
       targetProperty,
       operationKind,
       affectedNames,
-      binding.sourceAddressHandle,
+      sourceAddressHandle,
     ));
     return targetOperation == null
       ? RuntimeBindingBindContribution.none()
@@ -477,13 +478,14 @@ export class RuntimeBindingBindContext {
     binding: RuntimeBinding,
     targetName: string,
     operationKind: RuntimeBindingSourceOperationKind,
+    sourceAddressHandle: AddressHandle | null,
   ): RuntimeBindingBindContribution {
     const sourceOperation = this.host.materializeSourceOperation(new RuntimeBindingSourceOperationRequest(
       this.localKey,
       binding,
       targetName,
       operationKind,
-      binding.sourceAddressHandle,
+      sourceAddressHandle,
     ));
     return sourceOperation == null
       ? RuntimeBindingBindContribution.none()
@@ -707,6 +709,7 @@ export class AttributeBinding {
       this.target,
       targetOperation.kind,
       targetOperation.affectedNames,
+      this.sourceAddressHandle,
     );
   }
 }
@@ -749,6 +752,7 @@ export class LetBinding {
       this.target,
       RuntimeBindingTargetOperationKind.PropertySet,
       [this.target],
+      this.targetSourceAddressHandle ?? this.sourceAddressHandle,
     );
   }
 }
@@ -766,9 +770,11 @@ export class ListenerBinding {
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
     readonly eventName: string,
+    readonly eventNameSourceAddressHandle: AddressHandle | null,
     readonly expressionProductHandle: ProductHandle | null,
     readonly strategy: TemplateListenerStrategy,
     readonly eventModifier: string | null,
+    readonly eventModifierSourceAddressHandle: AddressHandle | null,
     readonly command: BindingCommandExecutableReference | null,
     readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],
     readonly sourceAddressHandle: AddressHandle | null,
@@ -794,6 +800,7 @@ export class ListenerBinding {
       this.eventName,
       RuntimeBindingTargetOperationKind.EventListenerAdd,
       this.eventModifier == null ? [this.eventName] : [this.eventName, this.eventModifier],
+      this.eventNameSourceAddressHandle ?? this.sourceAddressHandle,
     );
   }
 }
@@ -847,6 +854,7 @@ export class RefBinding {
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
     readonly target: string,
+    readonly targetSourceAddressHandle: AddressHandle | null,
     readonly expressionProductHandle: ProductHandle | null,
     readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],
     readonly sourceAddressHandle: AddressHandle | null,
@@ -870,6 +878,7 @@ export class RefBinding {
       this,
       this.target,
       RuntimeBindingSourceOperationKind.RefAssignTarget,
+      this.targetSourceAddressHandle ?? this.sourceAddressHandle,
     );
   }
 }
@@ -907,6 +916,7 @@ export class ContentBinding {
       this.target,
       RuntimeBindingTargetOperationKind.TextContentSet,
       [this.target],
+      this.sourceAddressHandle,
     );
   }
 }
@@ -1096,11 +1106,13 @@ export class StateDispatchBinding {
       this.eventName,
       RuntimeBindingTargetOperationKind.EventListenerAdd,
       [this.eventName],
+      this.sourceAddressHandle,
     );
     const dispatchAction = input.sourceOperation(
       this,
       this.storeName ?? 'default',
       RuntimeBindingSourceOperationKind.StateDispatchAction,
+      this.sourceAddressHandle,
     );
     return new RuntimeBindingBindContribution(
       [

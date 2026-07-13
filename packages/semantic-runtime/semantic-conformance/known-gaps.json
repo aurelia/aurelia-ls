@@ -78,6 +78,34 @@
       "failureBucket": "attr-mapper-predicate-execution-open",
       "firstObserved": "2026-07-13",
       "rationale": "Aurelia executes arbitrary IAttrMapper.useTwoWay predicates against the live element. Semantic-runtime now rejects partially understood predicate conjunctions instead of widening them, but does not yet preserve an executable or open predicate product, so the valid live-attribute branch remains conservatively to-view."
+    },
+    {
+      "assertionId": "template-ref-listener-semantics/custom-event-fallback-honesty",
+      "status": "known-gap",
+      "failureBucket": "listener-custom-event-generic-instantiation",
+      "firstObserved": "2026-07-13",
+      "rationale": "Unknown listener events fall back to the generic CustomEvent declaration but project its unbound type parameter as CustomEvent<T>. The public cursor type should instantiate the unproven detail payload as unknown rather than leaking a declaration-local type variable or widening it to any."
+    },
+    {
+      "assertionId": "template-ref-listener-semantics/ref-target-completion-context",
+      "status": "known-gap",
+      "failureBucket": "ref-target-completion-vocabulary",
+      "firstObserved": "2026-07-13",
+      "rationale": "Attribute-name completion has no ref-target site/candidate vocabulary. It cannot distinguish special ref API targets from same-node resource controllers without rebuilding the runtime ref relation in a local completion island."
+    },
+    {
+      "assertionId": "template-ref-listener-semantics/listener-event-completion-context",
+      "status": "known-gap",
+      "failureBucket": "listener-event-completion-vocabulary",
+      "firstObserved": "2026-07-13",
+      "rationale": "Attribute-name completion does not expose an event-target context backed by DOM event maps and an honest custom-event fallback, so trigger/capture target completion is absent."
+    },
+    {
+      "assertionId": "template-ref-listener-semantics/listener-modifier-completion-context",
+      "status": "known-gap",
+      "failureBucket": "listener-modifier-completion-vocabulary",
+      "firstObserved": "2026-07-13",
+      "rationale": "The parser and lowered instruction now preserve exact modifier text and source, but completion lacks an event-family/registered-service modifier candidate kind and therefore cannot offer prevent, stop, or keyboard modifiers honestly."
     }
   ]
 }

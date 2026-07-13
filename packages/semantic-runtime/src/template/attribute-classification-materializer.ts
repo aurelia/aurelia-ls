@@ -228,7 +228,9 @@ export class AttributeClassificationMaterializer {
         decision.issue.issueKind,
         decision.issue.message,
         decision.issue.frameworkErrorCode,
-        classification.sourceAddressHandle,
+        decision.issue.issueKind === TemplateCompilerIssueKind.UnknownBindingCommand
+          ? syntax.commandSourceAddressHandle ?? classification.sourceAddressHandle
+          : classification.sourceAddressHandle,
       );
     const claims = this.claimsForAttributeClassification(local, source, syntax, classification, decision);
     return new AttributeClassificationPublication(

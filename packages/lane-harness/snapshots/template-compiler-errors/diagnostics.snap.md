@@ -471,15 +471,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Aurelia template compiler AUR0713 rejects this template syntax: Template compilation error: unknown binding command: \"delegate\". The \".delegate\" binding command has been removed in v2. Binding command \".trigger\" should be used instead. If you are migrating v1 application, install compat package to add back the \".delegate\" binding command for ease of migration..",
       "range": {
         "end": {
-          "character": 43,
+          "character": 22,
           "line": 7
         },
         "start": {
-          "character": 8,
+          "character": 14,
           "line": 7
         }
       },
-      "rangeText": "click.delegate=\"enabled = !enabled\"",
+      "rangeText": "delegate",
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
@@ -521,15 +521,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Aurelia template compiler AUR0713 rejects this template syntax: Template compilation error: unknown binding command: \"call\". The \".call\" binding command has been removed in v2. If you want to pass a callback that preserves the context of the function call, you can use lambda instead. Refer to lambda expression doc for more details..",
       "range": {
         "end": {
-          "character": 39,
+          "character": 18,
           "line": 8
         },
         "start": {
-          "character": 8,
+          "character": 14,
           "line": 8
         }
       },
-      "rangeText": "click.call=\"enabled = !enabled\"",
+      "rangeText": "call",
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
@@ -1131,7 +1131,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:6:template:template-compiler-error:framework-error-code:AUR0713:src/template-compiler-errors-app.html:435:470:template-compiler:AUR0713",
+        "groupKey": "row:diagnostic:6:template:template-compiler-error:framework-error-code:AUR0713:src/template-compiler-errors-app.html:441:449:template-compiler:AUR0713",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -1184,16 +1184,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 470,
-              "start": 435
+              "end": 449,
+              "start": 441
             },
-            "spanText": "click.delegate=\"enabled = !enabled\"",
+            "spanText": "delegate",
             "status": "primary",
             "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:6:template:template-compiler-error:framework-error-code:AUR0713:src/template-compiler-errors-app.html:435:470:template-compiler:AUR0713"
+          "rowId": "diagnostic:6:template:template-compiler-error:framework-error-code:AUR0713:src/template-compiler-errors-app.html:441:449:template-compiler:AUR0713"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -1201,7 +1201,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:8:template:template-compiler-error:framework-error-code:AUR0713:src/template-compiler-errors-app.html:512:543:template-compiler:AUR0713",
+        "groupKey": "row:diagnostic:8:template:template-compiler-error:framework-error-code:AUR0713:src/template-compiler-errors-app.html:518:522:template-compiler:AUR0713",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -1254,16 +1254,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 543,
-              "start": 512
+              "end": 522,
+              "start": 518
             },
-            "spanText": "click.call=\"enabled = !enabled\"",
+            "spanText": "call",
             "status": "primary",
             "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:8:template:template-compiler-error:framework-error-code:AUR0713:src/template-compiler-errors-app.html:512:543:template-compiler:AUR0713"
+          "rowId": "diagnostic:8:template:template-compiler-error:framework-error-code:AUR0713:src/template-compiler-errors-app.html:518:522:template-compiler:AUR0713"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -1681,10 +1681,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 470,
-          "start": 435
+          "end": 449,
+          "start": 441
         },
-        "spanText": "click.delegate=\"enabled = !enabled\"",
+        "spanText": "delegate",
         "status": "canonical",
         "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
       },
@@ -1795,10 +1795,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 543,
-          "start": 512
+          "end": 522,
+          "start": 518
         },
-        "spanText": "click.call=\"enabled = !enabled\"",
+        "spanText": "call",
         "status": "canonical",
         "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
       },
@@ -2387,10 +2387,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 470,
-            "start": 435
+            "end": 449,
+            "start": 441
           },
-          "spanText": "click.delegate=\"enabled = !enabled\"",
+          "spanText": "delegate",
           "status": "primary",
           "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
         },
@@ -2444,10 +2444,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 543,
-            "start": 512
+            "end": 522,
+            "start": 518
           },
-          "spanText": "click.call=\"enabled = !enabled\"",
+          "spanText": "call",
           "status": "primary",
           "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
         }

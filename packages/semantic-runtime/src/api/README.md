@@ -613,6 +613,12 @@ Framework/catalog resources anchor the query at the active usage and omit the no
 definition product remains the matching authority. Rename stays unavailable with
 `resource-name-has-no-authored-source`, which distinguishes a real selected resource with no workspace-owned name token
 from a cursor that selected no source-backed semantic surface at all.
+Named `PART.ref` targets join that same resource closure through the controller already resolved during controller bind.
+Their usage/edit kind is `ref-target`; language targets such as `element`, `controller`, `component`, and `view` are
+excluded. Semantic tokens spend the same relation and exact pattern-part loci: resolved custom elements, custom
+attributes, and template controllers use their Aurelia resource token roles, listener event names use `aureliaEvent`,
+and listener modifiers use `aureliaModifier`. Deprecated authored `view-model.ref` remains visible as a deprecated
+keyword even though lowering executes `component.ref` semantics.
 `TemplateCodeActions` is the conservative edit-planning projection for runtime-owned template diagnostics at a cursor.
 It reads the same diagnostic rows as `TemplateDiagnostics`, but only turns a suggestion into an edit when semantic-runtime
 can prove the authored target and exact insertion span. Supported edit families include `declare-view-model-member`
@@ -842,7 +848,9 @@ Runtime renderer diagnostics are owned by `RuntimeRendererIssue` when the failur
 binding/controller product exists. `RefBindingRenderer` maps `view.ref` to `AUR0750` because runtime-html rejects that
 ref target during `getRefTarget(...)`, maps missing named ref targets to `AUR0751` only after a custom-element host
 exists, and maps `AUR0762`/`AUR0763` for the framework `findElementControllerFor(...)` host checks that happen before
-controller/component or named custom-element fallback can resolve on ordinary DOM elements. `SpreadValueRenderer` maps
+controller/component or named custom-element fallback can resolve on ordinary DOM elements. Ref renderer rows use the
+exact authored target part and the `template-syntax` diagnostic subject; transformed or missing targets must not fall
+back to the whole attribute carrier. `SpreadValueRenderer` maps
 invalid spread targets to `AUR0820` when `.spread` lowering produces a `SpreadValueBindingInstruction` target other than
 `$bindables`. Diagnostics surface these as `runtime-renderer-framework-error` rows.
 Runtime binding-behavior diagnostics are owned below the API by `RuntimeBindingBehaviorIssue`. Built-in bind-time
@@ -1558,7 +1566,9 @@ renderer-owned operations from `SetPropertyRenderer`, `SetAttributeRenderer`, `S
 `.style`, ordinary attribute writes, `ContentBinding.updateTarget(...)` for text content writes, and
 `ListenerBinding.bind(...)` for event listener subscription. Rows report owner kind, binding/renderer kind, target
 attribute, target property/token/key, static value when one exists, operation kind, affected names, authority, source
-address, optional handles, and row-local open pressure. `BindingTargetOperations` remains as a compatibility entrypoint
+address, optional handles, and row-local open pressure. Listener subscription rows join their retained binding product
+to expose trigger/capture strategy, modifier text, the exact event-name source, and any exact modifier source separately
+from the enclosing binding. `BindingTargetOperations` remains as a compatibility entrypoint
 for the same projection while callers migrate to the broader name.
 
 `BindingSourceOperations` exposes source-side binding behavior that should not be squeezed into DOM target updates.

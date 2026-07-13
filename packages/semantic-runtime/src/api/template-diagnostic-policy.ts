@@ -878,6 +878,7 @@ function runtimeBindingIssueSuggestion(issue: RuntimeBindingIssue): string {
 export function runtimeRendererIssueDiagnostic(
   issue: RuntimeRendererIssue,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+  selectedMemberName: string | null,
 ): SemanticTemplateCursorDiagnosticRow {
   return {
     diagnosticKind: 'runtime-renderer-framework-error',
@@ -894,16 +895,16 @@ export function runtimeRendererIssueDiagnostic(
         : `runtime-renderer:${issue.frameworkErrorCode}`,
     ],
     source,
-    selectedMemberName: null,
+    selectedMemberName,
     ownerTypeDisplay: null,
     ownerTypeShapeKind: null,
     ownerTypeOrigin: null,
     suggestion: {
       suggestionKind: 'fix-template-syntax',
       actionKind: 'rewrite-template-syntax',
-      actionTarget: suggestionActionTarget('template-syntax', source, null, null),
+      actionTarget: suggestionActionTarget('template-syntax', source, selectedMemberName, null),
       summary: runtimeRendererIssueSuggestion(issue),
-      targetMemberName: null,
+      targetMemberName: selectedMemberName,
       ownerTypeDisplay: null,
       valueTypeDisplay: null,
       valueTypeSource: null,

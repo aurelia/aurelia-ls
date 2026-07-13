@@ -1539,9 +1539,11 @@ function renderListenerRuntimeBinding(input: RuntimeRendererInvocation): Runtime
     instruction.node,
     instruction.attribute,
     instruction.eventName,
+    instruction.eventNameSourceAddressHandle,
     instruction.expressionProductHandle,
     instruction.strategy,
     instruction.eventModifier,
+    instruction.eventModifierSourceAddressHandle,
     instruction.command,
     [],
     instruction.sourceAddressHandle,
@@ -1580,7 +1582,7 @@ function renderRefRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRende
       targetIssue.issueKind,
       targetIssue.message,
       targetIssue.frameworkErrorCode,
-      instruction.sourceAddressHandle,
+      instruction.targetSourceAddressHandle ?? instruction.sourceAddressHandle,
     );
     return RuntimeRendererRenderResult.none();
   }
@@ -1593,6 +1595,7 @@ function renderRefRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRende
     instruction.node,
     instruction.attribute,
     instruction.target,
+    instruction.targetSourceAddressHandle,
     instruction.expressionProductHandle,
     [],
     instruction.sourceAddressHandle,

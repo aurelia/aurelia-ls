@@ -863,6 +863,7 @@ export class BindingCommandLoweringPublisher {
       execution.command,
       partSources.commandSourceAddressHandle,
       execution.parts,
+      partSources.patternParts,
       parse.pattern,
       parse.interpretation?.compiledPatternProductHandle ?? null,
       partSources.patternLiterals,

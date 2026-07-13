@@ -163,6 +163,7 @@ export class AttributeSyntaxMaterializer {
       parse.execution.command,
       partSources.commandSourceAddressHandle,
       parse.execution.parts,
+      partSources.patternParts,
       parse.pattern,
       parse.interpretation?.compiledPatternProductHandle ?? null,
       partSources.patternLiterals,

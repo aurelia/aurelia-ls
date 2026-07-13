@@ -170,7 +170,7 @@ export class RuntimeControllerBindPublisher {
       handles,
       KernelVocabulary.Binding.TargetAccess.key,
       request.binding.identityHandle,
-      request.binding.sourceAddressHandle,
+      request.sourceAddressHandle,
       source,
       `${request.lookup}:${target.targetKind}:${request.targetProperty}`,
       'target-access',
@@ -200,7 +200,7 @@ export class RuntimeControllerBindPublisher {
       handles,
       KernelVocabulary.Binding.TargetOperation.key,
       request.binding.identityHandle,
-      request.binding.sourceAddressHandle,
+      request.sourceAddressHandle,
       source,
       `${operationKind}:${target.targetKind}:${request.targetAttribute}:${request.targetProperty}`,
       'target-operation',
@@ -230,7 +230,7 @@ export class RuntimeControllerBindPublisher {
       handles,
       KernelVocabulary.Binding.SourceOperation.key,
       request.binding.identityHandle,
-      request.binding.sourceAddressHandle,
+      request.sourceAddressHandle,
       source,
       `${operationKind}:${target.targetKind}:${request.targetName}`,
       'source-operation',
@@ -274,7 +274,7 @@ export class RuntimeControllerBindPublisher {
       lookup.openReason,
       lookup.frameworkErrorCode,
       lookup.diagnosticReason,
-      request.binding.sourceAddressHandle,
+      request.sourceAddressHandle,
     );
   }
 
@@ -302,7 +302,7 @@ export class RuntimeControllerBindPublisher {
       request.affectedNames,
       this.targetOperationAuthority(openReason),
       openReason,
-      request.binding.sourceAddressHandle,
+      request.sourceAddressHandle,
     );
   }
 
@@ -326,7 +326,7 @@ export class RuntimeControllerBindPublisher {
       operationKind,
       this.sourceOperationAuthority(openReason),
       openReason,
-      request.binding.sourceAddressHandle,
+      request.sourceAddressHandle,
     );
   }
 

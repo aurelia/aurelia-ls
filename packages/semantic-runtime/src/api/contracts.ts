@@ -164,6 +164,7 @@ import type { TemplateResourceVisibilityKind } from '../template/compiler-world-
 import type {
   TemplateBindingMode,
   TemplateInstructionKind,
+  TemplateListenerStrategy,
 } from '../template/instruction-ir.js';
 import type {
   RuntimeBindingDataFlowDirection,
@@ -2180,6 +2181,7 @@ export type SemanticAppDiagnosticPhase =
 
 /** Closed subject vocabulary projected by normalized diagnostics; interpret domain-local members with `diagnosticDomain`. */
 export type SemanticDiagnosticSubjectKind =
+  | 'template-syntax'
   | 'template-member-access'
   | 'template-member-call'
   | 'template-expression'
@@ -3798,6 +3800,8 @@ export enum SemanticTemplateResourceUsageKind {
   ExpressionName = 'expression-name',
   BindingCommandName = 'binding-command-name',
   AttributePatternLiteral = 'attribute-pattern-literal',
+  /** Named `.ref` target resolved to a same-node custom element or custom attribute controller. */
+  RefTarget = 'ref-target',
 }
 
 export enum SemanticTemplateResourceDeclarationKind {
@@ -3890,6 +3894,7 @@ export enum SemanticTemplateRenameEditKind {
   ResourceAttributeTarget = 'resource-attribute-target',
   ResourceAsElementValue = 'resource-as-element-value',
   ResourceExpressionName = 'resource-expression-name',
+  ResourceRefTarget = 'resource-ref-target',
 }
 
 export interface SemanticTemplateRenameEditRow {
@@ -3967,6 +3972,8 @@ export const SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES = [
   'aureliaBehavior',
   'aureliaMetaElement',
   'aureliaMetaAttribute',
+  'aureliaEvent',
+  'aureliaModifier',
   'aureliaExpression',
   'variable',
   'property',
@@ -4355,6 +4362,11 @@ export interface SemanticTargetOperationRow {
   readonly staticValue: string | null;
   readonly operationKind: RuntimeBindingTargetOperationKind | `${RuntimeBindingTargetOperationKind}`;
   readonly affectedNames: readonly string[];
+  /** Listener registration strategy when this operation comes from a ListenerBinding. */
+  readonly listenerStrategy: TemplateListenerStrategy | `${TemplateListenerStrategy}` | null;
+  /** Authored listener modifier when one was lowered with the event registration. */
+  readonly eventModifier: string | null;
+  readonly eventModifierSource: SemanticSourceReference | null;
   readonly authority: RuntimeBindingTargetOperationAuthority | `${RuntimeBindingTargetOperationAuthority}`;
   readonly openReason: string | null;
   readonly source: SemanticSourceReference | null;
@@ -4364,6 +4376,7 @@ export interface SemanticTargetOperationRow {
     readonly instructionProductHandle: ProductHandle | null;
     readonly targetOperationProductHandle: ProductHandle;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly eventModifierSourceAddressHandle: AddressHandle | null;
   };
 }
 

@@ -1,0 +1,27 @@
+<input ref="plainElement">
+<input element.ref="explicitElement">
+
+<ref-panel
+  component.ref="panelComponent"
+  controller.ref="panelController"
+  view-model.ref="legacyPanel"
+  focus-ring
+  focus-ring.ref="focusRingController"
+  ref-panel.ref="namedPanel"
+  saved.trigger="handleCustom($event)">
+</ref-panel>
+
+<div view.ref="unsupportedView"></div>
+<div component.ref="missingComponent"></div>
+<ref-panel missing.ref="missingNamedTarget"></ref-panel>
+<input ref="readonlyElement">
+<input ref="wrongElement">
+
+<button type="button" click.trigger:prevent="handleMouse($event)">Mouse</button>
+<input keydown.trigger:ctrl+enter="handleKeyboard($event)">
+<div pointerdown.capture:stop="handlePointer($event)"></div>
+<button type="button" click.trigger="handlerReference">Reference</button>
+<button type="button" click.trigger="handleMouse($event) & self">Self</button>
+<input value.bind="selfValue & self">
+<button type="button" click.delegate="handleMouse($event)">Legacy</button>
+<button type="button" click.trigger="handleMouse($event.missing)">Invalid event member</button>

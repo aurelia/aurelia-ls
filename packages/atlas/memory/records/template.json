@@ -2863,6 +2863,80 @@
       ],
       "createdAt": "2026-05-23",
       "updatedAt": "2026-07-12"
+    },
+    {
+      "id": "decision:attribute-pattern-part-loci-and-ref-listener-closure",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "template",
+        "binding",
+        "resources",
+        "ide",
+        "provenance"
+      ],
+      "summary": "Attribute-pattern parts retain authored loci, and ref/listener consumers spend the resolved lowering relations rather than rescanning syntax.",
+      "rationale": "Ref/listener pressure exposed two versions of the same data-loss class: attribute interpretation retained semantic strings but discarded non-target/command part locations, while controller-bind publication discarded the exact source already carried by target/source-operation requests. Preserving every interpreted part occurrence and spending request-owned sources lets diagnostics, tokens, resource closure, and IDE operations share the compiler/runtime relation. Named ref targets are resource usages only when controller bind resolved a same-node resource controller; special ref API targets are not resource identities.",
+      "guidance": [
+        "Retain relative occurrences for every AttributePatternMatch part before semantic transforms; attribute-syntax-source owns their source publication and downstream consumers must not rescan raw attribute names.",
+        "Ref and listener instructions/runtime bindings carry exact ref target, event name, and modifier sources. Controller-bind publication must spend the request sourceAddressHandle rather than the enclosing binding source.",
+        "BindingTargetOperations joins the retained ListenerBinding product to expose trigger/capture strategy, modifier text, and the exact modifier source; do not infer those facts from affectedNames in API consumers.",
+        "Resolve named ref resource identity from the existing controller-bind relation. References, rename, cursor selection, and semantic tokens consume that relation; element, controller, component, and view remain language targets.",
+        "Completion for ref targets, event names, and event modifiers requires explicit inquiry site/candidate vocabulary backed by runtime relations and DOM/service catalogs. Do not append syntax strings in an adapter.",
+        "Unknown custom events should instantiate the generic CustomEvent payload as unknown; never expose the declaration-local T or widen it to any."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/attribute-syntax.ts",
+          "symbolName": "AttributePatternPartOccurrence",
+          "summary": "Interpreted attribute-pattern part and relative authored occurrence."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/attribute-syntax-source.ts",
+          "symbolName": "attributeSyntaxPartSources",
+          "summary": "Publishes exact source addresses for every interpreted pattern part."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-controller-bind-publication.ts",
+          "summary": "Publishes binding requests against their request-owned source loci."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-ref-target.ts",
+          "summary": "Maps named ref source operations to already-resolved resource controllers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/template-semantic-tokens.ts",
+          "summary": "Projects event, modifier, and named-ref resource token roles from exact semantic sources."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/template/README.md",
+          "summary": "Template lowering and controller-bind ownership guidance."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/api/README.md",
+          "summary": "Public ref/listener diagnostics, resource closure, and semantic token projection."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/attribute-syntax.ts",
+          "symbolName": "AttributePatternPartOccurrence"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-ref-target.ts"
+        }
+      ],
+      "createdAt": "2026-07-13",
+      "updatedAt": "2026-07-13"
     }
   ]
 }

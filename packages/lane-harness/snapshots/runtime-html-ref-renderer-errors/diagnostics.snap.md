@@ -47,7 +47,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "all"
         },
         "sourceRole": "template",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 46,
+            "kind": "source-span-address",
+            "label": "src/runtime-html-ref-renderer-errors-app.html@42..46",
+            "path": "src/runtime-html-ref-renderer-errors-app.html",
+            "role": "name",
+            "start": 42
+          },
+          "span": null,
+          "subjectKind": "template-syntax",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "guided",
           "category": "template-syntax",
@@ -59,7 +71,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Aurelia runtime renderer AUR0750 rejects this instruction input: view.ref is not supported by runtime-html..",
       "range": {
         "end": {
-          "character": 26,
+          "character": 9,
           "line": 1
         },
         "start": {
@@ -67,7 +79,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 1
         }
       },
-      "rangeText": "view.ref=\"legacyView\"",
+      "rangeText": "view",
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
@@ -97,7 +109,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "all"
         },
         "sourceRole": "template",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 86,
+            "kind": "source-span-address",
+            "label": "src/runtime-html-ref-renderer-errors-app.html@76..86",
+            "path": "src/runtime-html-ref-renderer-errors-app.html",
+            "role": "name",
+            "start": 76
+          },
+          "span": null,
+          "subjectKind": "template-syntax",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "guided",
           "category": "template-syntax",
@@ -109,7 +133,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Aurelia runtime renderer AUR0762 rejects this instruction input: controller.ref requires a custom element or containerless host..",
       "range": {
         "end": {
-          "character": 40,
+          "character": 15,
           "line": 2
         },
         "start": {
@@ -117,7 +141,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 2
         }
       },
-      "rangeText": "controller.ref=\"plainControllerRef\"",
+      "rangeText": "controller",
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
@@ -147,7 +171,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "all"
         },
         "sourceRole": "template",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 129,
+            "kind": "source-span-address",
+            "label": "src/runtime-html-ref-renderer-errors-app.html@124..129",
+            "path": "src/runtime-html-ref-renderer-errors-app.html",
+            "role": "name",
+            "start": 124
+          },
+          "span": null,
+          "subjectKind": "template-syntax",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "guided",
           "category": "template-syntax",
@@ -159,7 +195,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Aurelia runtime renderer AUR0763 rejects this instruction input: Ref target 'ghost' could not fall back to a custom element controller because the ref host is not a custom element..",
       "range": {
         "end": {
-          "character": 32,
+          "character": 10,
           "line": 3
         },
         "start": {
@@ -167,7 +203,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 3
         }
       },
-      "rangeText": "ghost.ref=\"plainMissingRef\"",
+      "rangeText": "ghost",
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
@@ -197,7 +233,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "targetSourceCoverage": "all"
         },
         "sourceRole": "template",
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 311,
+            "kind": "source-span-address",
+            "label": "src/runtime-html-ref-renderer-errors-app.html@306..311",
+            "path": "src/runtime-html-ref-renderer-errors-app.html",
+            "role": "name",
+            "start": 306
+          },
+          "span": null,
+          "subjectKind": "template-syntax",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "guided",
           "category": "template-syntax",
@@ -209,7 +257,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Aurelia runtime renderer AUR0751 rejects this instruction input: Ref target 'ghost' was not found amongst the target API..",
       "range": {
         "end": {
-          "character": 41,
+          "character": 24,
           "line": 6
         },
         "start": {
@@ -217,7 +265,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 6
         }
       },
-      "rangeText": "ghost.ref=\"missingRef\"",
+      "rangeText": "ghost",
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
@@ -239,7 +287,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "contextualCount": 0,
     "groups": [
       {
-        "groupKey": "row:diagnostic:2:template:runtime-renderer-framework-error:framework-error-code:AUR0750:src/runtime-html-ref-renderer-errors-app.html:42:63:runtime-renderer:AUR0750",
+        "groupKey": "row:diagnostic:2:template:runtime-renderer-framework-error:framework-error-code:AUR0750:src/runtime-html-ref-renderer-errors-app.html:42:46:runtime-renderer:AUR0750",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -269,7 +317,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "all"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 46,
+                  "kind": "source-span-address",
+                  "label": "src/runtime-html-ref-renderer-errors-app.html@42..46",
+                  "path": "src/runtime-html-ref-renderer-errors-app.html",
+                  "role": "name",
+                  "start": 42
+                },
+                "span": null,
+                "subjectKind": "template-syntax",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -292,24 +352,32 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 63,
+              "end": 46,
               "start": 42
             },
-            "spanText": "view.ref=\"legacyView\"",
+            "spanText": "view",
             "status": "primary",
             "uri": "fixtures://pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:2:template:runtime-renderer-framework-error:framework-error-code:AUR0750:src/runtime-html-ref-renderer-errors-app.html:42:63:runtime-renderer:AUR0750"
+          "rowId": "diagnostic:2:template:runtime-renderer-framework-error:framework-error-code:AUR0750:src/runtime-html-ref-renderer-errors-app.html:42:46:runtime-renderer:AUR0750"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 46,
+            "start": 42
+          },
+          "subjectKind": "template-syntax",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
+        }
       },
       {
-        "groupKey": "row:diagnostic:3:template:runtime-renderer-framework-error:framework-error-code:AUR0762:src/runtime-html-ref-renderer-errors-app.html:76:111:runtime-renderer:AUR0762",
+        "groupKey": "row:diagnostic:3:template:runtime-renderer-framework-error:framework-error-code:AUR0762:src/runtime-html-ref-renderer-errors-app.html:76:86:runtime-renderer:AUR0762",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -339,7 +407,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "all"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 86,
+                  "kind": "source-span-address",
+                  "label": "src/runtime-html-ref-renderer-errors-app.html@76..86",
+                  "path": "src/runtime-html-ref-renderer-errors-app.html",
+                  "role": "name",
+                  "start": 76
+                },
+                "span": null,
+                "subjectKind": "template-syntax",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -362,24 +442,32 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 111,
+              "end": 86,
               "start": 76
             },
-            "spanText": "controller.ref=\"plainControllerRef\"",
+            "spanText": "controller",
             "status": "primary",
             "uri": "fixtures://pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:3:template:runtime-renderer-framework-error:framework-error-code:AUR0762:src/runtime-html-ref-renderer-errors-app.html:76:111:runtime-renderer:AUR0762"
+          "rowId": "diagnostic:3:template:runtime-renderer-framework-error:framework-error-code:AUR0762:src/runtime-html-ref-renderer-errors-app.html:76:86:runtime-renderer:AUR0762"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 86,
+            "start": 76
+          },
+          "subjectKind": "template-syntax",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
+        }
       },
       {
-        "groupKey": "row:diagnostic:0:template:runtime-renderer-framework-error:framework-error-code:AUR0763:src/runtime-html-ref-renderer-errors-app.html:124:151:runtime-renderer:AUR0763",
+        "groupKey": "row:diagnostic:0:template:runtime-renderer-framework-error:framework-error-code:AUR0763:src/runtime-html-ref-renderer-errors-app.html:124:129:runtime-renderer:AUR0763",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -409,7 +497,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "all"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 129,
+                  "kind": "source-span-address",
+                  "label": "src/runtime-html-ref-renderer-errors-app.html@124..129",
+                  "path": "src/runtime-html-ref-renderer-errors-app.html",
+                  "role": "name",
+                  "start": 124
+                },
+                "span": null,
+                "subjectKind": "template-syntax",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -432,24 +532,32 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 151,
+              "end": 129,
               "start": 124
             },
-            "spanText": "ghost.ref=\"plainMissingRef\"",
+            "spanText": "ghost",
             "status": "primary",
             "uri": "fixtures://pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:0:template:runtime-renderer-framework-error:framework-error-code:AUR0763:src/runtime-html-ref-renderer-errors-app.html:124:151:runtime-renderer:AUR0763"
+          "rowId": "diagnostic:0:template:runtime-renderer-framework-error:framework-error-code:AUR0763:src/runtime-html-ref-renderer-errors-app.html:124:129:runtime-renderer:AUR0763"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 129,
+            "start": 124
+          },
+          "subjectKind": "template-syntax",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
+        }
       },
       {
-        "groupKey": "row:diagnostic:1:template:runtime-renderer-framework-error:framework-error-code:AUR0751:src/runtime-html-ref-renderer-errors-app.html:306:328:runtime-renderer:AUR0751",
+        "groupKey": "row:diagnostic:1:template:runtime-renderer-framework-error:framework-error-code:AUR0751:src/runtime-html-ref-renderer-errors-app.html:306:311:runtime-renderer:AUR0751",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -479,7 +587,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "targetSourceCoverage": "all"
               },
               "sourceRole": null,
-              "subject": null,
+              "subject": {
+                "source": {
+                  "end": 311,
+                  "kind": "source-span-address",
+                  "label": "src/runtime-html-ref-renderer-errors-app.html@306..311",
+                  "path": "src/runtime-html-ref-renderer-errors-app.html",
+                  "role": "name",
+                  "start": 306
+                },
+                "span": null,
+                "subjectKind": "template-syntax",
+                "uri": null
+              },
               "taxonomy": {
                 "actionability": null,
                 "category": null,
@@ -502,21 +622,29 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 328,
+              "end": 311,
               "start": 306
             },
-            "spanText": "ghost.ref=\"missingRef\"",
+            "spanText": "ghost",
             "status": "primary",
             "uri": "fixtures://pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:1:template:runtime-renderer-framework-error:framework-error-code:AUR0751:src/runtime-html-ref-renderer-errors-app.html:306:328:runtime-renderer:AUR0751"
+          "rowId": "diagnostic:1:template:runtime-renderer-framework-error:framework-error-code:AUR0751:src/runtime-html-ref-renderer-errors-app.html:306:311:runtime-renderer:AUR0751"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
         "related": [],
-        "subject": null
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 311,
+            "start": 306
+          },
+          "subjectKind": "template-syntax",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
+        }
       }
     ],
     "primaryCount": 4,
@@ -552,7 +680,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "all"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 129,
+              "kind": "source-span-address",
+              "label": "src/runtime-html-ref-renderer-errors-app.html@124..129",
+              "path": "src/runtime-html-ref-renderer-errors-app.html",
+              "role": "name",
+              "start": 124
+            },
+            "span": null,
+            "subjectKind": "template-syntax",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -575,10 +715,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 151,
+          "end": 129,
           "start": 124
         },
-        "spanText": "ghost.ref=\"plainMissingRef\"",
+        "spanText": "ghost",
         "status": "canonical",
         "uri": "fixtures://pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
       },
@@ -609,7 +749,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "all"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 311,
+              "kind": "source-span-address",
+              "label": "src/runtime-html-ref-renderer-errors-app.html@306..311",
+              "path": "src/runtime-html-ref-renderer-errors-app.html",
+              "role": "name",
+              "start": 306
+            },
+            "span": null,
+            "subjectKind": "template-syntax",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -632,10 +784,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 328,
+          "end": 311,
           "start": 306
         },
-        "spanText": "ghost.ref=\"missingRef\"",
+        "spanText": "ghost",
         "status": "canonical",
         "uri": "fixtures://pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
       },
@@ -666,7 +818,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "all"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 46,
+              "kind": "source-span-address",
+              "label": "src/runtime-html-ref-renderer-errors-app.html@42..46",
+              "path": "src/runtime-html-ref-renderer-errors-app.html",
+              "role": "name",
+              "start": 42
+            },
+            "span": null,
+            "subjectKind": "template-syntax",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -689,10 +853,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 63,
+          "end": 46,
           "start": 42
         },
-        "spanText": "view.ref=\"legacyView\"",
+        "spanText": "view",
         "status": "canonical",
         "uri": "fixtures://pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
       },
@@ -723,7 +887,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "targetSourceCoverage": "all"
           },
           "sourceRole": null,
-          "subject": null,
+          "subject": {
+            "source": {
+              "end": 86,
+              "kind": "source-span-address",
+              "label": "src/runtime-html-ref-renderer-errors-app.html@76..86",
+              "path": "src/runtime-html-ref-renderer-errors-app.html",
+              "role": "name",
+              "start": 76
+            },
+            "span": null,
+            "subjectKind": "template-syntax",
+            "uri": null
+          },
           "taxonomy": {
             "actionability": null,
             "category": null,
@@ -746,10 +922,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 111,
+          "end": 86,
           "start": 76
         },
-        "spanText": "controller.ref=\"plainControllerRef\"",
+        "spanText": "controller",
         "status": "canonical",
         "uri": "fixtures://pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
       }
@@ -790,7 +966,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "all"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 46,
+                "kind": "source-span-address",
+                "label": "src/runtime-html-ref-renderer-errors-app.html@42..46",
+                "path": "src/runtime-html-ref-renderer-errors-app.html",
+                "role": "name",
+                "start": 42
+              },
+              "span": null,
+              "subjectKind": "template-syntax",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -813,10 +1001,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 63,
+            "end": 46,
             "start": 42
           },
-          "spanText": "view.ref=\"legacyView\"",
+          "spanText": "view",
           "status": "primary",
           "uri": "fixtures://pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
         },
@@ -847,7 +1035,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "all"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 86,
+                "kind": "source-span-address",
+                "label": "src/runtime-html-ref-renderer-errors-app.html@76..86",
+                "path": "src/runtime-html-ref-renderer-errors-app.html",
+                "role": "name",
+                "start": 76
+              },
+              "span": null,
+              "subjectKind": "template-syntax",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -870,10 +1070,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 111,
+            "end": 86,
             "start": 76
           },
-          "spanText": "controller.ref=\"plainControllerRef\"",
+          "spanText": "controller",
           "status": "primary",
           "uri": "fixtures://pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
         },
@@ -904,7 +1104,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "all"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 129,
+                "kind": "source-span-address",
+                "label": "src/runtime-html-ref-renderer-errors-app.html@124..129",
+                "path": "src/runtime-html-ref-renderer-errors-app.html",
+                "role": "name",
+                "start": 124
+              },
+              "span": null,
+              "subjectKind": "template-syntax",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -927,10 +1139,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 151,
+            "end": 129,
             "start": 124
           },
-          "spanText": "ghost.ref=\"plainMissingRef\"",
+          "spanText": "ghost",
           "status": "primary",
           "uri": "fixtures://pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
         },
@@ -961,7 +1173,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "targetSourceCoverage": "all"
             },
             "sourceRole": null,
-            "subject": null,
+            "subject": {
+              "source": {
+                "end": 311,
+                "kind": "source-span-address",
+                "label": "src/runtime-html-ref-renderer-errors-app.html@306..311",
+                "path": "src/runtime-html-ref-renderer-errors-app.html",
+                "role": "name",
+                "start": 306
+              },
+              "span": null,
+              "subjectKind": "template-syntax",
+              "uri": null
+            },
             "taxonomy": {
               "actionability": null,
               "category": null,
@@ -984,10 +1208,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 328,
+            "end": 311,
             "start": 306
           },
-          "spanText": "ghost.ref=\"missingRef\"",
+          "spanText": "ghost",
           "status": "primary",
           "uri": "fixtures://pressure/runtime-html-ref-renderer-errors/src/runtime-html-ref-renderer-errors-app.html"
         }
