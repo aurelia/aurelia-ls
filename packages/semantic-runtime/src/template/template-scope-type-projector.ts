@@ -50,6 +50,7 @@ import {
 import {
   CheckerTypeProjectionOrigin,
   checkerTypeReferenceWithSource,
+  sameCheckerTypeReference,
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
 import {
@@ -130,6 +131,41 @@ export class TemplateScopeTypeProjector {
 
   readParse(productHandle: ProductHandle | null): TemplateExpressionParse | null {
     return readTemplateExpressionParse(this.store, productHandle);
+  }
+
+  commonOrUnionTypeReference(
+    references: readonly CheckerTypeReference[],
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const distinct: CheckerTypeReference[] = [];
+    for (const reference of references) {
+      if (!distinct.some((candidate) => sameCheckerTypeReference(candidate, reference))) {
+        distinct.push(reference);
+      }
+    }
+    if (distinct.length < 2) {
+      return distinct[0] ?? null;
+    }
+    const checkerUnion = checkerBackedUnionTypeForReferences(this.store, distinct);
+    if (checkerUnion != null) {
+      return this.typeProjector.ensureProjection({
+        localKey,
+        checker: checkerUnion.checker,
+        type: checkerUnion.type,
+        origin: CheckerTypeProjectionOrigin.TypeChecker,
+        sourceAddressHandle,
+        display: checkerUnion.checker.typeToString(checkerUnion.type),
+        memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+      } satisfies CheckerTypeProjectionRequest).toReference();
+    }
+    const shapes = distinct.flatMap((reference) => {
+      const shape = readCheckerTypeShape(this.store, reference);
+      return shape == null ? [] : [shape];
+    });
+    return shapes.length !== distinct.length
+      ? null
+      : this.typeSynthesizer.unionType(shapes, localKey, sourceAddressHandle).toReference();
   }
 
   listenerEventSlot(

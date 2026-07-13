@@ -335,6 +335,15 @@ export class LocalTemplateDefinitionMaterializer {
         SourceSpanRole.Name,
         records,
       );
+    const modeSourceAddressHandle = modeAttribute == null
+      ? null
+      : coordinates.address(
+        `${local}:mode`,
+        modeAttribute.valueStart ?? modeAttribute.start,
+        modeAttribute.valueEnd ?? modeAttribute.end,
+        SourceSpanRole.Value,
+        records,
+      );
     const setter = new BindableSetterDefinition(BindableSetterKind.Default);
     return new LocalBindablePublication(
       new BindableDefinition(
@@ -347,6 +356,8 @@ export class LocalTemplateDefinitionMaterializer {
         [],
         nameSourceAddressHandle,
         attributeSourceAddressHandle,
+        null,
+        modeSourceAddressHandle,
       ),
       new BindableDefinitionContribution(
         BindableContributionKind.LocalTemplate,
@@ -360,6 +371,8 @@ export class LocalTemplateDefinitionMaterializer {
         [],
         nameSourceAddressHandle,
         attributeSourceAddressHandle,
+        null,
+        modeSourceAddressHandle,
       ),
     );
   }

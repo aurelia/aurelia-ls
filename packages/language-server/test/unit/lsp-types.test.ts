@@ -565,6 +565,124 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
     }]);
   });
 
+  test("keeps a local resource carrier range while selecting its exact authored name", () => {
+    const template = '<template as-custom-element="mode-panel"><p>local</p></template>';
+    const nameStart = template.indexOf("mode-panel");
+    const originDocument = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      template,
+    );
+    const carrierSource = {
+      kind: "source-span-address",
+      label: `src/component.html@0..${template.length}`,
+      path: "src/component.html",
+      start: 0,
+      end: template.length,
+    };
+    const nameSource = {
+      kind: "source-span-address",
+      label: `src/component.html@${nameStart}..${nameStart + "mode-panel".length}`,
+      path: "src/component.html",
+      start: nameStart,
+      end: nameStart + "mode-panel".length,
+    };
+
+    const mapped = mapSemanticRuntimeTemplateDefinition({
+      value: {
+        activeSource: nameSource,
+        selectedMember: null,
+        selectedBindable: null,
+        selectedDefinition: {
+          resourceKind: "custom-element",
+          name: "mode-panel",
+          matchedName: "mode-panel",
+          targetName: null,
+          source: carrierSource,
+          nameSource,
+          matchedNameSource: nameSource,
+          targetSource: carrierSource,
+        },
+      },
+    } as never, lookupText, {
+      workspaceRoot: "C:/projects/app",
+      originDocument,
+    });
+
+    expect(mapped?.[0]?.targetRange).toEqual({
+      start: { line: 0, character: 0 },
+      end: { line: 0, character: template.length },
+    });
+    expect(mapped?.[0]?.targetSelectionRange).toEqual({
+      start: { line: 0, character: nameStart },
+      end: { line: 0, character: nameStart + "mode-panel".length },
+    });
+  });
+
+  test("selects an explicit bindable alias inside its metadata carrier", () => {
+    const template = '<bindable name="item" attribute="card-item"></bindable>';
+    const aliasStart = template.indexOf("card-item");
+    const propertyStart = definitionText.indexOf("message");
+    const originDocument = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      template,
+    );
+    const carrierSource = {
+      kind: "source-span-address",
+      label: `src/component.html@0..${template.length}`,
+      path: "src/component.html",
+      start: 0,
+      end: template.length,
+    };
+    const aliasSource = {
+      kind: "source-span-address",
+      label: `src/component.html@${aliasStart}..${aliasStart + "card-item".length}`,
+      path: "src/component.html",
+      start: aliasStart,
+      end: aliasStart + "card-item".length,
+    };
+
+    const mapped = mapSemanticRuntimeTemplateDefinition({
+      value: {
+        activeSource: {
+          kind: "source-span-address",
+          label: "src/consumer.html@4..13",
+          path: "src/consumer.html",
+          start: 4,
+          end: 13,
+        },
+        selectedMember: null,
+        selectedDefinition: null,
+        selectedBindable: {
+          source: carrierSource,
+          attributeSource: aliasSource,
+          propertySource: {
+            kind: "typescript-node",
+            label: `${definitionLspUri}@${propertyStart}..${propertyStart + "message".length}`,
+            path: definitionLspUri,
+            start: propertyStart,
+            end: propertyStart + "message".length,
+          },
+        },
+      },
+    } as never, lookupText, {
+      workspaceRoot: "C:/projects/app",
+      originDocument,
+    });
+
+    expect(mapped?.[0]?.targetRange).toEqual({
+      start: { line: 0, character: 0 },
+      end: { line: 0, character: template.length },
+    });
+    expect(mapped?.[0]?.targetSelectionRange).toEqual({
+      start: { line: 0, character: aliasStart },
+      end: { line: 0, character: aliasStart + "card-item".length },
+    });
+  });
+
   test("returns null instead of inventing a link for broad source references", () => {
     const originDocument = TextDocument.create(
       "file:///C:/projects/app/src/component.html",

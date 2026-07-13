@@ -1,0 +1,37 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/resource-registration-local-template-errors",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "forbidden-host-attribute",
+        "file": "src/local-surrogate-invalid-attribute.html",
+        "verdict": "correct",
+        "reason": "AUR0702 should reach the IDE at the exact forbidden id attribute on a local-template host surrogate."
+      },
+      {
+        "id": "host-template-controller",
+        "file": "src/local-surrogate-template-controller.html",
+        "verdict": "correct",
+        "reason": "AUR0703 should reach the IDE at the template-controller attribute on a local-template host surrogate."
+      }
+    ],
+    "codeAction": [
+      {
+        "id": "forbidden-host-attribute",
+        "file": "src/local-surrogate-invalid-attribute.html",
+        "anchor": "id=\"forbidden-host-id\"",
+        "at": "id",
+        "verdict": "correct",
+        "reason": "Removing an authored id may change application behavior; without explicit intent no automatic repair should be fabricated."
+      },
+      {
+        "id": "host-template-controller",
+        "file": "src/local-surrogate-template-controller.html",
+        "anchor": "if.bind=\"true\"",
+        "at": "if",
+        "verdict": "correct",
+        "reason": "Moving a template controller off the generated host requires structural intent, so the honest baseline is no edit-backed quick fix."
+      }
+    ]
+  }
+}

@@ -564,7 +564,7 @@ export function mapSemanticRuntimeTemplateDefinition(
     return null;
   }
 
-  const targetUri = semanticSourceReferenceUri(target, options.workspaceRoot);
+  const targetUri = semanticSourceReferenceUri(target.selectionSource, options.workspaceRoot);
   if (targetUri == null) {
     return null;
   }
@@ -584,15 +584,25 @@ export function mapSemanticRuntimeTemplateDefinition(
     0,
     targetText,
   );
-  const targetRange = semanticSourceRangeForDocument(target, targetDocument);
-  if (targetRange == null) {
+  const targetSelectionRange = semanticSourceRangeForDocument(target.selectionSource, targetDocument);
+  if (targetSelectionRange == null) {
     return null;
   }
+  // LSP intentionally separates the enclosing declaration from the identifier selected by F12.
+  // Semantic-runtime already carries both; collapsing them here made local templates and aliases
+  // navigate to whole carrier elements even though their authored name tokens were exact.
+  const targetRange = containingDefinitionRange(
+    target.rangeSource,
+    targetUri,
+    targetDocument,
+    targetSelectionRange,
+    options.workspaceRoot,
+  );
 
   return [{
     targetUri,
     targetRange,
-    targetSelectionRange: targetRange,
+    targetSelectionRange,
   }];
 }
 
@@ -644,17 +654,102 @@ export function mapSemanticRuntimeRouteNodeDefinition(
   return null;
 }
 
+interface SemanticRuntimeDefinitionTarget {
+  readonly rangeSource: SemanticSourceReference;
+  readonly selectionSource: SemanticSourceReference;
+}
+
 function semanticRuntimeDefinitionTarget(
   value: SemanticTemplateCursorInfoResult,
-): SemanticSourceReference | null {
-  return firstSemanticRuntimeExactSourceReference([
+): SemanticRuntimeDefinitionTarget | null {
+  const memberSource = firstSemanticRuntimeExactSourceReference([
     value.selectedMember?.declarationSource ?? null,
     value.selectedMember?.source ?? null,
-    value.selectedBindable?.propertySource ?? null,
-    value.selectedBindable?.source ?? null,
-    value.selectedDefinition?.targetSource ?? null,
-    value.selectedDefinition?.source ?? null,
   ]);
+  if (memberSource != null) {
+    return { rangeSource: memberSource, selectionSource: memberSource };
+  }
+
+  const bindable = value.selectedBindable;
+  if (bindable != null) {
+    const activeSource = value.activeSource;
+    const selectionSource = firstSemanticRuntimeExactSourceReference([
+      sameExactSourceReference(activeSource, bindable.callbackSource)
+        ? bindable.callbackTargetSource ?? bindable.callbackSource
+        : null,
+      sameExactSourceReference(activeSource, bindable.modeSource) ? bindable.modeSource : null,
+      sameExactSourceReference(activeSource, bindable.setSource) ? bindable.setSource : null,
+      sameExactSourceReference(activeSource, bindable.attributeSource) ? bindable.attributeSource : null,
+      sameExactSourceReference(activeSource, bindable.nameSource) ? bindable.nameSource : null,
+      bindable.attributeSource ?? null,
+      bindable.propertySource ?? null,
+      bindable.nameSource ?? null,
+      bindable.source ?? null,
+    ]);
+    if (selectionSource != null) {
+      return {
+        rangeSource: firstSemanticRuntimeExactSourceReference([bindable.source, selectionSource]) ?? selectionSource,
+        selectionSource,
+      };
+    }
+  }
+
+  const definition = value.selectedDefinition;
+  if (definition == null) {
+    return null;
+  }
+  const selectionSource = firstSemanticRuntimeExactSourceReference([
+    definition.matchedNameSource,
+    definition.nameSource,
+    definition.targetSource,
+    definition.source,
+  ]);
+  return selectionSource == null
+    ? null
+    : {
+      rangeSource: firstSemanticRuntimeExactSourceReference([definition.source, selectionSource]) ?? selectionSource,
+      selectionSource,
+    };
+}
+
+function sameExactSourceReference(
+  left: SemanticSourceReference | null,
+  right: SemanticSourceReference | null,
+): boolean {
+  const leftExact = semanticExactSourceReference(left);
+  const rightExact = semanticExactSourceReference(right);
+  const leftPath = semanticSourceReferencePath(leftExact);
+  const rightPath = semanticSourceReferencePath(rightExact);
+  return leftExact != null
+    && rightExact != null
+    && leftPath != null
+    && leftPath === rightPath
+    && leftExact.start === rightExact.start
+    && leftExact.end === rightExact.end;
+}
+
+function containingDefinitionRange(
+  source: SemanticSourceReference,
+  selectionUri: string,
+  document: TextDocument,
+  selectionRange: Range,
+  workspaceRoot: string | null,
+): Range {
+  const sourceUri = semanticSourceReferenceUri(source, workspaceRoot);
+  if (sourceUri == null || canonicalDocumentUri(sourceUri).uri !== canonicalDocumentUri(selectionUri).uri) {
+    return selectionRange;
+  }
+  const range = semanticSourceRangeForDocument(source, document);
+  if (range == null) {
+    return selectionRange;
+  }
+  const rangeStart = document.offsetAt(range.start);
+  const rangeEnd = document.offsetAt(range.end);
+  const selectionStart = document.offsetAt(selectionRange.start);
+  const selectionEnd = document.offsetAt(selectionRange.end);
+  return rangeStart <= selectionStart && selectionEnd <= rangeEnd
+    ? range
+    : selectionRange;
 }
 
 function firstSemanticRuntimeExactSourceReference(

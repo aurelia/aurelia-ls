@@ -765,14 +765,34 @@ export class TemplateControllerScopeMaterializer {
     definition: CustomElementDefinition,
     controllerProductHandle: ProductHandle | null,
   ): readonly BindingContextSlotDraft[] {
-    return [
-      ...this.definitionBindableBindingContextSlots(definition),
-      ...this.boundControllerBindingContextSlots(
-        input,
-        controllerProductHandle,
-        definition.target.targetType,
-      ),
-    ];
+    const declarations = this.definitionBindableBindingContextSlots(definition);
+    const inferred = this.boundControllerBindingContextSlots(
+      input,
+      definition,
+      controllerProductHandle,
+      definition.target.targetType,
+    );
+    const inferredByName = new Map(inferred.map((slot) => [slot.name, slot]));
+    const merged = declarations.map((declaration) => {
+      const inference = inferredByName.get(declaration.name);
+      if (inference == null) {
+        return declaration;
+      }
+      inferredByName.delete(declaration.name);
+      return new BindingContextSlotDraft(
+        declaration.name,
+        declaration.targetIdentityHandle,
+        declaration.targetProductHandle,
+        inference.targetType ?? declaration.targetType,
+        declaration.sourceAddressHandle,
+        declaration.fieldProvenance,
+        declaration.staticValue,
+        declaration.memberTypes,
+        declaration.assignmentAccessKind,
+        inference.targetTypeSourceProductHandle,
+      );
+    });
+    return [...merged, ...inferredByName.values()];
   }
 
   private definitionBindableBindingContextSlots(
@@ -802,38 +822,83 @@ export class TemplateControllerScopeMaterializer {
 
   private boundControllerBindingContextSlots(
     input: TemplateScopeConstructionRequest,
+    definition: CustomElementDefinition,
     controllerProductHandle: ProductHandle | null,
     contextType: CheckerTypeReference | null,
   ): readonly BindingContextSlotDraft[] {
-    return input.boundControllerValues?.readAll(controllerProductHandle, contextType)
-      .flatMap((value) => this.boundControllerBindingContextSlot(input, value, contextType)) ?? [];
+    if (input.boundControllerValues == null) {
+      return [];
+    }
+    const exactValues = input.boundControllerValues.readExactControllerValues(controllerProductHandle);
+    const values = exactValues.length > 0
+      ? exactValues
+      : contextType != null
+        ? input.boundControllerValues.readAll(controllerProductHandle, contextType)
+        : input.boundControllerValues.readAllDefinitionValues(definition.productHandle);
+    const valuesByProperty = new Map<string, RuntimeBoundControllerPropertyValue[]>();
+    for (const value of values) {
+      const propertyValues = valuesByProperty.get(value.propertyName) ?? [];
+      propertyValues.push(value);
+      valuesByProperty.set(value.propertyName, propertyValues);
+    }
+    return [...valuesByProperty.values()].flatMap((propertyValues) =>
+      this.boundControllerBindingContextSlot(input, propertyValues, contextType)
+    );
   }
 
   private boundControllerBindingContextSlot(
     input: TemplateScopeConstructionRequest,
-    value: RuntimeBoundControllerPropertyValue,
+    values: readonly RuntimeBoundControllerPropertyValue[],
     contextType: CheckerTypeReference | null,
   ): readonly BindingContextSlotDraft[] {
-    if (value.expressionProductHandle == null || value.sourceScope == null) {
-      return [];
-    }
-    const parse = readTemplateExpressionParse(this.store, value.expressionProductHandle);
-    const expression = parse == null ? null : bindingExpressionAstForParse(parse);
-    if (expression == null) {
-      return [];
-    }
-    const sourceSite = this.boundControllerSourceExpressionSite(input, expression, value, value.sourceAddressHandle);
-    const sourceSlot = sourceSite.projection == null
-      ? null
-      : bindingContextSlotDraftForExpressionAccess(
-        this.store,
-        this.typeProjector,
-        sourceSite.projection.scope,
-        sourceSite.projection.expression,
-        `${input.localKey}:bound-controller:${value.propertyName}:source-slot`,
+    const projections = values.flatMap((value, index) => {
+      if (value.expressionProductHandle == null || value.sourceScope == null) {
+        return [];
+      }
+      const parse = readTemplateExpressionParse(this.store, value.expressionProductHandle);
+      const expression = parse == null ? null : bindingExpressionAstForParse(parse);
+      if (expression == null) {
+        return [];
+      }
+      const sourceSite = this.boundControllerSourceExpressionSite(
+        input,
+        expression,
+        value,
+        value.sourceAddressHandle,
       );
-    const evaluatedType = this.boundControllerExpressionType(input, sourceSite, value.propertyName, value.sourceResourceScope);
-    const targetType = evaluatedType ?? sourceSlot?.targetType;
+      const sourceSlot = sourceSite.projection == null
+        ? null
+        : bindingContextSlotDraftForExpressionAccess(
+          this.store,
+          this.typeProjector,
+          sourceSite.projection.scope,
+          sourceSite.projection.expression,
+          `${input.localKey}:bound-controller:${value.propertyName}:source-slot:${index}`,
+        );
+      const targetType = this.boundControllerExpressionType(
+        input,
+        sourceSite,
+        value.propertyName,
+        value.sourceResourceScope,
+      ) ?? sourceSlot?.targetType;
+      if (targetType == null) {
+        return [];
+      }
+      const sourceTypeMember = sourceSlot?.targetType == null
+        || !sameCheckerTypeReference(sourceSlot.targetType, targetType)
+        ? null
+        : bindingContextSlotTargetTypeSourceMember(this.store, sourceSlot);
+      return [{ targetType, sourceTypeMember }];
+    });
+    const value = values[0];
+    if (value == null || projections.length === 0) {
+      return [];
+    }
+    const targetType = this.typeSupport.commonOrUnionTypeReference(
+      projections.map((projection) => projection.targetType),
+      `${input.localKey}:bound-controller:${value.propertyName}:use-types`,
+      this.boundControllerPropertySourceAddressHandle(value),
+    );
     if (targetType == null) {
       return [];
     }
@@ -842,10 +907,12 @@ export class TemplateControllerScopeMaterializer {
       contextType,
       value.propertyName,
     );
-    const sourceTypeMember = sourceSlot?.targetType == null
-      || !sameCheckerTypeReference(sourceSlot.targetType, targetType)
-      ? null
-      : bindingContextSlotTargetTypeSourceMember(this.store, sourceSlot);
+    const sourceTypeMemberHandles = new Set(
+      projections.map((projection) => projection.sourceTypeMember?.productHandle ?? null),
+    );
+    const targetTypeSourceProductHandle = sourceTypeMemberHandles.size === 1
+      ? [...sourceTypeMemberHandles][0] ?? null
+      : null;
     return [new BindingContextSlotDraft(
       value.propertyName,
       declarationSlot?.targetIdentityHandle ?? null,
@@ -856,7 +923,7 @@ export class TemplateControllerScopeMaterializer {
       null,
       declarationSlot?.memberTypes ?? [],
       declarationSlot?.assignmentAccessKind ?? null,
-      sourceTypeMember?.productHandle ?? null,
+      targetTypeSourceProductHandle,
     )];
   }
 

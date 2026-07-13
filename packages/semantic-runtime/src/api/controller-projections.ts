@@ -397,7 +397,7 @@ function runtimeControllerProjectionState(
   const templateControllerLink = context.indexes.templateControllerLinkByController.get(controller.productHandle) ?? null;
   const viewFactoryDefinition = definitionLinkForViewFactory(viewFactory, context.indexes);
   return {
-    controllerDefinition: definitionForController(context.emission, controller),
+    controllerDefinition: definitionForController(context.store, controller),
     instruction,
     compiledTemplate,
     instructionSequence,
@@ -665,10 +665,12 @@ function inverseProductClaimLinks(
 }
 
 function definitionForController(
-  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
   controller: RuntimeControllerFrame,
 ): FullResourceDefinition | null {
-  return emission.resourceIndex.lookupByProduct(controller.definitionProductHandle);
+  return controller.definitionProductHandle == null
+    ? null
+    : store.productDetails.read(ResourceProductDetails.Definition, controller.definitionProductHandle);
 }
 
 function definitionName(definition: FullResourceDefinition | null): string | null {

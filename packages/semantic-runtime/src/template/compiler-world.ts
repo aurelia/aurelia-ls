@@ -572,8 +572,8 @@ export class TemplateResourceResolverService {
     }
     const info = definition.type === ResourceDefinitionKind.CustomElement
       ? new TemplateElementBindablesInfo(
-        bindableReferences(definition.productHandle, definition.sourceAddressHandle, definition.bindables, false),
-        bindableReferences(definition.productHandle, definition.sourceAddressHandle, definition.bindables, false),
+        templateBindableReferences(definition.productHandle, definition.sourceAddressHandle, definition.bindables, false),
+        templateBindableReferences(definition.productHandle, definition.sourceAddressHandle, definition.bindables, false),
       )
       : attributeBindablesInfo(definition);
     this._bindableCache.set(definition, info);
@@ -1146,7 +1146,7 @@ function isTemplateCompilableDefinition(
       || definition.type === ResourceDefinitionKind.CustomAttribute);
 }
 
-function bindableReferences(
+export function templateBindableReferences(
   ownerDefinitionProductHandle: ProductHandle | null,
   sourceAddressHandle: AddressHandle | null,
   bindables: readonly BindableDefinition[],
@@ -1169,9 +1169,9 @@ function bindableReferences(
 
 function attributeBindablesInfo(definition: CustomAttributeDefinition): TemplateAttributeBindablesInfo {
   const attrs = [
-    ...bindableReferences(definition.productHandle, definition.sourceAddressHandle, definition.bindables, false),
+    ...templateBindableReferences(definition.productHandle, definition.sourceAddressHandle, definition.bindables, false),
   ];
-  const bindables = bindableReferences(definition.productHandle, definition.sourceAddressHandle, definition.bindables, false);
+  const bindables = templateBindableReferences(definition.productHandle, definition.sourceAddressHandle, definition.bindables, false);
   let primary = bindables.find((entry) => entry.definition.name === definition.defaultProperty) ?? null;
   if (primary == null) {
     const implicit = new BindableDefinition(

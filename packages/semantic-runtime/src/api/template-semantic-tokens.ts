@@ -27,6 +27,7 @@ import type {
 } from '../expression/parse-result-algebra.js';
 import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
 import {
+  NamedResourceDefinitionContributionKind,
   ResourceDefinitionKind,
 } from '../resources/resource-kind.js';
 import {
@@ -101,7 +102,48 @@ function templateResourceSemanticTokenRows(
   rows.push(...classificationSemanticTokenRows(store, resource, attributesByProduct, syntaxByProduct, handles));
   rows.push(...multiBindingSegmentSemanticTokenRows(store, resource, syntaxByProduct, handles));
   rows.push(...expressionSemanticTokenRows(store, resource, handles));
+  rows.push(...localTemplateDefinitionSemanticTokenRows(store, resource, handles));
 
+  return rows;
+}
+
+function localTemplateDefinitionSemanticTokenRows(
+  store: KernelStore,
+  resource: TemplateResourceEmission,
+  handles: boolean,
+): readonly SemanticTemplateSemanticTokenRow[] {
+  const definition = resource.compilation.definition;
+  if (!definition.contributions.some((contribution) =>
+    contribution.contributionKind === NamedResourceDefinitionContributionKind.LocalTemplate
+  )) {
+    return [];
+  }
+  const rows: SemanticTemplateSemanticTokenRow[] = [];
+  const add = (
+    tokenType: SemanticTemplateSemanticTokenType,
+    tokenModifiers: readonly SemanticTemplateSemanticTokenModifier[],
+    sourceAddressHandle: AddressHandle | null,
+  ): void => {
+    const source = semanticExactSourceReference(describeAddress(store, sourceAddressHandle));
+    if (source == null) {
+      return;
+    }
+    rows.push(tokenRow(
+      tokenType,
+      tokenModifiers,
+      definition.name,
+      source,
+      definition.productHandle,
+      sourceAddressHandle,
+      handles,
+    ));
+  };
+  add('aureliaElement', ['definition'], definition.nameSourceAddressHandle);
+  for (const bindable of definition.bindables) {
+    add('property', ['declaration'], bindable.nameSourceAddressHandle);
+    add('aureliaBindable', ['declaration'], bindable.attributeSourceAddressHandle);
+    add('keyword', [], bindable.modeSourceAddressHandle);
+  }
   return rows;
 }
 

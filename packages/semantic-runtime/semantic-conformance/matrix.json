@@ -5787,6 +5787,26 @@
           ]
         },
         {
+          "id": "local-template-surrogate-rejects-forbidden-attribute",
+          "sourceFile": "src/local-surrogate-invalid-attribute.html",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-compiler-error", "diagnosticAuthority": "framework-error-code", "frameworkErrorCode": "AUR0702" }, "source": { "marker": "id=\"forbidden-host-id\"", "token": "id=\"forbidden-host-id\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "diagnosticAuthority": "framework-error-code", "frameworkErrorCode": "AUR0702", "relatedQueryKind": "template-diagnostics" }, "source": { "marker": "id=\"forbidden-host-id\"", "token": "id=\"forbidden-host-id\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
           "id": "local-template-surrogate-rejects-template-controller",
           "sourceFile": "src/local-surrogate-template-controller.html",
           "expectations": [
@@ -13254,6 +13274,344 @@
                 { "fields": { "renderingDefinitionName": "nested-capture-shell", "definitionName": "capture-shell", "creationKind": "custom-element", "parentControllerName": "nested-capture-shell", "runtimeBindings": 3, "childControllers": 2 }, "count": 1 },
                 { "fields": { "renderingDefinitionName": "nested-capture-shell", "definitionName": "input-mark", "creationKind": "custom-attribute", "parentControllerName": "capture-shell" }, "count": 1 },
                 { "fields": { "renderingDefinitionName": "nested-capture-shell", "definitionName": "inner-gate", "creationKind": "template-controller", "parentControllerName": "capture-shell" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "template-local-template-semantics",
+      "fixture": "fixtures/pressure/template-local-template-semantics",
+      "aureliaDomain": "template-binding-syntax",
+      "capability": "compiler-local-template-lowering",
+      "domainAxis": "template-syntax",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/template-local-template-semantics-app.html",
+      "requirement": "Compiler-local templates preserve framework declaration order, generated bindable contracts, owner and nested resource scope, host-surrogate lowering, controller realization, exact authored loci, and distinct property, alias, and resource edit planes across public semantic products.",
+      "cases": [
+        {
+          "id": "use-before-declaration-resource-identity",
+          "cursor": { "marker": "<mode-panel\n    one-time-value.bind", "token": "mode-panel" },
+          "expectations": [
+            {
+              "name": "cursor definition",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.siteKind": "element-name", "value.selectedDefinition.resourceKind": "custom-element", "value.selectedDefinition.name": "mode-panel", "value.selectedDefinition.targetName": null },
+              "rows": [
+                { "rowPath": "value.selectedDefinition", "sourceField": "nameSource", "source": { "marker": "as-custom-element=\"mode-panel\"", "token": "mode-panel" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "equals": { "value.selectedMemberName": "mode-panel", "value.rows.length": 5 },
+              "rows": [
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "element-tag" }, "count": 4 },
+                { "fields": { "referenceKind": "declaration", "resourceDeclarationKind": "primary-name" }, "source": { "marker": "as-custom-element=\"mode-panel\"", "token": "mode-panel" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "display-panel" } },
+              "equals": { "value.status": "available", "value.selectedMemberName": "mode-panel", "value.templateReferenceCount": 4, "value.typeScriptReferenceCount": 0, "value.edits.length": 5 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-element-tag", "oldText": "mode-panel", "newText": "display-panel" }, "count": 4 },
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-name-declaration", "oldText": "mode-panel", "newText": "display-panel" }, "source": { "marker": "as-custom-element=\"mode-panel\"", "token": "mode-panel" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "bindable-property-plane",
+          "cursor": { "marker": "<bindable name=\"oneTimeValue\"", "token": "oneTimeValue" },
+          "expectations": [
+            {
+              "name": "property declaration cursor",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition.name": "mode-panel", "value.selectedBindable.name": "oneTimeValue", "value.selectedBindable.attribute": "one-time-value", "value.selectedBindable.mode": "oneTime", "value.selectedMemberName": "oneTimeValue", "value.selectedMember.typeDisplay": "string", "value.selectedMember.isReadonly": false },
+              "rows": [
+                { "rowPath": "value.selectedMember", "source": { "marker": "<bindable name=\"oneTimeValue\"", "token": "oneTimeValue" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "property references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "equals": { "value.selectedMemberName": "oneTimeValue", "value.rows.length": 5 },
+              "rows": [
+                { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" }, "count": 2 },
+                { "fields": { "referenceKind": "declaration", "name": "oneTimeValue" }, "source": { "marker": "<bindable name=\"oneTimeValue\"", "token": "oneTimeValue" }, "count": 1 },
+                { "fields": { "referenceKind": "template-usage", "dependencyKind": "template-expression-read", "definitionName": "mode-panel" }, "count": 2 }
+              ]
+            },
+            {
+              "name": "property rename excludes public alias",
+              "query": { "kind": "template-rename", "options": { "newName": "primaryValue" } },
+              "equals": { "value.status": "available", "value.selectedMemberName": "oneTimeValue", "value.edits.length": 3 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "oneTimeValue", "newText": "primaryValue" }, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "oneTimeValue", "newText": "primaryValue" }, "count": 2 },
+                { "rowPath": "value.edits", "fields": { "editKind": "bindable-attribute" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "bindable-alias-plane",
+          "cursor": { "marker": "attribute=\"one-time-value\"", "token": "one-time-value" },
+          "expectations": [
+            {
+              "name": "alias cursor",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition.name": "mode-panel", "value.selectedBindable.name": "oneTimeValue", "value.selectedBindable.attribute": "one-time-value", "value.selectedMemberName": null },
+              "rows": [
+                { "rowPath": "value", "sourceField": "activeSource", "source": { "marker": "attribute=\"one-time-value\"", "token": "one-time-value" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "alias references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "equals": { "value.selectedMemberName": "one-time-value", "value.rows.length": 3 },
+              "rows": [
+                { "fields": { "referenceKind": "bindable-attribute", "name": "one-time-value", "bindableAttributeSourceKind": "explicit-alias" }, "count": 2 },
+                { "fields": { "referenceKind": "declaration", "bindableDeclarationKind": "attribute-alias" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "alias rename",
+              "query": { "kind": "template-rename", "options": { "newName": "primary-value" } },
+              "equals": { "value.status": "available", "value.selectedMemberName": "one-time-value", "value.edits.length": 3 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "bindable-attribute", "oldText": "one-time-value", "newText": "primary-value" }, "count": 2 },
+                { "rowPath": "value.edits", "fields": { "editKind": "bindable-attribute-alias-declaration", "oldText": "one-time-value", "newText": "primary-value" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "derived-attribute-and-default-mode",
+          "cursor": { "marker": "<bindable name=\"camelCaseValue\"", "token": "camelCaseValue" },
+          "expectations": [
+            {
+              "name": "derived metadata",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedBindable.name": "camelCaseValue", "value.selectedBindable.attribute": "camel-case-value", "value.selectedBindable.mode": "default", "value.selectedBindable.attributeSource": null, "value.selectedBindable.modeSource": null }
+            },
+            {
+              "name": "derived attribute resolves at use site",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "camel-case-value.bind=\"camelCaseValue\"", "markerOccurrence": 1, "token": "camel-case-value" } },
+              "equals": { "value.selectedDefinition.name": "mode-panel", "value.selectedBindable.name": "camelCaseValue", "value.selectedBindable.attribute": "camel-case-value", "value.selectedBindable.mode": "default" }
+            }
+          ]
+        },
+        {
+          "id": "mode-token-is-metadata-not-symbol",
+          "cursor": { "marker": "mode=\"oneTime\"", "token": "oneTime" },
+          "expectations": [
+            {
+              "name": "exact mode cursor",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition.name": "mode-panel", "value.selectedBindable.name": "oneTimeValue", "value.selectedBindable.mode": "oneTime", "value.selectedMemberName": null },
+              "rows": [
+                { "rowPath": "value", "sourceField": "activeSource", "source": { "marker": "mode=\"oneTime\"", "token": "oneTime" }, "count": 1 },
+                { "rowPath": "value.selectedBindable", "sourceField": "modeSource", "source": { "marker": "mode=\"oneTime\"", "token": "oneTime" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "rename refusal",
+              "query": { "kind": "template-rename", "options": { "newName": "renamedMode" } },
+              "outcomes": ["miss"],
+              "equals": { "value.status": "not-available", "value.reason": "cursor-not-on-renameable-reference", "value.edits.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "mode-value-completion-vocabulary",
+          "expectations": [
+            {
+              "name": "mode candidates",
+              "query": { "kind": "template-completions", "cursor": { "marker": "mode=\"oneTime\"", "token": "oneTime" }, "options": { "page": { "size": 100 } } },
+              "equals": { "value.siteKind": "attribute-value" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "oneTime", "candidateKind": "attribute-value" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "toView", "candidateKind": "attribute-value" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "fromView", "candidateKind": "attribute-value" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "twoWay", "candidateKind": "attribute-value" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "default", "candidateKind": "attribute-value" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "generated-local-slot-types",
+          "expectations": [
+            {
+              "name": "single observed type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<h2>${oneTimeValue}</h2>", "token": "oneTimeValue" } },
+              "equals": { "value.selectedMemberName": "oneTimeValue", "value.selectedMember.typeDisplay": "string", "value.selectedMember.isReadonly": false },
+              "rows": [
+                { "rowPath": "value.selectedMember", "source": { "marker": "<bindable name=\"oneTimeValue\"", "token": "oneTimeValue" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "heterogeneous uses form union",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<p>${mixedValue}</p>", "token": "mixedValue" } },
+              "equals": { "value.selectedMemberName": "mixedValue", "value.selectedMember.typeDisplay": "string | number", "value.selectedMember.isReadonly": false }
+            },
+            {
+              "name": "completion types retain unknown honestly",
+              "query": { "kind": "template-completions", "cursor": { "marker": "<h2>${", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "oneTimeValue", "candidateKind": "binding-context-slot", "typeDisplay": "string" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "mixedValue", "candidateKind": "binding-context-slot", "typeDisplay": "string | number" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "unusedValue", "candidateKind": "binding-context-slot", "typeDisplay": null }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "ownerSummary" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "authored-modes-drive-effective-flows",
+          "expectations": [
+            {
+              "name": "effective modes",
+              "query": { "kind": "template-inlay-hints", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "targetProperty": "oneTimeValue", "effectiveMode": "one-time" }, "source": { "marker": "one-time-value.bind=\"oneTimeValue\"", "markerOccurrence": 1, "token": "one-time-value.bind" }, "count": 1 },
+                { "fields": { "targetProperty": "toViewValue", "effectiveMode": "to-view" }, "count": 2 },
+                { "fields": { "targetProperty": "fromViewValue", "effectiveMode": "from-view" }, "count": 2 },
+                { "fields": { "targetProperty": "twoWayValue", "effectiveMode": "two-way" }, "count": 2 },
+                { "fields": { "targetProperty": "defaultValue", "effectiveMode": "to-view" }, "count": 2 },
+                { "fields": { "targetProperty": "mixedValue", "effectiveMode": "to-view" }, "count": 2 }
+              ]
+            },
+            {
+              "name": "parent values retain use-site types",
+              "query": { "kind": "binding-data-flows", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "definitionName": "template-local-template-semantics-app", "direction": "source-to-target", "sourceName": "defaultValue", "sourceType": "string", "targetProperty": "mixedValue" }, "source": { "marker": "mixed-value.bind=\"defaultValue\"", "token": "mixed-value.bind=\"defaultValue\"" }, "count": 1 },
+                { "fields": { "definitionName": "template-local-template-semantics-app", "direction": "source-to-target", "sourceName": "$index", "sourceType": "number", "targetProperty": "mixedValue" }, "source": { "marker": "mixed-value.bind=\"$index\"", "token": "mixed-value.bind=\"$index\"" }, "count": 1 },
+                { "fields": { "definitionName": "template-local-template-semantics-app", "sourceName": "entry.label", "sourceType": "string", "targetProperty": "defaultValue" }, "source": { "marker": "default-value.bind=\"entry.label\"", "token": "default-value.bind=\"entry.label\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "local writes retain declaration writeability",
+              "query": { "kind": "binding-data-flows", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "definitionName": "mode-panel", "direction": "two-way", "sourceName": "twoWayValue", "sourceType": "string", "targetKind": "node", "targetProperty": "value", "sourceWritable": true }, "source": { "marker": "<input value.bind=\"twoWayValue\">", "token": "value.bind=\"twoWayValue\"" }, "count": 1 },
+                { "fields": { "definitionName": "mode-panel", "direction": "two-way", "sourceName": "fromViewValue", "targetKind": "node", "targetProperty": "value", "sourceWritable": true }, "source": { "marker": "<input value.bind=\"fromViewValue\">", "token": "value.bind=\"fromViewValue\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "compiler-world-visibility",
+          "expectations": [
+            {
+              "name": "local and inherited visibility",
+              "query": { "kind": "resource-visibility", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "resourceKind": "custom-element", "name": "mode-panel", "visibilityKind": "local" }, "count": 2 },
+                { "fields": { "resourceKind": "custom-element", "name": "nested-note", "visibilityKind": "local" }, "count": 1 },
+                { "fields": { "resourceKind": "custom-element", "name": "local-icon", "visibilityKind": "local" }, "count": 2 },
+                { "fields": { "resourceKind": "custom-element", "name": "owner-badge", "visibilityKind": "local" }, "count": 3 }
+              ]
+            },
+            {
+              "name": "app definitions do not globalize locals",
+              "query": { "kind": "resource-definitions", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "resourceKind": "custom-element", "name": "mode-panel" }, "absent": true },
+                { "fields": { "resourceKind": "custom-element", "name": "nested-note" }, "absent": true },
+                { "fields": { "resourceKind": "custom-element", "name": "local-icon" }, "absent": true },
+                { "fields": { "resourceKind": "custom-element", "name": "owner-badge", "targetName": "OwnerBadge" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "local compilations rejoin app runtime",
+              "query": { "kind": "template-compilations", "cursor": false, "fetchAllPages": true, "options": { "detail": "compact", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "compilationLane": "app-runtime", "definitionName": "mode-panel", "templateSourceKind": "markup", "openSeams": 0 }, "count": 1 },
+                { "fields": { "compilationLane": "app-runtime", "definitionName": "nested-note", "templateSourceKind": "markup", "openSeams": 0 }, "count": 1 },
+                { "fields": { "compilationLane": "app-runtime", "definitionName": "local-icon", "templateSourceKind": "markup", "openSeams": 0 }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nested-and-owner-resource-scope",
+          "expectations": [
+            { "name": "sibling local", "query": { "kind": "template-cursor-info", "cursor": { "marker": "<local-icon value.bind", "token": "local-icon" } }, "equals": { "value.selectedDefinition.name": "local-icon", "value.selectedDefinition.resourceKind": "custom-element" } },
+            { "name": "nested local", "query": { "kind": "template-cursor-info", "cursor": { "marker": "<nested-note note.bind", "token": "nested-note" } }, "equals": { "value.selectedDefinition.name": "nested-note", "value.selectedDefinition.resourceKind": "custom-element" } },
+            { "name": "owner dependency", "query": { "kind": "template-cursor-info", "cursor": { "marker": "<owner-badge value.bind", "token": "owner-badge" } }, "equals": { "value.selectedDefinition.name": "owner-badge", "value.selectedDefinition.targetName": "OwnerBadge" } }
+          ]
+        },
+        {
+          "id": "runtime-controller-realization",
+          "expectations": [
+            {
+              "name": "generated and child controllers",
+              "query": { "kind": "runtime-controllers", "sourceFile": false, "fetchAllPages": true, "options": { "detail": "compact", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "renderingDefinitionName": "mode-panel", "creationKind": "root-custom-element", "definitionKind": "custom-element", "definitionName": "mode-panel", "definitionClassName": null, "hasScope": true }, "count": 1 },
+                { "fields": { "renderingDefinitionName": "template-local-template-semantics-app", "creationKind": "custom-element", "definitionName": "mode-panel", "definitionClassName": null }, "count": 2 },
+                { "fields": { "renderingDefinitionName": "mode-panel", "creationKind": "custom-element", "definitionName": "local-icon", "parentControllerName": "mode-panel" }, "count": 1 },
+                { "fields": { "renderingDefinitionName": "mode-panel", "creationKind": "custom-element", "definitionName": "nested-note", "parentControllerName": "mode-panel" }, "count": 1 },
+                { "fields": { "renderingDefinitionName": "mode-panel", "creationKind": "custom-element", "definitionName": "owner-badge", "definitionClassName": "OwnerBadge", "parentControllerName": "mode-panel" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "host-surrogate-and-switch-lowering",
+          "expectations": [
+            {
+              "name": "surrogate operation ownership",
+              "query": { "kind": "binding-target-operations", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "definitionName": "mode-panel", "targetKind": "host", "targetAttribute": "class", "targetProperty": "classList", "operationKind": "class-list-add", "staticValue": "local-panel" }, "source": { "marker": "class=\"local-panel\"", "token": "local-panel" }, "count": 1 },
+                { "fields": { "definitionName": "template-local-template-semantics-app", "targetKind": "host", "operationKind": "class-list-add", "staticValue": "local-panel" }, "source": { "marker": "class=\"local-panel\"", "token": "local-panel" }, "count": 2 }
+              ]
+            },
+            {
+              "name": "inner switch controller",
+              "query": { "kind": "runtime-controllers", "sourceFile": false, "fetchAllPages": true, "options": { "detail": "compact", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "renderingDefinitionName": "mode-panel", "creationKind": "template-controller", "definitionName": "switch", "parentControllerName": "mode-panel", "templateControllerFlowKind": "switch", "childViewCardinality": "single" }, "source": { "marker": "<div switch.bind=\"defaultValue\">", "token": "switch.bind=\"defaultValue\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "metadata-semantic-tokens",
+          "expectations": [
+            {
+              "name": "local declarations",
+              "query": { "kind": "template-semantic-tokens", "options": { "detail": "full", "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaElement", "tokenModifiers.0": "definition", "definitionName": "mode-panel" }, "source": { "marker": "as-custom-element=\"mode-panel\"", "token": "mode-panel" }, "count": 1 },
+                { "fields": { "tokenType": "property", "tokenModifiers.0": "declaration", "definitionName": "mode-panel" }, "source": { "marker": "<bindable name=\"oneTimeValue\"", "token": "oneTimeValue" }, "count": 1 },
+                { "fields": { "tokenType": "aureliaBindable", "tokenModifiers.0": "declaration", "definitionName": "mode-panel" }, "source": { "marker": "attribute=\"one-time-value\"", "token": "one-time-value" }, "count": 1 },
+                { "fields": { "tokenType": "keyword", "definitionName": "mode-panel" }, "source": { "marker": "mode=\"oneTime\"", "token": "oneTime" }, "count": 1 },
+                { "fields": { "tokenType": "aureliaElement", "tokenModifiers.0": "definition", "definitionName": "nested-note" }, "source": { "marker": "as-custom-element=\"nested-note\"", "token": "nested-note" }, "count": 1 },
+                { "fields": { "tokenType": "aureliaElement", "tokenModifiers.0": "definition", "definitionName": "local-icon" }, "source": { "marker": "as-custom-element=\"local-icon\"", "token": "local-icon" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "clean-public-projections",
+          "expectations": [
+            { "name": "diagnostics", "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } }, "equals": { "value.rows.length": 0 } },
+            { "name": "open seams", "query": { "kind": "open-seams", "options": { "detail": "full", "page": { "size": 100 } } }, "equals": { "value.rows.length": 0 } },
+            {
+              "name": "local folding ownership",
+              "query": { "kind": "template-folding-ranges", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "definitionName": "mode-panel", "tagName": "template", "childCount": 3 }, "count": 1 },
+                { "fields": { "definitionName": "nested-note", "tagName": "template", "childCount": 3 }, "count": 1 },
+                { "fields": { "definitionName": "local-icon", "tagName": "template", "childCount": 3 }, "count": 1 }
               ]
             }
           ]

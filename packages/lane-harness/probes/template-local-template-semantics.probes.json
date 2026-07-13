@@ -1,0 +1,252 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/template-local-template-semantics",
+  "lanes": {
+    "rename": [
+      {
+        "id": "local-resource-use-before-declaration",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<mode-panel\n    one-time-value.bind",
+        "at": "mode-panel",
+        "newName": "display-panel",
+        "verdict": "correct",
+        "reason": "A compiler-local element has an authored resource name even though it has no TypeScript class; rename should update its declaration and both opening and closing tag pairs."
+      },
+      {
+        "id": "local-bindable-property",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<bindable name=\"oneTimeValue\"",
+        "at": "oneTimeValue",
+        "newName": "primaryValue",
+        "verdict": "correct",
+        "reason": "The bindable property plane owns the local declaration and local-body expression uses, but not the independent public attribute alias."
+      },
+      {
+        "id": "local-bindable-alias",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "attribute=\"one-time-value\"",
+        "at": "one-time-value",
+        "newName": "primary-value",
+        "verdict": "correct",
+        "reason": "The explicit alias plane owns its declaration and the two parent attribute uses without renaming the generated property."
+      },
+      {
+        "id": "local-bindable-mode-refusal",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "mode=\"oneTime\"",
+        "at": "oneTime",
+        "newName": "renamedMode",
+        "verdict": "correct",
+        "reason": "A binding-mode keyword is finite framework metadata, not a symbol; rename should refuse it explicitly."
+      },
+      {
+        "id": "nested-local-resource",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<nested-note note.bind",
+        "at": "nested-note",
+        "newName": "detail-note",
+        "verdict": "correct",
+        "reason": "A nested local resource is scoped to its owning local template but still has an exact authored declaration and use that can be renamed together."
+      }
+    ],
+    "references": [
+      {
+        "id": "local-resource-use-before-declaration",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<mode-panel\n    one-time-value.bind",
+        "at": "mode-panel",
+        "verdict": "correct",
+        "reason": "References should return both tag pairs and the later local declaration despite source order."
+      },
+      {
+        "id": "local-bindable-property",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<bindable name=\"oneTimeValue\"",
+        "at": "oneTimeValue",
+        "verdict": "correct",
+        "reason": "Property references should include the declaration, two local-body reads, and both aliased parent binding sites as reads of the generated bindable."
+      },
+      {
+        "id": "local-bindable-alias",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "attribute=\"one-time-value\"",
+        "at": "one-time-value",
+        "verdict": "correct",
+        "reason": "Alias references should include only the alias declaration and its two public attribute uses."
+      },
+      {
+        "id": "nested-local-resource",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<nested-note note.bind",
+        "at": "nested-note",
+        "verdict": "correct",
+        "reason": "References should join the nested local use to the nested declaration without globalizing it."
+      }
+    ],
+    "hover": [
+      {
+        "id": "local-resource-use-before-declaration",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<mode-panel\n    one-time-value.bind",
+        "at": "mode-panel",
+        "verdict": "correct",
+        "reason": "Hover should identify mode-panel as a compiler-local custom element and must not invent a TypeScript class identity."
+      },
+      {
+        "id": "local-bindable-property-declaration",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<bindable name=\"oneTimeValue\"",
+        "at": "oneTimeValue",
+        "verdict": "correct",
+        "reason": "Hover should describe the generated writable property as string using parent binding evidence while retaining the local declaration as authority."
+      },
+      {
+        "id": "local-bindable-property-use",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<h2>${oneTimeValue}</h2>",
+        "at": "oneTimeValue",
+        "verdict": "correct",
+        "reason": "A local-body use should hover as the generated string property rather than falling back to the owner view-model."
+      },
+      {
+        "id": "local-bindable-union-use",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<p>${mixedValue}</p>",
+        "at": "mixedValue",
+        "verdict": "correct",
+        "reason": "The generated property receives string and number at distinct use sites, so hover should preserve the honest string | number union."
+      },
+      {
+        "id": "local-bindable-alias",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "attribute=\"one-time-value\"",
+        "at": "one-time-value",
+        "verdict": "correct",
+        "reason": "Hover should describe the explicit public alias and its owner bindable rather than treating it as ordinary HTML text."
+      },
+      {
+        "id": "local-bindable-mode",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "mode=\"oneTime\"",
+        "at": "oneTime",
+        "verdict": "correct",
+        "reason": "Hover should recognize oneTime as the selected bindable's effective framework mode, not as a renameable symbol."
+      },
+      {
+        "id": "nested-local-resource",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<nested-note note.bind",
+        "at": "nested-note",
+        "verdict": "correct",
+        "reason": "Hover should resolve the nested local resource in the mode-panel compiler world."
+      }
+    ],
+    "definition": [
+      {
+        "id": "local-resource-use-before-declaration",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<mode-panel\n    one-time-value.bind",
+        "at": "mode-panel",
+        "verdict": "correct",
+        "reason": "Definition should navigate from an earlier use to the as-custom-element value token."
+      },
+      {
+        "id": "local-bindable-property-use",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<h2>${oneTimeValue}</h2>",
+        "at": "oneTimeValue",
+        "verdict": "correct",
+        "reason": "Definition should navigate to the local bindable name token, not to a parent TypeScript source."
+      },
+      {
+        "id": "local-bindable-alias-use",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "one-time-value.bind=\"oneTimeValue\"",
+        "occurrence": 1,
+        "at": "one-time-value",
+        "verdict": "correct",
+        "reason": "Definition should navigate from the public attribute use to the explicit local alias token."
+      },
+      {
+        "id": "nested-local-resource",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<nested-note note.bind",
+        "at": "nested-note",
+        "verdict": "correct",
+        "reason": "Definition should navigate to the nested as-custom-element value token."
+      }
+    ],
+    "documentHighlight": [
+      {
+        "id": "local-resource-use-before-declaration",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<mode-panel\n    one-time-value.bind",
+        "at": "mode-panel",
+        "verdict": "correct",
+        "reason": "Highlights should include both tag pairs and the local declaration in the current document."
+      },
+      {
+        "id": "local-bindable-property",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<bindable name=\"oneTimeValue\"",
+        "at": "oneTimeValue",
+        "verdict": "correct",
+        "reason": "Property highlights should include the declaration, local-body reads, and parent attribute reads of that property while leaving the independent alias declaration unhighlighted."
+      },
+      {
+        "id": "local-bindable-alias",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "attribute=\"one-time-value\"",
+        "at": "one-time-value",
+        "verdict": "correct",
+        "reason": "Alias highlights should include its declaration and both parent use sites."
+      }
+    ],
+    "completions": [
+      {
+        "id": "local-body-scope",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "<h2>${oneTimeValue}</h2>",
+        "at": "oneTimeValue",
+        "watch": {
+          "present": ["oneTimeValue", "mixedValue", "unusedValue"],
+          "absent": ["ownerSummary", "entries"]
+        },
+        "verdict": "correct",
+        "reason": "Completion inside the generated local scope should expose its bindables, including honestly untyped unusedValue, without leaking owner view-model members."
+      },
+      {
+        "id": "local-parent-bindable-attributes",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "one-time-value.bind=\"oneTimeValue\"",
+        "occurrence": 1,
+        "at": "one-time-value",
+        "watch": {
+          "present": ["one-time-value", "camel-case-value", "mixed-value"],
+          "absent": ["unusedValue", "oneTimeValue"]
+        },
+        "verdict": "correct",
+        "reason": "Element attribute completion should expose public aliases and derived kebab-case names rather than generated property spellings."
+      },
+      {
+        "id": "local-bindable-mode-values",
+        "file": "src/template-local-template-semantics-app.html",
+        "anchor": "mode=\"oneTime\"",
+        "at": "oneTime",
+        "watch": {
+          "present": ["oneTime", "toView", "fromView", "twoWay", "default"]
+        },
+        "verdict": "wrong",
+        "reason": "The mode token has exact local-definition provenance, so completion should offer Aurelia's five supported authored mode values instead of returning no candidates.",
+        "note": "Known substrate vocabulary gap: local-template-bindable-mode-completion-vocabulary."
+      }
+    ],
+    "diagnostics": [
+      {
+        "id": "valid-local-template",
+        "file": "src/template-local-template-semantics-app.html",
+        "verdict": "correct",
+        "reason": "Use-before-declaration, generated bindables, nested locals, host surrogate class, and inner switch lowering are all valid and should publish no diagnostics."
+      }
+    ]
+  }
+}

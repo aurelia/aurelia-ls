@@ -120,6 +120,13 @@
       "failureBucket": "capture-predicate-execution-not-projected",
       "firstObserved": "2026-07-13",
       "rationale": "Aurelia executes a custom element's capture predicate for each non-bindable attribute. Semantic-runtime preserves an exact open seam for the callable boundary but does not yet execute or project the known predicate, so it cannot reject class while admitting data-note into dynamic spread compilation."
+    },
+    {
+      "assertionId": "template-local-template-semantics/mode-value-completion-vocabulary",
+      "status": "known-gap",
+      "failureBucket": "local-template-bindable-mode-completion-vocabulary",
+      "firstObserved": "2026-07-13",
+      "rationale": "Local-template materialization preserves the exact authored mode token and selected bindable, but the metadata is removed before ordinary HTML value-site classification and completion has no local-template bindable-mode site or candidate vocabulary. The completion lane must consume that shared declaration product rather than reparsing the stripped metadata."
     }
   ]
 }

@@ -87,6 +87,7 @@ import { I18nProductDetails } from '../i18n/product-details.js';
 import type { I18nTranslationKey } from '../i18n/model.js';
 import {
   TemplateResourceScope,
+  templateBindableReferences,
 } from '../template/compiler-world.js';
 import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
 import {
@@ -528,6 +529,11 @@ class TemplateCompletionCursorContextBuilder {
       offset,
       expressionParse,
     );
+    const declarationBindable = selectedBindableForDeclarationCursor(
+      this.store,
+      this.input.resource,
+      offset,
+    );
     const selectedDefinition = selectedDefinitionForCursor(
       this.store,
       this.input.resource,
@@ -536,8 +542,10 @@ class TemplateCompletionCursorContextBuilder {
       classification,
       siteKind,
       offset,
+      declarationBindable,
     );
-    const selectedBindable = selectedBindableForCursor(classification, valueSite, multiBindingSegment);
+    const selectedBindable = selectedBindableForCursor(classification, valueSite, multiBindingSegment)
+      ?? declarationBindable;
     const selectedScopeSlot = selectedScopeSlotForCursor(
       siteKind,
       expressionResult,
@@ -576,6 +584,7 @@ class TemplateCompletionCursorContextBuilder {
           activeElement,
           declarationSelection,
           valueSite,
+          selectedBindable,
         )
       : null;
 
@@ -819,6 +828,7 @@ function activeTemplateSourceAddressHandle(
   element: HtmlElement | null,
   declarationSelection: SourceBackedScopeSlotDeclarationSelection | null,
   valueSite: TemplateValueSite | null,
+  selectedBindable: TemplateBindableReference | null,
 ): AddressHandle | null {
   const handles = [
     ...(syntax?.patternParts.map((part) => part.sourceAddressHandle) ?? []),
@@ -831,6 +841,11 @@ function activeTemplateSourceAddressHandle(
     element?.closingTagNameAddressHandle ?? null,
     declarationSelection?.sourceSpan.handle ?? null,
     valueSite?.sourceAddressHandle ?? null,
+    selectedBindable?.definition.nameSourceAddressHandle ?? null,
+    selectedBindable?.definition.attributeSourceAddressHandle ?? null,
+    selectedBindable?.definition.callbackSourceAddressHandle ?? null,
+    selectedBindable?.definition.modeSourceAddressHandle ?? null,
+    selectedBindable?.definition.setSourceAddressHandle ?? null,
   ];
   return handles.find((handle) => cursorTouchesSpan(sourceSpanFor(store, handle), offset)) ?? null;
 }
@@ -2965,6 +2980,7 @@ function selectedDefinitionForCursor(
   classification: AttributeClassification | null,
   siteKind: TemplateCompletionSiteKind,
   offset: number,
+  declarationBindable: TemplateBindableReference | null,
 ): TemplateDefinitionCursorSelection | null {
   if (
     siteKind === TemplateCompletionSiteKind.ExpressionValueConverter
@@ -3011,7 +3027,7 @@ function selectedDefinitionForCursor(
         : null;
     return { productHandle: classifiedProductHandle, matchedName };
   }
-  return elementSelection ?? definitionForDeclarationCursor(store, resource, offset);
+  return elementSelection ?? definitionForDeclarationCursor(store, resource, offset, declarationBindable);
 }
 
 function classificationSelectsAuthoredResource(
@@ -3108,10 +3124,14 @@ function definitionForDeclarationCursor(
   store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
   offset: number,
+  declarationBindable: TemplateBindableReference | null,
 ): TemplateDefinitionCursorSelection | null {
   const definition = resource.compilation.definition;
   return definition.productHandle != null
-    && cursorTouchesSpan(sourceSpanFor(store, definition.nameSourceAddressHandle), offset)
+    && (
+      declarationBindable != null
+      || cursorTouchesSpan(sourceSpanFor(store, definition.nameSourceAddressHandle), offset)
+    )
     ? { productHandle: definition.productHandle, matchedName: definition.name }
     : null;
 }
@@ -3157,6 +3177,28 @@ function selectedBindableForCursor(
     ?? valueSite?.bindable
     ?? classification?.bindable
     ?? null;
+}
+
+function selectedBindableForDeclarationCursor(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  offset: number,
+): TemplateBindableReference | null {
+  const definition = resource.compilation.definition;
+  return templateBindableReferences(
+    definition.productHandle,
+    definition.sourceAddressHandle,
+    definition.bindables,
+    false,
+  ).find((bindable) => [
+    bindable.definition.nameSourceAddressHandle,
+    bindable.definition.attributeSourceAddressHandle,
+    bindable.definition.callbackSourceAddressHandle,
+    bindable.definition.modeSourceAddressHandle,
+    bindable.definition.setSourceAddressHandle,
+  ].some((addressHandle) =>
+    cursorTouchesSpan(sourceSpanFor(store, addressHandle), offset)
+  )) ?? null;
 }
 
 function definitionForElement(

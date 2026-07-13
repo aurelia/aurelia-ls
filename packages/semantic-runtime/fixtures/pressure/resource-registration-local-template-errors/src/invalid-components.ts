@@ -8,6 +8,7 @@ import nestedLocalBindable from './nested-local-bindable.html';
 import nestedLocalTemplate from './nested-local-template.html';
 import onlyLocalTemplates from './only-local-templates.html';
 import rootIsLocal from './root-is-local.html';
+import localSurrogateInvalidAttribute from './local-surrogate-invalid-attribute.html';
 import localSurrogateTemplateController from './local-surrogate-template-controller.html';
 
 @customElement({ name: 'root-is-local-case', template: rootIsLocal })
@@ -37,6 +38,9 @@ export class DuplicateLocalBindablePropertyCase {}
 @customElement({ name: 'duplicate-local-bindable-attribute-case', template: duplicateLocalBindableAttribute })
 export class DuplicateLocalBindableAttributeCase {}
 
+@customElement({ name: 'local-surrogate-invalid-attribute-case', template: localSurrogateInvalidAttribute })
+export class LocalSurrogateInvalidAttributeCase {}
+
 @customElement({ name: 'local-surrogate-template-controller-case', template: localSurrogateTemplateController })
 export class LocalSurrogateTemplateControllerCase {}
 
@@ -50,5 +54,6 @@ export const invalidLocalTemplateComponents = [
   MissingLocalBindableNameCase,
   DuplicateLocalBindablePropertyCase,
   DuplicateLocalBindableAttributeCase,
+  LocalSurrogateInvalidAttributeCase,
   LocalSurrogateTemplateControllerCase,
 ] as const;

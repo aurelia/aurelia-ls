@@ -156,6 +156,26 @@ export class RuntimeBoundControllerValueTable {
     return this.byController.get(controllerProductHandle)?.get(propertyName) ?? null;
   }
 
+  /** Read every binding rendered against this exact controller instance. */
+  readExactControllerValues(
+    controllerProductHandle: ProductHandle | null,
+  ): readonly RuntimeBoundControllerPropertyValue[] {
+    if (controllerProductHandle == null) {
+      return [];
+    }
+    return [...(this.byController.get(controllerProductHandle)?.values() ?? [])];
+  }
+
+  /** Read all observed bindings for a definition, retaining distinct runtime use sites. */
+  readAllDefinitionValues(
+    definitionProductHandle: ProductHandle | null,
+  ): readonly RuntimeBoundControllerPropertyValue[] {
+    if (definitionProductHandle == null) {
+      return [];
+    }
+    return [...(this.byDefinition.get(definitionProductHandle)?.values() ?? [])].flat();
+  }
+
   readControllerDefinitions(): readonly RuntimeControllerDefinitionReference[] {
     return [...this.definitions];
   }
@@ -179,15 +199,6 @@ export class RuntimeBoundControllerValueTable {
       }
     }
     return [...byProperty.values()];
-  }
-
-  private readExactControllerValues(
-    controllerProductHandle: ProductHandle | null,
-  ): readonly RuntimeBoundControllerPropertyValue[] {
-    if (controllerProductHandle == null) {
-      return [];
-    }
-    return [...(this.byController.get(controllerProductHandle)?.values() ?? [])];
   }
 
   private readDefinitionValue(
