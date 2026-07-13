@@ -537,24 +537,34 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private captureDynamicInstructionScopes(frame: TemplateScopeConstructionFrame): void {
-    for (const instruction of frame.input.runtimeBindings.dynamicInstructions) {
+    frame.input.runtimeBindings.dynamicInstructions.forEach((instruction, index) => {
       if (frame.hasInstructionScope(instruction.productHandle)) {
-        continue;
+        return;
       }
       const capturedContext = this.capturedAttributeContextForDynamicInstruction(instruction.productHandle);
       if (capturedContext == null) {
-        continue;
+        return;
       }
-      const capturedScope = this.capturedAttributeSourceScope(frame, capturedContext);
+      const controller = runtimeControllerForProductHandle(
+        frame.input.runtimeBindings,
+        capturedContext.controllerProductHandle,
+      );
+      const capturedScope = this.capturedAttributeSourceScope(frame, capturedContext, controller);
       if (capturedScope == null) {
-        continue;
+        return;
       }
       frame.addInstructionScope(
         instruction.productHandle,
-        capturedScope,
+        this.constructInstructionExpressionScope(
+          frame,
+          capturedScope,
+          instruction,
+          `dynamic:${index}:expression`,
+          controller,
+        ),
         capturedContext.controllerProductHandle,
       );
-    }
+    });
   }
 
   private commitScopeConstruction(frame: TemplateScopeConstructionFrame): TemplateScopeConstructionEmission {
@@ -1333,8 +1343,8 @@ export class TemplateControllerScopeMaterializer {
   private capturedAttributeSourceScope(
     frame: TemplateScopeConstructionFrame,
     context: DynamicCapturedAttributeContext,
+    controller: RuntimeControllerFrame | null,
   ): BindingScope | null {
-    const controller = runtimeControllerForProductHandle(frame.input.runtimeBindings, context.controllerProductHandle);
     if (controller == null || controller.instructionProductHandle !== context.instructionProductHandle) {
       return null;
     }
@@ -1394,15 +1404,15 @@ export class TemplateControllerScopeMaterializer {
       instruction.productHandle,
       controllerContext,
     );
-    const compiledTemplate = frame.input.projectContext.readCompiledTemplateEmissionForDefinition(
+    const resource = frame.input.projectContext.readResourceForDefinition(
       controller?.definitionProductHandle ?? instruction.definitionProductHandle,
     );
-    if (compiledTemplate == null || this.hasRecursiveCustomElementDefinitionAncestor(controller)) {
+    if (resource == null || this.hasRecursiveCustomElementDefinitionAncestor(controller)) {
       return;
     }
     this.constructCompiledTemplateScopes(
       frame,
-      compiledTemplate,
+      resource.compiledTemplateEmission,
       childScope,
       `${localSuffix}:custom-element-view`,
       controller,

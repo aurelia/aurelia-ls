@@ -129,6 +129,10 @@ export class TemplateResourceCompilationEmission {
   constructor(
     /** Store-local key shared by this resource's compiler and runtime phases. */
     readonly localKey: string,
+    /** Root compiler-world product that owns this runtime-analysis cohort. */
+    readonly analysisContextProductHandle: ProductHandle,
+    /** App-root component definition for this cohort; null when authoring/runtime ownership is not proven. */
+    readonly appRootDefinitionProductHandle: ProductHandle | null,
     /** Compiler world that supplied resources, syntax handlers, and runtime-shaped compiler services. */
     readonly compilerWorld: TemplateCompilerWorldEmission,
     /** Custom element definition whose authored template was admitted. */
@@ -313,10 +317,6 @@ export class TemplateCompilationProjectPass {
         phaseRecorder,
       )
       : [];
-    const projectContext = templateRuntimeAnalysisProjectContext([
-      ...appCompilations,
-      ...authoringCompilations,
-    ]);
     const expressionWorld = new CheckerExpressionTypeWorld(
       this.store,
       undefined,
@@ -325,7 +325,6 @@ export class TemplateCompilationProjectPass {
     );
     const resources = this.analyzeCompiledResources(
       appCompilations,
-      projectContext,
       options.projectKey ?? null,
       options.evaluation ?? null,
       typeSystem,
@@ -336,7 +335,6 @@ export class TemplateCompilationProjectPass {
     );
     const authoringResources = this.analyzeCompiledResources(
       authoringCompilations,
-      projectContext,
       options.projectKey ?? null,
       options.evaluation ?? null,
       typeSystem,
@@ -371,9 +369,19 @@ export class TemplateCompilationProjectPass {
     const appCompilations: TemplateResourceCompilationEmission[] = [];
 
     appWorld.compilerWorlds.forEach((compilerWorld, worldIndex) => {
+      const appRootDefinitionProductHandle = appRootDefinitionProductHandleForCompilerWorld(
+        appWorld,
+        compilerWorld,
+        resourceDefinitions,
+      );
       const tasks = [
-        ...initialCompilationTasks(compilerWorld),
-        ...routeableCompilationTasks(compilerWorld, routeContexts, resourceDefinitions),
+        ...initialCompilationTasks(compilerWorld, appRootDefinitionProductHandle),
+        ...routeableCompilationTasks(
+          compilerWorld,
+          appRootDefinitionProductHandle,
+          routeContexts,
+          resourceDefinitions,
+        ),
       ];
       const seen = new Set<string>();
 
@@ -401,7 +409,14 @@ export class TemplateCompilationProjectPass {
         );
         const result = compilationWorld.templateCompiler.compile(
           new TemplateCompilerCompileRequest(localKey, definition),
-          new ProjectTemplateCompilerHost(this, compilationWorld, typeSystem, phases),
+          new ProjectTemplateCompilerHost(
+            this,
+            compilationWorld,
+            task.analysisContextProductHandle,
+            task.appRootDefinitionProductHandle,
+            typeSystem,
+            phases,
+          ),
         );
         if (result.output != null) {
           appCompilations.push(...result.output);
@@ -416,7 +431,12 @@ export class TemplateCompilationProjectPass {
           if (visibleResource == null) {
             continue;
           }
-          tasks.push(new TemplateCompilationTask(compilationWorld, visibleResource));
+          tasks.push(new TemplateCompilationTask(
+            compilationWorld,
+            visibleResource,
+            task.analysisContextProductHandle,
+            task.appRootDefinitionProductHandle,
+          ));
         }
       }
     });
@@ -463,7 +483,14 @@ export class TemplateCompilationProjectPass {
       const localKey = templateResourceAuthoringCompilationLocalKey(resourceIndex, definition);
       const result = compilerWorld.templateCompiler.compile(
         new TemplateCompilerCompileRequest(localKey, definition),
-        new ProjectTemplateCompilerHost(this, compilerWorld, typeSystem, phases),
+        new ProjectTemplateCompilerHost(
+          this,
+          compilerWorld,
+          compilerWorld.world.productHandle,
+          null,
+          typeSystem,
+          phases,
+        ),
       );
       if (result.output != null) {
         compilations.push(...result.output);
@@ -475,7 +502,6 @@ export class TemplateCompilationProjectPass {
 
   private analyzeCompiledResources(
     compilations: readonly TemplateResourceCompilationEmission[],
-    projectContext: TemplateRuntimeAnalysisProjectContext,
     projectKey: string | null,
     evaluation: StaticProjectEvaluationResult | null,
     typeSystem: TypeSystemProject | null,
@@ -485,29 +511,34 @@ export class TemplateCompilationProjectPass {
     phases: TemplateCompilationPhaseRecorder,
   ): readonly TemplateResourceRuntimeAnalysisEmission[] {
     const resources: TemplateResourceRuntimeAnalysisEmission[] = [];
-    for (const group of runtimeAnalysisScheduleGroups(compilations, resourceDefinitions)) {
-      const boundControllerValues = runtimeBoundControllerValueTableForTemplateResources(this.store, resources);
-      const groupResources = group.map((compilation) =>
-        new TemplateResourceRuntimeAnalysisEmission(
-          compilation,
-          phases.measure(
-            'runtime-analysis',
-            () => this.analyzeResource(
-              compilation,
-              projectContext,
-              projectKey,
-              evaluation,
-              typeSystem,
-              resourceDefinitions,
-              runtimeAnalysisDepth,
-              expressionWorld,
-              phases.telemetry,
-              boundControllerValues,
+    for (const cohort of runtimeAnalysisCohorts(compilations)) {
+      const projectContext = templateRuntimeAnalysisProjectContext(cohort);
+      const cohortResources: TemplateResourceRuntimeAnalysisEmission[] = [];
+      for (const group of runtimeAnalysisScheduleGroups(cohort, resourceDefinitions)) {
+        const boundControllerValues = runtimeBoundControllerValueTableForTemplateResources(this.store, cohortResources);
+        const groupResources = group.map((compilation) =>
+          new TemplateResourceRuntimeAnalysisEmission(
+            compilation,
+            phases.measure(
+              'runtime-analysis',
+              () => this.analyzeResource(
+                compilation,
+                projectContext,
+                projectKey,
+                evaluation,
+                typeSystem,
+                resourceDefinitions,
+                runtimeAnalysisDepth,
+                expressionWorld,
+                phases.telemetry,
+                boundControllerValues,
+              ),
             ),
-          ),
-        )
-      );
-      resources.push(...groupResources);
+          )
+        );
+        cohortResources.push(...groupResources);
+      }
+      resources.push(...cohortResources);
     }
     return resources;
   }
@@ -581,7 +612,7 @@ export class TemplateCompilationProjectPass {
       localKey,
       TemplateCompilerWorldKind.Component,
       parentCompilerWorld.container,
-      null,
+      parentCompilerWorld.world.appRoot,
       resources,
       parentCompilerWorld.attributePatterns,
       parentCompilerWorld.bindingCommands,
@@ -595,6 +626,8 @@ export class TemplateCompilationProjectPass {
 
   compileResourceTree(
     compilerWorld: TemplateCompilerWorldEmission,
+    analysisContextProductHandle: ProductHandle,
+    appRootDefinitionProductHandle: ProductHandle | null,
     definition: CustomElementDefinition,
     localKey: string,
     typeSystem: TypeSystemProject | null,
@@ -621,6 +654,8 @@ export class TemplateCompilationProjectPass {
       .filter((identityHandle): identityHandle is IdentityHandle => identityHandle != null);
     const owner = this.compileResource(
       activeCompilerWorld,
+      analysisContextProductHandle,
+      appRootDefinitionProductHandle,
       definition,
       localKey,
       localDefinitions.ownerTemplate,
@@ -635,7 +670,14 @@ export class TemplateCompilationProjectPass {
       const childLocalKey = `${localKey}:local-template:${index}:${localDefinition.name}`;
       const result = activeCompilerWorld.templateCompiler.compile(
         new TemplateCompilerCompileRequest(childLocalKey, localDefinition),
-        new ProjectTemplateCompilerHost(this, activeCompilerWorld, typeSystem, phases),
+        new ProjectTemplateCompilerHost(
+          this,
+          activeCompilerWorld,
+          analysisContextProductHandle,
+          appRootDefinitionProductHandle,
+          typeSystem,
+          phases,
+        ),
       );
       if (result.output != null) {
         compilations.push(...result.output);
@@ -646,6 +688,8 @@ export class TemplateCompilationProjectPass {
 
   compileResource(
     compilerWorld: TemplateCompilerWorldEmission,
+    analysisContextProductHandle: ProductHandle,
+    appRootDefinitionProductHandle: ProductHandle | null,
     definition: CustomElementDefinition,
     localKey: string,
     template: CustomElementTemplateDefinition | null,
@@ -696,6 +740,8 @@ export class TemplateCompilationProjectPass {
     );
     return new TemplateResourceCompilationEmission(
       localKey,
+      analysisContextProductHandle,
+      appRootDefinitionProductHandle,
       compilerWorld,
       definition,
       unit,
@@ -881,6 +927,7 @@ export class TemplateCompilationProjectPass {
       compilation.localKey,
       projectKey,
       compilation.definition,
+      compilation.appRootDefinitionProductHandle,
       compilation.compiledTemplate,
       compilation.attributeSyntax,
       compilation.compilerWorld,
@@ -900,6 +947,8 @@ class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<readonl
   constructor(
     private readonly pass: TemplateCompilationProjectPass,
     private readonly compilerWorld: TemplateCompilerWorldEmission,
+    private readonly analysisContextProductHandle: ProductHandle,
+    private readonly appRootDefinitionProductHandle: ProductHandle | null,
     private readonly typeSystem: TypeSystemProject | null,
     private readonly phases: TemplateCompilationPhaseRecorder,
   ) {}
@@ -910,6 +959,8 @@ class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<readonl
   ): readonly TemplateResourceCompilationEmission[] {
     return this.pass.compileResourceTree(
       this.compilerWorld,
+      this.analysisContextProductHandle,
+      this.appRootDefinitionProductHandle,
       request.definition,
       request.localKey,
       this.typeSystem,
@@ -922,19 +973,43 @@ class TemplateCompilationTask {
   constructor(
     readonly compilerWorld: TemplateCompilerWorldEmission,
     readonly visibleResource: TemplateVisibleResource,
+    readonly analysisContextProductHandle: ProductHandle,
+    readonly appRootDefinitionProductHandle: ProductHandle | null,
   ) {}
+}
+
+function appRootDefinitionProductHandleForCompilerWorld(
+  appWorld: AureliaAppWorldEmission,
+  compilerWorld: TemplateCompilerWorldEmission,
+  resourceDefinitions: ResourceDefinitionIndex | null,
+): ProductHandle | null {
+  const appRootProductHandle = compilerWorld.world.appRoot?.productHandle ?? null;
+  if (appRootProductHandle == null || resourceDefinitions == null) {
+    return null;
+  }
+  const appRoot = appWorld.configuration.appRoots.find((candidate) =>
+    candidate.productHandle === appRootProductHandle
+  ) ?? null;
+  return resourceDefinitions.lookupByTargetReference(appRoot?.component ?? null)?.productHandle ?? null;
 }
 
 function initialCompilationTasks(
   compilerWorld: TemplateCompilerWorldEmission,
+  appRootDefinitionProductHandle: ProductHandle | null,
 ): TemplateCompilationTask[] {
   return compilerWorld.resourceScope.resources.map((visibleResource) =>
-    new TemplateCompilationTask(compilerWorld, visibleResource)
+    new TemplateCompilationTask(
+      compilerWorld,
+      visibleResource,
+      compilerWorld.world.productHandle,
+      appRootDefinitionProductHandle,
+    )
   );
 }
 
 function routeableCompilationTasks(
   compilerWorld: TemplateCompilerWorldEmission,
+  appRootDefinitionProductHandle: ProductHandle | null,
   routeContexts: RouteConfigContextMaterializationProjectResult | null,
   resourceDefinitions: ResourceDefinitionIndex | null,
 ): TemplateCompilationTask[] {
@@ -951,7 +1026,12 @@ function routeableCompilationTasks(
         continue;
       }
       seen.add(productHandle);
-      tasks.push(new TemplateCompilationTask(compilerWorld, visibleResource));
+      tasks.push(new TemplateCompilationTask(
+        compilerWorld,
+        visibleResource,
+        compilerWorld.world.productHandle,
+        appRootDefinitionProductHandle,
+      ));
     }
   }
   return tasks;
@@ -1021,6 +1101,18 @@ function templateResourceCompilationKey(
   definition: CustomElementDefinition,
 ): string {
   return definition.productHandle ?? `${definition.key}:${definition.name}`;
+}
+
+function runtimeAnalysisCohorts(
+  compilations: readonly TemplateResourceCompilationEmission[],
+): readonly (readonly TemplateResourceCompilationEmission[])[] {
+  const cohortsByContext = new Map<ProductHandle, TemplateResourceCompilationEmission[]>();
+  for (const compilation of compilations) {
+    const cohort = cohortsByContext.get(compilation.analysisContextProductHandle) ?? [];
+    cohort.push(compilation);
+    cohortsByContext.set(compilation.analysisContextProductHandle, cohort);
+  }
+  return [...cohortsByContext.values()];
 }
 
 function runtimeAnalysisScheduleGroups(
@@ -1272,9 +1364,11 @@ function templateRuntimeAnalysisProjectContext(
       compilation.definition.productHandle == null
         ? []
         : [new TemplateRuntimeAnalysisResource(
+          compilation.analysisContextProductHandle,
           compilation.definition.productHandle,
           compilation.compiledTemplate.compiledTemplate.productHandle,
           compilation.compiledTemplate,
+          compilation.compilerWorld,
         )]
     ));
   }

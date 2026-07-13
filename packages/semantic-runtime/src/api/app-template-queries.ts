@@ -115,6 +115,7 @@ import {
   resourceLocalRuntimeBindings,
 } from '../template/runtime-resource-ownership.js';
 import {
+  HydrateAttributeInstruction,
   HydrateElementInstruction,
   TemplateBindingMode,
 } from '../template/instruction-ir.js';
@@ -146,6 +147,7 @@ import type { TemplateVisibleResourceReference } from '../template/compiler-worl
 import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
 import { TemplateSpecialAttributeName } from '../template/special-attribute-source.js';
 import { namedRefTargetController } from '../template/runtime-ref-target.js';
+import { capturedAttributeSyntaxForDynamicInstruction } from '../template/template-expression-selection.js';
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
@@ -778,7 +780,6 @@ export class SemanticAppTemplateQueries {
   ): TemplateReferenceContext | null {
     const contexts = this.templateReferenceContexts(query, detail, handles);
     return activeTemplateReferenceContext(contexts, query.cursor)?.context
-      ?? contexts[0]
       ?? this.templateOpenMemberReferenceContext(query, detail, handles)
       ?? null;
   }
@@ -2654,7 +2655,7 @@ function attributeResourceReferenceRows(
   }
   const syntaxByProduct = new Map(resource.compilation.attributeSyntax.syntaxes.map((syntax) => [syntax.productHandle, syntax]));
   const attributeByProduct = new Map(resource.compilation.html.attributes.map((attribute) => [attribute.productHandle, attribute]));
-  return resource.compilation.attributeClassification.classifications.flatMap((classification): readonly SemanticTemplateReferenceRow[] => {
+  const staticRows = resource.compilation.attributeClassification.classifications.flatMap((classification): readonly SemanticTemplateReferenceRow[] => {
     if (
       classification.resource == null
       || classification.resourceKind == null
@@ -2679,6 +2680,30 @@ function attributeResourceReferenceRows(
           SemanticTemplateResourceUsageKind.AttributeTarget,
         )];
   });
+  const dynamicRows = resource.runtimeAnalysis.runtimeRendering.dynamicInstructions.flatMap((instruction): readonly SemanticTemplateReferenceRow[] => {
+    if (
+      !(instruction instanceof HydrateAttributeInstruction)
+      || instruction.definitionProductHandle == null
+      || target.definitionProductHandle == null
+      || instruction.definitionProductHandle !== target.definitionProductHandle
+    ) {
+      return [];
+    }
+    const syntax = capturedAttributeSyntaxForDynamicInstruction(store, instruction);
+    const token = syntax == null ? null : attributeSyntaxTargetTokenSource(store, syntax);
+    return token == null
+      ? []
+      : [resourceUsageReferenceRow(
+          resource,
+          target,
+          token.text,
+          token.source,
+          token.sourceAddressHandle,
+          handles,
+          SemanticTemplateResourceUsageKind.AttributeTarget,
+        )];
+  });
+  return [...staticRows, ...dynamicRows];
 }
 
 function resourceUsageReferenceRow(

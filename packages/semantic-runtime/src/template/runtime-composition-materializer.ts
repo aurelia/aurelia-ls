@@ -1038,7 +1038,7 @@ function resolvedComponentRows(
       definition.productHandle,
       definition.name,
       definition.target.localName,
-      input.projectContext.readCompiledTemplateForDefinition(definition.productHandle),
+      input.projectContext.readResourceForDefinition(definition.productHandle)?.compiledTemplateProductHandle ?? null,
       null,
       resolutionKind,
       activationModelHandoff(store, definition, model, `runtime-composition:${localKeyPart(definition.productHandle)}:activation:${index}`),

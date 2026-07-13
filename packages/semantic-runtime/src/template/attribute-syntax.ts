@@ -815,6 +815,8 @@ export class AttributeClassification {
     readonly instructionProductHandles: readonly ProductHandle[],
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<AttributeClassificationField>[] = [],
+    /** Exact unresolved lowering reason when classification could not close without guessing. */
+    readonly openReason: string | null = null,
   ) {}
 
   /** Product handle for the materialized-product envelope that represents this classification. */

@@ -2,6 +2,7 @@ import { SemanticClaim } from '../kernel/claim.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import { InstructionIdentity } from '../kernel/identity.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { KernelStore, KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
@@ -16,7 +17,9 @@ import {
   BindingCommandBuildInfo,
   BindingCommandInstructionAllocation,
   BindingCommandIteratorParse,
+  BindingCommandLoweringState,
   BindingCommandTailSyntax,
+  type BindingCommandBuildResult,
   type BindingCommandBuildContext,
   type BindingCommandExecutable,
 } from './binding-command-execution.js';
@@ -28,7 +31,7 @@ import {
   type TemplateCompilerService,
 } from './compiler-world.js';
 import type { TemplateBindableReference } from './compiler-world-reference.js';
-import { HtmlElement, type HtmlNodeReference } from './html-ir.js';
+import { HtmlAttribute, HtmlElement, type HtmlNodeReference } from './html-ir.js';
 import { templateElementLookupNameFromAttributes } from './special-attribute-source.js';
 import {
   HydrateAttributeInstruction,
@@ -59,6 +62,7 @@ import {
   TemplateCompilerFrameworkErrorCode,
 } from './framework-error-code.js';
 import {
+  type TemplateCompilerIssue,
   TemplateCompilerIssueKind,
   TemplateCompilerIssuePhase,
 } from './compiler-issue.js';
@@ -74,6 +78,7 @@ import type { RuntimeBindingIssue } from './runtime-binding-issue.js';
 import type {
   SpreadBinding,
 } from './runtime-binding.js';
+import type { CompilerBindingCommandResource } from './syntax-resource-materializer.js';
 
 export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompilerSpreadCompileHost {
   private readonly valueSitePublisher: TemplateValueSitePublisher;
@@ -89,6 +94,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     private readonly bindingOwner: SpreadBinding,
     private readonly records: KernelStoreRecord[],
     private readonly bindingIssues: RuntimeBindingIssue[],
+    private readonly compilerIssues: TemplateCompilerIssue[],
     private readonly dynamicInstructions: TemplateInstruction[],
     private readonly dynamicValueSites: TemplateValueSite[],
     private readonly dynamicExpressionParses: TemplateExpressionParse[],
@@ -108,6 +114,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       return TemplateCompilerSpreadCompileResult.open(
         request,
         'TemplateCompiler.compileSpread could not hydrate the target HTMLElement for captured attribute compilation.',
+        [OpenSeamReasonKind.FeatureNotYetModeled],
       );
     }
 
@@ -116,8 +123,8 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     const createdInstructions: TemplateInstruction[] = [];
     for (const syntax of request.capturedSyntaxes) {
       const compiled = this.compileCapturedSyntax(request, syntax, targetNode, targetDefinition);
-      if (typeof compiled === 'string') {
-        return TemplateCompilerSpreadCompileResult.open(request, compiled);
+      if (compiled instanceof TemplateCompilerSpreadCompileResult) {
+        return compiled;
       }
       rootInstructions.push(...compiled.rootInstructions);
       createdInstructions.push(...compiled.createdInstructions);
@@ -134,7 +141,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     syntax: AttributeSyntax,
     targetNode: HtmlElement,
     targetDefinition: CustomElementDefinition | null,
-  ): SpreadCompileInstructionSet | string {
+  ): SpreadCompileInstructionSet | TemplateCompilerSpreadCompileResult {
     const target = syntax.target.toLowerCase();
     if (target === '...$attrs') {
       const instruction = this.createInstruction(request, syntax, TemplateInstructionKind.SpreadTransferedBinding, 'spread-transfered-binding',
@@ -159,7 +166,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
         const inner = command == null
           ? instructionSet([this.bindableValueInstruction(request, syntax, targetNode, bindable.definition.name)])
           : this.commandInstructions(request, syntax, targetNode, bindable, targetDefinition.productHandle, command);
-        if (typeof inner === 'string') {
+        if (inner instanceof TemplateCompilerSpreadCompileResult) {
           return inner;
         }
         return this.wrapSpreadElementPropInstructions(request, syntax, targetNode, inner.rootInstructions);
@@ -173,12 +180,15 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     if (attributeDefinition != null) {
       if (attributeDefinition.isTemplateController) {
         this.publishSpreadTemplateControllerIssue(request, syntax, target, targetNode);
-        return `SpreadBinding.addChild does not allow captured template controller '${target}' to be spread onto '${targetNode.tagName}'.`;
+        return TemplateCompilerSpreadCompileResult.invalid(
+          request,
+          `SpreadBinding.addChild does not allow captured template controller '${target}' to be spread onto '${targetNode.tagName}'.`,
+        );
       }
       const props = command == null
         ? instructionSet([this.customAttributeValueInstruction(request, syntax, targetNode, attributeDefinition.defaultProperty)])
         : this.commandInstructions(request, syntax, targetNode, null, attributeDefinition.productHandle, command);
-      if (typeof props === 'string') {
+      if (props instanceof TemplateCompilerSpreadCompileResult) {
         return props;
       }
       const instruction = this.createInstruction(request, syntax, TemplateInstructionKind.HydrateAttribute, 'hydrate-attribute',
@@ -212,9 +222,13 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     bindable: TemplateBindableReference | null,
     definitionProductHandle: ProductHandle | null,
     command: SpreadCommandMatch,
-  ): SpreadCompileInstructionSet | string {
+  ): SpreadCompileInstructionSet | TemplateCompilerSpreadCompileResult {
     if (command.handler == null) {
-      return `TemplateCompiler.compileSpread reached binding command '${command.executable.name}' whose executable body is not modeled.`;
+      return TemplateCompilerSpreadCompileResult.open(
+        request,
+        `TemplateCompiler.compileSpread reached binding command '${command.executable.name}' whose executable body is not modeled.`,
+        [OpenSeamReasonKind.FeatureNotYetModeled],
+      );
     }
     const context = new RuntimeSpreadCommandBuildContext(
       this.world,
@@ -234,11 +248,31 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       bindable?.reference.ownerDefinitionProductHandle ?? null,
       definitionProductHandle,
       syntax.sourceAddressHandle,
-      syntax.sourceAddressHandle,
+      this.expressionSourceAddressHandle(syntax),
     );
-    const build = command.handler.build(info, context);
-    if (build.state !== 'complete') {
-      return build.message ?? `TemplateCompiler.compileSpread could not lower captured binding command '${syntax.command ?? '(unknown)'}'.`;
+    let build: BindingCommandBuildResult;
+    try {
+      build = command.handler.build(info, context);
+    } catch (error) {
+      return TemplateCompilerSpreadCompileResult.open(
+        request,
+        error instanceof Error ? error.message : String(error),
+        [OpenSeamReasonKind.FeatureNotYetModeled],
+      );
+    }
+    if (build.state === BindingCommandLoweringState.Invalid) {
+      this.publishBindingCommandIssue(request, syntax, build);
+      return TemplateCompilerSpreadCompileResult.invalid(
+        request,
+        build.message ?? `TemplateCompiler.compileSpread rejected captured binding command '${syntax.command ?? '(unknown)'}'.`,
+      );
+    }
+    if (build.state !== BindingCommandLoweringState.Complete) {
+      return TemplateCompilerSpreadCompileResult.open(
+        request,
+        build.message ?? `TemplateCompiler.compileSpread could not lower captured binding command '${syntax.command ?? '(unknown)'}'.`,
+        [OpenSeamReasonKind.FeatureNotYetModeled],
+      );
     }
     for (const instruction of build.instructions) {
       this.registerInstructionDetail(request, instruction, syntax);
@@ -413,12 +447,30 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     );
     this.records.push(...compilerIssue.records);
     this.records.push(...publication.records);
-    this.store.productDetails.add(
-      TemplateProductDetails.CompilerIssue,
-      compilerIssue.issue.productHandle,
-      compilerIssue.issue,
-    );
+    this.compilerIssues.push(compilerIssue.issue);
     this.bindingIssues.push(publication.issue);
+  }
+
+  private publishBindingCommandIssue(
+    request: TemplateCompilerSpreadCompileRequest,
+    syntax: AttributeSyntax,
+    result: BindingCommandBuildResult,
+  ): void {
+    if (result.message == null) {
+      return;
+    }
+    const publication = this.compilerIssuePublisher.publish(
+      `${request.localKey}:issue:binding-command:${syntax.productHandle}`,
+      this.world.templateCompiler.identityHandle,
+      this.source.provenanceHandle,
+      TemplateCompilerIssuePhase.SpreadCompile,
+      result.issueKind ?? TemplateCompilerIssueKind.BindingCommandBuildInvalid,
+      result.message,
+      result.frameworkErrorCode,
+      syntax.sourceAddressHandle,
+    );
+    this.records.push(...publication.records);
+    this.compilerIssues.push(publication.issue);
   }
 
   allocateInstruction(
@@ -486,7 +538,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       null,
       command?.toReference() ?? null,
       bindable,
-      syntax.sourceAddressHandle,
+      this.expressionSourceAddressHandle(syntax),
       syntax.identityHandle,
       `spread:${entryFamily}`,
       null,
@@ -530,6 +582,15 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
         this.source.provenanceHandle,
       ));
     }
+  }
+
+  private expressionSourceAddressHandle(syntax: AttributeSyntax) {
+    const attribute = syntax.attribute.productHandle == null
+      ? null
+      : this.store.productDetails.read(TemplateProductDetails.HtmlAttribute, syntax.attribute.productHandle);
+    return attribute instanceof HtmlAttribute
+      ? attribute.valueAddressHandle ?? attribute.sourceAddressHandle
+      : syntax.sourceAddressHandle;
   }
 
   private commandMatch(syntax: AttributeSyntax): SpreadCommandMatch | null {
@@ -580,12 +641,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
 
 interface SpreadCommandMatch {
   readonly executable: BindingCommandExecutable;
-  readonly handler: {
-    build(
-      info: BindingCommandBuildInfo,
-      context: BindingCommandBuildContext,
-    ): { readonly state: string; readonly instructions: readonly TemplateInstruction[]; readonly message: string | null };
-  } | null;
+  readonly handler: CompilerBindingCommandResource['handler'];
 }
 
 interface SpreadCompileInstructionSet {

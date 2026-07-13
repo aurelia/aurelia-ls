@@ -29,6 +29,7 @@ import type {
   TemplateValueSite,
 } from './value-site.js';
 import type { RuntimeBindingIssue } from './runtime-binding-issue.js';
+import type { TemplateCompilerIssue } from './compiler-issue.js';
 import {
   RuntimeBindingIssueKind,
   RuntimeBindingIssuePhase,
@@ -40,6 +41,7 @@ export interface RuntimeSpreadBindingCreationState {
   readonly source: RuntimeRenderingSourceSet;
   readonly records: KernelStoreRecord[];
   readonly bindingIssues: RuntimeBindingIssue[];
+  readonly compilerIssues: TemplateCompilerIssue[];
   readonly dynamicInstructions: TemplateInstruction[];
   readonly dynamicValueSites: TemplateValueSite[];
   readonly dynamicExpressionParses: TemplateExpressionParse[];
@@ -79,8 +81,21 @@ export class RuntimeSpreadBindingCreator {
       return RuntimeRendererSpreadCompileResult.open(
         'TemplateCompiler.compileSpread found captured attribute handles, but not every handle resolved to an AttrSyntax product.',
         spread.instruction.sourceAddressHandle,
+        [OpenSeamReasonKind.FeatureNotYetModeled],
       );
     }
+
+    const runtimeResource = state.input.projectContext.readResourceForDefinition(
+      usage.requestorDefinitionProductHandle,
+    );
+    if (runtimeResource == null) {
+      return RuntimeRendererSpreadCompileResult.open(
+        'TemplateCompiler.compileSpread could not recover the compiler world that owns the requesting custom-element view.',
+        spread.instruction.sourceAddressHandle,
+        [OpenSeamReasonKind.FeatureNotYetModeled],
+      );
+    }
+    const compilerWorld = runtimeResource.compilerWorld;
 
     const request = new TemplateCompilerSpreadCompileRequest(
       `${spread.local}:capture-usage`,
@@ -90,16 +105,17 @@ export class RuntimeSpreadBindingCreator {
       spread.target,
       null,
     );
-    const result = state.input.compilerWorld.templateCompiler.compileSpread(
+    const result = compilerWorld.templateCompiler.compileSpread(
       request,
       new RuntimeTemplateCompilerSpreadCompileHost(
         this.store,
-        state.input.compilerWorld,
+        compilerWorld,
         state.source,
         this.bindingIssuePublisher,
         spread.binding,
         state.records,
         state.bindingIssues,
+        state.compilerIssues,
         state.dynamicInstructions,
         state.dynamicValueSites,
         state.dynamicExpressionParses,
@@ -180,6 +196,7 @@ export class RuntimeSpreadBindingCreator {
       readonly instructions: readonly TemplateInstruction[];
       readonly createdInstructions: readonly TemplateInstruction[];
       readonly summary: string | null;
+      readonly reasonKinds: readonly OpenSeamReasonKind[];
     },
   ): RuntimeRendererSpreadCompileResult {
     switch (result.state) {
@@ -194,6 +211,12 @@ export class RuntimeSpreadBindingCreator {
       case TemplateCompilerSpreadCompileState.Open:
         return RuntimeRendererSpreadCompileResult.open(
           result.summary ?? 'TemplateCompiler.compileSpread remained open.',
+          spread.instruction.sourceAddressHandle,
+          result.reasonKinds,
+        );
+      case TemplateCompilerSpreadCompileState.Invalid:
+        return RuntimeRendererSpreadCompileResult.invalid(
+          result.summary ?? 'TemplateCompiler.compileSpread rejected the captured attribute.',
           spread.instruction.sourceAddressHandle,
         );
     }

@@ -48,6 +48,7 @@ import {
   type RuntimeBindingSourceOperationRequest,
   RuntimeBindingSourceOperationKind,
   RuntimeBindingTargetKind,
+  SpreadBinding,
   SpreadValueBinding,
   StateDispatchBinding,
 } from './runtime-binding.js';
@@ -74,6 +75,13 @@ import {
 import {
   effectivePropertyBindingMode,
 } from './runtime-binding-mode-behavior.js';
+import {
+  RuntimeBindingIssueKind,
+  RuntimeBindingIssuePhase,
+  RuntimeBindingIssuePublisher,
+  type RuntimeBindingIssue,
+} from './runtime-binding-issue.js';
+import { RuntimeHtmlBindingFrameworkErrorCode } from './framework-error-code.js';
 
 export interface RuntimeControllerBindMaterializationRequest {
   /** Store-local key shared with the template compilation pass. */
@@ -90,6 +98,8 @@ export interface RuntimeControllerBindMaterializationRequest {
   readonly nodeObserverLocatorConfiguration?: NodeObserverLocatorConfiguration | null;
   /** App-authored @aurelia/state store configurations visible to binding-source operation analysis. */
   readonly stateStores?: readonly StateStoreConfiguration[] | null;
+  /** Whether this standalone analysis root is proven to be the app root in its compiler world. */
+  readonly isAppRootDefinition: boolean;
 }
 
 export class RuntimeControllerBindEmission {
@@ -106,6 +116,8 @@ export class RuntimeControllerBindEmission {
     readonly sourceOperations: readonly RuntimeBindingSourceOperation[],
     /** Open Controller.bind pressures that should remain visible to inquiry. */
     readonly openSeams: readonly OpenSeam[],
+    /** Framework-runtime issues discovered while bindings execute their bind lifecycle. */
+    readonly bindingIssues: readonly RuntimeBindingIssue[],
     /** Kernel records emitted for target products, provenance, and claims. */
     readonly records: readonly KernelStoreRecord[],
   ) {
@@ -170,13 +182,26 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
     private readonly targetOperations: RuntimeBindingTargetOperation[],
     private readonly sourceOperations: RuntimeBindingSourceOperation[],
     private readonly openSeams: OpenSeam[],
+    private readonly bindingIssues: RuntimeBindingIssue[],
   ) {}
 
   inputForBinding(
     controller: RuntimeControllerFrame,
     binding: RuntimeBinding,
     index: number,
-  ): RuntimeBindingBindContext {
+  ): RuntimeBindingBindContext | null {
+    if (this.input.isAppRootDefinition
+      && binding instanceof SpreadBinding
+      && this.materializer.spreadBindingHasNoParentScope(controller, this.input.scopes)) {
+      this.materializer.recordMissingSpreadScope(
+        `${this.input.localKey}:controller:${controller.productHandle}:binding:${binding.productHandle}`,
+        binding,
+        this.source,
+        this.records,
+        this.bindingIssues,
+      );
+      return null;
+    }
     const renderContext = this.input.runtimeRendering.readRenderContextForBinding(binding.productHandle);
     const targetController = targetControllerForContext(renderContext);
     this.targetControllerByBinding.set(binding.productHandle, targetController);
@@ -236,6 +261,7 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
 export class RuntimeControllerBindMaterializer {
   private observerLocator: ObserverLocator;
   private readonly publisher: RuntimeControllerBindPublisher;
+  private readonly bindingIssuePublisher: RuntimeBindingIssuePublisher;
 
   constructor(
     /** Hot analysis store that receives controller bind-time products. */
@@ -243,6 +269,7 @@ export class RuntimeControllerBindMaterializer {
   ) {
     this.observerLocator = new ObserverLocator(store);
     this.publisher = new RuntimeControllerBindPublisher(store);
+    this.bindingIssuePublisher = new RuntimeBindingIssuePublisher(store);
   }
 
   materialize(input: RuntimeControllerBindMaterializationRequest): RuntimeControllerBindEmission {
@@ -268,6 +295,7 @@ export class RuntimeControllerBindMaterializer {
     for (const operation of emission.sourceOperations) {
       this.store.productDetails.add(TemplateProductDetails.RuntimeBindingSourceOperation, operation.productHandle, operation);
     }
+    this.store.productDetails.addAll(TemplateProductDetails.RuntimeBindingIssue, emission.bindingIssues);
   }
 
   private resolveTargetAccess(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
@@ -290,6 +318,7 @@ export class RuntimeControllerBindMaterializer {
     const targetOperations: RuntimeBindingTargetOperation[] = [];
     const sourceOperations: RuntimeBindingSourceOperation[] = [];
     const openSeams: OpenSeam[] = [];
+    const bindingIssues: RuntimeBindingIssue[] = [];
     const claims: SemanticClaim[] = [];
     const source = this.publisher.recordsForSource(input.localKey);
     records.push(...source.records);
@@ -303,6 +332,7 @@ export class RuntimeControllerBindMaterializer {
       targetOperations,
       sourceOperations,
       openSeams,
+      bindingIssues,
     );
 
     for (const controller of input.runtimeRendering.controllers) {
@@ -313,7 +343,48 @@ export class RuntimeControllerBindMaterializer {
     }
 
     records.push(...claims);
-    return new RuntimeControllerBindEmission(targetAccesses, targetOperations, sourceOperations, openSeams, records);
+    return new RuntimeControllerBindEmission(
+      targetAccesses,
+      targetOperations,
+      sourceOperations,
+      openSeams,
+      bindingIssues,
+      records,
+    );
+  }
+
+  spreadBindingHasNoParentScope(
+    controller: RuntimeControllerFrame,
+    scopes: TemplateScopeConstructionEmission,
+  ): boolean {
+    const scopeProductHandle = controller.readScopeReference()?.productHandle ?? null;
+    if (scopeProductHandle == null) {
+      return false;
+    }
+    const scope = scopes.readScopes().find((candidate) => candidate.productHandle === scopeProductHandle) ?? null;
+    return scope != null && scope.runtimeParent == null;
+  }
+
+  recordMissingSpreadScope(
+    local: string,
+    binding: SpreadBinding,
+    source: RuntimeControllerBindSourceSet,
+    records: KernelStoreRecord[],
+    bindingIssues: RuntimeBindingIssue[],
+  ): void {
+    const publication = this.bindingIssuePublisher.publish(
+      `${local}:issue:no-spread-scope-context`,
+      binding.toReference(),
+      binding.identityHandle,
+      source.provenanceHandle,
+      RuntimeBindingIssuePhase.SpreadBind,
+      RuntimeBindingIssueKind.SpreadScopeContextMissing,
+      'SpreadBinding.bind requires the hydration-context controller scope to have a parent scope.',
+      RuntimeHtmlBindingFrameworkErrorCode.NoSpreadScopeContextFound,
+      binding.sourceAddressHandle,
+    );
+    records.push(...publication.records);
+    bindingIssues.push(publication.issue);
   }
 
   materializeTargetAccess(

@@ -36,7 +36,10 @@ import {
   SetPropertyInstruction,
 } from '../template/instruction-ir.js';
 import { TemplateProductDetails } from '../template/product-details.js';
-import type { TemplateCompilationProjectEmission } from '../template/template-compilation-project-pass.js';
+import type {
+  TemplateCompilationProjectEmission,
+  TemplateResourceRuntimeAnalysisEmission,
+} from '../template/template-compilation-project-pass.js';
 import {
   RuntimeControllerCreationKind,
   type RuntimeControllerFrame,
@@ -341,7 +344,12 @@ class RouteRuntimeTopologyFrame {
     hostingViewport: ViewportRuntimeEmission | null,
   ): void {
     const routeConfig = requiredRouteConfigForContext(routeConfigContext, this.configs);
-    const parentContainer = parentContainerForRouteContext(routeConfig, hostingViewport, this.templates);
+    const parentContainer = parentContainerForRouteContext(
+      routeConfigContext,
+      routeConfig,
+      hostingViewport,
+      this.templates,
+    );
     const routeContext = this.materializeRouteContext(
       routeConfigContext,
       parentRouteContext,
@@ -715,7 +723,9 @@ function viewportDraftsByOwnerContext(
       continue;
     }
     const controllers = resource.runtimeAnalysis.runtimeRendering.controllers.filter(isViewportController);
-    for (const owner of ownerRouteConfigContext) {
+    for (const owner of ownerRouteConfigContext.filter((candidate) =>
+      templateResourceBelongsToAppRoot(resource, candidate)
+    )) {
       controllers.forEach((controller, index) => {
         const draft: ViewportDraft = {
           ownerRouteConfigContext: owner,
@@ -738,6 +748,7 @@ function viewportDraftsByOwnerContext(
 }
 
 function parentContainerForRouteContext(
+  routeConfigContext: RouteConfigContextModel,
   routeConfig: RouteConfigModel,
   hostingViewport: ViewportRuntimeEmission | null,
   templates: TemplateCompilationProjectEmission,
@@ -745,7 +756,7 @@ function parentContainerForRouteContext(
   if (hostingViewport != null) {
     return hostingViewport.draft.controller.containerFrame;
   }
-  return rootControllerForRouteConfig(routeConfig, templates)?.containerFrame ?? null;
+  return rootControllerForRouteConfig(routeConfigContext, routeConfig, templates)?.containerFrame ?? null;
 }
 
 function routeContextContainersByIdentity(
@@ -759,6 +770,7 @@ function routeContextContainersByIdentity(
 }
 
 function rootControllerForRouteConfig(
+  routeConfigContext: RouteConfigContextModel,
   routeConfig: RouteConfigModel,
   templates: TemplateCompilationProjectEmission,
 ): RuntimeControllerFrame | null {
@@ -767,7 +779,10 @@ function rootControllerForRouteConfig(
     return null;
   }
   for (const resource of templates.resources) {
-    if (resource.compilation.definition.productHandle !== definitionProductHandle) {
+    if (
+      resource.compilation.definition.productHandle !== definitionProductHandle
+      || !templateResourceBelongsToAppRoot(resource, routeConfigContext)
+    ) {
       continue;
     }
     return resource.runtimeAnalysis.runtimeRendering.controllers.find((controller) =>
@@ -775,6 +790,14 @@ function rootControllerForRouteConfig(
     ) ?? null;
   }
   return null;
+}
+
+function templateResourceBelongsToAppRoot(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  routeConfigContext: RouteConfigContextModel,
+): boolean {
+  return (resource.compilation.compilerWorld.world.appRoot?.productHandle ?? null)
+    === (routeConfigContext.appRoot?.productHandle ?? null);
 }
 
 function routeContextsByRouteConfigContextIdentity(

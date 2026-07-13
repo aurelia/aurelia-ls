@@ -1,6 +1,7 @@
 import { SemanticClaim, claimsForProduct } from '../kernel/claim.js';
 import {
   OpenSeam,
+  OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import {
   EvidenceKind,
@@ -352,6 +353,7 @@ class CompiledTemplateAssemblyState {
     summary: string,
     addressHandle: AddressHandle | null,
     seamKindKey: OpenSeamKindKey = KernelVocabulary.Instruction.OpenInstruction.key,
+    reasonKinds: readonly OpenSeamReasonKind[] = [OpenSeamReasonKind.FeatureNotYetModeled],
   ): void => {
     const seam = new OpenSeam(
       this.store.handles.openSeam(`compiled-template:${this.input.localKey}:assembly:${local}`),
@@ -359,6 +361,7 @@ class CompiledTemplateAssemblyState {
       summary,
       addressHandle,
       this.source.evidenceHandle,
+      reasonKinds,
     );
     this.openSeams.push(seam);
     this.records.push(seam);
@@ -517,19 +520,19 @@ class CompiledTemplateInstructionFactory {
       return null;
     }
     const target = syntax.target.toLowerCase();
-    const addressHandle = attribute.valueAddressHandle ?? attribute.sourceAddressHandle;
+    const defaultAddressHandle = attribute.valueAddressHandle ?? attribute.sourceAddressHandle;
     if (target === '...$attrs') {
       return this.assemblyState.createInstruction(
         `spread-transfered-binding:${attribute.productHandle}`,
         TemplateInstructionKind.SpreadTransferedBinding,
         classification.identityHandle,
-        addressHandle,
+        defaultAddressHandle,
         (productHandle, identityHandle) => new SpreadTransferedBindingInstruction(
           productHandle,
           identityHandle,
           node.toReference(),
           attribute.toReference(),
-          addressHandle,
+          defaultAddressHandle,
           [],
         ),
       );
@@ -539,11 +542,12 @@ class CompiledTemplateInstructionFactory {
     }
     const site = this.indexes.valueSiteByClassification.get(classification.productHandle) ?? null;
     const parse = site == null ? null : this.indexes.parseBySite.get(site.productHandle) ?? null;
+    const expressionAddressHandle = site?.sourceAddressHandle ?? defaultAddressHandle;
     return this.assemblyState.createInstruction(
       `spread-value-binding:${attribute.productHandle}`,
       TemplateInstructionKind.SpreadValueBinding,
       classification.identityHandle,
-      addressHandle,
+      expressionAddressHandle,
       (productHandle, identityHandle) => new SpreadValueBindingInstruction(
         productHandle,
         identityHandle,
@@ -552,7 +556,8 @@ class CompiledTemplateInstructionFactory {
         '$bindables',
         target === '...$bindables' ? syntax.rawValue : syntax.target.slice(3),
         parse?.productHandle ?? null,
-        addressHandle,
+        syntax.targetSourceAddressHandle,
+        expressionAddressHandle,
         [],
       ),
     );
@@ -1482,7 +1487,15 @@ class CompiledTemplateInstructionTraversal {
         }
         break;
       case AttributeClassificationKind.CompilerControl:
+        break;
       case AttributeClassificationKind.Open:
+        if (classification.openReason != null) {
+          this.assemblyState.addOpenSeam(
+            `open-attribute-classification:${classification.productHandle}`,
+            classification.openReason,
+            classification.sourceAddressHandle,
+          );
+        }
         break;
     }
   }

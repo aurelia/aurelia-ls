@@ -1,0 +1,364 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/template-spread-capture-semantics",
+  "lanes": {
+    "rename": [
+      {
+        "id": "spread-root-member",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "<spread-card ...spreadState>",
+        "at": "spreadState",
+        "newName": "spreadModel",
+        "verdict": "correct",
+        "reason": "A spread source is an ordinary template expression root, so rename should update its TypeScript declaration and every template occurrence without editing target bindable names.",
+        "note": "IDE boundary canary for the exact shorthand expression source restored by this slice."
+      },
+      {
+        "id": "spread-inferred-member",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "...spreadContainer.details",
+        "at": "details",
+        "newName": "payload",
+        "verdict": "correct",
+        "reason": "The member token has a TypeScript-owned inferred object-property declaration and must rename at token granularity across that declaration and template use.",
+        "note": "Canary for member-origin routing inside shorthand spread syntax."
+      },
+      {
+        "id": "spread-repeat-local",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "repeat.for=\"card of spreadCards\" ...card",
+        "at": "card",
+        "atOccurrence": 2,
+        "newName": "entry",
+        "verdict": "correct",
+        "reason": "The spread operand resolves to the repeat lexical local, so rename should edit only its declaration and same-scope usage.",
+        "note": "Canary for dynamic spread consuming the established scope-slot product."
+      },
+      {
+        "id": "spread-value-converter-resource",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "spreadState | spreadIdentity",
+        "at": "spreadIdentity",
+        "newName": "spreadCopy",
+        "verdict": "correct",
+        "reason": "An explicitly named value converter is a source-backed resource; resource rename should update its name literal and expression use without renaming the TypeScript class.",
+        "note": "Tests resource dispatch inside a spread expression rather than on an element or attribute target."
+      },
+      {
+        "id": "captured-expression-member",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "value.bind=\"capturedValue\"",
+        "occurrence": 1,
+        "at": "capturedValue",
+        "newName": "forwardedValue",
+        "verdict": "correct",
+        "reason": "Captured attributes retain the sender's lexical expression scope, so rename should share the ordinary member reference context and update all sender sites plus TypeScript.",
+        "note": "Canary for captured dynamic instruction scopes at the edit boundary."
+      },
+      {
+        "id": "receiver-local-custom-attribute",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "input-mark=\"receiver-local-mark\"",
+        "at": "input-mark",
+        "newName": "input-stamp",
+        "verdict": "correct",
+        "reason": "Dynamic spread compilation resolves input-mark in the receiver's compiler world; rename should spend that resolved resource identity and update the declaration and all admitted uses.",
+        "note": "High-pressure canary: the resource is not visible in the sender app world and only becomes known in the capture receiver cohort."
+      }
+    ],
+    "references": [
+      {
+        "id": "spread-root-member",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "<spread-card ...spreadState>",
+        "at": "spreadState",
+        "verdict": "correct",
+        "reason": "References should merge the TypeScript declaration with every authored template spread occurrence of spreadState."
+      },
+      {
+        "id": "spread-inferred-member",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "...spreadContainer.details",
+        "at": "details",
+        "verdict": "correct",
+        "reason": "References should include the exact details token and its inferred object-property declaration."
+      },
+      {
+        "id": "spread-repeat-local",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "repeat.for=\"card of spreadCards\" ...card",
+        "at": "card",
+        "atOccurrence": 2,
+        "verdict": "correct",
+        "reason": "References should return the repeat-local declaration and spread operand, with no unrelated card-shaped symbols."
+      },
+      {
+        "id": "spread-value-converter-resource",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "spreadState | spreadIdentity",
+        "at": "spreadIdentity",
+        "verdict": "correct",
+        "reason": "References should join the value-converter usage to its explicit resource-name declaration."
+      },
+      {
+        "id": "captured-expression-member",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "value.bind=\"capturedValue\"",
+        "occurrence": 1,
+        "at": "capturedValue",
+        "verdict": "correct",
+        "reason": "Captured expression references should be indistinguishable from ordinary sender-scope member references."
+      },
+      {
+        "id": "receiver-local-custom-attribute",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "input-mark=\"receiver-local-mark\"",
+        "at": "input-mark",
+        "verdict": "correct",
+        "reason": "References should expose the dynamically resolved receiver-local custom attribute, its declaration, and direct receiver-template usage."
+      }
+    ],
+    "hover": [
+      {
+        "id": "spread-root-member",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "<spread-card ...spreadState>",
+        "at": "spreadState",
+        "verdict": "correct",
+        "reason": "Hover should describe spreadState as SpreadCardState, not the spread mechanism or target component."
+      },
+      {
+        "id": "spread-inferred-member",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "...spreadContainer.details",
+        "at": "details",
+        "verdict": "correct",
+        "reason": "Hover should describe the inferred details member and its object shape at the authored leaf token."
+      },
+      {
+        "id": "spread-repeat-local",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "repeat.for=\"card of spreadCards\" ...card",
+        "at": "card",
+        "atOccurrence": 2,
+        "verdict": "correct",
+        "reason": "Hover should lead with the lexical local card: SpreadCardState."
+      },
+      {
+        "id": "spread-value-converter-resource",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "spreadState | spreadIdentity",
+        "at": "spreadIdentity",
+        "verdict": "correct",
+        "reason": "Hover should identify the explicitly named spreadIdentity value converter."
+      },
+      {
+        "id": "captured-expression-member",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "value.bind=\"capturedValue\"",
+        "occurrence": 1,
+        "at": "capturedValue",
+        "verdict": "correct",
+        "reason": "Hover should resolve capturedValue from the sender view-model as string."
+      },
+      {
+        "id": "captured-listener-event",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "click.trigger=\"handleCaptured($event)\"",
+        "occurrence": 1,
+        "at": "$event",
+        "verdict": "correct",
+        "reason": "Captured listener lowering must reconstruct event scope, so hover should report $event as MouseEvent."
+      },
+      {
+        "id": "receiver-local-custom-attribute",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "input-mark=\"receiver-local-mark\"",
+        "at": "input-mark",
+        "verdict": "correct",
+        "reason": "Hover should identify the InputMark custom attribute resolved in the capture receiver world."
+      }
+    ],
+    "definition": [
+      {
+        "id": "spread-root-member",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "<spread-card ...spreadState>",
+        "at": "spreadState",
+        "verdict": "correct",
+        "reason": "Definition should navigate to the spreadState TypeScript property token."
+      },
+      {
+        "id": "spread-inferred-member",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "...spreadContainer.details",
+        "at": "details",
+        "verdict": "correct",
+        "reason": "Definition should navigate to the inferred details property token in the TypeScript object literal."
+      },
+      {
+        "id": "spread-repeat-local",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "repeat.for=\"card of spreadCards\" ...card",
+        "at": "card",
+        "atOccurrence": 2,
+        "verdict": "correct",
+        "reason": "Definition should navigate from the spread operand to the repeat-local declaration token."
+      },
+      {
+        "id": "spread-value-converter-resource",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "spreadState | spreadIdentity",
+        "at": "spreadIdentity",
+        "verdict": "correct",
+        "reason": "Definition should navigate to the value-converter class target for the explicit resource."
+      },
+      {
+        "id": "captured-expression-member",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "value.bind=\"capturedValue\"",
+        "occurrence": 1,
+        "at": "capturedValue",
+        "verdict": "correct",
+        "reason": "Definition should navigate through captured scope to the sender view-model member."
+      },
+      {
+        "id": "receiver-local-custom-attribute",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "input-mark=\"receiver-local-mark\"",
+        "at": "input-mark",
+        "verdict": "correct",
+        "reason": "Definition should spend dynamic receiver-world resolution and navigate to InputMark."
+      }
+    ],
+    "documentHighlight": [
+      {
+        "id": "spread-root-member",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "<spread-card ...spreadState>",
+        "at": "spreadState",
+        "verdict": "correct",
+        "reason": "Highlights should include every spreadState expression token in this template."
+      },
+      {
+        "id": "spread-repeat-local",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "repeat.for=\"card of spreadCards\" ...card",
+        "at": "card",
+        "atOccurrence": 2,
+        "verdict": "correct",
+        "reason": "Highlights should include the repeat declaration and spread operand only."
+      },
+      {
+        "id": "spread-value-converter-resource",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "spreadState | spreadIdentity",
+        "at": "spreadIdentity",
+        "verdict": "correct",
+        "reason": "The converter usage should highlight at exact token granularity in the current document."
+      },
+      {
+        "id": "captured-expression-member",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "value.bind=\"capturedValue\"",
+        "occurrence": 1,
+        "at": "capturedValue",
+        "verdict": "correct",
+        "reason": "Captured and ordinary same-document uses of capturedValue should share one highlight context."
+      },
+      {
+        "id": "receiver-local-custom-attribute",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "input-mark=\"receiver-local-mark\"",
+        "at": "input-mark",
+        "verdict": "correct",
+        "reason": "The dynamically resolved custom-attribute occurrence should highlight without swallowing its literal value."
+      }
+    ],
+    "completions": [
+      {
+        "id": "spread-root-scope",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "<spread-card ...spreadState>",
+        "at": "spreadState",
+        "watch": {
+          "present": ["spreadState", "spreadContainer", "spreadCards", "capturedValue", "handleCaptured"],
+          "absent": ["title", "count", "tone", "card"]
+        },
+        "verdict": "correct",
+        "reason": "Root completion in shorthand spread syntax should expose sender view-model members, not target bindables or out-of-scope repeat locals."
+      },
+      {
+        "id": "spread-repeat-scope",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "repeat.for=\"card of spreadCards\" ...card",
+        "at": "card",
+        "atOccurrence": 2,
+        "watch": {
+          "present": ["card", "spreadState"],
+          "absent": ["title", "count", "tone"]
+        },
+        "verdict": "correct",
+        "reason": "Completion at the spread operand should include the active repeat local and root scope without flattening card members into root position."
+      },
+      {
+        "id": "captured-expression-scope",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "value.bind=\"capturedValue\"",
+        "occurrence": 1,
+        "at": "capturedValue",
+        "watch": {
+          "present": ["capturedValue", "isActive", "handleCaptured", "spreadState"],
+          "absent": ["label", "value"]
+        },
+        "verdict": "correct",
+        "reason": "Completion in a captured value must stay in sender scope rather than switching to the capture-shell receiver."
+      }
+    ],
+    "diagnostics": [
+      {
+        "id": "spread-capture-app-template",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "verdict": "correct",
+        "reason": "The app template should publish exactly the five framework-grounded spread/capture errors at authored target loci, with no false captured-listener $event diagnostics."
+      },
+      {
+        "id": "capture-shell-reusable-template",
+        "file": "src/capture-shell.html",
+        "verdict": "correct",
+        "reason": "A reusable capture receiver has a runtime parent when hydrated and must not inherit the app-root-only AUR9999 diagnostic from standalone template analysis."
+      },
+      {
+        "id": "capture-shell-inline-templates",
+        "file": "src/capture-shell.ts",
+        "verdict": "correct",
+        "reason": "Inline reusable capture templates likewise must not be diagnosed as app roots when their parent hydration context is not proven absent."
+      }
+    ],
+    "codeAction": [
+      {
+        "id": "reserved-element-shorthand",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "...$element=\"spreadState\"",
+        "at": "...$element",
+        "verdict": "correct",
+        "reason": "AUR0720 is framework syntax rejection without a uniquely safe rewrite, so no edit-backed quick fix should be invented."
+      },
+      {
+        "id": "app-root-attrs-spread",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "<div ...$attrs>",
+        "at": "...$attrs",
+        "verdict": "correct",
+        "reason": "Moving an app-root $attrs spread into a reusable component is architectural, not an exact local edit; no quick fix is the honest answer."
+      },
+      {
+        "id": "captured-template-controller",
+        "file": "src/template-spread-capture-semantics-app.html",
+        "anchor": "inner-gate.bind=\"showCapture\"",
+        "at": "inner-gate",
+        "verdict": "correct",
+        "reason": "AUR9998 exposes an unsupported captured template-controller child; removing or restructuring it requires developer intent, so the lane should return no fabricated edit."
+      }
+    ]
+  }
+}

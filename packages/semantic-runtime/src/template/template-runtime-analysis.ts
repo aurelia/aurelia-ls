@@ -62,6 +62,7 @@ import {
   I18nTranslationBindingIssueMaterializer,
 } from '../i18n/translation-binding-issues.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { ProductHandle } from '../kernel/handles.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import type { CompiledTemplateEmission } from './compiled-template-materializer.js';
@@ -81,6 +82,7 @@ import {
   type RuntimeRenderingEmission,
   type RuntimeRenderingMaterializationRequest,
 } from './runtime-rendering-materializer.js';
+import type { RuntimeBindingIssue } from './runtime-binding-issue.js';
 import { ContainerContextResolverRecordPolicy } from '../di/container-materializer.js';
 import type { TemplateRuntimeAnalysisProjectContext } from './template-runtime-analysis-context.js';
 import {
@@ -98,6 +100,8 @@ export class TemplateRuntimeAnalysisRequest {
     readonly projectKey: string | null,
     /** Custom element definition whose compiled template is being analyzed. */
     readonly definition: CustomElementDefinition,
+    /** App-root component definition for this compiler cohort; null when runtime ownership is not proven. */
+    readonly appRootDefinitionProductHandle: ProductHandle | null,
     /** Compiled template handoff produced by the compiler-front-door phase. */
     readonly compiledTemplate: CompiledTemplateEmission,
     /** Runtime AttrSyntax products needed by dynamic spread compilation. */
@@ -172,6 +176,15 @@ export class TemplateRuntimeAnalysisEmission {
     /** Nested timing profile for the runtime/checker half of template analysis. */
     readonly profile: TemplateRuntimeAnalysisProfile,
   ) {}
+
+  /** Runtime binding lifecycle issues across creation, renderer admission, bind, and plugin-owned bind phases. */
+  readRuntimeBindingIssues(): readonly RuntimeBindingIssue[] {
+    return [
+      ...this.runtimeRendering.bindingIssues,
+      ...this.controllerBind.bindingIssues,
+      ...this.i18nTranslationBinding.issues,
+    ];
+  }
 }
 
 /**
@@ -436,6 +449,8 @@ class TemplateRuntimeAnalysisFrame {
       resourceScope: this.request.compilerWorld.resourceScope,
       nodeObserverLocatorConfiguration: this.request.compilerWorld.nodeObserverLocatorConfiguration,
       stateStores: this.expressionWorld.stateStores,
+      isAppRootDefinition: this.request.definition.productHandle != null
+        && this.request.definition.productHandle === this.request.appRootDefinitionProductHandle,
     } satisfies RuntimeControllerBindMaterializationRequest);
   }
 
@@ -572,7 +587,7 @@ class TemplateRuntimeAnalysisFrame {
 
 function skippedControllerBind(phases: TemplateRuntimeAnalysisPhaseTiming[]): RuntimeControllerBindEmission {
   recordSkippedTemplateRuntimeAnalysisPhase(phases, 'controller-bind');
-  return new RuntimeControllerBindEmission([], [], [], [], []);
+  return new RuntimeControllerBindEmission([], [], [], [], [], []);
 }
 
 function skippedI18nTranslationBinding(phases: TemplateRuntimeAnalysisPhaseTiming[]): I18nTranslationBindingIssueEmission {

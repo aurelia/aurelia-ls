@@ -299,7 +299,7 @@ class AppRootCompilerWorldFrame {
       `app-root:${appRoot.productHandle}`,
       TemplateCompilerWorldKind.AppRoot,
       container,
-      appRoot,
+      appRoot.toReference(),
       resources,
       [...syntax.attributePatterns, ...registeredSyntax.attributePatterns],
       [...syntax.bindingCommands, ...registeredSyntax.bindingCommands],

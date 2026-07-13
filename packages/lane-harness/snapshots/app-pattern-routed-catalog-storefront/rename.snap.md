@@ -1212,7 +1212,7 @@ diff --git a/src/routes/item-list-route.html b/src/routes/item-list-route.html
 {
   "error": {
     "code": 0,
-    "message": "No source-backed template member is selected at this cursor."
+    "message": "Resource name 'repeat' is convention-derived or otherwise has no authored name token to rename."
   },
   "outcome": "error"
 }

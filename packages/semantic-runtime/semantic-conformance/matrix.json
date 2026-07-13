@@ -13016,6 +13016,249 @@
           ]
         }
       ]
+    },
+    {
+      "id": "template-spread-capture-semantics",
+      "fixture": "fixtures/pressure/template-spread-capture-semantics",
+      "aureliaDomain": "template-binding-syntax",
+      "capability": "spread-capture-semantics",
+      "domainAxis": "template-syntax",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/template-spread-capture-semantics-app.html",
+      "requirement": "Spread and capture lowering preserve compiler-world ownership, framework admission rules, runtime realization honesty, captured instruction scope, and exact authored source loci across public semantic products.",
+      "cases": [
+        {
+          "id": "spread-spellings-converge-on-bindable-property-flows",
+          "expectations": [
+            {
+              "name": "spread member flows",
+              "query": { "kind": "binding-data-flows", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "bindingKind": "spread-value", "targetProperty": "title", "sourceName": "spreadState.title", "sourceType": "string", "targetPropertyType": "string", "sourceToTargetAssignable": true }, "source": { "marker": "<spread-card ...spreadState>", "token": "spreadState" }, "count": 1 },
+                { "fields": { "bindingKind": "spread-value", "targetProperty": "count", "sourceName": "spreadState.count", "sourceType": "number", "targetPropertyType": "number", "sourceToTargetAssignable": true }, "source": { "marker": "<spread-card ...spreadState>", "token": "spreadState" }, "count": 1 },
+                { "fields": { "bindingKind": "spread-value", "targetProperty": "tone", "sourceName": "spreadState.tone", "sourceType": "string", "targetPropertyType": "string", "sourceToTargetAssignable": true }, "source": { "marker": "<spread-card ...spreadState>", "token": "spreadState" }, "count": 1 },
+                { "fields": { "bindingKind": "spread-value", "targetProperty": "title", "sourceName": "spreadState.title", "valueSiteKind": "spread-value" }, "source": { "marker": "<spread-card ...$bindables=\"spreadState\">", "token": "spreadState" }, "count": 1 },
+                { "fields": { "bindingKind": "spread-value", "targetProperty": "count", "sourceName": "spreadState.count", "valueSiteKind": "spread-value" }, "source": { "marker": "<spread-card ...$bindables=\"spreadState\">", "token": "spreadState" }, "count": 1 },
+                { "fields": { "bindingKind": "spread-value", "targetProperty": "tone", "sourceName": "spreadState.tone", "valueSiteKind": "spread-value" }, "source": { "marker": "<spread-card ...$bindables=\"spreadState\">", "token": "spreadState" }, "count": 1 },
+                { "fields": { "bindingKind": "spread-value", "targetProperty": "title", "sourceName": "spreadState.title", "valueSiteKind": "binding-command-value" }, "source": { "marker": "$bindables.spread=\"spreadState\"", "token": "spreadState" }, "count": 1 },
+                { "fields": { "bindingKind": "spread-value", "targetProperty": "count", "sourceName": "spreadState.count", "valueSiteKind": "binding-command-value" }, "source": { "marker": "$bindables.spread=\"spreadState\"", "token": "spreadState" }, "count": 1 },
+                { "fields": { "bindingKind": "spread-value", "targetProperty": "tone", "sourceName": "spreadState.tone", "valueSiteKind": "binding-command-value" }, "source": { "marker": "$bindables.spread=\"spreadState\"", "token": "spreadState" }, "count": 1 },
+                { "fields": { "bindingKind": "spread-value", "targetProperty": "title", "sourceName": "spreadState.title", "sourceType": "string" }, "source": { "marker": "spreadState | spreadIdentity", "token": "spreadState | spreadIdentity" }, "count": 1 },
+                { "fields": { "bindingKind": "spread-value", "targetProperty": "count", "sourceName": "spreadState.count", "sourceType": "number" }, "source": { "marker": "spreadState | spreadIdentity", "token": "spreadState | spreadIdentity" }, "count": 1 },
+                { "fields": { "bindingKind": "spread-value", "targetProperty": "tone", "sourceName": "spreadState.tone", "sourceType": "string" }, "source": { "marker": "spreadState | spreadIdentity", "token": "spreadState | spreadIdentity" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "spread-member-literal-and-repeat-sources-preserve-types",
+          "expectations": [
+            {
+              "name": "structured spread sources",
+              "query": { "kind": "binding-data-flows", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "targetProperty": "title", "sourceName": "spreadContainer.details.title", "sourceRootName": "spreadContainer", "sourceType": "string" }, "source": { "marker": "...spreadContainer.details", "token": "spreadContainer.details" }, "count": 1 },
+                { "fields": { "targetProperty": "count", "sourceName": "spreadContainer.details.count", "sourceRootName": "spreadContainer", "sourceType": "number" }, "source": { "marker": "...spreadContainer.details", "token": "spreadContainer.details" }, "count": 1 },
+                { "fields": { "targetProperty": "tone", "sourceName": "spreadContainer.details.tone", "sourceRootName": "spreadContainer", "sourceType": "string" }, "source": { "marker": "...spreadContainer.details", "token": "spreadContainer.details" }, "count": 1 },
+                { "fields": { "targetProperty": "title", "sourceName": "title", "sourceType": "string" }, "source": { "marker": "{ title: spreadState.title, count: spreadState.count, tone: spreadState.tone }", "token": "{ title: spreadState.title, count: spreadState.count, tone: spreadState.tone }" }, "count": 1 },
+                { "fields": { "targetProperty": "count", "sourceName": "count", "sourceType": "number" }, "source": { "marker": "{ title: spreadState.title, count: spreadState.count, tone: spreadState.tone }", "token": "{ title: spreadState.title, count: spreadState.count, tone: spreadState.tone }" }, "count": 1 },
+                { "fields": { "targetProperty": "title", "sourceName": "card.title", "sourceRootName": "card", "sourceType": "string" }, "source": { "marker": "repeat.for=\"card of spreadCards\" ...card", "token": "card", "occurrence": 2 }, "count": 1 },
+                { "fields": { "targetProperty": "count", "sourceName": "card.count", "sourceRootName": "card", "sourceType": "number" }, "source": { "marker": "repeat.for=\"card of spreadCards\" ...card", "token": "card", "occurrence": 2 }, "count": 1 },
+                { "fields": { "targetProperty": "tone", "sourceName": "card.tone", "sourceRootName": "card", "sourceType": "string" }, "source": { "marker": "repeat.for=\"card of spreadCards\" ...card", "token": "card", "occurrence": 2 }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "spread-targets-use-property-names-not-aliases",
+          "expectations": [
+            {
+              "name": "property matching",
+              "query": { "kind": "binding-data-flows", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "targetProperty": "title", "sourceName": "aliasShaped.title", "sourceType": "string" }, "source": { "marker": "...aliasShaped", "token": "aliasShaped" }, "count": 1 },
+                { "fields": { "targetProperty": "internal", "sourceName": "spreadState.internal" }, "source": { "marker": "<spread-card ...spreadState>", "token": "spreadState" }, "absent": true },
+                { "fields": { "targetProperty": "accent-tone" }, "source": { "marker": "...aliasShaped", "token": "aliasShaped" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "spread-key-realization-is-conditional",
+          "expectations": [
+            {
+              "name": "runtime key admission",
+              "query": { "kind": "binding-data-flows", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "targetProperty": "count", "sourceName": "aliasShaped.count" }, "source": { "marker": "...aliasShaped", "token": "aliasShaped" }, "absent": true },
+                { "fields": { "targetProperty": "tone", "sourceName": "aliasShaped.tone" }, "source": { "marker": "...aliasShaped", "token": "aliasShaped" }, "absent": true },
+                { "fields": { "targetProperty": "title", "sourceName": "nullableSpread.title", "sourceType": "string" }, "source": { "marker": "...nullableSpread", "token": "nullableSpread" }, "count": 1 },
+                { "fields": { "targetProperty": "count", "sourceName": "nullableSpread.count", "sourceType": "number" }, "source": { "marker": "...nullableSpread", "token": "nullableSpread" }, "count": 1 },
+                { "fields": { "sourceRootName": "primitiveSpread" }, "source": { "marker": "...primitiveSpread", "token": "primitiveSpread" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "spread-framework-errors-use-exact-authored-targets",
+          "expectations": [
+            {
+              "name": "spread diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 5 },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0720", "phase": "attribute-classification" }, "source": { "marker": "...$element=\"spreadState\"", "token": "...$element" }, "count": 1 },
+                { "fields": { "diagnosticKind": "runtime-renderer-framework-error", "frameworkErrorCode": "AUR0820", "phase": "render" }, "source": { "marker": "$element.spread=\"spreadState\"", "token": "$element" }, "count": 1 },
+                { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0720", "phase": "attribute-classification" }, "source": { "marker": "<div ...$bindables=\"spreadState\">", "token": "...$bindables" }, "count": 1 },
+                { "fields": { "diagnosticKind": "runtime-binding-framework-error", "frameworkErrorCode": "AUR9999", "phase": "spread-bind" }, "source": { "marker": "<div ...$attrs>", "token": "...$attrs" }, "count": 1 },
+                { "fields": { "diagnosticKind": "runtime-binding-framework-error", "frameworkErrorCode": "AUR9998", "phase": "spread-child-admission" }, "source": { "marker": "inner-gate.bind=\"showCapture\"", "token": "inner-gate.bind=\"showCapture\"" }, "count": 1 },
+                { "source": { "marker": "handleCaptured($event)", "markerOccurrence": 1, "token": "$event" }, "absent": true },
+                { "source": { "marker": "handleLabelEvent($event)", "markerOccurrence": 1, "token": "$event" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "reusable-capture-receivers-are-not-app-roots",
+          "expectations": [
+            {
+              "name": "external template",
+              "query": { "kind": "template-diagnostics", "sourceFile": "src/capture-shell.html", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "frameworkErrorCode": "AUR9999" }, "absent": true }
+              ]
+            },
+            {
+              "name": "inline templates",
+              "query": { "kind": "template-diagnostics", "sourceFile": "src/capture-shell.ts", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "frameworkErrorCode": "AUR9999" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "captured-instructions-use-captured-expression-scope",
+          "expectations": [
+            {
+              "name": "captured data flows",
+              "query": { "kind": "binding-data-flows", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "bindingKind": "property", "direction": "two-way", "valueSiteKind": "captured-value", "sourceName": "capturedValue", "sourceType": "string", "targetProperty": "value", "targetPropertyType": "string" }, "source": { "marker": "value.bind=\"capturedValue\"", "markerOccurrence": 1, "token": "value.bind=\"capturedValue\"" }, "count": 1 },
+                { "fields": { "bindingKind": "attribute", "valueSiteKind": "captured-value", "sourceName": "isActive", "sourceType": "boolean", "targetProperty": "active" }, "source": { "marker": "active.class=\"isActive\"", "markerOccurrence": 1, "token": "active.class=\"isActive\"" }, "count": 1 },
+                { "fields": { "bindingKind": "listener", "valueSiteKind": "captured-value", "sourceName": "handleCaptured($event)", "sourceType": "void", "targetProperty": "click" }, "source": { "marker": "click.trigger=\"handleCaptured($event)\"", "markerOccurrence": 1, "token": "click.trigger=\"handleCaptured($event)\"" }, "count": 1 },
+                { "fields": { "bindingKind": "listener", "valueSiteKind": "captured-value", "sourceName": "handleLabelEvent($event)", "sourceType": "void", "targetProperty": "label" }, "source": { "marker": "label.trigger=\"handleLabelEvent($event)\"", "markerOccurrence": 1, "token": "label.trigger=\"handleLabelEvent($event)\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "captured-target-operations-preserve-runtime-resolution",
+          "expectations": [
+            {
+              "name": "captured target operations",
+              "query": { "kind": "binding-target-operations", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "bindingKind": "attribute", "targetAttribute": "class", "targetProperty": "active", "operationKind": "class-list-toggle" }, "source": { "marker": "active.class=\"isActive\"", "markerOccurrence": 1, "token": "active.class=\"isActive\"" }, "count": 1 },
+                { "fields": { "bindingKind": "listener", "targetAttribute": "click", "targetProperty": "click", "operationKind": "event-listener-add" }, "source": { "marker": "click.trigger=\"handleCaptured($event)\"", "markerOccurrence": 1, "token": "click" }, "count": 1 },
+                { "fields": { "targetAttribute": "data-note", "targetProperty": "data-note", "staticValue": "clean-captured-note", "operationKind": "attribute-set" }, "source": { "marker": "data-note=\"clean-captured-note\"", "token": "data-note=\"clean-captured-note\"" }, "count": 1 },
+                { "fields": { "targetKind": "controller-view-model", "targetAttribute": "input-mark", "targetProperty": "value", "staticValue": "receiver-local-mark", "operationKind": "property-set" }, "source": { "marker": "input-mark=\"receiver-local-mark\"", "token": "input-mark=\"receiver-local-mark\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "capture-exclusions-remain-in-sender-compilation",
+          "expectations": [
+            {
+              "name": "ordinary excluded bindings",
+              "query": { "kind": "binding-data-flows", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "bindingKind": "property", "valueSiteKind": "binding-command-value", "sourceName": "showCapture", "targetKind": "controller-view-model", "targetProperty": "value" }, "source": { "marker": "if.bind=\"showCapture\"", "token": "if.bind=\"showCapture\"" }, "count": 1 },
+                { "fields": { "bindingKind": "property", "valueSiteKind": "binding-command-value", "sourceName": "shellLabel", "targetKind": "controller-view-model", "targetProperty": "label" }, "source": { "marker": "label.bind=\"shellLabel\"", "token": "label.bind=\"shellLabel\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nested-capture-follows-ancestor-hydration-context",
+          "expectations": [
+            {
+              "name": "nested transfer operations",
+              "query": { "kind": "binding-target-operations", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "targetKind": "node", "targetAttribute": "input-mark", "targetProperty": "input-mark", "staticValue": "nested-mark", "operationKind": "attribute-set" }, "source": { "marker": "input-mark=\"nested-mark\"", "token": "input-mark=\"nested-mark\"" }, "count": 1 },
+                { "fields": { "targetKind": "controller-view-model", "targetAttribute": "input-mark", "targetProperty": "value", "operationKind": "property-set" }, "source": { "marker": "input-mark=\"receiver-local-mark\"", "token": "input-mark=\"receiver-local-mark\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "nested transfer flow",
+              "query": { "kind": "binding-data-flows", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "bindingKind": "property", "valueSiteKind": "captured-value", "sourceName": "capturedValue", "targetProperty": "value", "direction": "two-way" }, "source": { "marker": "<nested-capture-shell value.bind=\"capturedValue\"", "token": "value.bind=\"capturedValue\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "capture-predicate-open-boundary-is-explicit",
+          "expectations": [
+            {
+              "name": "predicate seams",
+              "query": { "kind": "open-seams", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "summary": "Custom-element capture predicate execution is not yet projected into attribute classification." }, "source": { "marker": "class=\"host-class\"", "token": "class=\"host-class\"" }, "count": 1 },
+                { "fields": { "summary": "Custom-element capture predicate execution is not yet projected into attribute classification." }, "source": { "marker": "data-note=\"filtered-note\"", "token": "data-note=\"filtered-note\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "capture-predicate-execution",
+          "expectations": [
+            {
+              "name": "predicate decisions",
+              "query": { "kind": "binding-target-operations", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "source": { "marker": "class=\"host-class\"", "token": "class=\"host-class\"" }, "absent": true },
+                { "fields": { "targetAttribute": "data-note", "targetProperty": "data-note", "staticValue": "filtered-note", "operationKind": "attribute-set" }, "source": { "marker": "data-note=\"filtered-note\"", "token": "data-note=\"filtered-note\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "runtime-compiled-products-rejoin-public-template-projections",
+          "expectations": [
+            {
+              "name": "dynamic semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "<spread-card ...spreadState>", "token": "spreadState" }, "count": 1 },
+                { "fields": { "tokenType": "function" }, "source": { "marker": "click.trigger=\"handleCaptured($event)\"", "markerOccurrence": 1, "token": "handleCaptured" }, "count": 1 },
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "click.trigger=\"handleCaptured($event)\"", "markerOccurrence": 1, "token": "$event" }, "count": 1 },
+                { "fields": { "tokenType": "aureliaAttribute" }, "source": { "marker": "input-mark=\"receiver-local-mark\"", "token": "input-mark" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "compiler-world-cohorts-own-recursive-controller-graphs",
+          "expectations": [
+            {
+              "name": "cohort-local controllers",
+              "query": { "kind": "runtime-controllers", "sourceFile": false, "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "renderingDefinitionName": "capture-shell", "definitionName": "capture-shell", "creationKind": "root-custom-element", "parentControllerName": null, "runtimeBindings": 3, "childControllers": 2 }, "count": 1 },
+                { "fields": { "renderingDefinitionName": "nested-capture-shell", "definitionName": "nested-capture-shell", "creationKind": "root-custom-element", "parentControllerName": null, "childControllers": 1 }, "count": 1 },
+                { "fields": { "renderingDefinitionName": "nested-capture-shell", "definitionName": "capture-shell", "creationKind": "custom-element", "parentControllerName": "nested-capture-shell", "runtimeBindings": 3, "childControllers": 2 }, "count": 1 },
+                { "fields": { "renderingDefinitionName": "nested-capture-shell", "definitionName": "input-mark", "creationKind": "custom-attribute", "parentControllerName": "capture-shell" }, "count": 1 },
+                { "fields": { "renderingDefinitionName": "nested-capture-shell", "definitionName": "inner-gate", "creationKind": "template-controller", "parentControllerName": "capture-shell" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

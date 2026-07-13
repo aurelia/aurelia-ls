@@ -490,6 +490,7 @@ export class SpreadValueBindingInstruction {
     readonly target: '$bindables' | '$element',
     readonly value: string,
     readonly expressionProductHandle: ProductHandle | null,
+    readonly targetSourceAddressHandle: AddressHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}

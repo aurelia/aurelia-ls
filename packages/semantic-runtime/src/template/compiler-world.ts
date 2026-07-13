@@ -382,6 +382,8 @@ export const enum TemplateCompilerSpreadCompileState {
   Compiled = 'compiled',
   /** Runtime spread compile is recognized but still open in the semantic model. */
   Open = 'open',
+  /** Runtime spread compile reached a closed framework refusal and emitted its owning issue. */
+  Invalid = 'invalid',
 }
 
 /** Runtime-shaped TemplateCompiler.compileSpread request. */
@@ -420,6 +422,7 @@ export class TemplateCompilerSpreadCompileResult {
     /** Every dynamic instruction allocated during spread compilation, including wrapped inner instructions. */
     readonly createdInstructions: readonly TemplateInstruction[],
     readonly summary: string | null,
+    readonly reasonKinds: readonly OpenSeamReasonKind[],
   ) {}
 
   static noCapturedAttributes(request: TemplateCompilerSpreadCompileRequest): TemplateCompilerSpreadCompileResult {
@@ -429,12 +432,14 @@ export class TemplateCompilerSpreadCompileResult {
       [],
       [],
       null,
+      [],
     );
   }
 
   static open(
     request: TemplateCompilerSpreadCompileRequest,
     summary: string,
+    reasonKinds: readonly OpenSeamReasonKind[] = [],
   ): TemplateCompilerSpreadCompileResult {
     return new TemplateCompilerSpreadCompileResult(
       TemplateCompilerSpreadCompileState.Open,
@@ -442,6 +447,21 @@ export class TemplateCompilerSpreadCompileResult {
       [],
       [],
       summary,
+      reasonKinds,
+    );
+  }
+
+  static invalid(
+    request: TemplateCompilerSpreadCompileRequest,
+    summary: string,
+  ): TemplateCompilerSpreadCompileResult {
+    return new TemplateCompilerSpreadCompileResult(
+      TemplateCompilerSpreadCompileState.Invalid,
+      request,
+      [],
+      [],
+      summary,
+      [],
     );
   }
 
@@ -456,6 +476,7 @@ export class TemplateCompilerSpreadCompileResult {
       instructions,
       createdInstructions,
       null,
+      [],
     );
   }
 }

@@ -106,6 +106,20 @@
       "failureBucket": "listener-modifier-completion-vocabulary",
       "firstObserved": "2026-07-13",
       "rationale": "The parser and lowered instruction now preserve exact modifier text and source, but completion lacks an event-family/registered-service modifier candidate kind and therefore cannot offer prevent, stop, or keyboard modifiers honestly."
+    },
+    {
+      "assertionId": "template-spread-capture-semantics/spread-key-realization-is-conditional",
+      "status": "known-gap",
+      "failureBucket": "spread-value-conditional-realization-vocabulary",
+      "firstObserved": "2026-07-13",
+      "rationale": "Aurelia creates each SpreadValueBinding only when the runtime source is a non-null object and the bindable property key is present. Semantic-runtime currently emits every target bindable as an ordinary flow, loses the non-null member shape of nullable sources, and invents missing-member flows for absent and primitive keys instead of distinguishing potential target enumeration from conditional runtime realization."
+    },
+    {
+      "assertionId": "template-spread-capture-semantics/capture-predicate-execution",
+      "status": "known-gap",
+      "failureBucket": "capture-predicate-execution-not-projected",
+      "firstObserved": "2026-07-13",
+      "rationale": "Aurelia executes a custom element's capture predicate for each non-bindable attribute. Semantic-runtime preserves an exact open seam for the callable boundary but does not yet execute or project the known predicate, so it cannot reject class while admitting data-note into dynamic spread compilation."
     }
   ]
 }

@@ -50,7 +50,7 @@
         "newName": "loop",
         "verdict": "correct",
         "reason": "",
-        "note": "NEW 2026-07-07. Refusal probe for a framework-owned template-controller resource token. F2 on repeat in repeat.for should not synthesize edits against Aurelia's built-in Repeat resource or the .for binding command; the repeat local remains covered by the separate repeat-local-item probe."
+        "note": "NEW 2026-07-07. Refusal probe for a framework-owned template-controller resource token. UPDATED 2026-07-13: F2 still produces no edits, but resource dispatch now identifies the active repeat token and explains that its synthetic catalog definition has no authored name token; it does not fall back to the less accurate no-member-selected refusal. The .for binding command and repeat local remain separate surfaces."
       },
       {
         "id": "let-local-item-target",
@@ -361,7 +361,7 @@
         "at": "repeat",
         "verdict": "correct",
         "reason": "",
-        "note": "NEW 2026-07-07. Framework-owned template-controller resource cursor. VERDICT (2026-07-07): null is an honest baseline matching definition; built-in resources are synthetic catalog entries without a path-backed reference context."
+        "note": "NEW 2026-07-07. Framework-owned template-controller resource cursor. UPDATED 2026-07-13: definition remains null because the built-in catalog entry has no authored path, while document highlights correctly return the two repeat usage tokens in this file. Usage closure does not require inventing a declaration location."
       },
       {
         "id": "let-local-item-target",

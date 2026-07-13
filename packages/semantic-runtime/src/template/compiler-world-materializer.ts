@@ -38,7 +38,7 @@ import type { BuiltInRuntimeRendererEmission } from './runtime-renderer-catalog-
 import {
   TemplateCompilerFrameworkErrorCode,
 } from './framework-error-code.js';
-import type { AppRoot } from '../configuration/app-root.js';
+import type { AppRootReference } from '../configuration/app-root.js';
 import type { Container } from '../di/container.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import {
@@ -84,7 +84,7 @@ export class TemplateCompilerWorldConstructionRequest {
     /** Container whose DI/resource state feeds this compiler world. */
     readonly container: Container,
     /** AppRoot that owns this compiler world, if known. */
-    readonly appRoot: AppRoot | null,
+    readonly appRoot: AppRootReference | null,
     /** Non-syntax resources already selected as visible to this compiler world. */
     readonly resources: readonly TemplateVisibleResource[],
     /** Attribute-pattern executables selected as visible to this compiler world. */
@@ -649,7 +649,7 @@ export class TemplateCompilerWorldMaterializer {
       handles.worldProductHandle,
       handles.worldIdentityHandle,
       input.worldKind,
-      input.appRoot?.toReference() ?? null,
+      input.appRoot,
       input.container.toReference(),
       resourceScope.productHandle,
       services,

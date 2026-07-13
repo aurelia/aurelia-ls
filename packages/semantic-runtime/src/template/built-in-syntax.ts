@@ -1171,7 +1171,8 @@ export class SpreadValueBindingCommand {
         info.syntax.target as '$bindables' | '$element',
         info.syntax.rawValue,
         context.parsePropertyExpression(info.syntax.rawValue, info, null),
-        instructionSource(info),
+        info.syntax.targetSourceAddressHandle,
+        info.expressionSourceAddressHandle ?? instructionSource(info),
       ),
     ]);
   }

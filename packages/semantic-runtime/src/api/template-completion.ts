@@ -1543,10 +1543,7 @@ function runtimeBindingIssueDiagnosticRowsForSelection(
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
-  const issues = [
-    ...selection.resource.runtimeAnalysis.runtimeRendering.bindingIssues,
-    ...selection.resource.runtimeAnalysis.i18nTranslationBinding.issues,
-  ];
+  const issues = selection.resource.runtimeAnalysis.readRuntimeBindingIssues();
   return issues.flatMap((issue) => {
     const source = sourceReferenceForRuntimeBindingIssue(store, issue);
     if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {

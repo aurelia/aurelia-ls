@@ -193,6 +193,8 @@ export const enum RuntimeRendererSpreadCompileState {
   Compiled = 'compiled',
   /** Captured-attribute compilation is recognized but not fully materialized. */
   Open = 'open',
+  /** Captured-attribute compilation reached a closed framework refusal already published as an issue. */
+  Invalid = 'invalid',
 }
 
 export interface RuntimeRendererSpreadCompileRequest {
@@ -239,6 +241,17 @@ export class RuntimeRendererSpreadCompileResult {
       summary,
       addressHandle,
       reasonKinds,
+    );
+  }
+
+  static invalid(summary: string, addressHandle: AddressHandle | null): RuntimeRendererSpreadCompileResult {
+    return new RuntimeRendererSpreadCompileResult(
+      RuntimeRendererSpreadCompileState.Invalid,
+      [],
+      [],
+      summary,
+      addressHandle,
+      [],
     );
   }
 
@@ -1755,7 +1768,7 @@ function renderSpreadValueRuntimeBinding(input: RuntimeRendererInvocation): Runt
       RuntimeRendererIssueKind.SpreadingInvalidTarget,
       `Invalid spread target ${instruction.target}.`,
       RuntimeHtmlRendererFrameworkErrorCode.SpreadingInvalidTarget,
-      instruction.sourceAddressHandle,
+      instruction.targetSourceAddressHandle ?? instruction.sourceAddressHandle,
     );
     return RuntimeRendererRenderResult.none();
   }

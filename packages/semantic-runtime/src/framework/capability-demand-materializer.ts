@@ -490,13 +490,19 @@ class SourceServiceApiAdmissionContext {
     if (rootSpan == null) {
       return null;
     }
-    const containerHandles = [
+    const matchingResources = [
       ...this.templates.resources,
       ...this.templates.authoringResources,
-    ].flatMap((resource) => {
-      if (!resourceDefinitionContainsSpan(this.store, this.typeSystem, resource, rootSpan)) {
-        return [];
-      }
+    ].filter((resource) =>
+      resourceDefinitionContainsSpan(this.store, this.typeSystem, resource, rootSpan)
+    );
+    const appRootResources = matchingResources.filter((resource) =>
+      resource.compilation.definition.productHandle != null
+      && resource.compilation.definition.productHandle === resource.compilation.appRootDefinitionProductHandle
+    );
+    // App.app({ component }) proves activation in this cohort; compiler visibility in sibling worlds does not.
+    const activationResources = appRootResources.length > 0 ? appRootResources : matchingResources;
+    const containerHandles = activationResources.flatMap((resource) => {
       const containerIdentityHandle = this.chainFacts.containerIdentityHandleForProduct(
         resource.compilation.compilerWorld.container.productHandle,
       );

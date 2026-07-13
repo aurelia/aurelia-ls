@@ -34,8 +34,14 @@ import {
   BindingScopeOwnerKind,
   type BindingScope,
 } from '../configuration/scope.js';
-import { bindingScopeForTemplateExpressionParse } from '../template/template-expression-selection.js';
 import {
+  bindingScopeForTemplateExpressionParse,
+  capturedAttributeSyntaxForDynamicInstruction,
+  templateExpressionParsesForResource,
+  templateInstructionsForResource,
+} from '../template/template-expression-selection.js';
+import {
+  HydrateAttributeInstruction,
   ListenerBindingInstruction,
   RefBindingInstruction,
   TemplateInstructionKind,
@@ -91,6 +97,7 @@ function templateResourceSemanticTokenRows(
   const syntaxByProduct = new Map(resource.compilation.authoredAttributeSyntaxes.map((syntax) => [syntax.productHandle, syntax]));
 
   rows.push(...instructionSemanticTokenRows(store, resource, elementsByProduct, attributesByProduct, syntaxByAttributeProduct, handles));
+  rows.push(...dynamicInstructionSyntaxSemanticTokenRows(store, resource, handles));
   rows.push(...classificationSemanticTokenRows(store, resource, attributesByProduct, syntaxByProduct, handles));
   rows.push(...multiBindingSegmentSemanticTokenRows(store, resource, syntaxByProduct, handles));
   rows.push(...expressionSemanticTokenRows(store, resource, handles));
@@ -147,7 +154,7 @@ function instructionSemanticTokenRows(
   handles: boolean,
 ): readonly SemanticTemplateSemanticTokenRow[] {
   const rows: SemanticTemplateSemanticTokenRow[] = [];
-  for (const instruction of resource.compilation.compiledTemplate.instructions) {
+  for (const instruction of templateInstructionsForResource(resource)) {
     switch (instruction.instructionKind) {
       case TemplateInstructionKind.HydrateElement:
         if (instruction.definitionProductHandle == null) {
@@ -183,6 +190,48 @@ function instructionSemanticTokenRows(
     }
   }
   return rows;
+}
+
+function dynamicInstructionSyntaxSemanticTokenRows(
+  store: KernelStore,
+  resource: TemplateResourceEmission,
+  handles: boolean,
+): readonly SemanticTemplateSemanticTokenRow[] {
+  return resource.runtimeAnalysis.runtimeRendering.dynamicInstructions.flatMap((instruction) => {
+    const syntax = capturedAttributeSyntaxForDynamicInstruction(store, instruction);
+    if (syntax == null) {
+      return [];
+    }
+    const rows: SemanticTemplateSemanticTokenRow[] = [];
+    const commandSource = commandSourceForSyntax(store, syntax);
+    if (commandSource != null) {
+      rows.push(tokenRow(
+        'aureliaCommand',
+        [],
+        resource.compilation.definition.name,
+        commandSource,
+        instruction.productHandle,
+        syntax.commandSourceAddressHandle,
+        handles,
+      ));
+    }
+    const targetSource = instruction instanceof HydrateAttributeInstruction
+      && instruction.definitionProductHandle != null
+      ? targetSourceForSyntax(store, syntax)
+      : null;
+    if (targetSource != null) {
+      rows.push(tokenRow(
+        'aureliaAttribute',
+        [],
+        resource.compilation.definition.name,
+        targetSource,
+        instruction.productHandle,
+        syntax.targetSourceAddressHandle,
+        handles,
+      ));
+    }
+    return rows;
+  });
 }
 
 function listenerSemanticTokenRows(
@@ -336,10 +385,7 @@ function expressionSemanticTokenRows(
   handles: boolean,
 ): readonly SemanticTemplateSemanticTokenRow[] {
   const rows: SemanticTemplateSemanticTokenRow[] = [];
-  const parses = [
-    ...resource.compilation.valueSites.parses,
-    ...resource.compilation.bindingCommandLowering.expressionParses,
-  ];
+  const parses = templateExpressionParsesForResource(resource);
   for (const parse of parses) {
     const parseSource = semanticExactSourceReference(describeAddress(store, parse.sourceAddressHandle));
     const root = expressionRoot(parse.result);

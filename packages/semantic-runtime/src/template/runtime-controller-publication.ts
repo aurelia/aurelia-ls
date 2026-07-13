@@ -186,7 +186,9 @@ export class RuntimeControllerPublicationMaterializer {
     projectContext: TemplateRuntimeAnalysisProjectContext,
     source: RuntimeRenderingSourceSet,
   ): SemanticClaim | null {
-    const compiledTemplateProductHandle = projectContext.readCompiledTemplateForDefinition(controller.definitionProductHandle);
+    const compiledTemplateProductHandle = projectContext
+      .readResourceForDefinition(controller.definitionProductHandle)
+      ?.compiledTemplateProductHandle ?? null;
     return compiledTemplateProductHandle == null
       ? null
       : new SemanticClaim(

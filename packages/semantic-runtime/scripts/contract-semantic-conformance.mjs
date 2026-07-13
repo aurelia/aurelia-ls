@@ -516,7 +516,9 @@ async function answerForExpectation(context, runtime, query, expectation) {
 
 function buildQueryForExpectation(assertion, expectation, context) {
   const queryKind = semanticQueryKind(expectation.query?.kind ?? expectation.kind);
-  const sourceFilePath = absoluteFixturePath(context.fixtureRoot, expectation.query?.sourceFile ?? assertion.sourceFile);
+  const querySourceFile = expectation.query?.sourceFile;
+  const sourceFile = querySourceFile === false ? assertion.sourceFile : querySourceFile ?? assertion.sourceFile;
+  const sourceFilePath = absoluteFixturePath(context.fixtureRoot, sourceFile);
   const query = {
     kind: queryKind,
     sourceFilePath,
@@ -527,14 +529,14 @@ function buildQueryForExpectation(assertion, expectation, context) {
     ...(expectation.query?.options ?? {}),
   };
   const catalogRow = catalogRowFor(queryKind);
-  if (catalogRow?.supportsSourceFile === true && expectation.query?.sourceFile !== false) {
+  if (catalogRow?.supportsSourceFile === true && querySourceFile !== false) {
     query.sourceFile = { filePath: sourceFilePath };
   }
   const cursorSpec = expectation.query?.cursor === false
     ? null
     : expectation.query?.cursor ?? assertion.cursor ?? null;
   if (cursorSpec != null) {
-    query.cursor = cursorForSpec(context.fixtureRoot, expectation.query?.sourceFile ?? assertion.sourceFile, cursorSpec);
+    query.cursor = cursorForSpec(context.fixtureRoot, sourceFile, cursorSpec);
   }
   return query;
 }

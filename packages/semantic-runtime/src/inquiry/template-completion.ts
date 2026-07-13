@@ -101,8 +101,12 @@ import type {
 } from '../template/value-site.js';
 import { TemplateValueSiteKind } from '../template/value-site.js';
 import type { TemplateSource } from '../template/compilation-unit.js';
-import type { AttributeClassification, AttributeSyntax } from '../template/attribute-syntax.js';
-import { HydrateElementInstruction } from '../template/instruction-ir.js';
+import {
+  AttributeClassificationKind,
+  type AttributeClassification,
+  type AttributeSyntax,
+} from '../template/attribute-syntax.js';
+import { HydrateAttributeInstruction, HydrateElementInstruction } from '../template/instruction-ir.js';
 import { namedRefTargetController } from '../template/runtime-ref-target.js';
 import {
   HtmlAttribute,
@@ -118,6 +122,7 @@ import {
   bindingSourceContextProjectionForTemplateExpressionParseAtOffset,
   bindingScopeForTemplateExpressionParse,
   templateExpressionParsesForResource,
+  templateInstructionsForResource,
   templateScopeRangeAddressHandle,
   templateValueSitesForResource,
 } from '../template/template-expression-selection.js';
@@ -2567,6 +2572,16 @@ function classifyTemplateCompletionSite(
   if (isBindingCommandNameOffset(store, offset, syntax)) {
     return TemplateCompletionSiteKind.BindingCommandName;
   }
+
+  if (valueSite != null && expressionResult != null) {
+    if (!valueSiteOwnsExpressionOffset(store, valueSite, expressionResult, offset)) {
+      return valueSite.attribute == null
+        ? TemplateCompletionSiteKind.Unknown
+        : TemplateCompletionSiteKind.AttributeValue;
+    }
+    return completionSiteForExpressionOffset(expressionResult, offset);
+  }
+
   if (cursorTouchesSpan(sourceSpanFor(store, syntax?.nameSourceAddressHandle ?? null), offset)) {
     return TemplateCompletionSiteKind.AttributeName;
   }
@@ -2575,15 +2590,7 @@ function classifyTemplateCompletionSite(
   }
 
   if (valueSite != null) {
-    if (expressionResult == null) {
-      return TemplateCompletionSiteKind.AttributeValue;
-    }
-    if (!valueSiteOwnsExpressionOffset(store, valueSite, expressionResult, offset)) {
-      return valueSite.attribute == null
-        ? TemplateCompletionSiteKind.Unknown
-        : TemplateCompletionSiteKind.AttributeValue;
-    }
-    return completionSiteForExpressionOffset(expressionResult, offset);
+    return TemplateCompletionSiteKind.AttributeValue;
   }
 
   if (htmlAttribute != null) {
@@ -2983,11 +2990,18 @@ function selectedDefinitionForCursor(
   if (attributePattern != null) {
     return attributePattern;
   }
+  const dynamicAttribute = dynamicAttributeDefinitionForCursor(store, resource, syntax, offset);
+  if (dynamicAttribute != null) {
+    return dynamicAttribute;
+  }
   const elementSelection = definitionForElement(resource, activeElement);
   const classifiedProductHandle = classification?.bindable?.reference.ownerDefinitionProductHandle
     ?? classification?.resource?.definitionProductHandle
     ?? null;
-  if (classifiedProductHandle != null) {
+  if (
+    classifiedProductHandle != null
+    && classificationSelectsAuthoredResource(classification)
+  ) {
     const matchedName = classification?.resource?.definitionProductHandle === classifiedProductHandle
       ? classification.resource.resourceKind === ResourceDefinitionKind.CustomElement
         ? elementSelection?.matchedName ?? classification.resource.name
@@ -2998,6 +3012,45 @@ function selectedDefinitionForCursor(
     return { productHandle: classifiedProductHandle, matchedName };
   }
   return elementSelection ?? definitionForDeclarationCursor(store, resource, offset);
+}
+
+function classificationSelectsAuthoredResource(
+  classification: AttributeClassification | null,
+): boolean {
+  switch (classification?.classificationKind) {
+    case AttributeClassificationKind.Bindable:
+    case AttributeClassificationKind.BindingCommand:
+    case AttributeClassificationKind.CustomAttribute:
+    case AttributeClassificationKind.TemplateController:
+      return true;
+    default:
+      return false;
+  }
+}
+
+function dynamicAttributeDefinitionForCursor(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  syntax: AttributeSyntax | null,
+  offset: number,
+): TemplateDefinitionCursorSelection | null {
+  if (
+    syntax == null
+    || !cursorTouchesSpan(sourceSpanFor(store, syntax.targetSourceAddressHandle), offset)
+  ) {
+    return null;
+  }
+  const instructions = resource.runtimeAnalysis.runtimeRendering.dynamicInstructions.filter((candidate): candidate is HydrateAttributeInstruction =>
+    candidate instanceof HydrateAttributeInstruction
+    && candidate.attribute.productHandle === syntax.attribute.productHandle
+    && candidate.definitionProductHandle != null
+  );
+  const definitions = new Set(instructions.map((instruction) => instruction.definitionProductHandle));
+  if (definitions.size !== 1) {
+    return null;
+  }
+  const instruction = instructions[0]!;
+  return { productHandle: instruction.definitionProductHandle!, matchedName: instruction.attributeName };
 }
 
 function namedRefTargetDefinitionForCursor(
@@ -3113,7 +3166,7 @@ function definitionForElement(
   if (activeElement == null) {
     return null;
   }
-  const instruction = resource.compilation.compiledTemplate.instructions.find((candidate) =>
+  const instruction = templateInstructionsForResource(resource).find((candidate) =>
     candidate instanceof HydrateElementInstruction
     && candidate.node.productHandle === activeElement.productHandle
   ) ?? null;

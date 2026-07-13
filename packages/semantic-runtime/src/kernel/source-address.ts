@@ -38,10 +38,14 @@ export interface SourcePathSpanSite {
 }
 
 export class SourceSpanAddressPublication {
+  readonly records: readonly KernelStoreRecord[];
+
   constructor(
     readonly handle: AddressHandle,
-    readonly records: readonly KernelStoreRecord[],
-  ) {}
+    readonly address: SourceSpanAddress,
+  ) {
+    this.records = [address];
+  }
 }
 
 export class SourceSpanEvidencePublication {
@@ -73,15 +77,13 @@ export function sourceSpanAddressForSite(
   const handle = store.handles.address(`${localKey}:source`);
   return new SourceSpanAddressPublication(
     handle,
-    [
-      new SourceSpanAddress(
-        handle,
-        site.sourceFileAddressHandle,
-        site.start,
-        site.end,
-        role,
-      ),
-    ],
+    new SourceSpanAddress(
+      handle,
+      site.sourceFileAddressHandle,
+      site.start,
+      site.end,
+      role,
+    ),
   );
 }
 

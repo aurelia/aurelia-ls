@@ -5,6 +5,7 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type {
+  AddressHandle,
   IdentityHandle,
   ProductHandle,
   ProvenanceHandle,
@@ -105,6 +106,7 @@ class ClassificationDecision {
     readonly bindingCommand: AttributeClassification['bindingCommand'],
     readonly bindable: TemplateBindableReference | null,
     readonly issue: TemplateCompilerIssueDraft | null = null,
+    readonly openReason: string | null = null,
   ) {}
 }
 
@@ -228,9 +230,7 @@ export class AttributeClassificationMaterializer {
         decision.issue.issueKind,
         decision.issue.message,
         decision.issue.frameworkErrorCode,
-        decision.issue.issueKind === TemplateCompilerIssueKind.UnknownBindingCommand
-          ? syntax.commandSourceAddressHandle ?? classification.sourceAddressHandle
-          : classification.sourceAddressHandle,
+        attributeClassificationIssueSource(syntax, classification, decision.issue.issueKind),
       );
     const claims = this.claimsForAttributeClassification(local, source, syntax, classification, decision);
     return new AttributeClassificationPublication(
@@ -259,6 +259,7 @@ export class AttributeClassificationMaterializer {
       decision.bindable,
       [],
       [],
+      decision.openReason,
     ), new MaterializedProduct(
       productHandle,
       KernelVocabulary.Template.AttributeClassification.key,
@@ -334,6 +335,22 @@ export class AttributeClassificationMaterializer {
       ],
       provenanceHandle,
     );
+  }
+}
+
+function attributeClassificationIssueSource(
+  syntax: AttributeSyntax,
+  classification: AttributeClassification,
+  issueKind: TemplateCompilerIssueKind,
+): AddressHandle | null {
+  switch (issueKind) {
+    case TemplateCompilerIssueKind.UnknownBindingCommand:
+      return syntax.commandSourceAddressHandle ?? classification.sourceAddressHandle;
+    case TemplateCompilerIssueKind.ReservedSpreadSyntax:
+    case TemplateCompilerIssueKind.ReservedBindableSyntax:
+      return syntax.targetSourceAddressHandle ?? classification.sourceAddressHandle;
+    default:
+      return classification.sourceAddressHandle;
   }
 }
 
@@ -505,7 +522,10 @@ function classifyCapture(
     return null;
   }
   if (captureKind === CustomElementCaptureKind.Predicate) {
-    return openDecision();
+    return openDecision(
+      null,
+      'Custom-element capture predicate execution is not yet projected into attribute classification.',
+    );
   }
   return new ClassificationDecision(
     AttributeClassificationKind.Captured,
@@ -534,8 +554,17 @@ function commandIgnoresAttributeName(
 
 function openDecision(
   bindingCommand: AttributeClassification['bindingCommand'] = null,
+  openReason: string | null = null,
 ): ClassificationDecision {
-  return new ClassificationDecision(AttributeClassificationKind.Open, null, null, bindingCommand, null);
+  return new ClassificationDecision(
+    AttributeClassificationKind.Open,
+    null,
+    null,
+    bindingCommand,
+    null,
+    null,
+    openReason,
+  );
 }
 
 function invalidDecision(

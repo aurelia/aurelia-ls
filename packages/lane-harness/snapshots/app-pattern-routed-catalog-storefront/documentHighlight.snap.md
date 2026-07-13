@@ -326,7 +326,34 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ```json
 {
   "outcome": "result",
-  "result": null
+  "result": [
+    {
+      "kind": 1,
+      "range": {
+        "end": {
+          "character": 24,
+          "line": 16
+        },
+        "start": {
+          "character": 18,
+          "line": 16
+        }
+      }
+    },
+    {
+      "kind": 1,
+      "range": {
+        "end": {
+          "character": 18,
+          "line": 24
+        },
+        "start": {
+          "character": 12,
+          "line": 24
+        }
+      }
+    }
+  ]
 }
 ```
 
@@ -334,8 +361,39 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "highlightCount": 0,
-  "highlights": []
+  "highlightCount": 2,
+  "highlights": [
+    {
+      "anomaly": null,
+      "kind": "text",
+      "range": {
+        "end": {
+          "character": 24,
+          "line": 16
+        },
+        "start": {
+          "character": 18,
+          "line": 16
+        }
+      },
+      "rangeText": "repeat"
+    },
+    {
+      "anomaly": null,
+      "kind": "text",
+      "range": {
+        "end": {
+          "character": 18,
+          "line": 24
+        },
+        "start": {
+          "character": 12,
+          "line": 24
+        }
+      },
+      "rangeText": "repeat"
+    }
+  ]
 }
 ```
 

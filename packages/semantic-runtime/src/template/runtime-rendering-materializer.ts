@@ -88,7 +88,10 @@ import {
   RuntimeBindingRenderContext,
   RuntimeRenderedInstructionRecorder,
 } from './runtime-rendered-instruction-recorder.js';
-import type { TemplateRuntimeAnalysisProjectContext } from './template-runtime-analysis-context.js';
+import type {
+  TemplateRuntimeAnalysisProjectContext,
+  TemplateRuntimeAnalysisResource,
+} from './template-runtime-analysis-context.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
@@ -103,6 +106,7 @@ import { RuntimeControllerCreationMaterializer } from './runtime-controller-crea
 import { RuntimeSpreadBindingCreator } from './runtime-spread-binding-creator.js';
 import type { RuntimeControllerIssue } from './runtime-controller-issue.js';
 import type { RuntimeBindingIssue } from './runtime-binding-issue.js';
+import type { TemplateCompilerIssue } from './compiler-issue.js';
 import {
   RuntimeRendererIssuePublisher,
   type RuntimeRendererIssue,
@@ -195,6 +199,8 @@ export class RuntimeRenderingEmission {
     readonly rendererIssues: readonly RuntimeRendererIssue[],
     /** Framework-runtime issues discovered while modeled runtime bindings execute their own lifecycle. */
     readonly bindingIssues: readonly RuntimeBindingIssue[],
+    /** Template-compiler issues discovered while dynamic captured attributes are compiled. */
+    readonly compilerIssues: readonly TemplateCompilerIssue[],
     /** Built-in IContainer self resolver rows installed on runtime child containers. */
     readonly childSelfResolverSlots: readonly ContainerSelfResolverSlot[],
     /** Hydration-context resolver slots installed on runtime child containers. */
@@ -320,6 +326,7 @@ class RuntimeRenderingMaterializationState {
   readonly controllerIssues: RuntimeControllerIssue[] = [];
   readonly rendererIssues: RuntimeRendererIssue[] = [];
   readonly bindingIssues: RuntimeBindingIssue[] = [];
+  readonly compilerIssues: TemplateCompilerIssue[] = [];
   readonly dynamicInstructions: TemplateInstruction[] = [];
   readonly dynamicValueSites: TemplateValueSite[] = [];
   readonly dynamicExpressionParses: TemplateExpressionParse[] = [];
@@ -396,6 +403,7 @@ export class RuntimeRenderingMaterializer {
     this.store.productDetails.addAll(TemplateProductDetails.RuntimeControllerIssue, emission.controllerIssues);
     this.store.productDetails.addAll(TemplateProductDetails.RuntimeRendererIssue, emission.rendererIssues);
     this.store.productDetails.addAll(TemplateProductDetails.RuntimeBindingIssue, emission.bindingIssues);
+    this.store.productDetails.addAll(TemplateProductDetails.CompilerIssue, emission.compilerIssues);
     this.store.productDetails.addAll(ConfigurationProductDetails.ViewFactory, emission.viewFactories);
     for (const definition of emission.embeddedDefinitions) {
       if (definition.productHandle != null) {
@@ -594,6 +602,7 @@ export class RuntimeRenderingMaterializer {
       state.controllerIssues,
       state.rendererIssues,
       state.bindingIssues,
+      state.compilerIssues,
       state.childSelfResolverSlots(),
       state.childContextResolverSlots(),
       state.dynamicInstructions,
@@ -718,12 +727,13 @@ export class RuntimeRenderingMaterializer {
       return null;
     }
 
-    const compiledTemplate = state.input.projectContext.readCompiledTemplateEmissionForDefinition(
+    const resource = state.input.projectContext.readResourceForDefinition(
       controller.definitionProductHandle,
     );
-    if (compiledTemplate == null) {
+    if (resource == null) {
       return null;
     }
+    const compiledTemplate = resource.compiledTemplateEmission;
 
     const targetInputs = this.measure(state.input, 'custom-element-target-inputs', () =>
       this.renderTargetInputsForCompiledTemplate(
@@ -746,7 +756,7 @@ export class RuntimeRenderingMaterializer {
       'Rendering.render dispatched the child custom-element compiled-template instruction rows.',
     );
     return this.measure(state.input, 'custom-element-render-dispatch', () =>
-      state.input.compilerWorld.rendering.render({
+      resource.compilerWorld.rendering.render({
         localKey: `${state.input.localKey}:custom-element-view:${controller.productHandle}`,
         compiledTemplate: compiledTemplate.compiledTemplate,
         targets: targetInputs,
@@ -805,7 +815,9 @@ export class RuntimeRenderingMaterializer {
       syntheticController.sourceAddressHandle,
       'IViewFactory.create produced an aggregate synthetic-view controller for nested instruction analysis.',
     );
-    const ownerCompiledTemplate = this.compiledTemplateForControllerView(state, controller);
+    const ownerResource = this.runtimeResourceForControllerView(state, controller);
+    const ownerCompiledTemplate = ownerResource?.compiledTemplateEmission ?? state.input.compiledTemplate;
+    const ownerCompilerWorld = ownerResource?.compilerWorld ?? state.input.compilerWorld;
     const instructions = this.instructionsForControllerView(state, ownerCompiledTemplate);
     const targetInputs = this.measure(state.input, 'synthetic-view-target-inputs', () =>
       this.syntheticViewRenderingTargetInputs(
@@ -829,7 +841,7 @@ export class RuntimeRenderingMaterializer {
       'Rendering.render dispatched synthetic-view child instruction rows.',
     );
     return this.measure(state.input, 'synthetic-view-render-dispatch', () =>
-      state.input.compilerWorld.rendering.render({
+      ownerCompilerWorld.rendering.render({
         localKey: `${state.input.localKey}:synthetic-view:${syntheticController.productHandle}`,
         compiledTemplate: ownerCompiledTemplate.compiledTemplate,
         targets: targetInputs,
@@ -842,21 +854,21 @@ export class RuntimeRenderingMaterializer {
     );
   }
 
-  private compiledTemplateForControllerView(
+  private runtimeResourceForControllerView(
     state: RuntimeRenderingMaterializationState,
     controller: RuntimeControllerFrame,
-  ): CompiledTemplateEmission {
+  ): TemplateRuntimeAnalysisResource | null {
     let current: RuntimeControllerFrame | null = controller;
     while (current != null) {
-      const compiledTemplate = state.input.projectContext.readCompiledTemplateEmissionForDefinition(
+      const resource = state.input.projectContext.readResourceForDefinition(
         current.definitionProductHandle,
       );
-      if (compiledTemplate != null) {
-        return compiledTemplate;
+      if (resource != null) {
+        return resource;
       }
       current = current.parent;
     }
-    return state.input.compiledTemplate;
+    return null;
   }
 
   private instructionsForControllerView(

@@ -5,6 +5,12 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type { ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
+import { SourceSpanRole } from '../kernel/address.js';
+import {
+  sourceSpanAddressForAddress,
+  sourceSpanAddressForSite,
+  type SourceSpanAddressPublication,
+} from '../kernel/source-address.js';
 import {
   MaterializationRecord,
 } from '../kernel/materialization.js';
@@ -47,6 +53,7 @@ import {
   TemplateValueSitePublisher,
 } from './value-site-publication.js';
 import { TemplateProductDetails } from './product-details.js';
+import { runtimeExpressionParseContextForSourceSpanAddress } from './runtime-expression-source-address.js';
 
 export interface TemplateValueSiteRequest {
   /** Store-local key for this value-site pass. */
@@ -164,6 +171,7 @@ export class TemplateValueSiteMaterializer {
     index: number,
   ): ValueSiteMaterializationEmission {
     const siteLocal = `template-value-site:${input.localKey}:${index}`;
+    const expressionSource = this.expressionSourceForPendingSite(siteLocal, pending);
     const publication = this.valueSitePublisher.publish(new TemplateValueSitePublicationRequest(
       siteLocal,
       pending.entryFamily == null ? null : `template-expression-parse:${input.localKey}:${index}`,
@@ -178,18 +186,43 @@ export class TemplateValueSiteMaterializer {
       pending.classification,
       pending.bindingCommand,
       pending.bindable,
-      pending.sourceAddressHandle,
+      expressionSource?.handle ?? pending.sourceAddressHandle,
       input.compilationUnit.identityHandle,
       pending.siteKind,
       valueSiteSubject(pending),
       (result) => `${pending.siteKind}:${result.kind}`,
+      expressionSource == null
+        ? null
+        : runtimeExpressionParseContextForSourceSpanAddress(this.store, expressionSource.address) ?? null,
     ));
     return new ValueSiteMaterializationEmission(
       publication.site,
       publication.parse,
       publication.claims,
-      publication.records,
+      [...(expressionSource?.records ?? []), ...publication.records],
     );
+  }
+
+  private expressionSourceForPendingSite(
+    siteLocal: string,
+    pending: PendingValueSite,
+  ): SourceSpanAddressPublication | null {
+    const syntax = pending.syntax;
+    if (pending.siteKind !== TemplateValueSiteKind.SpreadValue
+      || syntax == null
+      || syntax.target.toLowerCase() === '...$bindables') {
+      return null;
+    }
+    const targetSource = sourceSpanAddressForAddress(this.store, syntax.targetSourceAddressHandle);
+    const expression = spreadValueExpression(syntax);
+    if (targetSource == null || !syntax.target.startsWith('...') || expression.length === 0) {
+      return null;
+    }
+    return sourceSpanAddressForSite(this.store, `${siteLocal}:spread-expression`, {
+      sourceFileAddressHandle: targetSource.fileHandle,
+      start: targetSource.start + 3,
+      end: targetSource.start + 3 + expression.length,
+    }, SourceSpanRole.Value);
   }
 
   private recordsForSource(input: TemplateValueSiteRequest): TemplateValueSiteSourceSet {
