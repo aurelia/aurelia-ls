@@ -28,5 +28,6 @@ export class ResourceCombinatorGallery {
   readonly item = expressionItems[0]!;
   readonly prefix = 'Count: ';
   readonly limit = 4;
+  refTarget: NumericTarget | null = null;
   count = 2;
 }

@@ -40,6 +40,7 @@ import type { TemplateVisibleResource } from './compiler-world-reference.js';
 import { TemplateProductDetails } from './product-details.js';
 import {
   PropertyBinding,
+  RefBinding,
   type RuntimeBinding,
 } from './runtime-binding.js';
 import { appendRuntimeBindingProductValue } from './runtime-binding-product-index.js';
@@ -566,6 +567,12 @@ function valueConverterConversionPhasesForBinding(
   binding: RuntimeBinding,
   expressionResourcePlan: RuntimeExpressionResourcePlan,
 ): readonly RuntimeValueConverterApplicationPhase[] {
+  if (binding instanceof RefBinding) {
+    return [
+      RuntimeValueConverterApplicationPhase.FromView,
+      RuntimeValueConverterApplicationPhase.ToView,
+    ];
+  }
   if (!(binding instanceof PropertyBinding)) {
     return [RuntimeValueConverterApplicationPhase.ToView];
   }

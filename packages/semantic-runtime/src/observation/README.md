@@ -359,6 +359,14 @@ static type surfaces rather than hydrated runtime values.
   same outer-to-inner order as Aurelia `astAssign`, projects each `fromView(value, ...args)` return through the
   shared `projectRuntimeAssignmentValueConverterWriteback(...)` helper, and then compares the converted value against
   the unwrapped assignment target type.
+  The data-flow product retains the final `targetToSourceValueType` and every target-specific writeback stage. Each
+  stage links to the existing from-view application for runtime origin, order, reachability, and exact converter-name
+  source while preserving its own checker input/output types and projection state. These facts stay on the data-flow
+  edge because one spread binding can expose several targets with different contextual input types; converter
+  application products remain lifecycle identities rather than pretending one call shape applies to every target.
+  Checker projection and runtime reachability are independent axes. A structurally projectable converter can still be
+  blocked at runtime, and an open outer converter leaves every inner structural stage visible as `input-open` rather
+  than erasing the rest of the chain.
   Literal converter `withContext = true` inserts the framework caller-context argument before authored converter
   arguments, so overload selection and target-to-source assignability match runtime-html `useConverter(...)`. Missing
   `fromView` methods are identity conversions; a two-way `input value.two-way="state.quantity | numberText"` can

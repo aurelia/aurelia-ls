@@ -5,6 +5,8 @@
   <p class="converter-identity">${item | identityValue}</p>
   <p class="converter-behavior-combined">${count | numberText:prefix & typedAudit:'combined':limit}</p>
   <numeric-target class="converter-writeback-chain" value.two-way="count | numberText:prefix | textLength"></numeric-target>
+  <numeric-target class="converter-writeback-open-chain" value.two-way="count | identityValue | numberText:prefix | missingConverter"></numeric-target>
+  <numeric-target class="converter-ref-writeback" component.ref="refTarget | identityValue"></numeric-target>
 
   <p class="behavior-arguments-valid">${item.label & typedAudit:'view':limit}</p>
   <p class="behavior-argument-types-invalid">${item.label & typedAudit:limit:'wrong'}</p>

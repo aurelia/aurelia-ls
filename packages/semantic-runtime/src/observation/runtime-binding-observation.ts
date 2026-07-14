@@ -18,6 +18,12 @@ import type {
 } from '../template/runtime-binding.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { CheckerExpressionTypeOpenKind } from '../type-system/expression-type-evaluation.js';
+import type { RuntimeValueConverterWritebackStageState } from '../type-system/value-converter-writeback.js';
+import type {
+  RuntimeExpressionResourceApplicationOrigin,
+  RuntimeExpressionResourcePhaseReachability,
+} from '../template/runtime-expression-resource.js';
+import type { RuntimeValueConverterApplicationReference } from '../template/runtime-value-converter.js';
 import type { ObservationFrameworkErrorCode } from './framework-error-code.js';
 
 export const enum RuntimeBindingValueChannelKind {
@@ -262,6 +268,10 @@ export type RuntimeBindingDataFlowField =
   | 'sourceAssignmentTargetSource'
   | 'targetPropertyType'
   | 'targetValueType'
+  | 'targetToSourceValueType'
+  | 'targetToSourceValueTypeOpenReason'
+  | 'targetToSourceValueTypeOpenKind'
+  | 'valueConverterWritebackStages'
   | 'sourceWritable'
   | 'sourceAssignmentKind'
   | 'sourceAssignmentReason'
@@ -422,6 +432,30 @@ export class RuntimeBindingValueChannel {
   }
 }
 
+/** One target-specific TypeChecker projection of a value-converter `fromView` application. */
+export class RuntimeBindingDataFlowValueConverterWritebackStage {
+  constructor(
+    readonly converterName: string,
+    /** Outer-to-inner structural order used by Aurelia `astAssign`. */
+    readonly stageIndex: number,
+    /** Runtime application identity for the same converter occurrence and from-view phase. */
+    readonly application: RuntimeValueConverterApplicationReference,
+    readonly origin: RuntimeExpressionResourceApplicationOrigin,
+    readonly runtimeChainDepth: number,
+    /** Runtime execution order; null when converter invocation is blocked. */
+    readonly phaseOrder: number | null,
+    readonly phaseReachability: RuntimeExpressionResourcePhaseReachability,
+    readonly projectionState: RuntimeValueConverterWritebackStageState,
+    /** Best-known checker input; `input-open` stages may carry a partial prior output. */
+    readonly inputType: CheckerTypeReference | null,
+    /** Closed output for `type`, partial output for `open`, and null for `input-open`. */
+    readonly outputType: CheckerTypeReference | null,
+    readonly openReason: string | null,
+    readonly openKind: CheckerExpressionTypeOpenKind | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
 /** Runtime binding source/target data-flow edge computed from Scope lookup plus target-side facts. */
 export class RuntimeBindingDataFlow {
   constructor(
@@ -448,6 +482,11 @@ export class RuntimeBindingDataFlow {
     readonly sourceAssignmentTargetSourceAddressHandle: AddressHandle | null,
     readonly targetPropertyType: CheckerTypeReference | null,
     readonly targetValueType: CheckerTypeReference | null,
+    /** Final value handed to the unwrapped assignment target after every projected `fromView` stage. */
+    readonly targetToSourceValueType: CheckerTypeReference | null,
+    readonly targetToSourceValueTypeOpenReason: string | null,
+    readonly targetToSourceValueTypeOpenKind: CheckerExpressionTypeOpenKind | null,
+    readonly valueConverterWritebackStages: readonly RuntimeBindingDataFlowValueConverterWritebackStage[],
     readonly sourceWritable: boolean | null,
     readonly sourceAssignmentKind: RuntimeBindingDataFlowSourceAssignmentKind | null,
     readonly sourceAssignmentReason: string | null,

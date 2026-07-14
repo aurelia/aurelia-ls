@@ -594,7 +594,11 @@ context, then hands the converter input, optional caller-context, and authored c
 child expression arguments so overload selection and generated overlay calls spend the same TypeChecker call semantics.
 `value-converter-writeback.ts` is the shared `astAssign` bridge for `fromView`: binding data-flow and runtime-assignment
 scope construction both use it, so target-to-source assignment rows and runtime-assignment scope slots cannot drift into
-parallel converter-chain loops.
+parallel converter-chain loops. Its projection retains every outer-to-inner stage as well as the final type. A closed
+stage records its checker input and output; the first unresolved call records an open stage and any partial type; later
+stages remain explicit `input-open` facts because their structural presence is known even though no closed input reaches
+them. Observation joins those stages to runtime application identity and source provenance; type-system does not grow a
+second resource-lifecycle model.
 Callers that start from a lazy `CheckerTypeMember.valueType` must materialize the reference before converter
 projection; a checker-key-only reference is fine for display, but `fromView` overload selection needs the current
 program's retained checker carrier. Use the shared expression world/projector for that handoff instead of inventing a

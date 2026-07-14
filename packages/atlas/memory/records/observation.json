@@ -1599,6 +1599,8 @@
         "Trackable-method observed-dependency collection should receive the same CheckerExpressionTypeEvaluationContext as the ordinary connectable pass. If a collector needs expression, Scope, source address, local key, and runtime mode as separate parameters, thread the source projection's context instead of adding another bundle.",
         "Member-owner projection must descend through BindingBehavior and ValueConverter wrappers just like astEvaluate. Value-converter arguments are observed source reads, while binding-behavior arguments are bind-time inputs evaluated with no active connectable and should not become observed-dependency rows.",
         "Value-converter writeback belongs in data-flow, not overlay-local TypeScript. For target-to-source bindings, strip transparent wrappers for source write capability, then spend `projectRuntimeAssignmentValueConverterWriteback(...)` for the outer-to-inner astAssign `fromView(value, ...args)` chain before comparing that converted value with the unwrapped assignment target type. Literal `withContext = true` inserts the framework caller-context argument before authored converter arguments, and missing `fromView` is an identity conversion.",
+        "Retain value-converter writeback stages on each RuntimeBindingDataFlow target edge, not on the shared converter application. A spread binding can give one converter occurrence several contextual target input types. Join each structural stage to the existing from-view application by expression identity plus runtime chain depth so origin, reachability, order, and exact converter source are reused without relying on array position. Keep checker projection state independent from runtime phase reachability, and retain later stages as input-open after an earlier open conversion.",
+        "RefBinding is assignment-only data flow but not converter-fromView-only lifecycle: bind and cleanup call astAssign/fromView, while unbind first calls astEvaluate/toView for its equality guard. Value-converter phase classification must therefore publish both from-view and to-view for ref bindings; a missing matching from-view application for any retained writeback stage is an internal model invariant violation, not a nullable provenance fallback.",
         "Runtime-assignment scope slots must spend the same value-converter `fromView` projection helper early because later sibling expressions and overlays read those locals before data-flow rows are queried. If a bindable member value type is lazy, materialize it through the shared expression world/projector before converter call projection.",
         "Runtime-assignment scope slots must project their writeback type context through the concrete runtime binding source-expression projection before value-converter `fromView` projection; otherwise render-context strict mode or a source-scope-changing binding behavior can make overlays and data-flow disagree about the synthetic local type.",
         "Do not treat a runtime-assignment slot's target bindable member as assignment authority. It is an importable type carrier only when the converted source-local type is still the bindable member type; if `fromView` changes the type, assignment target source stays the template writeback local and overlays should emit the converted source-local type.",
@@ -1692,6 +1694,18 @@
           "symbolName": "BindingDataFlowSourceInfoProjector",
           "line": 58,
           "summary": "Binding source descriptor, assignment-target classification, and value-converter writeback hint projector."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/value-converter-writeback.ts",
+          "symbolName": "projectRuntimeAssignmentValueConverterWriteback",
+          "summary": "Shared outer-to-inner astAssign checker projection that retains every fromView stage and the final converted type."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
+          "symbolName": "RuntimeBindingDataFlowValueConverterWritebackStage",
+          "summary": "Target-specific writeback stage joined to runtime converter application identity and exact source."
         },
         {
           "kind": "source",
@@ -1791,7 +1805,7 @@
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:keyed-form-source-bindings",
-          "summary": "Focused contract for keyed checked/select source writes, readonly keyed source strictness, string-index member source routes, and value-converter fromView writeback."
+          "summary": "Focused contract for keyed checked/select source writes, readonly keyed source strictness, string-index member source routes, and target-specific value-converter fromView writeback stages/application provenance."
         },
         {
           "kind": "script",
@@ -1952,7 +1966,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-12"
+      "updatedAt": "2026-07-13"
     },
     {
       "id": "reuse:forms-observation-value-channels",

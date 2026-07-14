@@ -15,6 +15,7 @@ const app = await runtime.openApp({
 
 const dataFlows = app.ask({
   kind: 'binding-data-flows',
+  detail: 'handles',
   page: { size: 100 },
 }).value.rows;
 const valueChannels = app.ask({
@@ -88,9 +89,16 @@ expectDataFlow('Value converter fromView should make string input writeback assi
   sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
   valueChannelKind: 'value-attribute-observer-property',
   targetValueType: 'string',
+  targetToSourceValueType: 'number',
   sourceToTargetAssignable: true,
   targetToSourceAssignable: true,
   sourceAssignmentKind: 'runtime-assignable',
+  valueConverterWritebackStages: [{
+    converterName: 'numberText',
+    projectionState: 'type',
+    inputType: 'string',
+    outputType: 'number',
+  }],
 });
 expectDataFlow('withContext value converter fromView should insert caller context before overload selection.', {
   sourceName: 'state.contextualQuantity',
@@ -100,9 +108,16 @@ expectDataFlow('withContext value converter fromView should insert caller contex
   sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
   valueChannelKind: 'value-attribute-observer-property',
   targetValueType: 'string',
+  targetToSourceValueType: 'number',
   sourceToTargetAssignable: true,
   targetToSourceAssignable: true,
   sourceAssignmentKind: 'runtime-assignable',
+  valueConverterWritebackStages: [{
+    converterName: 'contextualNumberText',
+    projectionState: 'type',
+    inputType: 'string',
+    outputType: 'number',
+  }],
 });
 expectDataFlow('Missing converter fromView should fall back to the raw observer value and expose strictness pressure.', {
   sourceName: 'state.fallbackQuantity',
@@ -112,9 +127,16 @@ expectDataFlow('Missing converter fromView should fall back to the raw observer 
   sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
   valueChannelKind: 'value-attribute-observer-property',
   targetValueType: 'string',
+  targetToSourceValueType: 'string',
   sourceToTargetAssignable: true,
   targetToSourceAssignable: false,
   sourceAssignmentKind: 'runtime-assignable-with-typescript-strictness',
+  valueConverterWritebackStages: [{
+    converterName: 'numberTextReadonly',
+    projectionState: 'type',
+    inputType: 'string',
+    outputType: 'string',
+  }],
 });
 expectDataFlow('fromView binding behavior should turn a default value binding into target-to-source data flow.', {
   sourceName: 'state.modeFromViewText',
@@ -184,6 +206,14 @@ const summary = {
       sourceType: row.sourceType,
       sourceAssignmentTargetType: row.sourceAssignmentTargetType,
       targetValueType: row.targetValueType,
+      targetToSourceValueType: row.targetToSourceValueType,
+      valueConverterWritebackStages: row.valueConverterWritebackStages.map((stage) => ({
+        converterName: stage.converterName,
+        projectionState: stage.projectionState,
+        inputType: stage.inputType,
+        outputType: stage.outputType,
+        source: stage.source?.label ?? null,
+      })),
       sourceToTargetAssignable: row.sourceToTargetAssignable,
       targetToSourceAssignable: row.targetToSourceAssignable,
       sourceAssignmentKind: row.sourceAssignmentKind,
@@ -226,6 +256,10 @@ function expectDataFlow(message, expected) {
     return;
   }
   for (const [field, value] of Object.entries(expected)) {
+    if (field === 'valueConverterWritebackStages') {
+      expectValueConverterWritebackStages(message, row, value);
+      continue;
+    }
     if (field === 'sourceAssignmentTargetSourcePath') {
       if (row.sourceAssignmentTargetSource?.path !== value) {
         failures.push(`${message}: expected ${field}=${JSON.stringify(value)}, observed ${JSON.stringify(row.sourceAssignmentTargetSource?.path ?? null)}.`);
@@ -234,6 +268,33 @@ function expectDataFlow(message, expected) {
     }
     if (row[field] !== value) {
       failures.push(`${message}: expected ${field}=${JSON.stringify(value)}, observed ${JSON.stringify(row[field])}.`);
+    }
+  }
+}
+
+function expectValueConverterWritebackStages(message, row, expectedStages) {
+  if (row.valueConverterWritebackStages.length !== expectedStages.length) {
+    failures.push(`${message}: expected ${expectedStages.length} writeback stage(s), observed ${row.valueConverterWritebackStages.length}.`);
+    return;
+  }
+  for (const [index, expected] of expectedStages.entries()) {
+    const stage = row.valueConverterWritebackStages[index];
+    for (const [field, value] of Object.entries(expected)) {
+      if (stage[field] !== value) {
+        failures.push(`${message}: expected writeback stage ${index} ${field}=${JSON.stringify(value)}, observed ${JSON.stringify(stage[field])}.`);
+      }
+    }
+    if (stage.stageIndex !== index) {
+      failures.push(`${message}: expected writeback stage ${index} stageIndex=${index}, observed ${JSON.stringify(stage.stageIndex)}.`);
+    }
+    if (stage.phaseOrder !== index || stage.phaseReachability !== 'reached') {
+      failures.push(`${message}: writeback stage ${index} did not retain reached runtime order ${index}.`);
+    }
+    if (stage.source?.path !== 'src/keyed-form-source-bindings-app.html') {
+      failures.push(`${message}: writeback stage ${index} did not retain its authored template source.`);
+    }
+    if (stage.handles?.valueConverterApplicationProductHandle == null) {
+      failures.push(`${message}: writeback stage ${index} did not retain its runtime converter application identity.`);
     }
   }
 }

@@ -80,6 +80,7 @@ export const PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS = new Set<string>([
   'declarationSources',
   'sourceAssignmentOccurrenceSource',
   'sourceAssignmentTargetSource',
+  'valueConverterWritebackStages',
   'resource',
   'aliases',
   'bindables',

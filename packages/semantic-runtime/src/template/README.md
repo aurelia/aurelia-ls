@@ -471,8 +471,11 @@ classification, expression parsing, and instruction lowering converge on the sam
   publications preserve request-owned event, modifier, and ref-target addresses rather than replacing them with the
   enclosing binding carrier. Named ref targets also retain the resolved same-node controller relation, which resource
   navigation, references, and rename consume as an ordinary resource usage; `element`, `controller`, `component`, and
-  `view` remain ref API targets rather than resource identities. Target-access rows
-  record whether
+  `view` remain ref API targets rather than resource identities. Ref products preserve converter lifecycle as well as
+  target identity: bind/cleanup assigns through `fromView`, and unbind's
+  equality guard evaluates through `toView`, so a converter-wrapped ref has both conversion phases even though its
+  data-flow transport is assignment-only.
+  Target-access rows record whether
   bind-time asks for an accessor or observer, whether the target is a native node or controller view-model, and the
   selected built-in access strategy for common form controls and presentation targets such as input value, checkbox
   checked, select value, textarea value, class/style accessors, and ordinary element properties. The access strategy is

@@ -321,6 +321,7 @@ class TemplateRuntimeAnalysisFrame {
       expressionResourcePlan,
       controllerBind,
       bindingValueChannel,
+      valueConverter,
       scopes,
     );
     const runtimeComposition = this.materializeRuntimeCompositionForDepth(
@@ -418,11 +419,19 @@ class TemplateRuntimeAnalysisFrame {
     expressionResourcePlan: RuntimeExpressionResourcePlan,
     controllerBind: RuntimeControllerBindEmission,
     bindingValueChannel: RuntimeBindingValueChannelEmission,
+    valueConverter: RuntimeValueConverterEmission,
     scopes: TemplateScopeConstructionEmission,
   ): RuntimeBindingDataFlowEmission {
     return semanticAppAnalysisDepthSatisfies(this.analysisDepth, SemanticAppAnalysisDepth.BindingObservation)
       ? this.measure('binding-data-flow', () =>
-        this.materializeBindingDataFlow(runtimeRendering, expressionResourcePlan, controllerBind, bindingValueChannel, scopes)
+        this.materializeBindingDataFlow(
+          runtimeRendering,
+          expressionResourcePlan,
+          controllerBind,
+          bindingValueChannel,
+          valueConverter,
+          scopes,
+        )
       )
       : skippedBindingDataFlow(this.phases);
   }
@@ -576,12 +585,14 @@ class TemplateRuntimeAnalysisFrame {
     expressionResourcePlan: RuntimeExpressionResourcePlan,
     controllerBind: RuntimeControllerBindEmission,
     bindingValueChannel: RuntimeBindingValueChannelEmission,
+    valueConverter: RuntimeValueConverterEmission,
     scopes: TemplateScopeConstructionEmission,
   ): RuntimeBindingDataFlowEmission {
     return this.services.bindingDataFlow.materialize(new RuntimeBindingDataFlowMaterializationRequest(
       this.request.localKey,
       runtimeRendering,
       expressionResourcePlan,
+      valueConverter,
       controllerBind,
       bindingValueChannel,
       scopes,

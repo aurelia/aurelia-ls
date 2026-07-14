@@ -1619,6 +1619,9 @@ app-owned converter instances use the shared static source-value evaluator and p
 each known array-element source, and honest open-array pressure. Conversion rows do not duplicate those lifecycle
 effects. A null resource preserves the attempted application whose issue product owns bind-phase AUR0103. Use this query
 when IDE/LSP, MCP, or future build/AOT consumers need execution facts rather than token-coloring or diagnostic inference.
+Ref bindings legitimately publish both conversion phases: bind and cleanup assign the resolved ref target through
+`astAssign`/`fromView`, while unbind evaluates the wrapped source through `toView` before deciding whether to clear it.
+Treating every non-property binding as to-view-only loses real ref writeback and breaks stage/application provenance.
 
 `BindingValueChannels` exposes the observer/accessor or direct-operation value shape that runtime data flow should use
 instead of blindly treating the raw DOM property as the transported value. Use `BindingValueChannelSummary` first when
@@ -1699,6 +1702,12 @@ remaining target-to-source edge; these axes stay independent. This is the compac
 two-way form controls, setter-backed state, class/style presentation bindings, template-controller value bindings, and
 future validation/write diagnostics. Direct spread value bindings appear here as source-to-target flow from each spread
 object property into the corresponding target bindable, such as `featuredCardBindings.productId -> productId`.
+For target-to-source edges, `targetToSourceValueType` is the final observer value after Aurelia's outer-to-inner
+`fromView` chain. `valueConverterWritebackStages` retains each target-specific checker input/output and its projection
+state, then links it to the existing runtime converter application for origin, phase order/reachability, exact
+converter-token source, and optional product handles. A `type` projection does not imply runtime execution: blocked
+applications keep their runtime reachability, and stages after an open conversion remain `input-open`. Source-independent
+primitive type products may legitimately have no type source; the converter token remains the exact authored locus.
 Captured `...$attrs` flows appear as the concrete inner binding that `TemplateCompiler.compileSpread(...)` produced,
 for example a forwarded `disabled.bind="false"` reporting boolean-to-boolean flow on the inner input element. Captured
 parent expressions can also surface here: the storefront `field-shell` wrapper reports forwarded `value.bind="email"`

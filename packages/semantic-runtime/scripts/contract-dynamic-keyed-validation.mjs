@@ -43,8 +43,14 @@ const validateBehaviors = bindingBehaviors.filter((row) =>
   && row.targetKind === 'node'
   && row.targetProperty === 'value'
 );
-if (validateBehaviors.length !== 3) {
-  failures.push(`Expected 3 validate binding-behavior applications; observed ${validateBehaviors.length}.`);
+if (validateBehaviors.length !== 6) {
+  failures.push(`Expected 6 validate binding-behavior lifecycle applications; observed ${validateBehaviors.length}.`);
+}
+for (const phase of ['bind', 'unbind']) {
+  const phaseRows = validateBehaviors.filter((row) => row.phase === phase);
+  if (phaseRows.length !== 3) {
+    failures.push(`Expected 3 validate ${phase} applications; observed ${phaseRows.length}.`);
+  }
 }
 
 for (const sourceName of [
@@ -67,6 +73,7 @@ const summary = {
   fixture: 'dynamic-keyed-validation',
   validateBehaviors: validateBehaviors.map((row) => ({
     targetProperty: row.targetProperty,
+    phase: row.phase,
     argumentCount: row.argumentCount,
     source: row.source?.label ?? null,
   })),

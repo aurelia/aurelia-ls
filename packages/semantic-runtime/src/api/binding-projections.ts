@@ -3,6 +3,7 @@ import type { KernelStore } from '../kernel/store.js';
 import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import {
   type RuntimeBindingDataFlow,
+  type RuntimeBindingDataFlowValueConverterWritebackStage,
   type RuntimeBindingObservedDependency,
 } from '../observation/runtime-binding-observation.js';
 import {
@@ -24,6 +25,7 @@ import { ListenerBinding } from '../template/runtime-binding.js';
 import type { RuntimeExpressionResourceLifecycleEffects } from '../template/runtime-expression-resource.js';
 import type {
   SemanticBindingDataFlowRow,
+  SemanticBindingDataFlowValueConverterWritebackStageRow,
   SemanticBindingDataFlowIssueKind,
   SemanticBindingDataFlowIssueSummaryRow,
   SemanticBindingDataFlowSummaryResult,
@@ -1373,6 +1375,12 @@ function bindingDataFlowRow(
     sourceOperationKind: dataFlow.sourceOperation?.operationKind ?? null,
     targetPropertyType: dataFlow.targetPropertyType?.display ?? null,
     targetValueType: dataFlow.targetValueType?.display ?? null,
+    targetToSourceValueType: dataFlow.targetToSourceValueType?.display ?? null,
+    targetToSourceValueTypeOpenReason: dataFlow.targetToSourceValueTypeOpenReason,
+    targetToSourceValueTypeOpenKind: dataFlow.targetToSourceValueTypeOpenKind,
+    valueConverterWritebackStages: dataFlow.valueConverterWritebackStages.map((stage) =>
+      bindingDataFlowValueConverterWritebackStageRow(store, stage, handles)
+    ),
     valueChannelKind: dataFlow.valueChannel?.channelKind ?? null,
     sourceWritable: dataFlow.sourceWritable,
     sourceAssignmentKind: dataFlow.sourceAssignmentKind,
@@ -1401,7 +1409,39 @@ function bindingDataFlowRow(
         sourceAssignmentTargetSourceAddressHandle: dataFlow.sourceAssignmentTargetSourceAddressHandle,
         targetPropertyTypeProductHandle: dataFlow.targetPropertyType?.productHandle ?? null,
         targetValueTypeProductHandle: dataFlow.targetValueType?.productHandle ?? null,
+        targetToSourceValueTypeProductHandle: dataFlow.targetToSourceValueType?.productHandle ?? null,
         sourceAddressHandle: dataFlow.sourceAddressHandle,
+      },
+    } : {}),
+  };
+}
+
+function bindingDataFlowValueConverterWritebackStageRow(
+  store: KernelStore,
+  stage: RuntimeBindingDataFlowValueConverterWritebackStage,
+  handles: boolean,
+): SemanticBindingDataFlowValueConverterWritebackStageRow {
+  return {
+    converterName: stage.converterName,
+    stageIndex: stage.stageIndex,
+    origin: stage.origin,
+    runtimeChainDepth: stage.runtimeChainDepth,
+    phaseOrder: stage.phaseOrder,
+    phaseReachability: stage.phaseReachability,
+    projectionState: stage.projectionState,
+    inputType: stage.inputType?.display ?? null,
+    inputTypeSource: describeAddress(store, stage.inputType?.sourceAddressHandle ?? null),
+    outputType: stage.outputType?.display ?? null,
+    outputTypeSource: describeAddress(store, stage.outputType?.sourceAddressHandle ?? null),
+    openReason: stage.openReason,
+    openKind: stage.openKind,
+    source: describeAddress(store, stage.sourceAddressHandle),
+    ...(handles ? {
+      handles: {
+        valueConverterApplicationProductHandle: stage.application.productHandle,
+        inputTypeProductHandle: stage.inputType?.productHandle ?? null,
+        outputTypeProductHandle: stage.outputType?.productHandle ?? null,
+        sourceAddressHandle: stage.sourceAddressHandle,
       },
     } : {}),
   };

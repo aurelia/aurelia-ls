@@ -224,6 +224,7 @@ import type {
   RuntimeValueConverterApplicationPhase,
   RuntimeValueConverterIssuePhase,
 } from '../template/runtime-value-converter.js';
+import type { RuntimeValueConverterWritebackStageState } from '../type-system/value-converter-writeback.js';
 import type {
   RuntimeExpressionResourceApplicationOrigin,
   RuntimeExpressionResourceBindReachability,
@@ -4702,6 +4703,33 @@ export interface SemanticBindingValueChannelSummaryResult {
   readonly observerCouplings: readonly SemanticBindingValueChannelCouplingSummaryRow[];
 }
 
+export interface SemanticBindingDataFlowValueConverterWritebackStageRow {
+  readonly converterName: string;
+  /** Outer-to-inner structural order used by Aurelia `astAssign`. */
+  readonly stageIndex: number;
+  readonly origin: RuntimeExpressionResourceApplicationOrigin | `${RuntimeExpressionResourceApplicationOrigin}`;
+  readonly runtimeChainDepth: number;
+  /** Runtime execution order; null when converter invocation is blocked. */
+  readonly phaseOrder: number | null;
+  readonly phaseReachability: RuntimeExpressionResourcePhaseReachability | `${RuntimeExpressionResourcePhaseReachability}`;
+  readonly projectionState: RuntimeValueConverterWritebackStageState | `${RuntimeValueConverterWritebackStageState}`;
+  /** Best-known checker input; `input-open` stages may carry a partial prior output. */
+  readonly inputType: string | null;
+  readonly inputTypeSource: SemanticSourceReference | null;
+  /** Closed output for `type`, partial output for `open`, and null for `input-open`. */
+  readonly outputType: string | null;
+  readonly outputTypeSource: SemanticSourceReference | null;
+  readonly openReason: string | null;
+  readonly openKind: CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}` | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly valueConverterApplicationProductHandle: ProductHandle | null;
+    readonly inputTypeProductHandle: ProductHandle | null;
+    readonly outputTypeProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
 export interface SemanticBindingDataFlowRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
@@ -4728,6 +4756,10 @@ export interface SemanticBindingDataFlowRow {
   readonly sourceOperationKind: RuntimeBindingSourceOperationKind | `${RuntimeBindingSourceOperationKind}` | null;
   readonly targetPropertyType: string | null;
   readonly targetValueType: string | null;
+  readonly targetToSourceValueType: string | null;
+  readonly targetToSourceValueTypeOpenReason: string | null;
+  readonly targetToSourceValueTypeOpenKind: CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}` | null;
+  readonly valueConverterWritebackStages: readonly SemanticBindingDataFlowValueConverterWritebackStageRow[];
   readonly valueChannelKind: RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}` | null;
   readonly sourceWritable: boolean | null;
   readonly sourceAssignmentKind: RuntimeBindingDataFlowSourceAssignmentKind | `${RuntimeBindingDataFlowSourceAssignmentKind}` | null;
@@ -4757,6 +4789,7 @@ export interface SemanticBindingDataFlowRow {
     readonly sourceAssignmentTargetSourceAddressHandle: AddressHandle | null;
     readonly targetPropertyTypeProductHandle: ProductHandle | null;
     readonly targetValueTypeProductHandle: ProductHandle | null;
+    readonly targetToSourceValueTypeProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }

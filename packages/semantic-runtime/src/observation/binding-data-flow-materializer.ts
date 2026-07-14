@@ -56,6 +56,7 @@ import {
   CheckerExpressionTypeEvaluationResultKind,
   CheckerExpressionTypeOpenKind,
 } from '../type-system/expression-type-evaluation.js';
+import type { RuntimeAssignmentValueConverterWritebackStage } from '../type-system/value-converter-writeback.js';
 import {
   CheckerExpressionTypeBindingBehaviorEvaluation,
   CheckerExpressionTypeEvaluationContext,
@@ -106,6 +107,7 @@ import {
 } from '../template/runtime-binding.js';
 import {
   RuntimeBindingDataFlow,
+  RuntimeBindingDataFlowValueConverterWritebackStage,
   type RuntimeBindingDataFlowField,
   RuntimeBindingDataFlowDirection,
   RuntimeBindingSourceEvaluationKind,
@@ -154,6 +156,10 @@ import {
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
 import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
+import {
+  RuntimeValueConverterApplicationPhase,
+} from '../template/runtime-value-converter.js';
+import type { RuntimeValueConverterEmission } from '../template/runtime-value-converter-materializer.js';
 import type { RuntimeBindingValueChannelEmission } from './binding-value-channel-materializer.js';
 import {
   sourceAddressForRuntimeExpressionBounds,
@@ -204,6 +210,8 @@ export class RuntimeBindingDataFlowMaterializationRequest {
     readonly runtimeBindings: RuntimeRenderingEmission,
     /** Reached binding-behavior effects that determine runtime direction. */
     readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
+    /** Existing converter phase applications used as lifecycle/source identity for writeback stages. */
+    readonly valueConverters: RuntimeValueConverterEmission,
     /** Controller.bind target-side products produced by binding-owned target setup. */
     readonly controllerBind: RuntimeControllerBindEmission,
     /** Value channels visible to runtime property, attribute, and interpolation bindings. */
@@ -374,6 +382,10 @@ type DataFlowDraft = {
   readonly sourceAssignmentTargetSourceAddressHandle: AddressHandle | null;
   readonly targetPropertyType: CheckerTypeReference | null;
   readonly targetValueType: CheckerTypeReference | null;
+  readonly targetToSourceValueType: CheckerTypeReference | null;
+  readonly targetToSourceValueTypeOpenReason: string | null;
+  readonly targetToSourceValueTypeOpenKind: CheckerExpressionTypeOpenKind | null;
+  readonly valueConverterWritebackStages: readonly RuntimeBindingDataFlowValueConverterWritebackStage[];
   readonly sourceWritable: boolean | null;
   readonly sourceAssignmentKind: RuntimeBindingDataFlowSourceAssignmentKind | null;
   readonly sourceAssignmentReason: string | null;
@@ -416,6 +428,10 @@ function runtimeBindingDataFlowForDraft(
     draft.sourceAssignmentTargetSourceAddressHandle,
     draft.targetPropertyType,
     draft.targetValueType,
+    draft.targetToSourceValueType,
+    draft.targetToSourceValueTypeOpenReason,
+    draft.targetToSourceValueTypeOpenKind,
+    draft.valueConverterWritebackStages,
     draft.sourceWritable,
     draft.sourceAssignmentKind, draft.sourceAssignmentReason,
     draft.sourceAssignmentReasonKinds,
@@ -450,6 +466,7 @@ type DataFlowSourceProjection = {
   readonly targetToSourceValueType: CheckerTypeReference | null;
   readonly targetToSourceValueTypeOpenReason: string | null;
   readonly targetToSourceValueTypeOpenKind: CheckerExpressionTypeOpenKind | null;
+  readonly valueConverterWritebackStages: readonly RuntimeAssignmentValueConverterWritebackStage[];
 };
 
 /** Materializes binding data-flow edges after target observers and instruction scopes are both known. */
@@ -631,6 +648,7 @@ export class RuntimeBindingDataFlowMaterializer {
       context.sourceExpressionContexts,
       strictBinding,
       input.expressionResourcePlan,
+      input.valueConverters,
       context.resourceScope,
       local,
     );
@@ -1000,6 +1018,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
     sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector,
     strictBinding: boolean | null,
     expressionResourcePlan: RuntimeExpressionResourcePlan,
+    valueConverters: RuntimeValueConverterEmission,
     resourceScope: TemplateResourceScope | null,
     local: string,
   ): DataFlowDraft {
@@ -1081,6 +1100,15 @@ class RuntimeBindingDataFlowDraftMaterializer {
         : null,
       targetPropertyType: targetTypes.targetPropertyType,
       targetValueType: targetTypes.targetValueType,
+      targetToSourceValueType: sourceProjection.targetToSourceValueType,
+      targetToSourceValueTypeOpenReason: sourceProjection.targetToSourceValueTypeOpenReason,
+      targetToSourceValueTypeOpenKind: sourceProjection.targetToSourceValueTypeOpenKind,
+      valueConverterWritebackStages: this.valueConverterWritebackStages(
+        binding,
+        expressionFacts.expressionProductHandle,
+        sourceProjection.valueConverterWritebackStages,
+        valueConverters,
+      ),
       sourceWritable: needsSourceWriteCapability
         ? sourceProjection.sourceInfo.sourceWriteCapability?.checkerWritable ?? null
         : null,
@@ -1094,6 +1122,46 @@ class RuntimeBindingDataFlowDraftMaterializer {
       frameworkErrorCode,
       openReason,
     };
+  }
+
+  private valueConverterWritebackStages(
+    binding: RuntimeDataFlowBinding,
+    expressionProductHandle: ProductHandle | null,
+    stages: readonly RuntimeAssignmentValueConverterWritebackStage[],
+    valueConverters: RuntimeValueConverterEmission,
+  ): readonly RuntimeBindingDataFlowValueConverterWritebackStage[] {
+    const applications = valueConverters.readApplicationsForBinding(binding.productHandle).filter((application) =>
+      application.phase === RuntimeValueConverterApplicationPhase.FromView
+      && application.expressionProductHandle === expressionProductHandle
+      && application.chainIndex === 0
+    );
+    return stages.map((stage) => {
+      const application = applications.find((candidate) =>
+        candidate.runtimeChainDepth === stage.stageIndex
+        && candidate.converterName === stage.converter.name.name
+      ) ?? null;
+      if (application == null) {
+        throw new Error(
+          `Value-converter writeback stage '${stage.converter.name.name}' at runtime depth ${stage.stageIndex} `
+          + `has no matching from-view application for binding '${binding.productHandle}'.`,
+        );
+      }
+      return new RuntimeBindingDataFlowValueConverterWritebackStage(
+        stage.converter.name.name,
+        stage.stageIndex,
+        application.toReference(),
+        application.origin,
+        application.runtimeChainDepth,
+        application.phaseOrder,
+        application.phaseReachability,
+        stage.state,
+        stage.inputType,
+        stage.outputType,
+        stage.openReason,
+        stage.openKind,
+        application.sourceAddressHandle,
+      );
+    });
   }
 
   private frameworkErrorCodeForDataFlow(
@@ -1254,6 +1322,7 @@ class BindingDataFlowSourceProjector {
       targetToSourceValueType,
       targetToSourceValueTypeOpenReason: sourceInfo.targetToSourceValueTypeOpenReason ?? null,
       targetToSourceValueTypeOpenKind: sourceInfo.targetToSourceValueTypeOpenKind ?? null,
+      valueConverterWritebackStages: sourceInfo.valueConverterWritebackStages,
     };
   }
 

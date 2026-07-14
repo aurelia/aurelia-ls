@@ -810,7 +810,7 @@
         "Inline Aurelia arrow functions cannot express TypeScript type-predicate returns. When overloaded callback APIs such as Array.prototype.filter differ only by a type-predicate callback return, reject the type-guard overload for inline arrows and preserve the common callback parameter surface for contextual parameter typing.",
         "If collection callback diagnostics lose owner precision while data-flow still closes the expression, inspect this projector before adding observation or diagnostics special cases. The template-collection-observation fixture covers products.filter(...).map(...).join(...) as the canary.",
         "Direct type-parameter inference from non-callback arguments also belongs here. The projector may infer a signature type parameter from an ordinary argument such as `Array.prototype.reduce`'s initial value before projecting callback locals or direct type-parameter returns; keep this narrow and shared instead of cloning TypeScript inference in consumers.",
-        "Use projectRuntimeAssignmentValueConverterWriteback(...) when binding data-flow or runtime-assignment scope construction needs fromView writeback; do not grow another astAssign converter-chain loop beside the shared TypeChecker call path.",
+        "Use projectRuntimeAssignmentValueConverterWriteback(...) when binding data-flow or runtime-assignment scope construction needs fromView writeback; it retains every outer-to-inner structural stage plus the final converted type, so do not grow another astAssign converter-chain loop beside the shared TypeChecker call path. Runtime application identity/reachability belongs to observation and is joined there rather than duplicated in this checker projector.",
         "Template overlays should emit direct checker-visible `toView(...)` method calls instead of generic conditional helper wrappers; reserve the runtime-identity helper for missing converters or converter targets without `toView`, and model checker-visible dynamic `withContext` as both strict-true runtime branches. Keep the overlay and direct CheckerExpressionTypeEvaluator branch-union contracts paired when changing value-converter call projection.",
         "Keep nested generic inference, synthetic-argument inference, custom expression plugins, and richer collection prototype semantics explicit until their missing facts are modeled."
       ],
@@ -836,7 +836,7 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/value-converter-writeback.ts",
           "symbolName": "projectRuntimeAssignmentValueConverterWriteback",
-          "summary": "Shared astAssign fromView chain projection used by data-flow and runtime-assignment scope construction."
+          "summary": "Shared astAssign fromView chain projection that retains every structural stage and the final type for data-flow and runtime-assignment scope construction."
         },
         {
           "kind": "source",
@@ -854,7 +854,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-25"
+      "updatedAt": "2026-07-13"
     },
     {
       "id": "reuse:typescript-environment-fidelity",
