@@ -16,7 +16,7 @@ import {
   sourceSpanAddressForAddress,
 } from '../kernel/source-address.js';
 import type {
-  KernelStore,
+  KernelStoreReadView,
   KernelStoreRecord,
 } from '../kernel/store.js';
 
@@ -34,7 +34,7 @@ export function sourceAddressHandleForRuntimeExpressionSpan(
 }
 
 export function runtimeExpressionParseContextForAddress(
-  store: KernelStore,
+  store: KernelStoreReadView,
   carrierAddressHandle: AddressHandle | null,
 ): ExpressionParseContext | undefined {
   const sourceSpan = sourceSpanAddressForAddress(store, carrierAddressHandle);
@@ -42,7 +42,7 @@ export function runtimeExpressionParseContextForAddress(
 }
 
 export function runtimeExpressionParseContextForSourceSpanAddress(
-  store: KernelStore,
+  store: KernelStoreReadView,
   sourceSpan: SourceSpanAddress | null,
 ): ExpressionParseContext | undefined {
   if (sourceSpan == null) {
@@ -58,7 +58,7 @@ export function runtimeExpressionParseContextForSourceSpanAddress(
 }
 
 export function sourceAddressForRuntimeExpressionBounds(
-  store: KernelStore,
+  store: KernelStoreReadView,
   localKey: string,
   carrierAddressHandle: AddressHandle | null,
   start: number | null,
@@ -77,7 +77,7 @@ export function sourceAddressForRuntimeExpressionBounds(
 }
 
 export function sourceAddressRecordsForRuntimeExpressionBounds(
-  store: KernelStore,
+  store: KernelStoreReadView,
   sourceAddressHandle: AddressHandle | null,
   carrierAddressHandle: AddressHandle | null,
   start: number | null,
@@ -113,7 +113,7 @@ export function sourceAddressRecordsForRuntimeExpressionBounds(
 }
 
 export function sourceAddressForRuntimeExpressionSpan(
-  store: KernelStore,
+  store: KernelStoreReadView,
   localKey: string,
   carrierAddressHandle: AddressHandle | null,
   span: SourceSpan,

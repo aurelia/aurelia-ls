@@ -565,6 +565,52 @@ describe("mapSemanticRuntimeTemplateDefinition", () => {
     }]);
   });
 
+  test("selects an ordinary resource implementation rather than its explicit name literal", () => {
+    const resourceText = '@customElement("my-el")\nexport class Component {}';
+    const resourceUri = canonicalDocumentUri("file:///C:/projects/app/src/my-el.ts").uri;
+    const nameStart = resourceText.indexOf("my-el");
+    const classStart = resourceText.indexOf("Component");
+    const originDocument = TextDocument.create(
+      "file:///C:/projects/app/src/app.html",
+      "html",
+      1,
+      "<my-el></my-el>",
+    );
+    const source = (start: number, end: number) => ({
+      kind: "source-span-address",
+      label: `src/my-el.ts@${start}..${end}`,
+      path: "src/my-el.ts",
+      start,
+      end,
+    });
+
+    const mapped = mapSemanticRuntimeTemplateDefinition({
+      value: {
+        activeSource: null,
+        selectedMember: null,
+        selectedBindable: null,
+        selectedDefinition: {
+          resourceKind: "custom-element",
+          name: "my-el",
+          matchedName: "my-el",
+          targetName: "Component",
+          source: source(0, resourceText.length),
+          nameSource: source(nameStart, nameStart + "my-el".length),
+          matchedNameSource: source(nameStart, nameStart + "my-el".length),
+          targetSource: source(classStart, classStart + "Component".length),
+        },
+      },
+    } as never, (uri) => uri === resourceUri ? resourceText : null, {
+      workspaceRoot: "C:/projects/app",
+      originDocument,
+    });
+
+    expect(mapped?.[0]?.targetSelectionRange).toEqual({
+      start: { line: 1, character: 13 },
+      end: { line: 1, character: 22 },
+    });
+  });
+
   test("keeps a local resource carrier range while selecting its exact authored name", () => {
     const template = '<template as-custom-element="mode-panel"><p>local</p></template>';
     const nameStart = template.indexOf("mode-panel");

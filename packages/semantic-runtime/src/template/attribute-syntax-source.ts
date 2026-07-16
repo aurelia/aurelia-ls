@@ -5,7 +5,7 @@ import {
   sourceSpanAddressForSite,
   type SourceSpanAddressPublication,
 } from '../kernel/source-address.js';
-import type { KernelStore, KernelStoreRecord } from '../kernel/store.js';
+import type { KernelStoreReadView, KernelStoreRecord } from '../kernel/store.js';
 import {
   AttributePatternLiteralReference,
   AttributePatternPartReference,
@@ -25,7 +25,7 @@ export class AttributeSyntaxPartSources {
 
 /** Publish target, command, and literal-token addresses relative to an authored AttrSyntax name. */
 export function attributeSyntaxPartSources(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   nameSource: AddressHandle | SourceSpanAddress | null,
   parse: AttributeParserParseResult,

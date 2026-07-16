@@ -16,9 +16,14 @@ import {
 } from '../kernel/materialization.js';
 import {
   KernelStoreBatch,
-  type KernelStore,
+  type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  type KernelPublicationContext,
+  KernelPublicationPlan,
+  publishProductDetails,
+} from '../kernel/publication.js';
 import {
   KernelVocabulary,
   type OpenSeamKindKey,
@@ -86,11 +91,10 @@ import { TemplateCompilerFrameworkErrorCode } from './framework-error-code.js';
 import {
   type BuiltInBindingCommand,
 } from './built-in-syntax.js';
-import { BuiltInAttributeParserExecutionHost } from './attribute-parser-execution-host.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
+import type { TemplateCompilerReadView } from './compiler-read-view.js';
 import type {
   TemplateAttributeBindablesInfo,
-  TemplateExpressionParserService,
 } from './compiler-world.js';
 import type { TemplateBindableReference } from './compiler-world-reference.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
@@ -142,6 +146,8 @@ export interface BindingCommandLoweringRequest {
   readonly valueSites: TemplateValueSiteEmission;
   /** Compiler world that supplies binding-command resolver, expression parser, attribute parser, and mapper services. */
   readonly compilerWorld: TemplateCompilerWorldEmission;
+  /** Required run-scoped compiler lookup surface. */
+  readonly compilerReads: TemplateCompilerReadView;
 }
 
 export class BindingCommandLoweringEmission {
@@ -473,17 +479,17 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
   private expressionIndex = 0;
 
   constructor(
-    readonly store: KernelStore,
+    readonly store: KernelStoreReadView,
     readonly local: string,
     readonly source: BindingCommandLoweringSourceSet,
     readonly compilerWorld: TemplateCompilerWorldEmission,
+    readonly compilerReads: TemplateCompilerReadView,
     readonly owner: HtmlElementAttributeOwner,
     readonly syntax: AttributeSyntax,
     readonly classification: AttributeClassification,
     readonly command: BindingCommandExecutable,
     readonly commandReference: BindingCommandLowering['command'],
     readonly bindable: TemplateBindableReference | null,
-    readonly parser: TemplateExpressionParserService,
     readonly expressionParseContext: ExpressionParseContext | null = null,
   ) {
     this.valueSitePublisher = new TemplateValueSitePublisher(store);
@@ -536,7 +542,7 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
     _info: BindingCommandBuildInfo,
   ): BindingCommandTailSyntax | null {
     return BindingCommandTailSyntaxFromExecution(parseAttributeSyntaxInWorld(
-      this.compilerWorld,
+      this.compilerReads,
       rawName,
       rawValue,
     ).execution);
@@ -546,14 +552,14 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
     _node: HtmlNodeReference,
     attr: string,
   ): string | null {
-    return this.compilerWorld.attributeMapper.map(this.owner, attr);
+    return this.compilerReads.mapAttribute(this.owner, attr);
   }
 
   isTwoWay(
     _node: HtmlNodeReference,
     attr: string,
   ): boolean {
-    return this.compilerWorld.attributeMapper.isTwoWay(this.owner, attr);
+    return this.compilerReads.isTwoWay(this.owner, attr);
   }
 
   private parseExpression(
@@ -577,7 +583,7 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
     const publication = this.valueSitePublisher.publish(new TemplateValueSitePublicationRequest(
       siteLocal,
       parseLocal,
-      this.parser,
+      this.compilerReads,
       this.source.provenanceHandle,
       TemplateValueSiteKind.BindingCommandValue,
       expression,
@@ -615,7 +621,7 @@ export class BindingCommandLoweringMaterializer {
 
   constructor(
     /** Hot analysis store that receives binding-command lowering records. */
-    readonly store: KernelStore,
+    readonly store: KernelPublicationContext,
   ) {
     this.publisher = new BindingCommandLoweringPublisher(store);
     this.commandPublisher = new BindingCommandProductPublisher(store);
@@ -624,23 +630,21 @@ export class BindingCommandLoweringMaterializer {
 
   lower(input: BindingCommandLoweringRequest): BindingCommandLoweringEmission {
     const emission = this.recordsForLowering(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `binding-command-lowering:${input.localKey}`));
-    }
-    this.registerProductDetails(emission);
+    this.store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `binding-command-lowering:${input.localKey}`),
+      [
+        ...publishProductDetails(TemplateProductDetails.BindingCommandBuildInput, emission.buildInputs),
+        ...publishProductDetails(TemplateProductDetails.BindingCommandLowering, emission.lowerings),
+        ...publishProductDetails(TemplateProductDetails.CompilerIssue, emission.issues),
+        ...publishProductDetails(TemplateProductDetails.AttributeSyntax, emission.attributeSyntaxes),
+        ...publishProductDetails(TemplateProductDetails.MultiBindingSegment, emission.multiBindingSegments),
+        ...publishProductDetails(TemplateProductDetails.MultiBindingLowering, emission.multiBindingLowerings),
+        ...publishProductDetails(TemplateProductDetails.Instruction, emission.instructions),
+        ...publishProductDetails(TemplateProductDetails.ValueSite, emission.valueSites),
+        ...publishProductDetails(TemplateProductDetails.ExpressionParse, emission.expressionParses),
+      ],
+    ));
     return emission;
-  }
-
-  private registerProductDetails(emission: BindingCommandLoweringEmission): void {
-    this.store.productDetails.addAll(TemplateProductDetails.BindingCommandBuildInput, emission.buildInputs);
-    this.store.productDetails.addAll(TemplateProductDetails.BindingCommandLowering, emission.lowerings);
-    this.store.productDetails.addAll(TemplateProductDetails.CompilerIssue, emission.issues);
-    this.store.productDetails.addAll(TemplateProductDetails.AttributeSyntax, emission.attributeSyntaxes);
-    this.store.productDetails.addAll(TemplateProductDetails.MultiBindingSegment, emission.multiBindingSegments);
-    this.store.productDetails.addAll(TemplateProductDetails.MultiBindingLowering, emission.multiBindingLowerings);
-    this.store.productDetails.addAll(TemplateProductDetails.Instruction, emission.instructions);
-    this.store.productDetails.addAll(TemplateProductDetails.ValueSite, emission.valueSites);
-    this.store.productDetails.addAll(TemplateProductDetails.ExpressionParse, emission.expressionParses);
   }
 
   private recordsForLowering(input: BindingCommandLoweringRequest): BindingCommandLoweringEmission {
@@ -683,6 +687,7 @@ export class BindingCommandLoweringMaterializer {
         local,
         source,
         input.compilerWorld,
+        input.compilerReads,
         classification as CommandAttributeClassification,
         syntax,
         attribute,
@@ -705,6 +710,7 @@ export class BindingCommandLoweringMaterializer {
         `multi-binding-lowering:${input.localKey}:${index}`,
         source,
         input.compilerWorld,
+        input.compilerReads,
         site,
         indexes.attributesByProduct,
         indexes.ownersByAttributeProduct,
@@ -716,6 +722,7 @@ export class BindingCommandLoweringMaterializer {
     local: string,
     source: BindingCommandLoweringSourceSet,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     classification: CommandAttributeClassification,
     syntax: AttributeSyntax | null,
     attribute: HtmlAttribute | null,
@@ -726,7 +733,8 @@ export class BindingCommandLoweringMaterializer {
     const openSeams: OpenSeam[] = [];
     const valueSites: TemplateValueSite[] = [];
     const expressionParses: TemplateExpressionParse[] = [];
-    const commandMatch = findCommand(compilerWorld, classification.bindingCommand);
+    const command = compilerReads.bindingCommand(classification.bindingCommand.name);
+    const commandMatch = command == null ? null : findCommand(compilerWorld, command.toReference());
     const buildInput = this.commandPublisher.publishBindingCommandBuildInput(
       local,
       source,
@@ -739,7 +747,18 @@ export class BindingCommandLoweringMaterializer {
 
     const loweringResult = syntax == null || attribute == null || owner == null || commandMatch == null
       ? this.openLowering(local, source, syntax?.sourceAddressHandle ?? classification.sourceAddressHandle, missingInputSummary(syntax, attribute, owner, commandMatch))
-      : this.executeCommand(local, source, compilerWorld, owner, syntax, attribute, classification, buildInput.input, commandMatch);
+      : this.executeCommand(
+        local,
+        source,
+        compilerWorld,
+        compilerReads,
+        owner,
+        syntax,
+        attribute,
+        classification,
+        buildInput.input,
+        commandMatch,
+      );
     records.push(...loweringResult.openSeams);
     openSeams.push(...loweringResult.openSeams);
     const commandLowering = this.commandPublisher.materializeCommandLowering(
@@ -778,6 +797,7 @@ export class BindingCommandLoweringMaterializer {
     local: string,
     source: BindingCommandLoweringSourceSet,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     site: TemplateValueSite,
     attributesByProduct: ReadonlyMap<ProductHandle, HtmlAttribute>,
     ownersByAttributeProduct: ReadonlyMap<ProductHandle, HtmlElementAttributeOwner>,
@@ -786,12 +806,13 @@ export class BindingCommandLoweringMaterializer {
       local,
       source,
       compilerWorld,
+      compilerReads,
       site,
       attributesByProduct,
       ownersByAttributeProduct,
     );
     const batch = closed instanceof ClosedMultiBindingSite
-      ? this.lowerMultiBindingSiteSegments(local, source, compilerWorld, site, closed)
+      ? this.lowerMultiBindingSiteSegments(local, source, compilerWorld, compilerReads, site, closed)
       : this.openMultiBindingSiteBatch(closed);
     const state = loweringStateFor(batch.openSeams, batch.commandLowerings, batch.expressionParses, batch.issues);
     const lowering = this.createMultiBindingLowering(local, site, state, batch);
@@ -819,6 +840,7 @@ export class BindingCommandLoweringMaterializer {
     local: string,
     source: BindingCommandLoweringSourceSet,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     site: TemplateValueSite,
     attributesByProduct: ReadonlyMap<ProductHandle, HtmlAttribute>,
     ownersByAttributeProduct: ReadonlyMap<ProductHandle, HtmlElementAttributeOwner>,
@@ -859,7 +881,7 @@ export class BindingCommandLoweringMaterializer {
       classification,
       definition,
       parsedSegments,
-      compilerWorld.resourceResolver.bindables(definition),
+      compilerReads.bindables(definition),
     );
   }
 
@@ -884,6 +906,7 @@ export class BindingCommandLoweringMaterializer {
     local: string,
     source: BindingCommandLoweringSourceSet,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     site: TemplateValueSite,
     closed: ClosedMultiBindingSite,
   ): MultiBindingSiteSegmentBatch {
@@ -906,6 +929,7 @@ export class BindingCommandLoweringMaterializer {
         segmentLocal,
         source,
         compilerWorld,
+        compilerReads,
         site,
         closed.attribute,
         closed.owner,
@@ -987,6 +1011,7 @@ export class BindingCommandLoweringMaterializer {
     local: string,
     source: BindingCommandLoweringSourceSet,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     site: TemplateValueSite,
     attribute: HtmlAttribute,
     owner: HtmlElementAttributeOwner,
@@ -999,6 +1024,7 @@ export class BindingCommandLoweringMaterializer {
       local,
       source,
       compilerWorld,
+      compilerReads,
       site,
       attribute,
       parsed,
@@ -1013,7 +1039,7 @@ export class BindingCommandLoweringMaterializer {
       this.lowerPlainMultiBindingSegment(
         local,
         source,
-        compilerWorld,
+        compilerReads,
         site,
         attribute,
         owner,
@@ -1027,6 +1053,7 @@ export class BindingCommandLoweringMaterializer {
         local,
         source,
         compilerWorld,
+        compilerReads,
         attribute,
         owner,
         classification,
@@ -1062,7 +1089,7 @@ export class BindingCommandLoweringMaterializer {
   private lowerPlainMultiBindingSegment(
     local: string,
     source: BindingCommandLoweringSourceSet,
-    compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     site: TemplateValueSite,
     attribute: HtmlAttribute,
     owner: HtmlElementAttributeOwner,
@@ -1074,7 +1101,7 @@ export class BindingCommandLoweringMaterializer {
     const publication = this.publisher.publishMultiBindingExpressionParse(
       `${local}:interpolation`,
       source,
-      compilerWorld,
+      compilerReads,
       site,
       materializedSegment.segment,
       materializedSegment.syntax,
@@ -1100,6 +1127,7 @@ export class BindingCommandLoweringMaterializer {
     local: string,
     source: BindingCommandLoweringSourceSet,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     attribute: HtmlAttribute,
     owner: HtmlElementAttributeOwner,
     classification: AttributeClassification,
@@ -1123,6 +1151,7 @@ export class BindingCommandLoweringMaterializer {
       local,
       source,
       compilerWorld,
+      compilerReads,
       owner,
       materializedSegment.syntax,
       attribute,
@@ -1149,6 +1178,7 @@ export class BindingCommandLoweringMaterializer {
     local: string,
     source: BindingCommandLoweringSourceSet,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     site: TemplateValueSite,
     attribute: HtmlAttribute,
     parsed: ParsedMultiBindingSegment,
@@ -1162,12 +1192,13 @@ export class BindingCommandLoweringMaterializer {
       site,
       source,
       attribute,
-      parseAttributeSyntaxInWorld(compilerWorld, parsed.rawName, parsed.rawValue),
+      parseAttributeSyntaxInWorld(compilerReads, parsed.rawName, parsed.rawValue),
       syntaxAddress.handle,
       nameAddress.record ?? nameAddress.handle,
     );
     const selection = this.selectMultiBindingSegment(
       compilerWorld,
+      compilerReads,
       syntax.syntax,
       bindables,
     );
@@ -1207,13 +1238,14 @@ export class BindingCommandLoweringMaterializer {
 
   private selectMultiBindingSegment(
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     syntax: AttributeSyntax,
     bindables: TemplateAttributeBindablesInfo,
   ): MultiBindingSegmentSelection {
     const bindable = bindables.attr(syntax.target);
     const command = syntax.command == null
       ? null
-      : compilerWorld.bindingCommandResolver.get(syntax.command);
+      : compilerReads.bindingCommand(syntax.command);
     const commandMatch = command == null
       ? null
       : findCommand(compilerWorld, command.toReference());
@@ -1228,6 +1260,7 @@ export class BindingCommandLoweringMaterializer {
     local: string,
     source: BindingCommandLoweringSourceSet,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     owner: HtmlElementAttributeOwner,
     syntax: AttributeSyntax,
     attribute: HtmlAttribute,
@@ -1254,13 +1287,13 @@ export class BindingCommandLoweringMaterializer {
       local,
       source,
       compilerWorld,
+      compilerReads,
       owner,
       syntax,
       classification,
       executable,
       commandReference,
       bindable,
-      compilerWorld.expressionParser,
       expressionParseContext,
     );
     const buildInfo = new BindingCommandBuildInfo(
@@ -1354,15 +1387,11 @@ function findCommand(
 }
 
 function parseAttributeSyntaxInWorld(
-  world: TemplateCompilerWorldEmission,
+  compilerReads: TemplateCompilerReadView,
   rawName: string,
   rawValue: string,
 ) {
-  return world.attributeParser.parse(
-    rawName,
-    rawValue,
-    new BuiltInAttributeParserExecutionHost(world),
-  );
+  return compilerReads.parseAttribute(rawName, rawValue);
 }
 
 function BindingCommandTailSyntaxFromExecution(

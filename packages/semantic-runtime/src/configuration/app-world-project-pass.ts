@@ -15,6 +15,7 @@ import {
   type EvaluationIssueProjectResult,
 } from '../evaluation/evaluation-source-issues.js';
 import type { KernelStore } from '../kernel/store.js';
+import { ImmediateKernelPublicationContext } from '../kernel/publication.js';
 import {
   ResourceDefinitionIndex,
 } from '../resources/resource-definition-index.js';
@@ -939,7 +940,10 @@ class AureliaAppWorldProjectConstructionFrame {
     state: StateProjectResult,
   ): TemplateCompilationProjectEmission {
     return this.measure('template-compilation', () =>
-      new TemplateCompilationProjectPass(this.store).compile(
+      new TemplateCompilationProjectPass(
+        this.store,
+        new ImmediateKernelPublicationContext(this.store),
+      ).compile(
         appWorld,
         typeSystem,
         resourceIndex,

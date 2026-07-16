@@ -53,7 +53,8 @@ materialization policy. This is
 where future lazy API answers should attach their derived outcomes before deciding whether hot details, public answer
 values, or query-produced products should be retained, invalidated, or disposed.
 Answer-local kernel retention is intentionally one policy knob, not separate product-detail and hot-detail flags:
-`KernelStore.mark()` / `disposeSince(...)` rolls records, product details, and hot details back as one coherent slice.
+`KernelStore.markLifetime()` / `disposeSince(...)` rolls answer-local records, product details, and hot details back as
+one coherent lifetime slice. Telemetry uses the separate mutation cursor from `markObservation()`.
 If a future profile needs to retain hot details without durable products, that requires a new kernel-side lifetime
 primitive rather than a misleading claim-graph switch.
 `QueryClaimGraph` exposes named disposal methods for the common lifecycle boundaries, plus a query-type-projection

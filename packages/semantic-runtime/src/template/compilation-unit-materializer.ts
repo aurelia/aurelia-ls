@@ -28,9 +28,14 @@ import {
 } from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
-  type KernelStore,
+  type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  type KernelPublicationContext,
+  KernelPublicationPlan,
+  publishProductDetail,
+} from '../kernel/publication.js';
 import {
   KernelVocabulary,
   type ProductKindKey,
@@ -172,7 +177,7 @@ class TemplateCompilationUnitProducts {
 
 class TemplateCompilationClaimMaterializer {
   constructor(
-    readonly store: KernelStore,
+    readonly store: KernelStoreReadView,
   ) {}
 
   recordsForUnit(
@@ -328,25 +333,23 @@ export class TemplateCompilationUnitMaterializer {
 
   constructor(
     /** Hot analysis store that receives compilation-front-door records. */
-    readonly store: KernelStore,
+    readonly store: KernelPublicationContext,
   ) {
     this.claims = new TemplateCompilationClaimMaterializer(store);
   }
 
   construct(input: TemplateCompilationUnitConstructionRequest): TemplateCompilationUnitEmission {
     const emission = this.recordsForUnit(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `template-compilation-unit:${input.localKey}`));
-    }
-    this.registerProductDetails(emission);
+    this.store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `template-compilation-unit:${input.localKey}`),
+      [
+        publishProductDetail(TemplateProductDetails.Source, emission.templateSource.productHandle, emission.templateSource),
+        publishProductDetail(TemplateProductDetails.ParseContext, emission.parseContext.productHandle, emission.parseContext),
+        publishProductDetail(TemplateProductDetails.CompilationContext, emission.rootContext.productHandle, emission.rootContext),
+        publishProductDetail(TemplateProductDetails.CompilationUnit, emission.compilationUnit.productHandle, emission.compilationUnit),
+      ],
+    ));
     return emission;
-  }
-
-  private registerProductDetails(emission: TemplateCompilationUnitEmission): void {
-    this.store.productDetails.add(TemplateProductDetails.Source, emission.templateSource.productHandle, emission.templateSource);
-    this.store.productDetails.add(TemplateProductDetails.ParseContext, emission.parseContext.productHandle, emission.parseContext);
-    this.store.productDetails.add(TemplateProductDetails.CompilationContext, emission.rootContext.productHandle, emission.rootContext);
-    this.store.productDetails.add(TemplateProductDetails.CompilationUnit, emission.compilationUnit.productHandle, emission.compilationUnit);
   }
 
   private recordsForUnit(input: TemplateCompilationUnitConstructionRequest): TemplateCompilationUnitEmission {
@@ -651,7 +654,7 @@ function serviceClaims(
   contextProductHandle: ProductHandle,
   services: readonly TemplateCompilerServiceReference[],
   provenanceHandle: ProvenanceHandle,
-  store: KernelStore,
+  store: KernelStoreReadView,
 ): readonly SemanticClaim[] {
   const claims: SemanticClaim[] = [];
   services.forEach((service, index) => {

@@ -7,7 +7,7 @@ import {
 } from '../telemetry/kernel-density.js';
 import type {
   KernelStoreDisposalSummary,
-  KernelStoreMarker,
+  KernelStoreLifetimeMarker,
 } from '../kernel/store.js';
 import {
   queryClaimRetentionPolicyForProfile,
@@ -60,7 +60,7 @@ export interface QueryClaimAnswerBoundary {
    */
   readonly shouldReuseRetainedAnswer?: () => boolean;
   /** Optional store marker for reclaiming answer-local kernel records after the public answer has been shaped. */
-  readonly readKernelMarker?: () => KernelStoreMarker;
+  readonly readKernelMarker?: () => KernelStoreLifetimeMarker;
   /**
    * Optional cheap kernel snapshot reader for measuring query-time side effects.
    *
@@ -70,7 +70,7 @@ export interface QueryClaimAnswerBoundary {
    */
   readonly readKernelSnapshot?: () => SemanticRuntimeKernelCountSnapshot;
   /** Dispose kernel/product/hot-detail records created after a marker when the query profile does not retain them. */
-  readonly disposeKernelSince?: (marker: KernelStoreMarker) => KernelStoreDisposalSummary;
+  readonly disposeKernelSince?: (marker: KernelStoreLifetimeMarker) => KernelStoreDisposalSummary;
   /**
    * Dispose non-marker answer side effects after the public answer is shaped.
    *
@@ -579,7 +579,7 @@ export class QueryClaimGraph {
 
   private applyAnswerLocalKernelPolicy(
     node: QueryClaimNode,
-    marker: KernelStoreMarker | null,
+    marker: KernelStoreLifetimeMarker | null,
     boundary: QueryClaimAnswerBoundary,
   ): void {
     if (

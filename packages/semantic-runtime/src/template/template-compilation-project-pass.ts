@@ -34,6 +34,8 @@ import type { FullResourceDefinition } from '../resources/resource-definition.js
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
+import type { ComputationRead } from '../kernel/computation-lifecycle.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
@@ -120,6 +122,10 @@ import {
   LocalTemplateDefinitionMaterializer,
   type LocalTemplateDefinitionMaterialization,
 } from './local-template-definition-materializer.js';
+import {
+  TemplateCompilerReadView,
+  TemplateCompilerWorldAuthority,
+} from './compiler-read-view.js';
 
 /** Front-door template products produced for one compiler-visible custom element definition. */
 export class TemplateResourceCompilationEmission {
@@ -151,12 +157,29 @@ export class TemplateResourceCompilationEmission {
     readonly bindingCommandLowering: BindingCommandLoweringEmission,
     /** Compiled template handoff: render targets, instruction rows, and visible compiler gaps. */
     readonly compiledTemplate: CompiledTemplateEmission,
+    /** Complete compiler-scope read set observed while producing this front door. */
+    readonly registeredReads: readonly ComputationRead[],
   ) {
     this.authoredAttributeSyntaxes = [
       ...attributeSyntax.syntaxes,
       ...bindingCommandLowering.attributeSyntaxes,
     ];
   }
+}
+
+/** Complete compiler-front-door input for one template occurrence in one compiler cohort. */
+export class TemplateResourceCompilationRequest {
+  constructor(
+    readonly localKey: string,
+    readonly analysisContextProductHandle: ProductHandle,
+    readonly appRootDefinitionProductHandle: ProductHandle | null,
+    readonly compilerWorld: TemplateCompilerWorldEmission,
+    readonly definition: CustomElementDefinition,
+    readonly template: CustomElementTemplateDefinition,
+    readonly compilerReads: TemplateCompilerReadView,
+    readonly localElementNames: readonly string[] = [],
+    readonly dependencyIdentityHandles: readonly IdentityHandle[] = [],
+  ) {}
 }
 
 /** Runtime/checker products produced after the project has admitted compiled template front doors. */
@@ -267,17 +290,19 @@ export class TemplateCompilationProjectPass {
   constructor(
     /** Hot analysis store shared by child materializers. */
     readonly store: KernelStore,
+    /** Publication context shared by the compiler-front-door phases. */
+    readonly publication: KernelPublicationContext,
   ) {
     this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(store);
     this.authoringCompilerWorldMaterializer = new TemplateAuthoringCompilerWorldMaterializer(store);
-    this.unitMaterializer = new TemplateCompilationUnitMaterializer(store);
-    this.htmlParser = new HtmlParseMaterializer(store);
+    this.unitMaterializer = new TemplateCompilationUnitMaterializer(publication);
+    this.htmlParser = new HtmlParseMaterializer(publication);
     this.localTemplateDefinitions = new LocalTemplateDefinitionMaterializer(store);
-    this.attributeSyntax = new AttributeSyntaxMaterializer(store);
-    this.attributeClassification = new AttributeClassificationMaterializer(store);
-    this.valueSites = new TemplateValueSiteMaterializer(store);
-    this.bindingCommandLowering = new BindingCommandLoweringMaterializer(store);
-    this.compiledTemplate = new CompiledTemplateMaterializer(store);
+    this.attributeSyntax = new AttributeSyntaxMaterializer(publication);
+    this.attributeClassification = new AttributeClassificationMaterializer(publication);
+    this.valueSites = new TemplateValueSiteMaterializer(publication);
+    this.bindingCommandLowering = new BindingCommandLoweringMaterializer(publication);
+    this.compiledTemplate = new CompiledTemplateMaterializer(publication);
     this.runtimeAnalysis = new TemplateRuntimeAnalysisMaterializer(store);
   }
 
@@ -652,18 +677,26 @@ export class TemplateCompilationProjectPass {
     const dependencyIdentityHandles = localDefinitions.definitions
       .map((localDefinition) => localDefinition.identityHandle)
       .filter((identityHandle): identityHandle is IdentityHandle => identityHandle != null);
-    const owner = this.compileResource(
-      activeCompilerWorld,
-      analysisContextProductHandle,
-      appRootDefinitionProductHandle,
-      definition,
-      localKey,
-      localDefinitions.ownerTemplate,
-      localElementNames,
-      dependencyIdentityHandles,
-      typeSystem,
-      phases,
-    );
+    const ownerTemplate = localDefinitions.ownerTemplate;
+    const owner = ownerTemplate == null
+      ? null
+      : this.compileResource(
+        new TemplateResourceCompilationRequest(
+          localKey,
+          analysisContextProductHandle,
+          appRootDefinitionProductHandle,
+          activeCompilerWorld,
+          definition,
+          ownerTemplate,
+          new TemplateCompilerReadView(
+            this.store,
+            TemplateCompilerWorldAuthority.fixed(activeCompilerWorld),
+          ),
+          localElementNames,
+          dependencyIdentityHandles,
+        ),
+        phases,
+      );
     const compilations: TemplateResourceCompilationEmission[] = owner == null ? [] : [owner];
     for (let index = 0; index < localDefinitions.definitions.length; index++) {
       const localDefinition = localDefinitions.definitions[index]!;
@@ -686,20 +719,39 @@ export class TemplateCompilationProjectPass {
     return compilations;
   }
 
-  compileResource(
-    compilerWorld: TemplateCompilerWorldEmission,
-    analysisContextProductHandle: ProductHandle,
-    appRootDefinitionProductHandle: ProductHandle | null,
-    definition: CustomElementDefinition,
-    localKey: string,
-    template: CustomElementTemplateDefinition | null,
-    localElementNames: readonly string[],
-    dependencyIdentityHandles: readonly IdentityHandle[],
-    typeSystem: TypeSystemProject | null,
+  compileResourceFrontDoor(
+    request: TemplateResourceCompilationRequest,
+    telemetry: SemanticRuntimeTelemetryOptions | null = null,
+  ): TemplateResourceCompilationEmission | null {
+    return this.compileResource(
+      request,
+      new TemplateCompilationPhaseRecorder(
+        this.store,
+        normalizeSemanticRuntimeTelemetryOptions(
+          telemetry,
+          DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
+        ),
+      ),
+    );
+  }
+
+  private compileResource(
+    request: TemplateResourceCompilationRequest,
     phases: TemplateCompilationPhaseRecorder,
   ): TemplateResourceCompilationEmission | null {
+    const {
+      compilerWorld,
+      analysisContextProductHandle,
+      appRootDefinitionProductHandle,
+      definition,
+      localKey,
+      template,
+      compilerReads,
+      localElementNames,
+      dependencyIdentityHandles,
+    } = request;
     const sourceKind = templateSourceKind(template);
-    if (template == null || sourceKind == null) {
+    if (sourceKind == null) {
       return null;
     }
 
@@ -714,12 +766,36 @@ export class TemplateCompilationProjectPass {
       phases,
     );
     const html = this.parseHtml(localKey, unit, phases);
-    const attributeSyntax = this.parseAttributeSyntax(localKey, compilerWorld, unit, html, phases);
-    const attributeClassification = this.classifyAttributes(localKey, compilerWorld, unit, html, attributeSyntax, phases);
-    const valueSites = this.materializeValueSites(localKey, compilerWorld, unit, html, attributeSyntax, attributeClassification, phases);
+    const attributeSyntax = this.parseAttributeSyntax(
+      localKey,
+      compilerWorld,
+      compilerReads,
+      unit,
+      html,
+      phases,
+    );
+    const attributeClassification = this.classifyAttributes(
+      localKey,
+      compilerWorld,
+      compilerReads,
+      unit,
+      html,
+      attributeSyntax,
+      phases,
+    );
+    const valueSites = this.materializeValueSites(
+      localKey,
+      compilerReads,
+      unit,
+      html,
+      attributeSyntax,
+      attributeClassification,
+      phases,
+    );
     const bindingCommandLowering = this.lowerBindingCommands(
       localKey,
       compilerWorld,
+      compilerReads,
       unit,
       html,
       attributeSyntax,
@@ -730,6 +806,8 @@ export class TemplateCompilationProjectPass {
     const compiledTemplate = this.materializeCompiledTemplate(
       localKey,
       compilerWorld,
+      compilerReads,
+      definition,
       unit,
       html,
       attributeSyntax,
@@ -751,6 +829,7 @@ export class TemplateCompilationProjectPass {
       valueSites,
       bindingCommandLowering,
       compiledTemplate,
+      compilerReads.readAll(),
     );
   }
 
@@ -809,6 +888,7 @@ export class TemplateCompilationProjectPass {
   private parseAttributeSyntax(
     localKey: string,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     unit: TemplateCompilationUnitEmission,
     html: HtmlParseEmission,
     phases: TemplateCompilationPhaseRecorder,
@@ -819,6 +899,7 @@ export class TemplateCompilationProjectPass {
         compilationUnit: unit.compilationUnit,
         html,
         compilerWorld,
+        compilerReads,
       } satisfies AttributeSyntaxParseRequest)
     );
   }
@@ -826,6 +907,7 @@ export class TemplateCompilationProjectPass {
   private classifyAttributes(
     localKey: string,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     unit: TemplateCompilationUnitEmission,
     html: HtmlParseEmission,
     attributeSyntax: AttributeSyntaxParseEmission,
@@ -838,13 +920,14 @@ export class TemplateCompilationProjectPass {
         html,
         attributeSyntax,
         compilerWorld,
+        compilerReads,
       } satisfies AttributeClassificationRequest)
     );
   }
 
   private materializeValueSites(
     localKey: string,
-    compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     unit: TemplateCompilationUnitEmission,
     html: HtmlParseEmission,
     attributeSyntax: AttributeSyntaxParseEmission,
@@ -858,7 +941,7 @@ export class TemplateCompilationProjectPass {
         html,
         attributeSyntax,
         attributeClassification,
-        compilerWorld,
+        compilerReads,
       } satisfies TemplateValueSiteRequest)
     );
   }
@@ -866,6 +949,7 @@ export class TemplateCompilationProjectPass {
   private lowerBindingCommands(
     localKey: string,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     unit: TemplateCompilationUnitEmission,
     html: HtmlParseEmission,
     attributeSyntax: AttributeSyntaxParseEmission,
@@ -882,6 +966,7 @@ export class TemplateCompilationProjectPass {
         attributeClassification,
         valueSites,
         compilerWorld,
+        compilerReads,
       } satisfies BindingCommandLoweringRequest)
     );
   }
@@ -889,6 +974,8 @@ export class TemplateCompilationProjectPass {
   private materializeCompiledTemplate(
     localKey: string,
     compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
+    definition: CustomElementDefinition,
     unit: TemplateCompilationUnitEmission,
     html: HtmlParseEmission,
     attributeSyntax: AttributeSyntaxParseEmission,
@@ -907,6 +994,8 @@ export class TemplateCompilationProjectPass {
         valueSites,
         bindingCommandLowering,
         compilerWorld,
+        compilerReads,
+        definition,
       } satisfies CompiledTemplateMaterializationRequest)
     );
   }

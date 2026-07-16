@@ -40,9 +40,15 @@ import {
 } from '../kernel/source-address.js';
 import {
   KernelStoreBatch,
-  type KernelStore,
+  type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  type KernelPublicationContext,
+  KernelPublicationPlan,
+  publishProductDetail,
+  publishProductDetails,
+} from '../kernel/publication.js';
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
@@ -183,7 +189,7 @@ class HtmlMaterializationState {
     readonly localKey: string,
     readonly templateSource: TemplateSource,
     readonly source: HtmlParseSourceSet,
-    readonly store: KernelStore,
+    readonly store: KernelStoreReadView,
   ) {}
 }
 
@@ -226,24 +232,22 @@ export class HtmlParseMaterializer {
 
   constructor(
     /** Hot analysis store that receives HTML IR records. */
-    readonly store: KernelStore,
+    readonly store: KernelPublicationContext,
   ) {
     this.treeMaterializer = new HtmlParseTreeMaterializer(store);
   }
 
   parse(input: HtmlParseRequest): HtmlParseEmission {
     const emission = this.recordsForParse(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `html-parse:${input.localKey}`));
-    }
-    this.registerProductDetails(emission);
+    this.store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `html-parse:${input.localKey}`),
+      [
+        publishProductDetail(TemplateProductDetails.HtmlDocument, emission.document.productHandle, emission.document),
+        ...publishProductDetails(TemplateProductDetails.HtmlNode, emission.nodes),
+        ...publishProductDetails(TemplateProductDetails.HtmlAttribute, emission.attributes),
+      ],
+    ));
     return emission;
-  }
-
-  private registerProductDetails(emission: HtmlParseEmission): void {
-    this.store.productDetails.add(TemplateProductDetails.HtmlDocument, emission.document.productHandle, emission.document);
-    this.store.productDetails.addAll(TemplateProductDetails.HtmlNode, emission.nodes);
-    this.store.productDetails.addAll(TemplateProductDetails.HtmlAttribute, emission.attributes);
   }
 
   private recordsForParse(input: HtmlParseRequest): HtmlParseEmission {
@@ -377,7 +381,7 @@ export function parseHtmlDocumentDraft(
 
 class HtmlParseTreeMaterializer {
   constructor(
-    private readonly store: KernelStore,
+    private readonly store: KernelStoreReadView,
   ) {}
 
   materializeRootNodes(
@@ -739,7 +743,7 @@ class HtmlParseTreeMaterializer {
     if (state.source.sourceAddressHandle == null) {
       return null;
     }
-    const sourceAddress = this.store.readAddress(state.source.sourceAddressHandle);
+    const sourceAddress = this.store.read(state.source.sourceAddressHandle);
     if (!(sourceAddress instanceof SourceSpanAddress)) {
       return null;
     }

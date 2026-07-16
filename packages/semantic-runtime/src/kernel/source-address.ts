@@ -19,6 +19,7 @@ import type { SemanticIdentity } from './identity.js';
 import { ProvenanceRecord } from './provenance.js';
 import type {
   KernelStore,
+  KernelStoreReadView,
   KernelStoreRecord,
 } from './store.js';
 
@@ -69,7 +70,7 @@ export function sourcePathSpanLookupKey(site: SourcePathSpanSite): string {
 
 /** Materialize an exact source span when the caller already has the boot-admitted source-file handle. */
 export function sourceSpanAddressForSite(
-  store: KernelStore,
+  store: KernelStoreReadView,
   localKey: string,
   site: SourceSpanSite,
   role: SourceSpanRole = SourceSpanRole.Primary,
@@ -89,7 +90,7 @@ export function sourceSpanAddressForSite(
 
 /** Publish an exact authored span together with the witness used by durable field provenance. */
 export function sourceSpanEvidenceForSite(
-  store: KernelStore,
+  store: KernelStoreReadView,
   localKey: string,
   site: SourceSpanSite,
   role: SourceSpanRole,
@@ -204,7 +205,7 @@ export function sourceFileAddressHandlesForFileNames(
 }
 
 export function addressBelongsToSourceFiles(
-  store: KernelStore,
+  store: KernelStoreReadView,
   addressHandle: AddressHandle,
   sourceFileHandles: ReadonlySet<AddressHandle>,
 ): boolean {
@@ -224,28 +225,28 @@ interface AuthoredSourceAddressSeen {
 
 /** Narrow a kernel address to an exact source span, following template/generated anchors when possible. */
 export function sourceSpanAddressForAddress(
-  store: KernelStore,
+  store: KernelStoreReadView,
   addressHandle: AddressHandle | null,
 ): SourceSpanAddress | null {
   return authoredSourceAddressForAddress(store, addressHandle)?.sourceSpan ?? null;
 }
 
 export function sourceFileHandleForAddress(
-  store: KernelStore,
+  store: KernelStoreReadView,
   addressHandle: AddressHandle | null,
 ): AddressHandle | null {
   return sourceFileAddressForAddress(store, addressHandle)?.handle ?? null;
 }
 
 export function sourceFileAddressForAddress(
-  store: KernelStore,
+  store: KernelStoreReadView,
   addressHandle: AddressHandle | null,
 ): SourceFileAddress | null {
   return authoredSourceAddressForAddress(store, addressHandle)?.sourceFile ?? null;
 }
 
 function authoredSourceAddressForAddress(
-  store: KernelStore,
+  store: KernelStoreReadView,
   addressHandle: AddressHandle | null,
   seen: AuthoredSourceAddressSeen = createAuthoredSourceAddressSeen(),
 ): AuthoredSourceAddress | null {
@@ -254,16 +255,16 @@ function authoredSourceAddressForAddress(
   }
   seen.addresses.add(addressHandle);
 
-  const address = store.readAddress(addressHandle);
-  if (address == null) {
+  const record = store.read(addressHandle);
+  if (record == null || !isSemanticAddressRecord(record)) {
     return null;
   }
-  return authoredSourceAddressForStoredAddress(store, address, seen);
+  return authoredSourceAddressForStoredAddress(store, record, seen);
 }
 
 /** Follow an address or identity handle to the closest authored source anchor when one exists. */
 export function authoredSourceAddressForAnchorHandle(
-  store: KernelStore,
+  store: KernelStoreReadView,
   handle: SourceAnchorHandle | null,
 ): AuthoredSourceAddress | null {
   return authoredSourceAddressForAnchor(store, handle, createAuthoredSourceAddressSeen());
@@ -271,7 +272,7 @@ export function authoredSourceAddressForAnchorHandle(
 
 /** Read an address-or-identity anchor through the store record index and validate the expected record family. */
 export function readSourceAnchorRecord(
-  store: KernelStore,
+  store: KernelStoreReadView,
   handle: SourceAnchorHandle | null,
 ): SourceAnchorRecord | null {
   if (handle == null) {
@@ -289,7 +290,7 @@ function createAuthoredSourceAddressSeen(): AuthoredSourceAddressSeen {
 }
 
 function authoredSourceAddressForAnchor(
-  store: KernelStore,
+  store: KernelStoreReadView,
   handle: SourceAnchorHandle | null,
   seen: AuthoredSourceAddressSeen,
 ): AuthoredSourceAddress | null {
@@ -308,7 +309,7 @@ function authoredSourceAddressForAnchor(
 }
 
 function authoredSourceAddressForStoredAddress(
-  store: KernelStore,
+  store: KernelStoreReadView,
   address: SemanticAddress,
   seen: AuthoredSourceAddressSeen,
 ): AuthoredSourceAddress | null {
@@ -334,7 +335,7 @@ function authoredSourceAddressForStoredAddress(
 }
 
 function authoredSourceAddressForIdentity(
-  store: KernelStore,
+  store: KernelStoreReadView,
   identity: SemanticIdentity,
   seen: AuthoredSourceAddressSeen,
 ): AuthoredSourceAddress | null {

@@ -53,6 +53,7 @@ export class ProductDetailEntry<
 
 type ReadProduct = (handle: ProductHandle) => MaterializedProduct | null;
 type ProductDetailWithHandle = { readonly productHandle: ProductHandle };
+type AllocateOrdinal = () => number;
 
 const productEnvelopeByDetail = new WeakMap<object, MaterializedProduct>();
 
@@ -233,9 +234,13 @@ export class ProductDetailCatalog {
   private readonly entriesByHandle = new Map<ProductHandle, ProductDetailEntry<unknown>>();
   private readonly handlesByDetailKind = new Map<string, Set<ProductHandle>>();
   private readonly handleOrder: ProductHandle[] = [];
+  private readonly lifetimeOrdinalByHandle = new Map<ProductHandle, number>();
+  private readonly mutationOrdinalByHandle = new Map<ProductHandle, number>();
 
   constructor(
     private readonly readProduct: ReadProduct,
+    private readonly allocateLifetimeOrdinal: AllocateOrdinal,
+    private readonly allocateMutationOrdinal: AllocateOrdinal,
   ) {}
 
   /** Attach a typed detail to an already-committed materialized product. */
@@ -243,6 +248,16 @@ export class ProductDetailCatalog {
     slot: ProductDetailSlot<TDetail, TProductKind>,
     productHandle: ProductHandle,
     detail: TDetail,
+  ): ProductDetailEntry<TDetail, TProductKind> {
+    return this.addAtLifetime(slot, productHandle, detail, this.allocateLifetimeOrdinal());
+  }
+
+  /** Attach a detail while inheriting the explicit lifetime of a replacement publication. */
+  addAtLifetime<TDetail, TProductKind extends ProductKindKey>(
+    slot: ProductDetailSlot<TDetail, TProductKind>,
+    productHandle: ProductHandle,
+    detail: TDetail,
+    lifetimeOrdinal: number,
   ): ProductDetailEntry<TDetail, TProductKind> {
     const product = this.readProduct(productHandle);
     if (product == null) {
@@ -262,6 +277,8 @@ export class ProductDetailCatalog {
     const entry = new ProductDetailEntry(product, slot, detail);
     this.entriesByHandle.set(productHandle, entry as ProductDetailEntry<unknown>);
     this.handleOrder.push(productHandle);
+    this.lifetimeOrdinalByHandle.set(productHandle, lifetimeOrdinal);
+    this.mutationOrdinalByHandle.set(productHandle, this.allocateMutationOrdinal());
     this.addHandleForSlot(slot, productHandle);
     return entry;
   }
@@ -339,9 +356,9 @@ export class ProductDetailCatalog {
     return [...this.entriesByHandle.values()];
   }
 
-  readEntriesSince(marker: number): readonly ProductDetailEntry<unknown>[] {
+  readEntriesChangedSince(marker: number): readonly ProductDetailEntry<unknown>[] {
     return this.handleOrder
-      .slice(marker)
+      .filter((handle) => (this.mutationOrdinalByHandle.get(handle) ?? -1) >= marker)
       .map((handle) => this.entriesByHandle.get(handle) ?? null)
       .filter((entry): entry is ProductDetailEntry<unknown> => entry != null);
   }
@@ -355,16 +372,18 @@ export class ProductDetailCatalog {
       .map(([detailKind, handles]) => [detailKind, handles.size]));
   }
 
-  mark(): number {
-    return this.handleOrder.length;
-  }
-
   remove(productHandle: ProductHandle): ProductDetailEntry<unknown> | null {
     const entry = this.entriesByHandle.get(productHandle) ?? null;
     if (entry == null) {
       return null;
     }
     this.entriesByHandle.delete(productHandle);
+    const orderIndex = this.handleOrder.indexOf(productHandle);
+    if (orderIndex >= 0) {
+      this.handleOrder.splice(orderIndex, 1);
+    }
+    this.lifetimeOrdinalByHandle.delete(productHandle);
+    this.mutationOrdinalByHandle.delete(productHandle);
     const handles = this.handlesByDetailKind.get(entry.slot.detailKind);
     handles?.delete(productHandle);
     if (handles?.size === 0) {
@@ -373,11 +392,10 @@ export class ProductDetailCatalog {
     return entry;
   }
 
-  removeSince(marker: number): number {
+  removeAtOrAfterLifetime(marker: number): number {
     let removed = 0;
-    while (this.handleOrder.length > marker) {
-      const handle = this.handleOrder.pop();
-      if (handle != null && this.remove(handle) != null) {
+    for (const handle of [...this.handleOrder].reverse()) {
+      if ((this.lifetimeOrdinalByHandle.get(handle) ?? -1) >= marker && this.remove(handle) != null) {
         removed += 1;
       }
     }

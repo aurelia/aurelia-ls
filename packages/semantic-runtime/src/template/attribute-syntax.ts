@@ -103,7 +103,6 @@ export type AttributeParserServiceField =
 
 export type AttributeParserMachineField =
   | 'compiledPatterns'
-  | 'cache'
   | 'source';
 
 export type AttributeClassificationField =
@@ -338,10 +337,10 @@ export class CompiledAttributePattern {
   }
 }
 
-/** Cached result of interpreting one raw attribute name. */
+/** Immutable result of interpreting one raw attribute name against a compiled pattern set. */
 export class AttributePatternInterpretation {
   constructor(
-    /** Raw attribute name used as the cache key. */
+    /** Raw attribute name that was interpreted. */
     readonly rawName: string,
     /** Matched pattern string, or null when the name stays plain. */
     readonly pattern: string | null,
@@ -492,8 +491,7 @@ export class AttributeParserParseResult {
 /** Runtime SyntaxInterpreter model that turns registered pattern definitions into an attribute-name matcher. */
 @auLink('template-compiler:SyntaxInterpreter')
 export class AttributeParserMachine {
-  private readonly _cache = new Map<string, AttributePatternInterpretation>();
-  private readonly _compiledPatterns: CompiledAttributePattern[] = [];
+  private readonly _compiledPatterns: readonly CompiledAttributePattern[];
 
   constructor(
     /** Product handle for the materialized-product envelope that represents this parser machine. */
@@ -502,17 +500,12 @@ export class AttributeParserMachine {
     readonly identityHandle: IdentityHandle,
     /** Compiled patterns in the order registered with the parser. */
     compiledPatterns: readonly CompiledAttributePattern[],
-    /** Cached interpretations for already-seen raw names. */
-    cachedInterpretations: readonly AttributePatternInterpretation[],
     /** Source address for the parser machine owner or registration boundary. */
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<AttributeParserMachineField>[] = [],
   ) {
-    this._compiledPatterns.push(...compiledPatterns);
-    for (const interpretation of cachedInterpretations) {
-      this._cache.set(interpretation.rawName, interpretation);
-    }
+    this._compiledPatterns = [...compiledPatterns];
   }
 
   /** Compiled patterns in runtime registration order. */
@@ -525,31 +518,9 @@ export class AttributeParserMachine {
     return this._compiledPatterns.map((pattern) => pattern.productHandle);
   }
 
-  /** Cached interpretations for already-seen raw names. */
-  get cachedInterpretations(): readonly AttributePatternInterpretation[] {
-    return this.readCachedInterpretations();
-  }
-
-  /** Runtime `SyntaxInterpreter.interpret(name)` shape with live cache behavior. */
+  /** Runtime `SyntaxInterpreter.interpret(name)` shape over the immutable compiler-world registration set. */
   interpret(rawName: string): AttributePatternInterpretation {
-    const cached = this._cache.get(rawName);
-    if (cached != null) {
-      return cached;
-    }
-    const interpretation = interpretCompiledAttributePatterns(rawName, this._compiledPatterns);
-    this._cache.set(rawName, interpretation);
-    return interpretation;
-  }
-
-  /** Runtime SyntaxInterpreter registration shape used by IAttributeParser.registerPattern. */
-  registerPatterns(compiledPatterns: readonly CompiledAttributePattern[]): void {
-    this._compiledPatterns.push(...compiledPatterns);
-    this._cache.clear();
-  }
-
-  /** Snapshot the current live interpretation cache for answer envelopes or later kernel emission. */
-  readCachedInterpretations(): readonly AttributePatternInterpretation[] {
-    return [...this._cache.values()];
+    return interpretCompiledAttributePatterns(rawName, this._compiledPatterns);
   }
 }
 
@@ -652,7 +623,7 @@ export class AttributePatternExecutable {
 /** Runtime IAttributeParser model, including the pattern handlers visible through DI. */
 @auLink('template-compiler:IAttributeParser')
 export class AttributeParserService {
-  private readonly _patternExecutables: AttributePatternExecutable[] = [];
+  private readonly _patternExecutables: readonly AttributePatternExecutable[];
 
   constructor(
     /** Product handle for the materialized-product envelope that represents this parser service. */
@@ -668,7 +639,7 @@ export class AttributeParserService {
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<AttributeParserServiceField>[] = [],
   ) {
-    this._patternExecutables.push(...patternExecutables);
+    this._patternExecutables = [...patternExecutables];
   }
 
   /** Pattern handlers visible to this parser service. */
@@ -689,17 +660,6 @@ export class AttributeParserService {
   /** Interpret a raw attribute name through the visible SyntaxInterpreter machine. */
   interpret(rawName: string): AttributePatternInterpretation | null {
     return this.machine?.interpret(rawName) ?? null;
-  }
-
-  /** Runtime `IAttributeParser.registerPattern(patterns, Type)` shape over materialized pattern products. */
-  registerPattern(
-    executable: AttributePatternExecutable,
-    compiledPatterns: readonly CompiledAttributePattern[],
-  ): void {
-    if (!this._patternExecutables.some((pattern) => pattern.productHandle === executable.productHandle)) {
-      this._patternExecutables.push(executable);
-    }
-    this.machine?.registerPatterns(compiledPatterns);
   }
 
   /** Runtime `IAttributeParser.parse(name, value)` shape with handler execution delegated to a product host. */

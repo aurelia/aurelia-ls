@@ -11,7 +11,11 @@ import {
   readProjectCompilerOptionsCacheOverview,
 } from '../boot/project-compiler-options.js';
 import { SourceFileRole } from '../kernel/address.js';
-import { KernelStore, type KernelStoreDisposalSummary, type KernelStoreMarker } from '../kernel/store.js';
+import {
+  KernelStore,
+  type KernelStoreDisposalSummary,
+  type KernelStoreLifetimeMarker,
+} from '../kernel/store.js';
 import { AureliaAppWorldProjectEmission, AureliaAppWorldProjectPass } from '../configuration/app-world-project-pass.js';
 import {
   evaluateAureliaProject,
@@ -1288,9 +1292,9 @@ export class SemanticRuntime {
       }
       : {
         shouldReuseRetainedAnswer: input.shouldReuseRetainedAnswer,
-        readKernelMarker: () => this.workspace.store.mark(),
+        readKernelMarker: () => this.workspace.store.markLifetime(),
         readKernelSnapshot: () => this.workspace.store.readTelemetrySnapshot(),
-        disposeKernelSince: (marker: KernelStoreMarker) => this.workspace.store.disposeSince(marker),
+        disposeKernelSince: (marker: KernelStoreLifetimeMarker) => this.workspace.store.disposeSince(marker),
         disposeAnswerSideEffects: input.disposeAnswerSideEffects,
       };
     return queryClaims.answer({
@@ -1548,7 +1552,7 @@ export class SemanticRuntime {
     if (this.hasCachedAppForProject(project.projectKey)) {
       this.disposeCachedAppEpochs(QueryClaimDisposalReason.AppEpochDisposed);
     }
-    const kernelMarker = this.workspace.store.mark();
+    const kernelMarker = this.workspace.store.markLifetime();
     let emission: AureliaAppWorldProjectEmission;
     try {
       emission = new AureliaAppWorldProjectPass().constructAndEmit(this.workspace.store, project, {
@@ -2456,7 +2460,7 @@ export class SemanticApp {
     );
   }
 
-  get kernelMarker(): KernelStoreMarker {
+  get kernelMarker(): KernelStoreLifetimeMarker {
     return this.cacheRequest.kernelMarker;
   }
 
@@ -2834,7 +2838,7 @@ export class SemanticApp {
             this.activeInquiryProfileStack.pop();
           }
         }, {
-          readKernelMarker: () => this.runtime.workspace.store.mark(),
+          readKernelMarker: () => this.runtime.workspace.store.markLifetime(),
           readKernelSnapshot: () => this.runtime.workspace.store.readTelemetrySnapshot(),
           disposeKernelSince: (marker) => this.runtime.workspace.store.disposeSince(marker),
         }),
@@ -4475,17 +4479,17 @@ interface SemanticAppCacheRequest {
   readonly includeAuthoringTemplates: boolean;
   readonly authoringTemplateSourceFileCount: number;
   readonly authoringTemplateLimit: number | null;
-  readonly kernelMarker: KernelStoreMarker;
+  readonly kernelMarker: KernelStoreLifetimeMarker;
 }
 
 function earliestKernelMarker(
-  markers: readonly KernelStoreMarker[],
-): KernelStoreMarker {
+  markers: readonly KernelStoreLifetimeMarker[],
+): KernelStoreLifetimeMarker {
   if (markers.length === 0) {
     throw new Error('Cannot select earliest kernel marker from an empty marker list.');
   }
   return markers.reduce((earliest, marker) =>
-    marker.records < earliest.records
+    marker.nextLifetimeOrdinal < earliest.nextLifetimeOrdinal
       ? marker
       : earliest
   );

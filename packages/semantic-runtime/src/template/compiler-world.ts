@@ -513,10 +513,6 @@ export class TemplateResourceScope {
 /** Runtime ResourceResolver/IResourceResolver service as a product model. */
 @auLink('runtime-html:ResourceResolver')
 export class TemplateResourceResolverService {
-  private readonly _elementCache = new Map<string, TemplateResolvedResource | null>();
-  private readonly _attributeCache = new Map<string, TemplateResolvedResource | null>();
-  private readonly _bindableCache = new WeakMap<TemplateCompilableResourceDefinition, TemplateBindablesInfo>();
-
   constructor(
     /** Product handle for the materialized-product envelope that represents this service. */
     readonly productHandle: ProductHandle,
@@ -535,49 +531,33 @@ export class TemplateResourceResolverService {
   /** Runtime `IResourceResolver.el(container, name)` shape with the container already fixed by this world. */
   el(name: string): TemplateResolvedResource | null {
     const key = name.toLowerCase();
-    if (this._elementCache.has(key)) {
-      return this._elementCache.get(key) ?? null;
-    }
     const resource = this.resources.find((candidate) =>
       candidate.resourceKind === ResourceDefinitionKind.CustomElement
       && matchesVisibleResourceName(candidate, key)
     ) ?? null;
-    const result = resource == null ? null : resolvedResource(resource);
-    this._elementCache.set(key, result);
-    return result;
+    return resource == null ? null : resolvedResource(resource);
   }
 
   /** Runtime `IResourceResolver.attr(container, name)` shape with the container already fixed by this world. */
   attr(name: string): TemplateResolvedResource | null {
     const key = name.toLowerCase();
-    if (this._attributeCache.has(key)) {
-      return this._attributeCache.get(key) ?? null;
-    }
     const resource = this.resources.find((candidate) =>
       (candidate.resourceKind === ResourceDefinitionKind.CustomAttribute
         || candidate.resourceKind === ResourceDefinitionKind.TemplateController)
       && matchesVisibleResourceName(candidate, key)
     ) ?? null;
-    const result = resource == null ? null : resolvedResource(resource);
-    this._attributeCache.set(key, result);
-    return result;
+    return resource == null ? null : resolvedResource(resource);
   }
 
   bindables(definition: CustomElementDefinition): TemplateElementBindablesInfo;
   bindables(definition: CustomAttributeDefinition): TemplateAttributeBindablesInfo;
   bindables(definition: TemplateCompilableResourceDefinition): TemplateBindablesInfo {
-    const cached = this._bindableCache.get(definition);
-    if (cached != null) {
-      return cached;
-    }
-    const info = definition.type === ResourceDefinitionKind.CustomElement
+    return definition.type === ResourceDefinitionKind.CustomElement
       ? new TemplateElementBindablesInfo(
         templateBindableReferences(definition.productHandle, definition.sourceAddressHandle, definition.bindables, false),
         templateBindableReferences(definition.productHandle, definition.sourceAddressHandle, definition.bindables, false),
       )
       : attributeBindablesInfo(definition);
-    this._bindableCache.set(definition, info);
-    return info;
   }
 
   toReference(): TemplateCompilerServiceReference {

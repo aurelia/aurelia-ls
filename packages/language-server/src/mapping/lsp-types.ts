@@ -698,12 +698,18 @@ function semanticRuntimeDefinitionTarget(
   if (definition == null) {
     return null;
   }
-  const selectionSource = firstSemanticRuntimeExactSourceReference([
-    definition.matchedNameSource,
-    definition.nameSource,
-    definition.targetSource,
-    definition.source,
-  ]);
+  const selectedAlias = definition.matchedName != null
+    && definition.name != null
+    && definition.matchedName.toLowerCase() !== definition.name.toLowerCase();
+  // Alias and local-template names are declarations in their own right. A primary app resource name is metadata for
+  // the implementation target, so ordinary F12 follows the class while rename remains on the authored name surface.
+  const selectionSource = firstSemanticRuntimeExactSourceReference(
+    selectedAlias
+      ? [definition.matchedNameSource, definition.nameSource, definition.targetSource, definition.source]
+      : definition.targetName != null
+        ? [definition.targetSource, definition.matchedNameSource, definition.nameSource, definition.source]
+        : [definition.matchedNameSource, definition.nameSource, definition.targetSource, definition.source],
+  );
   return selectionSource == null
     ? null
     : {

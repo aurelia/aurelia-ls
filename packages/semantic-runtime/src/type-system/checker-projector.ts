@@ -191,6 +191,7 @@ interface TypeShapeIndex {
   readonly summary: string;
   readEntryCount(): number;
   dispose(context: { readonly summary: { readonly productDetails: number } }): void;
+  hasProductDetail(productHandle: ProductHandle): boolean;
 }
 
 const typeShapeIndexByStore = new WeakMap<KernelStore, TypeShapeIndex>();
@@ -874,6 +875,9 @@ function typeShapeIndexForStore(store: KernelStore): TypeShapeIndex {
         return;
       }
       pruneTypeShapeIndex(store, this);
+    },
+    hasProductDetail(productHandle) {
+      return store.productDetails.read(TypeSystemProductDetails.TypeShape, productHandle) != null;
     },
   };
   store.registerSidecarIndex(index);

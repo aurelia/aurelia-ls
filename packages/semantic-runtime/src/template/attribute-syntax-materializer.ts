@@ -23,9 +23,13 @@ import {
 } from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
-  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  type KernelPublicationContext,
+  KernelPublicationPlan,
+  publishProductDetails,
+} from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   AttributeSyntax,
@@ -35,8 +39,8 @@ import {
   attributeSyntaxPartSources,
   type AttributeSyntaxPartSources,
 } from './attribute-syntax-source.js';
-import { BuiltInAttributeParserExecutionHost } from './attribute-parser-execution-host.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
+import type { TemplateCompilerReadView } from './compiler-read-view.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import type { HtmlAttribute } from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
@@ -51,6 +55,8 @@ export interface AttributeSyntaxParseRequest {
   readonly html: HtmlParseEmission;
   /** Compiler world that supplies the runtime-shaped attribute parser service. */
   readonly compilerWorld: TemplateCompilerWorldEmission;
+  /** Required run-scoped compiler lookup surface. */
+  readonly compilerReads: TemplateCompilerReadView;
 }
 
 export class AttributeSyntaxParseEmission {
@@ -79,17 +85,15 @@ class AttributeSyntaxPublication {
 export class AttributeSyntaxMaterializer {
   constructor(
     /** Hot analysis store that receives AttrSyntax records. */
-    readonly store: KernelStore,
+    readonly store: KernelPublicationContext,
   ) {}
 
   parse(input: AttributeSyntaxParseRequest): AttributeSyntaxParseEmission {
     const emission = this.recordsForParse(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `attribute-syntax:${input.localKey}`));
-    }
-    for (const syntax of emission.syntaxes) {
-      this.store.productDetails.add(TemplateProductDetails.AttributeSyntax, syntax.productHandle, syntax);
-    }
+    this.store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `attribute-syntax:${input.localKey}`),
+      publishProductDetails(TemplateProductDetails.AttributeSyntax, emission.syntaxes),
+    ));
     return emission;
   }
 
@@ -98,14 +102,11 @@ export class AttributeSyntaxMaterializer {
     const records: KernelStoreRecord[] = [...source.records];
     const syntaxes: AttributeSyntax[] = [];
     const claims: SemanticClaim[] = [];
-    const executionHost = new BuiltInAttributeParserExecutionHost(input.compilerWorld);
-
     input.html.attributes.forEach((attribute, index) => {
       const publication = this.publishAttributeSyntax(
         `attribute-syntax:${input.localKey}:${index}`,
         source,
         input,
-        executionHost,
         attribute,
       );
       syntaxes.push(publication.syntax);
@@ -130,10 +131,9 @@ export class AttributeSyntaxMaterializer {
     local: string,
     source: AttributeSyntaxSourceSet,
     input: AttributeSyntaxParseRequest,
-    executionHost: BuiltInAttributeParserExecutionHost,
     attribute: HtmlAttribute,
   ): AttributeSyntaxPublication {
-    const parse = input.compilerWorld.attributeParser.parse(attribute.rawName, attribute.rawValue, executionHost);
+    const parse = input.compilerReads.parseAttribute(attribute.rawName, attribute.rawValue);
     const partSources = attributeSyntaxPartSources(this.store, local, attribute.nameAddressHandle, parse);
     const syntax = this.createAttributeSyntax(local, source, attribute, parse, partSources);
     const claims = this.claimsForAttributeSyntax(local, source, attribute, syntax, parse.executableProductHandle);

@@ -17,7 +17,8 @@ classification, expression parsing, and instruction lowering converge on the sam
   expression parser, and attribute mapper.
 - `compiler-world-materializer.ts` materializes a compiler world after earlier passes have selected the visible container,
   resource headers, and syntax executables. It constructs the scope and compiler service products, but it does not
-  rediscover source configuration. The app-world composition currently supplies non-syntax resources from
+  rediscover source configuration. Published compiler worlds are immutable semantic inputs; lookup memoization and
+  attribute-pattern registration do not mutate them during template compilation. The app-world composition currently supplies non-syntax resources from
   DI-produced container resource slots, and supplies attribute-pattern plus binding-command executables from the
   configured framework syntax-catalog admissions for the owning app-root sequence. Duplicate attribute-pattern
   registrations publish template-compiler `attribute_pattern_duplicate` (`AUR0089`), and duplicate binding-command
@@ -51,6 +52,22 @@ classification, expression parsing, and instruction lowering converge on the sam
   Runtime controller diagnostics that scan view-model class bodies should ask the type-system declaration-source bridge
   for the checker declaration's already-admitted source-file address. They should not borrow the resource target span,
   because imported/factory-backed targets can point at a different authored site than the class body being scanned.
+- `compiler-read-view.ts` is the required run-scoped read boundary for an incremental template front door. It delegates
+  resource, bindable, command, pattern, parser, AttrMapper, and TemplateCompiler operations to the admitted immutable
+  compiler world while registering the exact positive or negative keys that were read. The compiler-world authority is
+  re-read at commit, and each observation keeps scope, closure/support, and result revisions distinct. This view is not a
+  second resource catalog. Ordinary eager compilation uses the same operations with a fixed world authority.
+- `template-compilation-computation.ts` is the same-runtime lifecycle boundary. A stable resource owner plus
+  project/compiler cohort forms the computation locus; the current owner definition is resolved from the compiler-world
+  authority on every run, and external HTML address route/path/existence/content remain observed inputs rather than
+  identity. Positive and negative owner reads are registered even when no compilation is emitted. One run stages
+  compilation-unit, HTML, syntax, classification, value-site, command-lowering, and compiled-template products, then
+  atomically replaces the prior closure after read validation. Owner removal and source absence withdraw outputs.
+  Inline/local templates, runtime analysis, checker products, and production LSP epoch replacement remain outside this
+  boundary.
+- `compiled-template-comparison.ts` is the first rich-detail cutoff boundary. It compares compiled-template structure
+  separately from source/provenance witnesses and resolves stable address handles against old and proposed record views.
+  Other rich details remain conservative replacements until their downstream ownership justifies a comparator.
 - `html-ir.ts` models authored HTML before Aurelia syntax interpretation. It preserves source addresses and recovery
   observations without performing resource lookup.
 - `runtime-dom-name.ts` projects authored tag and attribute spelling into the browser DOM names consumed by framework
@@ -667,7 +684,7 @@ Attribute classification is a pressure point between resource lookup, bindable s
 and instruction lowering. Keep those facts separate until real materializers prove a smaller contract is safe.
 
 The attribute parser is a machine, not just a bag of patterns. Materializers should preserve the registered handler,
-compiled pattern, score, and interpretation-cache boundaries because autocomplete and diagnostics need to know whether
+compiled pattern, score, and interpretation boundaries because autocomplete and diagnostics need to know whether
 an attribute failed matching, matched a pattern, or reached an opaque handler.
 
 Authored framework capability demand is separate from parser success. Optional syntax such as runtime-html

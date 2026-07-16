@@ -32,7 +32,7 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import type {
-  KernelStore,
+  KernelStoreReadView,
   KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -63,7 +63,6 @@ import {
   MultiBindingLowering,
   MultiBindingSegment,
 } from './binding-command-execution.js';
-import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateBindableReference } from './compiler-world-reference.js';
 import {
   TemplateExpressionParse,
@@ -73,6 +72,7 @@ import {
 import {
   TemplateValueSitePublicationRequest,
   TemplateValueSitePublisher,
+  type TemplateValueSiteExpressionParser,
 } from './value-site-publication.js';
 import {
   runtimeExpressionParseContextForSourceSpanAddress,
@@ -172,7 +172,7 @@ export interface MultiBindingSegmentPublicationSelection {
 /** Publishes ordinary binding-command build inputs and command-lowering products. */
 export class BindingCommandProductPublisher {
   constructor(
-    readonly store: KernelStore,
+    readonly store: KernelStoreReadView,
   ) {}
 
   publishBindingCommandBuildInput(
@@ -376,7 +376,7 @@ export class BindingCommandLoweringPublisher {
   private readonly valueSitePublisher: TemplateValueSitePublisher;
 
   constructor(
-    readonly store: KernelStore,
+    readonly store: KernelStoreReadView,
   ) {
     this.valueSitePublisher = new TemplateValueSitePublisher(store);
   }
@@ -552,7 +552,7 @@ export class BindingCommandLoweringPublisher {
   publishMultiBindingExpressionParse(
     local: string,
     source: BindingCommandLoweringSourceSet,
-    compilerWorld: TemplateCompilerWorldEmission,
+    parser: TemplateValueSiteExpressionParser,
     originalSite: TemplateValueSite,
     segment: MultiBindingSegment,
     syntax: AttributeSyntax,
@@ -565,7 +565,7 @@ export class BindingCommandLoweringPublisher {
     const publication = this.valueSitePublisher.publish(new TemplateValueSitePublicationRequest(
       `${local}:value-site`,
       `${local}:expression-parse`,
-      compilerWorld.expressionParser,
+      parser,
       source.provenanceHandle,
       TemplateValueSiteKind.CustomAttributeValue,
       expression,
@@ -652,7 +652,7 @@ export class BindingCommandLoweringPublisher {
     readonly handle: AddressHandle | null;
     readonly record: SourceSpanAddress | null;
   } {
-    const address = addressHandle == null ? null : this.store.readAddress(addressHandle);
+    const address = addressHandle == null ? null : this.store.read(addressHandle);
     if (!(address instanceof SourceSpanAddress)) {
       return { handle: addressHandle, record: null };
     }
@@ -1020,7 +1020,7 @@ export class BindingCommandLoweringPublisher {
 }
 
 function claimsForProducedInstructions(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   source: BindingCommandLoweringSourceSet,
   producerHandle: ProductHandle,

@@ -26,9 +26,13 @@ import {
 } from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
-  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  type KernelPublicationContext,
+  KernelPublicationPlan,
+  publishProductDetails,
+} from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { CustomElementCaptureKind } from '../resources/custom-element-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
@@ -56,6 +60,7 @@ import type {
   TemplateVisibleResource,
 } from './compiler-world-reference.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
+import type { TemplateCompilerReadView } from './compiler-read-view.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import { TemplateCompilerFrameworkErrorCode } from './framework-error-code.js';
 import {
@@ -81,6 +86,8 @@ export interface AttributeClassificationRequest {
   readonly attributeSyntax: AttributeSyntaxParseEmission;
   /** Compiler world that supplies resource resolver and binding-command resolver services. */
   readonly compilerWorld: TemplateCompilerWorldEmission;
+  /** Required run-scoped compiler lookup surface. */
+  readonly compilerReads: TemplateCompilerReadView;
 }
 
 export class AttributeClassificationEmission {
@@ -133,26 +140,20 @@ export class AttributeClassificationMaterializer {
 
   constructor(
     /** Hot analysis store that receives attribute classification records. */
-    readonly store: KernelStore,
+    readonly store: KernelPublicationContext,
   ) {
     this.issuePublisher = new TemplateCompilerIssuePublisher(store);
   }
 
   classify(input: AttributeClassificationRequest): AttributeClassificationEmission {
     const emission = this.recordsForClassification(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `attribute-classification:${input.localKey}`));
-    }
-    for (const classification of emission.classifications) {
-      this.store.productDetails.add(
-        TemplateProductDetails.AttributeClassification,
-        classification.productHandle,
-        classification,
-      );
-    }
-    for (const issue of emission.issues) {
-      this.store.productDetails.add(TemplateProductDetails.CompilerIssue, issue.productHandle, issue);
-    }
+    this.store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `attribute-classification:${input.localKey}`),
+      [
+        ...publishProductDetails(TemplateProductDetails.AttributeClassification, emission.classifications),
+        ...publishProductDetails(TemplateProductDetails.CompilerIssue, emission.issues),
+      ],
+    ));
     return emission;
   }
 
@@ -169,7 +170,7 @@ export class AttributeClassificationMaterializer {
       const publication = this.publishAttributeClassification(
         `attribute-classification:${input.localKey}:${index}`,
         source,
-        input.compilerWorld,
+        input.compilerReads,
         syntax,
         attributeForSyntax(syntax, attributesByProduct),
         ownerForSyntax(syntax, ownersByAttributeProduct),
@@ -202,7 +203,7 @@ export class AttributeClassificationMaterializer {
   private publishAttributeClassification(
     local: string,
     source: AttributeClassificationSourceSet,
-    compilerWorld: TemplateCompilerWorldEmission,
+    compilerReads: TemplateCompilerReadView,
     syntax: AttributeSyntax,
     attribute: HtmlAttribute | null,
     owner: HtmlElementAttributeOwner | null,
@@ -211,7 +212,7 @@ export class AttributeClassificationMaterializer {
     const identityHandle = this.store.handles.identity(local);
     const decision = attribute == null || owner == null
       ? openDecision()
-      : classifySyntax(syntax, attribute, owner, compilerWorld);
+      : classifySyntax(syntax, attribute, owner, compilerReads);
     const classification = this.createAttributeClassification(
       productHandle,
       identityHandle,
@@ -385,7 +386,7 @@ function classifySyntax(
   syntax: AttributeSyntax,
   attribute: HtmlAttribute,
   owner: HtmlElementAttributeOwner,
-  world: TemplateCompilerWorldEmission,
+  reads: TemplateCompilerReadView,
 ): ClassificationDecision {
   const rawName = attribute.rawName.toLowerCase();
   const target = syntax.target.toLowerCase();
@@ -400,7 +401,7 @@ function classifySyntax(
   const commandName = syntax.command?.toLowerCase() ?? null;
   const bindingCommand = commandName == null
     ? null
-    : world.bindingCommandResolver.get(commandName)?.toReference() ?? null;
+    : reads.bindingCommand(commandName)?.toReference() ?? null;
   if (commandName != null && bindingCommand == null && isRemovedV1BindingCommand(commandName)) {
     return invalidDecision(
       TemplateCompilerIssueKind.UnknownBindingCommand,
@@ -408,14 +409,14 @@ function classifySyntax(
       TemplateCompilerFrameworkErrorCode.CompilerUnknownBindingCommand,
     );
   }
-  const elementResolution = world.resourceResolver.el(htmlElementLookupName(owner.element, owner));
+  const elementResolution = reads.element(htmlElementLookupName(owner.element, owner));
   const elementDefinition = elementResolution?.definition?.type === ResourceDefinitionKind.CustomElement
     ? elementResolution.definition
     : null;
 
   const captureDecision = elementDefinition == null || elementResolution == null
     ? null
-    : classifyCapture(syntax, elementDefinition.capture.kind, elementResolution, bindingCommand != null, world);
+    : classifyCapture(syntax, elementDefinition.capture.kind, elementResolution, bindingCommand != null, reads);
   if (captureDecision != null) {
     return captureDecision;
   }
@@ -424,7 +425,7 @@ function classifySyntax(
     return new ClassificationDecision(AttributeClassificationKind.Spread, null, null, bindingCommand, null);
   }
 
-  if (bindingCommand != null && commandIgnoresAttribute(bindingCommand, world)) {
+  if (bindingCommand != null && commandIgnoresAttribute(bindingCommand, reads)) {
     return new ClassificationDecision(AttributeClassificationKind.BindingCommand, null, null, bindingCommand, null);
   }
 
@@ -439,7 +440,7 @@ function classifySyntax(
   }
 
   if (elementDefinition != null) {
-    const bindable = world.resourceResolver.bindables(elementDefinition).attr(target);
+    const bindable = reads.bindables(elementDefinition).attr(target);
     if (bindable != null) {
       return new ClassificationDecision(
         AttributeClassificationKind.Bindable,
@@ -462,13 +463,13 @@ function classifySyntax(
     );
   }
 
-  const attributeResolution = world.resourceResolver.attr(target);
+  const attributeResolution = reads.attribute(target);
   if (attributeResolution?.resource != null) {
     const classificationKind = attributeResolution.resource.resourceKind === ResourceDefinitionKind.TemplateController
       ? AttributeClassificationKind.TemplateController
       : AttributeClassificationKind.CustomAttribute;
     const bindable = attributeResolution.definition?.type === ResourceDefinitionKind.CustomAttribute
-      ? world.resourceResolver.bindables(attributeResolution.definition).primary
+      ? reads.bindables(attributeResolution.definition).primary
       : null;
     return new ClassificationDecision(
       classificationKind,
@@ -489,13 +490,13 @@ function classifyCapture(
   captureKind: CustomElementCaptureKind,
   elementResolution: TemplateResolvedResource,
   hasBindingCommand: boolean,
-  world: TemplateCompilerWorldEmission,
+  reads: TemplateCompilerReadView,
 ): ClassificationDecision | null {
   if (captureKind === CustomElementCaptureKind.None) {
     return null;
   }
   const target = syntax.target.toLowerCase();
-  if (hasBindingCommand && commandIgnoresAttributeName(syntax.command?.toLowerCase() ?? null, world)) {
+  if (hasBindingCommand && commandIgnoresAttributeName(syntax.command?.toLowerCase() ?? null, reads)) {
     return new ClassificationDecision(
       AttributeClassificationKind.Captured,
       ResourceDefinitionKind.CustomElement,
@@ -516,8 +517,8 @@ function classifyCapture(
   if (elementDefinition == null) {
     return null;
   }
-  const bindable = world.resourceResolver.bindables(elementDefinition).attr(target);
-  const templateController = world.resourceResolver.attr(target);
+  const bindable = reads.bindables(elementDefinition).attr(target);
+  const templateController = reads.attribute(target);
   if (bindable != null || templateController?.resource?.resourceKind === ResourceDefinitionKind.TemplateController) {
     return null;
   }
@@ -538,18 +539,18 @@ function classifyCapture(
 
 function commandIgnoresAttribute(
   command: NonNullable<AttributeClassification['bindingCommand']>,
-  world: TemplateCompilerWorldEmission,
+  reads: TemplateCompilerReadView,
 ): boolean {
-  return commandIgnoresAttributeName(command.name, world);
+  return commandIgnoresAttributeName(command.name, reads);
 }
 
 function commandIgnoresAttributeName(
   commandName: string | null,
-  world: TemplateCompilerWorldEmission,
+  reads: TemplateCompilerReadView,
 ): boolean {
   return commandName == null
     ? false
-    : world.bindingCommandResolver.get(commandName)?.ignoreAttr === true;
+    : reads.bindingCommand(commandName)?.ignoreAttr === true;
 }
 
 function openDecision(

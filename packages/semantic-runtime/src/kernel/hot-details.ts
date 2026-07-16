@@ -1,5 +1,7 @@
 declare const hotDetailSlotBrand: unique symbol;
 
+type AllocateOrdinal = () => number;
+
 /**
  * Typed hot-sidecar slot for analysis-epoch details that should not be promoted into durable kernel products.
  *
@@ -121,11 +123,28 @@ export class HotDetailCatalog {
   private readonly entriesByHandle = new Map<string, HotDetailEntry<unknown>>();
   private readonly handlesByDetailKind = new Map<string, Set<string>>();
   private readonly handleOrder: string[] = [];
+  private readonly lifetimeOrdinalByHandle = new Map<string, number>();
+  private readonly mutationOrdinalByHandle = new Map<string, number>();
+
+  constructor(
+    private readonly allocateLifetimeOrdinal: AllocateOrdinal,
+    private readonly allocateMutationOrdinal: AllocateOrdinal,
+  ) {}
 
   add<TDetail>(
     slot: HotDetailSlot<TDetail>,
     handle: string,
     detail: TDetail,
+  ): HotDetailEntry<TDetail> {
+    return this.addAtLifetime(slot, handle, detail, this.allocateLifetimeOrdinal());
+  }
+
+  /** Attach a detail while inheriting the explicit lifetime of a replacement publication. */
+  addAtLifetime<TDetail>(
+    slot: HotDetailSlot<TDetail>,
+    handle: string,
+    detail: TDetail,
+    lifetimeOrdinal: number,
   ): HotDetailEntry<TDetail> {
     const existing = this.entriesByHandle.get(handle);
     if (existing != null) {
@@ -139,6 +158,8 @@ export class HotDetailCatalog {
     bindHotDetailEntry(detail, entry);
     this.entriesByHandle.set(handle, entry as HotDetailEntry<unknown>);
     this.handleOrder.push(handle);
+    this.lifetimeOrdinalByHandle.set(handle, lifetimeOrdinal);
+    this.mutationOrdinalByHandle.set(handle, this.allocateMutationOrdinal());
     this.addHandleForSlot(slot, handle);
     return entry;
   }
@@ -169,6 +190,11 @@ export class HotDetailCatalog {
     return entry.detail as TDetail;
   }
 
+  /** Read the unexpanded entry when replacement code only knows the epoch-local handle. */
+  readEntry(handle: string): HotDetailEntry<unknown> | null {
+    return this.entriesByHandle.get(handle) ?? null;
+  }
+
   readBySlot<TDetail>(
     slot: HotDetailSlot<TDetail>,
   ): readonly HotDetailEntry<TDetail>[] {
@@ -182,9 +208,9 @@ export class HotDetailCatalog {
     return [...this.entriesByHandle.values()];
   }
 
-  readEntriesSince(marker: number): readonly HotDetailEntry<unknown>[] {
+  readEntriesChangedSince(marker: number): readonly HotDetailEntry<unknown>[] {
     return this.handleOrder
-      .slice(marker)
+      .filter((handle) => (this.mutationOrdinalByHandle.get(handle) ?? -1) >= marker)
       .map((handle) => this.entriesByHandle.get(handle) ?? null)
       .filter((entry): entry is HotDetailEntry<unknown> => entry != null);
   }
@@ -198,16 +224,18 @@ export class HotDetailCatalog {
       .map(([detailKind, handles]) => [detailKind, handles.size]));
   }
 
-  mark(): number {
-    return this.handleOrder.length;
-  }
-
   remove(handle: string): HotDetailEntry<unknown> | null {
     const entry = this.entriesByHandle.get(handle) ?? null;
     if (entry == null) {
       return null;
     }
     this.entriesByHandle.delete(handle);
+    const orderIndex = this.handleOrder.indexOf(handle);
+    if (orderIndex >= 0) {
+      this.handleOrder.splice(orderIndex, 1);
+    }
+    this.lifetimeOrdinalByHandle.delete(handle);
+    this.mutationOrdinalByHandle.delete(handle);
     const handles = this.handlesByDetailKind.get(entry.slot.detailKind);
     handles?.delete(handle);
     if (handles?.size === 0) {
@@ -216,11 +244,10 @@ export class HotDetailCatalog {
     return entry;
   }
 
-  removeSince(marker: number): number {
+  removeAtOrAfterLifetime(marker: number): number {
     let removed = 0;
-    while (this.handleOrder.length > marker) {
-      const handle = this.handleOrder.pop();
-      if (handle != null && this.remove(handle) != null) {
+    for (const handle of [...this.handleOrder].reverse()) {
+      if ((this.lifetimeOrdinalByHandle.get(handle) ?? -1) >= marker && this.remove(handle) != null) {
         removed += 1;
       }
     }

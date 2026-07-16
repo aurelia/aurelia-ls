@@ -28,9 +28,16 @@ import {
 } from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
-  type KernelStore,
+  type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelDetailAdmission,
+  type KernelPublicationContext,
+  KernelPublicationPlan,
+  publishProductDetail,
+  publishProductDetails,
+} from '../kernel/publication.js';
 import {
   KernelVocabulary,
   type OpenSeamKindKey,
@@ -54,8 +61,10 @@ import {
   TemplateRenderTarget,
   TemplateRenderTargetKind,
 } from './compiled-template.js';
+import { compareCompiledTemplateDetails } from './compiled-template-comparison.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
+import type { TemplateCompilerReadView } from './compiler-read-view.js';
 import {
   HtmlAttribute,
   HtmlElement,
@@ -123,6 +132,10 @@ export interface CompiledTemplateMaterializationRequest {
   readonly bindingCommandLowering: BindingCommandLoweringEmission;
   /** Compiler world that supplies runtime-shaped resource and command lookup services. */
   readonly compilerWorld: TemplateCompilerWorldEmission;
+  /** Required run-scoped compiler lookup surface. */
+  readonly compilerReads: TemplateCompilerReadView;
+  /** Resource definition that owns this compilation occurrence. */
+  readonly definition: CustomElementDefinition;
 }
 
 export class CompiledTemplateEmission {
@@ -341,7 +354,7 @@ class CompiledTemplateAssemblyState {
   private readonly issuePublisher: TemplateCompilerIssuePublisher;
 
   constructor(
-    readonly store: KernelStore,
+    readonly store: KernelStoreReadView,
     readonly input: CompiledTemplateMaterializationRequest,
     readonly source: CompiledTemplateSourceSet,
   ) {
@@ -610,7 +623,7 @@ class CompiledTemplateInstructionFactory {
     lane: ValueInstructionLane,
   ): string {
     if (lane === 'plain') {
-      return this.input.compilerWorld.attributeMapper.map(node, syntax.target) ?? camelCaseAttributeName(syntax.target);
+      return this.input.compilerReads.mapAttribute(node, syntax.target) ?? camelCaseAttributeName(syntax.target);
     }
     const customAttributeDefinition = classification.resource?.definition instanceof CustomAttributeDefinition
       ? classification.resource.definition
@@ -970,7 +983,7 @@ class CompiledTemplateInstructionTraversal {
     const owner = this.indexes.ownersByElement.get(node.productHandle) ?? null;
     const classifications = this.indexes.classificationsByOwner.get(node.productHandle) ?? [];
     const lookupName = htmlElementLookupName(node, owner);
-    const elementResolution = this.input.compilerWorld.resourceResolver.el(lookupName);
+    const elementResolution = this.input.compilerReads.element(lookupName);
     const elementDefinition = elementResolution?.definition instanceof CustomElementDefinition
       ? elementResolution.definition
       : null;
@@ -998,7 +1011,7 @@ class CompiledTemplateInstructionTraversal {
           node.toReference(),
           elementDefinition.name,
           lookupName,
-          this.input.compilerWorld.templateCompiler.resolveResources ? elementDefinition.productHandle : null,
+          this.input.compilerReads.resolveResources() ? elementDefinition.productHandle : null,
           null,
           projectionGroups.map((group, index) => {
             const local = `${instructionLocal}:projection:${index}`;
@@ -1233,10 +1246,9 @@ class CompiledTemplateInstructionTraversal {
   }
 
   private rootCustomElementDefinition(): CustomElementDefinition | null {
-    const visible = this.input.compilerWorld.resourceResolver.resources.find((candidate) =>
-      candidate.definition instanceof CustomElementDefinition
-      && candidate.definition.template?.addressHandle === this.input.compilationUnit.sourceAddressHandle
-    ) ?? null;
+    const visible = this.input.compilerReads.templateOwnerResource(
+      this.input.definition,
+    );
     return visible?.definition instanceof CustomElementDefinition
       ? visible.definition
       : null;
@@ -1773,28 +1785,32 @@ class CompiledTemplateInstructionTraversal {
 export class CompiledTemplateMaterializer {
   constructor(
     /** Hot analysis store that receives compiled-template products. */
-    readonly store: KernelStore,
+    readonly store: KernelPublicationContext,
   ) {}
 
   materialize(input: CompiledTemplateMaterializationRequest): CompiledTemplateEmission {
     const emission = this.recordsForCompiledTemplate(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `compiled-template:${input.localKey}`));
-    }
-    this.registerProductDetails(emission);
+    this.store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `compiled-template:${input.localKey}`),
+      [
+        publishProductDetail(
+          TemplateProductDetails.CompiledTemplate,
+          emission.compiledTemplate.productHandle,
+          emission.compiledTemplate,
+          KernelDetailAdmission.Required,
+          compareCompiledTemplateDetails,
+        ),
+        ...publishProductDetails(TemplateProductDetails.InstructionSequence, emission.instructionSequences),
+        ...publishProductDetails(TemplateProductDetails.RenderTarget, emission.renderTargets),
+        ...publishProductDetails(
+          TemplateProductDetails.Instruction,
+          emission.instructions,
+          KernelDetailAdmission.IfAbsent,
+        ),
+        ...publishProductDetails(TemplateProductDetails.CompilerIssue, emission.issues),
+      ],
+    ));
     return emission;
-  }
-
-  private registerProductDetails(emission: CompiledTemplateEmission): void {
-    this.store.productDetails.add(
-      TemplateProductDetails.CompiledTemplate,
-      emission.compiledTemplate.productHandle,
-      emission.compiledTemplate,
-    );
-    this.store.productDetails.addAll(TemplateProductDetails.InstructionSequence, emission.instructionSequences);
-    this.store.productDetails.addAll(TemplateProductDetails.RenderTarget, emission.renderTargets);
-    this.store.productDetails.addAllIfAbsent(TemplateProductDetails.Instruction, emission.instructions);
-    this.store.productDetails.addAll(TemplateProductDetails.CompilerIssue, emission.issues);
   }
 
   private recordsForCompiledTemplate(input: CompiledTemplateMaterializationRequest): CompiledTemplateEmission {
@@ -2640,7 +2656,7 @@ function resolvedInstructionResourceProductHandle(
   input: CompiledTemplateMaterializationRequest,
   classification: AttributeClassification,
 ): ProductHandle | null {
-  return input.compilerWorld.templateCompiler.resolveResources
+  return input.compilerReads.resolveResources()
     ? classification.resource?.definitionProductHandle ?? classification.resource?.resourceProductHandle ?? null
     : null;
 }
@@ -2675,7 +2691,7 @@ function instructionReferencesFor(
 }
 
 function sequenceContainsInstructionClaims(
-  store: KernelStore,
+  store: KernelStoreReadView,
   sequenceLocal: string,
   sequenceProductHandle: ProductHandle,
   instructions: readonly TemplateInstruction[],

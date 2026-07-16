@@ -74,7 +74,7 @@ export function measureSemanticRuntimePhase<TName extends string, TValue>(
     ? readSemanticRuntimeMemorySample()
     : null;
   const kernelMarker = telemetry.capturePhaseKernelBreakdowns || telemetry.capturePhaseDetailDensity
-    ? store.mark()
+    ? store.markObservation()
     : null;
   const kernelBefore = telemetry.capturePhaseKernel
     ? store.readTelemetrySnapshot({

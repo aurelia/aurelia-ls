@@ -129,14 +129,16 @@ in the kernel yet.
 record links.
 
 `store.ts` defines the hot in-memory `KernelStore`, batch commit surface, missing-record commit guard, handle expansion,
-cheap navigation indexes, and typed product-detail sidecar. Batches are record-emission units, not durable transactions,
+cheap navigation indexes, and typed detail catalogs. Batches are record-emission units, not durable transactions,
 vocabulary mutations, or semantic boundaries. The store also validates controlled vocabulary usage at commit time: product kinds
 must be declared as product-kind vocabulary, claim predicates must be declared as claim-predicate vocabulary, and claim
 endpoints must match the predicate's directional signature.
-`KernelStore.mark()` / `disposeSince(...)` is the current app-session reclamation primitive for answer-local work. It
-rolls back records plus product-detail and hot-detail sidecars created after a marker, and is intended for query
-boundaries such as `QueryClaimGraph`, not for pretending long-lived app-world records are disposable without an epoch
-model. The disposal summary includes reclaimed record-handle character mass as well as record/detail counts, because
+`KernelStore.markLifetime()` / `disposeSince(...)` is the app-session reclamation primitive for answer-local work. A
+lifetime marker tracks ownership lineage, not append position: replacing a long-lived computation publication preserves
+its original lifetime even when the replacement objects are written after a query marker. `markObservation()` is the
+separate mutation cursor for telemetry and phase-density reads, so replacement writes remain measurable without making
+them answer-local. Query boundaries such as `QueryClaimGraph` use lifetime markers; telemetry uses observation markers.
+The disposal summary includes reclaimed record-handle character mass as well as record/detail counts, because
 handle strings are a first-class memory-pressure signal for one-off public answers. Use it when an inquiry profile says
 answer-local TypeChecker products should be measured but not retained.
 Store-local sidecar indexes register through `KernelStore.registerSidecarIndex(...)`. They are not semantic storage;
@@ -148,10 +150,30 @@ answer-local product-detail references when the kernel marker is disposed, then 
 maintained incrementally, while high-cardinality kind and handle-character breakdowns remain behind the explicit
 `includeBreakdowns` option. Do not add full-store scans to the default snapshot path; phase profiling calls it often.
 Use `KernelStore.readDensitySince(...)` and `readDetailDensitySince(...)` for phase-local x-rays because those operate
-from store markers and only inspect records/details admitted after the marker. Shallow product-detail and hot-detail
+from observation markers and inspect records/details mutated after the marker. Shallow product-detail and hot-detail
 density is a second opt-in lane behind `includeDetailDensity` for whole-store snapshots and behind phase-detail
 telemetry for phase-local rows. Use it when memory pressure needs to know which sidecar detail kinds and direct fields
 carry mass; do not smuggle those scans into ordinary adapter answers.
+
+`computation-lifecycle.ts` owns technical execution history for same-runtime recomputation. A domain locus reconciles a
+stable computation ID; each run stages a complete read set and publication closure; commit revalidates every typed read
+before replacing the prior state. `publication.ts` is the required materializer write boundary for immediate and staged
+execution. `KernelStore.replacePublication(...)` prevalidates ownership, references, detail envelopes, and unsupported
+sidecar participation before one synchronous callback-free replacement. A failed or stale run leaves the previous
+records, details, read index, and manifest intact. Sidecar indexes remain acceleration structures; replacing a detail
+they index is rejected until that index registers an explicit lifecycle participant.
+
+There is one `ComputationLifecycleRegistry` per `KernelStore`. The store enforces that ownership boundary and notifies the
+registry when lifetime disposal reclaims a complete publication, so a later run cannot reuse a stale manifest or steal
+handles republished by another owner. `ComputationRecordReadView` adapts existing normalized-record traversals into exact
+positive and negative computation reads by spending the store's record revision. Use it when a source-address or other
+kernel graph contributes to an output; observing only the final file text leaves the graph route itself staleable.
+
+`record-comparison.ts` exhaustively compares normalized kernel record kinds and keeps semantic replacement distinct from
+source/provenance witness refresh. Rich details use slot-specific comparators where one has been earned; an unsupported
+detail comparison conservatively replaces. `source-text-snapshot.ts` owns immutable source admission and content/
+existence revision validation for computation runs. These technical lifecycle products do not replace semantic claims,
+materialization records, evidence, or provenance.
 
 The store indexes normalized kernel records first. A `MaterializedProduct` is an envelope that names kind, identity,
 address, and provenance. Claims are indexed by subject/object handles in the store instead of being duplicated on the
@@ -223,7 +245,8 @@ generic generated identity bucket.
 - `fieldProvenanceWhenDistinct` is the default helper when a materializer has an owning product/source provenance and
   optional field-specific witnesses. If a field repeats the owner provenance, rely on the product/source record instead
   of storing a field-level echo.
-- Invalidation can walk from changed source to evidence/provenance to dependent claims and products.
+- Evidence and provenance explain witness lineage after a change. Scheduling dependencies come from registered
+  computation reads; treating witness links as execution reads loses negative lookups and service/policy dependencies.
 
 `claim.ts` records typed assertions:
 

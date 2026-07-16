@@ -261,8 +261,6 @@ export class BindingCommandExecutable {
 /** Runtime IBindingCommandResolver model for one compiler world/container. */
 @auLink('template-compiler:IBindingCommandResolver')
 export class BindingCommandResolverService {
-  private readonly _cache = new Map<string, BindingCommandExecutable | null>();
-
   constructor(
     /** Product handle for the materialized-product envelope that represents this resolver service. */
     readonly productHandle: ProductHandle,
@@ -283,19 +281,9 @@ export class BindingCommandResolverService {
 
   /** Runtime `IBindingCommandResolver.get(container, name)` shape for this container-scoped service. */
   get(commandName: string): BindingCommandExecutable | null {
-    if (this._cache.has(commandName)) {
-      return this._cache.get(commandName) ?? null;
-    }
-    const command = this.commands.find((candidate) =>
+    return this.commands.find((candidate) =>
       candidate.name === commandName || candidate.aliases.includes(commandName)
     ) ?? null;
-    this._cache.set(commandName, command);
-    return command;
-  }
-
-  /** Snapshot command lookup cache for answer envelopes or later kernel emission. */
-  readCachedCommands(): ReadonlyMap<string, BindingCommandExecutable | null> {
-    return new Map(this._cache);
   }
 
   toReference(): TemplateCompilerServiceReference {

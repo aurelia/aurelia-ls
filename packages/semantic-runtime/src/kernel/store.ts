@@ -5,8 +5,16 @@ import type {
 import type { SemanticClaim } from './claim.js';
 import type { SemanticIdentity } from './identity.js';
 import type { MaterializationRecord, MaterializedProduct } from './materialization.js';
-import { HotDetailCatalog } from './hot-details.js';
-import { ProductDetailCatalog } from './product-details.js';
+import {
+  bindHotDetailEntry,
+  HotDetailCatalog,
+  HotDetailEntry,
+} from './hot-details.js';
+import {
+  bindProductDetailEnvelope,
+  ProductDetailCatalog,
+  ProductDetailEntry,
+} from './product-details.js';
 import type { ClaimPredicateKey, ProductKindKey } from './vocabulary.js';
 import {
   KernelClaimEndpointKind,
@@ -43,6 +51,25 @@ import {
   readSemanticRuntimeDetailDensityRows,
 } from '../telemetry/detail-density.js';
 import { normalizeHostPath } from './source-address.js';
+import {
+  KernelDetailAdmission,
+  KernelPublicationDecision,
+  KernelPublicationDecisionKind,
+  KernelPublicationManifest,
+  KernelPublicationSurface,
+  KernelStoreBatch,
+  type KernelPublicationComparisonContext,
+  type KernelHotDetailPublication,
+  type KernelProductDetailPublication,
+  type KernelPublicationPlan,
+  KernelPublicationReplacement,
+} from './publication.js';
+import {
+  compareKernelRecords,
+  referencedKernelRecordHandles,
+} from './record-comparison.js';
+
+export { KernelStoreBatch } from './publication.js';
 
 interface KernelStoreCommitIndex {
   readonly addresses: ReadonlyMap<AddressHandle, SemanticAddress>;
@@ -51,10 +78,28 @@ interface KernelStoreCommitIndex {
   readonly claims: ReadonlyMap<ClaimHandle, SemanticClaim>;
 }
 
-export interface KernelStoreMarker {
-  readonly records: number;
-  readonly productDetails: number;
-  readonly hotDetails: number;
+interface PreparedProductDetailPublication {
+  readonly ownedHandles: readonly ProductHandle[];
+  readonly add: readonly KernelProductDetailPublication<unknown>[];
+  readonly remove: ReadonlySet<ProductHandle>;
+  readonly decisions: readonly KernelPublicationDecision[];
+}
+
+interface PreparedHotDetailPublication {
+  readonly ownedHandles: readonly string[];
+  readonly add: readonly KernelHotDetailPublication<unknown>[];
+  readonly remove: ReadonlySet<string>;
+  readonly decisions: readonly KernelPublicationDecision[];
+}
+
+/** Boundary for reclaiming entries born inside a later answer or app epoch. */
+export interface KernelStoreLifetimeMarker {
+  readonly nextLifetimeOrdinal: number;
+}
+
+/** Boundary for observing surviving writes without assigning their ownership lifetime. */
+export interface KernelStoreObservationMarker {
+  readonly nextMutationOrdinal: number;
 }
 
 export interface KernelStoreDisposalSummary {
@@ -78,7 +123,7 @@ export interface KernelStoreDensityDelta {
 }
 
 export interface KernelStoreDisposalContext {
-  readonly marker: KernelStoreMarker;
+  readonly marker: KernelStoreLifetimeMarker;
   readonly summary: KernelStoreDisposalSummary;
 }
 
@@ -87,12 +132,19 @@ export interface KernelStoreSidecarIndex {
   readonly summary: string;
   readEntryCount(): number;
   dispose(context: KernelStoreDisposalContext): void;
+  /** Whether replacing this detail requires a lifecycle participant not admitted by the current computation. */
+  hasProductDetail(productHandle: ProductHandle): boolean;
 }
 
 export interface KernelStoreSidecarIndexRow {
   readonly key: string;
   readonly entries: number;
   readonly summary: string;
+}
+
+/** Store-owned computation state that must reconcile when lifetime disposal removes its publications. */
+export interface KernelStoreComputationLifecycle {
+  dispose(context: KernelStoreDisposalContext): void;
 }
 
 /** Any handle-bearing record admitted into the hot kernel store; not a semantic taxonomy. */
@@ -106,14 +158,10 @@ export type KernelStoreRecord =
   | MaterializedProduct
   | MaterializationRecord;
 
-/** Coherent record-emission unit for the hot kernel store. */
-export class KernelStoreBatch {
-  constructor(
-    /** Normalized records emitted together by one analysis step. */
-    readonly records: readonly KernelStoreRecord[] = [],
-    /** Optional non-semantic label for debugging and inquiry traces. */
-    readonly label: string | null = null,
-  ) {}
+/** Narrow kernel surface available while a computation is building its next publication. */
+export interface KernelStoreReadView {
+  readonly handles: KernelHandleFactory;
+  read(handle: KernelRecordHandle): KernelStoreRecord | null;
 }
 
 function addToSet<TKey, TValue>(
@@ -212,6 +260,8 @@ export class KernelStore {
   readonly handles: KernelHandleFactory;
   private readonly records = new Map<KernelRecordHandle, KernelStoreRecord>();
   private readonly recordOrder: KernelRecordHandle[] = [];
+  private readonly recordLifetimeOrdinalByHandle = new Map<KernelRecordHandle, number>();
+  private readonly recordMutationOrdinalByHandle = new Map<KernelRecordHandle, number>();
   private readonly addresses = new Map<AddressHandle, SemanticAddress>();
   private readonly identities = new Map<IdentityHandle, SemanticIdentity>();
   private readonly evidence = new Map<EvidenceHandle, EvidenceRecord>();
@@ -229,8 +279,11 @@ export class KernelStore {
   private readonly claimsByObject = new Map<AddressHandle | IdentityHandle | ProductHandle, Set<ClaimHandle>>();
   private readonly claimsByPredicate = new Map<ClaimPredicateKey, Set<ClaimHandle>>();
   private readonly sidecarIndexes = new Map<string, KernelStoreSidecarIndex>();
+  private computationLifecycle: KernelStoreComputationLifecycle | null = null;
   private handleCharacterCount = 0;
-  readonly hotDetails = new HotDetailCatalog();
+  private nextLifetimeOrdinal = 0;
+  private nextMutationOrdinal = 0;
+  readonly hotDetails: HotDetailCatalog;
   readonly productDetails: ProductDetailCatalog;
 
   constructor(
@@ -238,16 +291,36 @@ export class KernelStore {
     storeKey: string,
   ) {
     this.handles = new KernelHandleFactory(storeKey);
-    this.productDetails = new ProductDetailCatalog((handle) => this.readProduct(handle));
+    const allocateLifetimeOrdinal = () => this.allocateLifetimeOrdinal();
+    const allocateMutationOrdinal = () => this.allocateMutationOrdinal();
+    this.productDetails = new ProductDetailCatalog(
+      (handle) => this.readProduct(handle),
+      allocateLifetimeOrdinal,
+      allocateMutationOrdinal,
+    );
+    this.hotDetails = new HotDetailCatalog(allocateLifetimeOrdinal, allocateMutationOrdinal);
+  }
+
+  private allocateLifetimeOrdinal(): number {
+    return this.nextLifetimeOrdinal++;
+  }
+
+  private allocateMutationOrdinal(): number {
+    return this.nextMutationOrdinal++;
   }
 
   /** Add a normalized kernel record and update cheap navigation indexes. */
-  private add<TRecord extends KernelStoreRecord>(record: TRecord): TRecord {
+  private add<TRecord extends KernelStoreRecord>(
+    record: TRecord,
+    lifetimeOrdinal: number,
+  ): TRecord {
     if (this.records.has(record.handle as KernelRecordHandle)) {
       throw new Error(`Duplicate kernel record handle in store: ${record.handle}`);
     }
     this.records.set(record.handle as KernelRecordHandle, record);
     this.recordOrder.push(record.handle as KernelRecordHandle);
+    this.recordLifetimeOrdinalByHandle.set(record.handle, lifetimeOrdinal);
+    this.recordMutationOrdinalByHandle.set(record.handle, this.allocateMutationOrdinal());
     this.handleCharacterCount += record.handle.length;
     this.indexRecord(record);
     return record;
@@ -270,8 +343,9 @@ export class KernelStore {
     }
     this.validateBatch(batch, pending, batchLabel);
 
+    const lifetimeOrdinal = this.allocateLifetimeOrdinal();
     for (const record of batch.records) {
-      this.add(record);
+      this.add(record, lifetimeOrdinal);
     }
   }
 
@@ -284,22 +358,523 @@ export class KernelStore {
     this.commit(new KernelStoreBatch(missing, batch.label));
   }
 
-  mark(): KernelStoreMarker {
+  /** Preserve eager materialization without pretending that phase-local writes form a lifecycle-owned manifest. */
+  publishImmediate(plan: KernelPublicationPlan): void {
+    this.commit(plan.batch);
+    for (const publication of plan.productDetails) {
+      if (publication.admission === KernelDetailAdmission.IfAbsent) {
+        this.productDetails.addIfAbsent(publication.slot, publication.productHandle, publication.detail);
+      } else {
+        this.productDetails.add(publication.slot, publication.productHandle, publication.detail);
+      }
+    }
+    for (const publication of plan.hotDetails) {
+      if (publication.admission === KernelDetailAdmission.IfAbsent) {
+        this.hotDetails.addIfAbsent(publication.slot, publication.handle, publication.detail);
+      } else {
+        this.hotDetails.add(publication.slot, publication.handle, publication.detail);
+      }
+    }
+  }
+
+  /**
+   * Prevalidate and synchronously replace one computation-owned publication across kernel and detail catalogs.
+   *
+   * JavaScript cannot interleave readers inside the mutation, and every operation that can fail is checked first.
+   * Sidecar reconciliation runs only after the complete post-state is visible.
+   */
+  replacePublication(
+    previous: KernelPublicationManifest,
+    next: KernelPublicationPlan,
+  ): KernelPublicationReplacement {
+    const label = next.batch.label ?? '(unnamed publication)';
+    const previousRecordHandles = new Set(previous.recordHandles);
+    const previousProductDetailHandles = new Set(previous.productDetailHandles);
+    const previousHotDetailHandles = new Set(previous.hotDetailHandles);
+    const lifetimeOrdinal = previous.lifetimeOrdinal ?? this.allocateLifetimeOrdinal();
+    this.validatePublicationManifest(
+      previousRecordHandles,
+      previousProductDetailHandles,
+      previousHotDetailHandles,
+      label,
+    );
+
+    const recordsByHandle = this.publicationRecordsByHandle(next.batch.records, previousRecordHandles, label);
+    const productDetailsByHandle = normalizedProductDetailPublications(next.productDetails, label);
+    const hotDetailsByHandle = normalizedHotDetailPublications(next.hotDetails, label);
+    const pending = this.buildCommitIndex(next.batch.records);
+    this.validateBatch(next.batch, pending, label, previousRecordHandles);
+    this.validatePublicationReferences(next.batch.records, recordsByHandle, previousRecordHandles, label);
+
+    const recordDecisions = this.recordPublicationDecisions(previousRecordHandles, recordsByHandle);
+    const comparisonContext = this.publicationComparisonContext(recordsByHandle, previousRecordHandles);
+    const recordKindsByHandle = new Map<KernelRecordHandle, string>();
+    for (const handle of new Set([...previousRecordHandles, ...recordsByHandle.keys()])) {
+      recordKindsByHandle.set(handle, recordsByHandle.get(handle)?.kind ?? this.records.get(handle)?.kind ?? 'kernel-record');
+    }
+    const productDetailPlan = this.prepareProductDetailPublication(
+      previousProductDetailHandles,
+      productDetailsByHandle,
+      recordsByHandle,
+      previousRecordHandles,
+      recordDecisions,
+      comparisonContext,
+      label,
+    );
+    const hotDetailPlan = this.prepareHotDetailPublication(
+      previousHotDetailHandles,
+      hotDetailsByHandle,
+      comparisonContext,
+      label,
+    );
+    const withdrawnRecordHandles = handlesForDecision(recordDecisions, KernelPublicationDecisionKind.Withdraw);
+    this.validateSurvivingReferences(withdrawnRecordHandles, previousRecordHandles, label);
+
+    const replacedRecordHandles = handlesForDecisions(recordDecisions, [
+      KernelPublicationDecisionKind.RefreshWitness,
+      KernelPublicationDecisionKind.Replace,
+    ]);
+    const recordsToRemove = new Set([...withdrawnRecordHandles, ...replacedRecordHandles]);
+    const recordsToAdd = next.batch.records.filter((record) => {
+      const decision = recordDecisions.get(record.handle);
+      return decision === KernelPublicationDecisionKind.Publish
+        || decision === KernelPublicationDecisionKind.RefreshWitness
+        || decision === KernelPublicationDecisionKind.Replace;
+    });
+
+    this.validateNoForeignDetailRemoval(recordsToRemove, previousProductDetailHandles, label);
+    this.validateNoSidecarReplacement(productDetailPlan.remove, label);
+    this.prebindPublicationDetails(productDetailPlan.add, hotDetailPlan.add, recordsByHandle, previousRecordHandles);
+
+    for (const handle of productDetailPlan.remove) {
+      this.productDetails.remove(handle);
+    }
+    for (const handle of hotDetailPlan.remove) {
+      this.hotDetails.remove(handle);
+    }
+    for (const handle of recordsToRemove) {
+      this.removeRecord(handle);
+    }
+    for (const record of recordsToAdd) {
+      this.add(record, lifetimeOrdinal);
+    }
+    for (const publication of productDetailPlan.add) {
+      this.productDetails.addAtLifetime(
+        publication.slot,
+        publication.productHandle,
+        publication.detail,
+        lifetimeOrdinal,
+      );
+    }
+    for (const publication of hotDetailPlan.add) {
+      this.hotDetails.addAtLifetime(
+        publication.slot,
+        publication.handle,
+        publication.detail,
+        lifetimeOrdinal,
+      );
+    }
+
+    const decisions = [
+      ...publicationDecisionRows(
+        recordDecisions,
+        KernelPublicationSurface.Record,
+        (handle) => recordKindsByHandle.get(handle) ?? 'kernel-record',
+      ),
+      ...productDetailPlan.decisions,
+      ...hotDetailPlan.decisions,
+    ];
+    return new KernelPublicationReplacement(
+      new KernelPublicationManifest(
+        [...recordsByHandle.keys()],
+        productDetailPlan.ownedHandles,
+        hotDetailPlan.ownedHandles,
+        lifetimeOrdinal,
+      ),
+      decisions,
+    );
+  }
+
+  private validatePublicationManifest(
+    recordHandles: ReadonlySet<KernelRecordHandle>,
+    productDetailHandles: ReadonlySet<ProductHandle>,
+    hotDetailHandles: ReadonlySet<string>,
+    label: string,
+  ): void {
+    for (const handle of recordHandles) {
+      if (!this.records.has(handle)) {
+        throw new Error(`Publication ${label} cannot replace missing owned record ${handle}.`);
+      }
+    }
+    for (const handle of productDetailHandles) {
+      if (this.productDetails.readEntry(handle) == null) {
+        throw new Error(`Publication ${label} cannot replace missing owned product detail ${handle}.`);
+      }
+    }
+    for (const handle of hotDetailHandles) {
+      if (this.hotDetails.readEntry(handle) == null) {
+        throw new Error(`Publication ${label} cannot replace missing owned hot detail ${handle}.`);
+      }
+    }
+  }
+
+  private publicationRecordsByHandle(
+    records: readonly KernelStoreRecord[],
+    previousRecordHandles: ReadonlySet<KernelRecordHandle>,
+    label: string,
+  ): ReadonlyMap<KernelRecordHandle, KernelStoreRecord> {
+    const byHandle = new Map<KernelRecordHandle, KernelStoreRecord>();
+    for (const record of records) {
+      const handle = record.handle;
+      if (byHandle.has(handle)) {
+        throw new Error(`Duplicate kernel record handle within ${label}: ${handle}.`);
+      }
+      if (this.records.has(handle) && !previousRecordHandles.has(handle)) {
+        throw new Error(`Publication ${label} cannot claim record ${handle}; another owner already published it.`);
+      }
+      byHandle.set(handle, record);
+    }
+    return byHandle;
+  }
+
+  private validatePublicationReferences(
+    records: readonly KernelStoreRecord[],
+    nextByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
+    previousRecordHandles: ReadonlySet<KernelRecordHandle>,
+    label: string,
+  ): void {
+    for (const record of records) {
+      for (const reference of referencedKernelRecordHandles(record)) {
+        const survives = nextByHandle.has(reference)
+          || (this.records.has(reference) && !previousRecordHandles.has(reference));
+        if (!survives) {
+          throw new Error(
+            `Publication ${label} leaves ${record.handle} referencing unavailable record ${reference}.`,
+          );
+        }
+      }
+    }
+  }
+
+  private recordPublicationDecisions(
+    previousRecordHandles: ReadonlySet<KernelRecordHandle>,
+    nextByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
+  ): ReadonlyMap<KernelRecordHandle, KernelPublicationDecisionKind> {
+    const decisions = new Map<KernelRecordHandle, KernelPublicationDecisionKind>();
+    for (const handle of previousRecordHandles) {
+      const next = nextByHandle.get(handle) ?? null;
+      const previous = this.records.get(handle) ?? null;
+      decisions.set(
+        handle,
+        next == null || previous == null
+          ? KernelPublicationDecisionKind.Withdraw
+          : compareKernelRecords(previous, next),
+      );
+    }
+    for (const handle of nextByHandle.keys()) {
+      if (!previousRecordHandles.has(handle)) {
+        decisions.set(handle, KernelPublicationDecisionKind.Publish);
+      }
+    }
+    return decisions;
+  }
+
+  private publicationComparisonContext(
+    nextByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
+    previousHandles: ReadonlySet<KernelRecordHandle>,
+  ): KernelPublicationComparisonContext {
     return {
-      records: this.recordOrder.length,
-      productDetails: this.productDetails.mark(),
-      hotDetails: this.hotDetails.mark(),
+      readPrevious: (handle) => this.records.get(handle) ?? null,
+      readNext: (handle) => nextByHandle.get(handle)
+        ?? (previousHandles.has(handle) ? null : this.records.get(handle) ?? null),
     };
   }
 
-  disposeSince(marker: KernelStoreMarker): KernelStoreDisposalSummary {
-    const productDetails = this.productDetails.removeSince(marker.productDetails);
-    const hotDetails = this.hotDetails.removeSince(marker.hotDetails);
+  private prepareProductDetailPublication(
+    previousHandles: ReadonlySet<ProductHandle>,
+    nextByHandle: ReadonlyMap<ProductHandle, KernelProductDetailPublication<unknown>>,
+    nextRecordsByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
+    previousRecordHandles: ReadonlySet<KernelRecordHandle>,
+    recordDecisions: ReadonlyMap<KernelRecordHandle, KernelPublicationDecisionKind>,
+    comparisonContext: KernelPublicationComparisonContext,
+    label: string,
+  ): PreparedProductDetailPublication {
+    const ownedHandles: ProductHandle[] = [];
+    const add: KernelProductDetailPublication<unknown>[] = [];
+    const remove = new Set<ProductHandle>();
+    const decisions: KernelPublicationDecision[] = [];
+
+    for (const handle of previousHandles) {
+      const publication = nextByHandle.get(handle) ?? null;
+      const existing = this.productDetails.readEntry(handle);
+      if (publication == null) {
+        remove.add(handle);
+        decisions.push(new KernelPublicationDecision(
+          handle,
+          KernelPublicationSurface.ProductDetail,
+          existing?.slot.detailKind ?? 'product-detail',
+          KernelPublicationDecisionKind.Withdraw,
+        ));
+        continue;
+      }
+      if (existing == null) {
+        throw new Error(`Publication ${label} lost owned product detail ${handle} before replacement.`);
+      }
+      this.validateProductDetailEnvelope(publication, nextRecordsByHandle, previousRecordHandles, label);
+      let decision = compareProductDetailPublication(existing, publication, comparisonContext);
+      const productDecision = recordDecisions.get(handle);
+      if (decision === KernelPublicationDecisionKind.Retain && productDecision !== KernelPublicationDecisionKind.Retain) {
+        decision = KernelPublicationDecisionKind.RefreshWitness;
+      }
+      ownedHandles.push(handle);
+      decisions.push(new KernelPublicationDecision(
+        handle,
+        KernelPublicationSurface.ProductDetail,
+        publication.slot.detailKind,
+        decision,
+      ));
+      if (decision !== KernelPublicationDecisionKind.Retain) {
+        remove.add(handle);
+        add.push(publication);
+      }
+    }
+
+    for (const [handle, publication] of nextByHandle) {
+      if (previousHandles.has(handle)) {
+        continue;
+      }
+      this.validateProductDetailEnvelope(publication, nextRecordsByHandle, previousRecordHandles, label);
+      const existing = this.productDetails.readEntry(handle);
+      if (existing != null) {
+        if (
+          publication.admission !== KernelDetailAdmission.IfAbsent
+          || existing.slot.detailKind !== publication.slot.detailKind
+        ) {
+          throw new Error(
+            `Publication ${label} cannot attach ${publication.slot.detailKind}; ${handle} already has `
+            + `${existing.slot.detailKind}.`,
+          );
+        }
+        continue;
+      }
+      ownedHandles.push(handle);
+      add.push(publication);
+      decisions.push(new KernelPublicationDecision(
+        handle,
+        KernelPublicationSurface.ProductDetail,
+        publication.slot.detailKind,
+        KernelPublicationDecisionKind.Publish,
+      ));
+    }
+
+    return { ownedHandles, add, remove, decisions };
+  }
+
+  private validateProductDetailEnvelope(
+    publication: KernelProductDetailPublication<unknown>,
+    nextRecordsByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
+    previousRecordHandles: ReadonlySet<KernelRecordHandle>,
+    label: string,
+  ): void {
+    const staged = nextRecordsByHandle.get(publication.productHandle) ?? null;
+    const current = previousRecordHandles.has(publication.productHandle)
+      ? null
+      : this.products.get(publication.productHandle) ?? null;
+    const product = staged?.kind === 'materialized-product' ? staged : current;
+    if (product == null) {
+      throw new Error(
+        `Publication ${label} cannot attach ${publication.slot.detailKind}; product `
+        + `${publication.productHandle} is absent from the post-state.`,
+      );
+    }
+    if (product.productKindKey !== publication.slot.productKindKey) {
+      throw new Error(
+        `Publication ${label} cannot attach ${publication.slot.detailKind}; product `
+        + `${publication.productHandle} has kind ${product.productKindKey}, expected ${publication.slot.productKindKey}.`,
+      );
+    }
+  }
+
+  private prepareHotDetailPublication(
+    previousHandles: ReadonlySet<string>,
+    nextByHandle: ReadonlyMap<string, KernelHotDetailPublication<unknown>>,
+    comparisonContext: KernelPublicationComparisonContext,
+    label: string,
+  ): PreparedHotDetailPublication {
+    const ownedHandles: string[] = [];
+    const add: KernelHotDetailPublication<unknown>[] = [];
+    const remove = new Set<string>();
+    const decisions: KernelPublicationDecision[] = [];
+
+    for (const handle of previousHandles) {
+      const publication = nextByHandle.get(handle) ?? null;
+      const existing = this.hotDetails.readEntry(handle);
+      if (publication == null) {
+        remove.add(handle);
+        decisions.push(new KernelPublicationDecision(
+          handle,
+          KernelPublicationSurface.HotDetail,
+          existing?.slot.detailKind ?? 'hot-detail',
+          KernelPublicationDecisionKind.Withdraw,
+        ));
+        continue;
+      }
+      if (existing == null) {
+        throw new Error(`Publication ${label} lost owned hot detail ${handle} before replacement.`);
+      }
+      const decision = compareHotDetailPublication(existing, publication, comparisonContext);
+      ownedHandles.push(handle);
+      decisions.push(new KernelPublicationDecision(
+        handle,
+        KernelPublicationSurface.HotDetail,
+        publication.slot.detailKind,
+        decision,
+      ));
+      if (decision !== KernelPublicationDecisionKind.Retain) {
+        remove.add(handle);
+        add.push(publication);
+      }
+    }
+
+    for (const [handle, publication] of nextByHandle) {
+      if (previousHandles.has(handle)) {
+        continue;
+      }
+      const existing = this.hotDetails.readEntry(handle);
+      if (existing != null) {
+        if (
+          publication.admission !== KernelDetailAdmission.IfAbsent
+          || existing.slot.detailKind !== publication.slot.detailKind
+        ) {
+          throw new Error(
+            `Publication ${label} cannot attach ${publication.slot.detailKind}; ${handle} already has `
+            + `${existing.slot.detailKind}.`,
+          );
+        }
+        continue;
+      }
+      ownedHandles.push(handle);
+      add.push(publication);
+      decisions.push(new KernelPublicationDecision(
+        handle,
+        KernelPublicationSurface.HotDetail,
+        publication.slot.detailKind,
+        KernelPublicationDecisionKind.Publish,
+      ));
+    }
+    return { ownedHandles, add, remove, decisions };
+  }
+
+  private validateSurvivingReferences(
+    withdrawnHandles: ReadonlySet<KernelRecordHandle>,
+    previousRecordHandles: ReadonlySet<KernelRecordHandle>,
+    label: string,
+  ): void {
+    if (withdrawnHandles.size === 0) {
+      return;
+    }
+    for (const record of this.records.values()) {
+      if (previousRecordHandles.has(record.handle)) {
+        continue;
+      }
+      const dangling = referencedKernelRecordHandles(record).find((handle) => withdrawnHandles.has(handle));
+      if (dangling != null) {
+        throw new Error(
+          `Publication ${label} cannot withdraw ${dangling}; surviving record ${record.handle} still references it.`,
+        );
+      }
+    }
+  }
+
+  private validateNoForeignDetailRemoval(
+    removedRecordHandles: ReadonlySet<KernelRecordHandle>,
+    ownedProductDetailHandles: ReadonlySet<ProductHandle>,
+    label: string,
+  ): void {
+    for (const handle of removedRecordHandles) {
+      const record = this.records.get(handle) ?? null;
+      if (
+        record?.kind === 'materialized-product'
+        && this.productDetails.readEntry(record.handle) != null
+        && !ownedProductDetailHandles.has(record.handle)
+      ) {
+        throw new Error(
+          `Publication ${label} cannot replace product ${record.handle}; its attached detail is owned elsewhere.`,
+        );
+      }
+    }
+  }
+
+  private validateNoSidecarReplacement(
+    removedProductDetailHandles: ReadonlySet<ProductHandle>,
+    label: string,
+  ): void {
+    for (const index of this.sidecarIndexes.values()) {
+      const handle = [...removedProductDetailHandles].find((candidate) => index.hasProductDetail(candidate));
+      if (handle != null) {
+        throw new Error(
+          `Publication ${label} cannot replace sidecar-indexed detail ${handle}; `
+          + `index ${index.key} has no registered lifecycle participant.`,
+        );
+      }
+    }
+  }
+
+  private prebindPublicationDetails(
+    productDetails: readonly KernelProductDetailPublication<unknown>[],
+    hotDetails: readonly KernelHotDetailPublication<unknown>[],
+    nextRecordsByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
+    previousRecordHandles: ReadonlySet<KernelRecordHandle>,
+  ): void {
+    for (const publication of productDetails) {
+      const staged = nextRecordsByHandle.get(publication.productHandle) ?? null;
+      const current = previousRecordHandles.has(publication.productHandle)
+        ? null
+        : this.products.get(publication.productHandle) ?? null;
+      const product = staged?.kind === 'materialized-product' ? staged : current;
+      if (product == null) {
+        throw new Error(`Cannot prebind product detail ${publication.productHandle}; product is absent.`);
+      }
+      bindProductDetailEnvelope(publication.detail, product);
+      new ProductDetailEntry(product, publication.slot, publication.detail);
+    }
+    for (const publication of hotDetails) {
+      const entry = new HotDetailEntry(publication.handle, publication.slot, publication.detail);
+      bindHotDetailEntry(publication.detail, entry);
+    }
+  }
+
+  private removeRecord(handle: KernelRecordHandle): void {
+    const record = this.records.get(handle) ?? null;
+    if (record == null) {
+      return;
+    }
+    this.records.delete(handle);
+    const orderIndex = this.recordOrder.indexOf(handle);
+    if (orderIndex >= 0) {
+      this.recordOrder.splice(orderIndex, 1);
+    }
+    this.recordLifetimeOrdinalByHandle.delete(handle);
+    this.recordMutationOrdinalByHandle.delete(handle);
+    this.handleCharacterCount -= record.handle.length;
+    this.removeRecordFromIndexes(record);
+  }
+
+  markLifetime(): KernelStoreLifetimeMarker {
+    return { nextLifetimeOrdinal: this.nextLifetimeOrdinal };
+  }
+
+  markObservation(): KernelStoreObservationMarker {
+    return { nextMutationOrdinal: this.nextMutationOrdinal };
+  }
+
+  disposeSince(marker: KernelStoreLifetimeMarker): KernelStoreDisposalSummary {
+    const productDetails = this.productDetails.removeAtOrAfterLifetime(marker.nextLifetimeOrdinal);
+    const hotDetails = this.hotDetails.removeAtOrAfterLifetime(marker.nextLifetimeOrdinal);
     let records = 0;
     let handleCharacters = 0;
-    while (this.recordOrder.length > marker.records) {
-      const handle = this.recordOrder.pop();
-      if (handle == null) {
+    for (const handle of [...this.recordOrder].reverse()) {
+      if ((this.recordLifetimeOrdinalByHandle.get(handle) ?? -1) < marker.nextLifetimeOrdinal) {
         continue;
       }
       const record = this.records.get(handle) ?? null;
@@ -307,14 +882,29 @@ export class KernelStore {
         continue;
       }
       this.records.delete(handle);
+      const orderIndex = this.recordOrder.indexOf(handle);
+      if (orderIndex >= 0) {
+        this.recordOrder.splice(orderIndex, 1);
+      }
+      this.recordLifetimeOrdinalByHandle.delete(handle);
+      this.recordMutationOrdinalByHandle.delete(handle);
       this.handleCharacterCount -= record.handle.length;
       handleCharacters += record.handle.length;
       this.removeRecordFromIndexes(record);
       records += 1;
     }
     const summary = { records, productDetails, hotDetails, handleCharacters };
+    this.computationLifecycle?.dispose({ marker, summary });
     this.notifySidecarIndexes({ marker, summary });
     return summary;
+  }
+
+  /** Admit the one computation lifecycle allowed to own replaceable publications in this store. */
+  registerComputationLifecycle(lifecycle: KernelStoreComputationLifecycle): void {
+    if (this.computationLifecycle != null && this.computationLifecycle !== lifecycle) {
+      throw new Error('Kernel store already has a computation lifecycle registry.');
+    }
+    this.computationLifecycle = lifecycle;
   }
 
   /** Register a store-local sidecar index whose entries mirror kernel/product-detail lifetimes. */
@@ -344,6 +934,11 @@ export class KernelStore {
   /** Expand any handle-bearing record by store-local handle. */
   read(handle: KernelRecordHandle): KernelStoreRecord | null {
     return this.records.get(handle) ?? null;
+  }
+
+  /** Exact store-local revision for a normalized record, including witness-only replacement. */
+  readRecordRevision(handle: KernelRecordHandle): number | null {
+    return this.recordMutationOrdinalByHandle.get(handle) ?? null;
   }
 
   readAddress(handle: AddressHandle): SemanticAddress | null {
@@ -477,15 +1072,15 @@ export class KernelStore {
       sourceSpanRoleHandleCharacters: handleCharactersBySourceSpanRole(this.addresses.values()),
       sidecarIndexes: this.readSidecarIndexRows(),
       ...(options.includeDetailDensity === true
-        ? this.readDetailDensitySince({ records: 0, productDetails: 0, hotDetails: 0 })
+          ? this.readDetailDensitySince({ nextMutationOrdinal: 0 })
         : {}),
     };
   }
 
-  readDetailDensitySince(marker: KernelStoreMarker): KernelStoreDetailDensityDelta {
+  readDetailDensitySince(marker: KernelStoreObservationMarker): KernelStoreDetailDensityDelta {
     return {
       productDetailDensity: readSemanticRuntimeDetailDensityRows(
-        this.productDetails.readEntriesSince(marker.productDetails).map((entry) => {
+        this.productDetails.readEntriesChangedSince(marker.nextMutationOrdinal).map((entry) => {
           return {
             detailKind: entry.slot.detailKind,
             detail: entry.detail,
@@ -499,7 +1094,7 @@ export class KernelStore {
         }),
       ),
       hotDetailDensity: readSemanticRuntimeDetailDensityRows(
-        this.hotDetails.readEntriesSince(marker.hotDetails).map((entry) => ({
+        this.hotDetails.readEntriesChangedSince(marker.nextMutationOrdinal).map((entry) => ({
           detailKind: entry.slot.detailKind,
           detail: entry.detail,
           envelopeHandles: [entry.handle],
@@ -508,13 +1103,12 @@ export class KernelStore {
     };
   }
 
-  readDensitySince(marker: KernelStoreMarker): KernelStoreDensityDelta {
+  readDensitySince(marker: KernelStoreObservationMarker): KernelStoreDensityDelta {
     const recordKinds = new Map<string, number>();
     const sourceSpanRoles = new Map<string, number>();
     const productKinds = new Map<string, number>();
-    for (let index = marker.records; index < this.recordOrder.length; index += 1) {
-      const handle = this.recordOrder[index];
-      if (handle == null) {
+    for (const handle of this.recordOrder) {
+      if ((this.recordMutationOrdinalByHandle.get(handle) ?? -1) < marker.nextMutationOrdinal) {
         continue;
       }
       const record = this.records.get(handle) ?? null;
@@ -533,8 +1127,12 @@ export class KernelStore {
       recordKinds: sortedCountRows(recordKinds),
       sourceSpanRoles: sortedCountRows(sourceSpanRoles),
       productKinds: sortedCountRows(productKinds),
-      productDetailKinds: countDetailKindRows(this.productDetails.readEntriesSince(marker.productDetails)),
-      hotDetailKinds: countDetailKindRows(this.hotDetails.readEntriesSince(marker.hotDetails)),
+      productDetailKinds: countDetailKindRows(
+        this.productDetails.readEntriesChangedSince(marker.nextMutationOrdinal),
+      ),
+      hotDetailKinds: countDetailKindRows(
+        this.hotDetails.readEntriesChangedSince(marker.nextMutationOrdinal),
+      ),
     };
   }
 
@@ -587,7 +1185,9 @@ export class KernelStore {
         case 'registration-identity':
         case 'resource-product-identity':
         case 'evaluation-identity':
+        case 'observation-identity':
         case 'configuration-identity':
+        case 'framework-identity':
         case 'router-identity':
         case 'route-recognizer-identity':
         case 'i18n-identity':
@@ -619,6 +1219,7 @@ export class KernelStore {
     batch: KernelStoreBatch,
     pending: KernelStoreCommitIndex,
     batchLabel: string,
+    replacedHandles: ReadonlySet<KernelRecordHandle> = new Set(),
   ): void {
     for (const record of batch.records) {
       if (record.kind === 'materialized-product') {
@@ -627,7 +1228,7 @@ export class KernelStore {
     }
     for (const record of batch.records) {
       if (record.kind === 'semantic-claim') {
-        this.validateClaim(record, pending, batchLabel);
+        this.validateClaim(record, pending, batchLabel, replacedHandles);
       }
     }
   }
@@ -649,6 +1250,7 @@ export class KernelStore {
     claim: SemanticClaim,
     pending: KernelStoreCommitIndex,
     batchLabel: string,
+    replacedHandles: ReadonlySet<KernelRecordHandle>,
   ): void {
     const definition = readClaimPredicateDefinition(claim.predicateKey);
     const signature = definition?.claimSignature;
@@ -658,8 +1260,8 @@ export class KernelStore {
       );
     }
 
-    this.validateClaimEndpoint(claim, 'subject', claim.subjectHandle, signature.subject, pending, batchLabel);
-    this.validateClaimEndpoint(claim, 'object', claim.objectHandle, signature.object, pending, batchLabel);
+    this.validateClaimEndpoint(claim, 'subject', claim.subjectHandle, signature.subject, pending, batchLabel, replacedHandles);
+    this.validateClaimEndpoint(claim, 'object', claim.objectHandle, signature.object, pending, batchLabel, replacedHandles);
   }
 
   private validateClaimEndpoint(
@@ -669,10 +1271,14 @@ export class KernelStore {
     signature: { readonly endpointKinds: readonly KernelClaimEndpointKind[]; readonly productKinds: readonly ProductKindKey[] },
     pending: KernelStoreCommitIndex,
     batchLabel: string,
+    replacedHandles: ReadonlySet<KernelRecordHandle>,
   ): void {
-    const address = pending.addresses.get(handle as AddressHandle) ?? this.addresses.get(handle as AddressHandle) ?? null;
-    const identity = pending.identities.get(handle as IdentityHandle) ?? this.identities.get(handle as IdentityHandle) ?? null;
-    const product = pending.products.get(handle as ProductHandle) ?? this.products.get(handle as ProductHandle) ?? null;
+    const address = pending.addresses.get(handle as AddressHandle)
+      ?? (replacedHandles.has(handle) ? null : this.addresses.get(handle as AddressHandle) ?? null);
+    const identity = pending.identities.get(handle as IdentityHandle)
+      ?? (replacedHandles.has(handle) ? null : this.identities.get(handle as IdentityHandle) ?? null);
+    const product = pending.products.get(handle as ProductHandle)
+      ?? (replacedHandles.has(handle) ? null : this.products.get(handle as ProductHandle) ?? null);
     const acceptedKinds = new Set(signature.endpointKinds);
 
     if (address == null && identity == null && product == null) {
@@ -736,7 +1342,9 @@ export class KernelStore {
       case 'registration-identity':
       case 'resource-product-identity':
       case 'evaluation-identity':
+      case 'observation-identity':
       case 'configuration-identity':
+      case 'framework-identity':
       case 'router-identity':
       case 'route-recognizer-identity':
       case 'i18n-identity':
@@ -810,7 +1418,9 @@ export class KernelStore {
       case 'registration-identity':
       case 'resource-product-identity':
       case 'evaluation-identity':
+      case 'observation-identity':
       case 'configuration-identity':
+      case 'framework-identity':
       case 'router-identity':
       case 'route-recognizer-identity':
       case 'i18n-identity':
@@ -853,7 +1463,6 @@ export class KernelStore {
       case 'materialized-product':
         this.products.delete(record.handle);
         removeFromSet(this.productsByKind, record.productKindKey, record.handle);
-        this.productDetails.remove(record.handle);
         return;
       case 'materialization-record':
         this.materializations.delete(record.handle);
@@ -869,6 +1478,123 @@ export class KernelStore {
       index.dispose(context);
     }
   }
+
+}
+
+function normalizedProductDetailPublications(
+  publications: readonly KernelProductDetailPublication<unknown>[],
+  label: string,
+): ReadonlyMap<ProductHandle, KernelProductDetailPublication<unknown>> {
+  const byHandle = new Map<ProductHandle, KernelProductDetailPublication<unknown>>();
+  for (const publication of publications) {
+    const existing = byHandle.get(publication.productHandle);
+    if (existing == null) {
+      byHandle.set(publication.productHandle, publication);
+      continue;
+    }
+    if (existing.slot.detailKind !== publication.slot.detailKind) {
+      throw new Error(
+        `Publication ${label} stages conflicting detail slots for ${publication.productHandle}: `
+        + `${existing.slot.detailKind} and ${publication.slot.detailKind}.`,
+      );
+    }
+    if (publication.admission === KernelDetailAdmission.IfAbsent) {
+      continue;
+    }
+    if (existing.admission === KernelDetailAdmission.IfAbsent) {
+      byHandle.set(publication.productHandle, publication);
+      continue;
+    }
+    throw new Error(`Publication ${label} stages duplicate product detail ${publication.productHandle}.`);
+  }
+  return byHandle;
+}
+
+function normalizedHotDetailPublications(
+  publications: readonly KernelHotDetailPublication<unknown>[],
+  label: string,
+): ReadonlyMap<string, KernelHotDetailPublication<unknown>> {
+  const byHandle = new Map<string, KernelHotDetailPublication<unknown>>();
+  for (const publication of publications) {
+    const existing = byHandle.get(publication.handle);
+    if (existing == null) {
+      byHandle.set(publication.handle, publication);
+      continue;
+    }
+    if (existing.slot.detailKind !== publication.slot.detailKind) {
+      throw new Error(
+        `Publication ${label} stages conflicting hot-detail slots for ${publication.handle}: `
+        + `${existing.slot.detailKind} and ${publication.slot.detailKind}.`,
+      );
+    }
+    if (publication.admission === KernelDetailAdmission.IfAbsent) {
+      continue;
+    }
+    if (existing.admission === KernelDetailAdmission.IfAbsent) {
+      byHandle.set(publication.handle, publication);
+      continue;
+    }
+    throw new Error(`Publication ${label} stages duplicate hot detail ${publication.handle}.`);
+  }
+  return byHandle;
+}
+
+function compareProductDetailPublication(
+  previous: ProductDetailEntry<unknown>,
+  next: KernelProductDetailPublication<unknown>,
+  context: KernelPublicationComparisonContext,
+): KernelPublicationDecisionKind {
+  if (previous.slot.detailKind !== next.slot.detailKind) {
+    return KernelPublicationDecisionKind.Replace;
+  }
+  if (previous.detail === next.detail) {
+    return KernelPublicationDecisionKind.Retain;
+  }
+  return next.compare?.(previous.detail, next.detail, context) ?? KernelPublicationDecisionKind.Replace;
+}
+
+function compareHotDetailPublication(
+  previous: HotDetailEntry<unknown>,
+  next: KernelHotDetailPublication<unknown>,
+  context: KernelPublicationComparisonContext,
+): KernelPublicationDecisionKind {
+  if (previous.slot.detailKind !== next.slot.detailKind) {
+    return KernelPublicationDecisionKind.Replace;
+  }
+  if (previous.detail === next.detail) {
+    return KernelPublicationDecisionKind.Retain;
+  }
+  return next.compare?.(previous.detail, next.detail, context) ?? KernelPublicationDecisionKind.Replace;
+}
+
+function handlesForDecision<THandle extends string>(
+  decisions: ReadonlyMap<THandle, KernelPublicationDecisionKind>,
+  decision: KernelPublicationDecisionKind,
+): ReadonlySet<THandle> {
+  return handlesForDecisions(decisions, [decision]);
+}
+
+function handlesForDecisions<THandle extends string>(
+  decisions: ReadonlyMap<THandle, KernelPublicationDecisionKind>,
+  expected: readonly KernelPublicationDecisionKind[],
+): ReadonlySet<THandle> {
+  const accepted = new Set(expected);
+  return new Set([...decisions]
+    .filter(([, decision]) => accepted.has(decision))
+    .map(([handle]) => handle));
+}
+
+function publicationDecisionRows<THandle extends string>(
+  decisions: ReadonlyMap<THandle, KernelPublicationDecisionKind>,
+  surface: KernelPublicationSurface,
+  detailKind: (handle: THandle) => string,
+): readonly KernelPublicationDecision[] {
+  return [...decisions].map(([handle, decision]) => new KernelPublicationDecision(
+    handle,
+    surface,
+    detailKind(handle),
+    decision,
+  ));
 }
 
 function sourcePathMatchScore(

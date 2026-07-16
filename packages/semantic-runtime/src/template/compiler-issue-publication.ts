@@ -11,7 +11,7 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import type {
-  KernelStore,
+  KernelStoreReadView,
   KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -35,7 +35,7 @@ export class TemplateCompilerIssuePublication {
 /** Publishes source-backed template-compiler issue products from compiler passes. */
 export class TemplateCompilerIssuePublisher {
   constructor(
-    readonly store: KernelStore,
+    readonly store: KernelStoreReadView,
   ) {}
 
   publish(

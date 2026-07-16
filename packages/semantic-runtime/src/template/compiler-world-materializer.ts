@@ -1,4 +1,9 @@
-import { AttributeParserMachine, AttributeParserService } from './attribute-syntax.js';
+import {
+  AttributeParserMachine,
+  AttributeParserService,
+  type AttributePatternExecutable,
+  type CompiledAttributePattern,
+} from './attribute-syntax.js';
 import {
   BindingCommandResolverService,
   type BindingCommandExecutable,
@@ -273,6 +278,13 @@ class CompilerWorldProducts {
   }
 }
 
+class CompilerWorldAttributeParserProducts {
+  constructor(
+    readonly machine: AttributeParserMachine,
+    readonly service: AttributeParserService,
+  ) {}
+}
+
 /** Materializes the compiler-facing world once visibility has already been selected. */
 export class TemplateCompilerWorldMaterializer {
   constructor(
@@ -412,15 +424,15 @@ export class TemplateCompilerWorldMaterializer {
   ): CompilerWorldProducts {
     const syntaxResources = syntaxResourcesForInput(input);
     const resourceScope = this.resourceScopeForWorld(input, handles, source, syntaxResources);
-    const attributeParserMachine = this.attributeParserMachineForWorld(handles, source);
     const issues = new CompilerWorldIssueSet(this.store, input.localKey, source.provenanceHandle);
-    const attributeParser = this.attributeParserForWorld(
+    const attributeParserProducts = this.attributeParserProductsForWorld(
       input,
       handles,
       source,
-      attributeParserMachine,
       issues,
     );
+    const attributeParser = attributeParserProducts.service;
+    const attributeParserMachine = attributeParserProducts.machine;
     const bindingCommandResolver = this.bindingCommandResolverForWorld(input, handles, source, issues);
     const templateCompiler = this.templateCompilerServiceForWorld(input, handles, source);
     const resourceResolver = this.resourceResolverForWorld(input, handles, source);
@@ -479,43 +491,22 @@ export class TemplateCompilerWorldMaterializer {
     );
   }
 
-  private attributeParserMachineForWorld(
-    handles: CompilerWorldHandleSet,
-    source: CompilerWorldSourceSet,
-  ): AttributeParserMachine {
-    return new AttributeParserMachine(
-      handles.machineProductHandle,
-      handles.machineIdentityHandle,
-      [],
-      [],
-      source.addressHandle,
-      [],
-    );
-  }
-
-  private attributeParserForWorld(
+  private attributeParserProductsForWorld(
     input: TemplateCompilerWorldConstructionRequest,
     handles: CompilerWorldHandleSet,
     source: CompilerWorldSourceSet,
-    attributeParserMachine: AttributeParserMachine,
     issues: CompilerWorldIssueSet,
-  ): AttributeParserService {
-    const attributeParser = new AttributeParserService(
-      handles.attributeParserProductHandle,
-      handles.attributeParserIdentityHandle,
-      [],
-      attributeParserMachine,
-      source.addressHandle,
-      [],
-    );
+  ): CompilerWorldAttributeParserProducts {
     const registeredPatterns = new Map<string, RegisteredAttributePattern>();
+    const patternExecutables: AttributePatternExecutable[] = [];
+    const compiledPatterns: CompiledAttributePattern[] = [];
     input.attributePatterns.forEach((pattern, index) => {
       const duplicate = firstDuplicateAttributePattern(pattern, registeredPatterns);
       if (duplicate != null) {
         const occupiedSourceAddressHandle = registeredAttributePatternSource(duplicate.occupied);
         issues.publish(
           `attribute-pattern-duplicate:${index}`,
-          attributeParser.identityHandle,
+          handles.attributeParserIdentityHandle,
           TemplateCompilerIssuePhase.CompilerWorld,
           TemplateCompilerIssueKind.AttributePatternDuplicate,
           `AttributeParser.registerPattern cannot register duplicate attribute pattern "${duplicate.incoming.pattern}".`,
@@ -540,9 +531,29 @@ export class TemplateCompilerWorldMaterializer {
           pattern.executable.sourceAddressHandle,
         ));
       }
-      attributeParser.registerPattern(pattern.executable, pattern.compiledPatterns);
+      if (!patternExecutables.some((candidate) => candidate.productHandle === pattern.executable.productHandle)) {
+        patternExecutables.push(pattern.executable);
+      }
+      compiledPatterns.push(...pattern.compiledPatterns);
     });
-    return attributeParser;
+    const machine = new AttributeParserMachine(
+      handles.machineProductHandle,
+      handles.machineIdentityHandle,
+      compiledPatterns,
+      source.addressHandle,
+      [],
+    );
+    return new CompilerWorldAttributeParserProducts(
+      machine,
+      new AttributeParserService(
+        handles.attributeParserProductHandle,
+        handles.attributeParserIdentityHandle,
+        patternExecutables,
+        machine,
+        source.addressHandle,
+        [],
+      ),
+    );
   }
 
   private bindingCommandResolverForWorld(

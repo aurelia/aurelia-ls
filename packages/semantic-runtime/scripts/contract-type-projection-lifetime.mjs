@@ -17,7 +17,7 @@ function verifyTypeShapeIndexPrunesWithKernelDisposal() {
   const fixture = createCheckerFixture();
   const store = new KernelStore('contract-type-projection-lifetime');
   const projector = new CheckerTypeProjector(store);
-  const marker = store.mark();
+  const marker = store.markLifetime();
   const first = projector.ensureProjection({
     localKey: 'foo',
     checker: fixture.checker,

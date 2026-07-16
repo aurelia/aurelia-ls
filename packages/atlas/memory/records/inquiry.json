@@ -433,8 +433,8 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/kernel/store.ts",
-          "symbolName": "KernelStore.mark",
-          "summary": "Kernel/session marker used by query claims to dispose answer-local records and sidecars."
+          "symbolName": "KernelStore.markLifetime",
+          "summary": "Kernel/session lifetime marker used by query claims to dispose answer-local records and sidecars."
         },
         {
           "kind": "source",

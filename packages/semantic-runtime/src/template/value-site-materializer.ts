@@ -19,9 +19,13 @@ import {
 } from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
-  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  type KernelPublicationContext,
+  KernelPublicationPlan,
+  publishProductDetails,
+} from '../kernel/publication.js';
 import type { ExpressionType } from '../expression/ast.js';
 import { hasInterpolationStart } from '../expression/expression-boundary-scanner.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
@@ -36,7 +40,7 @@ import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializ
 import type {
   TemplateBindableReference,
 } from './compiler-world-reference.js';
-import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
+import type { TemplateCompilerReadView } from './compiler-read-view.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import {
   HtmlAttribute,
@@ -66,8 +70,8 @@ export interface TemplateValueSiteRequest {
   readonly attributeSyntax: AttributeSyntaxParseEmission;
   /** Runtime-shaped attribute classifications that decide attribute-value ownership. */
   readonly attributeClassification: AttributeClassificationEmission;
-  /** Compiler world that supplies the expression parser service and future command execution context. */
-  readonly compilerWorld: TemplateCompilerWorldEmission;
+  /** Required compiler read surface for expression-parser access. */
+  readonly compilerReads: TemplateCompilerReadView;
 }
 
 export class TemplateValueSiteEmission {
@@ -115,18 +119,20 @@ export class TemplateValueSiteMaterializer {
 
   constructor(
     /** Hot analysis store that receives value-site records. */
-    readonly store: KernelStore,
+    readonly store: KernelPublicationContext,
   ) {
     this.valueSitePublisher = new TemplateValueSitePublisher(store);
   }
 
   materialize(input: TemplateValueSiteRequest): TemplateValueSiteEmission {
     const emission = this.recordsForValueSites(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `template-value-site:${input.localKey}`));
-    }
-    this.store.productDetails.addAll(TemplateProductDetails.ValueSite, emission.sites);
-    this.store.productDetails.addAll(TemplateProductDetails.ExpressionParse, emission.parses);
+    this.store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `template-value-site:${input.localKey}`),
+      [
+        ...publishProductDetails(TemplateProductDetails.ValueSite, emission.sites),
+        ...publishProductDetails(TemplateProductDetails.ExpressionParse, emission.parses),
+      ],
+    ));
     return emission;
   }
 
@@ -175,7 +181,7 @@ export class TemplateValueSiteMaterializer {
     const publication = this.valueSitePublisher.publish(new TemplateValueSitePublicationRequest(
       siteLocal,
       pending.entryFamily == null ? null : `template-expression-parse:${input.localKey}:${index}`,
-      input.compilerWorld.expressionParser,
+      input.compilerReads,
       source.provenanceHandle,
       pending.siteKind,
       pending.rawValue,
