@@ -24,7 +24,6 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
-  ImmediateKernelPublicationContext,
   KernelPublicationPlan,
   publishProductDetails,
   type KernelPublicationContext,
@@ -167,7 +166,7 @@ export class RuntimeBindingValueChannelMaterializer {
   constructor(
     /** Hot analysis store that receives binding value-channel products. */
     readonly store: KernelStore,
-    readonly publication: KernelPublicationContext = new ImmediateKernelPublicationContext(store),
+    readonly publication: KernelPublicationContext = store,
   ) {}
 
   materialize(input: RuntimeBindingValueChannelMaterializationRequest): RuntimeBindingValueChannelEmission {

@@ -1162,7 +1162,10 @@ export class ObserverLocator {
     if (input.typeSystem == null || reference?.productHandle == null) {
       return null;
     }
-    const shape = this.store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
+    const shape = this.projector.publication.readProductDetail(
+      TypeSystemProductDetails.TypeShape,
+      reference.productHandle,
+    );
     const carrier = shape?.carrier ?? null;
     if (carrier == null) {
       return null;

@@ -1,9 +1,14 @@
 import { TypeScriptDeclarationIdentity } from '../kernel/identity.js';
-import type { AddressHandle } from '../kernel/handles.js';
+import type { AddressHandle, KernelRecordHandle } from '../kernel/handles.js';
 import {
   KernelStoreBatch,
   type KernelStore,
+  type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { SourceSpanRole } from '../kernel/address.js';
 import ts from 'typescript';
 import {
@@ -49,23 +54,26 @@ export function checkerTypeMemberSourceAddressHandle(
 /** Materialize a navigable member declaration source for a raw checker symbol. */
 export function checkerSymbolMemberSourceProjection(
   store: KernelStore,
+  publication: KernelPublicationContext,
   symbol: ts.Symbol,
   declarations: readonly ts.Declaration[] = declarationsForCheckerSymbol(symbol),
 ): CheckerSymbolMemberSourceProjection {
-  const publication = sourceSpanForCheckerDeclaration(store, symbol, declarations, SourceSpanRole.Name);
-  store.commitMissing(new KernelStoreBatch(
-    publication?.records ?? [],
+  const source = sourceSpanForCheckerDeclaration(store, symbol, declarations, SourceSpanRole.Name);
+  publishMissingSourceRecords(
+    publication,
+    source?.records ?? [],
     `type-system:checker-symbol-member-source:${symbol.getName()}`,
-  ));
+  );
   return {
     memberKind: checkerSymbolMemberKind(symbol, declarations),
-    sourceAddressHandle: publication?.address.handle ?? null,
+    sourceAddressHandle: source?.address.handle ?? null,
   };
 }
 
 /** Read the best source address for the value type produced by a checker member. */
 export function checkerTypeMemberValueSourceAddressHandle(
   store: KernelStore,
+  publication: KernelPublicationContext,
   member: CheckerTypeMember,
 ): AddressHandle | null {
   if (member.carrier == null) {
@@ -73,6 +81,7 @@ export function checkerTypeMemberValueSourceAddressHandle(
   }
   return checkerSymbolMemberValueSourceProjection(
     store,
+    publication,
     member.carrier.symbol,
     member.carrier.declarations,
   ).sourceAddressHandle;
@@ -81,27 +90,42 @@ export function checkerTypeMemberValueSourceAddressHandle(
 /** Materialize the type annotation / return type source for a raw checker member when it exists. */
 export function checkerSymbolMemberValueSourceProjection(
   store: KernelStore,
+  publication: KernelPublicationContext,
   symbol: ts.Symbol,
   declarations: readonly ts.Declaration[] = declarationsForCheckerSymbol(symbol),
 ): CheckerSymbolMemberSourceProjection {
   const typeNode = memberValueTypeNode(declarations);
   if (typeNode == null) {
-    return checkerSymbolMemberSourceProjection(store, symbol, declarations);
+    return checkerSymbolMemberSourceProjection(store, publication, symbol, declarations);
   }
-  const publication = sourceSpanForCheckerNode(
+  const source = sourceSpanForCheckerNode(
     store,
     `checker-symbol-member-value-source:${symbol.getName()}`,
     typeNode,
     SourceSpanRole.Type,
   );
-  store.commitMissing(new KernelStoreBatch(
-    publication.records,
+  publishMissingSourceRecords(
+    publication,
+    source.records,
     `type-system:checker-symbol-member-value-source:${symbol.getName()}`,
-  ));
+  );
   return {
     memberKind: checkerSymbolMemberKind(symbol, declarations),
-    sourceAddressHandle: publication.address.handle,
+    sourceAddressHandle: source.address.handle,
   };
+}
+
+function publishMissingSourceRecords(
+  publication: KernelPublicationContext,
+  records: readonly KernelStoreRecord[],
+  label: string,
+): void {
+  const missing = records.filter((record) =>
+    publication.read(record.handle as KernelRecordHandle) == null
+  );
+  if (missing.length > 0) {
+    publication.publish(new KernelPublicationPlan(new KernelStoreBatch(missing, label)));
+  }
 }
 
 function memberValueTypeNode(

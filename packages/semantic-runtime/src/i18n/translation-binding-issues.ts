@@ -12,7 +12,6 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
-  ImmediateKernelPublicationContext,
   KernelPublicationPlan,
   publishProductDetails,
   type KernelPublicationContext,
@@ -146,7 +145,7 @@ export class I18nTranslationBindingIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
-    readonly publication: KernelPublicationContext = new ImmediateKernelPublicationContext(store),
+    readonly publication: KernelPublicationContext = store,
   ) {
     this.publisher = new RuntimeBindingIssuePublisher(store);
   }

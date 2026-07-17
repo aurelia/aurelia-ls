@@ -43,7 +43,7 @@ export function observedMemberSourceForCheckerSymbol(
   if (symbol == null) {
     return null;
   }
-  const projection = checkerSymbolMemberSourceProjection(store, symbol, declarations ?? undefined);
+  const projection = checkerSymbolMemberSourceProjection(store, store, symbol, declarations ?? undefined);
   return {
     observedMemberKind: projection.memberKind,
     observedMemberSourceAddressHandle: projection.sourceAddressHandle,

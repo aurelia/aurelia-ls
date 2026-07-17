@@ -376,8 +376,8 @@ export class KernelStore {
     this.commit(new KernelStoreBatch(missing, batch.label));
   }
 
-  /** Preserve eager materialization without pretending that phase-local writes form a lifecycle-owned manifest. */
-  publishImmediate(plan: KernelPublicationPlan): void {
+  /** Publish immediately when no computation transaction owns the current analysis. */
+  publish(plan: KernelPublicationPlan): void {
     this.commit(plan.batch);
     for (const publication of plan.productDetails) {
       if (publication.admission === KernelDetailAdmission.IfAbsent) {

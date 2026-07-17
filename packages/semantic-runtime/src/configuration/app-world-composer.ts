@@ -1,5 +1,4 @@
 import type { KernelStore } from '../kernel/store.js';
-import { ImmediateKernelPublicationContext } from '../kernel/publication.js';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type {
   ProductHandle,
@@ -117,7 +116,7 @@ export class AureliaAppWorldComposer {
     this.configuredResourceMaterializer = new ConfiguredBuiltInResourceCatalogMaterializer(store);
     this.configuredRendererMaterializer = new ConfiguredBuiltInRuntimeRendererCatalogMaterializer(store);
     this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(
-      new ImmediateKernelPublicationContext(store),
+      store,
     );
     this.resourceVisibilityComposer = new AppWorldResourceVisibilityComposer();
   }

@@ -14,7 +14,6 @@ import { CompilerIdentity } from '../kernel/identity.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import {
-  ImmediateKernelPublicationContext,
   KernelPublicationPlan,
   publishProductDetails,
   type KernelPublicationContext,
@@ -131,7 +130,7 @@ class RuntimeBindingBehaviorLifecyclePublication {
 export class RuntimeBindingBehaviorMaterializer {
   constructor(
     readonly store: KernelStore,
-    readonly publication: KernelPublicationContext = new ImmediateKernelPublicationContext(store),
+    readonly publication: KernelPublicationContext = store,
   ) {}
 
   materialize(input: RuntimeBindingBehaviorMaterializationRequest): RuntimeBindingBehaviorEmission {

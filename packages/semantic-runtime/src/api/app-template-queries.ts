@@ -755,7 +755,7 @@ export class SemanticAppTemplateQueries {
       : this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, memberProductHandle);
     const valueSource = semanticExactSourceReference(describeAddress(
       this.store,
-      member == null ? null : checkerTypeMemberValueSourceAddressHandle(this.store, member),
+      member == null ? null : checkerTypeMemberValueSourceAddressHandle(this.store, this.store, member),
     ));
     return valueSource == null || sourceReferencesMatchExactSpan(valueSource, targetSource)
       ? [targetSource]

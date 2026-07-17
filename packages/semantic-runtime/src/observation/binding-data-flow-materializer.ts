@@ -1359,7 +1359,7 @@ class BindingDataFlowTypeAccess implements BindingDataFlowAssignabilityTypeAcces
   }
 
   readTypeShape(reference: CheckerTypeReference | null): CheckerTypeShape | null {
-    return readCheckerTypeShape(this.store, reference);
+    return reference == null ? null : this.shapeAccess.resolveReference(reference);
   }
 
   isRuntimeArrayInstanceType(reference: CheckerTypeReference | null): boolean {

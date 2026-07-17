@@ -318,7 +318,7 @@ export class CheckerExpressionTypeSynthesizer {
   private readTypeShape(reference: CheckerTypeReference): CheckerTypeShape | null {
     return reference.productHandle == null
       ? null
-      : this.projector.store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
+      : this.projector.publication.readProductDetail(TypeSystemProductDetails.TypeShape, reference.productHandle);
   }
 }
 

@@ -77,7 +77,7 @@ export function bindingContextSlotDraftForTypeMember(
   store: KernelStore,
   member: CheckerTypeMember,
 ): BindingContextSlotDraft {
-  const valueSourceAddressHandle = checkerTypeMemberValueSourceAddressHandle(store, member);
+  const valueSourceAddressHandle = checkerTypeMemberValueSourceAddressHandle(store, store, member);
   return new BindingContextSlotDraft(
     member.name,
     checkerTypeMemberReachableIdentityHandle(member),

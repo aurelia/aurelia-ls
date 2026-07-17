@@ -38,7 +38,6 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
-  ImmediateKernelPublicationContext,
   KernelPublicationPlan,
   publishHotDetail,
   publishProductDetail,
@@ -246,7 +245,7 @@ export class CheckerTypeProjector {
     /** Hot analysis store that receives type-system projection records. */
     readonly store: KernelStore,
     /** Immediate or staged owner of projected records and hot details. */
-    readonly publication: KernelPublicationContext = new ImmediateKernelPublicationContext(store),
+    readonly publication: KernelPublicationContext = store,
   ) {}
 
   ensureProjection(input: CheckerTypeProjectionRequest): CheckerTypeShape {

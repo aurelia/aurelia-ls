@@ -178,35 +178,6 @@ export interface KernelPublicationContext
   publish(plan: KernelPublicationPlan): void;
 }
 
-/** Existing eager publication behavior expressed through the shared publication contract. */
-export class ImmediateKernelPublicationContext implements KernelPublicationContext {
-  constructor(private readonly store: KernelStore) {}
-
-  get handles(): KernelHandleFactory {
-    return this.store.handles;
-  }
-
-  read(handle: KernelRecordHandle): KernelStoreRecord | null {
-    return this.store.read(handle);
-  }
-
-  readMaterializations(): readonly MaterializationRecord[] {
-    return this.store.readMaterializations();
-  }
-
-  readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
-    return this.store.productDetails.read(slot, productHandle);
-  }
-
-  readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: string): TDetail | null {
-    return this.store.hotDetails.read(slot, handle);
-  }
-
-  publish(plan: KernelPublicationPlan): void {
-    this.store.publishImmediate(plan);
-  }
-}
-
 /** Run-local collector that keeps every materializer write invisible until lifecycle commit. */
 export class StagedKernelPublicationContext implements KernelPublicationContext {
   private readonly plans: KernelPublicationPlan[] = [];

@@ -18,7 +18,6 @@ import {
 import { MaterializedProduct } from '../kernel/materialization.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import {
-  ImmediateKernelPublicationContext,
   KernelPublicationPlan,
   publishProductDetails,
   type KernelPublicationContext,
@@ -148,7 +147,7 @@ export class RuntimeValueConverterMaterializer {
 
   constructor(
     readonly store: KernelStore,
-    readonly publication: KernelPublicationContext = new ImmediateKernelPublicationContext(store),
+    readonly publication: KernelPublicationContext = store,
   ) {}
 
   materialize(input: RuntimeValueConverterMaterializationRequest): RuntimeValueConverterEmission {

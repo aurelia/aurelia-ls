@@ -56,7 +56,8 @@ export class CheckerAsyncTypeProjector {
     if (reference.productHandle == null) {
       return null;
     }
-    const carrier = this.store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle)?.carrier ?? null;
+    const carrier = this.projector.publication
+      .readProductDetail(TypeSystemProductDetails.TypeShape, reference.productHandle)?.carrier ?? null;
     if (carrier == null) {
       return null;
     }

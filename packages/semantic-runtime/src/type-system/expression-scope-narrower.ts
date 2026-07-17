@@ -643,7 +643,7 @@ export class CheckerExpressionScopeNarrower {
     const ownerReference = slot.targetType == null
       ? null
       : this.ensureProjectedSlotType(slot, slot.targetType, `${localKey}:owner`);
-    const ownerShape = readCheckerTypeShape(this.store, ownerReference);
+    const ownerShape = readCheckerTypeShape(this.projector.publication, ownerReference);
     if (ownerShape == null) {
       return null;
     }
@@ -859,7 +859,8 @@ export class CheckerExpressionScopeNarrower {
     if (reference.productHandle == null) {
       return null;
     }
-    const carrier = this.store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle)?.carrier ?? null;
+    const carrier = this.projector.publication
+      .readProductDetail(TypeSystemProductDetails.TypeShape, reference.productHandle)?.carrier ?? null;
     if (carrier == null) {
       return null;
     }

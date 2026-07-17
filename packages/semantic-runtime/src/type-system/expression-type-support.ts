@@ -75,7 +75,7 @@ export class CheckerExpressionTypeSupport {
   ) {}
 
   typeShapeForReference(reference: CheckerTypeReference | null): CheckerTypeShape | null {
-    return readCheckerTypeShape(this.store, reference);
+    return reference == null ? null : this.typeAccess.resolveReference(reference);
   }
 
   findChecker(scope: BindingScope): ts.TypeChecker | null {

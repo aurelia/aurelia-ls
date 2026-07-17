@@ -491,7 +491,7 @@ export class RuntimeBindingValueChannelTypeSupport {
   }
 
   readTypeShape(reference: CheckerTypeReference | null): CheckerTypeShape | null {
-    return readCheckerTypeShape(this.store, reference);
+    return reference == null ? null : this.typeAccess.resolveReference(reference);
   }
 }
 
