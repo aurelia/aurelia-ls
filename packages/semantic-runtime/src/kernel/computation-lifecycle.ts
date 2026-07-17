@@ -1,5 +1,7 @@
-import type { KernelRecordHandle } from './handles.js';
+import type { KernelRecordHandle, ProductHandle } from './handles.js';
+import type { HotDetailSlot } from './hot-details.js';
 import type { MaterializationRecord } from './materialization.js';
+import type { ProductDetailSlot } from './product-details.js';
 import {
   KernelPublicationManifest,
   type KernelPublicationPlan,
@@ -197,6 +199,14 @@ export class ComputationRun implements KernelPublicationContext {
 
   readMaterializations(): readonly MaterializationRecord[] {
     return this.publications.readMaterializations();
+  }
+
+  readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
+    return this.publications.readProductDetail(slot, productHandle);
+  }
+
+  readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: string): TDetail | null {
+    return this.publications.readHotDetail(slot, handle);
   }
 
   observe(read: ComputationRead): void {

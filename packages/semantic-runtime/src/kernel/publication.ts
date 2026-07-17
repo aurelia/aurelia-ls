@@ -174,6 +174,10 @@ export class KernelPublicationReplacement {
 
 /** Required read/write boundary used by materializers in immediate or staged mode. */
 export interface KernelPublicationContext extends KernelMaterializationReadView {
+  /** Read the candidate post-state for one typed product detail without exposing staged writes globally. */
+  readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null;
+  /** Read the candidate post-state for one typed hot detail without exposing staged writes globally. */
+  readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: string): TDetail | null;
   publish(plan: KernelPublicationPlan): void;
 }
 
@@ -193,6 +197,14 @@ export class ImmediateKernelPublicationContext implements KernelPublicationConte
     return this.store.readMaterializations();
   }
 
+  readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
+    return this.store.productDetails.read(slot, productHandle);
+  }
+
+  readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: string): TDetail | null {
+    return this.store.hotDetails.read(slot, handle);
+  }
+
   publish(plan: KernelPublicationPlan): void {
     this.store.publishImmediate(plan);
   }
@@ -202,6 +214,8 @@ export class ImmediateKernelPublicationContext implements KernelPublicationConte
 export class StagedKernelPublicationContext implements KernelPublicationContext {
   private readonly plans: KernelPublicationPlan[] = [];
   private readonly records = new Map<KernelRecordHandle, KernelStoreRecord>();
+  private readonly productDetails = new Map<ProductHandle, KernelProductDetailPublication<unknown>>();
+  private readonly hotDetails = new Map<string, KernelHotDetailPublication<unknown>>();
 
   constructor(private readonly store: KernelStore) {}
 
@@ -225,6 +239,34 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
     return [...materializations.values()];
   }
 
+  readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
+    const staged = this.productDetails.get(productHandle) ?? null;
+    const existing = this.store.productDetails.read(slot, productHandle);
+    if (staged == null) {
+      return existing;
+    }
+    if (staged.slot.detailKind !== slot.detailKind) {
+      return null;
+    }
+    return staged.admission === KernelDetailAdmission.IfAbsent && existing != null
+      ? existing
+      : staged.detail as TDetail;
+  }
+
+  readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: string): TDetail | null {
+    const staged = this.hotDetails.get(handle) ?? null;
+    const existing = this.store.hotDetails.read(slot, handle);
+    if (staged == null) {
+      return existing;
+    }
+    if (staged.slot.detailKind !== slot.detailKind) {
+      return null;
+    }
+    return staged.admission === KernelDetailAdmission.IfAbsent && existing != null
+      ? existing
+      : staged.detail as TDetail;
+  }
+
   publish(plan: KernelPublicationPlan): void {
     for (const record of plan.batch.records) {
       const handle = record.handle;
@@ -232,6 +274,12 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
         throw new Error(`Staged publication emitted duplicate kernel record ${handle}.`);
       }
       this.records.set(handle, record);
+    }
+    for (const publication of plan.productDetails) {
+      this.stageProductDetail(publication);
+    }
+    for (const publication of plan.hotDetails) {
+      this.stageHotDetail(publication);
     }
     this.plans.push(plan);
   }
@@ -245,5 +293,49 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       this.plans.flatMap((plan) => plan.productDetails),
       this.plans.flatMap((plan) => plan.hotDetails),
     );
+  }
+
+  private stageProductDetail(publication: KernelProductDetailPublication<unknown>): void {
+    const existing = this.productDetails.get(publication.productHandle) ?? null;
+    if (existing == null) {
+      this.productDetails.set(publication.productHandle, publication);
+      return;
+    }
+    if (existing.slot.detailKind !== publication.slot.detailKind) {
+      throw new Error(
+        `Staged publication emitted conflicting product details for ${publication.productHandle}: `
+        + `${existing.slot.detailKind} and ${publication.slot.detailKind}.`,
+      );
+    }
+    if (publication.admission === KernelDetailAdmission.IfAbsent) {
+      return;
+    }
+    if (existing.admission === KernelDetailAdmission.IfAbsent) {
+      this.productDetails.set(publication.productHandle, publication);
+      return;
+    }
+    throw new Error(`Staged publication emitted duplicate product detail ${publication.productHandle}.`);
+  }
+
+  private stageHotDetail(publication: KernelHotDetailPublication<unknown>): void {
+    const existing = this.hotDetails.get(publication.handle) ?? null;
+    if (existing == null) {
+      this.hotDetails.set(publication.handle, publication);
+      return;
+    }
+    if (existing.slot.detailKind !== publication.slot.detailKind) {
+      throw new Error(
+        `Staged publication emitted conflicting hot details for ${publication.handle}: `
+        + `${existing.slot.detailKind} and ${publication.slot.detailKind}.`,
+      );
+    }
+    if (publication.admission === KernelDetailAdmission.IfAbsent) {
+      return;
+    }
+    if (existing.admission === KernelDetailAdmission.IfAbsent) {
+      this.hotDetails.set(publication.handle, publication);
+      return;
+    }
+    throw new Error(`Staged publication emitted duplicate hot detail ${publication.handle}.`);
   }
 }

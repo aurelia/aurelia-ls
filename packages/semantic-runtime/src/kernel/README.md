@@ -169,6 +169,10 @@ materialization records on the committed view, so support and closure checks see
 publishing an intermediate world. Template-family compilation is the first recursive consumer: one owner-family run
 shares authored local definitions across a complete observed cohort set while retaining cohort-specific compiler
 products under one publication replacement.
+`KernelPublicationContext.readProductDetail(...)` and `readHotDetail(...)` provide the corresponding typed
+read-your-writes view for a known handle. They deliberately do not expose staged whole-slot enumeration: combining a
+prior manifest's rows with candidate rows would manufacture a mixed generation. Aggregate phases must pass their
+complete candidate emissions explicitly, while exact links may follow a staged detail by handle.
 
 There is one `ComputationLifecycleRegistry` per `KernelStore`. The store enforces that ownership boundary and notifies the
 registry when lifetime disposal reclaims a complete publication, so a later run cannot reuse a stale manifest or steal

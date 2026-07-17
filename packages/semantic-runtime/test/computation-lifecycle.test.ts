@@ -373,6 +373,10 @@ describe("computation lifecycle", () => {
       [publishProductDetail(detailSlot, productHandle, product0)],
       [publishHotDetail(hotSlot, "hot:atomic", hot0)],
     ));
+    expect(run0.readProductDetail(detailSlot, productHandle)).toBe(product0);
+    expect(run0.readHotDetail(hotSlot, "hot:atomic")).toBe(hot0);
+    expect(store.productDetails.read(detailSlot, productHandle)).toBeNull();
+    expect(store.hotDetails.read(hotSlot, "hot:atomic")).toBeNull();
     expect(run0.commit().state).toBe(ComputationCommitState.Committed);
 
     revisions.set("source:atomic", "2");

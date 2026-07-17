@@ -37,6 +37,13 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  ImmediateKernelPublicationContext,
+  KernelPublicationPlan,
+  publishHotDetail,
+  publishProductDetail,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { TypeSystemHotDetails, TypeSystemProductDetails } from './product-details.js';
 import {
@@ -238,6 +245,8 @@ export class CheckerTypeProjector {
   constructor(
     /** Hot analysis store that receives type-system projection records. */
     readonly store: KernelStore,
+    /** Immediate or staged owner of projected records and hot details. */
+    readonly publication: KernelPublicationContext = new ImmediateKernelPublicationContext(store),
   ) {}
 
   ensureProjection(input: CheckerTypeProjectionRequest): CheckerTypeShape {
@@ -247,7 +256,7 @@ export class CheckerTypeProjector {
       canonicalCheckerProjectionLocalKey(input, descriptor),
     );
     const productHandle = this.store.handles.product(`type-shape:${canonicalInput.localKey}`);
-    const existing = this.store.productDetails.read(TypeSystemProductDetails.TypeShape, productHandle);
+    const existing = this.publication.readProductDetail(TypeSystemProductDetails.TypeShape, productHandle);
     if (existing != null) {
       return existing;
     }
@@ -256,7 +265,7 @@ export class CheckerTypeProjector {
 
   ensureSyntheticProjection(input: CheckerSyntheticTypeProjectionRequest): CheckerTypeShape {
     const productHandle = this.store.handles.product(`type-shape:${input.localKey}`);
-    const existing = this.store.productDetails.read(TypeSystemProductDetails.TypeShape, productHandle);
+    const existing = this.publication.readProductDetail(TypeSystemProductDetails.TypeShape, productHandle);
     if (existing != null) {
       return existing;
     }
@@ -273,26 +282,22 @@ export class CheckerTypeProjector {
   }
 
   projectSynthetic(input: CheckerSyntheticTypeProjectionRequest): CheckerTypeProjectionEmission {
-    const emission = this.recordsForSyntheticType(input);
-    this.store.commit(new KernelStoreBatch(emission.records, `type-system:${input.localKey}`));
-    this.registerProductDetails(emission.typeShape);
-    return emission;
+    return this.publishProjection(this.recordsForSyntheticType(input));
   }
 
   private publishProjection(emission: CheckerTypeProjectionEmission): CheckerTypeProjectionEmission {
-    this.store.commit(new KernelStoreBatch(emission.records, `type-system:${emission.typeShape.productHandle}`));
-    this.registerProductDetails(emission.typeShape);
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `type-system:${emission.typeShape.productHandle}`),
+      [publishProductDetail(
+        TypeSystemProductDetails.TypeShape,
+        emission.typeShape.productHandle,
+        emission.typeShape,
+      )],
+      emission.typeShape.members.map((member) =>
+        publishHotDetail(TypeSystemHotDetails.TypeMember, member.productHandle, member)
+      ),
+    ));
     return emission;
-  }
-
-  private registerProductDetails(typeShape: CheckerTypeShape): void {
-    this.store.productDetails.add(TypeSystemProductDetails.TypeShape, typeShape.productHandle, typeShape);
-    // Type members are hot children of the owning shape, not durable kernel products by default. Keeping their detail
-    // handles addressable lets binding scopes and completions follow up in-process without retaining one
-    // MaterializedProduct/Identity/Claim trio per framework or DOM member.
-    for (const member of typeShape.members) {
-      this.store.hotDetails.add(TypeSystemHotDetails.TypeMember, member.productHandle, member);
-    }
   }
 
   private recordsForType(
@@ -317,7 +322,7 @@ export class CheckerTypeProjector {
     records: KernelStoreRecord[],
   ): TypeShapePublicationFrame {
     const declarationSource = typeShapeDeclarationSource(this.store, descriptor);
-    appendDeclarationSourceRecords(this.store, records, declarationSource);
+    appendDeclarationSourceRecords(this.publication, records, declarationSource);
     const handles = this.typeShapeHandles(input.localKey);
     const shapeReference = typeShapeReferenceFor(
       handles,
@@ -540,7 +545,7 @@ export class CheckerTypeProjector {
     const localKey = `${input.localKey}:member:${localKeyPart(name)}`;
     const valueType = valueTypeForSymbol(input.checker, symbol, input.sourceNode ?? null, declarations);
     const declarationSource = sourceSpanForCheckerDeclaration(this.store, symbol, declarations, SourceSpanRole.Name);
-    appendDeclarationSourceRecords(this.store, records, declarationSource);
+    appendDeclarationSourceRecords(this.publication, records, declarationSource);
     const valueTypeReference = valueTypeReferenceForMember(input, valueType);
     return new CheckerTypeMember(
       this.store.handles.product(`type-member:${localKey}`),
@@ -908,7 +913,7 @@ function valueTypeReferenceForMember(
 }
 
 function appendDeclarationSourceRecords(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   records: KernelStoreRecord[],
   declarationSource: DeclarationSourcePublication | null,
 ): void {
@@ -916,17 +921,17 @@ function appendDeclarationSourceRecords(
     return;
   }
   for (const record of declarationSource.records) {
-    appendKernelRecordIfAbsent(store, records, record);
+    appendKernelRecordIfAbsent(publication, records, record);
   }
 }
 
 function appendKernelRecordIfAbsent(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   records: KernelStoreRecord[],
   record: KernelStoreRecord,
 ): void {
   if (
-    store.read(record.handle as KernelRecordHandle) == null
+    publication.read(record.handle as KernelRecordHandle) == null
     && !records.some((existing) => existing.handle === record.handle)
   ) {
     records.push(record);
