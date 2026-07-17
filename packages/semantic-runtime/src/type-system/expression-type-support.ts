@@ -135,7 +135,7 @@ export class CheckerExpressionTypeSupport {
     const sourceNode = member.carrier.declarations[0] ?? null;
     const sourceAddressHandle = reference.sourceAddressHandle
       ?? slot.sourceAddressHandle
-      ?? checkerTypeMemberSourceAddressHandle(this.store, member);
+      ?? checkerTypeMemberSourceAddressHandle(this.projector.publication, member);
     const projected = this.projector.ensureProjection({
       localKey: `${localKey}:projected-type`,
       checker: member.carrier.checker,

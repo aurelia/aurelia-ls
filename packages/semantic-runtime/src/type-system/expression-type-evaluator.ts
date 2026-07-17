@@ -157,7 +157,7 @@ export class CheckerExpressionTypeEvaluator {
       this.access,
       this.calls,
       resourceScope,
-      new StateBindingScopeProjector(store, stateStores),
+      new StateBindingScopeProjector(store, stateStores, projector),
       {
         evaluateNode: (context) => this.evaluateNode(context),
       },

@@ -1,5 +1,5 @@
 import type { ProductHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import {
   HydrateTemplateControllerInstruction,
   InterpolationInstruction,
@@ -10,7 +10,7 @@ import { TemplateProductDetails } from './product-details.js';
 import { frameworkTemplateControllerSemanticsForName } from './template-controller-semantics.js';
 
 export function templateControllerValueExpressionProductHandle(
-  store: KernelStore,
+  store: ProductDetailReadView,
   instruction: HydrateTemplateControllerInstruction,
 ): ProductHandle | null {
   const propertyBinding = templateControllerValuePropertyBinding(store, instruction);
@@ -22,7 +22,7 @@ export function templateControllerValueExpressionProductHandle(
     return null;
   }
   for (const productHandle of instruction.bindingInstructionProductHandles) {
-    const binding = store.productDetails.read(TemplateProductDetails.Instruction, productHandle);
+    const binding = store.readProductDetail(TemplateProductDetails.Instruction, productHandle);
     if (binding instanceof InterpolationInstruction && binding.target === valueProperty) {
       return binding.expressionProductHandles[0] ?? null;
     }
@@ -31,7 +31,7 @@ export function templateControllerValueExpressionProductHandle(
 }
 
 export function templateControllerValuePropertyBinding(
-  store: KernelStore,
+  store: ProductDetailReadView,
   instruction: HydrateTemplateControllerInstruction,
 ): PropertyBindingInstruction | null {
   const valueProperty = templateControllerValueProperty(instruction);
@@ -39,7 +39,7 @@ export function templateControllerValuePropertyBinding(
     return null;
   }
   for (const productHandle of instruction.bindingInstructionProductHandles) {
-    const binding = store.productDetails.read(TemplateProductDetails.Instruction, productHandle);
+    const binding = store.readProductDetail(TemplateProductDetails.Instruction, productHandle);
     if (binding instanceof PropertyBindingInstruction && binding.targetProperty === valueProperty) {
       return binding;
     }
@@ -48,7 +48,7 @@ export function templateControllerValuePropertyBinding(
 }
 
 export function templateControllerStaticValue(
-  store: KernelStore,
+  store: ProductDetailReadView,
   instruction: HydrateTemplateControllerInstruction,
 ): string | null {
   const valueProperty = templateControllerValueProperty(instruction);
@@ -58,12 +58,12 @@ export function templateControllerStaticValue(
 }
 
 export function templateControllerStaticPropertyValue(
-  store: KernelStore,
+  store: ProductDetailReadView,
   instruction: HydrateTemplateControllerInstruction,
   targetProperty: string,
 ): string | null {
   for (const productHandle of instruction.bindingInstructionProductHandles) {
-    const binding = store.productDetails.read(TemplateProductDetails.Instruction, productHandle);
+    const binding = store.readProductDetail(TemplateProductDetails.Instruction, productHandle);
     if (binding instanceof SetPropertyInstruction && binding.targetProperty === targetProperty) {
       return binding.value;
     }
@@ -72,14 +72,14 @@ export function templateControllerStaticPropertyValue(
 }
 
 export function staticTemplateControllerBooleanProperty(
-  store: KernelStore,
+  store: ProductDetailReadView,
   instruction: HydrateTemplateControllerInstruction,
   targetProperty: string,
   fallback: boolean,
 ): boolean | null {
   let sawTarget = false;
   for (const productHandle of instruction.bindingInstructionProductHandles) {
-    const binding = store.productDetails.read(TemplateProductDetails.Instruction, productHandle);
+    const binding = store.readProductDetail(TemplateProductDetails.Instruction, productHandle);
     if (binding instanceof SetPropertyInstruction && binding.targetProperty === targetProperty) {
       sawTarget = true;
       return coerceTemplateControllerBoolean(binding.value);

@@ -21,13 +21,18 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
-  KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  KernelStoreBatch,
+  publishProductDetail,
+} from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { ConfigurationProductDetails } from './product-details.js';
 import { BindingScopeSlotProjector } from './binding-scope-slot-projector.js';
+import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import {
   BindingScopeCreatorKind,
   BindingContext,
@@ -92,11 +97,16 @@ class BindingScopeProducts {
 
 /** Materializes runtime Scope, BindingContext, and OverrideContext products for controller/expression lookup. */
 export class BindingScopeMaterializer {
+  readonly slotProjector: BindingScopeSlotProjector;
+
   constructor(
     /** Hot analysis store that receives scope records. */
     readonly store: KernelStore,
-    readonly slotProjector = new BindingScopeSlotProjector(store),
-  ) {}
+    /** Generation-local checker projector and publication authority for all slot details. */
+    readonly projector: CheckerTypeProjector,
+  ) {
+    this.slotProjector = new BindingScopeSlotProjector(store, projector);
+  }
 
   construct(input: BindingScopeConstructionRequest): BindingScopeConstructionEmission {
     const emission = this.prepare(input);
@@ -109,24 +119,38 @@ export class BindingScopeMaterializer {
     return this.recordsForScope(input);
   }
 
-  /** Commit prepared scope records and attach their typed hot details after the products exist. */
+  /** Publish prepared scope records and their typed details through the active generation. */
   publish(
     emissions: readonly BindingScopeConstructionEmission[],
     batchLabel: string,
   ): void {
-    const records = emissions.flatMap((emission) => emission.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, batchLabel));
-    }
-    for (const emission of emissions) {
-      this.registerProductDetails(emission);
-    }
+    this.projector.publication.publish(this.publicationPlan(emissions, batchLabel));
   }
 
-  private registerProductDetails(emission: BindingScopeConstructionEmission): void {
-    this.store.productDetails.add(ConfigurationProductDetails.BindingContext, emission.bindingContext.productHandle, emission.bindingContext);
-    this.store.productDetails.add(ConfigurationProductDetails.OverrideContext, emission.overrideContext.productHandle, emission.overrideContext);
-    this.store.productDetails.add(ConfigurationProductDetails.BindingScope, emission.scope.productHandle, emission.scope);
+  publicationPlan(
+    emissions: readonly BindingScopeConstructionEmission[],
+    batchLabel: string,
+  ): KernelPublicationPlan {
+    return new KernelPublicationPlan(
+      new KernelStoreBatch(emissions.flatMap((emission) => emission.records), batchLabel),
+      emissions.flatMap((emission) => [
+        publishProductDetail(
+          ConfigurationProductDetails.BindingContext,
+          emission.bindingContext.productHandle,
+          emission.bindingContext,
+        ),
+        publishProductDetail(
+          ConfigurationProductDetails.OverrideContext,
+          emission.overrideContext.productHandle,
+          emission.overrideContext,
+        ),
+        publishProductDetail(
+          ConfigurationProductDetails.BindingScope,
+          emission.scope.productHandle,
+          emission.scope,
+        ),
+      ]),
+    );
   }
 
   private recordsForScope(input: BindingScopeConstructionRequest): BindingScopeConstructionEmission {
@@ -464,10 +488,14 @@ export class BindingScopeMaterializer {
   }
 
   private isControllerProduct(productHandle: ProductHandle): boolean {
-    return this.store.readProduct(productHandle)?.productKindKey === KernelVocabulary.Configuration.Controller.key;
+    const product = this.projector.publication.read(productHandle);
+    return product instanceof MaterializedProduct
+      && product.productKindKey === KernelVocabulary.Configuration.Controller.key;
   }
 
   private isScopeEffectProduct(productHandle: ProductHandle): boolean {
-    return this.store.readProduct(productHandle)?.productKindKey === KernelVocabulary.Binding.ScopeEffect.key;
+    const product = this.projector.publication.read(productHandle);
+    return product instanceof MaterializedProduct
+      && product.productKindKey === KernelVocabulary.Binding.ScopeEffect.key;
   }
 }

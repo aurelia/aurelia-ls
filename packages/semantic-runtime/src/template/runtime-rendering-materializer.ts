@@ -112,7 +112,10 @@ import {
 } from './runtime-view-factory-materializer.js';
 import { RuntimeControllerPublicationMaterializer } from './runtime-controller-publication.js';
 import { RuntimeControllerCreationMaterializer } from './runtime-controller-creation-materializer.js';
-import { RuntimeSpreadBindingCreator } from './runtime-spread-binding-creator.js';
+import {
+  type RuntimeDynamicInstructionContext,
+  RuntimeSpreadBindingCreator,
+} from './runtime-spread-binding-creator.js';
 import type { RuntimeControllerIssue } from './runtime-controller-issue.js';
 import type { RuntimeBindingIssue } from './runtime-binding-issue.js';
 import type { TemplateCompilerIssue } from './compiler-issue.js';
@@ -181,6 +184,7 @@ export class RuntimeRenderingEmission {
   private readonly renderContextsByBinding = new Map<ProductHandle, RuntimeBindingRenderContext>();
   private readonly controllersByInstruction = new Map<ProductHandle, RuntimeControllerFrame[]>();
   private readonly syntheticControllersByTemplateControllerInstruction = new Map<ProductHandle, RuntimeControllerFrame[]>();
+  private readonly dynamicInstructionContextsByProduct = new Map<ProductHandle, RuntimeDynamicInstructionContext>();
 
   constructor(
     /** Root custom-element controller that invoked the render pass. */
@@ -217,6 +221,8 @@ export class RuntimeRenderingEmission {
     readonly childContextResolverSlots: readonly ContainerResolverSlot[],
     /** Instructions allocated during runtime TemplateCompiler.compileSpread emulation. */
     readonly dynamicInstructions: readonly TemplateInstruction[],
+    /** Exact hydration contexts used to compile each runtime-created instruction. */
+    readonly dynamicInstructionContexts: readonly RuntimeDynamicInstructionContext[],
     /** Value sites allocated during runtime TemplateCompiler.compileSpread emulation. */
     readonly dynamicValueSites: readonly TemplateValueSite[],
     /** Expression parses allocated during runtime TemplateCompiler.compileSpread emulation. */
@@ -257,6 +263,9 @@ export class RuntimeRenderingEmission {
         controllers.push(controller);
         this.syntheticControllersByTemplateControllerInstruction.set(controller.syntheticOwnerInstructionProductHandle, controllers);
       }
+    }
+    for (const context of dynamicInstructionContexts) {
+      this.dynamicInstructionContextsByProduct.set(context.instructionProductHandle, context);
     }
   }
 
@@ -322,6 +331,10 @@ export class RuntimeRenderingEmission {
   readSyntheticControllersForTemplateControllerInstruction(productHandle: ProductHandle): readonly RuntimeControllerFrame[] {
     return this.syntheticControllersByTemplateControllerInstruction.get(productHandle) ?? [];
   }
+
+  readDynamicInstructionContext(productHandle: ProductHandle): RuntimeDynamicInstructionContext | null {
+    return this.dynamicInstructionContextsByProduct.get(productHandle) ?? null;
+  }
 }
 
 class RuntimeRenderingMaterializationState {
@@ -338,6 +351,7 @@ class RuntimeRenderingMaterializationState {
   readonly bindingIssues: RuntimeBindingIssue[] = [];
   readonly compilerIssues: TemplateCompilerIssue[] = [];
   readonly dynamicInstructions: TemplateInstruction[] = [];
+  readonly dynamicInstructionContexts: RuntimeDynamicInstructionContext[] = [];
   readonly dynamicValueSites: TemplateValueSite[] = [];
   readonly dynamicExpressionParses: TemplateExpressionParse[] = [];
   readonly openSeams: OpenSeam[] = [];
@@ -402,10 +416,6 @@ export class RuntimeRenderingMaterializer {
     this.publication.publish(new KernelPublicationPlan(
       new KernelStoreBatch(emission.records, `runtime-rendering:${input.localKey}`),
       [
-        ...publishProductDetails(
-          ConfigurationProductDetails.Controller,
-          emission.controllers.map((controller) => controller.toControllerProduct()),
-        ),
         ...publishProductDetails(TemplateProductDetails.RuntimeBinding, emission.bindings),
         ...publishProductDetails(TemplateProductDetails.RuntimeWatcher, emission.watchers),
         ...publishProductDetails(
@@ -631,6 +641,7 @@ export class RuntimeRenderingMaterializer {
       state.childSelfResolverSlots(),
       state.childContextResolverSlots(),
       state.dynamicInstructions,
+      state.dynamicInstructionContexts,
       state.dynamicValueSites,
       state.dynamicExpressionParses,
       state.openSeams,

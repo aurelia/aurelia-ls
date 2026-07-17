@@ -38,7 +38,8 @@ import {
   type CheckerPrimitiveName,
 } from './checker-primitive-types.js';
 import { checkerTypeMemberSourceAddressHandle } from './checker-type-member-source.js';
-import { readOrProjectCheckerTypeMembers } from './checker-type-member-surface.js';
+import { readOrProjectCheckerTypeMembersInProjection } from './checker-type-member-surface.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import { readCheckerTypeShape } from './checker-type-shape-access.js';
 import { checkerRawTypeAssignable } from './checker-type-assignability.js';
 import { checkerUnionTypeOrNever } from './checker-type-union.js';
@@ -613,7 +614,7 @@ export class CheckerExpressionScopeNarrower {
       return reference;
     }
 
-    const member = bindingContextSlotTargetTypeSourceMember(this.store, slot);
+    const member = bindingContextSlotTargetTypeSourceMember(this.projector.publication, slot);
     if (member?.carrier?.valueType == null) {
       return reference;
     }
@@ -625,7 +626,7 @@ export class CheckerExpressionScopeNarrower {
       type: member.carrier.valueType,
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceNode,
-      sourceAddressHandle: slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.store, member),
+      sourceAddressHandle: slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.projector.publication, member),
       ownerIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
       display: reference.display ?? member.valueType?.display ?? null,
     } satisfies CheckerTypeProjectionRequest).toReference();
@@ -647,7 +648,7 @@ export class CheckerExpressionScopeNarrower {
     if (ownerShape == null) {
       return null;
     }
-    const member = readOrProjectCheckerTypeMembers(this.store, ownerShape, `${localKey}:members`)
+    const member = readOrProjectCheckerTypeMembersInProjection(this.projector, ownerShape, `${localKey}:members`)
       .find((candidate) => candidate.name === memberName) ?? null;
     if (member?.valueType != null) {
       if (member.valueType.productHandle != null || member.carrier?.valueType == null) {
@@ -659,7 +660,7 @@ export class CheckerExpressionScopeNarrower {
         type: member.carrier.valueType,
         origin: CheckerTypeProjectionOrigin.TypeChecker,
         sourceNode: member.carrier.declarations[0] ?? null,
-        sourceAddressHandle: member.sourceAddressHandle ?? slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.store, member),
+        sourceAddressHandle: member.sourceAddressHandle ?? slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.projector.publication, member),
         ownerIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
         display: member.carrier.checker.typeToString(member.carrier.valueType),
       } satisfies CheckerTypeProjectionRequest).toReference();
@@ -673,7 +674,7 @@ export class CheckerExpressionScopeNarrower {
       type: member.carrier.valueType,
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceNode: member.carrier.declarations[0] ?? null,
-      sourceAddressHandle: member.sourceAddressHandle ?? slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.store, member),
+      sourceAddressHandle: member.sourceAddressHandle ?? slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.projector.publication, member),
       ownerIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
       display: member.carrier.checker.typeToString(member.carrier.valueType),
     } satisfies CheckerTypeProjectionRequest).toReference();
@@ -711,7 +712,7 @@ export class CheckerExpressionScopeNarrower {
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeReference | null {
     const sourceCarrier = this.carrierForReference(source);
-    const includeCarriers = sameCheckerCarriers(this.store, includeTypes, sourceCarrier?.checker ?? null);
+    const includeCarriers = sameCheckerCarriers(this.projector.publication, includeTypes, sourceCarrier?.checker ?? null);
     if (sourceCarrier == null || includeCarriers == null) {
       return null;
     }
@@ -736,7 +737,7 @@ export class CheckerExpressionScopeNarrower {
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeReference | null {
     const sourceCarrier = this.carrierForReference(source);
-    const excludeCarriers = sameCheckerCarriers(this.store, excludeTypes, sourceCarrier?.checker ?? null);
+    const excludeCarriers = sameCheckerCarriers(this.projector.publication, excludeTypes, sourceCarrier?.checker ?? null);
     if (sourceCarrier == null || excludeCarriers == null) {
       return null;
     }
@@ -1106,14 +1107,14 @@ function bindingContextSlotWithTargetType(
 }
 
 function sameCheckerCarriers(
-  store: KernelStore,
+  store: ProductDetailReadView,
   references: readonly CheckerTypeReference[],
   checker: ts.TypeChecker | null,
 ): readonly CheckerTypeCarrierInput[] | null {
   const carriers = references.map((reference) => {
     const carrier = reference.productHandle == null
       ? null
-      : store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle)?.carrier ?? null;
+      : store.readProductDetail(TypeSystemProductDetails.TypeShape, reference.productHandle)?.carrier ?? null;
     return carrier == null
       ? null
       : {

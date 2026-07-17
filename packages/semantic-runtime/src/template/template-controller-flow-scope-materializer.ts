@@ -243,7 +243,7 @@ export class TemplateControllerFlowScopeMaterializer {
       return parent;
     }
     const assignment = this.promiseSettlementAssignmentProjection(frame, parent, instruction, localSuffix);
-    const binding = templateControllerValuePropertyBinding(this.store, instruction);
+    const binding = templateControllerValuePropertyBinding(this.scopeNarrower.projector.publication, instruction);
     return assignment?.valid !== true || binding == null
       ? parent
       : this.constructRuntimeAssignmentScope(
@@ -301,7 +301,10 @@ export class TemplateControllerFlowScopeMaterializer {
     flowKind: BuiltInTemplateControllerFlowKind.SwitchCase | BuiltInTemplateControllerFlowKind.SwitchDefault,
     localSuffix: string,
   ): CheckerExpressionScopeNarrowingResult | null {
-    const parse = this.typeSupport.readParse(templateControllerValueExpressionProductHandle(this.store, switchInstruction));
+    const parse = this.typeSupport.readParse(templateControllerValueExpressionProductHandle(
+      this.scopeNarrower.projector.publication,
+      switchInstruction,
+    ));
     const switchExpression = parse == null ? null : completedTemplateExpressionAstForParse(parse);
     const switchSource = switchExpression == null
       ? null
@@ -334,7 +337,12 @@ export class TemplateControllerFlowScopeMaterializer {
       cases: this.switchCaseInstructions(frame, switchInstruction),
       current: instruction,
       readFallThrough: (candidate) =>
-        staticTemplateControllerBooleanProperty(this.store, candidate, 'fallThrough', false),
+        staticTemplateControllerBooleanProperty(
+          this.scopeNarrower.projector.publication,
+          candidate,
+          'fallThrough',
+          false,
+        ),
     });
     if (branch == null) {
       return null;
@@ -486,7 +494,10 @@ export class TemplateControllerFlowScopeMaterializer {
     polarity: CheckerExpressionScopeNarrowingPolarity,
     localSuffix: string,
   ): BindingScopeConstructionEmission | null {
-    const parse = this.typeSupport.readParse(templateControllerValueExpressionProductHandle(this.store, conditionInstruction));
+    const parse = this.typeSupport.readParse(templateControllerValueExpressionProductHandle(
+      this.scopeNarrower.projector.publication,
+      conditionInstruction,
+    ));
     const ast = parse == null ? null : completedTemplateExpressionAstForParse(parse);
     const source = ast == null
       ? null
@@ -537,7 +548,12 @@ export class TemplateControllerFlowScopeMaterializer {
     expression: ExpressionAstNode,
     localKey: string,
   ): TemplateControllerSourceExpressionSite | null {
-    const binding = templateControllerRuntimeValueBinding(this.store, input.runtimeBindings, instruction, controller);
+    const binding = templateControllerRuntimeValueBinding(
+      this.scopeNarrower.projector.publication,
+      input.runtimeBindings,
+      instruction,
+      controller,
+    );
     if (binding == null) {
       return {
         expression,

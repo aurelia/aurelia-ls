@@ -1,4 +1,5 @@
 import type { KernelStore } from '../kernel/store.js';
+import type { HotDetailReadView } from '../kernel/hot-details.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import { TypeSystemHotDetails, TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
@@ -10,7 +11,7 @@ import { checkerTypeMemberReachableIdentityHandle } from '../type-system/type-sh
 import { checkerTypeReferenceWithSource } from '../type-system/type-shape.js';
 import { sameCheckerTypeReference } from '../type-system/type-shape.js';
 import { CheckerTypeMemberProjectionPolicy, CheckerTypeProjector } from '../type-system/checker-projector.js';
-import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
+import { readOrProjectCheckerTypeMembersInProjection } from '../type-system/checker-type-member-surface.js';
 import {
   type BindingContextSlot,
   BindingContextSlotDraft,
@@ -26,6 +27,7 @@ import {
 export class BindingScopeSlotProjector {
   constructor(
     readonly store: KernelStore,
+    readonly projector: CheckerTypeProjector,
   ) {}
 
   contextSlotsFor(
@@ -35,7 +37,7 @@ export class BindingScopeSlotProjector {
     const slotsByName = explicitContextSlotsByName(explicitSlots);
     const typeShape = this.typeShapeForContext(contextType);
     if (typeShape != null) {
-      addTypeShapeSlots(this.store, slotsByName, typeShape);
+      addTypeShapeSlots(this.store, this.projector, slotsByName, typeShape);
     }
     return [...slotsByName.values()];
   }
@@ -45,7 +47,7 @@ export class BindingScopeSlotProjector {
   ): CheckerTypeShape | null {
     return contextType?.productHandle == null
       ? null
-      : this.store.productDetails.read(TypeSystemProductDetails.TypeShape, contextType.productHandle);
+      : this.projector.publication.readProductDetail(TypeSystemProductDetails.TypeShape, contextType.productHandle);
   }
 }
 
@@ -61,23 +63,25 @@ function explicitContextSlotsByName(
 
 function addTypeShapeSlots(
   store: KernelStore,
+  projector: CheckerTypeProjector,
   slotsByName: Map<string, BindingContextSlotDraft>,
   typeShape: CheckerTypeShape,
 ): void {
-  const members = readOrProjectCheckerTypeMembers(store, typeShape, typeShape.productHandle);
+  const members = readOrProjectCheckerTypeMembersInProjection(projector, typeShape, typeShape.productHandle);
   for (const member of members) {
     if (slotsByName.has(member.name)) {
       continue;
     }
-    slotsByName.set(member.name, bindingContextSlotDraftForTypeMember(store, member));
+    slotsByName.set(member.name, bindingContextSlotDraftForTypeMember(store, projector, member));
   }
 }
 
 export function bindingContextSlotDraftForTypeMember(
   store: KernelStore,
+  projector: CheckerTypeProjector,
   member: CheckerTypeMember,
 ): BindingContextSlotDraft {
-  const valueSourceAddressHandle = checkerTypeMemberValueSourceAddressHandle(store, store, member);
+  const valueSourceAddressHandle = checkerTypeMemberValueSourceAddressHandle(store, projector.publication, member);
   return new BindingContextSlotDraft(
     member.name,
     checkerTypeMemberReachableIdentityHandle(member),
@@ -88,34 +92,35 @@ export function bindingContextSlotDraftForTypeMember(
         member.valueType,
         member.valueType.sourceAddressHandle ?? valueSourceAddressHandle,
       ),
-    checkerTypeMemberSourceAddressHandle(store, member),
+    checkerTypeMemberSourceAddressHandle(projector.publication, member),
     [],
   );
 }
 
 export function bindingContextSlotDraftForContextTypeMember(
   store: KernelStore,
+  projector: CheckerTypeProjector,
   contextType: BindingScopeConstructionRequest['bindingContextType'],
   memberName: string,
 ): BindingContextSlotDraft | null {
   const typeShape = contextType?.productHandle == null
     ? null
-    : store.productDetails.read(TypeSystemProductDetails.TypeShape, contextType.productHandle);
+    : projector.publication.readProductDetail(TypeSystemProductDetails.TypeShape, contextType.productHandle);
   const member = typeShape == null
     ? null
-    : readOrProjectCheckerTypeMembers(store, typeShape, typeShape.productHandle)
+    : readOrProjectCheckerTypeMembersInProjection(projector, typeShape, typeShape.productHandle)
       .find((candidate) => candidate.name === memberName) ?? null;
-  return member == null ? null : bindingContextSlotDraftForTypeMember(store, member);
+  return member == null ? null : bindingContextSlotDraftForTypeMember(store, projector, member);
 }
 
 export function bindingContextSlotTargetTypeSourceMember(
-  store: KernelStore,
+  details: HotDetailReadView,
   slot: BindingContextSlot | BindingContextSlotDraft,
 ): CheckerTypeMember | null {
   const sourceProductHandle = slot.targetTypeSourceProductHandle ?? slot.targetProductHandle;
   const member = sourceProductHandle == null
     ? null
-    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, sourceProductHandle);
+    : details.readHotDetail(TypeSystemHotDetails.TypeMember, sourceProductHandle);
   if (member == null || slot.targetTypeSourceProductHandle != null) {
     return member;
   }
@@ -127,18 +132,17 @@ export function bindingContextSlotTargetTypeSourceMember(
 }
 
 export function bindingContextSlotTargetTypeShape(
-  store: KernelStore,
   projector: CheckerTypeProjector,
   slot: BindingContextSlot | BindingContextSlotDraft,
   localKey: string,
 ): CheckerTypeShape | null {
   const typeShape = slot.targetType?.productHandle == null
     ? null
-    : store.productDetails.read(TypeSystemProductDetails.TypeShape, slot.targetType.productHandle);
+    : projector.publication.readProductDetail(TypeSystemProductDetails.TypeShape, slot.targetType.productHandle);
   if (typeShape != null) {
     return typeShape;
   }
-  const member = bindingContextSlotTargetTypeSourceMember(store, slot);
+  const member = bindingContextSlotTargetTypeSourceMember(projector.publication, slot);
   if (member?.carrier?.valueType == null) {
     return null;
   }
@@ -197,14 +201,14 @@ function bindingContextSlotDraftForMemberAccess(
   memberName: string,
   localKey: string,
 ): BindingContextSlotDraft | null {
-  const ownerTypeShape = bindingContextSlotTargetTypeShape(store, projector, owner, `${localKey}:owner:${owner.name}`);
+  const ownerTypeShape = bindingContextSlotTargetTypeShape(projector, owner, `${localKey}:owner:${owner.name}`);
   const member = ownerTypeShape == null
     ? null
-    : readOrProjectCheckerTypeMembers(store, ownerTypeShape, localKey)
+    : readOrProjectCheckerTypeMembersInProjection(projector, ownerTypeShape, localKey)
       .find((candidate) => candidate.name === memberName) ?? null;
   return member == null
     ? null
-    : bindingContextSlotDraftForTypeMember(store, member);
+    : bindingContextSlotDraftForTypeMember(store, projector, member);
 }
 
 function draftFromSlot(slot: BindingContextSlot | null): BindingContextSlotDraft | null {

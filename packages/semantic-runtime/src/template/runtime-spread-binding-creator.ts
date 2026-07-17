@@ -44,8 +44,18 @@ export interface RuntimeSpreadBindingCreationState {
   readonly bindingIssues: RuntimeBindingIssue[];
   readonly compilerIssues: TemplateCompilerIssue[];
   readonly dynamicInstructions: TemplateInstruction[];
+  readonly dynamicInstructionContexts: RuntimeDynamicInstructionContext[];
   readonly dynamicValueSites: TemplateValueSite[];
   readonly dynamicExpressionParses: TemplateExpressionParse[];
+}
+
+/** Exact hydration context retained for an instruction created by runtime captured-attribute compilation. */
+export class RuntimeDynamicInstructionContext {
+  constructor(
+    readonly instructionProductHandle: ProductHandle,
+    readonly contextInstructionProductHandle: ProductHandle,
+    readonly contextControllerProductHandle: ProductHandle,
+  ) {}
 }
 
 interface RuntimeCapturedAttributeUsage {
@@ -126,6 +136,15 @@ export class RuntimeSpreadBindingCreator {
         usage.contextControllerProductHandle,
       ),
     );
+    if (result.state === TemplateCompilerSpreadCompileState.Compiled) {
+      state.dynamicInstructionContexts.push(...result.createdInstructions.map((instruction) =>
+        new RuntimeDynamicInstructionContext(
+          instruction.productHandle,
+          usage.contextInstructionProductHandle,
+          usage.contextControllerProductHandle,
+        )
+      ));
+    }
     return this.runtimeResultForTemplateCompilerResult(spread, result);
   }
 

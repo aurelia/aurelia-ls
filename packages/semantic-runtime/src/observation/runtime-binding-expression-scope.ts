@@ -51,7 +51,11 @@ export class RuntimeBindingExpressionScopeProjector {
     readonly expressionWorld: CheckerExpressionTypeWorld,
     readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
   ) {
-    this.stateScopes = new StateBindingScopeProjector(store, expressionWorld.stateStores);
+    this.stateScopes = new StateBindingScopeProjector(
+      store,
+      expressionWorld.stateStores,
+      expressionWorld.projector,
+    );
   }
 
   project(

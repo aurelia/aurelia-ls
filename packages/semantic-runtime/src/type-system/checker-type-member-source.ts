@@ -3,6 +3,7 @@ import type { AddressHandle, KernelRecordHandle } from '../kernel/handles.js';
 import {
   KernelStoreBatch,
   type KernelStore,
+  type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -36,7 +37,7 @@ export interface CheckerSymbolMemberSourceProjection {
  * span. Synthetic members and open checker members can still keep a direct source address on the hot member detail.
  */
 export function checkerTypeMemberSourceAddressHandle(
-  store: KernelStore,
+  store: KernelStoreReadView,
   member: CheckerTypeMember,
 ): AddressHandle | null {
   if (member.sourceAddressHandle != null) {
@@ -45,7 +46,7 @@ export function checkerTypeMemberSourceAddressHandle(
   if (member.declarationIdentityHandle == null) {
     return null;
   }
-  const identity = store.readIdentity(member.declarationIdentityHandle);
+  const identity = store.read(member.declarationIdentityHandle);
   return identity instanceof TypeScriptDeclarationIdentity
     ? identity.declarationAddressHandle
     : null;
@@ -77,7 +78,7 @@ export function checkerTypeMemberValueSourceAddressHandle(
   member: CheckerTypeMember,
 ): AddressHandle | null {
   if (member.carrier == null) {
-    return checkerTypeMemberSourceAddressHandle(store, member);
+    return checkerTypeMemberSourceAddressHandle(publication, member);
   }
   return checkerSymbolMemberValueSourceProjection(
     store,

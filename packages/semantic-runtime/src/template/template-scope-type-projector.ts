@@ -130,7 +130,7 @@ export class TemplateScopeTypeProjector {
   }
 
   readParse(productHandle: ProductHandle | null): TemplateExpressionParse | null {
-    return readTemplateExpressionParse(this.store, productHandle);
+    return readTemplateExpressionParse(this.typeProjector.publication, productHandle);
   }
 
   commonOrUnionTypeReference(
@@ -147,7 +147,7 @@ export class TemplateScopeTypeProjector {
     if (distinct.length < 2) {
       return distinct[0] ?? null;
     }
-    const checkerUnion = checkerBackedUnionTypeForReferences(this.store, distinct);
+    const checkerUnion = checkerBackedUnionTypeForReferences(this.typeProjector.publication, distinct);
     if (checkerUnion != null) {
       return this.typeProjector.ensureProjection({
         localKey,
@@ -160,7 +160,7 @@ export class TemplateScopeTypeProjector {
       } satisfies CheckerTypeProjectionRequest).toReference();
     }
     const shapes = distinct.flatMap((reference) => {
-      const shape = readCheckerTypeShape(this.store, reference);
+      const shape = readCheckerTypeShape(this.typeProjector.publication, reference);
       return shape == null ? [] : [shape];
     });
     return shapes.length !== distinct.length
@@ -234,7 +234,7 @@ export class TemplateScopeTypeProjector {
     if (undefinedType == null) {
       return elementType;
     }
-    const checkerUnion = checkerBackedUnionTypeForReferences(this.store, [elementType, undefinedType]);
+    const checkerUnion = checkerBackedUnionTypeForReferences(this.typeProjector.publication, [elementType, undefinedType]);
     if (checkerUnion != null) {
       return this.typeProjector.ensureProjection({
         localKey: `${input.localKey}:scope:${localSuffix}:repeat:$previous:checker-union`,
@@ -246,8 +246,8 @@ export class TemplateScopeTypeProjector {
         memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
       } satisfies CheckerTypeProjectionRequest).toReference();
     }
-    const elementShape = readCheckerTypeShape(this.store, elementType);
-    const undefinedShape = readCheckerTypeShape(this.store, undefinedType);
+    const elementShape = readCheckerTypeShape(this.typeProjector.publication, elementType);
+    const undefinedShape = readCheckerTypeShape(this.typeProjector.publication, undefinedType);
     return elementShape == null || undefinedShape == null
       ? elementType
       : this.typeSynthesizer.unionType(
@@ -434,7 +434,7 @@ export class TemplateScopeTypeProjector {
     localSuffix: string,
     controller: RuntimeControllerFrame | null = null,
   ): CheckerTypeReference | null {
-    const parse = this.readParse(templateControllerValueExpressionProductHandle(this.store, instruction));
+    const parse = this.readParse(templateControllerValueExpressionProductHandle(this.typeProjector.publication, instruction));
     const ast = parse == null ? null : completedTemplateExpressionAstForParse(parse);
     if (ast == null) {
       return null;
@@ -445,7 +445,7 @@ export class TemplateScopeTypeProjector {
       parent,
       `${input.localKey}:scope:template-controller:${localSuffix}:value`,
       instruction.sourceAddressHandle,
-      templateControllerRuntimeValueBinding(this.store, input.runtimeBindings, instruction, controller),
+      templateControllerRuntimeValueBinding(this.typeProjector.publication, input.runtimeBindings, instruction, controller),
     );
     if (context == null) {
       return null;
@@ -480,7 +480,7 @@ export class TemplateScopeTypeProjector {
     localSuffix: string,
     controller: RuntimeControllerFrame | null = null,
   ): readonly CheckerTypeReference[] | null {
-    const staticValue = templateControllerStaticValue(this.store, instruction);
+    const staticValue = templateControllerStaticValue(this.typeProjector.publication, instruction);
     if (staticValue != null) {
       return [
         this.literalTypeReference(
@@ -492,7 +492,7 @@ export class TemplateScopeTypeProjector {
       ].filter((reference): reference is CheckerTypeReference => reference != null);
     }
 
-    const parse = this.readParse(templateControllerValueExpressionProductHandle(this.store, instruction));
+    const parse = this.readParse(templateControllerValueExpressionProductHandle(this.typeProjector.publication, instruction));
     const ast = parse == null ? null : completedTemplateExpressionAstForParse(parse);
     return ast == null
       ? null
@@ -502,7 +502,7 @@ export class TemplateScopeTypeProjector {
         ast,
         `${input.localKey}:scope:template-controller:${localSuffix}:match`,
         instruction.sourceAddressHandle,
-        templateControllerRuntimeValueBinding(this.store, input.runtimeBindings, instruction, controller),
+        templateControllerRuntimeValueBinding(this.typeProjector.publication, input.runtimeBindings, instruction, controller),
       );
   }
 
@@ -548,7 +548,7 @@ export class TemplateScopeTypeProjector {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeReference | null {
-    const shape = readCheckerTypeShape(this.store, reference);
+    const shape = readCheckerTypeShape(this.typeProjector.publication, reference);
     const carrier = shape?.carrier ?? null;
     if (carrier == null) {
       return reference;
@@ -617,7 +617,7 @@ export class TemplateScopeTypeProjector {
   }
 
   private arrayElementType(reference: CheckerTypeReference): CheckerTypeReference | null {
-    const shape = readCheckerTypeShape(this.store, reference);
+    const shape = readCheckerTypeShape(this.typeProjector.publication, reference);
     const carrier = shape?.carrier ?? null;
     if (carrier == null) {
       return null;
@@ -777,7 +777,7 @@ export class TemplateScopeTypeProjector {
     if (reference.productHandle == null) {
       return null;
     }
-    const node = this.store.productDetails.read(TemplateProductDetails.HtmlNode, reference.productHandle);
+    const node = this.typeProjector.publication.readProductDetail(TemplateProductDetails.HtmlNode, reference.productHandle);
     return node instanceof HtmlElement ? node : null;
   }
 

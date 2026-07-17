@@ -4,6 +4,13 @@ import ts from 'typescript';
 import { describe, expect, test } from 'vitest';
 
 import {
+  BindingContextKind,
+  BindingScopeConstructionRequest,
+  BindingScopeOwnerKind,
+} from '../src/configuration/scope.js';
+import { BindingScopeMaterializer } from '../src/configuration/scope-materializer.js';
+import { ConfigurationProductDetails } from '../src/configuration/product-details.js';
+import {
   ComputationCommitState,
   ComputationLifecycleRegistry,
   type ComputationLocus,
@@ -43,6 +50,53 @@ describe('checker projection lifecycle', () => {
 
     expect(run.commit().state).toBe(ComputationCommitState.Committed);
     expect(store.readProductDetail(TypeSystemProductDetails.TypeShape, root.productHandle)).toBe(root);
+  });
+
+  test('keeps checker declaration sources and derived scopes inside one staged generation', () => {
+    const { checker, declaration } = checkerFixture(`
+      const viewModel = {
+        item: { label: 'Featured' },
+      };
+    `);
+    const store = new KernelStore('checker-projection-staged-scope-generation');
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const run = lifecycle.begin(locus('staged-binding-scope'));
+    const projector = new CheckerTypeProjector(store, run);
+    const access = new CheckerTypeShapeAccess(store, projector);
+    const root = projector.ensureProjection({
+      localKey: 'view-model',
+      checker,
+      type: checker.getTypeAtLocation(declaration.name),
+      sourceNode: declaration,
+    });
+    const scope = new BindingScopeMaterializer(store, projector).construct(new BindingScopeConstructionRequest(
+      'view-model-scope',
+      BindingScopeOwnerKind.SyntheticView,
+      null,
+      null,
+      null,
+      BindingContextKind.Synthetic,
+      root.toReference(),
+      [],
+      null,
+      [],
+      true,
+      root.sourceAddressHandle,
+    )).scope;
+    const item = access.memberValueAccess(root, 'item', 'view-model:item');
+
+    expect(store.read(scope.productHandle)).toBeNull();
+    expect(store.readProductDetail(ConfigurationProductDetails.BindingScope, scope.productHandle)).toBeNull();
+    expect(projector.publication.readProductDetail(ConfigurationProductDetails.BindingScope, scope.productHandle))
+      .toBe(scope);
+    expect(item.memberSourceAddressHandle).not.toBeNull();
+    expect(item.memberSourceAddressHandle == null ? null : store.read(item.memberSourceAddressHandle)).toBeNull();
+    expect(item.memberSourceAddressHandle == null ? null : projector.publication.read(item.memberSourceAddressHandle))
+      .not.toBeNull();
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    expect(store.readProductDetail(ConfigurationProductDetails.BindingScope, scope.productHandle)).toBe(scope);
+    expect(item.memberSourceAddressHandle == null ? null : store.read(item.memberSourceAddressHandle)).not.toBeNull();
   });
 });
 

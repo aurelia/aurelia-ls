@@ -38,7 +38,7 @@ const rootReference = projector.ensureProjection({
   display: checker.typeToString(rootType),
   memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
 }).toReference();
-const scope = new BindingScopeMaterializer(store).construct(new BindingScopeConstructionRequest(
+const scope = new BindingScopeMaterializer(store, projector).construct(new BindingScopeConstructionRequest(
   'contract-expression-primitive-literals:scope',
   BindingScopeOwnerKind.SyntheticView,
   null,

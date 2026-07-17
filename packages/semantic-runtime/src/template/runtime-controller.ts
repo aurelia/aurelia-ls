@@ -149,8 +149,8 @@ export class RuntimeControllerBindResult {
  * Mutable render-time controller frame.
  *
  * The runtime mutates Controller.bindings and Controller.children during Rendering.render. This frame is the tooling
- * equivalent of that in-progress controller state; the materializer freezes it into a controller product after the
- * renderer pass has spent the instruction sequence.
+ * equivalent of that in-progress controller state; runtime analysis freezes it into a controller product after
+ * rendering and scope attachment have completed.
  */
 export class RuntimeControllerFrame {
   private readonly bindings: RuntimeBinding[] = [];

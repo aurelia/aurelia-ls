@@ -40,7 +40,7 @@ const rootReference = projector.ensureProjection({
   memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
 }).toReference();
 
-const scope = new BindingScopeMaterializer(store).construct(new BindingScopeConstructionRequest(
+const scope = new BindingScopeMaterializer(store, projector).construct(new BindingScopeConstructionRequest(
   'contract-expression-synthetic-unions:scope',
   BindingScopeOwnerKind.SyntheticView,
   null,

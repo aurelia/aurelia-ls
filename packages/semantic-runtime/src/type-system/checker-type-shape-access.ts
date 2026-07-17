@@ -161,7 +161,7 @@ export class CheckerTypeShapeAccess {
     const member = ownerType.members.find((candidate) => candidate.name === memberName) ?? null;
     if (member != null) {
       const valueType = this.declaredMemberValueType(member, localKey);
-      const memberSourceAddressHandle = checkerTypeMemberSourceAddressHandle(this.store, member);
+      const memberSourceAddressHandle = checkerTypeMemberSourceAddressHandle(this.projector.publication, member);
       const sourceAddressHandle = checkerTypeMemberValueSourceAddressHandle(
         this.store,
         this.projector.publication,
@@ -610,7 +610,7 @@ export class CheckerTypeShapeAccess {
         this.projector.publication,
         member,
       )
-        ?? checkerTypeMemberSourceAddressHandle(this.store, member),
+        ?? checkerTypeMemberSourceAddressHandle(this.projector.publication, member),
       ownerIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
       display: member.valueType?.display ?? null,
       memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
@@ -684,7 +684,7 @@ export function checkerTypeMemberWriteAccess(
     member.isReadonly,
     member.carrier?.declarations ?? [],
     checkerTypeMemberValueSourceAddressHandle(store, publication, member)
-      ?? checkerTypeMemberSourceAddressHandle(store, member),
+      ?? checkerTypeMemberSourceAddressHandle(publication, member),
   );
 }
 

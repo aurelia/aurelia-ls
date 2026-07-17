@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import type { KernelStore } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import { readCheckerTypeShape } from './checker-type-shape-access.js';
 import type { CheckerTypeReference } from './type-shape.js';
 
@@ -10,7 +10,7 @@ export interface CheckerBackedUnionType {
 
 /** Creates a TypeChecker-owned union when every reference still carries a hot type from the same checker epoch. */
 export function checkerBackedUnionTypeForReferences(
-  store: KernelStore,
+  store: ProductDetailReadView,
   references: readonly CheckerTypeReference[],
 ): CheckerBackedUnionType | null {
   if (references.length === 0) {
