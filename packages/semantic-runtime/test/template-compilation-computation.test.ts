@@ -37,7 +37,9 @@ import { TemplateProductDetails } from '../src/template/product-details.js';
 import { compareCompiledTemplateDetails } from '../src/template/compiled-template-comparison.js';
 import { CompiledTemplate, CompiledTemplateState } from '../src/template/compiled-template.js';
 import {
+  TemplateCompilationCohort,
   TemplateCompilationCohortKind,
+  TemplateCompilationCohortSetAuthority,
   TemplateCompilationComputationRequest,
   TemplateCompilationComputationService,
 } from '../src/template/template-compilation-computation.js';
@@ -122,25 +124,31 @@ describe('template compilation computation', () => {
     const sourceProvider = new MutableTemplateSourceProvider();
     const sourceAuthority = new SourceTextSnapshotAuthority(sourceProvider);
     const compiler = new TemplateCompilationComputationService(store, lifecycle, sourceAuthority);
-    const compilerWorldAuthority = TemplateCompilerWorldAuthority.fixed(baseline.compilerWorld);
-    const request = (cohortKind: TemplateCompilationCohortKind) =>
-      new TemplateCompilationComputationRequest(
-        app.project.projectKey,
-        app.project.rootDir,
-        cohortKind,
-        baseline.analysisContextProductHandle,
-        cohortKind === TemplateCompilationCohortKind.App
-          ? baseline.appRootDefinitionProductHandle
-          : null,
-        compilerWorldAuthority,
-        baseline.definition,
-      );
-    const appRequest = request(TemplateCompilationCohortKind.App);
+    const compilerWorldAuthority = TemplateCompilerWorldAuthority.fixed(baseline.parentCompilerWorld);
+    const appCohort = new TemplateCompilationCohort(
+      TemplateCompilationCohortKind.App,
+      baseline.analysisContextProductHandle,
+      baseline.appRootDefinitionProductHandle,
+      compilerWorldAuthority,
+    );
+    const authoringCohort = new TemplateCompilationCohort(
+      TemplateCompilationCohortKind.Authoring,
+      baseline.parentCompilerWorld.world.productHandle,
+      null,
+      compilerWorldAuthority,
+    );
+    let currentCohorts: readonly TemplateCompilationCohort[] = [appCohort];
+    const appRequest = new TemplateCompilationComputationRequest(
+      app.project.projectKey,
+      app.project.rootDir,
+      new TemplateCompilationCohortSetAuthority(() => currentCohorts),
+      baseline.definition,
+    );
     const baselineProduct = store.read(baseline.compiledTemplate.compiledTemplate.productHandle);
 
     sourceProvider.write(templateFileName, originalText);
     const firstAttempt = compiler.prepare(appRequest);
-    const firstCandidate = firstAttempt.candidateCompilation;
+    const firstCandidate = firstAttempt.candidateCompilations[0] ?? null;
     expect(firstCandidate).not.toBeNull();
     if (firstCandidate == null) {
       throw new Error('Expected the first computation-backed compilation candidate.');
@@ -149,7 +157,7 @@ describe('template compilation computation', () => {
 
     const first = firstAttempt.commit();
     expect(first.commit.state).toBe(ComputationCommitState.Committed);
-    expect(first.candidateCompilation).toBe(firstCandidate);
+    expect(first.candidateCompilations[0]).toBe(firstCandidate);
     expect(store.productDetails.read(
       TemplateProductDetails.Source,
       firstCandidate.unit.templateSource.productHandle,
@@ -177,7 +185,7 @@ describe('template compilation computation', () => {
       TemplateProductDetails.CompiledTemplate,
       firstCandidate.compiledTemplate.compiledTemplate.productHandle,
     )).toBe(canonicalCompiledTemplate);
-    expect(equal.candidateCompilation?.compiledTemplate.compiledTemplate).not.toBe(canonicalCompiledTemplate);
+    expect(equal.candidateCompilations[0]?.compiledTemplate.compiledTemplate).not.toBe(canonicalCompiledTemplate);
 
     const italicText = replaceFirstParagraphTag(originalText, 'i');
     sourceProvider.write(templateFileName, italicText);
@@ -254,7 +262,7 @@ describe('template compilation computation', () => {
     expect(absentAttempt.source?.state).toBe(SourceTextSnapshotState.Absent);
     const absent = absentAttempt.commit();
     expect(absent.commit.state).toBe(ComputationCommitState.Committed);
-    expect(absent.candidateCompilation).toBeNull();
+    expect(absent.candidateCompilations).toEqual([]);
     expect(absent.commit.transition.publications).toContainEqual(expect.objectContaining({
       handle: firstCandidate.unit.templateSource.productHandle,
       decision: KernelPublicationDecisionKind.Withdraw,
@@ -270,13 +278,16 @@ describe('template compilation computation', () => {
       firstCandidate.unit.templateSource.productHandle,
     )?.markup).toBe(originalText);
 
-    const authoringAttempt = compiler.prepare(
-      request(TemplateCompilationCohortKind.Authoring),
-    );
-    expect(authoringAttempt.computationId).not.toBe(firstAttempt.computationId);
+    currentCohorts = [appCohort, authoringCohort];
+    const authoringAttempt = compiler.prepare(appRequest);
+    expect(authoringAttempt.computationId).toBe(firstAttempt.computationId);
     expect(authoringAttempt.commit().commit.state).toBe(ComputationCommitState.Committed);
-    expect(authoringAttempt.candidateCompilation?.unit.templateSource.productHandle)
-      .not.toBe(firstCandidate.unit.templateSource.productHandle);
+    const authoringCandidate = authoringAttempt.candidateCompilations.find((candidate) =>
+      candidate.appRootDefinitionProductHandle == null
+    );
+    expect(authoringCandidate?.unit.templateSource.productHandle).not.toBe(firstCandidate.unit.templateSource.productHandle);
+    expect(authoringCandidate?.unit.templateSource.sourceAddressHandle)
+      .toBe(firstCandidate.unit.templateSource.sourceAddressHandle);
     expect(store.read(firstCandidate.unit.templateSource.productHandle)).not.toBeNull();
   }, 30_000);
 
@@ -301,7 +312,7 @@ describe('template compilation computation', () => {
     const store = runtime.workspace.store;
     const lifecycle = new ComputationLifecycleRegistry(store);
     const sourceProvider = new MutableTemplateSourceProvider();
-    let currentCompilerWorld = baseline.compilerWorld;
+    let currentCompilerWorld = baseline.parentCompilerWorld;
     const compilerWorldAuthority = new TemplateCompilerWorldAuthority(() => currentCompilerWorld);
     const compiler = new TemplateCompilationComputationService(
       store,
@@ -311,16 +322,18 @@ describe('template compilation computation', () => {
     const request = new TemplateCompilationComputationRequest(
       app.project.projectKey,
       app.project.rootDir,
-      TemplateCompilationCohortKind.App,
-      baseline.analysisContextProductHandle,
-      baseline.appRootDefinitionProductHandle,
-      compilerWorldAuthority,
+      TemplateCompilationCohortSetAuthority.fixed(new TemplateCompilationCohort(
+        TemplateCompilationCohortKind.App,
+        baseline.analysisContextProductHandle,
+        baseline.appRootDefinitionProductHandle,
+        compilerWorldAuthority,
+      )),
       baseline.definition,
     );
 
     sourceProvider.write(templateFileName, originalText);
     const firstAttempt = compiler.prepare(request);
-    const itemCardRead = firstAttempt.candidateCompilation?.registeredReads.find((read) =>
+    const itemCardRead = firstAttempt.candidateCompilations[0]?.registeredReads.find((read) =>
       read instanceof TemplateCompilerReadObservation
       && read.readKind === TemplateCompilerReadKind.ElementResource
       && read.canonicalKey === 'item-card'
@@ -329,11 +342,11 @@ describe('template compilation computation', () => {
     expect(firstAttempt.commit().commit.state).toBe(ComputationCommitState.Committed);
 
     currentCompilerWorld = compilerWorldWithoutResource(
-      baseline.compilerWorld,
+      baseline.parentCompilerWorld,
       (resource) => resource.name === 'item-card',
     );
     const absentItemCardAttempt = compiler.prepare(request);
-    const absentItemCardRead = absentItemCardAttempt.candidateCompilation?.registeredReads.find((read) =>
+    const absentItemCardRead = absentItemCardAttempt.candidateCompilations[0]?.registeredReads.find((read) =>
       read instanceof TemplateCompilerReadObservation
       && read.readKind === TemplateCompilerReadKind.ElementResource
       && read.canonicalKey === 'item-card'
@@ -348,9 +361,9 @@ describe('template compilation computation', () => {
       nextRevision: absentItemCardRead?.observedRevision,
     }));
 
-    currentCompilerWorld = baseline.compilerWorld;
+    currentCompilerWorld = baseline.parentCompilerWorld;
     const restoredItemCardAttempt = compiler.prepare(request);
-    const restoredItemCardRead = restoredItemCardAttempt.candidateCompilation?.registeredReads.find((read) =>
+    const restoredItemCardRead = restoredItemCardAttempt.candidateCompilations[0]?.registeredReads.find((read) =>
       read instanceof TemplateCompilerReadObservation
       && read.readKind === TemplateCompilerReadKind.ElementResource
       && read.canonicalKey === 'item-card'
@@ -395,7 +408,7 @@ describe('template compilation computation', () => {
       ),
     );
     currentCompilerWorld = compilerWorldWithDefinition(
-      baseline.compilerWorld,
+      baseline.parentCompilerWorld,
       baseline.definition,
       movedDefinition,
     );
@@ -403,7 +416,7 @@ describe('template compilation computation', () => {
     const movedSourceAttempt = compiler.prepare(request);
     expect(movedSourceAttempt.computationId).toBe(firstAttempt.computationId);
     expect(movedSourceAttempt.source?.fileName).toBe(path.resolve(movedTemplateFileName));
-    expect(movedSourceAttempt.candidateCompilation?.definition).toBe(movedDefinition);
+    expect(movedSourceAttempt.candidateCompilations[0]?.definition).toBe(movedDefinition);
     const movedSource = movedSourceAttempt.commit();
     expect(movedSource.commit.state).toBe(ComputationCommitState.Committed);
     expect(movedSource.commit.transition.changedReads).toContainEqual(expect.objectContaining({
@@ -431,7 +444,7 @@ describe('template compilation computation', () => {
     expect(redirectedSourceAttempt.source?.fileName).toBe(path.resolve(redirectedTemplateFileName));
     expect(redirectedSourceAttempt.commit().commit.state).toBe(ComputationCommitState.Committed);
 
-    currentCompilerWorld = baseline.compilerWorld;
+    currentCompilerWorld = baseline.parentCompilerWorld;
     const restoredSourceAttempt = compiler.prepare(request);
     expect(restoredSourceAttempt.computationId).toBe(firstAttempt.computationId);
     expect(restoredSourceAttempt.source?.fileName).toBe(path.resolve(templateFileName));
@@ -441,7 +454,7 @@ describe('template compilation computation', () => {
     expect(missingResourceText.length).toBe(originalText.length);
     sourceProvider.write(templateFileName, missingResourceText);
     const secondAttempt = compiler.prepare(request);
-    const fakeCardRead = secondAttempt.candidateCompilation?.registeredReads.find((read) =>
+    const fakeCardRead = secondAttempt.candidateCompilations[0]?.registeredReads.find((read) =>
       read instanceof TemplateCompilerReadObservation
       && read.readKind === TemplateCompilerReadKind.ElementResource
       && read.canonicalKey === 'fake-card'
@@ -460,8 +473,8 @@ describe('template compilation computation', () => {
     }));
 
     const alternateCompilerWorld = app.emission.templates.resources
-      .map((resource) => resource.compilation.compilerWorld)
-      .find((world) => world.world.identityHandle !== baseline.compilerWorld.world.identityHandle);
+      .map((resource) => resource.compilation.parentCompilerWorld)
+      .find((world) => world.world.identityHandle !== baseline.parentCompilerWorld.world.identityHandle);
     expect(alternateCompilerWorld).toBeDefined();
     if (alternateCompilerWorld == null) {
       throw new Error('Expected a second compiler cohort in the routed storefront fixture.');
@@ -476,9 +489,9 @@ describe('template compilation computation', () => {
       changedFacets: expect.arrayContaining(['scope']),
     }));
 
-    currentCompilerWorld = baseline.compilerWorld;
+    currentCompilerWorld = baseline.parentCompilerWorld;
     const staleScopeWitnessAttempt = compiler.prepare(request);
-    currentCompilerWorld = compilerWorldWithScopeSource(baseline.compilerWorld, movedSpanHandle);
+    currentCompilerWorld = compilerWorldWithScopeSource(baseline.parentCompilerWorld, movedSpanHandle);
     const staleScopeWitness = staleScopeWitnessAttempt.commit();
     expect(staleScopeWitness.commit.state).toBe(ComputationCommitState.RejectedInputsChanged);
     expect(staleScopeWitness.commit.transition.invalidReads).toContainEqual(expect.objectContaining({
@@ -487,38 +500,38 @@ describe('template compilation computation', () => {
     }));
 
     const compilerWorldWithoutOwner = compilerWorldWithoutResource(
-      baseline.compilerWorld,
+      baseline.parentCompilerWorld,
       (resource) => resource.definitionProductHandle === baseline.definition.productHandle,
     );
     currentCompilerWorld = compilerWorldWithoutOwner;
     const staleRemovedOwnerAttempt = compiler.prepare(request);
     expect(staleRemovedOwnerAttempt.source).toBeNull();
-    expect(staleRemovedOwnerAttempt.candidateCompilation).toBeNull();
-    currentCompilerWorld = baseline.compilerWorld;
+    expect(staleRemovedOwnerAttempt.candidateCompilations).toEqual([]);
+    currentCompilerWorld = baseline.parentCompilerWorld;
     const staleRemovedOwner = staleRemovedOwnerAttempt.commit();
     expect(staleRemovedOwner.commit.state).toBe(ComputationCommitState.RejectedInputsChanged);
     expect(staleRemovedOwner.commit.transition.invalidReads).toContainEqual(expect.objectContaining({
       domain: 'template-compiler',
     }));
-    const retainedSourceHandle = firstAttempt.candidateCompilation?.unit.templateSource.productHandle ?? null;
+    const retainedSourceHandle = firstAttempt.candidateCompilations[0]?.unit.templateSource.productHandle ?? null;
     expect(retainedSourceHandle).not.toBeNull();
     expect(retainedSourceHandle == null ? null : store.read(retainedSourceHandle)).not.toBeNull();
 
     currentCompilerWorld = compilerWorldWithoutOwner;
     const removedOwnerAttempt = compiler.prepare(request);
     expect(removedOwnerAttempt.source).toBeNull();
-    expect(removedOwnerAttempt.candidateCompilation).toBeNull();
+    expect(removedOwnerAttempt.candidateCompilations).toEqual([]);
     const removedOwner = removedOwnerAttempt.commit();
     expect(removedOwner.commit.state).toBe(ComputationCommitState.Committed);
     expect(removedOwner.commit.transition.publications).toContainEqual(expect.objectContaining({
-      handle: firstAttempt.candidateCompilation?.unit.templateSource.productHandle,
+      handle: firstAttempt.candidateCompilations[0]?.unit.templateSource.productHandle,
       decision: KernelPublicationDecisionKind.Withdraw,
     }));
 
-    currentCompilerWorld = baseline.compilerWorld;
+    currentCompilerWorld = baseline.parentCompilerWorld;
     const restoredOwnerAttempt = compiler.prepare(request);
     expect(restoredOwnerAttempt.source?.state).toBe(SourceTextSnapshotState.Present);
-    expect(restoredOwnerAttempt.candidateCompilation).not.toBeNull();
+    expect(restoredOwnerAttempt.candidateCompilations[0]).toBeDefined();
     expect(restoredOwnerAttempt.commit().commit.state).toBe(ComputationCommitState.Committed);
   }, 30_000);
 });

@@ -21,8 +21,12 @@ import {
 } from '../kernel/materialization.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetail,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
-  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { sourceSpanAddressForSite } from '../kernel/source-address.js';
@@ -56,8 +60,8 @@ import {
   sliceTemplateSourceText,
 } from '../resources/template-source-text.js';
 import {
-  ParsedHtmlAttributeDraft,
-  ParsedHtmlNodeDraft,
+  type ParsedHtmlAttributeDraft,
+  type ParsedHtmlNodeDraft,
   parseHtmlDocumentDraft,
 } from './html-parse-materializer.js';
 import { HtmlIrNodeKind } from './html-ir.js';
@@ -90,10 +94,10 @@ class LocalTemplateSourceCoordinates {
   private readonly sourceSpan: SourceSpanAddress | null;
 
   constructor(
-    private readonly store: KernelStore,
+    private readonly store: KernelPublicationContext,
     private readonly template: CustomElementTemplateDefinition,
   ) {
-    const source = template.addressHandle == null ? null : store.readAddress(template.addressHandle);
+    const source = template.addressHandle == null ? null : store.read(template.addressHandle);
     this.sourceSpan = source instanceof SourceSpanAddress ? source : null;
   }
 
@@ -136,12 +140,13 @@ export class LocalTemplateDefinitionMaterializer {
   private readonly materializations = new Map<string, LocalTemplateDefinitionMaterialization>();
 
   constructor(
-    readonly store: KernelStore,
+    readonly store: KernelPublicationContext,
   ) {}
 
   materialize(
     localKey: string,
     ownerDefinition: CustomElementDefinition,
+    template: CustomElementTemplateDefinition | null,
   ): LocalTemplateDefinitionMaterialization {
     const materializationKey = ownerDefinition.productHandle
       ?? ownerDefinition.identityHandle
@@ -150,7 +155,6 @@ export class LocalTemplateDefinitionMaterializer {
     if (existing != null) {
       return existing;
     }
-    const template = ownerDefinition.template;
     if (template?.kind !== CustomElementTemplateKind.Markup || template.markup == null) {
       const empty = new LocalTemplateDefinitionMaterialization(template, [], []);
       this.materializations.set(materializationKey, empty);
@@ -166,8 +170,8 @@ export class LocalTemplateDefinitionMaterializer {
     const records: KernelStoreRecord[] = [];
     const coordinates = new LocalTemplateSourceCoordinates(this.store, template);
     const definitionLocalKey = `owner:${materializationKey}`;
-    const definitions = syntaxes.map((syntax, index) =>
-      this.definitionForSyntax(definitionLocalKey, index, template, syntax, coordinates, records)
+    const definitions = syntaxes.map((syntax) =>
+      this.definitionForSyntax(definitionLocalKey, template, syntax, coordinates, records)
     );
     const ownerTemplate = new CustomElementTemplateDefinition(
       template.kind,
@@ -179,12 +183,12 @@ export class LocalTemplateDefinitionMaterializer {
       template.sourceMap,
     );
 
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `local-template-definitions:${localKey}`));
-    }
-    for (const definition of definitions) {
-      this.store.productDetails.add(ResourceProductDetails.Definition, definition.productHandle!, definition);
-    }
+    this.store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `local-template-definitions:${localKey}`),
+      definitions.map((definition) =>
+        publishProductDetail(ResourceProductDetails.Definition, definition.productHandle!, definition)
+      ),
+    ));
     const materialization = new LocalTemplateDefinitionMaterialization(ownerTemplate, definitions, records);
     this.materializations.set(materializationKey, materialization);
     return materialization;
@@ -192,14 +196,13 @@ export class LocalTemplateDefinitionMaterializer {
 
   private definitionForSyntax(
     ownerLocalKey: string,
-    index: number,
     ownerTemplate: CustomElementTemplateDefinition,
     syntax: LocalTemplateSyntax,
     coordinates: LocalTemplateSourceCoordinates,
     records: KernelStoreRecord[],
   ): CustomElementDefinition {
     const name = syntax.nameAttribute.rawValue;
-    const local = `local-template-definition:${ownerLocalKey}:${index}:${name}`;
+    const local = `local-template-definition:${ownerLocalKey}:${name}`;
     const productHandle = this.store.handles.product(local);
     const identityHandle = this.store.handles.identity(local);
     const sourceAddressHandle = coordinates.address(
@@ -238,8 +241,8 @@ export class LocalTemplateDefinitionMaterializer {
       sourceAddressHandle,
       localSource.sourceMap,
     );
-    const bindables = syntax.bindables.map((bindable, bindableIndex) =>
-      this.bindableForSyntax(local, bindableIndex, bindable, coordinates, records)
+    const bindables = syntax.bindables.map((bindable) =>
+      this.bindableForSyntax(local, bindable, coordinates, records)
     );
     const target = new ResourceTargetReference(null, sourceAddressHandle, null, null);
     const key = runtimeResourceKeyForKind(ResourceDefinitionKind.CustomElement, name)!;
@@ -300,13 +303,12 @@ export class LocalTemplateDefinitionMaterializer {
 
   private bindableForSyntax(
     ownerLocal: string,
-    index: number,
     bindable: ParsedHtmlNodeDraft,
     coordinates: LocalTemplateSourceCoordinates,
     records: KernelStoreRecord[],
   ): LocalBindablePublication {
-    const local = `${ownerLocal}:bindable:${index}`;
     const nameAttribute = attributeForDraft(bindable, 'name')!;
+    const local = `${ownerLocal}:bindable:${nameAttribute.rawValue}`;
     const attributeAttribute = attributeForDraft(bindable, 'attribute');
     const modeAttribute = attributeForDraft(bindable, 'mode');
     const name = nameAttribute.rawValue;

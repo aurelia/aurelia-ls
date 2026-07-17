@@ -7,9 +7,10 @@ import type {
 import type { ProductDetailSlot } from './product-details.js';
 import type {
   KernelStore,
-  KernelStoreReadView,
+  KernelMaterializationReadView,
   KernelStoreRecord,
 } from './store.js';
+import type { MaterializationRecord } from './materialization.js';
 
 /** How a staged detail behaves when its handle is already owned by another publication. */
 export const enum KernelDetailAdmission {
@@ -172,7 +173,7 @@ export class KernelPublicationReplacement {
 }
 
 /** Required read/write boundary used by materializers in immediate or staged mode. */
-export interface KernelPublicationContext extends KernelStoreReadView {
+export interface KernelPublicationContext extends KernelMaterializationReadView {
   publish(plan: KernelPublicationPlan): void;
 }
 
@@ -186,6 +187,10 @@ export class ImmediateKernelPublicationContext implements KernelPublicationConte
 
   read(handle: KernelRecordHandle): KernelStoreRecord | null {
     return this.store.read(handle);
+  }
+
+  readMaterializations(): readonly MaterializationRecord[] {
+    return this.store.readMaterializations();
   }
 
   publish(plan: KernelPublicationPlan): void {
@@ -206,6 +211,18 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
 
   read(handle: KernelRecordHandle): KernelStoreRecord | null {
     return this.records.get(handle) ?? this.store.read(handle);
+  }
+
+  readMaterializations(): readonly MaterializationRecord[] {
+    const materializations = new Map(
+      this.store.readMaterializations().map((record) => [record.handle, record]),
+    );
+    for (const record of this.records.values()) {
+      if (record.kind === 'materialization-record') {
+        materializations.set(record.handle, record);
+      }
+    }
+    return [...materializations.values()];
   }
 
   publish(plan: KernelPublicationPlan): void {

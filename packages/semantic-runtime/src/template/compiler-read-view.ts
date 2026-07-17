@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import type { ComputationRead, ComputationReadValidation } from '../kernel/computation-lifecycle.js';
 import type { IdentityHandle, OpenSeamHandle, ProductHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelMaterializationReadView } from '../kernel/store.js';
 import type { Container } from '../di/container.js';
 import type { ExpressionType } from '../expression/ast.js';
 import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
@@ -53,7 +53,7 @@ export const enum TemplateCompilerReadKind {
 export const enum TemplateCompilerScopeClosureState {
   /** Every container owner has a materialization and none reports an unresolved seam. */
   Closed = 'closed',
-  /** An owner materialization is missing or an owner-scoped materialization reports an unresolved seam. */
+  /** A container materialization is missing or an observed owner materialization reports an unresolved seam. */
   Open = 'open',
 }
 
@@ -64,7 +64,7 @@ export class TemplateCompilerScopeClosure {
     readonly ownerIdentityHandles: readonly IdentityHandle[],
     readonly materializationHandles: readonly string[],
     readonly openSeamHandles: readonly OpenSeamHandle[],
-    readonly unsupportedOwnerIdentityHandles: readonly IdentityHandle[],
+    readonly unsupportedContainerIdentityHandles: readonly IdentityHandle[],
   ) {}
 
   get revision(): string {
@@ -73,7 +73,7 @@ export class TemplateCompilerScopeClosure {
       ...this.ownerIdentityHandles,
       ...this.materializationHandles,
       ...this.openSeamHandles,
-      ...this.unsupportedOwnerIdentityHandles,
+      ...this.unsupportedContainerIdentityHandles,
     ]);
   }
 }
@@ -151,7 +151,7 @@ export class TemplateCompilerReadView {
   private currentValidationState: TemplateCompilerReadValidationState | null = null;
 
   constructor(
-    private readonly store: KernelStore,
+    private readonly store: KernelMaterializationReadView,
     private readonly authority: TemplateCompilerWorldAuthority,
   ) {
     this.world = authority.current();
@@ -380,7 +380,7 @@ class TemplateCompilerReadValidationState {
 }
 
 function compilerScopeClosure(
-  store: KernelStore,
+  store: KernelMaterializationReadView,
   world: TemplateCompilerWorldEmission,
 ): TemplateCompilerScopeClosure {
   const containerOwners: IdentityHandle[] = [];
@@ -395,19 +395,19 @@ function compilerScopeClosure(
     .filter((materialization) => ownerSet.has(materialization.ownerHandle as IdentityHandle))
     .sort((left, right) => left.handle.localeCompare(right.handle));
   const supportedOwners = new Set(materializations.map((materialization) => materialization.ownerHandle));
-  const unsupportedOwnerIdentityHandles = containerOwners
+  const unsupportedContainerIdentityHandles = containerOwners
     .filter((owner) => !supportedOwners.has(owner))
     .sort();
   const openSeamHandles = [...new Set(materializations.flatMap((materialization) => materialization.openSeamHandles))]
     .sort();
   return new TemplateCompilerScopeClosure(
-    unsupportedOwnerIdentityHandles.length === 0 && openSeamHandles.length === 0
+    unsupportedContainerIdentityHandles.length === 0 && openSeamHandles.length === 0
       ? TemplateCompilerScopeClosureState.Closed
       : TemplateCompilerScopeClosureState.Open,
     ownerIdentityHandles,
     materializations.map((materialization) => materialization.handle),
     openSeamHandles,
-    unsupportedOwnerIdentityHandles,
+    unsupportedContainerIdentityHandles,
   );
 }
 

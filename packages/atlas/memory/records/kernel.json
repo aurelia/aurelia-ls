@@ -591,15 +591,16 @@
         "template"
       ],
       "summary": "Kernel computations validate typed run-scoped reads and atomically replace complete owned publication closures.",
-      "rationale": "The same-runtime external-HTML template front door proves the computation lifecycle against real materializers. The durable boundary is not another answer cache: stable computation loci reconcile complete product closures, typed reads preserve positive and negative dependency witnesses, and KernelStore performs one prevalidated replacement across records and sidecars. QueryClaimGraph remains the answer-retention layer above this product-computation lifecycle.",
+      "rationale": "The same-runtime external-HTML template family proves the computation lifecycle against real recursive materializers. The durable boundary is not another answer cache: stable computation loci reconcile complete product closures, typed reads preserve positive and negative dependency witnesses, and KernelStore performs one prevalidated replacement across records and sidecars. QueryClaimGraph remains the answer-retention layer above this product-computation lifecycle.",
       "guidance": [
-        "Use a stable semantic computation locus for reconciliation; never make a source path, run sequence, or copied input object the computation identity when the owning semantic definition is stable.",
-        "Resolve current compiler-world and source authority inside each run. Register every positive and negative read, including traversed source-address records, then validate those reads before publication.",
+        "Use a stable semantic computation locus for reconciliation; never make a source path, run sequence, compiler cohort, or copied input object the computation identity when the owning semantic definition is stable.",
+        "Resolve current compiler-world, cohort membership, and source authority inside each run. Register every positive and negative read, including traversed source-address records and exact child lookups, then validate those reads before publication.",
         "Publish the complete owned record, product-detail, and hot-detail closure through one KernelPublicationPlan. Replacement is all-or-nothing; do not patch an old publication or maintain a second ownership list in a materializer.",
+        "Use KernelMaterializationReadView when closure checks must see products staged earlier in the same candidate generation. Never publish an intermediate world merely to make recursive materializers discoverable.",
         "Keep exactly one ComputationLifecycleRegistry per KernelStore. Lifetime disposal must clear the committed manifest and read index and supersede any run prepared before the reclaimed publication disappeared.",
         "Use markLifetime for reclamation boundaries and markObservation for telemetry deltas. Publication replacement preserves lifetime identity while advancing mutation observation order.",
         "Keep QueryClaimGraph focused on answer shape, lazy materialization, retention, and answer-side disposal. Do not move durable product dependency ownership or computation invalidation into the answer graph.",
-        "The currently admitted boundary covers same-runtime external-HTML template compilation only. Do not infer cross-runtime persistence, local-template ownership, general dependency scheduling, or multi-edge invalidation from this proof."
+        "The admitted boundary covers one same-runtime external-HTML owner and its recursively compiled local-template family across a complete compiler-cohort set. Do not infer cross-runtime persistence, upstream scheduling, runtime/checker dependent closure, or production LSP adoption from this proof."
       ],
       "anchors": [
         {
@@ -624,7 +625,7 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-compilation-computation.ts",
           "symbolName": "TemplateCompilationComputationService",
-          "summary": "First real materializer front door admitted to the lifecycle."
+          "summary": "Recursive template-family materializer front door admitted to the lifecycle."
         },
         {
           "kind": "source",
@@ -659,6 +660,78 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/kernel/store.ts",
           "symbolName": "KernelStore.replacePublication"
+        }
+      ],
+      "createdAt": "2026-07-17",
+      "updatedAt": "2026-07-17"
+    },
+    {
+      "id": "decision:template-family-computation-ownership",
+      "kind": "decision",
+      "domains": [
+        "kernel",
+        "template",
+        "semantic-runtime",
+        "incrementality",
+        "resources"
+      ],
+      "summary": "One authored template owner atomically reconciles shared local declarations and cohort-specific recursive compilations.",
+      "rationale": "A local template is one authored resource declaration shared by every compiler cohort, while its compiler world and compiled products are cohort-derived. Cohort-specific owners either fight over shared handles or duplicate one declaration; one owner-family computation with an observed complete cohort set matches framework identity, preserves atomic recursive visibility, and withdraws obsolete children without a second family catalog.",
+      "guidance": [
+        "Key a template-family computation by project plus stable authored owner. Source paths, declaration ordinals, compiler cohorts, and run IDs are observed or derived facts, not family identity.",
+        "Treat the compiler-cohort set as complete observed authority. Share local definitions, bindables, and source products once; retain separate compiler worlds, compilation units, and compiled templates per cohort.",
+        "Use owner plus authored local name for generated resource identity and owner plus property name for local bindables. Reordering declarations may refresh source witnesses but must not churn semantic children.",
+        "Route local-definition and generated compiler-world records plus rich details through the family's required KernelPublicationContext. Direct commits create mixed generations and escape lifecycle ownership.",
+        "Retain both the parent and active compiler worlds for each recursive emission. Re-project child validation worlds from the current parent authority and register exact child lookups so parent and child-only changes both invalidate honestly.",
+        "A retained parent compiler world is validation authority, not another active public compiler world. Public visibility catalogs enumerate active worlds only; projecting retained parents duplicates inherited resource rows.",
+        "Production adoption must replace the eager template producer. Do not add first-writer, if-absent, or compatibility ownership to let eager and lifecycle producers claim the same stable family handles."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-compilation-computation.ts",
+          "symbolName": "TemplateCompilationCohortSetAuthority",
+          "summary": "Complete cohort membership and owner-family computation cardinality."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
+          "symbolName": "TemplateResourceFamilyCompilationRequest",
+          "summary": "Shared local extraction and recursive per-cohort compilation front door."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/local-template-definition-materializer.ts",
+          "symbolName": "LocalTemplateDefinitionMaterializer",
+          "summary": "Stable authored local identities and staged definition/detail publication."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/compiler-read-view.ts",
+          "symbolName": "TemplateCompilerReadView",
+          "summary": "Exact parent and recursively derived child compiler reads."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/template/README.md",
+          "summary": "Template-family lifecycle cardinality, ownership, and deferred dependent closure."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/template-compilation-computation.ts",
+          "symbolName": "TemplateCompilationCohortSetAuthority"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
+          "symbolName": "TemplateResourceFamilyCompilationRequest"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/local-template-definition-materializer.ts",
+          "symbolName": "LocalTemplateDefinitionMaterializer"
         }
       ],
       "createdAt": "2026-07-17",

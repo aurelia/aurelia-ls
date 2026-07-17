@@ -9,7 +9,7 @@ import {
   type BindingCommandExecutable,
 } from './binding-command-execution.js';
 import {
-  TemplateCompilerIssue,
+  type TemplateCompilerIssue,
   TemplateCompilerIssueKind,
   TemplateCompilerIssuePhase,
   TemplateCompilerIssueRelatedInformation,
@@ -23,7 +23,7 @@ import { AttributeMapperConfiguration } from './attribute-mapper.js';
 import {
   TemplateCompilerService,
   TemplateCompilerWorld,
-  TemplateCompilerWorldKind,
+  type TemplateCompilerWorldKind,
   TemplateAttributeMapperService,
   TemplateExpressionParserService,
   TemplateRenderingService,
@@ -32,7 +32,7 @@ import {
 } from './compiler-world.js';
 import {
   type TemplateCompilerServiceReference,
-  TemplateResourceVisibilityKind,
+  type TemplateResourceVisibilityKind,
   TemplateVisibleResource,
 } from './compiler-world-reference.js';
 import type {
@@ -68,8 +68,13 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetail,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
-  type KernelStore,
+  type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -158,7 +163,7 @@ class CompilerWorldIssueSet {
   readonly records: KernelStoreRecord[] = [];
 
   constructor(
-    store: KernelStore,
+    store: KernelStoreReadView,
     private readonly localKey: string,
     private readonly provenanceHandle: ProvenanceHandle,
   ) {
@@ -288,76 +293,78 @@ class CompilerWorldAttributeParserProducts {
 /** Materializes the compiler-facing world once visibility has already been selected. */
 export class TemplateCompilerWorldMaterializer {
   constructor(
-    /** Hot analysis store that receives compiler-world records. */
-    readonly store: KernelStore,
+    /** Required immediate or staged publication boundary for compiler-world products. */
+    readonly store: KernelPublicationContext,
   ) {}
 
   construct(input: TemplateCompilerWorldConstructionRequest): TemplateCompilerWorldEmission {
-    const emission = this.recordsForWorld(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `template-compiler-world:${input.localKey}`));
-    }
-    this.registerProductDetails(emission);
+    const emission = this.project(input);
+    this.store.publish(this.publicationFor(input, emission));
     return emission;
   }
 
-  private registerProductDetails(emission: TemplateCompilerWorldEmission): void {
-    this.store.productDetails.add(TemplateProductDetails.World, emission.world.productHandle, emission.world);
-    this.store.productDetails.add(TemplateProductDetails.ResourceScope, emission.resourceScope.productHandle, emission.resourceScope);
-    this.registerCompilerServiceProductDetails(emission);
-    this.registerAttributeParserProductDetails(emission);
+  /** Build the same immutable world without publishing it, for validation against a current parent authority. */
+  project(input: TemplateCompilerWorldConstructionRequest): TemplateCompilerWorldEmission {
+    return this.recordsForWorld(input);
   }
 
-  private registerCompilerServiceProductDetails(emission: TemplateCompilerWorldEmission): void {
-    this.store.productDetails.add(
-      TemplateProductDetails.TemplateCompilerService,
-      emission.templateCompiler.productHandle,
-      emission.templateCompiler,
-    );
-    this.store.productDetails.add(
-      TemplateProductDetails.ResourceResolverService,
-      emission.resourceResolver.productHandle,
-      emission.resourceResolver,
-    );
-    this.store.productDetails.add(
-      TemplateProductDetails.ExpressionParserService,
-      emission.expressionParser.productHandle,
-      emission.expressionParser,
-    );
-    this.store.productDetails.add(
-      TemplateProductDetails.AttributeMapperService,
-      emission.attributeMapper.productHandle,
-      emission.attributeMapper,
-    );
-    this.store.productDetails.add(
-      TemplateProductDetails.RenderingService,
-      emission.rendering.productHandle,
-      emission.rendering,
-    );
-    for (const issue of emission.issues) {
-      this.store.productDetails.add(
-        TemplateProductDetails.CompilerIssue,
-        issue.productHandle,
-        issue,
-      );
-    }
-  }
-
-  private registerAttributeParserProductDetails(emission: TemplateCompilerWorldEmission): void {
-    this.store.productDetails.add(
-      TemplateProductDetails.AttributeParserService,
-      emission.attributeParser.productHandle,
-      emission.attributeParser,
-    );
-    this.store.productDetails.add(
-      TemplateProductDetails.AttributeParserMachine,
-      emission.attributeParserMachine.productHandle,
-      emission.attributeParserMachine,
-    );
-    this.store.productDetails.add(
-      TemplateProductDetails.BindingCommandResolver,
-      emission.bindingCommandResolver.productHandle,
-      emission.bindingCommandResolver,
+  private publicationFor(
+    input: TemplateCompilerWorldConstructionRequest,
+    emission: TemplateCompilerWorldEmission,
+  ): KernelPublicationPlan {
+    return new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `template-compiler-world:${input.localKey}`),
+      [
+        publishProductDetail(TemplateProductDetails.World, emission.world.productHandle, emission.world),
+        publishProductDetail(
+          TemplateProductDetails.ResourceScope,
+          emission.resourceScope.productHandle,
+          emission.resourceScope,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.TemplateCompilerService,
+          emission.templateCompiler.productHandle,
+          emission.templateCompiler,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.ResourceResolverService,
+          emission.resourceResolver.productHandle,
+          emission.resourceResolver,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.ExpressionParserService,
+          emission.expressionParser.productHandle,
+          emission.expressionParser,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.AttributeMapperService,
+          emission.attributeMapper.productHandle,
+          emission.attributeMapper,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.RenderingService,
+          emission.rendering.productHandle,
+          emission.rendering,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.AttributeParserService,
+          emission.attributeParser.productHandle,
+          emission.attributeParser,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.AttributeParserMachine,
+          emission.attributeParserMachine.productHandle,
+          emission.attributeParserMachine,
+        ),
+        publishProductDetail(
+          TemplateProductDetails.BindingCommandResolver,
+          emission.bindingCommandResolver.productHandle,
+          emission.bindingCommandResolver,
+        ),
+        ...emission.issues.map((issue) =>
+          publishProductDetail(TemplateProductDetails.CompilerIssue, issue.productHandle, issue)
+        ),
+      ],
     );
   }
 

@@ -57,7 +57,7 @@ import {
 import type { AttributeSyntax } from './attribute-syntax.js';
 import {
   TemplateCompilerWorldConstructionRequest,
-  TemplateCompilerWorldEmission,
+  type TemplateCompilerWorldEmission,
   TemplateCompilerWorldMaterializer,
 } from './compiler-world-materializer.js';
 import {
@@ -139,6 +139,8 @@ export class TemplateResourceCompilationEmission {
     readonly analysisContextProductHandle: ProductHandle,
     /** App-root component definition for this cohort; null when authoring/runtime ownership is not proven. */
     readonly appRootDefinitionProductHandle: ProductHandle | null,
+    /** Compiler world supplied before this definition's compiler-local resources are introduced. */
+    readonly parentCompilerWorld: TemplateCompilerWorldEmission,
     /** Compiler world that supplied resources, syntax handlers, and runtime-shaped compiler services. */
     readonly compilerWorld: TemplateCompilerWorldEmission,
     /** Custom element definition whose authored template was admitted. */
@@ -173,12 +175,25 @@ export class TemplateResourceCompilationRequest {
     readonly localKey: string,
     readonly analysisContextProductHandle: ProductHandle,
     readonly appRootDefinitionProductHandle: ProductHandle | null,
+    readonly parentCompilerWorld: TemplateCompilerWorldEmission,
     readonly compilerWorld: TemplateCompilerWorldEmission,
     readonly definition: CustomElementDefinition,
     readonly template: CustomElementTemplateDefinition,
     readonly compilerReads: TemplateCompilerReadView,
     readonly localElementNames: readonly string[] = [],
     readonly dependencyIdentityHandles: readonly IdentityHandle[] = [],
+  ) {}
+}
+
+/** Recursive template-family front door rooted at one admitted custom-element template. */
+export class TemplateResourceFamilyCompilationRequest {
+  constructor(
+    readonly localKey: string,
+    readonly analysisContextProductHandle: ProductHandle,
+    readonly appRootDefinitionProductHandle: ProductHandle | null,
+    readonly compilerWorldAuthority: TemplateCompilerWorldAuthority,
+    readonly definition: CustomElementDefinition,
+    readonly template: CustomElementTemplateDefinition,
   ) {}
 }
 
@@ -293,11 +308,11 @@ export class TemplateCompilationProjectPass {
     /** Publication context shared by the compiler-front-door phases. */
     readonly publication: KernelPublicationContext,
   ) {
-    this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(store);
+    this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(publication);
     this.authoringCompilerWorldMaterializer = new TemplateAuthoringCompilerWorldMaterializer(store);
     this.unitMaterializer = new TemplateCompilationUnitMaterializer(publication);
     this.htmlParser = new HtmlParseMaterializer(publication);
-    this.localTemplateDefinitions = new LocalTemplateDefinitionMaterializer(store);
+    this.localTemplateDefinitions = new LocalTemplateDefinitionMaterializer(publication);
     this.attributeSyntax = new AttributeSyntaxMaterializer(publication);
     this.attributeClassification = new AttributeClassificationMaterializer(publication);
     this.valueSites = new TemplateValueSiteMaterializer(publication);
@@ -436,7 +451,7 @@ export class TemplateCompilationProjectPass {
           new TemplateCompilerCompileRequest(localKey, definition),
           new ProjectTemplateCompilerHost(
             this,
-            compilationWorld,
+            TemplateCompilerWorldAuthority.fixed(compilationWorld),
             task.analysisContextProductHandle,
             task.appRootDefinitionProductHandle,
             typeSystem,
@@ -510,7 +525,7 @@ export class TemplateCompilationProjectPass {
         new TemplateCompilerCompileRequest(localKey, definition),
         new ProjectTemplateCompilerHost(
           this,
-          compilerWorld,
+          TemplateCompilerWorldAuthority.fixed(compilerWorld),
           compilerWorld.world.productHandle,
           null,
           typeSystem,
@@ -593,11 +608,11 @@ export class TemplateCompilationProjectPass {
   }
 
   private compilerWorldForLocalDefinitions(
-    parentCompilerWorld: TemplateCompilerWorldEmission,
+    parentCompilerWorldAuthority: TemplateCompilerWorldAuthority,
     materialization: LocalTemplateDefinitionMaterialization,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
-  ): TemplateCompilerWorldEmission {
+  ): TemplateCompilerWorldSelection {
     const localResources = materialization.definitions
       .map((definition) =>
         visibleResourceForDefinition(
@@ -607,11 +622,26 @@ export class TemplateCompilationProjectPass {
         )
       )
       .filter((resource): resource is TemplateVisibleResource => resource != null);
-    return this.compilerWorldWithPreferredResources(
+    const parentCompilerWorld = parentCompilerWorldAuthority.current();
+    const compilerWorld = this.compilerWorldWithPreferredResources(
       parentCompilerWorld,
       localResources,
       `${localKey}:local-template-world`,
       sourceAddressHandle,
+    );
+    if (compilerWorld === parentCompilerWorld) {
+      return new TemplateCompilerWorldSelection(parentCompilerWorld, parentCompilerWorldAuthority);
+    }
+    return new TemplateCompilerWorldSelection(
+      compilerWorld,
+      new TemplateCompilerWorldAuthority(() =>
+        this.projectCompilerWorldWithPreferredResources(
+          parentCompilerWorldAuthority.current(),
+          localResources,
+          `${localKey}:local-template-world`,
+          sourceAddressHandle,
+        )
+      ),
     );
   }
 
@@ -621,19 +651,47 @@ export class TemplateCompilationProjectPass {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): TemplateCompilerWorldEmission {
-    if (preferredResources.length === 0) {
-      return parentCompilerWorld;
-    }
+    const request = this.compilerWorldConstructionRequest(
+      parentCompilerWorld,
+      preferredResources,
+      localKey,
+      sourceAddressHandle,
+    );
+    return request == null ? parentCompilerWorld : this.compilerWorldMaterializer.construct(request);
+  }
 
+  private projectCompilerWorldWithPreferredResources(
+    parentCompilerWorld: TemplateCompilerWorldEmission,
+    preferredResources: readonly TemplateVisibleResource[],
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): TemplateCompilerWorldEmission {
+    const request = this.compilerWorldConstructionRequest(
+      parentCompilerWorld,
+      preferredResources,
+      localKey,
+      sourceAddressHandle,
+    );
+    return request == null ? parentCompilerWorld : this.compilerWorldMaterializer.project(request);
+  }
+
+  private compilerWorldConstructionRequest(
+    parentCompilerWorld: TemplateCompilerWorldEmission,
+    preferredResources: readonly TemplateVisibleResource[],
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): TemplateCompilerWorldConstructionRequest | null {
+    if (preferredResources.length === 0) {
+      return null;
+    }
     const resources = mergeVisibleResourceScopes(
       preferredResources,
       parentCompilerWorld.resourceScope.resources,
     );
     if (sameResourceScope(resources, parentCompilerWorld.resourceScope.resources)) {
-      return parentCompilerWorld;
+      return null;
     }
-
-    return this.compilerWorldMaterializer.construct(new TemplateCompilerWorldConstructionRequest(
+    return new TemplateCompilerWorldConstructionRequest(
       localKey,
       TemplateCompilerWorldKind.Component,
       parentCompilerWorld.container,
@@ -646,31 +704,33 @@ export class TemplateCompilationProjectPass {
       sourceAddressHandle,
       parentCompilerWorld.attributeMapper.configuration,
       parentCompilerWorld.nodeObserverLocatorConfiguration,
-    ));
+    );
   }
 
   compileResourceTree(
-    compilerWorld: TemplateCompilerWorldEmission,
+    compilerWorldAuthority: TemplateCompilerWorldAuthority,
     analysisContextProductHandle: ProductHandle,
     appRootDefinitionProductHandle: ProductHandle | null,
     definition: CustomElementDefinition,
+    template: CustomElementTemplateDefinition,
     localKey: string,
     typeSystem: TypeSystemProject | null,
     phases: TemplateCompilationPhaseRecorder,
   ): readonly TemplateResourceCompilationEmission[] {
     const localDefinitions = phases.measure(
       'local-template-definitions',
-      () => this.localTemplateDefinitions.materialize(localKey, definition),
+      () => this.localTemplateDefinitions.materialize(localKey, definition, template),
     );
+    const parentCompilerWorld = compilerWorldAuthority.current();
     const activeCompilerWorld = localDefinitions.definitions.length === 0
-      ? compilerWorld
+      ? new TemplateCompilerWorldSelection(parentCompilerWorld, compilerWorldAuthority)
       : phases.measure(
         'component-compiler-world',
         () => this.compilerWorldForLocalDefinitions(
-          compilerWorld,
+          compilerWorldAuthority,
           localDefinitions,
           localKey,
-          definition.sourceAddressHandle,
+          template.addressHandle ?? definition.sourceAddressHandle,
         ),
       );
     const localElementNames = localDefinitions.definitions.map((localDefinition) => localDefinition.name);
@@ -685,12 +745,13 @@ export class TemplateCompilationProjectPass {
           localKey,
           analysisContextProductHandle,
           appRootDefinitionProductHandle,
-          activeCompilerWorld,
+          parentCompilerWorld,
+          activeCompilerWorld.world,
           definition,
           ownerTemplate,
           new TemplateCompilerReadView(
-            this.store,
-            TemplateCompilerWorldAuthority.fixed(activeCompilerWorld),
+            this.publication,
+            activeCompilerWorld.authority,
           ),
           localElementNames,
           dependencyIdentityHandles,
@@ -700,12 +761,12 @@ export class TemplateCompilationProjectPass {
     const compilations: TemplateResourceCompilationEmission[] = owner == null ? [] : [owner];
     for (let index = 0; index < localDefinitions.definitions.length; index++) {
       const localDefinition = localDefinitions.definitions[index]!;
-      const childLocalKey = `${localKey}:local-template:${index}:${localDefinition.name}`;
-      const result = activeCompilerWorld.templateCompiler.compile(
+      const childLocalKey = `${localKey}:local-template:${localDefinition.name}`;
+      const result = activeCompilerWorld.world.templateCompiler.compile(
         new TemplateCompilerCompileRequest(childLocalKey, localDefinition),
         new ProjectTemplateCompilerHost(
           this,
-          activeCompilerWorld,
+          activeCompilerWorld.authority,
           analysisContextProductHandle,
           appRootDefinitionProductHandle,
           typeSystem,
@@ -717,6 +778,29 @@ export class TemplateCompilationProjectPass {
       }
     }
     return compilations;
+  }
+
+  compileResourceFamilyFrontDoor(
+    request: TemplateResourceFamilyCompilationRequest,
+    typeSystem: TypeSystemProject | null = null,
+    telemetry: SemanticRuntimeTelemetryOptions | null = null,
+  ): readonly TemplateResourceCompilationEmission[] {
+    return this.compileResourceTree(
+      request.compilerWorldAuthority,
+      request.analysisContextProductHandle,
+      request.appRootDefinitionProductHandle,
+      request.definition,
+      request.template,
+      request.localKey,
+      typeSystem,
+      new TemplateCompilationPhaseRecorder(
+        this.store,
+        normalizeSemanticRuntimeTelemetryOptions(
+          telemetry,
+          DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
+        ),
+      ),
+    );
   }
 
   compileResourceFrontDoor(
@@ -741,6 +825,7 @@ export class TemplateCompilationProjectPass {
   ): TemplateResourceCompilationEmission | null {
     const {
       compilerWorld,
+      parentCompilerWorld,
       analysisContextProductHandle,
       appRootDefinitionProductHandle,
       definition,
@@ -820,6 +905,7 @@ export class TemplateCompilationProjectPass {
       localKey,
       analysisContextProductHandle,
       appRootDefinitionProductHandle,
+      parentCompilerWorld,
       compilerWorld,
       definition,
       unit,
@@ -1032,10 +1118,17 @@ export class TemplateCompilationProjectPass {
   }
 }
 
+class TemplateCompilerWorldSelection {
+  constructor(
+    readonly world: TemplateCompilerWorldEmission,
+    readonly authority: TemplateCompilerWorldAuthority,
+  ) {}
+}
+
 class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<readonly TemplateResourceCompilationEmission[]> {
   constructor(
     private readonly pass: TemplateCompilationProjectPass,
-    private readonly compilerWorld: TemplateCompilerWorldEmission,
+    private readonly compilerWorldAuthority: TemplateCompilerWorldAuthority,
     private readonly analysisContextProductHandle: ProductHandle,
     private readonly appRootDefinitionProductHandle: ProductHandle | null,
     private readonly typeSystem: TypeSystemProject | null,
@@ -1046,11 +1139,16 @@ class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<readonl
     request: TemplateCompilerCompileRequest,
     _compiler: TemplateCompilerService,
   ): readonly TemplateResourceCompilationEmission[] {
+    const template = request.definition.template;
+    if (template == null) {
+      throw new Error(`TemplateCompiler admitted ${request.definition.name} without a template.`);
+    }
     return this.pass.compileResourceTree(
-      this.compilerWorld,
+      this.compilerWorldAuthority,
       this.analysisContextProductHandle,
       this.appRootDefinitionProductHandle,
       request.definition,
+      template,
       request.localKey,
       this.typeSystem,
       this.phases,

@@ -4,6 +4,7 @@ import { EvidenceKind, EvidenceRecord, EvidenceRole } from '../kernel/evidence.j
 import type { AddressHandle, EvidenceHandle, ProvenanceHandle } from '../kernel/handles.js';
 import { MaterializationRecord, MaterializedProduct } from '../kernel/materialization.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
+import { ImmediateKernelPublicationContext } from '../kernel/publication.js';
 import { KernelStoreBatch, type KernelStore, type KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
@@ -58,7 +59,9 @@ export class TemplateAuthoringCompilerWorldMaterializer {
   constructor(
     readonly store: KernelStore,
   ) {
-    this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(store);
+    this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(
+      new ImmediateKernelPublicationContext(store),
+    );
   }
 
   construct(request: TemplateAuthoringCompilerWorldRequest): TemplateCompilerWorldEmission | null {

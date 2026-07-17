@@ -163,6 +163,13 @@ sidecar participation before one synchronous callback-free replacement. A failed
 records, details, read index, and manifest intact. Sidecar indexes remain acceleration structures; replacing a detail
 they index is rejected until that index registers an explicit lifecycle participant.
 
+Materializers whose closure proof depends on products staged earlier in the same run consume
+`KernelMaterializationReadView`, not the committed store directly. Its staged implementation overlays pending
+materialization records on the committed view, so support and closure checks see one candidate generation without
+publishing an intermediate world. Template-family compilation is the first recursive consumer: one owner-family run
+shares authored local definitions across a complete observed cohort set while retaining cohort-specific compiler
+products under one publication replacement.
+
 There is one `ComputationLifecycleRegistry` per `KernelStore`. The store enforces that ownership boundary and notifies the
 registry when lifetime disposal reclaims a complete publication, so a later run cannot reuse a stale manifest or steal
 handles republished by another owner. `ComputationRecordReadView` adapts existing normalized-record traversals into exact

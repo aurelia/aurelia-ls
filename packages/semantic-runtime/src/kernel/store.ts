@@ -164,6 +164,11 @@ export interface KernelStoreReadView {
   read(handle: KernelRecordHandle): KernelStoreRecord | null;
 }
 
+/** Read boundary for consumers whose support/closure proof depends on materialization ownership. */
+export interface KernelMaterializationReadView extends KernelStoreReadView {
+  readMaterializations(): readonly MaterializationRecord[];
+}
+
 function addToSet<TKey, TValue>(
   map: Map<TKey, Set<TValue>>,
   key: TKey,

@@ -1,4 +1,5 @@
 import type { KernelRecordHandle } from './handles.js';
+import type { MaterializationRecord } from './materialization.js';
 import {
   KernelPublicationManifest,
   type KernelPublicationPlan,
@@ -192,6 +193,10 @@ export class ComputationRun implements KernelPublicationContext {
 
   read(handle: KernelRecordHandle): KernelStoreRecord | null {
     return this.publications.read(handle);
+  }
+
+  readMaterializations(): readonly MaterializationRecord[] {
+    return this.publications.readMaterializations();
   }
 
   observe(read: ComputationRead): void {

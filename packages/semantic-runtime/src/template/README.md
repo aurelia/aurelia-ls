@@ -57,14 +57,17 @@ classification, expression parsing, and instruction lowering converge on the sam
   compiler world while registering the exact positive or negative keys that were read. The compiler-world authority is
   re-read at commit, and each observation keeps scope, closure/support, and result revisions distinct. This view is not a
   second resource catalog. Ordinary eager compilation uses the same operations with a fixed world authority.
-- `template-compilation-computation.ts` is the same-runtime lifecycle boundary. A stable resource owner plus
-  project/compiler cohort forms the computation locus; the current owner definition is resolved from the compiler-world
-  authority on every run, and external HTML address route/path/existence/content remain observed inputs rather than
-  identity. Positive and negative owner reads are registered even when no compilation is emitted. One run stages
-  compilation-unit, HTML, syntax, classification, value-site, command-lowering, and compiled-template products, then
-  atomically replaces the prior closure after read validation. Owner removal and source absence withdraw outputs.
-  Inline/local templates, runtime analysis, checker products, and production LSP epoch replacement remain outside this
-  boundary.
+- `template-compilation-computation.ts` is the same-runtime lifecycle boundary. A stable project plus authored resource
+  owner forms one template-family computation locus. Every run observes an authoritative complete compiler-cohort set,
+  resolves the current owner in each cohort, and admits one coherent external HTML snapshot for the family. Local
+  definitions, bindables, and authored source products are shared family outputs; compiler worlds, compilation units,
+  parsed/lowered products, and compiled templates remain cohort-specific. The recursive family is staged through one
+  publication manifest and atomically replaces its prior closure after source, cohort-membership, parent-world, exact
+  child-lookup, and kernel-record reads validate. Local identity is owner plus authored name rather than declaration
+  position, so reordering refreshes witnesses without churning semantic children. Owner/source absence, invalid local
+  declarations, and cohort removal withdraw exactly their obsolete closure while failed or stale runs preserve the last
+  coherent family. Inline TypeScript templates, runtime analysis, checker products, dependent public answers, and
+  production LSP epoch replacement remain outside this boundary.
 - `compiled-template-comparison.ts` is the first rich-detail cutoff boundary. It compares compiled-template structure
   separately from source/provenance witnesses and resolves stable address handles against old and proposed record views.
   Other rich details remain conservative replacements until their downstream ownership justifies a comparator.
