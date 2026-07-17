@@ -12,6 +12,12 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
+  ImmediateKernelPublicationContext,
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
@@ -140,18 +146,17 @@ export class I18nTranslationBindingIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext = new ImmediateKernelPublicationContext(store),
   ) {
     this.publisher = new RuntimeBindingIssuePublisher(store);
   }
 
   materialize(input: I18nTranslationBindingIssueMaterializationRequest): I18nTranslationBindingIssueEmission {
     const emission = this.recordsForTranslationBindingIssues(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `i18n-translation-binding:${input.localKey}`));
-    }
-    for (const issue of emission.issues) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeBindingIssue, issue.productHandle, issue);
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `i18n-translation-binding:${input.localKey}`),
+      publishProductDetails(TemplateProductDetails.RuntimeBindingIssue, emission.issues),
+    ));
     return emission;
   }
 

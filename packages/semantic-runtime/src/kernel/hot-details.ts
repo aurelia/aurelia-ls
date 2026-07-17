@@ -20,6 +20,11 @@ export class HotDetailSlot<TDetail> {
   ) {}
 }
 
+/** Typed exact-handle hot-detail read shared by committed and staged analysis views. */
+export interface HotDetailReadView {
+  readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: string): TDetail | null;
+}
+
 /** One typed hot detail object attached to an epoch-local handle. */
 export class HotDetailEntry<TDetail> {
   constructor(

@@ -9,11 +9,13 @@ import {
   bindHotDetailEntry,
   HotDetailCatalog,
   HotDetailEntry,
+  type HotDetailSlot,
 } from './hot-details.js';
 import {
   bindProductDetailEnvelope,
   ProductDetailCatalog,
   ProductDetailEntry,
+  type ProductDetailSlot,
 } from './product-details.js';
 import type { ClaimPredicateKey, ProductKindKey } from './vocabulary.js';
 import {
@@ -304,6 +306,17 @@ export class KernelStore {
       allocateMutationOrdinal,
     );
     this.hotDetails = new HotDetailCatalog(allocateLifetimeOrdinal, allocateMutationOrdinal);
+  }
+
+  readProductDetail<TDetail>(
+    slot: ProductDetailSlot<TDetail>,
+    productHandle: ProductHandle,
+  ): TDetail | null {
+    return this.productDetails.read(slot, productHandle);
+  }
+
+  readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: string): TDetail | null {
+    return this.hotDetails.read(slot, handle);
   }
 
   private allocateLifetimeOrdinal(): number {

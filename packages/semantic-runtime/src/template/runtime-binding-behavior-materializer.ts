@@ -14,6 +14,12 @@ import { CompilerIdentity } from '../kernel/identity.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import {
+  ImmediateKernelPublicationContext,
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
@@ -125,19 +131,18 @@ class RuntimeBindingBehaviorLifecyclePublication {
 export class RuntimeBindingBehaviorMaterializer {
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext = new ImmediateKernelPublicationContext(store),
   ) {}
 
   materialize(input: RuntimeBindingBehaviorMaterializationRequest): RuntimeBindingBehaviorEmission {
     const emission = this.recordsForBindingBehaviors(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `binding-behavior:${input.localKey}`));
-    }
-    for (const application of emission.applications) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeBindingBehaviorApplication, application.productHandle, application);
-    }
-    for (const issue of emission.issues) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeBindingBehaviorIssue, issue.productHandle, issue);
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `binding-behavior:${input.localKey}`),
+      [
+        ...publishProductDetails(TemplateProductDetails.RuntimeBindingBehaviorApplication, emission.applications),
+        ...publishProductDetails(TemplateProductDetails.RuntimeBindingBehaviorIssue, emission.issues),
+      ],
+    ));
     return emission;
   }
 

@@ -1,10 +1,10 @@
-import type { HotDetailSlot } from './hot-details.js';
+import type { HotDetailReadView, HotDetailSlot } from './hot-details.js';
 import type {
   KernelHandleFactory,
   KernelRecordHandle,
   ProductHandle,
 } from './handles.js';
-import type { ProductDetailSlot } from './product-details.js';
+import type { ProductDetailReadView, ProductDetailSlot } from './product-details.js';
 import type {
   KernelStore,
   KernelMaterializationReadView,
@@ -173,11 +173,8 @@ export class KernelPublicationReplacement {
 }
 
 /** Required read/write boundary used by materializers in immediate or staged mode. */
-export interface KernelPublicationContext extends KernelMaterializationReadView {
-  /** Read the candidate post-state for one typed product detail without exposing staged writes globally. */
-  readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null;
-  /** Read the candidate post-state for one typed hot detail without exposing staged writes globally. */
-  readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: string): TDetail | null;
+export interface KernelPublicationContext
+  extends KernelMaterializationReadView, ProductDetailReadView, HotDetailReadView {
   publish(plan: KernelPublicationPlan): void;
 }
 

@@ -18,6 +18,12 @@ import {
 import { MaterializedProduct } from '../kernel/materialization.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import {
+  ImmediateKernelPublicationContext,
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
@@ -142,19 +148,18 @@ export class RuntimeValueConverterMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext = new ImmediateKernelPublicationContext(store),
   ) {}
 
   materialize(input: RuntimeValueConverterMaterializationRequest): RuntimeValueConverterEmission {
     const emission = this.recordsForValueConverters(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `value-converter:${input.localKey}`));
-    }
-    for (const application of emission.applications) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeValueConverterApplication, application.productHandle, application);
-    }
-    for (const issue of emission.issues) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeValueConverterIssue, issue.productHandle, issue);
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `value-converter:${input.localKey}`),
+      [
+        ...publishProductDetails(TemplateProductDetails.RuntimeValueConverterApplication, emission.applications),
+        ...publishProductDetails(TemplateProductDetails.RuntimeValueConverterIssue, emission.issues),
+      ],
+    ));
     return emission;
   }
 

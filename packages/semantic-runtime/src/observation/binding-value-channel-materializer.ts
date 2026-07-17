@@ -24,6 +24,12 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
+  ImmediateKernelPublicationContext,
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
@@ -37,9 +43,6 @@ import {
 import {
   type CheckerExpressionTypeWorld,
 } from '../type-system/expression-type-world.js';
-import {
-  CheckerTypeProjector,
-} from '../type-system/checker-projector.js';
 import { ObservationProductDetails } from './product-details.js';
 import {
   RuntimeBindingTargetAccessStrategy,
@@ -161,30 +164,19 @@ type ValueChannelTarget = {
 
 /** Materializes the value shape that sits between target-side runtime behavior and binding data flow. */
 export class RuntimeBindingValueChannelMaterializer {
-  private readonly typeProjector: CheckerTypeProjector;
-  private readonly channelDrafts: RuntimeBindingValueChannelDraftMaterializer;
-
   constructor(
     /** Hot analysis store that receives binding value-channel products. */
     readonly store: KernelStore,
-  ) {
-    this.typeProjector = new CheckerTypeProjector(store);
-    this.channelDrafts = new RuntimeBindingValueChannelDraftMaterializer(store, this.typeProjector);
-  }
+    readonly publication: KernelPublicationContext = new ImmediateKernelPublicationContext(store),
+  ) {}
 
   materialize(input: RuntimeBindingValueChannelMaterializationRequest): RuntimeBindingValueChannelEmission {
     const emission = this.recordsForValueChannels(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `binding-value-channel:${input.localKey}`));
-    }
-    this.registerProductDetails(emission);
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `binding-value-channel:${input.localKey}`),
+      publishProductDetails(ObservationProductDetails.RuntimeBindingValueChannel, emission.valueChannels),
+    ));
     return emission;
-  }
-
-  private registerProductDetails(emission: RuntimeBindingValueChannelEmission): void {
-    for (const valueChannel of emission.valueChannels) {
-      this.store.productDetails.add(ObservationProductDetails.RuntimeBindingValueChannel, valueChannel.productHandle, valueChannel);
-    }
   }
 
   private recordsForValueChannels(input: RuntimeBindingValueChannelMaterializationRequest): RuntimeBindingValueChannelEmission {
@@ -205,9 +197,13 @@ export class RuntimeBindingValueChannelMaterializer {
       instructionScopes,
       bindingExpressionScopes,
     );
+    const channelDrafts = new RuntimeBindingValueChannelDraftMaterializer(
+      this.store,
+      input.expressionWorld.projector,
+    );
 
     input.runtimeBindings.bindings.forEach((binding, index) => {
-      for (const emission of this.recordsForBindingValueChannels(input, source, {
+      for (const emission of this.recordsForBindingValueChannels(input, channelDrafts, source, {
         input: {
           runtimeBindings: input.runtimeBindings,
           controllerBind: input.controllerBind,
@@ -228,6 +224,7 @@ export class RuntimeBindingValueChannelMaterializer {
 
   private recordsForBindingValueChannels(
     input: RuntimeBindingValueChannelMaterializationRequest,
+    channelDrafts: RuntimeBindingValueChannelDraftMaterializer,
     source: BindingValueChannelSourceSet,
     context: BindingValueChannelContext,
     binding: RuntimeBinding,
@@ -241,12 +238,13 @@ export class RuntimeBindingValueChannelMaterializer {
     const sourceOperations = input.controllerBind.readSourceOperationsForBinding(binding.productHandle);
     const targets = valueChannelTargetsForBinding(binding, targetAccesses, targetOperations, sourceOperations);
     return targets.map((target) =>
-      this.recordsForValueChannel(input, source, context, binding, bindingIndex, target)
+      this.recordsForValueChannel(input, channelDrafts, source, context, binding, bindingIndex, target)
     );
   }
 
   private recordsForValueChannel(
     input: RuntimeBindingValueChannelMaterializationRequest,
+    channelDrafts: RuntimeBindingValueChannelDraftMaterializer,
     source: BindingValueChannelSourceSet,
     context: BindingValueChannelContext,
     binding: RuntimeValueChannelBinding,
@@ -254,7 +252,7 @@ export class RuntimeBindingValueChannelMaterializer {
     target: ValueChannelTarget,
   ): BindingValueChannelRecordEmission {
     const local = `${input.localKey}:binding:${bindingIndex}:${binding.productHandle}:value-channel${target.localSuffix}`;
-    const draft = this.channelDrafts.valueChannelDraftForBinding(
+    const draft = channelDrafts.valueChannelDraftForBinding(
       local,
       binding,
       target.targetAccess,

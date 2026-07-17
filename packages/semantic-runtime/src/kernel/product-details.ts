@@ -31,6 +31,14 @@ export class ProductDetailSlot<
   ) {}
 }
 
+/** Typed exact-handle detail read shared by committed and staged analysis views. */
+export interface ProductDetailReadView {
+  readProductDetail<TDetail>(
+    slot: ProductDetailSlot<TDetail>,
+    productHandle: ProductHandle,
+  ): TDetail | null;
+}
+
 /** One typed detail object attached to a materialized-product handle. */
 export class ProductDetailEntry<
   TDetail,
