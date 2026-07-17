@@ -995,9 +995,10 @@ export class ObserverLocator {
 
   constructor(
     private readonly store: KernelStore,
+    projector: CheckerTypeProjector,
     nodeObserverLocatorConfiguration: NodeObserverLocatorConfiguration = NodeObserverLocatorConfiguration.empty,
   ) {
-    this.projector = new CheckerTypeProjector(store);
+    this.projector = projector;
     this.nodeObserverLocator = new NodeObserverLocator(this, nodeObserverLocatorConfiguration);
   }
 

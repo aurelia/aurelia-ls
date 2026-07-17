@@ -307,7 +307,7 @@ function observedDependencyDraftsForSite(
       return [
         ...ProxyObservable.collectObservedDependencyDrafts(
           site.getter,
-          ProxyObservable.typeContextForTypeSystem(typeSystem, store),
+          ProxyObservable.typeContextForTypeSystem(typeSystem, store, store),
           { rootNames: ['this'] },
         ),
         ...deepDrafts,
@@ -336,7 +336,7 @@ function computedExplicitDependencyDraftsForSite(
     ...site.dependency.dependencyFunctions.flatMap((dependency) =>
       ProxyObservable.collectObservedDependencyDrafts(
         dependency,
-        ProxyObservable.typeContextForTypeSystem(typeSystem, store),
+        ProxyObservable.typeContextForTypeSystem(typeSystem, store, store),
       )
     ),
   ];

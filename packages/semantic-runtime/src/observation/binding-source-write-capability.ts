@@ -13,6 +13,7 @@ import {
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   checkerTypeShapeIsDefinitelyNullish,
 } from '../type-system/checker-related-types.js';
@@ -72,6 +73,7 @@ export interface BindingDataFlowSourceWriteCapabilityTypeAccess {
 export class BindingDataFlowSourceWriteCapabilityProjector {
   constructor(
     private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
     private readonly typeAccess: BindingDataFlowSourceWriteCapabilityTypeAccess,
   ) {}
 
@@ -222,14 +224,14 @@ export class BindingDataFlowSourceWriteCapabilityProjector {
         slot.sourceAddressHandle,
       );
     }
-    const member = this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+    const member = this.publication.readHotDetail(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
     return member == null
       ? sourceWriteCapabilityOpen(
         'Scope slot member product was not available for runtime assignment policy.',
         RuntimeBindingDataFlowSourceAssignmentReasonKind.ScopeSlotTypeCheckerMemberUnavailable,
       )
       : sourceWriteCapabilityForMemberAccess(
-        checkerTypeMemberWriteAccess(member, this.store, this.store),
+        checkerTypeMemberWriteAccess(member, this.store, this.publication),
         member.ownerType.display,
         member.ownerType,
         member.ownerType.sourceAddressHandle,

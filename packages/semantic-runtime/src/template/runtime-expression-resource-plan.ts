@@ -1,5 +1,6 @@
 import type { ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import type {
   BindingBehaviorExpression,
   IsAssign,
@@ -285,6 +286,7 @@ export class RuntimeExpressionResourcePlanningRequest {
     readonly runtimeRendering: RuntimeRenderingEmission,
     readonly resourceScope: TemplateResourceScope | null,
     readonly nodeObserverLocatorConfiguration: NodeObserverLocatorConfiguration | null,
+    readonly expressionWorld: CheckerExpressionTypeWorld,
   ) {}
 }
 
@@ -365,18 +367,19 @@ export class RuntimeExpressionResourcePlanner {
     const entries: RuntimeExpressionResourcePlanEntry[] = [];
     const effectiveModesByExpression = new Map<ProductHandle, TemplateBindingMode>();
     const targetObserverOverridesByBinding = new Map<ProductHandle, RuntimeBindingTargetObserverOverride>();
-    const bindEffects = new RuntimeBindingBehaviorBindEffectReader(this.store);
+    const bindEffects = new RuntimeBindingBehaviorBindEffectReader(input.expressionWorld.projector.publication);
     const observerLocator = new ObserverLocator(
       this.store,
+      input.expressionWorld.projector,
       input.nodeObserverLocatorConfiguration ?? NodeObserverLocatorConfiguration.empty,
     );
 
     for (const [bindingIndex, binding] of input.runtimeRendering.bindings.entries()) {
       const targetController = runtimeBindingTargetController(input.runtimeRendering, binding);
-      const target = runtimeBindingAccessTarget(this.store, binding, targetController);
+      const target = runtimeBindingAccessTarget(input.expressionWorld.projector.publication, binding, targetController);
       const expressionProductHandles = expressionProductHandlesForRuntimeBinding(binding);
       for (const [expressionIndex, expressionProductHandle] of expressionProductHandles.entries()) {
-        const ast = bindingExpressionAstForProduct(this.store, expressionProductHandle);
+        const ast = bindingExpressionAstForProduct(input.expressionWorld.projector.publication, expressionProductHandle);
         if (ast == null) {
           continue;
         }

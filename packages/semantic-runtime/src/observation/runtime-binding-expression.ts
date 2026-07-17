@@ -5,7 +5,7 @@ import {
 } from '../expression/ast.js';
 import { SourceSpan } from '../expression/source-span.js';
 import type { ProductHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
 import {
   AttributeBinding,
@@ -94,7 +94,7 @@ export function expressionProductHandleForBinding(
 
 /** Rehydrates the runtime source AST across parsed expressions and compressed framework literal sources. */
 export function runtimeBindingSourceExpression(
-  store: KernelStore,
+  store: ProductDetailReadView,
   binding: RuntimeExpressionBinding,
 ): ExpressionAstNode | null {
   const parsed = bindingExpressionAstForProduct(store, expressionProductHandleForBinding(binding));

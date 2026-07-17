@@ -38,11 +38,25 @@ export function readOrProjectCheckerTypeMembers(
   typeShape: CheckerTypeShape,
   localKeySeed: ProductHandle | string,
 ): readonly CheckerTypeMember[] {
+  return readOrProjectCheckerTypeMembersInProjection(
+    new CheckerTypeProjector(store),
+    typeShape,
+    localKeySeed,
+  );
+}
+
+/** Read an enumerable member surface without escaping the active checker projection generation. */
+export function readOrProjectCheckerTypeMembersInProjection(
+  projector: CheckerTypeProjector,
+  typeShape: CheckerTypeShape,
+  localKeySeed: ProductHandle | string,
+): readonly CheckerTypeMember[] {
+  const store = projector.store;
   const localKey = localKeyPart(localKeySeed);
   if (typeShape.members.length > 0) {
     return withSyntheticRuntimeArrayMembers(store, typeShape, typeShape.members, localKey);
   }
-  const projected = projectCheckerTypeMemberSurface(store, typeShape, localKeySeed);
+  const projected = projectCheckerTypeMemberSurfaceInProjection(projector, typeShape, localKeySeed);
   return projected == null
     ? withSyntheticRuntimeArrayMembers(store, typeShape, [], localKey)
     : withSyntheticRuntimeArrayMembers(store, projected, projected.members, localKey);
@@ -53,13 +67,26 @@ export function projectCheckerTypeMemberSurface(
   typeShape: CheckerTypeShape,
   localKeySeed: ProductHandle | string,
 ): CheckerTypeShape | null {
+  return projectCheckerTypeMemberSurfaceInProjection(
+    new CheckerTypeProjector(store),
+    typeShape,
+    localKeySeed,
+  );
+}
+
+/** Project an enumerable member surface through the active checker generation. */
+export function projectCheckerTypeMemberSurfaceInProjection(
+  projector: CheckerTypeProjector,
+  typeShape: CheckerTypeShape,
+  localKeySeed: ProductHandle | string,
+): CheckerTypeShape | null {
   const carrier = typeShape.carrier;
   if (carrier == null) {
     return null;
   }
   const memberType = carrier.checker.getNonNullableType(carrier.type);
   const localKey = `query-member-surface:${localKeyPart(localKeySeed)}${memberType === carrier.type ? '' : ':non-nullish'}`;
-  return new CheckerTypeProjector(store).ensureProjection({
+  return projector.ensureProjection({
     localKey,
     checker: carrier.checker,
     type: memberType,

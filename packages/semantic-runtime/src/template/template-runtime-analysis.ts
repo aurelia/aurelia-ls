@@ -481,6 +481,7 @@ class TemplateRuntimeAnalysisFrame {
       runtimeRendering,
       this.request.compilerWorld.resourceScope,
       this.request.compilerWorld.nodeObserverLocatorConfiguration,
+      this.expressionWorld,
     ));
   }
 
@@ -517,6 +518,7 @@ class TemplateRuntimeAnalysisFrame {
       expressionResourcePlan,
       scopes,
       typeSystem: this.request.typeSystem,
+      expressionWorld: this.expressionWorld,
       nodeObserverLocatorConfiguration: this.request.compilerWorld.nodeObserverLocatorConfiguration,
       stateStores: this.expressionWorld.stateStores,
       isAppRootDefinition: this.request.definition.productHandle != null

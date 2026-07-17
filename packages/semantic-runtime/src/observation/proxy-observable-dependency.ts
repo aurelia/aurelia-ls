@@ -2,6 +2,7 @@ import ts from 'typescript';
 
 import { auLink } from '../kernel/au-link.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   ComputedObservationDependencyMode,
 } from './computed-observation.js';
@@ -64,7 +65,8 @@ export interface RuntimeProxyObservedDependencyDraft {
 
 export interface RuntimeProxyObservedDependencyTypeContext {
   readonly checker: ts.TypeChecker;
-  readonly store?: KernelStore | null;
+  readonly store: KernelStore;
+  readonly publication: KernelPublicationContext;
   readProgramNode<TNode extends ts.Node>(node: TNode): TNode | null;
 }
 
@@ -89,24 +91,28 @@ const nowrapImportBindings = new WeakMap<ts.SourceFile, SourceImportBindings>();
 export class ProxyObservable {
   static typeContextForTypeSystem(
     typeSystem: TypeSystemProject | null,
-    store: KernelStore | null = null,
+    store: KernelStore,
+    publication: KernelPublicationContext,
   ): RuntimeProxyObservedDependencyTypeContext | null {
     return typeSystem == null
       ? null
       : {
         checker: typeSystem.checker,
         store,
+        publication,
         readProgramNode: (node) => typeSystem.readProgramNode(node),
       };
   }
 
   static typeContextForChecker(
     checker: ts.TypeChecker,
-    store: KernelStore | null = null,
+    store: KernelStore,
+    publication: KernelPublicationContext,
   ): RuntimeProxyObservedDependencyTypeContext {
     return {
       checker,
       store,
+      publication,
       readProgramNode: (node) => node,
     };
   }
@@ -550,7 +556,11 @@ class RuntimeProxyObservedDependencyDraftCollector {
     if (dependency.dependencyMode === ComputedObservationDependencyMode.ProxyAutoTrack) {
       return ProxyObservable.collectObservedDependencyDrafts(
         method,
-        ProxyObservable.typeContextForChecker(this.typeContext.checker, this.typeContext.store ?? null),
+        ProxyObservable.typeContextForChecker(
+          this.typeContext.checker,
+          this.typeContext.store,
+          this.typeContext.publication,
+        ),
         {
           rootNames: ['this'],
           parameterRootNames: true,
@@ -567,7 +577,11 @@ class RuntimeProxyObservedDependencyDraftCollector {
       ...dependency.dependencyFunctions.flatMap((fn) =>
         ProxyObservable.collectObservedDependencyDrafts(
           fn,
-          ProxyObservable.typeContextForChecker(this.typeContext!.checker, this.typeContext?.store ?? null),
+          ProxyObservable.typeContextForChecker(
+            this.typeContext!.checker,
+            this.typeContext!.store,
+            this.typeContext!.publication,
+          ),
         )
       ),
     ];
@@ -617,7 +631,8 @@ class RuntimeProxyObservedDependencyDraftCollector {
     receiverType: ts.Type | null,
   ): TDraft {
     const withSource = observedDependencyWithMemberSourceForCheckerType(
-      this.typeContext?.store,
+      this.typeContext!.store,
+      this.typeContext!.publication,
       this.typeContext!.checker,
       receiverType,
       draft,
@@ -998,7 +1013,7 @@ function observedMemberSourceForPropertyAccess(
   typeContext: RuntimeProxyObservedDependencyTypeContext | null,
   expression: ts.PropertyAccessExpression,
 ): RuntimeObservedMemberSourceProjection | null {
-  if (typeContext?.store == null) {
+  if (typeContext == null) {
     return null;
   }
   const programExpression = typeContext.readProgramNode(expression);
@@ -1006,7 +1021,7 @@ function observedMemberSourceForPropertyAccess(
     return null;
   }
   const symbol = symbolForExpression(typeContext.checker, programExpression.name);
-  return observedMemberSourceForCheckerSymbol(typeContext.store, symbol);
+  return observedMemberSourceForCheckerSymbol(typeContext.store, typeContext.publication, symbol);
 }
 
 /** Reads a TypeChecker type through the admitted Program node before proxy-observation policy uses it. */
@@ -1026,7 +1041,7 @@ function observedMemberSourceForElementAccess(
   expression: ts.ElementAccessExpression,
   key: string,
 ): RuntimeObservedMemberSourceProjection | null {
-  if (typeContext?.store == null) {
+  if (typeContext == null) {
     return null;
   }
   const ownerType = proxyTypeAtNode(typeContext, expression.expression);
@@ -1034,7 +1049,7 @@ function observedMemberSourceForElementAccess(
     return null;
   }
   const symbol = checkerPropertySymbol(typeContext.checker, ownerType, key);
-  return observedMemberSourceForCheckerSymbol(typeContext.store, symbol);
+  return observedMemberSourceForCheckerSymbol(typeContext.store, typeContext.publication, symbol);
 }
 
 function propertyChainSegmentForElementAccess(
@@ -1133,7 +1148,7 @@ function observedMemberSourceForImplicitPropertyRead(
   receiver: ts.Expression,
   key: string,
 ): RuntimeObservedMemberSourceProjection | null {
-  if (typeContext?.store == null) {
+  if (typeContext == null) {
     return null;
   }
   const receiverType = proxyTypeAtNode(typeContext, receiver);
@@ -1141,7 +1156,7 @@ function observedMemberSourceForImplicitPropertyRead(
     return null;
   }
   const symbol = checkerPropertySymbol(typeContext.checker, receiverType, key);
-  return observedMemberSourceForCheckerSymbol(typeContext.store, symbol);
+  return observedMemberSourceForCheckerSymbol(typeContext.store, typeContext.publication, symbol);
 }
 
 function sourceNameForChain(

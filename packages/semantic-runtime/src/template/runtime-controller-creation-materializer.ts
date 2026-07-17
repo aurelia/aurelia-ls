@@ -45,6 +45,7 @@ import {
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
+import { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
 import { RuntimeHtmlControllerFrameworkErrorCode } from './framework-error-code.js';
 import {
@@ -143,7 +144,7 @@ export class RuntimeControllerCreationMaterializer {
   ) {
     this.childContainerMaterializer = new ContainerChildMaterializer(store);
     this.controllerIssuePublisher = new RuntimeControllerIssuePublisher(store);
-    this.observerLocator = new ObserverLocator(store);
+    this.observerLocator = new ObserverLocator(store, new CheckerTypeProjector(store));
     this.resourceSlotPublication = new DiResourceSlotPublicationMaterializer(store, new DiKeyIdentityEmitter(store));
   }
 

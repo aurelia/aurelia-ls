@@ -7,6 +7,7 @@ import type {
   ExpressionAstNode,
 } from '../expression/ast.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   CheckerExpressionTypeEvaluationResultKind,
 } from '../type-system/expression-type-evaluation.js';
@@ -17,7 +18,7 @@ import type { CheckerExpressionTypeEvaluator } from '../type-system/expression-t
 import {
   readCheckerTypeShape,
 } from '../type-system/checker-type-shape-access.js';
-import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
+import { readOrProjectCheckerTypeMembersInProjection } from '../type-system/checker-type-member-surface.js';
 import { TypeSystemHotDetails } from '../type-system/product-details.js';
 import type {
   CheckerTypeMember,
@@ -45,6 +46,7 @@ export interface RuntimeTrackableMethodObservedDependencyRequest {
   /** Checker expression request that owns source expression, runtime Scope, source address, and evaluator mode. */
   readonly checkerContext: CheckerExpressionTypeEvaluationContext;
   readonly store: KernelStore;
+  readonly publication: KernelPublicationContext;
   readonly evaluator: CheckerExpressionTypeEvaluator;
 }
 
@@ -172,11 +174,11 @@ class RuntimeTrackableMethodObservedDependencyCollector {
 
   private recordCallScope(expression: CallScopeExpression): void {
     const lookup = this.request.checkerContext.scope.locate(expression.name.name, expression.ancestor);
-    const slotMember = checkerTypeMemberForSlot(this.request.store, lookup.slot);
+    const slotMember = checkerTypeMemberForSlot(this.request.publication, lookup.slot);
     if (slotMember != null) {
       this.recordTrackableTypeMember(slotMember);
     }
-    const ownerType = readCheckerTypeShape(this.request.store, lookup.context?.contextType ?? null);
+    const ownerType = readCheckerTypeShape(this.request.publication, lookup.context?.contextType ?? null);
     this.recordTrackableMember(ownerType, expression.name.name);
   }
 
@@ -197,15 +199,19 @@ class RuntimeTrackableMethodObservedDependencyCollector {
   ): void {
     const member = ownerType == null
       ? null
-      : readOrProjectCheckerTypeMembers(
-        this.request.store,
+      : readOrProjectCheckerTypeMembersInProjection(
+        this.request.evaluator.projector,
         ownerType,
         ownerType.productHandle ?? `${this.request.checkerContext.localKey}:trackable-method-owner`,
       ).find((candidate) => candidate.name === expression.name.name) ?? null;
     if (member == null) {
       return;
     }
-    const trackableDependencies = trackableDependenciesForMember(this.request.store, member);
+    const trackableDependencies = trackableDependenciesForMember(
+      this.request.store,
+      this.request.publication,
+      member,
+    );
     if (trackableDependencies.length > 0) {
       for (const dependency of trackableDependencies) {
         this.add(dependency);
@@ -219,8 +225,8 @@ class RuntimeTrackableMethodObservedDependencyCollector {
   ): void {
     const member = ownerType == null
       ? null
-      : readOrProjectCheckerTypeMembers(
-        this.request.store,
+      : readOrProjectCheckerTypeMembersInProjection(
+        this.request.evaluator.projector,
         ownerType,
         ownerType.productHandle ?? `${this.request.checkerContext.localKey}:trackable-method-owner`,
       ).find((candidate) => candidate.name === methodName) ?? null;
@@ -230,7 +236,11 @@ class RuntimeTrackableMethodObservedDependencyCollector {
   }
 
   private recordTrackableTypeMember(member: CheckerTypeMember): void {
-    for (const dependency of trackableDependenciesForMember(this.request.store, member)) {
+    for (const dependency of trackableDependenciesForMember(
+      this.request.store,
+      this.request.publication,
+      member,
+    )) {
       this.add(dependency);
     }
   }
@@ -244,21 +254,24 @@ class RuntimeTrackableMethodObservedDependencyCollector {
 }
 
 function checkerTypeMemberForSlot(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   slot: BindingContextSlot | null,
 ): CheckerTypeMember | null {
   if (slot?.targetProductHandle == null) {
     return null;
   }
-  return store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle) ?? null;
+  return publication.readHotDetail(TypeSystemHotDetails.TypeMember, slot.targetProductHandle) ?? null;
 }
 
 function trackableDependenciesForMember(
   store: KernelStore,
+  publication: KernelPublicationContext,
   member: CheckerTypeMember,
 ): readonly RuntimeObservedDependencyDraft[] {
   const carrier = member.carrier
-    ?? (member.productHandle == null ? null : store.hotDetails.read(TypeSystemHotDetails.TypeMember, member.productHandle)?.carrier)
+    ?? (member.productHandle == null
+      ? null
+      : publication.readHotDetail(TypeSystemHotDetails.TypeMember, member.productHandle)?.carrier)
     ?? null;
   if (carrier == null) {
     return [];
@@ -272,20 +285,26 @@ function trackableDependenciesForMember(
     return [];
   }
   if (dependency.dependencyMode === ComputedObservationDependencyMode.ProxyAutoTrack) {
-    return methodBodyProxyDependencies(store, method, carrier.checker);
+    return methodBodyProxyDependencies(store, publication, method, carrier.checker);
   }
   const receiverType = member.ownerType.productHandle == null
     ? null
-    : readCheckerTypeShape(store, member.ownerType)?.carrier?.type ?? null;
+    : readCheckerTypeShape(publication, member.ownerType)?.carrier?.type ?? null;
   return [
     ...dependency.dependencyKeyReads.flatMap((key) =>
       connectableDraftsForTrackableDependencyKey(key)
-        .map((draft) => trackableReceiverDependencyDraft(store, carrier.checker, receiverType, draft))
+        .map((draft) => trackableReceiverDependencyDraft(
+          store,
+          publication,
+          carrier.checker,
+          receiverType,
+          draft,
+        ))
     ),
     ...dependency.dependencyFunctions.flatMap((fn) =>
       ProxyObservable.collectObservedDependencyDrafts(
         fn,
-        ProxyObservable.typeContextForChecker(carrier.checker, store),
+        ProxyObservable.typeContextForChecker(carrier.checker, store, publication),
       )
     ),
   ].map(withoutSourceSpan);
@@ -293,12 +312,13 @@ function trackableDependenciesForMember(
 
 function methodBodyProxyDependencies(
   store: KernelStore,
+  publication: KernelPublicationContext,
   method: ts.MethodDeclaration,
   checker: ts.TypeChecker,
 ): readonly RuntimeObservedDependencyDraft[] {
   return ProxyObservable.collectObservedDependencyDrafts(
     method,
-    ProxyObservable.typeContextForChecker(checker, store),
+    ProxyObservable.typeContextForChecker(checker, store, publication),
     {
       rootNames: ['this'],
       parameterRootNames: true,
@@ -308,11 +328,18 @@ function methodBodyProxyDependencies(
 
 function trackableReceiverDependencyDraft<TDraft extends RuntimeObservedDependencyDraft>(
   store: KernelStore,
+  publication: KernelPublicationContext,
   checker: ts.TypeChecker,
   receiverType: ts.Type | null,
   draft: TDraft,
 ): TDraft {
-  return observedDependencyWithMemberSourceForCheckerType(store, checker, receiverType, draft);
+  return observedDependencyWithMemberSourceForCheckerType(
+    store,
+    publication,
+    checker,
+    receiverType,
+    draft,
+  );
 }
 
 function withoutSourceSpan<TDraft extends RuntimeObservedDependencyDraft>(

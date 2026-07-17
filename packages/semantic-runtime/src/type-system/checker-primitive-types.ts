@@ -5,6 +5,7 @@ import {
 } from '../expression/ast.js';
 import { uniqueStrings } from '../kernel/collections.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import { checkerRawTypeAssignable } from './checker-type-assignability.js';
 import { readCheckerTypeShape } from './checker-type-shape-access.js';
 import {
@@ -71,7 +72,7 @@ export function checkerTypeAssignableToPrimitiveType(
 
 /** Checks whether a retained type reference is assignable to a broad primitive, using display-only fallback only when no checker carrier survives. */
 export function checkerTypeReferenceAssignableToPrimitiveType(
-  store: KernelStore,
+  store: ProductDetailReadView,
   reference: CheckerTypeReference | null,
   primitive: CheckerPrimitiveName,
 ): boolean | null {
@@ -85,7 +86,7 @@ export function checkerTypeReferenceAssignableToPrimitiveType(
 
 /** Checks whether a retained callable reference returns a value assignable to a broad primitive. */
 export function checkerCallableReferenceReturnAssignableToPrimitiveType(
-  store: KernelStore,
+  store: ProductDetailReadView,
   reference: CheckerTypeReference | null,
   primitive: CheckerPrimitiveName,
   runtimeArguments: readonly CheckerRuntimeArgumentType[] | number = [],

@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import type { KernelStore } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import { readCheckerTypeShapeByProductHandle } from '../type-system/checker-type-shape-access.js';
 import type { CheckerTypeMember, CheckerTypeShape } from '../type-system/type-shape.js';
@@ -18,7 +18,7 @@ export class RuntimeBindingBehaviorBindEffectReader {
   private readonly effectsByResource = new Map<string, RuntimeBindingBehaviorBindEffects>();
 
   constructor(
-    readonly store: KernelStore,
+    readonly store: ProductDetailReadView,
   ) {}
 
   readEffects(resource: TemplateVisibleResource | null): RuntimeBindingBehaviorBindEffects {

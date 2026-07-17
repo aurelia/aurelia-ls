@@ -561,7 +561,7 @@ function observedDependencyDraftsForEffectSite(
   if (site.getter != null) {
     return ProxyObservable.collectObservedDependencyDrafts(
       site.getter,
-      ProxyObservable.typeContextForTypeSystem(typeSystem, store),
+      ProxyObservable.typeContextForTypeSystem(typeSystem, store, store),
     );
   }
   return site.runFunction == null
@@ -613,7 +613,7 @@ function collectRunEffectObservedDependencyDrafts(
       memberName: expression.name.text,
       keyExpression: null,
       methodName: null,
-      ...observedMemberSourceFields(observedMemberSourceForCheckerSymbol(store, symbol)),
+      ...observedMemberSourceFields(observedMemberSourceForCheckerSymbol(store, store, symbol)),
       spanStart: expression.getStart(sourceFile),
       spanEnd: expression.end,
     };

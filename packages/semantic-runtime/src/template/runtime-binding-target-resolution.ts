@@ -1,4 +1,4 @@
-import type { KernelStore } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import { HtmlElement } from './html-ir.js';
 import { TemplateProductDetails } from './product-details.js';
 import {
@@ -23,7 +23,7 @@ export function runtimeBindingTargetController(
 
 /** Target object visible to behavior bind and ordinary target-access selection. */
 export function runtimeBindingAccessTarget(
-  store: KernelStore,
+  store: ProductDetailReadView,
   binding: RuntimeBinding,
   targetController: RuntimeControllerFrame | null,
 ): RuntimeBindingTarget {
@@ -72,12 +72,12 @@ function targetControllerForContext(
 }
 
 function htmlElementForBinding(
-  store: KernelStore,
+  store: ProductDetailReadView,
   binding: RuntimeBinding,
 ): HtmlElement | null {
   if (binding.node.productHandle == null) {
     return null;
   }
-  const node = store.productDetails.read(TemplateProductDetails.HtmlNode, binding.node.productHandle);
+  const node = store.readProductDetail(TemplateProductDetails.HtmlNode, binding.node.productHandle);
   return node instanceof HtmlElement ? node : null;
 }

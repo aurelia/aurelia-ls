@@ -37,6 +37,11 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
@@ -328,6 +333,7 @@ type BindingDataFlowContext = {
   readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjector;
   readonly sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector;
   readonly resourceScope: TemplateResourceScope | null;
+  readonly draftMaterializer: RuntimeBindingDataFlowDraftMaterializer;
 };
 
 type ObservedDependencyInput = {
@@ -471,37 +477,25 @@ type DataFlowSourceProjection = {
 
 /** Materializes binding data-flow edges after target observers and instruction scopes are both known. */
 export class RuntimeBindingDataFlowMaterializer {
-  private readonly typeProjector: CheckerTypeProjector;
-  private readonly draftMaterializer: RuntimeBindingDataFlowDraftMaterializer;
-
   constructor(
     /** Hot analysis store that receives binding data-flow products. */
     readonly store: KernelStore,
-  ) {
-    this.typeProjector = new CheckerTypeProjector(store);
-    this.draftMaterializer = new RuntimeBindingDataFlowDraftMaterializer(store, this.typeProjector);
-  }
+    readonly publication: KernelPublicationContext = store,
+  ) {}
 
   materialize(input: RuntimeBindingDataFlowMaterializationRequest): RuntimeBindingDataFlowEmission {
     const emission = this.recordsForDataFlows(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `binding-data-flow:${input.localKey}`));
-    }
-    this.registerProductDetails(emission);
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `binding-data-flow:${input.localKey}`),
+      [
+        ...publishProductDetails(ObservationProductDetails.RuntimeBindingDataFlow, emission.dataFlows),
+        ...publishProductDetails(
+          ObservationProductDetails.RuntimeBindingObservedDependency,
+          emission.observedDependencies,
+        ),
+      ],
+    ));
     return emission;
-  }
-
-  private registerProductDetails(emission: RuntimeBindingDataFlowEmission): void {
-    for (const dataFlow of emission.dataFlows) {
-      this.store.productDetails.add(ObservationProductDetails.RuntimeBindingDataFlow, dataFlow.productHandle, dataFlow);
-    }
-    for (const dependency of emission.observedDependencies) {
-      this.store.productDetails.add(
-        ObservationProductDetails.RuntimeBindingObservedDependency,
-        dependency.productHandle,
-        dependency,
-      );
-    }
   }
 
   private recordsForDataFlows(input: RuntimeBindingDataFlowMaterializationRequest): RuntimeBindingDataFlowEmission {
@@ -534,6 +528,10 @@ export class RuntimeBindingDataFlowMaterializer {
         bindingExpressionScopes,
       ),
       resourceScope: input.resourceScope,
+      draftMaterializer: new RuntimeBindingDataFlowDraftMaterializer(
+        this.store,
+        input.expressionWorld.projector,
+      ),
     });
   }
 
@@ -640,7 +638,7 @@ export class RuntimeBindingDataFlowMaterializer {
     local: string,
   ): BindingDataFlowProductEmission {
     const strictBinding = input.runtimeBindings.readRenderContextForBinding(binding.productHandle)?.renderingController.strict ?? null;
-    const draft = this.draftMaterializer.dataFlowDraftForBinding(
+    const draft = context.draftMaterializer.dataFlowDraftForBinding(
       binding,
       target,
       scope,
@@ -697,7 +695,7 @@ export class RuntimeBindingDataFlowMaterializer {
         const index = dependencyIndex++;
         const dependencyLocal = `${local}:observed-dependency:${index}`;
         const dependencySource = sourceAddressForRuntimeExpressionBounds(
-          this.store,
+          this.publication,
           dependencyLocal,
           site.sourceAddressHandle,
           dependency.spanStart,
@@ -751,7 +749,7 @@ export class RuntimeBindingDataFlowMaterializer {
     draft: DataFlowDraft,
     context: BindingDataFlowContext,
   ): readonly ObservedExpressionSite[] {
-    const primaryParse = readTemplateExpressionParse(this.store, draft.expressionProductHandle);
+    const primaryParse = readTemplateExpressionParse(this.publication, draft.expressionProductHandle);
     const sites: ObservedExpressionSite[] = [{
       expressionProductHandle: draft.expressionProductHandle,
       expression: draft.ast!,
@@ -759,7 +757,7 @@ export class RuntimeBindingDataFlowMaterializer {
       sourceAddressHandle: primaryParse?.sourceAddressHandle ?? binding.sourceAddressHandle,
       bindingBehavior: null,
     }];
-    const instruction = this.store.productDetails.read(
+    const instruction = this.publication.readProductDetail(
       TemplateProductDetails.Instruction,
       binding.instructionProductHandle,
     );
@@ -770,17 +768,17 @@ export class RuntimeBindingDataFlowMaterializer {
       .readRenderContextForBinding(binding.productHandle)
       ?.renderingController.productHandle ?? null;
     for (const handle of instruction.tailInstructionProductHandles) {
-      const tail = this.store.productDetails.read(TemplateProductDetails.Instruction, handle);
+      const tail = this.publication.readProductDetail(TemplateProductDetails.Instruction, handle);
       if (!(tail instanceof MultiAttrInstruction)
         || tail.command !== 'bind'
         || tail.expressionProductHandle == null) {
         continue;
       }
-      const expression = bindingExpressionAstForProduct(this.store, tail.expressionProductHandle);
+      const expression = bindingExpressionAstForProduct(this.publication, tail.expressionProductHandle);
       if (expression == null) {
         continue;
       }
-      const parse = readTemplateExpressionParse(this.store, tail.expressionProductHandle);
+      const parse = readTemplateExpressionParse(this.publication, tail.expressionProductHandle);
       sites.push({
         expressionProductHandle: tail.expressionProductHandle,
         expression,
@@ -829,6 +827,7 @@ export class RuntimeBindingDataFlowMaterializer {
           ...collectRuntimeTrackableMethodObservedDependencyDrafts({
             checkerContext,
             store: this.store,
+            publication: this.publication,
             evaluator: context.evaluator,
           }),
         ]),
@@ -874,7 +873,7 @@ export class RuntimeBindingDataFlowMaterializer {
     if (reference == null) {
       return true;
     }
-    const carrier = readCheckerTypeShape(this.store, reference)?.carrier ?? null;
+    const carrier = readCheckerTypeShape(this.publication, reference)?.carrier ?? null;
     return carrier == null
       ? true
       : checkerTypeMayBeRuntimeArrayInstance(carrier.checker, carrier.type);
@@ -1003,7 +1002,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
 
   constructor(
     private readonly store: KernelStore,
-    typeProjector: CheckerTypeProjector,
+    private readonly typeProjector: CheckerTypeProjector,
   ) {
     this.typeAccess = new BindingDataFlowTypeAccess(store, typeProjector);
     this.sourceProjector = new BindingDataFlowSourceProjector(store, this.typeAccess);
@@ -1194,7 +1193,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
     local: string,
   ): DataFlowExpressionFacts {
     const expressionProductHandle = expressionProductHandleForBinding(binding);
-    const ast = runtimeBindingSourceExpression(this.store, binding);
+    const ast = runtimeBindingSourceExpression(this.typeProjector.publication, binding);
     return {
       expressionProductHandle,
       ast,
@@ -1227,7 +1226,7 @@ class BindingDataFlowSourceProjector {
     private readonly typeAccess: BindingDataFlowTypeAccess,
   ) {
     this.sourceInfo = new BindingDataFlowSourceInfoProjector(
-      new BindingDataFlowSourceWriteCapabilityProjector(store, typeAccess),
+      new BindingDataFlowSourceWriteCapabilityProjector(store, typeAccess.publication, typeAccess),
     );
   }
 
@@ -1350,12 +1349,14 @@ class BindingDataFlowSourceProjector {
 
 class BindingDataFlowTypeAccess implements BindingDataFlowAssignabilityTypeAccess {
   private readonly shapeAccess: CheckerTypeShapeAccess;
+  readonly publication: KernelPublicationContext;
 
   constructor(
     readonly store: KernelStore,
     typeProjector: CheckerTypeProjector,
   ) {
     this.shapeAccess = new CheckerTypeShapeAccess(store, typeProjector);
+    this.publication = typeProjector.publication;
   }
 
   readTypeShape(reference: CheckerTypeReference | null): CheckerTypeShape | null {
@@ -1385,7 +1386,12 @@ class BindingDataFlowTypeAccess implements BindingDataFlowAssignabilityTypeAcces
   }
 
   isCallableBooleanFunction(reference: CheckerTypeReference | null, runtimeArgumentCount: number = 0): boolean | null {
-    return checkerCallableReferenceReturnAssignableToPrimitiveType(this.store, reference, 'boolean', runtimeArgumentCount);
+    return checkerCallableReferenceReturnAssignableToPrimitiveType(
+      this.publication,
+      reference,
+      'boolean',
+      runtimeArgumentCount,
+    );
   }
 
   memberType(

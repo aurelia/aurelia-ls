@@ -181,7 +181,7 @@ function proxyObservedDependencyDraftsForComputedWatcher(
     ? []
     : ProxyObservable.collectObservedDependencyDrafts(
       declaration,
-      ProxyObservable.typeContextForTypeSystem(typeSystem, store),
+      ProxyObservable.typeContextForTypeSystem(typeSystem, store, store),
     );
 }
 
