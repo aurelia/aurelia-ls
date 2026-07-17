@@ -15,11 +15,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "${count | numberText:prefix & missingBehavior}",
   "at": "numberText",
   "atOccurrence": 1,
-  "displayPosition": "src/resource-combinator-gallery.html:15:58",
+  "displayPosition": "src/resource-combinator-gallery.html:17:58",
   "file": "src/resource-combinator-gallery.html",
   "lspPosition": {
     "character": 57,
-    "line": 14
+    "line": 16
   },
   "occurrence": 1
 }
@@ -87,12 +87,25 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "kind": 1,
       "range": {
         "end": {
+          "character": 106,
+          "line": 7
+        },
+        "start": {
+          "character": 96,
+          "line": 7
+        }
+      }
+    },
+    {
+      "kind": 1,
+      "range": {
+        "end": {
           "character": 67,
-          "line": 14
+          "line": 16
         },
         "start": {
           "character": 57,
-          "line": 14
+          "line": 16
         }
       }
     },
@@ -101,11 +114,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 70,
-          "line": 17
+          "line": 19
         },
         "start": {
           "character": 60,
-          "line": 17
+          "line": 19
         }
       }
     }
@@ -117,7 +130,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "highlightCount": 6,
+  "highlightCount": 7,
   "highlights": [
     {
       "anomaly": null,
@@ -184,12 +197,27 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "kind": "text",
       "range": {
         "end": {
+          "character": 106,
+          "line": 7
+        },
+        "start": {
+          "character": 96,
+          "line": 7
+        }
+      },
+      "rangeText": "numberText"
+    },
+    {
+      "anomaly": null,
+      "kind": "text",
+      "range": {
+        "end": {
           "character": 67,
-          "line": 14
+          "line": 16
         },
         "start": {
           "character": 57,
-          "line": 14
+          "line": 16
         }
       },
       "rangeText": "numberText"
@@ -200,11 +228,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 70,
-          "line": 17
+          "line": 19
         },
         "start": {
           "character": 60,
-          "line": 17
+          "line": 19
         }
       },
       "rangeText": "numberText"

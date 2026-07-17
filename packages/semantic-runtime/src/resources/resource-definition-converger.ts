@@ -2,6 +2,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import type { SourceFileAdmission } from '../boot/frames.js';
 import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
+import { sourceTextContentRevision } from '../kernel/source-text-snapshot.js';
 import {
   SourceSpanRole,
 } from '../kernel/address.js';
@@ -1416,6 +1417,7 @@ function readCustomElementTemplate(
         value.value,
         source?.addressHandle ?? null,
         source?.sourceMap ?? null,
+        sourceTextContentRevision(context.sourceFile.text),
       ),
       source?.records ?? [],
     );
@@ -1446,10 +1448,11 @@ function readConventionalHtmlTemplate(
     return null;
   }
   const absolutePath = path.resolve(context.projectRootDir ?? path.dirname(context.sourceFile.fileName), admission.path);
-  const rawMarkup = sourceTextCache.read(absolutePath)?.text ?? null;
-  if (rawMarkup == null) {
+  const authoredSource = sourceTextCache.read(absolutePath);
+  if (authoredSource == null) {
     return null;
   }
+  const rawMarkup = authoredSource.text;
   const metadata = readHtmlTemplateMetadata(rawMarkup);
   const source = externalTemplateSourceAddress(store, admission.addressHandle, rawMarkup.length, local, metadata.sourceMap);
   return new TemplateDefinitionRead(
@@ -1458,6 +1461,7 @@ function readConventionalHtmlTemplate(
       metadata.markup,
       source.addressHandle,
       source.sourceMap,
+      authoredSource.contentRevision,
     ),
     source.records,
     readHtmlTemplateDependencies(context, admission.path, metadata.imports),
@@ -1488,10 +1492,11 @@ function readImportedHtmlTemplate(
   if (admission == null) {
     return null;
   }
-  const rawMarkup = sourceTextCache.read(absolutePath)?.text ?? null;
-  if (rawMarkup == null) {
+  const authoredSource = sourceTextCache.read(absolutePath);
+  if (authoredSource == null) {
     return null;
   }
+  const rawMarkup = authoredSource.text;
   const metadata = readHtmlTemplateMetadata(rawMarkup);
   const source = externalTemplateSourceAddress(store, admission.addressHandle, rawMarkup.length, local, metadata.sourceMap);
   return new TemplateDefinitionRead(
@@ -1500,6 +1505,7 @@ function readImportedHtmlTemplate(
       metadata.markup,
       source.addressHandle,
       source.sourceMap,
+      authoredSource.contentRevision,
     ),
     source.records,
     readHtmlTemplateDependencies(context, admission.path, metadata.imports),

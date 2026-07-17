@@ -25,6 +25,7 @@ import {
 } from '../kernel/provenance.js';
 import {
   type KernelStore,
+  type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -159,8 +160,10 @@ export class ContainerChildMaterializer {
   constructor(
     /** Hot analysis store used for handle allocation and duplicate identity checks. */
     readonly store: KernelStore,
+    /** Current publication view, including records staged earlier in the same generation. */
+    records: KernelStoreReadView,
   ) {
-    this.keyIdentityEmitter = new DiKeyIdentityEmitter(store);
+    this.keyIdentityEmitter = new DiKeyIdentityEmitter(records);
   }
 
   materializeChild(

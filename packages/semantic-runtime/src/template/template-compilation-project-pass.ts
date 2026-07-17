@@ -30,8 +30,9 @@ import {
 } from '../resources/custom-element-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelStore, KernelTelemetryReadView } from '../kernel/store.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
+import type { GenerationAuthority } from '../kernel/generation-authority.js';
 import type { ComputationRead } from '../kernel/computation-lifecycle.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
@@ -125,8 +126,8 @@ import {
   TemplateCompilerWorldAuthority,
 } from './compiler-read-view.js';
 import {
-  TemplateCompilationCohortKind,
   TemplateCompilationCohortProjectAuthority,
+  TemplateCompilationCohortKind,
   type TemplateCompilationCohortProjectPlan,
   type TemplateCompilationCohortPlan,
   type TemplateCompilationOwnerPlan,
@@ -216,6 +217,14 @@ export class TemplateResourceRuntimeAnalysisEmission {
     /** Runtime/checker analysis downstream of compiled-template row assembly. */
     readonly runtimeAnalysis: TemplateRuntimeAnalysisEmission,
   ) {}
+
+  /** Preserve the analyzed products while replacing their closed run-bound expression world. */
+  forCommittedGeneration(expressionWorld: CheckerExpressionTypeWorld): TemplateResourceRuntimeAnalysisEmission {
+    return new TemplateResourceRuntimeAnalysisEmission(
+      this.compilation,
+      this.runtimeAnalysis.forCommittedGeneration(expressionWorld),
+    );
+  }
 }
 
 export type TemplateCompilationProjectPhaseName =
@@ -252,7 +261,7 @@ class TemplateCompilationPhaseRecorder {
   readonly phases: TemplateCompilationProjectPhaseTiming[] = [];
 
   constructor(
-    private readonly store: KernelStore,
+    private readonly kernel: KernelTelemetryReadView,
     readonly telemetry: NormalizedSemanticRuntimeTelemetryOptions,
   ) {}
 
@@ -260,12 +269,13 @@ class TemplateCompilationPhaseRecorder {
     name: TemplateCompilationProjectPhaseName,
     read: () => TValue,
   ): TValue {
-    return measureSemanticRuntimePhase(this.phases, name, this.store, this.telemetry, read);
+    return measureSemanticRuntimePhase(this.phases, name, this.kernel, this.telemetry, read);
   }
 }
 
 /** Template compilation-front-door result for one app-world composition. */
 export class TemplateCompilationProjectEmission {
+  /** Generation-pinned cohort authority retained for direct template-compilation consumers. */
   readonly cohortAuthority: TemplateCompilationCohortProjectAuthority;
 
   get compilerWorlds(): readonly TemplateCompilerWorldEmission[] {
@@ -295,6 +305,21 @@ export class TemplateCompilationProjectEmission {
     readonly profile: TemplateCompilationProjectProfile,
   ) {
     this.cohortAuthority = TemplateCompilationCohortProjectAuthority.fixed(cohortPlan);
+  }
+
+  /** Replace a run-bound expression world with a fresh store-backed world after this generation commits. */
+  forCommittedGeneration(authority: GenerationAuthority): TemplateCompilationProjectEmission {
+    const expressionWorld = this.expressionWorld.forCommittedGeneration(authority);
+    return new TemplateCompilationProjectEmission(
+      this.appWorld,
+      this.cohortPlan,
+      this.resources.map((resource) => resource.forCommittedGeneration(expressionWorld)),
+      this.authoringResources.map((resource) => resource.forCommittedGeneration(expressionWorld)),
+      expressionWorld,
+      this.authoringTemplateSourceFiles,
+      this.authoringTemplateLimit,
+      this.profile,
+    );
   }
 }
 
@@ -347,8 +372,9 @@ export class TemplateCompilationProjectPass {
     options: TemplateCompilationProjectOptions = {},
   ): TemplateCompilationProjectEmission {
     const started = performance.now();
+    const evaluation = options.evaluation?.forkSession() ?? null;
     const phaseRecorder = new TemplateCompilationPhaseRecorder(
-      this.store,
+      this.publication,
       normalizeSemanticRuntimeTelemetryOptions(
         options.telemetry,
         DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
@@ -390,7 +416,7 @@ export class TemplateCompilationProjectPass {
     const resources = this.analyzeCompiledResources(
       appCompilations,
       options.projectKey ?? null,
-      options.evaluation ?? null,
+      evaluation,
       typeSystem,
       resourceDefinitions,
       runtimeAnalysisDepth,
@@ -400,7 +426,7 @@ export class TemplateCompilationProjectPass {
     const authoringResources = this.analyzeCompiledResources(
       authoringCompilations,
       options.projectKey ?? null,
-      options.evaluation ?? null,
+      evaluation,
       typeSystem,
       resourceDefinitions,
       runtimeAnalysisDepth,
@@ -687,7 +713,7 @@ export class TemplateCompilationProjectPass {
       request.localKey,
       typeSystem,
       new TemplateCompilationPhaseRecorder(
-        this.store,
+        this.publication,
         normalizeSemanticRuntimeTelemetryOptions(
           telemetry,
           DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
@@ -703,7 +729,7 @@ export class TemplateCompilationProjectPass {
     return this.compileResource(
       request,
       new TemplateCompilationPhaseRecorder(
-        this.store,
+        this.publication,
         normalizeSemanticRuntimeTelemetryOptions(
           telemetry,
           DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,

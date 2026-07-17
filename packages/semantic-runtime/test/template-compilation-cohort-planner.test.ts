@@ -54,7 +54,7 @@ describe('template compilation cohort planning', () => {
           resource.definitionProductHandle === ownerPlan.definition.productHandle
         )).toBe(true);
       }
-      for (const cohort of app.emission.templates.cohortAuthority.cohortSetFor(ownerPlan.definition).current()) {
+      for (const cohort of app.emission.templateCohorts.cohortSetFor(ownerPlan.definition).current()) {
         const readView = new TemplateCompilerReadView(runtime.workspace.store, cohort.compilerWorldAuthority);
         expect(readView.templateOwnerResource(ownerPlan.definition)).not.toBeNull();
       }
@@ -82,9 +82,16 @@ describe('template compilation cohort planning', () => {
       [...app.emission.appWorld.compilerWorlds].reverse(),
     );
     const committedRecordCount = runtime.workspace.store.readAllRecords().length;
+    const currentComputation = runtime.computationLifecycle.readState(
+      app.emission.templateAnalysisGeneration.computationId,
+    );
+    expect(currentComputation).not.toBeNull();
+    if (currentComputation == null) {
+      throw new Error('Expected a current template-analysis computation.');
+    }
     const reorderedPlan = new TemplateCompilationCohortPlanner(
       runtime.workspace.store,
-      new StagedKernelPublicationContext(runtime.workspace.store),
+      new StagedKernelPublicationContext(runtime.workspace.store, currentComputation.publication),
     ).plan(new TemplateCompilationCohortPlanningRequest(
       app.project.projectKey,
       reorderedAppWorld,

@@ -219,9 +219,10 @@ For `scripts/app-telemetry.mjs`, `SEMANTIC_RUNTIME_TELEMETRY_KERNEL_BREAKDOWNS=t
 x-ray, while `SEMANTIC_RUNTIME_TELEMETRY_PHASE_KERNEL_BREAKDOWNS=true` separately opts phase boundaries into full
 breakdowns. Keep the latter off for large-app canaries unless phase-owned product-kind deltas are the actual target.
 `SEMANTIC_RUNTIME_TELEMETRY_PHASE_DETAIL_DENSITY=true` adds compact phase-local detail-density rows to that same
-phase-breakdown lane. It is intentionally implemented from store markers rather than full snapshot diffs, so disposed
-routed app worlds can explain peak detail shape without retaining the app world and without recounting the whole store
-at every phase boundary.
+phase-breakdown lane. It is intentionally implemented from the active kernel publication's markers rather than full
+snapshot diffs. Immediate phases observe the committed store; atomic computation phases observe the logical candidate
+with the prior owned closure hidden and staged writes visible. Disposed routed app worlds can therefore explain peak
+detail shape without retaining the app world and without recounting the whole store at every phase boundary.
 Routed disposed-app answers keep compact phase kernel summaries in the app profile when phase-kernel telemetry is
 enabled, including phase record/product counts and, when phase breakdowns are on, top product/detail/source-span rows.
 This is the template/runtime analogue of query-claim dependency-cache attribution: the answer can dispose products at

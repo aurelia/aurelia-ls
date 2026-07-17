@@ -31,6 +31,7 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   CheckerTypeMemberProjectionPolicy,
@@ -107,6 +108,7 @@ type ResourceRecognitionPublicationPhaseRecorder = <TValue>(
 export class ResourceRecognitionPublicationSupport {
   constructor(
     readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
     readonly recordPhase: ResourceRecognitionPublicationPhaseRecorder = (_name, read) => read(),
   ) {}
 
@@ -261,6 +263,7 @@ export class ResourceRecognitionPublicationSupport {
         ? null
         : projectTargetType(
           this.store,
+          this.publication,
           context.typeSystem,
           target.node,
           local,
@@ -586,6 +589,7 @@ function resourceIdentityLocalKey(
 
 function projectTargetType(
   store: KernelStore,
+  publication: KernelPublicationContext,
   typeSystem: TypeSystemProject,
   node: ts.Node,
   local: string,
@@ -597,7 +601,7 @@ function projectTargetType(
   if (type == null) {
     return null;
   }
-  const typeShape = new CheckerTypeProjector(store).ensureProjection({
+  const typeShape = new CheckerTypeProjector(store, publication).ensureProjection({
     localKey: `resource-target:${local}:runtime-type`,
     checker: typeSystem.checker,
     type,

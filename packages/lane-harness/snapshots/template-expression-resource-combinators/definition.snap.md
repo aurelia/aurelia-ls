@@ -15,11 +15,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "${item.label & innerAudit:'inner' & missingBehavior}",
   "at": "innerAudit",
   "atOccurrence": 1,
-  "displayPosition": "src/resource-combinator-gallery.html:14:65",
+  "displayPosition": "src/resource-combinator-gallery.html:16:65",
   "file": "src/resource-combinator-gallery.html",
   "lspPosition": {
     "character": 64,
-    "line": 13
+    "line": 15
   },
   "occurrence": 1
 }
@@ -34,22 +34,22 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "targetRange": {
         "end": {
-          "character": 30,
-          "line": 32
+          "character": 38,
+          "line": 33
         },
         "start": {
-          "character": 0,
-          "line": 32
+          "character": 13,
+          "line": 33
         }
       },
       "targetSelectionRange": {
         "end": {
-          "character": 28,
-          "line": 32
+          "character": 38,
+          "line": 33
         },
         "start": {
-          "character": 18,
-          "line": 32
+          "character": 13,
+          "line": 33
         }
       },
       "targetUri": "fixtures://pressure/template-expression-resource-combinators/src/expression-resources.ts"
@@ -69,15 +69,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "file": "src/expression-resources.ts",
       "range": {
         "end": {
-          "character": 28,
-          "line": 32
+          "character": 38,
+          "line": 33
         },
         "start": {
-          "character": 18,
-          "line": 32
+          "character": 13,
+          "line": 33
         }
       },
-      "rangeText": "innerAudit",
+      "rangeText": "InnerAuditBindingBehavior",
       "uri": "fixtures://pressure/template-expression-resource-combinators/src/expression-resources.ts"
     }
   ]

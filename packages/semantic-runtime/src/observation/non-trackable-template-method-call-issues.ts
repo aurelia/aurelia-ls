@@ -288,7 +288,7 @@ function addThisReadExpression(
     method.name == null ? 'method' : localKeyPart(method.name.getText(sourceFile)),
     localKeyPart(sourceName),
   ].join(':');
-  const source = sourceSpanForCheckerNode(store, local, node, SourceSpanRole.Range);
+  const source = sourceSpanForCheckerNode(store, store, local, node, SourceSpanRole.Range);
   reads.set(sourceName, {
     sourceName,
     sourceAddressHandle: source.address.handle,

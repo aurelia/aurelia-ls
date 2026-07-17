@@ -1,4 +1,4 @@
-import type { ProductHandle } from '../kernel/handles.js';
+import type { KernelHandleFactory, ProductHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { KernelStore } from '../kernel/store.js';
@@ -52,15 +52,15 @@ export function readOrProjectCheckerTypeMembersInProjection(
   typeShape: CheckerTypeShape,
   localKeySeed: ProductHandle | string,
 ): readonly CheckerTypeMember[] {
-  const store = projector.store;
+  const handles = projector.publication.handles;
   const localKey = localKeyPart(localKeySeed);
   if (typeShape.members.length > 0) {
-    return withSyntheticRuntimeArrayMembers(store, typeShape, typeShape.members, localKey);
+    return withSyntheticRuntimeArrayMembers(handles, typeShape, typeShape.members, localKey);
   }
   const projected = projectCheckerTypeMemberSurfaceInProjection(projector, typeShape, localKeySeed);
   return projected == null
-    ? withSyntheticRuntimeArrayMembers(store, typeShape, [], localKey)
-    : withSyntheticRuntimeArrayMembers(store, projected, projected.members, localKey);
+    ? withSyntheticRuntimeArrayMembers(handles, typeShape, [], localKey)
+    : withSyntheticRuntimeArrayMembers(handles, projected, projected.members, localKey);
 }
 
 export function projectCheckerTypeMemberSurface(
@@ -101,12 +101,12 @@ export function projectCheckerTypeMemberSurfaceInProjection(
 }
 
 function withSyntheticRuntimeArrayMembers(
-  store: KernelStore,
+  handles: KernelHandleFactory,
   typeShape: CheckerTypeShape,
   members: readonly CheckerTypeMember[],
   localKey: string,
 ): readonly CheckerTypeMember[] {
-  const syntheticMembers = syntheticRuntimeArrayTypeMembers(store, typeShape, localKey);
+  const syntheticMembers = syntheticRuntimeArrayTypeMembers(handles, typeShape, localKey);
   if (syntheticMembers.length === 0) {
     return members;
   }

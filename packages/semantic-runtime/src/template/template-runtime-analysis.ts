@@ -187,6 +187,25 @@ export class TemplateRuntimeAnalysisEmission {
     readonly profile: TemplateRuntimeAnalysisProfile,
   ) {}
 
+  /** Rebind this immutable product graph to the store-backed expression world installed after commit. */
+  forCommittedGeneration(expressionWorld: CheckerExpressionTypeWorld): TemplateRuntimeAnalysisEmission {
+    return new TemplateRuntimeAnalysisEmission(
+      this.analysisDepth,
+      this.runtimeRendering,
+      this.expressionResourcePlan,
+      this.scopes,
+      this.controllerBind,
+      this.i18nTranslationBinding,
+      this.bindingBehavior,
+      this.valueConverter,
+      this.bindingValueChannel,
+      this.bindingDataFlow,
+      this.runtimeComposition,
+      expressionWorld,
+      this.profile,
+    );
+  }
+
   /** Runtime binding lifecycle issues across creation, renderer admission, bind, and plugin-owned bind phases. */
   readRuntimeBindingIssues(): readonly RuntimeBindingIssue[] {
     return [
@@ -275,7 +294,7 @@ class TemplateRuntimeAnalysisFrame {
   constructor(
     private readonly request: TemplateRuntimeAnalysisRequest,
     private readonly store: KernelStore,
-    publication: KernelPublicationContext,
+    private readonly publication: KernelPublicationContext,
     private readonly services: TemplateRuntimeAnalysisServices,
   ) {
     this.analysisDepth = normalizeSemanticAppAnalysisDepth(request.analysisDepth);
@@ -660,7 +679,7 @@ class TemplateRuntimeAnalysisFrame {
       this.request.compilerWorld.resourceScope,
       this.request.compilerWorld.container,
     );
-    return new RuntimeBindingSourceValueEvaluator(
+    return RuntimeBindingSourceValueEvaluator.create(
       this.store,
       this.expressionWorld.projector,
       this.request.evaluation,
@@ -674,7 +693,7 @@ class TemplateRuntimeAnalysisFrame {
     name: TemplateRuntimeAnalysisPhaseName,
     read: () => TValue,
   ): TValue {
-    return measureSemanticRuntimePhase(this.phases, name, this.store, this.telemetry, read);
+    return measureSemanticRuntimePhase(this.phases, name, this.publication, this.telemetry, read);
   }
 
   private profilingSink(): SemanticRuntimePhaseSink | null {
@@ -682,6 +701,7 @@ class TemplateRuntimeAnalysisFrame {
       ? {
         phases: this.phases as SemanticRuntimePhaseTiming<string>[],
         telemetry: this.telemetry,
+        kernel: this.publication,
       }
       : null;
   }

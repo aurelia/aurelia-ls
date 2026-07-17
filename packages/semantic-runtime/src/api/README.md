@@ -90,6 +90,11 @@ Default `openApp()` uses `runtime-topology`, the cheapest complete app-world tie
 methods default to `binding-observation` because those answers intentionally need observer/data-flow diagnostics and
 weak-member pressure. Generic adapters should read `runtime.appQueryCatalog()` and open the catalog row's
 `minimumAnalysisDepth` instead of treating the deepest tier as a default.
+An opened `SemanticApp` pins one exact committed template-analysis generation together with every app-level product
+derived from it. Same-runtime replacement or lifetime disposal makes that app stale; `ask(...)`, profile/cache reads,
+and template access fail closed rather than combining current kernel rows with an old object graph. Runtime cache and
+cursor-locus admission skip stale apps and rebuild a coherent app epoch on the next request. Template-query objects
+also spend that authority on every operation; capturing one before replacement does not preserve access to stale rows.
 Generic adapters that only need one answer should prefer `runtime.answerAppQuery(...)` over manual
 `openApp(...).ask(...)`. That routed API reads the app-query catalog for default depth, derives an inquiry profile from
 the locus when the caller did not supply one, records a runtime-level routed answer claim before returning, and disposes
@@ -306,8 +311,9 @@ editor clients; completions, cursor info, references, rename, and code actions n
 same authored-source resolver before performing containment checks.
 
 `templateCursorInfo(...)` and `templateCompletions(...)` first reuse any already opened app-world whose compiled
-template owns the cursor source. That preserves app context for templates that entered the compiler world through an
-app dependency or plugin package. If no opened app contains the cursor source, the facade selects the owning project,
+template owns the cursor source and whose pinned template generation is still current. That preserves app context for
+templates that entered the compiler world through an app dependency or plugin package. If no opened app contains the
+cursor source, the facade selects the owning project,
 enables authoring-template compilation by default, and opens an authoring world whose default source selection is the
 cursor file. App callers can still pass `projectKey`, `includeAuthoringTemplates: false`, explicit authoring source
 options, or `authoringTemplateLimit` when they need different scope or budget behavior.

@@ -6,18 +6,19 @@ import type { SemanticClaim } from './claim.js';
 import type { SemanticIdentity } from './identity.js';
 import type { MaterializationRecord, MaterializedProduct } from './materialization.js';
 import {
-  bindHotDetailEntry,
   HotDetailCatalog,
   HotDetailEntry,
+  type PreparedHotDetailEntry,
   type HotDetailSlot,
 } from './hot-details.js';
 import {
-  bindProductDetailEnvelope,
   ProductDetailCatalog,
   ProductDetailEntry,
+  type PreparedProductDetailEntry,
   type ProductDetailSlot,
 } from './product-details.js';
 import type { ClaimPredicateKey, ProductKindKey } from './vocabulary.js';
+import { applyObjectFieldNormalizations } from './object-field-normalization.js';
 import {
   KernelClaimEndpointKind,
   KernelVocabularySlot,
@@ -122,6 +123,14 @@ export interface KernelStoreDensityDelta {
   readonly productKinds: readonly SemanticRuntimeCountRow[];
   readonly productDetailKinds: readonly SemanticRuntimeCountRow[];
   readonly hotDetailKinds: readonly SemanticRuntimeCountRow[];
+}
+
+/** Count and mutation-delta boundary shared by committed stores and staged publication views. */
+export interface KernelTelemetryReadView {
+  markObservation(): KernelStoreObservationMarker;
+  readKernelCountSnapshot(): SemanticRuntimeKernelCountSnapshot;
+  readDetailDensitySince(marker: KernelStoreObservationMarker): KernelStoreDetailDensityDelta;
+  readDensitySince(marker: KernelStoreObservationMarker): KernelStoreDensityDelta;
 }
 
 export interface KernelStoreDisposalContext {
@@ -286,6 +295,8 @@ export class KernelStore {
   private readonly claimsByObject = new Map<AddressHandle | IdentityHandle | ProductHandle, Set<ClaimHandle>>();
   private readonly claimsByPredicate = new Map<ClaimPredicateKey, Set<ClaimHandle>>();
   private readonly sidecarIndexes = new Map<string, KernelStoreSidecarIndex>();
+  private readonly directPublicationOwner = {};
+  private readonly activePublicationOwners = new Map<KernelPublicationManifest, object>();
   private computationLifecycle: KernelStoreComputationLifecycle | null = null;
   private handleCharacterCount = 0;
   private nextLifetimeOrdinal = 0;
@@ -378,7 +389,9 @@ export class KernelStore {
 
   /** Publish immediately when no computation transaction owns the current analysis. */
   publish(plan: KernelPublicationPlan): void {
-    this.commit(plan.batch);
+    if (plan.batch.records.length > 0) {
+      this.commit(plan.batch);
+    }
     for (const publication of plan.productDetails) {
       if (publication.admission === KernelDetailAdmission.IfAbsent) {
         this.productDetails.addIfAbsent(publication.slot, publication.productHandle, publication.detail);
@@ -395,6 +408,13 @@ export class KernelStore {
     }
   }
 
+  /** Immediate store publication is not tied to a replaceable computation generation. */
+  isCurrent(): boolean {
+    return true;
+  }
+
+  requireCurrent(): void {}
+
   /**
    * Prevalidate and synchronously replace one computation-owned publication across kernel and detail catalogs.
    *
@@ -404,18 +424,21 @@ export class KernelStore {
   replacePublication(
     previous: KernelPublicationManifest,
     next: KernelPublicationPlan,
+    owner: object = this.directPublicationOwner,
   ): KernelPublicationReplacement {
     const label = next.batch.label ?? '(unnamed publication)';
+    this.validatePublicationManifestAuthority(previous, owner, label);
     const previousRecordHandles = new Set(previous.recordHandles);
     const previousProductDetailHandles = new Set(previous.productDetailHandles);
     const previousHotDetailHandles = new Set(previous.hotDetailHandles);
-    const lifetimeOrdinal = previous.lifetimeOrdinal ?? this.allocateLifetimeOrdinal();
     this.validatePublicationManifest(
       previousRecordHandles,
       previousProductDetailHandles,
       previousHotDetailHandles,
+      previous.lifetimeOrdinal,
       label,
     );
+    this.validatePublicationAdmissionSnapshots(next, label);
 
     const recordsByHandle = this.publicationRecordsByHandle(next.batch.records, previousRecordHandles, label);
     const productDetailsByHandle = normalizedProductDetailPublications(next.productDetails, label);
@@ -462,7 +485,26 @@ export class KernelStore {
 
     this.validateNoForeignDetailRemoval(recordsToRemove, previousProductDetailHandles, label);
     this.validateNoSidecarReplacement(productDetailPlan.remove, label);
-    this.prebindPublicationDetails(productDetailPlan.add, hotDetailPlan.add, recordsByHandle, previousRecordHandles);
+    const preparedDetails = this.preparePublicationDetailBindings(
+      productDetailPlan.add,
+      hotDetailPlan.add,
+      recordsByHandle,
+      previousRecordHandles,
+    );
+
+    const dependencyLifetimeOrdinal = this.publicationDependencyLifetimeOrdinal(
+      next,
+      recordsByHandle,
+    );
+    const lifetimeOrdinal = Math.max(
+      previous.lifetimeOrdinal ?? this.allocateLifetimeOrdinal(),
+      dependencyLifetimeOrdinal ?? -1,
+    );
+
+    applyObjectFieldNormalizations([
+      ...preparedDetails.productDetails.flatMap((entry) => entry.binding.normalizations),
+      ...preparedDetails.hotDetails.flatMap((entry) => entry.binding.normalizations),
+    ]);
 
     for (const handle of productDetailPlan.remove) {
       this.productDetails.remove(handle);
@@ -476,21 +518,20 @@ export class KernelStore {
     for (const record of recordsToAdd) {
       this.add(record, lifetimeOrdinal);
     }
-    for (const publication of productDetailPlan.add) {
-      this.productDetails.addAtLifetime(
-        publication.slot,
-        publication.productHandle,
-        publication.detail,
-        lifetimeOrdinal,
-      );
+    for (const entry of preparedDetails.productDetails) {
+      this.productDetails.addPreparedAtLifetime(entry, lifetimeOrdinal);
     }
-    for (const publication of hotDetailPlan.add) {
-      this.hotDetails.addAtLifetime(
-        publication.slot,
-        publication.handle,
-        publication.detail,
-        lifetimeOrdinal,
-      );
+    for (const entry of preparedDetails.hotDetails) {
+      this.hotDetails.addPreparedAtLifetime(entry, lifetimeOrdinal);
+    }
+    for (const handle of recordsByHandle.keys()) {
+      this.recordLifetimeOrdinalByHandle.set(handle, lifetimeOrdinal);
+    }
+    for (const handle of productDetailPlan.ownedHandles) {
+      this.productDetails.promoteLifetimeOrdinal(handle, lifetimeOrdinal);
+    }
+    for (const handle of hotDetailPlan.ownedHandles) {
+      this.hotDetails.promoteLifetimeOrdinal(handle, lifetimeOrdinal);
     }
 
     const decisions = [
@@ -502,36 +543,110 @@ export class KernelStore {
       ...productDetailPlan.decisions,
       ...hotDetailPlan.decisions,
     ];
-    return new KernelPublicationReplacement(
-      new KernelPublicationManifest(
-        [...recordsByHandle.keys()],
-        productDetailPlan.ownedHandles,
-        hotDetailPlan.ownedHandles,
-        lifetimeOrdinal,
-      ),
-      decisions,
+    const manifest = new KernelPublicationManifest(
+      [...recordsByHandle.keys()],
+      productDetailPlan.ownedHandles,
+      hotDetailPlan.ownedHandles,
+      lifetimeOrdinal,
     );
+    if (previous !== KernelPublicationManifest.empty) {
+      this.activePublicationOwners.delete(previous);
+    }
+    this.activePublicationOwners.set(manifest, owner);
+    return new KernelPublicationReplacement(manifest, decisions);
+  }
+
+  private validatePublicationManifestAuthority(
+    manifest: KernelPublicationManifest,
+    owner: object,
+    label: string,
+  ): void {
+    if (
+      manifest !== KernelPublicationManifest.empty
+      && this.activePublicationOwners.get(manifest) !== owner
+    ) {
+      throw new Error(`Publication ${label} cannot replace a stale or foreign publication manifest.`);
+    }
+  }
+
+  /** Revoke a committed manifest when lifetime disposal removes its computation state. */
+  retirePublicationManifest(manifest: KernelPublicationManifest, owner: object): void {
+    if (manifest === KernelPublicationManifest.empty) {
+      return;
+    }
+    if (this.activePublicationOwners.get(manifest) !== owner) {
+      throw new Error('Cannot retire a stale, foreign, or differently owned publication manifest.');
+    }
+    this.activePublicationOwners.delete(manifest);
   }
 
   private validatePublicationManifest(
     recordHandles: ReadonlySet<KernelRecordHandle>,
     productDetailHandles: ReadonlySet<ProductHandle>,
     hotDetailHandles: ReadonlySet<string>,
+    lifetimeOrdinal: number | null,
     label: string,
   ): void {
+    if (
+      lifetimeOrdinal == null
+      && (recordHandles.size > 0 || productDetailHandles.size > 0 || hotDetailHandles.size > 0)
+    ) {
+      throw new Error(`Publication ${label} cannot replace owned entries without their lifetime identity.`);
+    }
     for (const handle of recordHandles) {
       if (!this.records.has(handle)) {
         throw new Error(`Publication ${label} cannot replace missing owned record ${handle}.`);
+      }
+      if (this.recordLifetimeOrdinalByHandle.get(handle) !== lifetimeOrdinal) {
+        throw new Error(`Publication ${label} does not own record ${handle}.`);
       }
     }
     for (const handle of productDetailHandles) {
       if (this.productDetails.readEntry(handle) == null) {
         throw new Error(`Publication ${label} cannot replace missing owned product detail ${handle}.`);
       }
+      if (this.productDetails.readLifetimeOrdinal(handle) !== lifetimeOrdinal) {
+        throw new Error(`Publication ${label} does not own product detail ${handle}.`);
+      }
     }
     for (const handle of hotDetailHandles) {
       if (this.hotDetails.readEntry(handle) == null) {
         throw new Error(`Publication ${label} cannot replace missing owned hot detail ${handle}.`);
+      }
+      if (this.hotDetails.readLifetimeOrdinal(handle) !== lifetimeOrdinal) {
+        throw new Error(`Publication ${label} does not own hot detail ${handle}.`);
+      }
+    }
+  }
+
+  private validatePublicationAdmissionSnapshots(
+    plan: KernelPublicationPlan,
+    label: string,
+  ): void {
+    const productHandles = new Set<ProductHandle>();
+    for (const snapshot of plan.productDetailAdmissionSnapshots) {
+      if (productHandles.has(snapshot.productHandle)) {
+        throw new Error(`Publication ${label} has duplicate admission evidence for ${snapshot.productHandle}.`);
+      }
+      productHandles.add(snapshot.productHandle);
+      if (this.productDetails.readEntry(snapshot.productHandle) !== snapshot.expectedEntry) {
+        throw new Error(
+          `Publication ${label} cannot commit product detail ${snapshot.productHandle}; `
+          + 'catalog admission changed after staging.',
+        );
+      }
+    }
+    const hotHandles = new Set<string>();
+    for (const snapshot of plan.hotDetailAdmissionSnapshots) {
+      if (hotHandles.has(snapshot.handle)) {
+        throw new Error(`Publication ${label} has duplicate admission evidence for ${snapshot.handle}.`);
+      }
+      hotHandles.add(snapshot.handle);
+      if (this.hotDetails.readEntry(snapshot.handle) !== snapshot.expectedEntry) {
+        throw new Error(
+          `Publication ${label} cannot commit hot detail ${snapshot.handle}; `
+          + 'catalog admission changed after staging.',
+        );
       }
     }
   }
@@ -572,6 +687,41 @@ export class KernelStore {
         }
       }
     }
+  }
+
+  private publicationDependencyLifetimeOrdinal(
+    plan: KernelPublicationPlan,
+    nextByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
+  ): number | null {
+    let lifetimeOrdinal = plan.minimumLifetimeOrdinal;
+    for (const record of plan.batch.records) {
+      for (const reference of referencedKernelRecordHandles(record)) {
+        if (nextByHandle.has(reference)) {
+          continue;
+        }
+        lifetimeOrdinal = maxOptionalOrdinal(
+          lifetimeOrdinal,
+          this.recordLifetimeOrdinalByHandle.get(reference) ?? null,
+        );
+      }
+    }
+    for (const snapshot of plan.productDetailAdmissionSnapshots) {
+      if (snapshot.expectedEntry != null) {
+        lifetimeOrdinal = maxOptionalOrdinal(
+          lifetimeOrdinal,
+          this.productDetails.readLifetimeOrdinal(snapshot.productHandle),
+        );
+      }
+    }
+    for (const snapshot of plan.hotDetailAdmissionSnapshots) {
+      if (snapshot.expectedEntry != null) {
+        lifetimeOrdinal = maxOptionalOrdinal(
+          lifetimeOrdinal,
+          this.hotDetails.readLifetimeOrdinal(snapshot.handle),
+        );
+      }
+    }
+    return lifetimeOrdinal;
   }
 
   private recordPublicationDecisions(
@@ -838,12 +988,18 @@ export class KernelStore {
     }
   }
 
-  private prebindPublicationDetails(
+  private preparePublicationDetailBindings(
     productDetails: readonly KernelProductDetailPublication<unknown>[],
     hotDetails: readonly KernelHotDetailPublication<unknown>[],
     nextRecordsByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
     previousRecordHandles: ReadonlySet<KernelRecordHandle>,
-  ): void {
+  ): {
+    readonly productDetails: readonly PreparedProductDetailEntry<unknown>[];
+    readonly hotDetails: readonly PreparedHotDetailEntry<unknown>[];
+  } {
+    const ownerByDetail = new Map<object, string>();
+    const preparedProductDetails: PreparedProductDetailEntry<unknown>[] = [];
+    const preparedHotDetails: PreparedHotDetailEntry<unknown>[] = [];
     for (const publication of productDetails) {
       const staged = nextRecordsByHandle.get(publication.productHandle) ?? null;
       const current = previousRecordHandles.has(publication.productHandle)
@@ -853,13 +1009,22 @@ export class KernelStore {
       if (product == null) {
         throw new Error(`Cannot prebind product detail ${publication.productHandle}; product is absent.`);
       }
-      bindProductDetailEnvelope(publication.detail, product);
-      new ProductDetailEntry(product, publication.slot, publication.detail);
+      validateUniqueDetailOwner(publication.detail, `product ${publication.productHandle}`, ownerByDetail);
+      preparedProductDetails.push(this.productDetails.prepareReplacementEntry(
+        publication.slot,
+        product,
+        publication.detail,
+      ));
     }
     for (const publication of hotDetails) {
-      const entry = new HotDetailEntry(publication.handle, publication.slot, publication.detail);
-      bindHotDetailEntry(publication.detail, entry);
+      validateUniqueDetailOwner(publication.detail, `hot detail ${publication.handle}`, ownerByDetail);
+      preparedHotDetails.push(this.hotDetails.prepareReplacementEntry(
+        publication.slot,
+        publication.handle,
+        publication.detail,
+      ));
     }
+    return { productDetails: preparedProductDetails, hotDetails: preparedHotDetails };
   }
 
   private removeRecord(handle: KernelRecordHandle): void {
@@ -913,6 +1078,11 @@ export class KernelStore {
     }
     const summary = { records, productDetails, hotDetails, handleCharacters };
     this.computationLifecycle?.dispose({ marker, summary });
+    for (const manifest of this.activePublicationOwners.keys()) {
+      if ((manifest.lifetimeOrdinal ?? -1) >= marker.nextLifetimeOrdinal) {
+        this.activePublicationOwners.delete(manifest);
+      }
+    }
     this.notifySidecarIndexes({ marker, summary });
     return summary;
   }
@@ -957,6 +1127,11 @@ export class KernelStore {
   /** Exact store-local revision for a normalized record, including witness-only replacement. */
   readRecordRevision(handle: KernelRecordHandle): number | null {
     return this.recordMutationOrdinalByHandle.get(handle) ?? null;
+  }
+
+  /** Store-local ownership lifetime for a positive kernel-record dependency. */
+  readRecordLifetimeOrdinal(handle: KernelRecordHandle): number | null {
+    return this.recordLifetimeOrdinalByHandle.get(handle) ?? null;
   }
 
   readAddress(handle: AddressHandle): SemanticAddress | null {
@@ -1053,10 +1228,8 @@ export class KernelStore {
   }
 
   /** Snapshot kernel size for telemetry; this does not expand product details or source text. */
-  readTelemetrySnapshot(
-    options: SemanticRuntimeKernelTelemetryOptions = {},
-  ): SemanticRuntimeKernelCountSnapshot | SemanticRuntimeKernelDensitySnapshot {
-    const counts: SemanticRuntimeKernelCountSnapshot = {
+  readKernelCountSnapshot(): SemanticRuntimeKernelCountSnapshot {
+    return {
       totalRecords: this.records.size,
       addresses: this.addresses.size,
       identities: this.identities.size,
@@ -1070,6 +1243,12 @@ export class KernelStore {
       hotDetails: this.hotDetails.size,
       handleCharacters: this.handleCharacterCount,
     };
+  }
+
+  readTelemetrySnapshot(
+    options: SemanticRuntimeKernelTelemetryOptions = {},
+  ): SemanticRuntimeKernelCountSnapshot | SemanticRuntimeKernelDensitySnapshot {
+    const counts = this.readKernelCountSnapshot();
     if (options.includeBreakdowns !== true) {
       return counts;
     }
@@ -1499,6 +1678,10 @@ export class KernelStore {
 
 }
 
+function maxOptionalOrdinal(left: number | null, right: number | null): number | null {
+  return left == null ? right : right == null ? left : Math.max(left, right);
+}
+
 function normalizedProductDetailPublications(
   publications: readonly KernelProductDetailPublication<unknown>[],
   label: string,
@@ -1555,6 +1738,21 @@ function normalizedHotDetailPublications(
     throw new Error(`Publication ${label} stages duplicate hot detail ${publication.handle}.`);
   }
   return byHandle;
+}
+
+function validateUniqueDetailOwner(
+  detail: unknown,
+  owner: string,
+  ownerByDetail: Map<object, string>,
+): void {
+  if (detail == null || typeof detail !== 'object') {
+    return;
+  }
+  const existingOwner = ownerByDetail.get(detail);
+  if (existingOwner != null && existingOwner !== owner) {
+    throw new Error(`One detail object cannot be staged for both ${existingOwner} and ${owner}.`);
+  }
+  ownerByDetail.set(detail, owner);
 }
 
 function compareProductDetailPublication(

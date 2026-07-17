@@ -5,6 +5,11 @@ import type {
   ProvenanceHandle,
 } from './handles.js';
 import type { MaterializedProduct } from './materialization.js';
+import {
+  applyObjectFieldNormalizations,
+  prepareObjectFieldNormalization,
+  type PreparedObjectFieldNormalization,
+} from './object-field-normalization.js';
 import type { ProductKindKey } from './vocabulary.js';
 
 declare const productDetailSlotBrand: unique symbol;
@@ -95,6 +100,25 @@ const provenanceHandleAccessor = {
   get: productDetailProvenanceHandleGetter,
 } as const;
 
+class ProductDetailEnvelopeBinding {
+  constructor(
+    readonly detail: object | null,
+    readonly product: MaterializedProduct,
+    readonly normalizations: readonly PreparedObjectFieldNormalization[],
+  ) {}
+}
+
+/** Product-detail entry whose fallible field normalization completed before live catalog mutation. */
+export class PreparedProductDetailEntry<
+  TDetail,
+  TProductKind extends ProductKindKey = ProductKindKey,
+> {
+  constructor(
+    readonly entry: ProductDetailEntry<TDetail, TProductKind>,
+    readonly binding: ProductDetailEnvelopeBinding,
+  ) {}
+}
+
 /**
  * Bind a rich product-detail object to the materialized-product envelope that owns it.
  *
@@ -105,16 +129,35 @@ export function bindProductDetailEnvelope<TDetail>(
   detail: TDetail,
   product: MaterializedProduct,
 ): TDetail {
+  const binding = prepareProductDetailEnvelopeBinding(detail, product);
+  applyObjectFieldNormalizations(binding.normalizations);
+  admitProductDetailEnvelopeBinding(binding);
+  return detail;
+}
+
+/** Complete every fallible normalization step without changing the detail's current envelope owner. */
+function prepareProductDetailEnvelopeBinding(
+  detail: unknown,
+  product: MaterializedProduct,
+): ProductDetailEnvelopeBinding {
   if (detail == null || typeof detail !== 'object') {
-    return detail;
+    return new ProductDetailEnvelopeBinding(null, product, []);
   }
   const existing = productEnvelopeByDetail.get(detail);
   if (existing != null && existing.handle !== product.handle) {
     throw new Error(`Product detail is already bound to ${existing.handle}; cannot rebind to ${product.handle}.`);
   }
-  productEnvelopeByDetail.set(detail, product);
-  hideEnvelopeHandleEchoes(detail, product);
-  return detail;
+  return new ProductDetailEnvelopeBinding(
+    detail,
+    product,
+    prepareEnvelopeHandleEchoes(detail, product),
+  );
+}
+
+function admitProductDetailEnvelopeBinding(binding: ProductDetailEnvelopeBinding): void {
+  if (binding.detail != null) {
+    productEnvelopeByDetail.set(binding.detail, binding.product);
+  }
 }
 
 export function readProductDetailEnvelope(detail: unknown): MaterializedProduct | null {
@@ -184,33 +227,19 @@ export function productDetailProvenanceHandle(
   return requireProductDetailEnvelope(detail, detailKind).provenanceHandle;
 }
 
-function hideEnvelopeHandleEchoes(
+function prepareEnvelopeHandleEchoes(
   detail: object,
   product: MaterializedProduct,
-): void {
-  hideEnvelopeHandleEcho(detail, 'productHandle', product.handle, productHandleAccessor);
-  hideEnvelopeHandleEcho(detail, 'identityHandle', product.identityHandle, identityHandleAccessor);
-  hideEnvelopeHandleEcho(detail, 'primaryIdentityHandle', product.identityHandle, optionalIdentityHandleAccessor);
-  hideEnvelopeHandleEcho(detail, 'sourceAddressHandle', product.addressHandle, addressHandleAccessor);
-  hideEnvelopeHandleEcho(detail, 'addressHandle', product.addressHandle, addressHandleAccessor);
-  hideEnvelopeHandleEcho(detail, 'hostAddressHandle', product.addressHandle, addressHandleAccessor);
-  hideEnvelopeHandleEcho(detail, 'provenanceHandle', product.provenanceHandle, provenanceHandleAccessor);
-}
-
-function hideEnvelopeHandleEcho<TValue>(
-  detail: object,
-  field: string,
-  envelopeValue: TValue,
-  accessor: PropertyDescriptor,
-): void {
-  if (!Object.prototype.hasOwnProperty.call(detail, field)) {
-    return;
-  }
-  const currentValue = (detail as Record<string, unknown>)[field];
-  if (currentValue !== envelopeValue) {
-    return;
-  }
-  Object.defineProperty(detail, field, accessor);
+): readonly PreparedObjectFieldNormalization[] {
+  return [
+    prepareObjectFieldNormalization(detail, 'productHandle', product.handle, productHandleAccessor, 'Product detail'),
+    prepareObjectFieldNormalization(detail, 'identityHandle', product.identityHandle, identityHandleAccessor, 'Product detail'),
+    prepareObjectFieldNormalization(detail, 'primaryIdentityHandle', product.identityHandle, optionalIdentityHandleAccessor, 'Product detail'),
+    prepareObjectFieldNormalization(detail, 'sourceAddressHandle', product.addressHandle, addressHandleAccessor, 'Product detail'),
+    prepareObjectFieldNormalization(detail, 'addressHandle', product.addressHandle, addressHandleAccessor, 'Product detail'),
+    prepareObjectFieldNormalization(detail, 'hostAddressHandle', product.addressHandle, addressHandleAccessor, 'Product detail'),
+    prepareObjectFieldNormalization(detail, 'provenanceHandle', product.provenanceHandle, provenanceHandleAccessor, 'Product detail'),
+  ].filter((entry): entry is PreparedObjectFieldNormalization => entry != null);
 }
 
 function productDetailProductHandleGetter(this: object): ProductHandle {
@@ -271,18 +300,50 @@ export class ProductDetailCatalog {
     if (product == null) {
       throw new Error(`Cannot attach product detail ${slot.detailKind}; product ${productHandle} is not committed.`);
     }
+    const entry = this.prepareEntry(slot, product, detail);
+    applyObjectFieldNormalizations(entry.binding.normalizations);
+    return this.addPreparedAtLifetime(entry, lifetimeOrdinal);
+  }
+
+  /** Normalize a candidate detail completely before a replacement mutates any live catalog. */
+  prepareEntry<TDetail, TProductKind extends ProductKindKey>(
+    slot: ProductDetailSlot<TDetail, TProductKind>,
+    product: MaterializedProduct,
+    detail: TDetail,
+  ): PreparedProductDetailEntry<TDetail, TProductKind> {
+    if (this.entriesByHandle.has(product.handle)) {
+      throw new Error(`Duplicate product detail for ${product.handle}.`);
+    }
+    return this.prepareReplacementEntry(slot, product, detail);
+  }
+
+  /** Prepare a replacement for an entry removed by the same publication transaction. */
+  prepareReplacementEntry<TDetail, TProductKind extends ProductKindKey>(
+    slot: ProductDetailSlot<TDetail, TProductKind>,
+    product: MaterializedProduct,
+    detail: TDetail,
+  ): PreparedProductDetailEntry<TDetail, TProductKind> {
     if (product.productKindKey !== slot.productKindKey) {
       throw new Error(
-        `Cannot attach product detail ${slot.detailKind}; product ${productHandle} has kind ` +
+        `Cannot attach product detail ${slot.detailKind}; product ${product.handle} has kind ` +
         `${product.productKindKey}, expected ${slot.productKindKey}.`,
       );
     }
-    if (this.entriesByHandle.has(productHandle)) {
-      throw new Error(`Duplicate product detail for ${productHandle}.`);
-    }
+    return new PreparedProductDetailEntry(
+      new ProductDetailEntry(product, slot, detail),
+      prepareProductDetailEnvelopeBinding(detail, product),
+    );
+  }
 
-    bindProductDetailEnvelope(detail, product);
-    const entry = new ProductDetailEntry(product, slot, detail);
+  /** Admit an already-normalized entry after every fallible preparation step has completed. */
+  addPreparedAtLifetime<TDetail, TProductKind extends ProductKindKey>(
+    prepared: PreparedProductDetailEntry<TDetail, TProductKind>,
+    lifetimeOrdinal: number,
+  ): ProductDetailEntry<TDetail, TProductKind> {
+    const entry = prepared.entry;
+    const productHandle = entry.productHandle;
+    const slot = entry.slot;
+    admitProductDetailEnvelopeBinding(prepared.binding);
     this.entriesByHandle.set(productHandle, entry as ProductDetailEntry<unknown>);
     this.handleOrder.push(productHandle);
     this.lifetimeOrdinalByHandle.set(productHandle, lifetimeOrdinal);
@@ -348,6 +409,16 @@ export class ProductDetailCatalog {
   /** Read the unexpanded detail entry when the caller only knows a product handle. */
   readEntry(productHandle: ProductHandle): ProductDetailEntry<unknown> | null {
     return this.entriesByHandle.get(productHandle) ?? null;
+  }
+
+  /** Lifetime shared by the committed publication that owns this entry. */
+  readLifetimeOrdinal(productHandle: ProductHandle): number | null {
+    return this.lifetimeOrdinalByHandle.get(productHandle) ?? null;
+  }
+
+  /** Advance an admitted detail with the complete publication closure that owns it. */
+  promoteLifetimeOrdinal(productHandle: ProductHandle, lifetimeOrdinal: number): void {
+    this.lifetimeOrdinalByHandle.set(productHandle, lifetimeOrdinal);
   }
 
   /** Read all details attached through one typed slot. */

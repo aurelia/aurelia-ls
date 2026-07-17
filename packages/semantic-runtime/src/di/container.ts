@@ -69,7 +69,6 @@ export class Container {
   private readonly _rootReference: ContainerReference;
   private readonly config: ContainerConfiguration;
   private readonly registrationOperations: ContainerRegistrationOperation[] = [];
-  private readonly childContainers: Container[] = [];
   private disposed = false;
   readonly id: IdentityHandle;
   readonly root: Container;
@@ -414,9 +413,7 @@ export class Container {
   /** Product-aware child creation. The caller supplies the child factory because it owns handle/provenance minting. */
   createChild(factory: ContainerChildFactory, input?: ContainerConfiguration | ContainerConfigurationRequest): Container {
     const configuration = this.configurationForChild(input);
-    const child = factory(this, configuration);
-    this.childContainers.push(child);
-    return child;
+    return factory(this, configuration);
   }
 
   /** Runtime `disposeResolvers` shape: delete every resolver key that has a disposable marker. */
@@ -502,10 +499,6 @@ export class Container {
 
   readFactorySlots(): readonly ContainerFactorySlot[] {
     return [...this._factories.values()];
-  }
-
-  readChildContainers(): readonly Container[] {
-    return [...this.childContainers];
   }
 
   private addResolverSlot(slot: ContainerResolverLikeSlot): void {

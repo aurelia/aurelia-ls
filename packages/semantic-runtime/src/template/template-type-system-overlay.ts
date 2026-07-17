@@ -375,7 +375,7 @@ export class TemplateTypeSystemOverlayBuilder {
     overlayFileName: string,
     builder: TypeSystemOverlaySourceBuilder,
   ): TemplateTypeSystemOverlayBuildFrame {
-    const expressionWorld = resource.runtimeAnalysis.expressionWorld.freshCommittedGeneration();
+    const expressionWorld = resource.runtimeAnalysis.expressionWorld.freshInquiryGeneration();
     return {
       resource,
       localKey,

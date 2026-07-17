@@ -1,4 +1,6 @@
 import type { KernelStore } from '../kernel/store.js';
+import type { GenerationAuthority } from '../kernel/generation-authority.js';
+import { GenerationBoundKernelPublicationContext } from '../kernel/publication.js';
 import type { StateStoreConfiguration } from '../state/model.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import { CheckerTypeProjector } from './checker-projector.js';
@@ -21,7 +23,7 @@ export class CheckerExpressionTypeWorld {
   private readonly scopedEvaluators = new WeakMap<TemplateResourceScope, CheckerExpressionTypeEvaluator>();
 
   constructor(
-    readonly store: KernelStore,
+    private readonly store: KernelStore,
     readonly projector: CheckerTypeProjector = new CheckerTypeProjector(store),
     readonly cache: CheckerExpressionTypeEvaluationCache = new CheckerExpressionTypeEvaluationCache(),
     readonly stateStores: readonly StateStoreConfiguration[] = [],
@@ -30,6 +32,7 @@ export class CheckerExpressionTypeWorld {
   }
 
   evaluator(resourceScope: TemplateResourceScope | null = null): CheckerExpressionTypeEvaluator {
+    this.projector.publication.requireCurrent();
     if (resourceScope == null) {
       return this.defaultEvaluator;
     }
@@ -42,8 +45,22 @@ export class CheckerExpressionTypeWorld {
     return evaluator;
   }
 
-  /** Start a store-backed generation after the publication that created this world has committed. */
-  freshCommittedGeneration(): CheckerExpressionTypeWorld {
+  /** Start a store-backed world revoked with the computation generation that committed this candidate. */
+  forCommittedGeneration(authority: GenerationAuthority): CheckerExpressionTypeWorld {
+    return new CheckerExpressionTypeWorld(
+      this.store,
+      new CheckerTypeProjector(
+        this.store,
+        new GenerationBoundKernelPublicationContext(this.store, authority),
+      ),
+      new CheckerExpressionTypeEvaluationCache(),
+      this.stateStores,
+    );
+  }
+
+  /** Start an inquiry-local store-backed world that is not retained as a replaceable project generation. */
+  freshInquiryGeneration(): CheckerExpressionTypeWorld {
+    this.projector.publication.requireCurrent();
     return new CheckerExpressionTypeWorld(
       this.store,
       new CheckerTypeProjector(this.store),

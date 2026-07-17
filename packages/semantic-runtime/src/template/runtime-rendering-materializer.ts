@@ -578,7 +578,7 @@ export class RuntimeRenderingMaterializer {
     return measureSemanticRuntimePhase(
       profiling.phases,
       `runtime-rendering:${name}`,
-      this.store,
+      profiling.kernel,
       profiling.telemetry,
       read,
     );

@@ -141,6 +141,45 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "line": 6
               }
             }
+          },
+          {
+            "newText": "spreadModel",
+            "range": {
+              "end": {
+                "character": 76,
+                "line": 6
+              },
+              "start": {
+                "character": 65,
+                "line": 6
+              }
+            }
+          },
+          {
+            "newText": "spreadModel",
+            "range": {
+              "end": {
+                "character": 101,
+                "line": 6
+              },
+              "start": {
+                "character": 90,
+                "line": 6
+              }
+            }
+          },
+          {
+            "newText": "spreadModel",
+            "range": {
+              "end": {
+                "character": 43,
+                "line": 13
+              },
+              "start": {
+                "character": 32,
+                "line": 13
+              }
+            }
           }
         ],
         "textDocument": {
@@ -167,7 +206,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ```json
 {
   "anomalies": [],
-  "editCount": 6,
+  "editCount": 9,
   "expectedOldTexts": [
     "spreadState"
   ],
@@ -263,6 +302,57 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "status": "ok"
     },
     {
+      "file": "src/template-spread-capture-semantics-app.html",
+      "newText": "spreadModel",
+      "oldText": "spreadState",
+      "range": {
+        "end": {
+          "character": 76,
+          "line": 6
+        },
+        "start": {
+          "character": 65,
+          "line": 6
+        }
+      },
+      "source": "documentChanges",
+      "status": "ok"
+    },
+    {
+      "file": "src/template-spread-capture-semantics-app.html",
+      "newText": "spreadModel",
+      "oldText": "spreadState",
+      "range": {
+        "end": {
+          "character": 101,
+          "line": 6
+        },
+        "start": {
+          "character": 90,
+          "line": 6
+        }
+      },
+      "source": "documentChanges",
+      "status": "ok"
+    },
+    {
+      "file": "src/template-spread-capture-semantics-app.html",
+      "newText": "spreadModel",
+      "oldText": "spreadState",
+      "range": {
+        "end": {
+          "character": 43,
+          "line": 13
+        },
+        "start": {
+          "character": 32,
+          "line": 13
+        }
+      },
+      "source": "documentChanges",
+      "status": "ok"
+    },
+    {
       "file": "src/template-spread-capture-semantics-app.ts",
       "newText": "spreadModel",
       "oldText": "spreadState",
@@ -301,14 +391,15 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
 +  <spread-card ...$bindables="spreadModel"></spread-card>
 +  <spread-card $bindables.spread="spreadModel"></spread-card>
 +  <spread-card ...$bindables="spreadModel | spreadIdentity"></spread-card>
-+  <spread-card ...$bindables="{ title: spreadModel.title, count: spreadState.count, tone: spreadState.tone }"></spread-card>
++  <spread-card ...$bindables="{ title: spreadModel.title, count: spreadModel.count, tone: spreadModel.tone }"></spread-card>
    <spread-card repeat.for="card of spreadCards" ...card></spread-card>
    <spread-card ...aliasShaped></spread-card>
    <spread-card ...nullableSpread></spread-card>
    <spread-card ...primitiveSpread></spread-card>
 
    <spread-card ...$element="spreadState"></spread-card>
-   <spread-card $element.spread="spreadState"></spread-card>
+-  <spread-card $element.spread="spreadState"></spread-card>
++  <spread-card $element.spread="spreadModel"></spread-card>
    <div ...$bindables="spreadState"></div>
    <div ...$attrs></div>
 
@@ -1612,19 +1703,6 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
                 "line": 23
               }
             }
-          },
-          {
-            "newText": "input-stamp",
-            "range": {
-              "end": {
-                "character": 14,
-                "line": 33
-              },
-              "start": {
-                "character": 4,
-                "line": 33
-              }
-            }
           }
         ],
         "textDocument": {
@@ -1651,7 +1729,7 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
 ```json
 {
   "anomalies": [],
-  "editCount": 4,
+  "editCount": 3,
   "expectedOldTexts": [
     "input-mark",
     "input"
@@ -1709,23 +1787,6 @@ diff --git a/src/template-spread-capture-semantics-app.ts b/src/template-spread-
         "start": {
           "character": 4,
           "line": 23
-        }
-      },
-      "source": "documentChanges",
-      "status": "ok"
-    },
-    {
-      "file": "src/template-spread-capture-semantics-app.html",
-      "newText": "input-stamp",
-      "oldText": "input-mark",
-      "range": {
-        "end": {
-          "character": 14,
-          "line": 33
-        },
-        "start": {
-          "character": 4,
-          "line": 33
         }
       },
       "source": "documentChanges",
@@ -1807,8 +1868,7 @@ diff --git a/src/template-spread-capture-semantics-app.html b/src/template-sprea
      value.bind="capturedValue"
      active.class="isActive"
      click.trigger="handleCaptured($event)"
--    input-mark="captured-mark"
-+    input-stamp="captured-mark"
+     input-mark="captured-mark"
      inner-gate.bind="showCapture"
      slot="named"
      data-note="captured-note">

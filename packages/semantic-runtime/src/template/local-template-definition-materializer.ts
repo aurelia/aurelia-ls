@@ -181,6 +181,7 @@ export class LocalTemplateDefinitionMaterializer {
       ),
       template.addressHandle,
       template.sourceMap,
+      template.authoredSourceRevision,
     );
 
     this.store.publish(new KernelPublicationPlan(
@@ -240,6 +241,7 @@ export class LocalTemplateDefinitionMaterializer {
       localMarkup,
       sourceAddressHandle,
       localSource.sourceMap,
+      ownerTemplate.authoredSourceRevision,
     );
     const bindables = syntax.bindables.map((bindable) =>
       this.bindableForSyntax(local, bindable, coordinates, records)

@@ -31,6 +31,13 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelDetailAdmission,
+  KernelPublicationPlan,
+  publishProductDetail,
+  type KernelPublicationContext,
+  type KernelProductDetailPublication,
+} from '../kernel/publication.js';
 import { catalogGroupLocalKey } from '../kernel/local-key.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
@@ -133,8 +140,10 @@ class BuiltInRuntimeRendererHandles {
 /** Materializes framework-owned runtime renderer catalogs before compiler-world visibility is decided. */
 export class BuiltInRuntimeRendererCatalogMaterializer {
   constructor(
-    /** Hot analysis store that receives built-in renderer records. */
+    /** Store used for deterministic renderer handles. */
     readonly store: KernelStore,
+    /** Immediate or staged owner of renderer records and rich details. */
+    private readonly publication: KernelPublicationContext,
   ) {}
 
   materialize(catalogInputs: readonly BuiltInRuntimeRendererCatalogInput[]): BuiltInRuntimeRendererCatalogEmission {
@@ -144,33 +153,38 @@ export class BuiltInRuntimeRendererCatalogMaterializer {
 
     for (const input of catalogInputs) {
       const emission = this.recordsForCatalog(input);
-      if (this.store.readProduct(emission.catalog.productHandle) == null) {
+      if (this.publication.read(emission.catalog.productHandle) == null) {
         records.push(...emission.records);
       }
       catalogs.push(emission.catalog);
       renderers.push(...emission.renderers);
     }
 
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'built-in-runtime-renderer-catalogs'));
-    }
-
     const emission = new BuiltInRuntimeRendererCatalogEmission(catalogs, renderers, records);
-    this.registerProductDetails(emission);
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, 'built-in-runtime-renderer-catalogs'),
+      this.productDetailPublications(emission),
+    ));
     return emission;
   }
 
-  private registerProductDetails(emission: BuiltInRuntimeRendererCatalogEmission): void {
-    for (const catalog of emission.catalogs) {
-      this.store.productDetails.addIfAbsent(TemplateProductDetails.BuiltInRuntimeRendererCatalog, catalog.productHandle, catalog);
-    }
-    for (const renderer of emission.renderers) {
-      this.store.productDetails.addIfAbsent(
+  private productDetailPublications(
+    emission: BuiltInRuntimeRendererCatalogEmission,
+  ): readonly KernelProductDetailPublication<unknown>[] {
+    return [
+      ...emission.catalogs.map((catalog) => publishProductDetail(
+        TemplateProductDetails.BuiltInRuntimeRendererCatalog,
+        catalog.productHandle,
+        catalog,
+        KernelDetailAdmission.IfAbsent,
+      )),
+      ...emission.renderers.map((renderer) => publishProductDetail(
         TemplateProductDetails.RuntimeRenderer,
         renderer.renderer.productHandle!,
         renderer.renderer,
-      );
-    }
+        KernelDetailAdmission.IfAbsent,
+      )),
+    ];
   }
 
   private recordsForCatalog(input: BuiltInRuntimeRendererCatalogInput): {
@@ -389,7 +403,7 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
     /** Hot analysis store that receives configured renderer-catalog selection records. */
     readonly store: KernelStore,
   ) {
-    this.catalogMaterializer = new BuiltInRuntimeRendererCatalogMaterializer(store);
+    this.catalogMaterializer = new BuiltInRuntimeRendererCatalogMaterializer(store, store);
   }
 
   materialize(configuration: ConfigurationKernelEmission): ConfiguredBuiltInRuntimeRendererCatalogEmission {

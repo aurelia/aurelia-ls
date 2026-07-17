@@ -16,6 +16,7 @@ import { localKeyPart } from '../kernel/local-key.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import type {
   KernelStore,
+  KernelStoreReadView,
   KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -49,11 +50,12 @@ interface SourceFileAddressPublication {
 
 export function sourceSpanForCheckerDeclaration(
   store: KernelStore,
+  publication: KernelStoreReadView,
   symbol: ts.Symbol,
   declarations: readonly ts.Declaration[],
   role: SourceSpanRole,
 ): DeclarationSourcePublication | null {
-  const span = declarationSourceSpan(store, symbol, declarations);
+  const span = declarationSourceSpan(store, publication, symbol, declarations);
   if (span == null) {
     return null;
   }
@@ -63,12 +65,13 @@ export function sourceSpanForCheckerDeclaration(
 /** Materialize a navigable source span for a checker node without minting a declaration identity. */
 export function sourceSpanForCheckerNode(
   store: KernelStore,
+  publication: KernelStoreReadView,
   localKey: string,
   node: ts.Node,
   role: SourceSpanRole,
 ): CheckerNodeSourceSpanPublication {
   const sourceFile = node.getSourceFile();
-  const sourceFilePublication = sourceFileAddressForDeclaration(store, sourceFile);
+  const sourceFilePublication = sourceFileAddressForDeclaration(store, publication, sourceFile);
   const start = node.getStart(sourceFile);
   const end = node.end;
   const local = checkerNodeSourceLocal(sourceFilePublication.address, localKey, start, end, role);
@@ -142,6 +145,7 @@ function declarationSourcePublication(
 
 function declarationSourceSpan(
   store: KernelStore,
+  publication: KernelStoreReadView,
   symbol: ts.Symbol,
   declarations: readonly ts.Declaration[],
 ): DeclarationSourceSpan | null {
@@ -150,7 +154,7 @@ function declarationSourceSpan(
     return null;
   }
   const sourceFile = declaration.getSourceFile();
-  const sourceFilePublication = sourceFileAddressForDeclaration(store, sourceFile);
+  const sourceFilePublication = sourceFileAddressForDeclaration(store, publication, sourceFile);
   const addressNode = declarationAddressNode(declaration);
   return {
     sourceFileAddress: sourceFilePublication.address,
@@ -194,25 +198,34 @@ function checkerNodeSourceLocal(
 
 function sourceFileAddressForDeclaration(
   store: KernelStore,
+  publication: KernelStoreReadView,
   sourceFile: ts.SourceFile,
 ): SourceFileAddressPublication {
   // TypeChecker declarations can come from boot-admitted app sources, ambient declarations, framework declarations, or
   // dependency declarations. Reuse an admitted source-file address when one exists; otherwise deliberately admit a
   // checker-program source address for declaration navigation without treating it as discovered app source.
-  const existing = store.readBestSourceFileAddressForFileName(sourceFile.fileName);
+  const existing = store.readSourceFileAddressesByFileName(sourceFile.fileName)
+    .map((candidate) => publication.read(candidate.handle))
+    .find((candidate): candidate is SourceFileAddress => candidate instanceof SourceFileAddress)
+    ?? null;
   if (existing != null) {
     return { address: existing, records: [] };
   }
-  return programSourceFileAddressPublication(store, sourceFile.fileName);
+  return programSourceFileAddressPublication(store, publication, sourceFile.fileName);
 }
 
 function programSourceFileAddressPublication(
   store: KernelStore,
+  publication: KernelStoreReadView,
   fileName: string,
 ): SourceFileAddressPublication {
   const path = normalizeHostPath(fileName);
   const local = `program-source-file:${localKeyPart(path)}`;
   const address = programSourceFileAddress(store, local, path);
+  const staged = publication.read(address.handle);
+  if (staged instanceof SourceFileAddress) {
+    return { address: staged, records: [] };
+  }
   return {
     address,
     records: [

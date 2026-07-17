@@ -8,7 +8,10 @@ import type {
   SourceFileAdmission,
 } from '../boot/frames.js';
 import type { ModuleEnvironmentRecord } from '../evaluation/environment.js';
-import type { StaticEvaluationRuntimeHost } from '../evaluation/evaluator.js';
+import type {
+  StaticEvaluationRuntimeHost,
+  StaticEvaluationValueMetadataTransfer,
+} from '../evaluation/evaluator.js';
 import { readStaticCommonJsExportValue } from '../evaluation/commonjs.js';
 import type { StaticIntrinsicEvaluationHost } from '../evaluation/intrinsics/contracts.js';
 import type { StaticModuleExternalValueResolver } from '../evaluation/module-evaluator.js';
@@ -148,6 +151,11 @@ class ConventionPluginListRead {
 
 type ConventionToolingFactoryValue = EvaluationBoundaryValue | EvaluationObjectValue;
 
+function isConventionToolingFactoryValue(value: EvaluationValue): value is ConventionToolingFactoryValue {
+  return value.kind === EvaluationValueKind.BoundaryValue
+    || value.kind === EvaluationValueKind.Object;
+}
+
 class ConventionToolingEvaluationHost {
   private readonly plugins = new WeakMap<EvaluationObjectValue, ConventionPluginEvaluation>();
   private readonly aureliaPluginFactories = new WeakSet<ConventionToolingFactoryValue>();
@@ -155,6 +163,8 @@ class ConventionToolingEvaluationHost {
   private readonly executedAureliaPluginCalls = new WeakSet<ts.CallExpression>();
 
   readonly runtimeHost: StaticEvaluationRuntimeHost = {
+    transferValueMetadata: (source, target, transfer) =>
+      this.transferValueMetadata(source, target, transfer),
     evaluateCallExpression: (call, environment, moduleKey, depth, host) =>
       this.evaluateCallExpression(call, environment, moduleKey, depth, host),
     resolveCommonJsRequire: (_moduleKey, moduleSpecifier, node) =>
@@ -173,6 +183,30 @@ class ConventionToolingEvaluationHost {
     return value.kind === EvaluationValueKind.Object
       ? this.plugins.get(value) ?? null
       : null;
+  }
+
+  private transferValueMetadata(
+    source: EvaluationValue,
+    target: EvaluationValue,
+    transfer: StaticEvaluationValueMetadataTransfer,
+  ): void {
+    if (source.kind === EvaluationValueKind.Object && target.kind === EvaluationValueKind.Object) {
+      const plugin = this.plugins.get(source);
+      if (plugin != null) {
+        this.plugins.set(target, new ConventionPluginEvaluation(
+          plugin.call,
+          transfer.forkValue(plugin.options),
+        ));
+      }
+    }
+    if (isConventionToolingFactoryValue(source) && isConventionToolingFactoryValue(target)) {
+      if (this.aureliaPluginFactories.has(source)) {
+        this.aureliaPluginFactories.add(target);
+      }
+      if (this.defineConfigFactories.has(source)) {
+        this.defineConfigFactories.add(target);
+      }
+    }
   }
 
   private evaluateCallExpression(

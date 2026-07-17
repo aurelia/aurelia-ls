@@ -142,9 +142,12 @@ export class RuntimeControllerCreationMaterializer {
     private readonly store: KernelStore,
     private readonly publication: KernelPublicationContext,
   ) {
-    this.childContainerMaterializer = new ContainerChildMaterializer(store);
+    this.childContainerMaterializer = new ContainerChildMaterializer(store, publication);
     this.controllerIssuePublisher = new RuntimeControllerIssuePublisher(store);
-    this.resourceSlotPublication = new DiResourceSlotPublicationMaterializer(store, new DiKeyIdentityEmitter(store));
+    this.resourceSlotPublication = new DiResourceSlotPublicationMaterializer(
+      store,
+      new DiKeyIdentityEmitter(publication),
+    );
   }
 
   createRootController(

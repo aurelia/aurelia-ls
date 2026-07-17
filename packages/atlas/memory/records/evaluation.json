@@ -14,6 +14,8 @@
       "guidance": [
         "Prefer extending evaluator capabilities and open-seam modeling over adding feature-local evaluator shortcuts.",
         "StaticEvaluationExpressionReader should keep one evaluator per reader, matching RuntimeBindingSourceEvaluationFrame's per-source evaluator lifetime, so guardrails and seam checkpoints do not reset for every follow-up property, target, or expression probe.",
+        "StaticEvaluationExpressionReader is not an isolation boundary. A speculative or replaceable analysis owner should call StaticProjectEvaluationResult.forkSession() once and share that graph-preserving session across all of its readers; forking per reader destroys authored alias identity and breaks cross-reader joins.",
+        "StaticEvaluationSessionFork must clone every mutable evaluator carrier, captured environment, and completion while preserving aliases and cycles, including Promise back-edges and class/instance knots. Runtime-host call/new results are adopted into the active session realm so host-installed aliases and call-frame closures remain exact; metadata transfer must fork any mutable child values held outside the generic value graph. Template-analysis candidates and later binding/router value evaluation use separate explicit sessions so rejected work cannot mutate the admitted project graph.",
         "When a gap appears, also check whether Atlas needs better flow or capability projection to expose the evaluator route.",
         "Use `framework:evaluator` for targeted framework evaluator effects, open seams, and module summaries before expanding semantic-runtime evaluator/world-construction support.",
         "`framework:evaluator --memberName=...` narrows the traced root; `--calleeName=...` only filters returned effects. Use memberName when checking whether one framework method closes without open seams.",
@@ -113,6 +115,12 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/expression-reader.ts",
           "summary": "Expression-reading helper adjacent to evaluator expansion."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluation-session.ts",
+          "symbolName": "StaticEvaluationSessionFork",
+          "summary": "Graph-preserving mutable analysis-session fork and runtime-host isolation boundary."
         },
         {
           "kind": "source",
@@ -262,6 +270,13 @@
           "minMethodCount": 20
         },
         {
+          "kind": "product-large-class",
+          "className": "StaticEvaluationSessionFork",
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluation-session.ts",
+          "minLineCount": 200,
+          "minMethodCount": 10
+        },
+        {
           "kind": "source-file-exists",
           "filePath": "packages/semantic-runtime/src/evaluation/property-access.ts"
         },
@@ -287,7 +302,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-13"
+      "updatedAt": "2026-07-17"
     },
     {
       "id": "frontier:static-module-graph-evaluator",
@@ -693,6 +708,7 @@
       "guidance": [
         "Start here when lexical binding state, assignment mutability, CommonJS carriers, function-call frames, or branch clones change.",
         "Keep evaluator-local binding cells out of durable kernel records unless a specific fact earns a product identity.",
+        "Function and class evaluator values capture the concrete ModuleEnvironmentRecord used by the evaluator. Do not reintroduce a structural environment-reference abstraction without a second implementation and fork semantics for it.",
         "Do not replace environment lookup with ad hoc maps inside expression or module evaluators."
       ],
       "anchors": [
@@ -726,7 +742,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-17"
     }
   ]
 }

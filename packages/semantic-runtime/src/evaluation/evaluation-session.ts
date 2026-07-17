@@ -1,0 +1,508 @@
+import {
+  BreakEvaluationCompletion,
+  ContinueEvaluationCompletion,
+  EvaluationCompletionKind,
+  NormalEvaluationCompletion,
+  OpenEvaluationCompletion,
+  ReturnEvaluationCompletion,
+  ThrowEvaluationCompletion,
+  type EvaluationCompletion,
+} from './completion.js';
+import {
+  EvaluationBinding,
+  ModuleEnvironmentRecord,
+} from './environment.js';
+import {
+  StaticModuleEvaluationResult,
+  type StaticEvaluationRuntimeHost,
+  type StaticEvaluationValueMetadataTransfer,
+} from './evaluator.js';
+import type { StaticIntrinsicEvaluationHost } from './intrinsics/contracts.js';
+import {
+  EvaluationArrayElement,
+  EvaluationArrayValue,
+  EvaluationBoundaryObjectValue,
+  EvaluationClassValue,
+  EvaluationFunctionValue,
+  EvaluationInstanceValue,
+  EvaluationMapEntry,
+  EvaluationMapValue,
+  EvaluationModuleNamespaceValue,
+  EvaluationObjectProperty,
+  EvaluationObjectValue,
+  EvaluationPromiseValue,
+  EvaluationSetValue,
+  EvaluationValueKind,
+  type EvaluationValue,
+} from './values.js';
+
+/** Graph-preserving mutable analysis session forked from one admitted project-evaluation graph. */
+export class StaticEvaluationSessionFork {
+  private readonly environments = new WeakMap<ModuleEnvironmentRecord, ModuleEnvironmentRecord>();
+  private readonly populatedEnvironments = new WeakSet<ModuleEnvironmentRecord>();
+  private readonly populatingEnvironments = new WeakSet<ModuleEnvironmentRecord>();
+  private readonly values = new WeakMap<object, EvaluationValue>();
+  private readonly sessionValues = new WeakSet<object>();
+  private readonly populatedClasses = new WeakSet<EvaluationClassValue>();
+  private readonly populatingClasses = new WeakSet<EvaluationClassValue>();
+  private activeRuntimeHost: StaticEvaluationRuntimeHost | null = null;
+  private readonly metadataTransfer: StaticEvaluationValueMetadataTransfer = {
+    forkValue: <TValue extends EvaluationValue>(value: TValue): TValue => this.forkValue(value),
+  };
+
+  forkModuleEvaluation(source: StaticModuleEvaluationResult): StaticModuleEvaluationResult {
+    const runtimeHost = this.forkRuntimeHost(source.runtimeHost);
+    return this.withRuntimeHost(source.runtimeHost, () => new StaticModuleEvaluationResult(
+      source.moduleKey,
+      this.forkEnvironment(source.environment),
+      this.forkCompletion(source.completion),
+      source.openSeams,
+      source.executedCallExpressions,
+      source.policy,
+      runtimeHost,
+    ));
+  }
+
+  forkEnvironment(source: ModuleEnvironmentRecord): ModuleEnvironmentRecord {
+    const target = this.environmentShell(source);
+    this.populateEnvironment(source, target);
+    return target;
+  }
+
+  forkValue<TValue extends EvaluationValue>(source: TValue): TValue {
+    if (!evaluationValueHasMutableGraph(source)) {
+      return source;
+    }
+    if (this.isSessionValue(source)) {
+      return this.adoptSessionValueGraph(source);
+    }
+    const existing = this.values.get(source);
+    if (existing != null) {
+      this.transferRuntimeHostMetadata(source, existing);
+      return existing as TValue;
+    }
+
+    return this.forkMutableValue(source) as TValue;
+  }
+
+  private forkMutableValue(source: EvaluationValue): EvaluationValue {
+    switch (source.kind) {
+      case EvaluationValueKind.Array: {
+        const target = new EvaluationArrayValue(
+          [],
+          source.mayHaveUnknownElements,
+          source.node,
+          source.mayHaveUnknownOrder,
+          source.uncertainties,
+        );
+        this.bindValue(source, target);
+        target.elements.push(...source.elements.map((element) =>
+          new EvaluationArrayElement(this.forkValue(element.value), element.expression)
+        ));
+        return target;
+      }
+      case EvaluationValueKind.Set: {
+        const target = new EvaluationSetValue([], source.mayHaveUnknownElements, source.node, source.weak);
+        this.bindValue(source, target);
+        target.elements.push(...source.elements.map((element) =>
+          new EvaluationArrayElement(this.forkValue(element.value), element.expression)
+        ));
+        return target;
+      }
+      case EvaluationValueKind.Map: {
+        const target = new EvaluationMapValue([], source.mayHaveUnknownEntries, source.node, source.weak);
+        this.bindValue(source, target);
+        target.entries.push(...source.entries.map((entry) => new EvaluationMapEntry(
+          this.forkValue(entry.key),
+          this.forkValue(entry.value),
+          entry.expression,
+        )));
+        return target;
+      }
+      case EvaluationValueKind.Object: {
+        const target = new EvaluationObjectValue(
+          new Map(),
+          source.mayHaveUnknownProperties,
+          source.node,
+          source.uncertainties,
+        );
+        this.bindValue(source, target);
+        this.forkProperties(source.properties, target.properties);
+        return target;
+      }
+      case EvaluationValueKind.BoundaryObject: {
+        const target = new EvaluationBoundaryObjectValue(
+          source.boundaryKind,
+          source.path,
+          new Map(),
+          source.node,
+        );
+        this.bindValue(source, target);
+        this.forkProperties(source.properties, target.properties);
+        return target;
+      }
+      case EvaluationValueKind.Function: {
+        const environment = this.environmentShell(this.moduleEnvironment(source.environment));
+        const target = new EvaluationFunctionValue(source.declaration, environment, source.node);
+        this.bindValue(source, target);
+        this.populateEnvironment(this.moduleEnvironment(source.environment), environment);
+        this.forkProperties(source.properties, target.properties);
+        return target;
+      }
+      case EvaluationValueKind.Class: {
+        const target = this.classShell(source);
+        this.populateClass(source, target);
+        return target;
+      }
+      case EvaluationValueKind.Instance: {
+        const classValue = this.classShell(source.classValue);
+        const target = new EvaluationInstanceValue(
+          classValue,
+          new Map(),
+          source.mayHaveUnknownProperties,
+          source.node,
+        );
+        this.bindValue(source, target);
+        this.populateClass(source.classValue, classValue);
+        this.forkProperties(source.properties, target.properties);
+        return target;
+      }
+      case EvaluationValueKind.ModuleNamespace: {
+        const exports = new Map<string, EvaluationValue>();
+        const target = new EvaluationModuleNamespaceValue(source.moduleKey, exports, source.node);
+        this.bindValue(source, target);
+        for (const [name, value] of source.exports) {
+          exports.set(name, this.forkValue(value));
+        }
+        return target;
+      }
+      case EvaluationValueKind.Promise: {
+        const target = EvaluationPromiseValue.forkShell(source.node);
+        this.bindValue(source, target);
+        target.completeFork(this.forkValue(source.fulfilledValue));
+        return target;
+      }
+      default:
+        return source;
+    }
+  }
+
+  private environmentShell(source: ModuleEnvironmentRecord): ModuleEnvironmentRecord {
+    if (source.belongsToGraph(this)) {
+      return source;
+    }
+    let target = this.environments.get(source);
+    if (target == null) {
+      target = new ModuleEnvironmentRecord(source.moduleKey);
+      this.environments.set(source, target);
+      target.adoptGraphOwner(this);
+    }
+    return target;
+  }
+
+  private populateEnvironment(source: ModuleEnvironmentRecord, target: ModuleEnvironmentRecord): void {
+    if (this.populatedEnvironments.has(source) || this.populatingEnvironments.has(source)) {
+      return;
+    }
+    this.populatingEnvironments.add(source);
+    try {
+      for (const binding of source.readBindings()) {
+        const targetBinding = new EvaluationBinding(
+          binding.name,
+          binding.bindingKind,
+          binding.mutable,
+          binding.declaration,
+          binding.state,
+          this.forkValue(binding.value),
+        );
+        target.installBinding(targetBinding);
+      }
+      this.populatedEnvironments.add(source);
+    } finally {
+      this.populatingEnvironments.delete(source);
+    }
+  }
+
+  private forkProperties(
+    source: ReadonlyMap<string, EvaluationObjectProperty>,
+    target: Map<string, EvaluationObjectProperty>,
+  ): void {
+    for (const [name, property] of source) {
+      target.set(name, new EvaluationObjectProperty(
+        property.name,
+        this.forkValue(property.value),
+        property.node,
+        property.state,
+      ));
+    }
+  }
+
+  private classShell(source: EvaluationClassValue): EvaluationClassValue {
+    const existing = this.values.get(source);
+    if (existing != null) {
+      if (existing.kind !== EvaluationValueKind.Class) {
+        throw new Error('Static evaluation session mapped a class source to a non-class value.');
+      }
+      return existing;
+    }
+    const environment = this.environmentShell(this.moduleEnvironment(source.environment));
+    const target = new EvaluationClassValue(source.declaration, environment, source.node);
+    this.bindValue(source, target);
+    return target;
+  }
+
+  private populateClass(source: EvaluationClassValue, target: EvaluationClassValue): void {
+    if (this.populatedClasses.has(source) || this.populatingClasses.has(source)) {
+      return;
+    }
+    this.populatingClasses.add(source);
+    try {
+      this.populateEnvironment(
+        this.moduleEnvironment(source.environment),
+        this.moduleEnvironment(target.environment),
+      );
+      this.forkProperties(source.properties, target.properties);
+      this.populatedClasses.add(source);
+    } finally {
+      this.populatingClasses.delete(source);
+    }
+  }
+
+  private bindValue(source: EvaluationValue, target: EvaluationValue): void {
+    this.values.set(source, target);
+    this.sessionValues.add(target);
+    this.transferRuntimeHostMetadata(source, target);
+  }
+
+  private moduleEnvironment(
+    environment: EvaluationFunctionValue['environment'],
+  ): ModuleEnvironmentRecord {
+    return environment;
+  }
+
+  private forkCompletion(completion: EvaluationCompletion): EvaluationCompletion {
+    switch (completion.kind) {
+      case EvaluationCompletionKind.Normal:
+        return new NormalEvaluationCompletion(this.forkValue(completion.value));
+      case EvaluationCompletionKind.Return:
+        return new ReturnEvaluationCompletion(this.forkValue(completion.value));
+      case EvaluationCompletionKind.Throw:
+        return new ThrowEvaluationCompletion(this.forkValue(completion.value));
+      case EvaluationCompletionKind.Break:
+        return new BreakEvaluationCompletion(completion.label);
+      case EvaluationCompletionKind.Continue:
+        return new ContinueEvaluationCompletion(completion.label);
+      case EvaluationCompletionKind.Open:
+        return new OpenEvaluationCompletion(completion.summary);
+    }
+  }
+
+  forkRuntimeHost(host: StaticEvaluationRuntimeHost): StaticEvaluationRuntimeHost {
+    return {
+      transferValueMetadata: (source, target, transfer) =>
+        host.transferValueMetadata?.(source, target, transfer),
+      resolveIdentifier: (identifier, environment, moduleKey) =>
+        this.withRuntimeHost(host, () =>
+          this.forkNullableValue(host.resolveIdentifier?.(identifier, environment, moduleKey) ?? null)),
+      resolveCommonJsRequire: (moduleKey, moduleSpecifier, node) =>
+        this.withRuntimeHost(host, () =>
+          this.forkNullableValue(host.resolveCommonJsRequire?.(moduleKey, moduleSpecifier, node) ?? null)),
+      resolveDynamicImport: (moduleKey, moduleSpecifier, node) =>
+        this.withRuntimeHost(host, () =>
+          this.forkNullableValue(host.resolveDynamicImport?.(moduleKey, moduleSpecifier, node) ?? null)),
+      evaluateCallExpression: (call, environment, moduleKey, depth, intrinsicHost) =>
+        this.withRuntimeHost(host, () => this.adoptNullableSessionValue(
+          host.evaluateCallExpression?.(
+            call,
+            environment,
+            moduleKey,
+            depth,
+            this.sessionIntrinsicHost(intrinsicHost),
+          ) ?? null,
+        )),
+      evaluateNewExpression: (expression, environment, moduleKey, depth, intrinsicHost) =>
+        this.withRuntimeHost(host, () => this.adoptNullableSessionValue(
+          host.evaluateNewExpression?.(
+            expression,
+            environment,
+            moduleKey,
+            depth,
+            this.sessionIntrinsicHost(intrinsicHost),
+          ) ?? null,
+        )),
+    };
+  }
+
+  private sessionIntrinsicHost(host: StaticIntrinsicEvaluationHost): StaticIntrinsicEvaluationHost {
+    return {
+      guardrails: host.guardrails,
+      evaluateExpression: (expression, environment, moduleKey, depth) =>
+        this.adoptSessionValueGraph(host.evaluateExpression(expression, environment, moduleKey, depth)),
+      evaluateFunctionWithArguments: (callee, call, argumentValues, moduleKey, depth) =>
+        this.adoptSessionValueGraph(
+          host.evaluateFunctionWithArguments(callee, call, argumentValues, moduleKey, depth),
+        ),
+      evaluateClassInstantiation: (callee, expression, argumentValues, moduleKey, depth) =>
+        this.adoptSessionValueGraph(
+          host.evaluateClassInstantiation(callee, expression, argumentValues, moduleKey, depth),
+        ),
+      open: (seamKind, summary, node, moduleKey) => host.open(seamKind, summary, node, moduleKey),
+      unknown: (reason, node, moduleKey, seamKind) => host.unknown(reason, node, moduleKey, seamKind),
+      checkpoint: () => host.checkpoint(),
+      restore: (checkpoint) => host.restore(checkpoint),
+      resolveCommonJsRequire: (moduleKey, moduleSpecifier, node) =>
+        this.adoptNullableSessionValue(host.resolveCommonJsRequire(moduleKey, moduleSpecifier, node)),
+      resolveDynamicImport: (moduleKey, moduleSpecifier, node) =>
+        this.adoptNullableSessionValue(host.resolveDynamicImport(moduleKey, moduleSpecifier, node)),
+      evaluateCallExpression: (call, environment, moduleKey, depth, nestedHost) =>
+        this.adoptNullableSessionValue(
+          host.evaluateCallExpression(
+            call,
+            environment,
+            moduleKey,
+            depth,
+            this.sessionIntrinsicHost(nestedHost),
+          ),
+        ),
+    };
+  }
+
+  private withRuntimeHost<TValue>(host: StaticEvaluationRuntimeHost, read: () => TValue): TValue {
+    const previous = this.activeRuntimeHost;
+    this.activeRuntimeHost = host;
+    try {
+      return read();
+    } finally {
+      this.activeRuntimeHost = previous;
+    }
+  }
+
+  private transferRuntimeHostMetadata(source: EvaluationValue, target: EvaluationValue): void {
+    this.activeRuntimeHost?.transferValueMetadata?.(source, target, this.metadataTransfer);
+  }
+
+  private forkNullableValue(value: EvaluationValue | null): EvaluationValue | null {
+    return value == null ? null : this.forkValue(value);
+  }
+
+  private adoptNullableSessionValue(value: EvaluationValue | null): EvaluationValue | null {
+    return value == null ? null : this.adoptSessionValueGraph(value);
+  }
+
+  private isSessionValue(value: EvaluationValue): boolean {
+    return this.sessionValues.has(value)
+      || value.kind === EvaluationValueKind.Function && value.environment.belongsToGraph(this)
+      || value.kind === EvaluationValueKind.Class && value.environment.belongsToGraph(this)
+      || value.kind === EvaluationValueKind.Instance && value.classValue.environment.belongsToGraph(this);
+  }
+
+  private adoptSessionValueGraph<TValue extends EvaluationValue>(value: TValue): TValue {
+    if (!evaluationValueHasMutableGraph(value)) {
+      return value;
+    }
+    const mapped = this.values.get(value);
+    if (mapped != null) {
+      return mapped as TValue;
+    }
+    if (this.sessionValues.has(value)) {
+      return value;
+    }
+    this.sessionValues.add(value);
+    switch (value.kind) {
+      case EvaluationValueKind.Array:
+      case EvaluationValueKind.Set:
+        for (let index = 0; index < value.elements.length; index += 1) {
+          const element = value.elements[index]!;
+          const adopted = this.adoptSessionValueGraph(element.value);
+          if (adopted !== element.value) {
+            value.elements[index] = new EvaluationArrayElement(adopted, element.expression);
+          }
+        }
+        break;
+      case EvaluationValueKind.Map:
+        for (let index = 0; index < value.entries.length; index += 1) {
+          const entry = value.entries[index]!;
+          const key = this.adoptSessionValueGraph(entry.key);
+          const entryValue = this.adoptSessionValueGraph(entry.value);
+          if (key !== entry.key || entryValue !== entry.value) {
+            value.entries[index] = new EvaluationMapEntry(key, entryValue, entry.expression);
+          }
+        }
+        break;
+      case EvaluationValueKind.Object:
+      case EvaluationValueKind.BoundaryObject:
+        this.adoptPropertyValues(value.properties);
+        break;
+      case EvaluationValueKind.Function:
+        this.adoptEnvironment(value.environment);
+        this.adoptPropertyValues(value.properties);
+        break;
+      case EvaluationValueKind.Class:
+        this.adoptEnvironment(value.environment);
+        this.adoptPropertyValues(value.properties);
+        break;
+      case EvaluationValueKind.Instance: {
+        const classValue = this.adoptSessionValueGraph(value.classValue);
+        if (classValue !== value.classValue) {
+          throw new Error('Session-local instance retained a class from another evaluation graph.');
+        }
+        this.adoptPropertyValues(value.properties);
+        break;
+      }
+      case EvaluationValueKind.ModuleNamespace:
+        for (const [name, exported] of value.exports) {
+          if (this.adoptSessionValueGraph(exported) !== exported) {
+            throw new Error(`Session-local module namespace export ${name} retained another evaluation graph.`);
+          }
+        }
+        break;
+      case EvaluationValueKind.Promise: {
+        const fulfilled = this.adoptSessionValueGraph(value.fulfilledValue);
+        if (fulfilled !== value.fulfilledValue) {
+          throw new Error('Session-local Promise retained a fulfillment value from another evaluation graph.');
+        }
+        break;
+      }
+    }
+    return value;
+  }
+
+  private adoptEnvironment(environment: ModuleEnvironmentRecord): void {
+    environment.adoptGraphOwner(this);
+    for (const binding of environment.readBindings()) {
+      binding.value = this.adoptSessionValueGraph(binding.value);
+    }
+  }
+
+  private adoptPropertyValues(properties: Map<string, EvaluationObjectProperty>): void {
+    for (const [name, property] of properties) {
+      const value = this.adoptSessionValueGraph(property.value);
+      if (value !== property.value) {
+        properties.set(name, new EvaluationObjectProperty(
+          property.name,
+          value,
+          property.node,
+          property.state,
+        ));
+      }
+    }
+  }
+}
+
+function evaluationValueHasMutableGraph(value: EvaluationValue): boolean {
+  switch (value.kind) {
+    case EvaluationValueKind.Array:
+    case EvaluationValueKind.Set:
+    case EvaluationValueKind.Map:
+    case EvaluationValueKind.Object:
+    case EvaluationValueKind.BoundaryObject:
+    case EvaluationValueKind.Function:
+    case EvaluationValueKind.Class:
+    case EvaluationValueKind.Instance:
+    case EvaluationValueKind.ModuleNamespace:
+    case EvaluationValueKind.Promise:
+      return true;
+    default:
+      return false;
+  }
+}

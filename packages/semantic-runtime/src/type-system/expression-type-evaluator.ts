@@ -129,7 +129,7 @@ export class CheckerExpressionTypeEvaluator {
   private readonly resources: CheckerExpressionResourceProjector;
 
   constructor(
-    readonly store: KernelStore,
+    private readonly store: KernelStore,
     readonly projector: CheckerTypeProjector,
     /** Compiler resource scope visible at this expression site, when template compilation supplied one. */
     readonly resourceScope: TemplateResourceScope | null = null,
@@ -228,6 +228,7 @@ export class CheckerExpressionTypeEvaluator {
   }
 
   evaluate(context: CheckerExpressionTypeEvaluationContext): CheckerExpressionTypeEvaluation {
+    this.requireCurrent();
     return this.evaluateNode(context);
   }
 
@@ -236,6 +237,7 @@ export class CheckerExpressionTypeEvaluator {
     methodName: RuntimeValueConverterMethodName,
     inputType: CheckerTypeReference,
   ): CheckerExpressionTypeEvaluation {
+    this.requireCurrent();
     const expression = context.expression;
     const input = this.support.resolveReference(
       expression,
@@ -257,6 +259,7 @@ export class CheckerExpressionTypeEvaluator {
   contextualBindingBehaviorArgumentTypes(
     context: CheckerExpressionTypeEvaluationContext<Extract<ExpressionAstNode, { readonly $kind: 'BindingBehavior' }>>,
   ): readonly (CheckerTypeReference | null)[] | null {
+    this.requireCurrent();
     return this.resources.contextualBindingBehaviorArgumentTypes(context.expression, context);
   }
 
@@ -264,6 +267,7 @@ export class CheckerExpressionTypeEvaluator {
     context: CheckerExpressionTypeEvaluationContext,
     offset: number,
   ): CheckerExpressionTypeEvaluation {
+    this.requireCurrent();
     const evaluation = this.memberOwners.evaluateAtOffset(
       context,
       offset,
@@ -280,6 +284,7 @@ export class CheckerExpressionTypeEvaluator {
     offset: number,
     memberName: string,
   ): CheckerTypeShapeMemberValueAccess | null {
+    this.requireCurrent();
     const owner = this.evaluateMemberOwnerAtOffset(
       context,
       offset,
@@ -301,6 +306,7 @@ export class CheckerExpressionTypeEvaluator {
     memberName: string,
     localKey: string,
   ): CheckerTypeShapeMemberValueAccess | null {
+    this.requireCurrent();
     if (ownerReference == null) {
       return null;
     }
@@ -313,19 +319,26 @@ export class CheckerExpressionTypeEvaluator {
   evaluateIteratorElement(
     context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
+    this.requireCurrent();
     return this.iterables.evaluateIteratorElement(context);
   }
 
   evaluateIteratorLocals(
     context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation | CheckerBindingPatternLocalProjection {
+    this.requireCurrent();
     return this.iterables.evaluateIteratorLocals(context);
   }
 
   evaluateIteratorProjection(
     context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionIteratorProjection {
+    this.requireCurrent();
     return this.iterables.evaluateIteratorProjection(context);
+  }
+
+  private requireCurrent(): void {
+    this.projector.publication.requireCurrent();
   }
 
   private evaluateNode(

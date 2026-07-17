@@ -131,6 +131,10 @@ records, product-detail registration, and the batch commit. `resource-recognitio
 identity handoff, TypeChecker-backed target type projection, resource identities, aliases, attribute-pattern identities,
 and recognition open-seam publication. Keep those support records out of carrier recognition and convergence so headers
 remain the narrow bridge between AST observations and full definition models.
+The emitter stages nested checker declaration projections, observation records, definition-header details, and their
+source/provenance records into one strict first-publication closure before touching the store. This is atomic admission,
+not an independent resource-generation authority; later same-runtime replacement belongs to the configuration/resource
+lifecycle gate rather than a second manifest hidden inside recognition.
 
 Emitter results return typed definition-header handles for downstream materializers. The converger consumes
 those handles plus the AST-bearing observations and emits `resource.definition` products with field provenance and

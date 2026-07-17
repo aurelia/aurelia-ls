@@ -59,7 +59,7 @@ export function checkerSymbolMemberSourceProjection(
   symbol: ts.Symbol,
   declarations: readonly ts.Declaration[] = declarationsForCheckerSymbol(symbol),
 ): CheckerSymbolMemberSourceProjection {
-  const source = sourceSpanForCheckerDeclaration(store, symbol, declarations, SourceSpanRole.Name);
+  const source = sourceSpanForCheckerDeclaration(store, publication, symbol, declarations, SourceSpanRole.Name);
   publishMissingSourceRecords(
     publication,
     source?.records ?? [],
@@ -101,6 +101,7 @@ export function checkerSymbolMemberValueSourceProjection(
   }
   const source = sourceSpanForCheckerNode(
     store,
+    publication,
     `checker-symbol-member-value-source:${symbol.getName()}`,
     typeNode,
     SourceSpanRole.Type,

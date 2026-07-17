@@ -15,6 +15,7 @@ import {
   type EvaluationIssueProjectResult,
 } from '../evaluation/evaluation-source-issues.js';
 import type { KernelStore } from '../kernel/store.js';
+import { ComputationCommitState } from '../kernel/computation-lifecycle.js';
 import {
   ResourceDefinitionIndex,
 } from '../resources/resource-definition-index.js';
@@ -56,9 +57,15 @@ import {
   type SemanticRuntimePhaseMemoryProfile,
 } from '../telemetry/phase.js';
 import {
-  TemplateCompilationProjectPass,
   type TemplateCompilationProjectEmission,
 } from '../template/template-compilation-project-pass.js';
+import {
+  TemplateAnalysisProjectComputationRequest,
+  TemplateAnalysisProjectComputationService,
+  type TemplateAnalysisProjectGeneration,
+  TemplateAnalysisProjectInput,
+  TemplateAnalysisProjectInputAuthority,
+} from '../template/template-analysis-computation.js';
 import { RuntimeBindingSourceValueEvaluator } from '../observation/binding-source-value-evaluator.js';
 import { RuntimeBindingSourceActivationContext } from '../observation/binding-source-activation-context.js';
 import { runtimeBoundControllerValueTableForTemplateResources } from '../observation/runtime-bound-controller-value.js';
@@ -342,8 +349,8 @@ export class AureliaAppWorldProjectEmission {
     readonly dialog: DialogSourceIssueProjectResult,
     /** App-world composition over the aggregated project configuration. */
     readonly appWorld: AureliaAppWorldEmission,
-    /** Template compiler front-door and downstream rendering/scope products for compiler-visible custom elements. */
-    readonly templates: TemplateCompilationProjectEmission,
+    /** Exact committed template-analysis generation consumed by every downstream app-level product. */
+    readonly templateAnalysisGeneration: TemplateAnalysisProjectGeneration,
     /** Authored framework capability uses joined to app admission and package/import availability evidence. */
     readonly capabilityDemands: FrameworkCapabilityDemandProjectResult,
     /** Router RouteContext/viewport/agent topology discovered after route configs and runtime rendering are known. */
@@ -359,16 +366,40 @@ export class AureliaAppWorldProjectEmission {
     /** Aggregate timing profile for x-raying this orchestration pass during app-pressure runs. */
     readonly profile: AureliaAppWorldProjectProfile,
   ) {}
+
+  /** Current template products, guarded against replacement or lifetime disposal. */
+  get templates(): TemplateCompilationProjectEmission {
+    return this.templateAnalysisGeneration.requireCurrentEmission();
+  }
+
+  /** Dynamic cohort authority for family computations that intentionally follow committed replacement. */
+  get templateCohorts() {
+    this.templateAnalysisGeneration.requireCurrentEmission();
+    return this.templateAnalysisGeneration.cohortAuthority;
+  }
+
+  requireCurrentTemplateAnalysis(): void {
+    this.templateAnalysisGeneration.requireCurrentEmission();
+  }
 }
 
 /** Compose the current project-level Aurelia semantic passes over one booted project frame. */
 export class AureliaAppWorldProjectPass {
+  constructor(
+    private readonly templateAnalysis: TemplateAnalysisProjectComputationService,
+  ) {}
+
   constructAndEmit(
     store: KernelStore,
     project: ProjectBootFrame,
     options: AureliaAppWorldProjectOptions = {},
   ): AureliaAppWorldProjectEmission {
-    return new AureliaAppWorldProjectConstructionFrame(store, project, options).constructAndEmit();
+    return new AureliaAppWorldProjectConstructionFrame(
+      store,
+      project,
+      this.templateAnalysis,
+      options,
+    ).constructAndEmit();
   }
 }
 
@@ -384,6 +415,7 @@ class AureliaAppWorldProjectConstructionFrame {
   constructor(
     readonly store: KernelStore,
     readonly project: ProjectBootFrame,
+    private readonly templateAnalysis: TemplateAnalysisProjectComputationService,
     options: AureliaAppWorldProjectOptions,
   ) {
     this.analysisDepth = normalizeSemanticAppAnalysisDepth(
@@ -434,17 +466,26 @@ class AureliaAppWorldProjectConstructionFrame {
     const fetchClient = this.materializeFetchClientSourceIssues(typeSystem, sourceApiRoots);
     const dialog = this.materializeDialogSourceIssues(typeSystem, sourceApiRoots);
     this.enrichFrameworkServiceRoots(serviceRoots);
-    const templates = this.compileTemplates(evaluation, appWorld, typeSystem, resourceIndex, routeContexts, stateBase);
+    const templateAnalysisGeneration = this.compileTemplates(
+      evaluation,
+      appWorld,
+      typeSystem,
+      resourceIndex,
+      routeContexts,
+      stateBase,
+    );
+    const templates = templateAnalysisGeneration.requireCurrentEmission();
     const capabilityDemands = this.materializeFrameworkCapabilityDemands(typeSystem, templates, configuration, serviceRoots);
     const bindingObservation = this.materializeBindingObservationIssues(typeSystem, templates);
     const observation = mergeObservationSourceIssueProjectResults([sourceObservation, bindingObservation]);
     const state = this.materializeStateStoreLookupIssues(stateBase, templates, typeSystem);
-    const bindingSourceValues = new RuntimeBindingSourceValueEvaluator(
+    const bindingSourceEvaluation = evaluation.forkSession();
+    const bindingSourceValues = RuntimeBindingSourceValueEvaluator.create(
       this.store,
       templates.expressionWorld.projector,
-      evaluation,
+      bindingSourceEvaluation,
       runtimeBoundControllerValueTableForTemplateResources(this.store, templates.resources),
-      new RuntimeBindingSourceActivationContext(this.store, evaluation, typeSystem),
+      new RuntimeBindingSourceActivationContext(this.store, bindingSourceEvaluation, typeSystem),
     );
     const routeRuntimeTopology = this.materializeRouteRuntimeTopology(routeContexts, templates, bindingSourceValues);
     const routeInstructions = this.materializeRouteInstructions(
@@ -502,7 +543,7 @@ class AureliaAppWorldProjectConstructionFrame {
       fetchClient,
       dialog,
       appWorld,
-      templates,
+      templateAnalysisGeneration,
       capabilityDemands,
       routeRuntimeTopology,
       routeInstructions,
@@ -938,28 +979,36 @@ class AureliaAppWorldProjectConstructionFrame {
     resourceIndex: ResourceDefinitionIndex,
     routeContexts: RouteConfigContextMaterializationProjectResult,
     state: StateProjectResult,
-  ): TemplateCompilationProjectEmission {
-    return this.measure('template-compilation', () =>
-      new TemplateCompilationProjectPass(
-        this.store,
-        this.store,
-      ).compile(
+  ): TemplateAnalysisProjectGeneration {
+    return this.measure('template-compilation', () => {
+      const input = new TemplateAnalysisProjectInput(
+        this.project.projectKey,
         appWorld,
         typeSystem,
         resourceIndex,
         routeContexts,
-        {
-          runtimeAnalysisDepth: this.analysisDepth,
-          evaluation,
-          includeAuthoringTemplates: this.includeAuthoringTemplates,
-          authoringTemplateSourceFiles: this.authoringTemplateSourceFiles,
-          authoringTemplateLimit: this.authoringTemplateLimit,
-          projectKey: this.project.projectKey,
-          stateStores: state.readStores(),
-          telemetry: this.telemetry,
-        },
-      )
-    );
+        evaluation,
+        state.readStores(),
+        this.analysisDepth,
+        this.includeAuthoringTemplates,
+        this.authoringTemplateSourceFiles,
+        this.authoringTemplateLimit,
+      );
+      const attempt = this.templateAnalysis.prepare(
+        new TemplateAnalysisProjectComputationRequest(
+          this.project.projectKey,
+          TemplateAnalysisProjectInputAuthority.fixed(input),
+        ),
+        this.telemetry,
+      );
+      const result = attempt.commit();
+      if (result.commit.state !== ComputationCommitState.Committed || result.committedGeneration == null) {
+        throw new Error(
+          `Template analysis for ${this.project.projectKey} did not commit: ${result.commit.state}.`,
+        );
+      }
+      return result.committedGeneration;
+    });
   }
 
   private materializeRouteRuntimeTopology(

@@ -116,6 +116,8 @@ export class RuntimeBindingSourceActivationContext {
     readActiveContainer: RuntimeBindingSourceActiveContainerReader,
   ): StaticEvaluationRuntimeHost {
     return {
+      transferValueMetadata: (source, target, transfer) =>
+        baseHost.transferValueMetadata?.(source, target, transfer),
       resolveIdentifier: (identifier, environment, moduleKey) =>
         baseHost.resolveIdentifier?.(identifier, environment, moduleKey) ?? null,
       resolveCommonJsRequire: (moduleKey, moduleSpecifier, node) =>
@@ -287,7 +289,6 @@ export class RuntimeBindingSourceActivationContext {
           openReason: 'Aurelia resolve(...) reached an array resolver with multiple possible values.',
         };
       case ResolverResolutionKind.Open:
-      case ResolverResolutionKind.Cyclic:
       case ResolverResolutionKind.InvalidStrategy:
         return {
           value: null,

@@ -1,12 +1,15 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { SemanticRuntimeSourceTextProvider } from './source-text-provider.js';
+import { sourceTextContentRevision } from './source-text-snapshot.js';
 
 /** Authored file text plus line metadata for source spans that must refer back to user-written files. */
 export interface AuthoredSourceText {
   readonly sourcePath: string;
   readonly hostPath: string;
   readonly text: string;
+  /** Stable identity of the exact authored file value admitted by this cache. */
+  readonly contentRevision: string;
   readonly lineStarts: readonly number[];
 }
 
@@ -48,6 +51,7 @@ export class AuthoredSourceTextCache {
         sourcePath,
         hostPath,
         text,
+        contentRevision: sourceTextContentRevision(text),
         lineStarts: authoredSourceLineStartsForText(text),
       };
     } catch {

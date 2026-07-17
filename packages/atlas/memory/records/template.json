@@ -1501,6 +1501,7 @@
         "Keep RuntimeSpreadBindingCreator focused on the SpreadBinding.create side: controller parent walk, captured AttrSyntax lookup, and TemplateCompiler.compileSpread admission.",
         "Model ...$attrs transfer through runtime hydration-context/controller parent flow; definition-wide capture fallbacks merge unrelated component instances and should be treated as a modeling regression.",
         "Treat unsupported spread cases as semantic-runtime compiler-host gaps before adding local renderer shortcuts, except for source-proved renderer-dispatch failures such as SpreadValueRenderer invalid targets, which belong in RuntimeRendererIssue before any binding exists.",
+        "Treat one compileSpread captured-attribute group as an atomic publication boundary. Commit dynamic instructions, value sites, expression parses, and their provenance claims only after every captured syntax compiles; a refused group may publish its compiler issue but must not leak a valid speculative prefix.",
         "Dynamic instructions produced by compileSpread should carry direct captured-attribute context instruction and context controller claims. Scope construction should spend those exact claims and then use the context controller scope's parent as the dynamic instruction scope, matching framework SpreadBinding.bind. If the exact controller or parent scope does not resolve, leave the dynamic instruction unscoped rather than falling back to root scope or syntax-only captured-attribute buckets, because repeated wrapper definitions under different template-controller scopes can otherwise merge.",
         "Downstream value-channel, data-flow, i18n, composition, and bound-controller value evaluation should resolve dynamic spread-created binding sources through the binding render context and RuntimeInstructionScopeLookup, not by choosing the first scope for a reused instruction product."
       ],
@@ -3075,6 +3076,101 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/template/template-compilation-cohort.ts",
           "symbolName": "TemplateCompilationCohortProjectAuthority"
+        }
+      ],
+      "createdAt": "2026-07-17",
+      "updatedAt": "2026-07-17"
+    },
+    {
+      "id": "decision:template-analysis-current-generation",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "template",
+        "type-system",
+        "api",
+        "incrementality"
+      ],
+      "summary": "A semantic app pins one exact committed project template-analysis generation and rebuilds as a unit when it becomes stale.",
+      "rationale": "Compiler/runtime/checker kernel rows and their retained TypeScript-backed object graph are one logical generation. Replacing only kernel rows or hot-swapping only the template pointer would pair current products with stale expression worlds, observation, state, capability, and router fan-in. The production authority therefore commits one complete project template-analysis closure, installs a generation-guarded store-backed expression world, and makes every app query fail closed when its exact generation is replaced or disposed.",
+      "guidance": [
+        "One project template-analysis locus owns the current generation regardless of analysis depth or authoring policy. Those policies are replacement inputs, not parallel owners of the same stable handles.",
+        "A prepared TemplateCompilationProjectEmission is run-bound and never public current state. Promote only after a successful lifecycle commit; rejected, stale, superseded, or throwing attempts preserve the previous current generation.",
+        "After commit, bind every retained resource emission to one generation-guarded store-backed CheckerExpressionTypeWorld. Replacement and disposal must revoke retained evaluator reads and lazy projections; do not retain a mix of run-backed, unguarded store-backed, and committed worlds behind different object paths.",
+        "AureliaAppWorldProjectEmission pins the exact template generation used to derive its downstream observation, state, capability, and router products. Replacement or disposal makes the whole app emission stale.",
+        "SemanticApp queries, cache summaries, and template access must check currentness before reading kernel state. A retained SemanticAppTemplateQueries object rechecks that authority on every operation; runtime cache and cursor admission skip stale apps and rebuild a coherent app epoch rather than hot-swapping templates underneath old fan-in.",
+        "Carry the exact complete-file revision that produced each inline or external template into resource metadata. Preparation must match it to the current immutable source snapshot, and commit must revalidate that snapshot; input-bundle revision, source text, compiler lookup, and kernel record changes remain separately attributable validation domains.",
+        "Keep one TemplateAnalysisProjectComputationService and one ComputationLifecycleRegistry per SemanticRuntime/KernelStore. Do not create feature-local registries or authorities.",
+        "Dynamic replacement of app-level fan-in remains a later project-computation boundary. Do not weaken exact generation pinning to make partial reuse appear incremental."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-analysis-computation.ts",
+          "symbolName": "TemplateAnalysisProjectComputationService",
+          "summary": "Preparation, validation, commit, current authority, and lifetime reconciliation for complete project generations."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+          "symbolName": "AureliaAppWorldProjectEmission",
+          "summary": "Immutable app fan-in pinned to one exact current template-analysis generation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp",
+          "summary": "Public currentness guard and stale cache/cursor rebuilding boundary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
+          "symbolName": "SemanticAppTemplateQueries",
+          "summary": "Revocable public template-query capability that spends the pinned generation on every operation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/custom-element-definition.ts",
+          "symbolName": "CustomElementTemplateDefinition",
+          "summary": "Template metadata carrying the exact authored-file revision that produced its markup."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
+          "symbolName": "TemplateCompilationProjectEmission.forCommittedGeneration",
+          "summary": "Post-commit rebinding of every retained analysis emission to one generation-guarded store-backed expression world."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/template/README.md",
+          "summary": "Template project-generation ownership, publication, and current-authority doctrine."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/api/README.md",
+          "summary": "Public app generation pinning and stale-cache behavior."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/template-analysis-computation.ts",
+          "symbolName": "TemplateAnalysisProjectComputationService"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+          "symbolName": "AureliaAppWorldProjectEmission"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
+          "symbolName": "SemanticAppTemplateQueries"
         }
       ],
       "createdAt": "2026-07-17",

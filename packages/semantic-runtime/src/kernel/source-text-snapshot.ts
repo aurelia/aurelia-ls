@@ -113,6 +113,11 @@ function presentSourceText(text: string): SourceTextSnapshotValue {
   return new SourceTextSnapshotValue(
     SourceTextSnapshotState.Present,
     text,
-    createHash('sha256').update(text).digest('base64url'),
+    sourceTextContentRevision(text),
   );
+}
+
+/** Stable content identity shared by source admission and later currentness validation. */
+export function sourceTextContentRevision(text: string): string {
+  return createHash('sha256').update(text).digest('base64url');
 }

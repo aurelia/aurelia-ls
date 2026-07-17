@@ -37,6 +37,7 @@ import {
   readStaticEvaluationAmbientGlobalDeclarations,
   withStaticEvaluationAmbientGlobals,
 } from './ambient-globals.js';
+import { StaticEvaluationSessionFork } from './evaluation-session.js';
 
 export type EvaluatedProjectSource = StaticProjectEvaluationSourceResult & {
   readonly sourceFile: ts.SourceFile;
@@ -131,6 +132,25 @@ export class StaticProjectEvaluationResult {
 
   readUnresolvedModules(): readonly EvaluationModuleResolutionOpen[] {
     return this.sources.flatMap((source) => source.unresolvedModules);
+  }
+
+  /** Fork mutable evaluator values and environments for one speculative follow-up analysis session. */
+  forkSession(): StaticProjectEvaluationResult {
+    const session = new StaticEvaluationSessionFork();
+    return new StaticProjectEvaluationResult(
+      this.project,
+      this.sources.map((source) => isEvaluatedProjectSource(source)
+        ? new StaticProjectEvaluationSourceResult(
+            source.admission,
+            source.moduleKey,
+            source.sourceFile,
+            session.forkModuleEvaluation(source.evaluation),
+            source.unresolvedModules,
+            source.origins,
+          )
+        : source),
+      this.profile,
+    );
   }
 }
 

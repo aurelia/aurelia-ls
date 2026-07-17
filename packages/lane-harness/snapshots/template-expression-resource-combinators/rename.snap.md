@@ -15,11 +15,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "${item.label & innerAudit:'inner' & missingBehavior}",
   "at": "innerAudit",
   "atOccurrence": 1,
-  "displayPosition": "src/resource-combinator-gallery.html:14:65",
+  "displayPosition": "src/resource-combinator-gallery.html:16:65",
   "file": "src/resource-combinator-gallery.html",
   "lspPosition": {
     "character": 64,
-    "line": 13
+    "line": 15
   },
   "newName": "innerTrace",
   "occurrence": 1
@@ -36,11 +36,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "range": {
       "end": {
         "character": 74,
-        "line": 13
+        "line": 15
       },
       "start": {
         "character": 64,
-        "line": 13
+        "line": 15
       }
     }
   }
@@ -82,11 +82,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "range": {
               "end": {
                 "character": 59,
-                "line": 11
+                "line": 13
               },
               "start": {
                 "character": 49,
-                "line": 11
+                "line": 13
               }
             }
           },
@@ -95,11 +95,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "range": {
               "end": {
                 "character": 57,
-                "line": 12
+                "line": 14
               },
               "start": {
                 "character": 47,
-                "line": 12
+                "line": 14
               }
             }
           },
@@ -108,11 +108,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "range": {
               "end": {
                 "character": 78,
-                "line": 12
+                "line": 14
               },
               "start": {
                 "character": 68,
-                "line": 12
+                "line": 14
               }
             }
           },
@@ -121,11 +121,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "range": {
               "end": {
                 "character": 74,
-                "line": 13
+                "line": 15
               },
               "start": {
                 "character": 64,
-                "line": 13
+                "line": 15
               }
             }
           }
@@ -188,11 +188,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 59,
-          "line": 11
+          "line": 13
         },
         "start": {
           "character": 49,
-          "line": 11
+          "line": 13
         }
       },
       "source": "documentChanges",
@@ -205,11 +205,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 57,
-          "line": 12
+          "line": 14
         },
         "start": {
           "character": 47,
-          "line": 12
+          "line": 14
         }
       },
       "source": "documentChanges",
@@ -222,11 +222,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 78,
-          "line": 12
+          "line": 14
         },
         "start": {
           "character": 68,
-          "line": 12
+          "line": 14
         }
       },
       "source": "documentChanges",
@@ -239,11 +239,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 74,
-          "line": 13
+          "line": 15
         },
         "start": {
           "character": 64,
-          "line": 13
+          "line": 15
         }
       },
       "source": "documentChanges",
@@ -305,7 +305,7 @@ diff --git a/src/expression-resources.ts b/src/expression-resources.ts
 diff --git a/src/resource-combinator-gallery.html b/src/resource-combinator-gallery.html
 --- a/src/resource-combinator-gallery.html
 +++ b/src/resource-combinator-gallery.html
-@@ -1,20 +1,20 @@
+@@ -1,23 +1,23 @@
  <template>
    <p class="converter-chain-valid">${count | numberText:prefix | textLength}</p>
    <p class="converter-input-invalid">${count | textLength}</p>
@@ -313,6 +313,8 @@ diff --git a/src/resource-combinator-gallery.html b/src/resource-combinator-gall
    <p class="converter-identity">${item | identityValue}</p>
    <p class="converter-behavior-combined">${count | numberText:prefix & typedAudit:'combined':limit}</p>
    <numeric-target class="converter-writeback-chain" value.two-way="count | numberText:prefix | textLength"></numeric-target>
+   <numeric-target class="converter-writeback-open-chain" value.two-way="count | identityValue | numberText:prefix | missingConverter"></numeric-target>
+   <numeric-target class="converter-ref-writeback" component.ref="refTarget | identityValue"></numeric-target>
 
    <p class="behavior-arguments-valid">${item.label & typedAudit:'view':limit}</p>
    <p class="behavior-argument-types-invalid">${item.label & typedAudit:limit:'wrong'}</p>
@@ -327,6 +329,7 @@ diff --git a/src/resource-combinator-gallery.html b/src/resource-combinator-gall
    <p class="converter-after-behavior">${item.label & typedAudit:'reverse':limit | numberText:prefix}</p>
    <p class="missing-converter">${count | missingConverter}</p>
    <p class="converter-inner-behind-missing-outer">${count | numberText:prefix | missingConverter}</p>
+   <p class="converter-phase-error-blocked-by-inner-missing">${count | missingConverter | sanitize}</p>
    <p class="missing-behavior">${item.label & missingBehavior}</p>
  </template>
 ```

@@ -226,7 +226,10 @@ The current spending path is intentionally narrow but end-to-end:
   `DiResolveCallSite` / app topology rows without spending exact framework error authority;
 - source-visible singleton activation cycles reached from a concrete `container.get(...)` entry point produce
   `cyclic_dependency` (`AUR0003`) when the DI graph is closed through interface singleton providers and instance-time
-  `resolve(...)` dependencies;
+  `resolve(...)` dependencies. `Resolver.resolve(...)` itself is a pure abstract lookup answer and does not carry a
+  mutable resolving flag or cached factory: those fields would make speculative reads order-dependent without actually
+  executing activation. Cycle authority stays in `DiDependencyCycleIssueMaterializer`, which owns the provider and
+  activation graph needed to prove re-entry;
 - resolver-wrapper calls such as `newInstanceOf(...)` are recognized as resolver keys. Exact `AUR0017` is currently
   claimed only for fresh stock container API entries; ambient `resolve(newInstanceOf(...))` remains activation/container
   state dependent until controller activation can join the active container with interface registration state.

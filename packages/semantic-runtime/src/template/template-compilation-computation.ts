@@ -347,5 +347,6 @@ function externalMarkupTemplateFromSnapshot(
     markup,
     addressHandle,
     null,
+    source.contentRevision,
   );
 }

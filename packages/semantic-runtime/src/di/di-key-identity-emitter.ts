@@ -7,7 +7,7 @@ import {
   ResourceDiKeyIdentity,
 } from '../kernel/identity.js';
 import type {
-  KernelStore,
+  KernelStoreReadView,
   KernelStoreRecord,
 } from '../kernel/store.js';
 
@@ -15,7 +15,7 @@ export class DiKeyIdentityEmitter {
   private readonly emittedIdentityHandles = new Set<IdentityHandle>();
   private readonly interfaceKeyIdentityHandles = new Map<string, IdentityHandle>();
 
-  constructor(private readonly store: KernelStore) {}
+  constructor(private readonly records: KernelStoreReadView) {}
 
   reset(): void {
     this.emittedIdentityHandles.clear();
@@ -24,7 +24,7 @@ export class DiKeyIdentityEmitter {
   interfaceKeyIdentityHandle(interfaceName: string): IdentityHandle {
     let handle = this.interfaceKeyIdentityHandles.get(interfaceName);
     if (handle === undefined) {
-      handle = this.store.handles.identity(`di-key:interface:${interfaceName}`);
+      handle = this.records.handles.identity(`di-key:interface:${interfaceName}`);
       this.interfaceKeyIdentityHandles.set(interfaceName, handle);
     }
     return handle;
@@ -36,7 +36,7 @@ export class DiKeyIdentityEmitter {
     interfaceName: string,
     addressHandle: AddressHandle | null,
   ): void {
-    if (this.emittedIdentityHandles.has(handle) || this.store.readIdentity(handle) != null) {
+    if (this.emittedIdentityHandles.has(handle) || this.records.read(handle) != null) {
       return;
     }
     this.emittedIdentityHandles.add(handle);
@@ -55,7 +55,7 @@ export class DiKeyIdentityEmitter {
     resourceKey: string,
     addressHandle: AddressHandle | null,
   ): void {
-    if (this.emittedIdentityHandles.has(handle) || this.store.readIdentity(handle) != null) {
+    if (this.emittedIdentityHandles.has(handle) || this.records.read(handle) != null) {
       return;
     }
     this.emittedIdentityHandles.add(handle);

@@ -1,3 +1,9 @@
+import {
+  applyObjectFieldNormalizations,
+  prepareObjectFieldNormalization,
+  type PreparedObjectFieldNormalization,
+} from './object-field-normalization.js';
+
 declare const hotDetailSlotBrand: unique symbol;
 
 type AllocateOrdinal = () => number;
@@ -45,6 +51,22 @@ const hotDetailHandleAccessor = {
   get: hotDetailHandleGetter,
 } as const;
 
+class HotDetailEntryBinding {
+  constructor(
+    readonly detail: object | null,
+    readonly entry: HotDetailEntry<unknown>,
+    readonly normalizations: readonly PreparedObjectFieldNormalization[],
+  ) {}
+}
+
+/** Hot-detail entry whose fallible field normalization completed before live catalog mutation. */
+export class PreparedHotDetailEntry<TDetail> {
+  constructor(
+    readonly entry: HotDetailEntry<TDetail>,
+    readonly binding: HotDetailEntryBinding,
+  ) {}
+}
+
 /**
  * Bind a hot detail object to the epoch-local catalog entry that owns it.
  *
@@ -56,16 +78,35 @@ export function bindHotDetailEntry<TDetail>(
   detail: TDetail,
   entry: HotDetailEntry<TDetail>,
 ): TDetail {
+  const binding = prepareHotDetailEntryBinding(detail, entry);
+  applyObjectFieldNormalizations(binding.normalizations);
+  admitHotDetailEntryBinding(binding);
+  return detail;
+}
+
+/** Complete every fallible normalization step without changing the detail's current catalog owner. */
+function prepareHotDetailEntryBinding(
+  detail: unknown,
+  entry: HotDetailEntry<unknown>,
+): HotDetailEntryBinding {
   if (detail == null || typeof detail !== 'object') {
-    return detail;
+    return new HotDetailEntryBinding(null, entry, []);
   }
   const existing = hotDetailEntryByDetail.get(detail);
   if (existing != null && existing.handle !== entry.handle) {
     throw new Error(`Hot detail is already bound to ${existing.handle}; cannot rebind to ${entry.handle}.`);
   }
-  hotDetailEntryByDetail.set(detail, entry as HotDetailEntry<unknown>);
-  hideHotDetailHandleEchoes(detail, entry);
-  return detail;
+  return new HotDetailEntryBinding(
+    detail,
+    entry,
+    prepareHotDetailHandleEchoes(detail, entry),
+  );
+}
+
+function admitHotDetailEntryBinding(binding: HotDetailEntryBinding): void {
+  if (binding.detail != null) {
+    hotDetailEntryByDetail.set(binding.detail, binding.entry);
+  }
 }
 
 export function readHotDetailEntry(detail: unknown): HotDetailEntry<unknown> | null {
@@ -92,31 +133,17 @@ export function hotDetailHandle(
   return requireHotDetailEntry(detail, detailKind).handle;
 }
 
-function hideHotDetailHandleEchoes<TDetail>(
+function prepareHotDetailHandleEchoes<TDetail>(
   detail: TDetail,
   entry: HotDetailEntry<TDetail>,
-): void {
+): readonly PreparedObjectFieldNormalization[] {
   if (detail == null || typeof detail !== 'object') {
-    return;
+    return [];
   }
-  hideHotDetailHandleEcho(detail, 'handle', entry.handle, hotDetailHandleAccessor);
-  hideHotDetailHandleEcho(detail, 'productHandle', entry.handle, hotDetailHandleAccessor);
-}
-
-function hideHotDetailHandleEcho<TValue>(
-  detail: object,
-  field: string,
-  envelopeValue: TValue,
-  accessor: PropertyDescriptor,
-): void {
-  if (!Object.prototype.hasOwnProperty.call(detail, field)) {
-    return;
-  }
-  const currentValue = (detail as Record<string, unknown>)[field];
-  if (currentValue !== envelopeValue) {
-    return;
-  }
-  Object.defineProperty(detail, field, accessor);
+  return [
+    prepareObjectFieldNormalization(detail, 'handle', entry.handle, hotDetailHandleAccessor, 'Hot detail'),
+    prepareObjectFieldNormalization(detail, 'productHandle', entry.handle, hotDetailHandleAccessor, 'Hot detail'),
+  ].filter((candidate): candidate is PreparedObjectFieldNormalization => candidate != null);
 }
 
 function hotDetailHandleGetter(this: object): string {
@@ -151,6 +178,17 @@ export class HotDetailCatalog {
     detail: TDetail,
     lifetimeOrdinal: number,
   ): HotDetailEntry<TDetail> {
+    const entry = this.prepareEntry(slot, handle, detail);
+    applyObjectFieldNormalizations(entry.binding.normalizations);
+    return this.addPreparedAtLifetime(entry, lifetimeOrdinal);
+  }
+
+  /** Normalize a candidate detail completely before a replacement mutates any live catalog. */
+  prepareEntry<TDetail>(
+    slot: HotDetailSlot<TDetail>,
+    handle: string,
+    detail: TDetail,
+  ): PreparedHotDetailEntry<TDetail> {
     const existing = this.entriesByHandle.get(handle);
     if (existing != null) {
       if (existing.slot.detailKind !== slot.detailKind) {
@@ -158,9 +196,31 @@ export class HotDetailCatalog {
       }
       throw new Error(`Duplicate hot detail for ${handle}.`);
     }
+    return this.prepareReplacementEntry(slot, handle, detail);
+  }
 
+  /** Prepare a replacement for an entry removed by the same publication transaction. */
+  prepareReplacementEntry<TDetail>(
+    slot: HotDetailSlot<TDetail>,
+    handle: string,
+    detail: TDetail,
+  ): PreparedHotDetailEntry<TDetail> {
     const entry = new HotDetailEntry(handle, slot, detail);
-    bindHotDetailEntry(detail, entry);
+    return new PreparedHotDetailEntry(
+      entry,
+      prepareHotDetailEntryBinding(detail, entry),
+    );
+  }
+
+  /** Admit an already-normalized entry after every fallible preparation step has completed. */
+  addPreparedAtLifetime<TDetail>(
+    prepared: PreparedHotDetailEntry<TDetail>,
+    lifetimeOrdinal: number,
+  ): HotDetailEntry<TDetail> {
+    const entry = prepared.entry;
+    const handle = entry.handle;
+    const slot = entry.slot;
+    admitHotDetailEntryBinding(prepared.binding);
     this.entriesByHandle.set(handle, entry as HotDetailEntry<unknown>);
     this.handleOrder.push(handle);
     this.lifetimeOrdinalByHandle.set(handle, lifetimeOrdinal);
@@ -198,6 +258,16 @@ export class HotDetailCatalog {
   /** Read the unexpanded entry when replacement code only knows the epoch-local handle. */
   readEntry(handle: string): HotDetailEntry<unknown> | null {
     return this.entriesByHandle.get(handle) ?? null;
+  }
+
+  /** Lifetime shared by the committed publication that owns this entry. */
+  readLifetimeOrdinal(handle: string): number | null {
+    return this.lifetimeOrdinalByHandle.get(handle) ?? null;
+  }
+
+  /** Advance an admitted detail with the complete publication closure that owns it. */
+  promoteLifetimeOrdinal(handle: string, lifetimeOrdinal: number): void {
+    this.lifetimeOrdinalByHandle.set(handle, lifetimeOrdinal);
   }
 
   readBySlot<TDetail>(

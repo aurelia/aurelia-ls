@@ -99,6 +99,45 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "range": {
         "end": {
+          "character": 76,
+          "line": 6
+        },
+        "start": {
+          "character": 65,
+          "line": 6
+        }
+      },
+      "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 101,
+          "line": 6
+        },
+        "start": {
+          "character": 90,
+          "line": 6
+        }
+      },
+      "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 43,
+          "line": 13
+        },
+        "start": {
+          "character": 32,
+          "line": 13
+        }
+      },
+      "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html"
+    },
+    {
+      "range": {
+        "end": {
           "character": 13,
           "line": 27
         },
@@ -117,7 +156,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "locationCount": 6,
+  "locationCount": 9,
   "locations": [
     {
       "anomaly": null,
@@ -194,6 +233,54 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "start": {
           "character": 39,
           "line": 6
+        }
+      },
+      "rangeText": "spreadState",
+      "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html"
+    },
+    {
+      "anomaly": null,
+      "file": "src/template-spread-capture-semantics-app.html",
+      "range": {
+        "end": {
+          "character": 76,
+          "line": 6
+        },
+        "start": {
+          "character": 65,
+          "line": 6
+        }
+      },
+      "rangeText": "spreadState",
+      "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html"
+    },
+    {
+      "anomaly": null,
+      "file": "src/template-spread-capture-semantics-app.html",
+      "range": {
+        "end": {
+          "character": 101,
+          "line": 6
+        },
+        "start": {
+          "character": 90,
+          "line": 6
+        }
+      },
+      "rangeText": "spreadState",
+      "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html"
+    },
+    {
+      "anomaly": null,
+      "file": "src/template-spread-capture-semantics-app.html",
+      "range": {
+        "end": {
+          "character": 43,
+          "line": 13
+        },
+        "start": {
+          "character": 32,
+          "line": 13
         }
       },
       "rangeText": "spreadState",
@@ -728,19 +815,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html"
-    },
-    {
-      "range": {
-        "end": {
-          "character": 14,
-          "line": 33
-        },
-        "start": {
-          "character": 4,
-          "line": 33
-        }
-      },
-      "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html"
     }
   ]
 }
@@ -750,7 +824,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "locationCount": 4,
+  "locationCount": 3,
   "locations": [
     {
       "anomaly": null,
@@ -795,22 +869,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "start": {
           "character": 4,
           "line": 23
-        }
-      },
-      "rangeText": "input-mark",
-      "uri": "fixtures://pressure/template-spread-capture-semantics/src/template-spread-capture-semantics-app.html"
-    },
-    {
-      "anomaly": null,
-      "file": "src/template-spread-capture-semantics-app.html",
-      "range": {
-        "end": {
-          "character": 14,
-          "line": 33
-        },
-        "start": {
-          "character": 4,
-          "line": 33
         }
       },
       "rangeText": "input-mark",

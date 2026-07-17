@@ -127,7 +127,7 @@ export class CheckerExpressionTypeSupport {
       return checkerTypeReferenceWithSource(reference, reference.sourceAddressHandle ?? slot.sourceAddressHandle);
     }
 
-    const member = bindingContextSlotTargetTypeSourceMember(this.store, slot);
+    const member = bindingContextSlotTargetTypeSourceMember(this.projector.publication, slot);
     if (member?.carrier?.valueType == null) {
       return reference;
     }

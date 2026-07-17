@@ -20,7 +20,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 11,
+  "diagnosticCount": 12,
   "diagnostics": [
     {
       "anomaly": null,
@@ -474,6 +474,68 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     },
     {
       "anomaly": null,
+      "code": "binding-target-assignment-strictness",
+      "data": {
+        "diagnosticAuthority": "semantic-runtime-product",
+        "diagnosticDomain": "template",
+        "diagnosticKind": "binding-target-assignment-strictness",
+        "frameworkErrorCode": null,
+        "frameworkRawErrorAuthority": null,
+        "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
+        "missingInputs": [
+          "binding-target-assignment:source-to-target-type-mismatch"
+        ],
+        "phase": null,
+        "relatedInformation": [],
+        "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "rewrite-expression",
+          "actionability": "guided",
+          "changeDomain": "app-source",
+          "planKind": "template-expression-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
+        "sourceRole": "template",
+        "subject": {
+          "source": {
+            "end": 335,
+            "kind": "source-span-address",
+            "label": "src/unregistered-plugin-resources-app.html@321..335",
+            "path": "src/unregistered-plugin-resources-app.html",
+            "role": "binding-source-assignment",
+            "start": 321
+          },
+          "span": null,
+          "subjectKind": "template-expression",
+          "uri": null
+        },
+        "taxonomy": {
+          "actionability": "guided",
+          "category": "template-syntax",
+          "confidence": null,
+          "impact": "degraded",
+          "schema": "diagnostics-taxonomy/1"
+        }
+      },
+      "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string.",
+      "range": {
+        "end": {
+          "character": 41,
+          "line": 13
+        },
+        "start": {
+          "character": 27,
+          "line": 13
+        }
+      },
+      "rangeText": "dashboardState",
+      "relatedInformation": [],
+      "severity": "warning",
+      "source": "aurelia"
+    },
+    {
+      "anomaly": null,
       "code": "framework-capability-not-registered",
       "data": {
         "diagnosticAuthority": "semantic-authoring-policy",
@@ -589,7 +651,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "contextualCount": 0,
     "groups": [
       {
-        "groupKey": "row:diagnostic:10:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:8:21:router.default-resources",
+        "groupKey": "row:diagnostic:11:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:8:21:router.default-resources",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -651,7 +713,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:10:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:8:21:router.default-resources"
+          "rowId": "diagnostic:11:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:8:21:router.default-resources"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -659,7 +721,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:8:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:38:65:router.default-resources",
+        "groupKey": "row:diagnostic:9:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:38:65:router.default-resources",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -721,7 +783,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:8:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:38:65:router.default-resources"
+          "rowId": "diagnostic:9:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:38:65:router.default-resources"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -729,7 +791,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:9:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:78:112:ui-virtualization.default-resources",
+        "groupKey": "row:diagnostic:10:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:78:112:ui-virtualization.default-resources",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -791,7 +853,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:9:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:78:112:ui-virtualization.default-resources"
+          "rowId": "diagnostic:10:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:78:112:ui-virtualization.default-resources"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -1219,7 +1281,97 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:6:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:338:343:state.default-resources",
+        "groupKey": "row:diagnostic:6:template:binding-target-assignment-strictness:semantic-runtime-product:no-framework-code:src/unregistered-plugin-resources-app.html:321:335:binding-target-assignment:source-to-target-type-mismatch",
+        "maxRawSeverity": "warning",
+        "primary": {
+          "diagnostic": {
+            "actionability": "guided",
+            "anomaly": null,
+            "category": "template-syntax",
+            "code": "binding-target-assignment-strictness",
+            "data": {
+              "diagnosticAuthority": "semantic-runtime-product",
+              "diagnosticDomain": "template",
+              "diagnosticKind": "binding-target-assignment-strictness",
+              "frameworkErrorCode": null,
+              "frameworkRawErrorAuthority": null,
+              "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
+              "missingInputs": [
+                "binding-target-assignment:source-to-target-type-mismatch"
+              ],
+              "phase": null,
+              "relatedInformation": [],
+              "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "rewrite-expression",
+                "actionability": "guided",
+                "changeDomain": "app-source",
+                "planKind": "template-expression-rewrite",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
+              },
+              "sourceRole": null,
+              "subject": {
+                "source": {
+                  "end": 335,
+                  "kind": "source-span-address",
+                  "label": "src/unregistered-plugin-resources-app.html@321..335",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "role": "binding-source-assignment",
+                  "start": 321
+                },
+                "span": null,
+                "subjectKind": "template-expression",
+                "uri": null
+              },
+              "taxonomy": {
+                "actionability": null,
+                "category": null,
+                "confidence": null,
+                "impact": null,
+                "schema": null
+              }
+            },
+            "file": "src/unregistered-plugin-resources-app.html",
+            "impact": "degraded",
+            "issues": [
+              {
+                "code": "binding-target-assignment-strictness",
+                "kind": "binding-target-assignment-strictness",
+                "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string."
+              }
+            ],
+            "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string.",
+            "related": [],
+            "severity": "warning",
+            "source": "semantic-runtime:template",
+            "span": {
+              "end": 335,
+              "start": 321
+            },
+            "spanText": "dashboardState",
+            "status": "primary",
+            "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+          },
+          "relation": null,
+          "role": "primary",
+          "rowId": "diagnostic:6:template:binding-target-assignment-strictness:semantic-runtime-product:no-framework-code:src/unregistered-plugin-resources-app.html:321:335:binding-target-assignment:source-to-target-type-mismatch"
+        },
+        "primarySeverity": "warning",
+        "rawRowCount": 1,
+        "related": [],
+        "subject": {
+          "source": null,
+          "span": {
+            "end": 335,
+            "start": 321
+          },
+          "subjectKind": "template-expression",
+          "uri": "file:///c:/projects/aurelia-ls2/packages/semantic-runtime/fixtures/pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+        }
+      },
+      {
+        "groupKey": "row:diagnostic:7:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:338:343:state.default-resources",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -1281,7 +1433,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:6:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:338:343:state.default-resources"
+          "rowId": "diagnostic:7:template:framework-capability-not-registered:semantic-authoring-policy:no-framework-code:src/unregistered-plugin-resources-app.html:338:343:state.default-resources"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -1289,7 +1441,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:7:template:runtime-binding-behavior-framework-error:framework-error-code:AUR0101:src/unregistered-plugin-resources-app.html:338:343:runtime-binding-behavior:AUR0101",
+        "groupKey": "row:diagnostic:8:template:runtime-binding-behavior-framework-error:framework-error-code:AUR0101:src/unregistered-plugin-resources-app.html:338:343:runtime-binding-behavior:AUR0101",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -1351,7 +1503,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:7:template:runtime-binding-behavior-framework-error:framework-error-code:AUR0101:src/unregistered-plugin-resources-app.html:338:343:runtime-binding-behavior:AUR0101"
+          "rowId": "diagnostic:8:template:runtime-binding-behavior-framework-error:framework-error-code:AUR0101:src/unregistered-plugin-resources-app.html:338:343:runtime-binding-behavior:AUR0101"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -1359,11 +1511,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       }
     ],
-    "primaryCount": 11,
-    "rawRowCount": 11
+    "primaryCount": 12,
+    "rawRowCount": 12
   },
   "raw": {
-    "diagnosticCount": 11,
+    "diagnosticCount": 12,
     "diagnostics": [
       {
         "actionability": "guided",
@@ -1711,6 +1863,75 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "actionability": "guided",
         "anomaly": null,
         "category": "template-syntax",
+        "code": "binding-target-assignment-strictness",
+        "data": {
+          "diagnosticAuthority": "semantic-runtime-product",
+          "diagnosticDomain": "template",
+          "diagnosticKind": "binding-target-assignment-strictness",
+          "frameworkErrorCode": null,
+          "frameworkRawErrorAuthority": null,
+          "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
+          "missingInputs": [
+            "binding-target-assignment:source-to-target-type-mismatch"
+          ],
+          "phase": null,
+          "relatedInformation": [],
+          "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "rewrite-expression",
+            "actionability": "guided",
+            "changeDomain": "app-source",
+            "planKind": "template-expression-rewrite",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
+          },
+          "sourceRole": null,
+          "subject": {
+            "source": {
+              "end": 335,
+              "kind": "source-span-address",
+              "label": "src/unregistered-plugin-resources-app.html@321..335",
+              "path": "src/unregistered-plugin-resources-app.html",
+              "role": "binding-source-assignment",
+              "start": 321
+            },
+            "span": null,
+            "subjectKind": "template-expression",
+            "uri": null
+          },
+          "taxonomy": {
+            "actionability": null,
+            "category": null,
+            "confidence": null,
+            "impact": null,
+            "schema": null
+          }
+        },
+        "file": "src/unregistered-plugin-resources-app.html",
+        "impact": "degraded",
+        "issues": [
+          {
+            "code": "binding-target-assignment-strictness",
+            "kind": "binding-target-assignment-strictness",
+            "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string."
+          }
+        ],
+        "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string.",
+        "related": [],
+        "severity": "warning",
+        "source": "semantic-runtime:template",
+        "span": {
+          "end": 335,
+          "start": 321
+        },
+        "spanText": "dashboardState",
+        "status": "canonical",
+        "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+      },
+      {
+        "actionability": "guided",
+        "anomaly": null,
+        "category": "template-syntax",
         "code": "framework-capability-not-registered",
         "data": {
           "diagnosticAuthority": "semantic-authoring-policy",
@@ -2000,7 +2221,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   },
   "surfaces": {
     "lsp": {
-      "diagnosticCount": 11,
+      "diagnosticCount": 12,
       "diagnostics": [
         {
           "actionability": "guided",
@@ -2519,6 +2740,75 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "actionability": "guided",
           "anomaly": null,
           "category": "template-syntax",
+          "code": "binding-target-assignment-strictness",
+          "data": {
+            "diagnosticAuthority": "semantic-runtime-product",
+            "diagnosticDomain": "template",
+            "diagnosticKind": "binding-target-assignment-strictness",
+            "frameworkErrorCode": null,
+            "frameworkRawErrorAuthority": null,
+            "missingInput": "binding-target-assignment:source-to-target-type-mismatch",
+            "missingInputs": [
+              "binding-target-assignment:source-to-target-type-mismatch"
+            ],
+            "phase": null,
+            "relatedInformation": [],
+            "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "rewrite-expression",
+              "actionability": "guided",
+              "changeDomain": "app-source",
+              "planKind": "template-expression-rewrite",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
+            },
+            "sourceRole": null,
+            "subject": {
+              "source": {
+                "end": 335,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@321..335",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "binding-source-assignment",
+                "start": 321
+              },
+              "span": null,
+              "subjectKind": "template-expression",
+              "uri": null
+            },
+            "taxonomy": {
+              "actionability": null,
+              "category": null,
+              "confidence": null,
+              "impact": null,
+              "schema": null
+            }
+          },
+          "file": "src/unregistered-plugin-resources-app.html",
+          "impact": "degraded",
+          "issues": [
+            {
+              "code": "binding-target-assignment-strictness",
+              "kind": "binding-target-assignment-strictness",
+              "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string."
+            }
+          ],
+          "message": "Binding source type { ready: boolean; } is not assignable to target 'textContent' of type string.",
+          "related": [],
+          "severity": "warning",
+          "source": "semantic-runtime:template",
+          "span": {
+            "end": 335,
+            "start": 321
+          },
+          "spanText": "dashboardState",
+          "status": "primary",
+          "uri": "fixtures://pressure/unregistered-plugin-resources/src/unregistered-plugin-resources-app.html"
+        },
+        {
+          "actionability": "guided",
+          "anomaly": null,
+          "category": "template-syntax",
           "code": "framework-capability-not-registered",
           "data": {
             "diagnosticAuthority": "semantic-authoring-policy",
@@ -2642,10 +2932,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "comparisonKey": "domain/kind/code/severity/text/message",
   "countsMatch": true,
-  "customLspSurfaceCount": 11,
+  "customLspSurfaceCount": 12,
   "customOnly": [],
   "lspOnly": [],
-  "lspPublishCount": 11,
+  "lspPublishCount": 12,
   "suppressedCount": 0
 }
 ```

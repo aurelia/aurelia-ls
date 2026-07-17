@@ -498,6 +498,10 @@ that scan boot-admitted app sources should carry the admitted source-file addres
 instead. `declaration-source.ts` first reuses an admitted source-file address for checker declarations and only then
 materializes a `type-system-program` source-file address for ambient/framework/dependency declarations that the
 TypeScript Program can see but the boot frame did not admit as app source.
+During a staged generation, declaration lookup filters the store's path index through the active publication view.
+That makes a prior computation-owned Program source address absent until the candidate restages it, while declarations
+projected earlier in the same candidate remain visible. Reading the committed path index directly can otherwise omit a
+source-file record from the replacement closure while preserving spans that still reference it.
 When a checker-carrier consumer scans declaration bodies for app diagnostics, use
 `admittedSourceFileAddressHandleForCheckerNode(...)`; it returns only already-admitted source files and leaves
 checker-only files out of app-authored diagnostic publication.
@@ -750,8 +754,12 @@ callback parameter typing, object-option typing, and nested literal context do n
 - One template-analysis generation shares one `CheckerExpressionTypeWorld` across compiler/runtime materializers,
   selected authoring templates, and app-level follow-up that still runs inside the same publication. The retained world
   records that generation's checker/projection authority, but its projector is run-bound when the generation is staged.
-  Post-commit overlay and cursor inquiries call `freshCommittedGeneration()` so lazy projections publish through the
-  committed store with a fresh cache rather than attempting to write through a closed computation run.
+  Commit rebinds every retained resource emission to one store-backed world guarded by the committed generation
+  authority; replacement or disposal revokes retained evaluators and lazy projections instead of allowing them to read
+  a newer kernel world. Overlay, completion, and cursor work that is not retained by a committed generation calls
+  `freshInquiryGeneration()` for a separate store-backed cache. That factory first proves its source world is current;
+  a revoked world cannot mint a fresh unguarded writer into the store. Retaining per-resource run-bound worlds would
+  make lazy follow-up projection depend on which object path a query happened to traverse.
 - Resource-level timing profiles mark the generation cache before each resource and report deltas, so aggregate
   pressure can stay honest while same-generation materializers still share projection work.
 - Routed app profile summaries aggregate those resource-level expression-cache deltas before app disposal. Use that

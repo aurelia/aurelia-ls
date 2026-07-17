@@ -85,7 +85,7 @@ export class RouteComponentAgentMaterializationProjectPass {
   constructor(
     readonly store: KernelStore,
   ) {
-    this.childContainerMaterializer = new ContainerChildMaterializer(store);
+    this.childContainerMaterializer = new ContainerChildMaterializer(store, store);
   }
 
   materializeAndEmit(

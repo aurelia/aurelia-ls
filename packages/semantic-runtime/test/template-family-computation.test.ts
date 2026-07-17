@@ -7,7 +7,6 @@ import { describe, expect, test } from 'vitest';
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import {
   ComputationCommitState,
-  ComputationLifecycleRegistry,
 } from '../src/kernel/computation-lifecycle.js';
 import { KernelPublicationDecisionKind } from '../src/kernel/publication.js';
 import { SourceTextSnapshotAuthority } from '../src/kernel/source-text-snapshot.js';
@@ -74,7 +73,7 @@ describe('template family computation', () => {
       throw new Error('Expected the fixture app template to be compiled.');
     }
 
-    const cohorts = app.emission.templates.cohortAuthority.cohortSetFor(baseline.definition);
+    const cohorts = app.emission.templateCohorts.cohortSetFor(baseline.definition);
     expect(cohorts.current().map((cohort) => cohort.analysisContextProductHandle)).toEqual([
       baseline.analysisContextProductHandle,
     ]);
@@ -82,7 +81,7 @@ describe('template family computation', () => {
     sourceProvider.write(templateFileName, readFileSync(templateFileName, 'utf8'));
     const compiler = new TemplateCompilationComputationService(
       runtime.workspace.store,
-      new ComputationLifecycleRegistry(runtime.workspace.store),
+      runtime.computationLifecycle,
       new SourceTextSnapshotAuthority(sourceProvider),
     );
     const attempt = compiler.prepare(new TemplateCompilationComputationRequest(
@@ -113,7 +112,7 @@ describe('template family computation', () => {
     }
 
     const store = runtime.workspace.store;
-    const lifecycle = new ComputationLifecycleRegistry(store);
+    const lifecycle = runtime.computationLifecycle;
     const sourceProvider = new MutableTemplateSourceProvider();
     const compilerWorldAuthority = TemplateCompilerWorldAuthority.fixed(baseline.parentCompilerWorld);
     const appCohort = new TemplateCompilationCohort(
@@ -319,7 +318,7 @@ describe('template family computation', () => {
     let currentCompilerWorld = baseline.parentCompilerWorld;
     const compilerWorldAuthority = new TemplateCompilerWorldAuthority(() => currentCompilerWorld);
     const store = runtime.workspace.store;
-    const lifecycle = new ComputationLifecycleRegistry(store);
+    const lifecycle = runtime.computationLifecycle;
     const sourceProvider = new MutableTemplateSourceProvider();
     const compiler = new TemplateCompilationComputationService(
       store,

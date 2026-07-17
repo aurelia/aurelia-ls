@@ -132,6 +132,19 @@ configuration values to degrade when a recognizer asks a second question about t
 `StaticEvaluationExpressionReader` keeps one evaluator per reader for those follow-up reads, matching the
 binding-source evaluation frame's per-source evaluator lifetime so guardrails and seam checkpoints do not reset for
 every property or target probe.
+The reader does not create an isolation boundary. A replaceable or speculative analysis owner calls
+`StaticProjectEvaluationResult.forkSession()` once, then shares that graph-preserving session across all of its readers
+and evaluator-backed consumers. The fork copies mutable environments, objects, collections, functions, classes,
+instances, namespaces, promise fulfillment values, completions, and runtime-host returns while preserving aliases and
+cycles, including Promise back-edges and class/instance knots. Runtime hosts transfer any semantic identity they own
+outside the generic value graph (for example Aurelia registration and registry-body metadata), and the transfer context
+forks mutable child values retained by that metadata. Call-frame environments inherit the session realm; values created
+through the wrapped intrinsic host and returned by runtime-host call/new hooks are adopted into that realm rather than
+cloned a second time, so host-installed aliases and captured closures stay exact. Forking per reader is incorrect: one authored
+configuration/resource value would acquire several unrelated
+identities, breaking joins such as two app roots that intentionally share one router configuration. Template-analysis
+candidates and post-template binding/router evaluation own separate explicit sessions so rejected work cannot mutate
+the admitted project-evaluation graph.
 Product runtime hosts may expose framework-shaped intrinsics only at the host boundary. Aurelia's host handles browser
 ambient globals such as `document`, `window`, `self`, `customElements`, and `console` as host-environment boundaries so
 app admission can preserve host-dependent setup expressions without reporting them as missing identifiers. It also

@@ -177,28 +177,43 @@ interface RuntimeValueConverterInstanceRead {
  * carries a static value, but source lookup, view-model member access, and getter execution stay with the binding flow.
  */
 export class RuntimeBindingSourceValueEvaluator {
-  private readonly evaluationFrame: RuntimeBindingSourceEvaluationFrame;
   private readonly arrayMethods: RuntimeBindingSourceArrayMethodEvaluator;
   private readonly memberValues: RuntimeBindingSourceMemberValueReader;
   private readonly valueConverterInstances = new Map<string, RuntimeValueConverterInstanceRead>();
 
-  constructor(
+  private constructor(
     readonly store: KernelStore,
     readonly projector: CheckerTypeProjector,
     readonly evaluation: StaticProjectEvaluationResult,
+    private readonly evaluationFrame: RuntimeBindingSourceEvaluationFrame,
     readonly boundControllerValues: RuntimeBoundControllerValueTable = RuntimeBoundControllerValueTable.empty,
     readonly activationContext: RuntimeBindingSourceActivationContext | null = null,
     private readonly defaultActiveContainer: Container | null = null,
   ) {
-    this.evaluationFrame = new RuntimeBindingSourceEvaluationFrame(
-      evaluation,
-      activationContext,
-    );
     this.arrayMethods = new RuntimeBindingSourceArrayMethodEvaluator(
       store,
       (context) => this.evaluateNode(context),
     );
     this.memberValues = new RuntimeBindingSourceMemberValueReader(this.evaluationFrame);
+  }
+
+  static create(
+    store: KernelStore,
+    projector: CheckerTypeProjector,
+    evaluation: StaticProjectEvaluationResult,
+    boundControllerValues: RuntimeBoundControllerValueTable = RuntimeBoundControllerValueTable.empty,
+    activationContext: RuntimeBindingSourceActivationContext | null = null,
+    defaultActiveContainer: Container | null = null,
+  ): RuntimeBindingSourceValueEvaluator {
+    return new RuntimeBindingSourceValueEvaluator(
+      store,
+      projector,
+      evaluation,
+      new RuntimeBindingSourceEvaluationFrame(evaluation, activationContext),
+      boundControllerValues,
+      activationContext,
+      defaultActiveContainer,
+    );
   }
 
   /** Returns a source-value evaluator whose root requests default to the supplied DI activation container. */
@@ -207,6 +222,7 @@ export class RuntimeBindingSourceValueEvaluator {
       this.store,
       this.projector,
       this.evaluation,
+      this.evaluationFrame,
       this.boundControllerValues,
       this.activationContext,
       activeContainer,

@@ -274,7 +274,7 @@ export class RouteRuntimeTopologyProjectPass {
   constructor(
     readonly store: KernelStore,
   ) {
-    this.childContainerMaterializer = new ContainerChildMaterializer(store);
+    this.childContainerMaterializer = new ContainerChildMaterializer(store, store);
   }
 
   materializeAndEmit(

@@ -243,7 +243,7 @@ class TypeShapePublicationFrame {
 export class CheckerTypeProjector {
   constructor(
     /** Hot analysis store that receives type-system projection records. */
-    readonly store: KernelStore,
+    private readonly store: KernelStore,
     /** Immediate or staged owner of projected records and hot details. */
     readonly publication: KernelPublicationContext = store,
   ) {}
@@ -320,7 +320,7 @@ export class CheckerTypeProjector {
     source: TypeProjectionSourceSet,
     records: KernelStoreRecord[],
   ): TypeShapePublicationFrame {
-    const declarationSource = typeShapeDeclarationSource(this.store, descriptor);
+    const declarationSource = typeShapeDeclarationSource(this.store, this.publication, descriptor);
     appendDeclarationSourceRecords(this.publication, records, declarationSource);
     const handles = this.typeShapeHandles(input.localKey);
     const shapeReference = typeShapeReferenceFor(
@@ -543,7 +543,13 @@ export class CheckerTypeProjector {
     const name = symbol.getName();
     const localKey = `${input.localKey}:member:${localKeyPart(name)}`;
     const valueType = valueTypeForSymbol(input.checker, symbol, input.sourceNode ?? null, declarations);
-    const declarationSource = sourceSpanForCheckerDeclaration(this.store, symbol, declarations, SourceSpanRole.Name);
+    const declarationSource = sourceSpanForCheckerDeclaration(
+      this.store,
+      this.publication,
+      symbol,
+      declarations,
+      SourceSpanRole.Name,
+    );
     appendDeclarationSourceRecords(this.publication, records, declarationSource);
     const valueTypeReference = valueTypeReferenceForMember(input, valueType);
     return new CheckerTypeMember(
@@ -657,11 +663,18 @@ const sourceIndependentCheckerTypeDisplays = new Set([
 
 function typeShapeDeclarationSource(
   store: KernelStore,
+  publication: KernelPublicationContext,
   descriptor: CheckerTypeDescriptor,
 ): DeclarationSourcePublication | null {
   return descriptor.symbol == null
     ? null
-    : sourceSpanForCheckerDeclaration(store, descriptor.symbol, descriptor.declarations, SourceSpanRole.Name);
+    : sourceSpanForCheckerDeclaration(
+      store,
+      publication,
+      descriptor.symbol,
+      descriptor.declarations,
+      SourceSpanRole.Name,
+    );
 }
 
 function checkerTypeRelatedTypes(input: CheckerTypeProjectionRequest): TypeShapeRelatedTypes {

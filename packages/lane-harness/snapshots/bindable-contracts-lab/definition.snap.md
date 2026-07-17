@@ -424,21 +424,21 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "targetRange": {
         "end": {
-          "character": 53,
+          "character": 39,
           "line": 11
         },
         "start": {
-          "character": 44,
+          "character": 26,
           "line": 11
         }
       },
       "targetSelectionRange": {
         "end": {
-          "character": 53,
+          "character": 39,
           "line": 11
         },
         "start": {
-          "character": 44,
+          "character": 26,
           "line": 11
         }
       },
@@ -459,15 +459,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "file": "src/profile-card.ts",
       "range": {
         "end": {
-          "character": 53,
+          "character": 39,
           "line": 11
         },
         "start": {
-          "character": 44,
+          "character": 26,
           "line": 11
         }
       },
-      "rangeText": "labelText",
+      "rangeText": "display-label",
       "uri": "fixtures://pressure/bindable-contracts-lab/src/profile-card.ts"
     }
   ]
@@ -502,21 +502,21 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     {
       "targetRange": {
         "end": {
-          "character": 53,
+          "character": 39,
           "line": 8
         },
         "start": {
-          "character": 44,
+          "character": 26,
           "line": 8
         }
       },
       "targetSelectionRange": {
         "end": {
-          "character": 53,
+          "character": 39,
           "line": 8
         },
         "start": {
-          "character": 44,
+          "character": 26,
           "line": 8
         }
       },
@@ -537,15 +537,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "file": "src/display-hint.ts",
       "range": {
         "end": {
-          "character": 53,
+          "character": 39,
           "line": 8
         },
         "start": {
-          "character": 44,
+          "character": 26,
           "line": 8
         }
       },
-      "rangeText": "labelText",
+      "rangeText": "display-label",
       "uri": "fixtures://pressure/bindable-contracts-lab/src/display-hint.ts"
     }
   ]

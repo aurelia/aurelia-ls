@@ -16,7 +16,9 @@ import {
   type KernelStoreDisposalSummary,
   type KernelStoreLifetimeMarker,
 } from '../kernel/store.js';
+import { ComputationLifecycleRegistry } from '../kernel/computation-lifecycle.js';
 import { AureliaAppWorldProjectEmission, AureliaAppWorldProjectPass } from '../configuration/app-world-project-pass.js';
+import { TemplateAnalysisProjectComputationService } from '../template/template-analysis-computation.js';
 import {
   evaluateAureliaProject,
 } from '../configuration/aurelia-project-evaluation.js';
@@ -436,10 +438,18 @@ export class SemanticRuntime {
   private readonly appsByCacheKey = new Map<string, SemanticApp>();
   private readonly projectShapesByProjectKey = new Map<string, SemanticProjectShape>();
   private readonly queryClaimsByProfile = new Map<SemanticRuntimeInquiryProfile, QueryClaimGraph>();
+  readonly computationLifecycle: ComputationLifecycleRegistry;
+  readonly templateAnalysisComputations: TemplateAnalysisProjectComputationService;
 
   private constructor(
     readonly workspace: WorkspaceBootFrame,
-  ) {}
+  ) {
+    this.computationLifecycle = new ComputationLifecycleRegistry(workspace.store);
+    this.templateAnalysisComputations = new TemplateAnalysisProjectComputationService(
+      workspace.store,
+      this.computationLifecycle,
+    );
+  }
 
   static async open(options: SemanticRuntimeOptions): Promise<SemanticRuntime> {
     const workspaceRoot = path.resolve(options.workspaceRoot);
@@ -548,6 +558,7 @@ export class SemanticRuntime {
       rowLimit,
     );
     const cachedApps = [...this.appsByCacheKey.values()]
+      .filter((app) => app.isCurrent())
       .map((app) => app.cacheSummary(rowLimit, request.includeQueryClaimRows === true))
       .sort((left, right) =>
         left.projectKey.localeCompare(right.projectKey)
@@ -1555,7 +1566,7 @@ export class SemanticRuntime {
     const kernelMarker = this.workspace.store.markLifetime();
     let emission: AureliaAppWorldProjectEmission;
     try {
-      emission = new AureliaAppWorldProjectPass().constructAndEmit(this.workspace.store, project, {
+      emission = new AureliaAppWorldProjectPass(this.templateAnalysisComputations).constructAndEmit(this.workspace.store, project, {
         analysisDepth,
         includeAuthoringTemplates,
         authoringTemplateSourceFiles,
@@ -1639,7 +1650,8 @@ export class SemanticRuntime {
   ): SemanticApp | null {
     for (const app of this.appsByCacheKey.values()) {
       if (
-        (project == null || app.project.projectKey === project.projectKey)
+        app.isCurrent()
+        && (project == null || app.project.projectKey === project.projectKey)
         && semanticAppAnalysisDepthSatisfies(app.emission.analysisDepth, requestedDepth)
         && appContainsTemplateSourceFile(app, sourceFilePath)
       ) {
@@ -1659,11 +1671,13 @@ export class SemanticRuntime {
     const exact = this.appsByCacheKey.get(
       appCacheKey(projectKey, requestedDepth, includeAuthoringTemplates, authoringTemplateSourceFiles, authoringTemplateLimit),
     );
-    if (exact != null) {
+    if (exact?.isCurrent() === true) {
       return exact;
     }
     for (const app of this.appsByCacheKey.values()) {
       if (
+        app.isCurrent()
+        &&
         app.project.projectKey === projectKey
         && semanticAppAnalysisDepthSatisfies(app.emission.analysisDepth, requestedDepth)
         && app.satisfiesAuthoringTemplateRequest(includeAuthoringTemplates, authoringTemplateSourceFiles, authoringTemplateLimit)
@@ -2437,23 +2451,23 @@ function semanticRuntimeAppWorldFreeProfileSummary(
 /** Open app facade. It owns one project-level semantic app-world emission and compact query entrypoints. */
 export class SemanticApp {
   private readonly routeQueries: SemanticAppRouteQueries;
-  readonly queryClaims: QueryClaimGraph;
+  private readonly defaultQueryClaims: QueryClaimGraph;
   private readonly queryClaimsByProfile = new Map<SemanticRuntimeInquiryProfile, QueryClaimGraph>();
   private readonly activeInquiryProfileStack: SemanticRuntimeInquiryProfile[] = [];
   private applicationFileRolesByPathCache: ReadonlyMap<string, readonly ApplicationFileRole[]> | null = null;
   private staticEvaluationOriginsByPathCache: ReadonlyMap<string, SemanticOpenSeamSiteRow['staticEvaluationOrigins']> | null = null;
-  readonly templateQueries: SemanticAppTemplateQueries;
+  private readonly currentTemplateQueries: SemanticAppTemplateQueries;
 
   constructor(
     readonly runtime: SemanticRuntime,
     readonly project: ProjectBootFrame,
-    readonly emission: AureliaAppWorldProjectEmission,
+    private readonly appEmission: AureliaAppWorldProjectEmission,
     private readonly cacheRequest: SemanticAppCacheRequest,
   ) {
-    this.queryClaims = this.queryClaimsForProfile(emission.profile.inquiryProfile);
-    this.routeQueries = new SemanticAppRouteQueries(emission, runtime.workspace.store);
-    this.templateQueries = new SemanticAppTemplateQueries(
-      emission,
+    this.defaultQueryClaims = this.queryClaimsForProfile(appEmission.profile.inquiryProfile);
+    this.routeQueries = new SemanticAppRouteQueries(appEmission, runtime.workspace.store);
+    this.currentTemplateQueries = new SemanticAppTemplateQueries(
+      appEmission,
       runtime.workspace.store,
       runtime.workspace.rootDir,
       project.rootDir,
@@ -2464,11 +2478,34 @@ export class SemanticApp {
     return this.cacheRequest.kernelMarker;
   }
 
+  /** Complete app fan-in guarded by the exact template-analysis generation that produced it. */
+  get emission(): AureliaAppWorldProjectEmission {
+    this.appEmission.requireCurrentTemplateAnalysis();
+    return this.appEmission;
+  }
+
+  /** Default retained-answer graph guarded by the app generation whose answers it contains. */
+  get queryClaims(): QueryClaimGraph {
+    this.appEmission.requireCurrentTemplateAnalysis();
+    return this.defaultQueryClaims;
+  }
+
+  /** Public template-query surface guarded by the app's pinned template-analysis generation. */
+  get templateQueries(): SemanticAppTemplateQueries {
+    this.appEmission.requireCurrentTemplateAnalysis();
+    return this.currentTemplateQueries;
+  }
+
+  isCurrent(): boolean {
+    return this.appEmission.templateAnalysisGeneration.isCurrent();
+  }
+
   satisfiesAuthoringTemplateRequest(
     includeAuthoringTemplates: boolean,
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
   ): boolean {
+    this.emission.requireCurrentTemplateAnalysis();
     return !includeAuthoringTemplates
       || (
         this.cacheRequest.includeAuthoringTemplates
@@ -2482,6 +2519,7 @@ export class SemanticApp {
   }
 
   cacheSummary(rowLimit: number, includeQueryClaimRows: boolean): SemanticRuntimeCachedAppSummary {
+    this.emission.requireCurrentTemplateAnalysis();
     return {
       projectKey: this.project.projectKey,
       analysisDepth: this.cacheRequest.analysisDepth,
@@ -2522,6 +2560,7 @@ export class SemanticApp {
   }
 
   ask(query: SemanticAppQuery): SemanticRuntimeAnswer<unknown> {
+    this.emission.requireCurrentTemplateAnalysis();
     const unsupportedFilterAnswer = this.answerUnsupportedQueryFilters(query);
     if (unsupportedFilterAnswer != null) {
       return unsupportedFilterAnswer;

@@ -237,7 +237,7 @@ export class RuntimeCompositionMaterializer {
     private readonly store: KernelStore,
     private readonly publication: KernelPublicationContext,
   ) {
-    this.childContainerMaterializer = new ContainerChildMaterializer(store);
+    this.childContainerMaterializer = new ContainerChildMaterializer(store, publication);
     this.controllerPublication = new RuntimeControllerPublicationMaterializer(store, publication);
   }
 

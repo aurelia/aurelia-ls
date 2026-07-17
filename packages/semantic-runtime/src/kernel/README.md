@@ -134,8 +134,10 @@ vocabulary mutations, or semantic boundaries. The store also validates controlle
 must be declared as product-kind vocabulary, claim predicates must be declared as claim-predicate vocabulary, and claim
 endpoints must match the predicate's directional signature.
 `KernelStore.markLifetime()` / `disposeSince(...)` is the app-session reclamation primitive for answer-local work. A
-lifetime marker tracks ownership lineage, not append position: replacing a long-lived computation publication preserves
-its original lifetime even when the replacement objects are written after a query marker. `markObservation()` is the
+lifetime marker tracks ownership lineage, not append position: replacing a computation publication preserves its
+lineage lifetime unless the candidate consumes a younger positive kernel dependency, in which case the complete owned
+record/detail closure advances to that dependency's lifetime. This monotone rule prevents an older publication from
+surviving disposal after it has incorporated answer-local truth. `markObservation()` is the
 separate mutation cursor for telemetry and phase-density reads, so replacement writes remain measurable without making
 them answer-local. Query boundaries such as `QueryClaimGraph` use lifetime markers; telemetry uses observation markers.
 The disposal summary includes reclaimed record-handle character mass as well as record/detail counts, because
@@ -154,6 +156,10 @@ from observation markers and inspect records/details mutated after the marker. S
 density is a second opt-in lane behind `includeDetailDensity` for whole-store snapshots and behind phase-detail
 telemetry for phase-local rows. Use it when memory pressure needs to know which sidecar detail kinds and direct fields
 carry mass; do not smuggle those scans into ordinary adapter answers.
+`KernelTelemetryReadView` carries the same count/marker contract across committed and staged worlds. A staged
+publication reports the logical candidate view (prior owned closure removed, current candidate added), while density
+markers inspect only writes staged after the marker. Phase telemetry must spend that view instead of sampling the
+committed store and reporting an atomic candidate as empty.
 
 `computation-lifecycle.ts` owns technical execution history for same-runtime recomputation. A domain locus reconciles a
 stable computation ID; each run stages a complete read set and publication closure; commit revalidates every typed read
@@ -162,6 +168,27 @@ execution. `KernelStore.replacePublication(...)` prevalidates ownership, referen
 sidecar participation before one synchronous callback-free replacement. A failed or stale run leaves the previous
 records, details, read index, and manifest intact. Sidecar indexes remain acceleration structures; replacing a detail
 they index is rejected until that index registers an explicit lifecycle participant.
+Manifest authority requires the exact frozen manifest object currently admitted by the store and the same owner that
+created its lineage; a copied handle list, an earlier manifest, or an exact lifecycle manifest presented through the
+store-owned lane is stale. The manifest's monotone lifetime then proves that every listed record and detail still belongs
+to that lineage and cannot outlive a positive dependency it consumed. Successful replacement retires the prior capability, and lifetime disposal enumerates and retires the
+final capability even when a store-owned or lifecycle-owned closure is empty. Detail admission captures the exact
+foreign catalog entry (including absence) seen during staging and revalidates it at commit. Fallible detail-field
+normalization is prepared without mutation, then applied as one reversible descriptor transaction before any live
+catalog mutation; weak envelope ownership changes only during the callback-free admission tail. A failed staged write
+poisons the run so an accepted prefix can never become a commit payload.
+Committed domain object graphs are admitted once per computation run and domain through the lifecycle registry. Do not
+construct a second authority around the same committed publication or let a domain-local cache decide uniqueness.
+The next run at a locus reads through a candidate view that hides every record and detail owned by the prior manifest.
+Still-current outputs must be restaged as part of the complete next closure; otherwise commit withdraws them. This
+prevents a materializer from mistaking its own old output for upstream truth and then publishing a partial replacement.
+The staged record/detail maps are both the read-your-writes authority and the final commit payload, so duplicate
+`IfAbsent` admission cannot resolve one way during construction and reappear as duplicate rows at commit.
+
+`KernelStore.publish(...)` remains the immediate first-publication boundary used by eager producers. It is not a
+recomputation protocol: it has no prior manifest, cannot withdraw omitted output, and legacy nested producers may emit
+references before an outer owner batch exists. Do not use it to approximate replacement with cleanup calls. Migrate a
+logical owner to one staged closure when rollback, currentness, or same-runtime replacement becomes part of its contract.
 
 Materializers whose closure proof depends on products staged earlier in the same run consume
 `KernelMaterializationReadView`, not the committed store directly. Its staged implementation overlays pending
@@ -176,9 +203,9 @@ complete candidate emissions explicitly, while exact links may follow a staged d
 
 A projector or expression world backed by a `ComputationRun` is a candidate-generation capability, not a retained
 query cache. It may be shared by every materializer in that generation and by follow-up work that runs before commit,
-but the run is closed after commit. Post-commit inquiries must start a fresh store-backed expression generation from
-the committed emission; reusing the closed projector would turn a later lazy TypeChecker projection into a write
-against a completed transaction.
+but the run is closed after commit. A committed emission rebinds its retained expression world to a store-backed
+publication guarded by the exact committed generation authority; replacement or disposal revokes reads as well as
+lazy writes. Inquiry-local work that is not retained by a generation starts a separate fresh store-backed world.
 
 There is one `ComputationLifecycleRegistry` per `KernelStore`. The store enforces that ownership boundary and notifies the
 registry when lifetime disposal reclaims a complete publication, so a later run cannot reuse a stale manifest or steal

@@ -69,6 +69,8 @@ export class CustomElementTemplateDefinition {
     readonly markup: string | null = null,
     readonly addressHandle: AddressHandle | null = null,
     readonly sourceMap: TemplateSourceOffsetMap | null = null,
+    /** Revision of the complete authored file from which markup and metadata were admitted. */
+    readonly authoredSourceRevision: string | null = null,
   ) {}
 }
 

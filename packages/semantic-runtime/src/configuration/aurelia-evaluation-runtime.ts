@@ -128,6 +128,20 @@ for (const statement of syntheticSource.statements) {
 }
 
 export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
+  transferValueMetadata(source, target): void {
+    if (source.kind !== EvaluationValueKind.Object || target.kind !== EvaluationValueKind.Object) {
+      return;
+    }
+    const frameworkKind = frameworkRegistrationKindsByObject.get(source);
+    if (frameworkKind != null) {
+      frameworkRegistrationKindsByObject.set(target, frameworkKind);
+    }
+    const registryBody = registryBodiesByObject.get(source);
+    if (registryBody != null) {
+      registryBodiesByObject.set(target, registryBody);
+    }
+  },
+
   resolveIdentifier(
     identifier: ts.Identifier,
   ): EvaluationValue | null {

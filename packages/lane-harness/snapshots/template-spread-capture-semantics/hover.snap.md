@@ -32,7 +32,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 130,
+    "markdownCharacters": 198,
     "range": null
   }
 }
@@ -48,6 +48,8 @@ spreadState: SpreadCardState
 ```
 
 kind: `property`
+owner: `TemplateSpreadCaptureSemanticsApp`
+owner shape: `class`
 
 ---
 
@@ -224,7 +226,7 @@ kind: `value-converter`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 127,
+    "markdownCharacters": 195,
     "range": null
   }
 }
@@ -240,6 +242,8 @@ capturedValue: string
 ```
 
 kind: `property`
+owner: `TemplateSpreadCaptureSemanticsApp`
+owner shape: `class`
 
 ---
 

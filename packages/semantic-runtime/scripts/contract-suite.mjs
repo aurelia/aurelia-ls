@@ -314,7 +314,7 @@ const contractSuites = [
     'kernel',
     'query-claim',
     'lifetime',
-  ], 'contract-type-projection-lifetime.mjs', 'TypeChecker projection sidecar indexes prune with kernel product-detail disposal.'),
+  ], 'contract-type-projection-lifetime.mjs', 'Canonical TypeChecker projections follow kernel lifetime and Program epochs.'),
   contract('type-system', 'fast', [
     'type-system',
     'checker',

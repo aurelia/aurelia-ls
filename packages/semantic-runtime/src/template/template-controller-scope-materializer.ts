@@ -1602,7 +1602,7 @@ export class TemplateControllerScopeMaterializer {
     return measureSemanticRuntimePhase(
       profiling.phases,
       `scope-construction:${name}`,
-      this.store,
+      profiling.kernel,
       profiling.telemetry,
       read,
     );
@@ -1730,7 +1730,7 @@ export class TemplateControllerScopeMaterializer {
     const input = frame.input;
     const sourceValueEvaluator = input.evaluation == null
       ? null
-      : new RuntimeBindingSourceValueEvaluator(
+      : RuntimeBindingSourceValueEvaluator.create(
           this.store,
           input.expressionWorld.projector,
           input.evaluation,
@@ -2066,7 +2066,7 @@ export class TemplateControllerScopeMaterializer {
       input,
       effect,
       targetType,
-      sourceValueEvaluator: new RuntimeBindingSourceValueEvaluator(
+      sourceValueEvaluator: RuntimeBindingSourceValueEvaluator.create(
         this.store,
         input.expressionWorld.projector,
         input.evaluation,

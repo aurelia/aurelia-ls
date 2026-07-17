@@ -109,7 +109,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Aurelia template compiler AUR0720 rejects this template syntax: Spreading syntax \"...xxx\" is reserved. Encountered \"...$element.bind\"..",
       "range": {
         "end": {
-          "character": 36,
+          "character": 21,
           "line": 1
         },
         "start": {
@@ -117,7 +117,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 1
         }
       },
-      "rangeText": "...$element.bind=\"spreadSource\"",
+      "rangeText": "...$element.bind",
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
@@ -159,7 +159,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Aurelia template compiler AUR0721 rejects this template syntax: Usage of $bindables is only allowed on custom elements. Encountered \"$bindables.bind\"..",
       "range": {
         "end": {
-          "character": 35,
+          "character": 15,
           "line": 2
         },
         "start": {
@@ -167,7 +167,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 2
         }
       },
-      "rangeText": "$bindables.bind=\"spreadSource\"",
+      "rangeText": "$bindables",
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
@@ -621,7 +621,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:9:template:template-compiler-error:framework-error-code:AUR0720:src/template-compiler-errors-app.html:63:94:template-compiler:AUR0720",
+        "groupKey": "row:diagnostic:9:template:template-compiler-error:framework-error-code:AUR0720:src/template-compiler-errors-app.html:63:79:template-compiler:AUR0720",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -674,16 +674,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 94,
+              "end": 79,
               "start": 63
             },
-            "spanText": "...$element.bind=\"spreadSource\"",
+            "spanText": "...$element.bind",
             "status": "primary",
             "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:9:template:template-compiler-error:framework-error-code:AUR0720:src/template-compiler-errors-app.html:63:94:template-compiler:AUR0720"
+          "rowId": "diagnostic:9:template:template-compiler-error:framework-error-code:AUR0720:src/template-compiler-errors-app.html:63:79:template-compiler:AUR0720"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -691,7 +691,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:0:template:template-compiler-error:framework-error-code:AUR0721:src/template-compiler-errors-app.html:129:159:template-compiler:AUR0721",
+        "groupKey": "row:diagnostic:0:template:template-compiler-error:framework-error-code:AUR0721:src/template-compiler-errors-app.html:129:139:template-compiler:AUR0721",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -744,16 +744,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 159,
+              "end": 139,
               "start": 129
             },
-            "spanText": "$bindables.bind=\"spreadSource\"",
+            "spanText": "$bindables",
             "status": "primary",
             "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:0:template:template-compiler-error:framework-error-code:AUR0721:src/template-compiler-errors-app.html:129:159:template-compiler:AUR0721"
+          "rowId": "diagnostic:0:template:template-compiler-error:framework-error-code:AUR0721:src/template-compiler-errors-app.html:129:139:template-compiler:AUR0721"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -1327,10 +1327,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 159,
+          "end": 139,
           "start": 129
         },
-        "spanText": "$bindables.bind=\"spreadSource\"",
+        "spanText": "$bindables",
         "status": "canonical",
         "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
       },
@@ -1852,10 +1852,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 94,
+          "end": 79,
           "start": 63
         },
-        "spanText": "...$element.bind=\"spreadSource\"",
+        "spanText": "...$element.bind",
         "status": "canonical",
         "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
       }
@@ -1976,10 +1976,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 94,
+            "end": 79,
             "start": 63
           },
-          "spanText": "...$element.bind=\"spreadSource\"",
+          "spanText": "...$element.bind",
           "status": "primary",
           "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
         },
@@ -2033,10 +2033,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 159,
+            "end": 139,
             "start": 129
           },
-          "spanText": "$bindables.bind=\"spreadSource\"",
+          "spanText": "$bindables",
           "status": "primary",
           "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
         },

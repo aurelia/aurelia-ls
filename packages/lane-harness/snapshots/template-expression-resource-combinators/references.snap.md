@@ -15,11 +15,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "anchor": "${item.label & innerAudit:'inner' & missingBehavior}",
   "at": "innerAudit",
   "atOccurrence": 1,
-  "displayPosition": "src/resource-combinator-gallery.html:14:65",
+  "displayPosition": "src/resource-combinator-gallery.html:16:65",
   "file": "src/resource-combinator-gallery.html",
   "lspPosition": {
     "character": 64,
-    "line": 13
+    "line": 15
   },
   "occurrence": 1
 }
@@ -48,11 +48,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 59,
-          "line": 11
+          "line": 13
         },
         "start": {
           "character": 49,
-          "line": 11
+          "line": 13
         }
       },
       "uri": "fixtures://pressure/template-expression-resource-combinators/src/resource-combinator-gallery.html"
@@ -61,11 +61,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 57,
-          "line": 12
+          "line": 14
         },
         "start": {
           "character": 47,
-          "line": 12
+          "line": 14
         }
       },
       "uri": "fixtures://pressure/template-expression-resource-combinators/src/resource-combinator-gallery.html"
@@ -74,11 +74,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 78,
-          "line": 12
+          "line": 14
         },
         "start": {
           "character": 68,
-          "line": 12
+          "line": 14
         }
       },
       "uri": "fixtures://pressure/template-expression-resource-combinators/src/resource-combinator-gallery.html"
@@ -87,11 +87,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 74,
-          "line": 13
+          "line": 15
         },
         "start": {
           "character": 64,
-          "line": 13
+          "line": 15
         }
       },
       "uri": "fixtures://pressure/template-expression-resource-combinators/src/resource-combinator-gallery.html"
@@ -128,11 +128,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 59,
-          "line": 11
+          "line": 13
         },
         "start": {
           "character": 49,
-          "line": 11
+          "line": 13
         }
       },
       "rangeText": "innerAudit",
@@ -144,11 +144,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 57,
-          "line": 12
+          "line": 14
         },
         "start": {
           "character": 47,
-          "line": 12
+          "line": 14
         }
       },
       "rangeText": "innerAudit",
@@ -160,11 +160,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 78,
-          "line": 12
+          "line": 14
         },
         "start": {
           "character": 68,
-          "line": 12
+          "line": 14
         }
       },
       "rangeText": "innerAudit",
@@ -176,11 +176,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 74,
-          "line": 13
+          "line": 15
         },
         "start": {
           "character": 64,
-          "line": 13
+          "line": 15
         }
       },
       "rangeText": "innerAudit",

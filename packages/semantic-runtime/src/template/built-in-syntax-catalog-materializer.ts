@@ -32,6 +32,13 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelDetailAdmission,
+  KernelPublicationPlan,
+  publishProductDetail,
+  type KernelPublicationContext,
+  type KernelProductDetailPublication,
+} from '../kernel/publication.js';
 import { catalogVariantLocalKey } from '../kernel/local-key.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
@@ -186,8 +193,10 @@ export class BuiltInSyntaxCatalogMaterializer {
   private readonly executables: SyntaxResourceExecutableMaterializer;
 
   constructor(
-    /** Hot analysis store that receives built-in syntax records. */
+    /** Store used for deterministic handles and checker-independent source facts. */
     readonly store: KernelStore,
+    /** Immediate or staged owner of built-in syntax records and rich details. */
+    private readonly publication: KernelPublicationContext,
   ) {
     this.executables = new SyntaxResourceExecutableMaterializer(store);
   }
@@ -201,17 +210,13 @@ export class BuiltInSyntaxCatalogMaterializer {
 
     for (const input of catalogInputs) {
       const emission = this.recordsForCatalog(input);
-      if (this.store.readProduct(emission.catalog.productHandle) == null) {
+      if (this.publication.read(emission.catalog.productHandle) == null) {
         records.push(...emission.records);
       }
       catalogs.push(emission.catalog);
       attributePatterns.push(...emission.attributePatterns);
       bindingCommands.push(...emission.bindingCommands);
       compiledPatterns.push(...emission.attributePatterns.flatMap((pattern) => pattern.compiledPatterns));
-    }
-
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'built-in-syntax-catalogs'));
     }
 
     const emission = new BuiltInSyntaxCatalogEmission(
@@ -221,40 +226,52 @@ export class BuiltInSyntaxCatalogMaterializer {
       compiledPatterns,
       records,
     );
-    this.registerProductDetails(emission);
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, 'built-in-syntax-catalogs'),
+      this.productDetailPublications(emission),
+    ));
     return emission;
   }
 
-  private registerProductDetails(emission: BuiltInSyntaxCatalogEmission): void {
-    for (const catalog of emission.catalogs) {
-      this.store.productDetails.addIfAbsent(TemplateProductDetails.BuiltInSyntaxCatalog, catalog.productHandle, catalog);
-    }
-    for (const pattern of emission.attributePatterns) {
-      this.store.productDetails.addIfAbsent(
+  private productDetailPublications(
+    emission: BuiltInSyntaxCatalogEmission,
+  ): readonly KernelProductDetailPublication<unknown>[] {
+    return [
+      ...emission.catalogs.map((catalog) => publishProductDetail(
+        TemplateProductDetails.BuiltInSyntaxCatalog,
+        catalog.productHandle,
+        catalog,
+        KernelDetailAdmission.IfAbsent,
+      )),
+      ...emission.attributePatterns.map((pattern) => publishProductDetail(
         TemplateProductDetails.AttributePatternExecutable,
         pattern.executable.productHandle,
         pattern.executable,
-      );
-    }
-    for (const command of emission.bindingCommands) {
-      this.store.productDetails.addIfAbsent(
+        KernelDetailAdmission.IfAbsent,
+      )),
+      ...emission.bindingCommands.map((command) => publishProductDetail(
         TemplateProductDetails.BindingCommandExecutable,
         command.executable.productHandle,
         command.executable,
-      );
-    }
-    for (const syntaxResource of [...emission.attributePatterns, ...emission.bindingCommands]) {
-      if (syntaxResource.definition?.productHandle != null) {
-        this.store.productDetails.addIfAbsent(
+        KernelDetailAdmission.IfAbsent,
+      )),
+      ...[...emission.attributePatterns, ...emission.bindingCommands].flatMap((syntaxResource) =>
+        syntaxResource.definition?.productHandle == null
+          ? []
+          : [publishProductDetail(
           ResourceProductDetails.Definition,
           syntaxResource.definition.productHandle,
           syntaxResource.definition,
-        );
-      }
-    }
-    for (const pattern of emission.compiledPatterns) {
-      this.store.productDetails.addIfAbsent(TemplateProductDetails.CompiledAttributePattern, pattern.productHandle, pattern);
-    }
+          KernelDetailAdmission.IfAbsent,
+        )]
+      ),
+      ...emission.compiledPatterns.map((pattern) => publishProductDetail(
+        TemplateProductDetails.CompiledAttributePattern,
+        pattern.productHandle,
+        pattern,
+        KernelDetailAdmission.IfAbsent,
+      )),
+    ];
   }
 
   private recordsForCatalog(input: BuiltInSyntaxCatalogInput): BuiltInSyntaxCatalogPublication {
@@ -588,7 +605,7 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
     /** Hot analysis store that receives configured syntax-catalog selection records. */
     readonly store: KernelStore,
   ) {
-    this.catalogMaterializer = new BuiltInSyntaxCatalogMaterializer(store);
+    this.catalogMaterializer = new BuiltInSyntaxCatalogMaterializer(store, store);
   }
 
   materialize(configuration: ConfigurationKernelEmission): ConfiguredBuiltInSyntaxCatalogEmission {

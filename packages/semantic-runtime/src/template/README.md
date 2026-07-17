@@ -41,12 +41,11 @@ classification, expression parsing, and instruction lowering converge on the sam
   planner partitions routeables by their owning app root, computes dependency closure before compilation, and gives
   every owner a deterministic retained parent world containing that owner plus its own declared dependencies. Stable
   project/app-root/owner keys and exact resource-scope comparison prevent queue order, array position, aliases, or
-  source-witness changes from silently selecting a different world. The project authority is fixed for the current
-  immutable app epoch; its callback-backed form admits later same-runtime plan replacement without asking an LSP caller
-  to reconstruct cohorts from compiled emissions. Component worlds and the standalone authoring container/world spend
-  the caller's publication context, so a staged project replan cannot leak those records before the transaction commits.
-  Framework authoring support catalogs are still immediate upstream inputs and must eventually be borrowed from their
-  owning catalog authority rather than brought under template-family ownership.
+  source-witness changes from silently selecting a different world. `template-analysis-computation.ts` owns the current
+  committed project generation and its callback-backed cohort authority, so family computations can follow complete
+  same-runtime replacement without asking an LSP caller to reconstruct cohorts from compiled emissions. Component
+  worlds, the standalone authoring container/world, and its built-in syntax/resource/renderer catalogs all spend the
+  caller's publication context, so a staged project replan cannot leak support records before the transaction commits.
 - `template-compilation-project-pass.ts` is the current project-level template entrypoint. It consumes app-world
   compiler worlds and resource/router authority once, obtains the complete cohort plan, and uses that plan for eager
   compilation-unit materialization, HTML parsing, attribute syntax parsing, attribute classification, compiler-owned
@@ -56,6 +55,14 @@ classification, expression parsing, and instruction lowering converge on the sam
   The pass owns the shared `CheckerExpressionTypeWorld` for all resource runtime-analysis frames in that project
   compilation, while each resource profile reports expression-cache deltas from a local marker. Keep future
   runtime/checker lifetime work at this project-pass boundary instead of rebuilding an expression world per resource.
+  Production runs enter through `TemplateAnalysisProjectComputationService`: compiler and runtime products, checker
+  projections, exact compiler/kernel/source reads, and omitted-output withdrawal form one project publication. A
+  prepared emission remains run-bound and invisible; commit installs one generation-guarded, store-backed expression
+  world shared by every retained resource. Replacement or disposal revokes retained checker reads and lazy projections
+  together with the kernel closure. Resource convergence records the complete authored-file revision that produced each inline
+  or external template, and preparation requires the current source snapshot to match that producer revision before it
+  can certify the candidate. Commit then revalidates the same immutable snapshots, closing both pre-prepare and
+  prepare-to-commit source races.
   App component compiler-world materialization and standalone authoring compiler-world materialization are separate
   profile phases (`component-compiler-world` and `authoring-compiler-world`) so broad app-root cost and LSP/resource
   library fallback cost remain distinguishable.
@@ -84,6 +91,13 @@ classification, expression parsing, and instruction lowering converge on the sam
   production LSP epoch replacement remain outside this boundary. Configuration/DI lifecycle ownership also remains
   upstream: the cohort planner spends the current app-world snapshot and must not grow a parallel registration or
   resource catalog while that larger authority is introduced.
+- `template-analysis-computation.ts` is the larger production authority around the complete project pass. One project
+  locus owns one current generation regardless of analysis depth or authoring policy; those are replacement inputs, not
+  parallel owners of stable handles. `AureliaAppWorldProjectEmission` pins the exact generation used by its downstream
+  observation, state, capability, and router products. Replacement or disposal makes that whole app emission stale and
+  public queries fail closed until `SemanticRuntime` rebuilds a coherent app epoch; template products never hot-swap
+  underneath old fan-in products. A previously obtained `SemanticAppTemplateQueries` object rechecks the same authority
+  at every public operation, so retaining the query capability cannot bypass generation revocation.
 - `compiled-template-comparison.ts` is the first rich-detail cutoff boundary. It compares compiled-template structure
   separately from source/provenance witnesses and resolves stable address handles against old and proposed record views.
   Other rich details remain conservative replacements until their downstream ownership justifies a comparator.
@@ -309,7 +323,11 @@ classification, expression parsing, and instruction lowering converge on the sam
   on syntax-only provenance. This matters when the same wrapper definition is rendered under different template
   controllers or parent scopes. `...$attrs` transfer walks the modeled runtime controller parent chain, matching
   `SpreadBinding.create`'s hydration-context ancestor lookup; do not reintroduce definition-wide capture fallbacks that
-  merge unrelated uses of the same component definition. Dynamic spread compilation also publishes a template-compiler
+  merge unrelated uses of the same component definition. One captured-attribute group is a publication transaction:
+  dynamic instructions, value sites, expression parses, and their provenance claims become visible together only after
+  every captured syntax compiles. A refused group may publish its compiler issue, but must not leak a valid prefix whose
+  missing context would later be mistaken for an independently authored binding. Dynamic spread compilation also
+  publishes a template-compiler
   `no_spread_template_controller` (`AUR9998`) compiler issue when it reaches the `SpreadBinding.addChild` branch that
   rejects template-controller children, while the binding lifecycle lane preserves the sibling runtime-html issue.
 - `runtime-binding-issue.ts` owns binding-lifecycle diagnostics that are not binding-behavior or scope-effect

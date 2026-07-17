@@ -198,6 +198,7 @@
         "Inspect Resolver before changing resolver slot products, registration strategies, or container lookup behavior.",
         "Resolver slots should retain the modeled resolver object when DI publication owns it; do not fall back to resolver product handles when a framework-shaped method such as getFactory needs resolver state.",
         "ResolverStrategy mirrors Aurelia's numeric resolver strategy enum; cached callback registration stores cached state on a callback resolver, and invalid strategy values claim invalid_resolver_strategy / AUR0005.",
+        "Keep Resolver abstract lookup answers pure. Do not copy the framework resolver's activation-time resolving flag or factory cache into speculative reads; cyclic_dependency / AUR0003 belongs to DiDependencyCycleIssueMaterializer, which owns the closed provider and activation graph required to prove re-entry.",
         "Resolver wrapper calls such as newInstanceOf(...) are source-recognized as resolver keys; invalid_new_instance_on_interface / AUR0017 is exact only when the container state is proven fresh and the wrapped interface has no default registration.",
         "Use InstanceProvider for contextual provider semantics and no_instance_provided / AUR0013; keep it at provider-resolution level until a source/runtime lifecycle path proves a diagnostic.",
         "Keep resolver model changes grounded in framework.di rather than local app pressure alone.",
@@ -216,6 +217,12 @@
           "filePath": "packages/semantic-runtime/src/di/instance-provider.ts",
           "symbolName": "InstanceProvider",
           "summary": "Semantic-runtime InstanceProvider model for contextual DI providers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/dependency-cycle-issues.ts",
+          "symbolName": "DiDependencyCycleIssueMaterializer",
+          "summary": "Closed provider/activation graph owner for cyclic dependency authority."
         },
         {
           "kind": "lens",
@@ -239,7 +246,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-07-17"
     },
     {
       "id": "frontier:di-world-publication-materializers",

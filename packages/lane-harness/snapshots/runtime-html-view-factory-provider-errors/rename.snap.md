@@ -82,11 +82,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "range": {
               "end": {
                 "character": 30,
-                "line": 28
+                "line": 31
               },
               "start": {
                 "character": 9,
-                "line": 28
+                "line": 31
               }
             }
           }
@@ -150,11 +150,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 30,
-          "line": 28
+          "line": 31
         },
         "start": {
           "character": 9,
-          "line": 28
+          "line": 31
         }
       },
       "source": "documentChanges",
@@ -179,13 +179,16 @@ diff --git a/src/runtime-html-view-factory-provider-errors-app.html b/src/runtim
 diff --git a/src/runtime-html-view-factory-provider-errors-app.ts b/src/runtime-html-view-factory-provider-errors-app.ts
 --- a/src/runtime-html-view-factory-provider-errors-app.ts
 +++ b/src/runtime-html-view-factory-provider-errors-app.ts
-@@ -1,38 +1,38 @@
+@@ -1,41 +1,41 @@
  import { resolve } from '@aurelia/kernel';
  import {
    customAttribute,
+   customElement,
    IViewFactory,
  } from '@aurelia/runtime-html';
+ import template from './runtime-html-view-factory-provider-errors-app.html';
 
+ @customElement({ name: 'runtime-html-view-factory-provider-errors-app', template })
  export class RuntimeHtmlViewFactoryProviderErrorsApp {
    message = 'ViewFactory provider pressure';
  }

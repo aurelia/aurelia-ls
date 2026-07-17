@@ -3,7 +3,7 @@ import {
   mapExpressionPrimitiveLiteralValue,
   type ExpressionPrimitiveLiteralValue,
 } from '../expression/ast.js';
-import type { EvaluationEnvironmentRecordReference } from './environment-reference.js';
+import type { ModuleEnvironmentRecord } from './environment.js';
 
 export const enum EvaluationValueKind {
   /** Value that could not be reduced without guessing. */
@@ -688,7 +688,7 @@ export class EvaluationFunctionValue {
     /** Function-like declaration captured by this value. */
     readonly declaration: ts.FunctionLikeDeclaration,
     /** Captured environment record used for local calls. */
-    readonly environment: EvaluationEnvironmentRecordReference,
+    readonly environment: ModuleEnvironmentRecord,
     /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,
     /** Evaluator-local own properties assigned to the function object. */
@@ -707,7 +707,7 @@ export class EvaluationClassValue {
     /** Class declaration or expression represented by this value. */
     readonly declaration: ts.ClassLikeDeclaration,
     /** Captured environment record available to later class-aware materializers. */
-    readonly environment: EvaluationEnvironmentRecordReference,
+    readonly environment: ModuleEnvironmentRecord,
     /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,
     /** Evaluator-local own/static properties assigned to the class object. */
@@ -754,12 +754,34 @@ export class EvaluationModuleNamespaceValue {
 export class EvaluationPromiseValue {
   readonly kind = EvaluationValueKind.Promise;
 
+  private forkShell = false;
+
   constructor(
     /** Value that would be observed by promise fulfillment when static evaluation can close it. */
-    readonly fulfilledValue: EvaluationValue,
+    private fulfilledValueState: EvaluationValue,
     /** Syntax node that produced the promise, when one exists. */
     readonly node: ts.Node | null = null,
   ) {}
+
+  get fulfilledValue(): EvaluationValue {
+    return this.fulfilledValueState;
+  }
+
+  /** Create an unpublished shell so graph-preserving session forks can close Promise back-edges. */
+  static forkShell(node: ts.Node | null): EvaluationPromiseValue {
+    const shell = new EvaluationPromiseValue(EvaluationUndefined, node);
+    shell.forkShell = true;
+    return shell;
+  }
+
+  /** Complete a graph-fork shell exactly once before the session graph is exposed. */
+  completeFork(fulfilledValue: EvaluationValue): void {
+    if (!this.forkShell) {
+      throw new Error('Evaluation Promise value is not an incomplete graph-fork shell.');
+    }
+    this.fulfilledValueState = fulfilledValue;
+    this.forkShell = false;
+  }
 }
 
 /** Concrete primitive value classes that can be safely converted to JS primitive values. */

@@ -64,8 +64,6 @@ export const enum ResolverResolutionKind {
   Array = 'array',
   /** Resolver state is not yet precise enough to model the runtime branch. */
   Open = 'open',
-  /** Singleton resolution re-entered while already resolving. */
-  Cyclic = 'cyclic',
   /** Resolver carried a strategy value outside Aurelia's ResolverStrategy enum. */
   InvalidStrategy = 'invalid-strategy',
 }
@@ -92,8 +90,6 @@ export class ResolverResolution {
 
   get frameworkErrorCode(): DiFrameworkErrorCodeValue | null {
     switch (this.resolutionKind) {
-      case ResolverResolutionKind.Cyclic:
-        return DiFrameworkErrorCode.CyclicDependency;
       case ResolverResolutionKind.InvalidStrategy:
         return DiFrameworkErrorCode.InvalidResolverStrategy;
       case ResolverResolutionKind.Instance:
@@ -118,9 +114,6 @@ export class Resolver {
   _key: RegistrationKeyReference;
   _strategy: ResolverStrategy | number | null;
   _state: RegistrationValueReference | null;
-
-  private _resolving = false;
-  private _cachedFactory: ContainerFactoryLookup | null = null;
 
   constructor(
     /** Product handle for the kernel materialized-product envelope that represents this resolver. */
@@ -169,27 +162,13 @@ export class Resolver {
           null,
         );
       case ResolverStrategy.singleton:
-        if (this._resolving) {
-          return new ResolverResolution(
-            ResolverResolutionKind.Cyclic,
-            this,
-            handler,
-            requestor,
-            this._state,
-            null,
-            null,
-          );
-        }
-        this._resolving = true;
-        this._cachedFactory = this.getFactory(handler);
-        this._resolving = false;
         return new ResolverResolution(
           ResolverResolutionKind.SingletonFactory,
           this,
           handler,
           requestor,
           this._state,
-          this._cachedFactory,
+          this.getFactory(handler),
           null,
         );
       case ResolverStrategy.transient:
@@ -262,7 +241,7 @@ export class Resolver {
       case ResolverStrategy.transient:
         return factoryLookupForRegistrationValue(container, this._state);
       case ResolverStrategy.instance:
-        return this._cachedFactory;
+        return null;
       default:
         return null;
     }

@@ -32,6 +32,13 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelDetailAdmission,
+  KernelPublicationPlan,
+  publishProductDetail,
+  type KernelPublicationContext,
+  type KernelProductDetailPublication,
+} from '../kernel/publication.js';
 import { catalogGroupLocalKey, localKeyPart } from '../kernel/local-key.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
@@ -354,8 +361,10 @@ export class BuiltInResourceCatalogMaterializer {
   private readonly resourcePublication: BuiltInResourcePublicationMaterializer;
 
   constructor(
-    /** Hot analysis store that receives built-in resource records. */
+    /** Store used for deterministic handles and checker projection carriers. */
     readonly store: KernelStore,
+    /** Immediate or staged owner of built-in resource records and rich details. */
+    private readonly publication: KernelPublicationContext,
   ) {
     this.resourcePublication = new BuiltInResourcePublicationMaterializer(store);
   }
@@ -369,46 +378,54 @@ export class BuiltInResourceCatalogMaterializer {
     const resources: BuiltInResourceEmission[] = [];
     const targetTypes = typeSystem == null
       ? null
-      : new BuiltInResourceTargetTypeProjector(this.store, typeSystem);
+      : new BuiltInResourceTargetTypeProjector(this.store, typeSystem, this.publication);
 
     for (const input of catalogInputs) {
       const emission = this.recordsForCatalog(input, targetTypes);
-      if (this.store.readProduct(emission.catalog.productHandle) == null) {
+      if (this.publication.read(emission.catalog.productHandle) == null) {
         records.push(...emission.records);
       }
       catalogs.push(emission.catalog);
       resources.push(...emission.resources);
     }
 
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'built-in-resource-catalogs'));
-    }
-
     const emission = new BuiltInResourceCatalogEmission(catalogs, resources, records);
-    this.registerProductDetails(emission);
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, 'built-in-resource-catalogs'),
+      this.productDetailPublications(emission),
+    ));
     return emission;
   }
 
-  private registerProductDetails(emission: BuiltInResourceCatalogEmission): void {
-    for (const catalog of emission.catalogs) {
-      this.store.productDetails.addIfAbsent(ResourceProductDetails.BuiltInCatalog, catalog.productHandle, catalog);
-    }
-    for (const resource of emission.resources) {
-      if (resource.resource.productHandle != null) {
-        this.store.productDetails.addIfAbsent(
+  private productDetailPublications(
+    emission: BuiltInResourceCatalogEmission,
+  ): readonly KernelProductDetailPublication<unknown>[] {
+    return [
+      ...emission.catalogs.map((catalog) => publishProductDetail(
+        ResourceProductDetails.BuiltInCatalog,
+        catalog.productHandle,
+        catalog,
+        KernelDetailAdmission.IfAbsent,
+      )),
+      ...emission.resources.flatMap((resource) => [
+        ...(resource.resource.productHandle == null
+          ? []
+          : [publishProductDetail(
           ResourceProductDetails.DefinitionHeader,
           resource.resource.productHandle,
           resource.resource,
-        );
-      }
-      if (resource.definition?.productHandle != null) {
-        this.store.productDetails.addIfAbsent(
+          KernelDetailAdmission.IfAbsent,
+        )]),
+        ...(resource.definition?.productHandle == null
+          ? []
+          : [publishProductDetail(
           ResourceProductDetails.Definition,
           resource.definition.productHandle,
           resource.definition,
-        );
-      }
-    }
+          KernelDetailAdmission.IfAbsent,
+        )]),
+      ]),
+    ];
   }
 
   private recordsForCatalog(
@@ -636,7 +653,7 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
     /** Hot analysis store that receives configured resource-catalog selection records. */
     readonly store: KernelStore,
   ) {
-    this.catalogMaterializer = new BuiltInResourceCatalogMaterializer(store);
+    this.catalogMaterializer = new BuiltInResourceCatalogMaterializer(store, store);
   }
 
   materialize(

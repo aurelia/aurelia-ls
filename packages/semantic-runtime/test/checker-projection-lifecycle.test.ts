@@ -16,8 +16,10 @@ import {
   type ComputationLocus,
 } from '../src/kernel/computation-lifecycle.js';
 import { KernelStore } from '../src/kernel/store.js';
+import { SourceSpanRole } from '../src/kernel/address.js';
 import { CheckerTypeProjector } from '../src/type-system/checker-projector.js';
 import { CheckerTypeShapeAccess } from '../src/type-system/checker-type-shape-access.js';
+import { sourceSpanForCheckerNode } from '../src/type-system/declaration-source.js';
 import { TypeSystemProductDetails } from '../src/type-system/product-details.js';
 
 describe('checker projection lifecycle', () => {
@@ -84,6 +86,13 @@ describe('checker projection lifecycle', () => {
       root.sourceAddressHandle,
     )).scope;
     const item = access.memberValueAccess(root, 'item', 'view-model:item');
+    const laterSource = sourceSpanForCheckerNode(
+      store,
+      run,
+      'view-model:later-source',
+      declaration,
+      SourceSpanRole.Name,
+    );
 
     expect(store.read(scope.productHandle)).toBeNull();
     expect(store.readProductDetail(ConfigurationProductDetails.BindingScope, scope.productHandle)).toBeNull();
@@ -93,6 +102,7 @@ describe('checker projection lifecycle', () => {
     expect(item.memberSourceAddressHandle == null ? null : store.read(item.memberSourceAddressHandle)).toBeNull();
     expect(item.memberSourceAddressHandle == null ? null : projector.publication.read(item.memberSourceAddressHandle))
       .not.toBeNull();
+    expect(laterSource.records).toEqual([laterSource.address]);
 
     expect(run.commit().state).toBe(ComputationCommitState.Committed);
     expect(store.readProductDetail(ConfigurationProductDetails.BindingScope, scope.productHandle)).toBe(scope);

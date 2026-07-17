@@ -7,17 +7,24 @@ import { SourceFileAddress, SourceLanguage, SourceSpanAddress } from "../src/ker
 import {
   ComputationCommitState,
   ComputationLifecycleRegistry,
+  ComputationRecordReadView,
   type ComputationLocus,
   type ComputationRead,
   type ComputationReadValidation,
 } from "../src/kernel/computation-lifecycle.js";
 import { FrameworkIdentity, ObservationIdentity } from "../src/kernel/identity.js";
+import type { AddressHandle } from "../src/kernel/handles.js";
 import { defineHotDetailSlot } from "../src/kernel/hot-details.js";
 import { MaterializedProduct } from "../src/kernel/materialization.js";
-import { defineProductDetailSlot } from "../src/kernel/product-details.js";
+import {
+  defineProductDetailSlot,
+  readProductDetailEnvelope,
+} from "../src/kernel/product-details.js";
 import { ProvenanceRecord } from "../src/kernel/provenance.js";
 import {
+  KernelDetailAdmission,
   KernelPublicationDecisionKind,
+  KernelPublicationManifest,
   KernelPublicationPlan,
   publishHotDetail,
   publishProductDetail,
@@ -105,6 +112,35 @@ describe("computation lifecycle", () => {
     expect(() => new ComputationLifecycleRegistry(store)).toThrow(
       /already has a computation lifecycle registry/,
     );
+  });
+
+  test("builds a replacement without reading its own prior publication as upstream state", () => {
+    const store = new KernelStore("computation-prior-publication-isolation");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const ownedHandle = store.handles.address("template:owned");
+    const upstreamHandle = store.handles.address("template:upstream");
+    const owned0 = new SourceFileAddress(ownedHandle, "test", "src/owned.html", SourceLanguage.Html);
+    const upstream = new SourceFileAddress(upstreamHandle, "test", "src/upstream.html", SourceLanguage.Html);
+    store.commit(new KernelStoreBatch([upstream], "upstream"));
+
+    const run0 = lifecycle.begin(locus("prior-publication"));
+    run0.publish(publication("owned:0", [owned0]));
+    expect(run0.commit().state).toBe(ComputationCommitState.Committed);
+
+    const run1 = lifecycle.begin(locus("prior-publication"));
+    expect(run1.read(ownedHandle)).toBeNull();
+    expect(run1.read(upstreamHandle)).toBe(upstream);
+    expect(run1.readKernelCountSnapshot().totalRecords).toBe(1);
+    const replacementMarker = run1.markObservation();
+    const owned1 = new SourceFileAddress(ownedHandle, "test", "src/owned-next.html", SourceLanguage.Html);
+    run1.publish(publication("owned:1", [owned1]));
+    expect(run1.read(ownedHandle)).toBe(owned1);
+    expect(run1.readKernelCountSnapshot().totalRecords).toBe(2);
+    expect(run1.readDensitySince(replacementMarker).recordKinds).toEqual([
+      { key: "source-file-address", count: 1 },
+    ]);
+    expect(run1.commit().state).toBe(ComputationCommitState.Committed);
+    expect(store.read(ownedHandle)).toBe(owned1);
   });
 
   test("retains an unrelated template publication while replacing another", () => {
@@ -362,6 +398,7 @@ describe("computation lifecycle", () => {
 
     const run0 = lifecycle.begin(locus("atomic"));
     run0.observe(revisions.observe("source:atomic"));
+    const publicationMarker = run0.markObservation();
     const product0 = { revision: 0 };
     const hot0 = { revision: 0 };
     run0.publish(new KernelPublicationPlan(
@@ -375,6 +412,15 @@ describe("computation lifecycle", () => {
     ));
     expect(run0.readProductDetail(detailSlot, productHandle)).toBe(product0);
     expect(run0.readHotDetail(hotSlot, "hot:atomic")).toBe(hot0);
+    expect(run0.readKernelCountSnapshot()).toEqual(expect.objectContaining({
+      totalRecords: 3,
+      productDetails: 1,
+      hotDetails: 1,
+    }));
+    expect(run0.readDetailDensitySince(publicationMarker)).toEqual(expect.objectContaining({
+      productDetailDensity: [expect.objectContaining({ detailKind: "test.atomic-product", count: 1 })],
+      hotDetailDensity: [expect.objectContaining({ detailKind: "test.atomic-hot", count: 1 })],
+    }));
     expect(store.productDetails.read(detailSlot, productHandle)).toBeNull();
     expect(store.hotDetails.read(hotSlot, "hot:atomic")).toBeNull();
     expect(run0.commit().state).toBe(ComputationCommitState.Committed);
@@ -444,6 +490,386 @@ describe("computation lifecycle", () => {
     expect(store.productDetails.read(detailSlot, productHandle)).toBe(product1);
     expect(store.hotDetails.read(hotSlot, "hot:atomic")).toBe(hot1);
     expect(lifecycle.readState(run1.computationId)?.committedRunSequence).toBe(run1.runSequence);
+  });
+
+  test("aborts a staged transaction after any publication write fails", () => {
+    const store = new KernelStore("computation-staged-write-abort");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const ownedHandle = store.handles.address("staged-write-abort:owned");
+    const initial = lifecycle.begin(locus("staged-write-abort"));
+    initial.publish(publication("staged-write-abort:initial", [
+      new SourceFileAddress(ownedHandle, "test", "src/initial.html", SourceLanguage.Html),
+    ]));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const transientHandle = store.handles.address("staged-write-abort:transient");
+    const replacement = lifecycle.begin(locus("staged-write-abort"));
+    expect(() => replacement.publish(publication("staged-write-abort:invalid", [
+      new SourceFileAddress(ownedHandle, "test", "src/replacement.html", SourceLanguage.Html),
+      new SourceFileAddress(transientHandle, "test", "src/transient-a.html", SourceLanguage.Html),
+      new SourceFileAddress(transientHandle, "test", "src/transient-b.html", SourceLanguage.Html),
+    ]))).toThrow(/duplicate kernel record/);
+    expect(replacement.isCurrent()).toBe(false);
+    expect(() => replacement.read(transientHandle)).toThrow(/cannot continue after a failed write/);
+    expect(() => replacement.readKernelCountSnapshot()).toThrow(/cannot continue after a failed write/);
+    expect(() => replacement.commit()).toThrow(/cannot continue after a failed write/);
+    expect(store.readAddress(ownedHandle)).toEqual(expect.objectContaining({ path: "src/initial.html" }));
+    expect(store.read(transientHandle)).toBeNull();
+  });
+
+  test("keeps staged if-absent admission stable and rejects a changed foreign catalog", () => {
+    const store = new KernelStore("computation-stable-detail-admission");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("stable-admission:product");
+    const provenanceHandle = store.handles.provenance("stable-admission:product");
+    const productSlot = defineProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.stable-admission-product",
+      "Stable staged product-detail admission witness.",
+    );
+    const hotSlot = defineHotDetailSlot<{ readonly owner: string }>(
+      "test.stable-admission-hot",
+      "Stable staged hot-detail admission witness.",
+    );
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(provenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        provenanceHandle,
+      ),
+    ], "stable-admission:product"));
+
+    const stagedProduct = { owner: "staged" };
+    const productRun = lifecycle.begin(locus("stable-product-admission"));
+    productRun.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([], "stable-product-admission"),
+      [publishProductDetail(
+        productSlot,
+        productHandle,
+        stagedProduct,
+        KernelDetailAdmission.IfAbsent,
+      )],
+    ));
+    const productCounts = productRun.readKernelCountSnapshot();
+    expect(productRun.readProductDetail(productSlot, productHandle)).toBe(stagedProduct);
+    const foreignProduct = { owner: "foreign" };
+    store.productDetails.add(productSlot, productHandle, foreignProduct);
+    expect(productRun.readProductDetail(productSlot, productHandle)).toBe(stagedProduct);
+    expect(productRun.readKernelCountSnapshot()).toEqual(productCounts);
+    expect(() => productRun.commit()).toThrow(/catalog admission changed after staging/);
+    expect(store.productDetails.read(productSlot, productHandle)).toBe(foreignProduct);
+
+    const stagedHot = { owner: "staged" };
+    const hotRun = lifecycle.begin(locus("stable-hot-admission"));
+    hotRun.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([], "stable-hot-admission"),
+      [],
+      [publishHotDetail(hotSlot, "stable-admission:hot", stagedHot, KernelDetailAdmission.IfAbsent)],
+    ));
+    const hotCounts = hotRun.readKernelCountSnapshot();
+    expect(hotRun.readHotDetail(hotSlot, "stable-admission:hot")).toBe(stagedHot);
+    const foreignHot = { owner: "foreign" };
+    store.hotDetails.add(hotSlot, "stable-admission:hot", foreignHot);
+    expect(hotRun.readHotDetail(hotSlot, "stable-admission:hot")).toBe(stagedHot);
+    expect(hotRun.readKernelCountSnapshot()).toEqual(hotCounts);
+    expect(() => hotRun.commit()).toThrow(/catalog admission changed after staging/);
+    expect(store.hotDetails.read(hotSlot, "stable-admission:hot")).toBe(foreignHot);
+  });
+
+  test("preflights every detail object before rebinding a committed envelope", () => {
+    const store = new KernelStore("computation-detail-binding-preflight");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("detail-binding-preflight:product");
+    const provenanceHandle = store.handles.provenance("detail-binding-preflight:product");
+    const initialAddressHandle = store.handles.address("detail-binding-preflight:source:initial");
+    const replacementAddressHandle = store.handles.address("detail-binding-preflight:source:replacement");
+    const productSlot = defineProductDetailSlot<{ readonly sourceAddressHandle: AddressHandle }>(
+      KernelVocabulary.Template.Source.key,
+      "test.detail-binding-preflight-product",
+      "Product-detail weak-binding atomicity witness.",
+    );
+    const hotSlot = defineHotDetailSlot<{ readonly handle?: string }>(
+      "test.detail-binding-preflight-hot",
+      "Later failing hot-detail binding witness.",
+    );
+    const detail = { sourceAddressHandle: initialAddressHandle };
+    const product = (addressHandle: AddressHandle) => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      addressHandle,
+      provenanceHandle,
+    );
+    const initial = lifecycle.begin(locus("detail-binding-preflight"));
+    initial.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new SourceFileAddress(initialAddressHandle, "test", "src/initial.html", SourceLanguage.Html),
+        new ProvenanceRecord(provenanceHandle),
+        product(initialAddressHandle),
+      ], "detail-binding-preflight:initial"),
+      [publishProductDetail(productSlot, productHandle, detail)],
+    ));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    expect(detail.sourceAddressHandle).toBe(initialAddressHandle);
+
+    const unbindableHot = {} as { readonly handle?: string };
+    Object.defineProperty(unbindableHot, "handle", {
+      configurable: false,
+      enumerable: true,
+      value: "detail-binding-preflight:hot",
+    });
+    const replacement = lifecycle.begin(locus("detail-binding-preflight"));
+    replacement.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new SourceFileAddress(replacementAddressHandle, "test", "src/replacement.html", SourceLanguage.Html),
+        new ProvenanceRecord(provenanceHandle),
+        product(replacementAddressHandle),
+      ], "detail-binding-preflight:replacement"),
+      [publishProductDetail(productSlot, productHandle, detail)],
+      [publishHotDetail(hotSlot, "detail-binding-preflight:hot", unbindableHot)],
+    ));
+    expect(() => replacement.commit()).toThrow(/cannot be normalized/);
+    expect(store.readAddress(initialAddressHandle)).toEqual(expect.objectContaining({ path: "src/initial.html" }));
+    expect(store.read(replacementAddressHandle)).toBeNull();
+    expect(store.productDetails.read(productSlot, productHandle)).toBe(detail);
+    expect(detail.sourceAddressHandle).toBe(initialAddressHandle);
+  });
+
+  test("restores fresh detail candidates when a later normalization fails", () => {
+    const store = new KernelStore("computation-fresh-detail-normalization-rollback");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("fresh-detail-normalization-rollback:product");
+    const provenanceHandle = store.handles.provenance("fresh-detail-normalization-rollback:product");
+    const addressHandle = store.handles.address("fresh-detail-normalization-rollback:source");
+    const productSlot = defineProductDetailSlot<{ readonly sourceAddressHandle: AddressHandle }>(
+      KernelVocabulary.Template.Source.key,
+      "test.fresh-detail-normalization-rollback-product",
+      "Fresh product-detail descriptor rollback witness.",
+    );
+    const hotSlot = defineHotDetailSlot<{ readonly handle?: string }>(
+      "test.fresh-detail-normalization-rollback-hot",
+      "Later failing hot-detail descriptor rollback witness.",
+    );
+    const detail = { sourceAddressHandle: addressHandle };
+    const product = new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      addressHandle,
+      provenanceHandle,
+    );
+    const unbindableHot = {} as { readonly handle?: string };
+    Object.defineProperty(unbindableHot, "handle", {
+      configurable: false,
+      enumerable: true,
+      value: "fresh-detail-normalization-rollback:hot",
+    });
+    const rejected = lifecycle.begin(locus("fresh-detail-normalization-rollback"));
+    rejected.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new SourceFileAddress(addressHandle, "test", "src/fresh.html", SourceLanguage.Html),
+        new ProvenanceRecord(provenanceHandle),
+        product,
+      ], "fresh-detail-normalization-rollback:rejected"),
+      [publishProductDetail(productSlot, productHandle, detail)],
+      [publishHotDetail(hotSlot, "fresh-detail-normalization-rollback:hot", unbindableHot)],
+    ));
+
+    expect(() => rejected.commit()).toThrow(/cannot be normalized/);
+    expect(detail.sourceAddressHandle).toBe(addressHandle);
+    expect(Object.getOwnPropertyDescriptor(detail, "sourceAddressHandle")).toEqual(expect.objectContaining({
+      value: addressHandle,
+    }));
+    expect(readProductDetailEnvelope(detail)).toBeNull();
+    expect(store.read(productHandle)).toBeNull();
+
+    const retry = lifecycle.begin(locus("fresh-detail-normalization-rollback"));
+    retry.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new SourceFileAddress(addressHandle, "test", "src/fresh.html", SourceLanguage.Html),
+        new ProvenanceRecord(provenanceHandle),
+        product,
+      ], "fresh-detail-normalization-rollback:retry"),
+      [publishProductDetail(productSlot, productHandle, detail)],
+    ));
+    expect(retry.commit().state).toBe(ComputationCommitState.Committed);
+    expect(detail.sourceAddressHandle).toBe(addressHandle);
+    expect(readProductDetailEnvelope(detail)?.handle).toBe(productHandle);
+  });
+
+  test("completes fallible detail binding before replacing live records", () => {
+    const store = new KernelStore("computation-detail-binding-atomicity");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("detail-binding-atomicity:product");
+    const provenanceHandle = store.handles.provenance("detail-binding-atomicity:product");
+    const initialAddressHandle = store.handles.address("detail-binding-atomicity:source:initial");
+    const replacementAddressHandle = store.handles.address("detail-binding-atomicity:source:replacement");
+    const productSlot = defineProductDetailSlot<{ readonly sourceAddressHandle: AddressHandle }>(
+      KernelVocabulary.Template.Source.key,
+      "test.detail-binding-atomicity-product",
+      "Stateful product-detail binding atomicity witness.",
+    );
+    const product = (addressHandle: AddressHandle) => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      addressHandle,
+      provenanceHandle,
+    );
+    const initialDetail = { sourceAddressHandle: initialAddressHandle };
+    const initial = lifecycle.begin(locus("detail-binding-atomicity"));
+    initial.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new SourceFileAddress(initialAddressHandle, "test", "src/initial.html", SourceLanguage.Html),
+        new ProvenanceRecord(provenanceHandle),
+        product(initialAddressHandle),
+      ], "detail-binding-atomicity:initial"),
+      [publishProductDetail(productSlot, productHandle, initialDetail)],
+    ));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    let reads = 0;
+    const hostileTarget = {} as { readonly sourceAddressHandle: AddressHandle };
+    Object.defineProperty(hostileTarget, "sourceAddressHandle", {
+      configurable: true,
+      enumerable: true,
+      get: () => {
+        reads += 1;
+        return replacementAddressHandle;
+      },
+    });
+    const hostileDetail = new Proxy(hostileTarget, {
+      defineProperty: () => {
+        throw new Error("detail normalization trap failed during binding");
+      },
+    });
+    const replacement = lifecycle.begin(locus("detail-binding-atomicity"));
+    replacement.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new SourceFileAddress(replacementAddressHandle, "test", "src/replacement.html", SourceLanguage.Html),
+        new ProvenanceRecord(provenanceHandle),
+        product(replacementAddressHandle),
+      ], "detail-binding-atomicity:replacement"),
+      [publishProductDetail(productSlot, productHandle, hostileDetail)],
+    ));
+
+    expect(() => replacement.commit()).toThrow("detail normalization trap failed during binding");
+    expect(reads).toBe(1);
+    expect(store.readAddress(initialAddressHandle)).toEqual(expect.objectContaining({ path: "src/initial.html" }));
+    expect(store.read(replacementAddressHandle)).toBeNull();
+    expect(store.productDetails.read(productSlot, productHandle)).toBe(initialDetail);
+    expect(lifecycle.readState(initial.computationId)?.committedRunSequence).toBe(initial.runSequence);
+  });
+
+  test("rejects a publication manifest that cannot prove store ownership", () => {
+    const store = new KernelStore("computation-publication-ownership");
+    const foreignHandle = store.handles.address("publication-ownership:foreign");
+    const foreign = new SourceFileAddress(foreignHandle, "test", "src/foreign.html", SourceLanguage.Html);
+    store.commit(new KernelStoreBatch([foreign], "publication-ownership:foreign"));
+
+    expect(() => store.replacePublication(
+      new KernelPublicationManifest([foreignHandle]),
+      new KernelPublicationPlan(new KernelStoreBatch([], "publication-ownership:forged")),
+    )).toThrow(/stale or foreign publication manifest/);
+    expect(store.read(foreignHandle)).toBe(foreign);
+  });
+
+  test("admits only the exact current manifest when replacing one publication lineage", () => {
+    const store = new KernelStore("computation-publication-current-authority");
+    const firstHandle = store.handles.address("publication-current-authority:first");
+    const secondHandle = store.handles.address("publication-current-authority:second");
+    const first = store.replacePublication(
+      KernelPublicationManifest.empty,
+      new KernelPublicationPlan(new KernelStoreBatch([
+        new SourceFileAddress(firstHandle, "test", "src/first.html", SourceLanguage.Html),
+      ], "publication-current-authority:first")),
+    );
+    const second = store.replacePublication(
+      first.manifest,
+      new KernelPublicationPlan(new KernelStoreBatch([
+        new SourceFileAddress(secondHandle, "test", "src/second.html", SourceLanguage.Html),
+      ], "publication-current-authority:second")),
+    );
+
+    expect(() => store.replacePublication(
+      first.manifest,
+      new KernelPublicationPlan(new KernelStoreBatch([], "publication-current-authority:stale")),
+    )).toThrow(/stale or foreign publication manifest/);
+    expect(() => store.replacePublication(
+      new KernelPublicationManifest(
+        second.manifest.recordHandles,
+        second.manifest.productDetailHandles,
+        second.manifest.hotDetailHandles,
+        second.manifest.lifetimeOrdinal,
+      ),
+      new KernelPublicationPlan(new KernelStoreBatch([], "publication-current-authority:copy")),
+    )).toThrow(/stale or foreign publication manifest/);
+    expect(store.read(firstHandle)).toBeNull();
+    expect(store.read(secondHandle)).not.toBeNull();
+    expect(Object.isFrozen(second.manifest)).toBe(true);
+    expect(Object.isFrozen(second.manifest.recordHandles)).toBe(true);
+  });
+
+  test("retires an exact empty manifest when its committed generation is disposed", () => {
+    const store = new KernelStore("computation-empty-publication-retirement");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const marker = store.markLifetime();
+    const run = lifecycle.begin(locus("empty-publication-retirement"));
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(run.computationId);
+    expect(state).not.toBeNull();
+    if (state == null) {
+      throw new Error("Expected an empty committed computation generation.");
+    }
+    expect(state.publication.recordHandles).toEqual([]);
+
+    store.disposeSince(marker);
+
+    expect(lifecycle.readState(run.computationId)).toBeNull();
+    expect(() => store.replacePublication(
+      state.publication,
+      new KernelPublicationPlan(new KernelStoreBatch([], "empty-publication-retirement:stale")),
+    )).toThrow(/stale or foreign publication manifest/);
+  });
+
+  test("retires a store-owned empty publication manifest at its lifetime boundary", () => {
+    const store = new KernelStore("store-empty-publication-retirement");
+    const marker = store.markLifetime();
+    const replacement = store.replacePublication(
+      KernelPublicationManifest.empty,
+      new KernelPublicationPlan(new KernelStoreBatch([], "store-empty-publication-retirement")),
+    );
+
+    store.disposeSince(marker);
+
+    expect(() => store.replacePublication(
+      replacement.manifest,
+      new KernelPublicationPlan(new KernelStoreBatch([], "store-empty-publication-retirement:stale")),
+    )).toThrow(/stale or foreign publication manifest/);
+  });
+
+  test("does not let an exact lifecycle manifest escape its owning registry", () => {
+    const store = new KernelStore("computation-publication-owner-boundary");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const initial = lifecycle.begin(locus("publication-owner-boundary"));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(initial.computationId);
+    if (state == null) {
+      throw new Error("Expected a committed lifecycle publication.");
+    }
+
+    expect(() => store.replacePublication(
+      state.publication,
+      new KernelPublicationPlan(new KernelStoreBatch([], "publication-owner-boundary:foreign")),
+    )).toThrow(/stale or foreign publication manifest/);
+    expect(lifecycle.readState(initial.computationId)?.committedRunSequence).toBe(initial.runSequence);
+
+    const legitimate = lifecycle.begin(locus("publication-owner-boundary"));
+    expect(legitimate.commit().state).toBe(ComputationCommitState.Committed);
   });
 
   test("preserves a publication lifetime across replacement while reclaiming later answer-local rows", () => {
@@ -517,6 +943,68 @@ describe("computation lifecycle", () => {
     expect(store.hotDetails.read(hotSlot, "hot:lifetime:answer-local")).toBeNull();
   });
 
+  test("promotes a replacement closure to the youngest foreign reference and registered record read", () => {
+    const store = new KernelStore("computation-lifetime-dependency-closure");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("lifetime-dependency-closure:product");
+    const initialProvenanceHandle = store.handles.provenance("lifetime-dependency-closure:initial");
+    const initial = lifecycle.begin(locus("lifetime-dependency-closure"));
+    initial.publish(new KernelPublicationPlan(new KernelStoreBatch([
+      new ProvenanceRecord(initialProvenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        initialProvenanceHandle,
+      ),
+    ], "lifetime-dependency-closure:initial")));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    const marker = store.markLifetime();
+
+    const observedHandle = store.handles.address("lifetime-dependency-closure:observed");
+    const foreignProvenanceHandle = store.handles.provenance("lifetime-dependency-closure:foreign");
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(observedHandle, "test", "src/observed.html", SourceLanguage.Html),
+    ], "lifetime-dependency-closure:observed"));
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(foreignProvenanceHandle),
+    ], "lifetime-dependency-closure:foreign"));
+
+    const reads = new ComputationRecordReadView(store);
+    expect(reads.read(observedHandle)).not.toBeNull();
+    const replacement = lifecycle.begin(locus("lifetime-dependency-closure"));
+    for (const read of reads.readAll()) {
+      replacement.observe(read);
+    }
+    replacement.publish(new KernelPublicationPlan(new KernelStoreBatch([
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        foreignProvenanceHandle,
+      ),
+    ], "lifetime-dependency-closure:replacement")));
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+    const generation = lifecycle.admitCommittedGeneration(
+      replacement.computationId,
+      replacement.runSequence,
+      "test-lifetime-dependency-closure",
+    );
+    const state = lifecycle.readState(replacement.computationId);
+    expect(state?.publication.lifetimeOrdinal).toBe(store.readRecordLifetimeOrdinal(foreignProvenanceHandle));
+    expect(store.readRecordLifetimeOrdinal(productHandle)).toBe(state?.publication.lifetimeOrdinal);
+
+    store.disposeSince(marker);
+
+    expect(store.read(observedHandle)).toBeNull();
+    expect(store.read(foreignProvenanceHandle)).toBeNull();
+    expect(store.read(productHandle)).toBeNull();
+    expect(lifecycle.readState(replacement.computationId)).toBeNull();
+    expect(generation.isCurrent()).toBe(false);
+  });
+
   test("clears lifecycle ownership when lifetime disposal reclaims a complete publication", () => {
     const store = new KernelStore("computation-lifecycle-disposal");
     const lifecycle = new ComputationLifecycleRegistry(store);
@@ -554,6 +1042,22 @@ describe("computation lifecycle", () => {
     expect(restored.computationId).toBe(initial.computationId);
     expect(restored.commit().state).toBe(ComputationCommitState.Committed);
     expect(store.readAddress(outputHandle)).toEqual(expect.objectContaining({ path: "src/restored.html" }));
+  });
+
+  test("supersedes an unpublished first generation across a lifetime disposal boundary", () => {
+    const store = new KernelStore("computation-pending-first-generation-disposal");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const marker = store.markLifetime();
+    const outputHandle = store.handles.address("pending-first-generation-output");
+    const pending = lifecycle.begin(locus("pending-first-generation"));
+    pending.publish(publication("pending-first-generation", [
+      new SourceFileAddress(outputHandle, "test", "src/pending.html", SourceLanguage.Html),
+    ]));
+
+    store.disposeSince(marker);
+
+    expect(pending.commit().state).toBe(ComputationCommitState.RejectedSuperseded);
+    expect(store.read(outputHandle)).toBeNull();
   });
 });
 

@@ -59,7 +59,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Aurelia runtime renderer AUR0820 rejects this instruction input: Invalid spread target $element..",
       "range": {
         "end": {
-          "character": 53,
+          "character": 28,
           "line": 1
         },
         "start": {
@@ -67,7 +67,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 1
         }
       },
-      "rangeText": "$element.spread=\"elementBindings\"",
+      "rangeText": "$element",
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
@@ -89,7 +89,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "contextualCount": 0,
     "groups": [
       {
-        "groupKey": "row:diagnostic:0:template:runtime-renderer-framework-error:framework-error-code:AUR0820:src/runtime-html-spread-renderer-errors-app.html:91:124:runtime-renderer:AUR0820",
+        "groupKey": "row:diagnostic:0:template:runtime-renderer-framework-error:framework-error-code:AUR0820:src/runtime-html-spread-renderer-errors-app.html:91:99:runtime-renderer:AUR0820",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -142,16 +142,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 124,
+              "end": 99,
               "start": 91
             },
-            "spanText": "$element.spread=\"elementBindings\"",
+            "spanText": "$element",
             "status": "primary",
             "uri": "fixtures://pressure/runtime-html-spread-renderer-errors/src/runtime-html-spread-renderer-errors-app.html"
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:0:template:runtime-renderer-framework-error:framework-error-code:AUR0820:src/runtime-html-spread-renderer-errors-app.html:91:124:runtime-renderer:AUR0820"
+          "rowId": "diagnostic:0:template:runtime-renderer-framework-error:framework-error-code:AUR0820:src/runtime-html-spread-renderer-errors-app.html:91:99:runtime-renderer:AUR0820"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -215,10 +215,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 124,
+          "end": 99,
           "start": 91
         },
-        "spanText": "$element.spread=\"elementBindings\"",
+        "spanText": "$element",
         "status": "canonical",
         "uri": "fixtures://pressure/runtime-html-spread-renderer-errors/src/runtime-html-spread-renderer-errors-app.html"
       }
@@ -282,10 +282,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 124,
+            "end": 99,
             "start": 91
           },
-          "spanText": "$element.spread=\"elementBindings\"",
+          "spanText": "$element",
           "status": "primary",
           "uri": "fixtures://pressure/runtime-html-spread-renderer-errors/src/runtime-html-spread-renderer-errors-app.html"
         }

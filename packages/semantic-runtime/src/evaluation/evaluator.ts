@@ -108,7 +108,18 @@ import {
 /** Linked import values keyed by local import binding name before module-body evaluation. */
 export type StaticEvaluationImportValues = ReadonlyMap<string, EvaluationValue>;
 
+export interface StaticEvaluationValueMetadataTransfer {
+  forkValue<TValue extends EvaluationValue>(value: TValue): TValue;
+}
+
 export interface StaticEvaluationRuntimeHost {
+  /** Transfer host-owned semantic identity when a speculative session clones an evaluator value. */
+  transferValueMetadata?(
+    source: EvaluationValue,
+    target: EvaluationValue,
+    transfer: StaticEvaluationValueMetadataTransfer,
+  ): void;
+
   resolveIdentifier?(
     identifier: ts.Identifier,
     environment: ModuleEnvironmentRecord,

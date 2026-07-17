@@ -174,6 +174,7 @@ export class SemanticAppTemplateQueries {
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticTemplateCompilationResult> {
+    this.requireCurrentGeneration();
     const handles = includeHandles(detail);
     const rows = [
       ...templateCompilationRows(this.store, this.emission.templates.resources, 'app-runtime', handles),
@@ -195,6 +196,7 @@ export class SemanticAppTemplateQueries {
   templateCompletions(
     query: SemanticAppQuery,
   ): SemanticRuntimeAnswer<SemanticTemplateCompletionResult> {
+    this.requireCurrentGeneration();
     return readSemanticTemplateCompletions(
       this.store,
       this.workspaceRootDir,
@@ -209,6 +211,7 @@ export class SemanticAppTemplateQueries {
   templateCursorInfo(
     query: SemanticAppQuery,
   ): SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult> {
+    this.requireCurrentGeneration();
     return readSemanticTemplateCursorInfo(
       this.store,
       this.workspaceRootDir,
@@ -223,6 +226,7 @@ export class SemanticAppTemplateQueries {
   templateReferences(
     input: SemanticAppQuery,
   ): SemanticRuntimeAnswer<SemanticTemplateReferencesResult> {
+    this.requireCurrentGeneration();
     const query = this.queryWithResolvedCursor(input);
     const detail = query.detail ?? SemanticRuntimeDetail.Compact;
     const handles = includeHandles(detail);
@@ -282,6 +286,7 @@ export class SemanticAppTemplateQueries {
   templateRename(
     input: SemanticAppQuery,
   ): SemanticRuntimeAnswer<SemanticTemplateRenameResult> {
+    this.requireCurrentGeneration();
     const query = this.queryWithResolvedCursor(input);
     const detail = query.detail ?? SemanticRuntimeDetail.Compact;
     const handles = includeHandles(detail);
@@ -460,6 +465,7 @@ export class SemanticAppTemplateQueries {
   templateRenameFromTypeScript(
     query: SemanticAppQuery,
   ): SemanticRuntimeAnswer<SemanticTemplateRenameResult> {
+    this.requireCurrentGeneration();
     const detail = query.detail ?? SemanticRuntimeDetail.Compact;
     const handles = includeHandles(detail);
     const context = this.typeScriptReferenceContext(query, handles);
@@ -556,6 +562,7 @@ export class SemanticAppTemplateQueries {
   templateCodeActions(
     input: SemanticAppQuery,
   ): SemanticRuntimeAnswer<SemanticTemplateCodeActionsResult> {
+    this.requireCurrentGeneration();
     const query = this.queryWithResolvedCursor(input);
     if (query.cursor == null || query.cursor.offset == null) {
       return answer(
@@ -598,6 +605,7 @@ export class SemanticAppTemplateQueries {
   templateDiagnostics(
     query: SemanticAppQuery,
   ): SemanticRuntimeAnswer<SemanticTemplateDiagnosticsResult> {
+    this.requireCurrentGeneration();
     return readSemanticTemplateDiagnostics(
       this.store,
       this.workspaceRootDir,
@@ -613,6 +621,7 @@ export class SemanticAppTemplateQueries {
   templateInlayHints(
     query: SemanticAppQuery,
   ): SemanticRuntimeAnswer<SemanticTemplateInlayHintsResult> {
+    this.requireCurrentGeneration();
     const handles = includeHandles(query.detail ?? SemanticRuntimeDetail.Compact);
     const sourceFile = query.sourceFile?.filePath ?? null;
     const rows = uniqueTemplateInlayHintRows([
@@ -643,6 +652,7 @@ export class SemanticAppTemplateQueries {
   templateSemanticTokens(
     query: SemanticAppQuery,
   ): SemanticRuntimeAnswer<SemanticTemplateSemanticTokensResult> {
+    this.requireCurrentGeneration();
     const sourceFile = query.sourceFile?.filePath ?? null;
     const rows = readTemplateSemanticTokenRows(
       this.store,
@@ -665,6 +675,7 @@ export class SemanticAppTemplateQueries {
   templateFoldingRanges(
     query: SemanticAppQuery,
   ): SemanticRuntimeAnswer<SemanticTemplateFoldingRangesResult> {
+    this.requireCurrentGeneration();
     const sourceFile = query.sourceFile?.filePath ?? null;
     const rows = readTemplateFoldingRangeRows(
       this.store,
@@ -687,6 +698,7 @@ export class SemanticAppTemplateQueries {
   templateDiagnosticRows(
     query: SemanticAppQuery,
   ): readonly SemanticTemplateDiagnosticRow[] {
+    this.requireCurrentGeneration();
     return readTemplateDiagnosticRows(
       this.store,
       this.workspaceRootDir,
@@ -696,6 +708,10 @@ export class SemanticAppTemplateQueries {
       (query.detail ?? SemanticRuntimeDetail.Compact) === SemanticRuntimeDetail.Handles,
       query.diagnosticProjection,
     );
+  }
+
+  private requireCurrentGeneration(): void {
+    this.emission.requireCurrentTemplateAnalysis();
   }
 
   private templateReferenceContext(

@@ -95,6 +95,45 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 6
         }
       }
+    },
+    {
+      "kind": 1,
+      "range": {
+        "end": {
+          "character": 76,
+          "line": 6
+        },
+        "start": {
+          "character": 65,
+          "line": 6
+        }
+      }
+    },
+    {
+      "kind": 1,
+      "range": {
+        "end": {
+          "character": 101,
+          "line": 6
+        },
+        "start": {
+          "character": 90,
+          "line": 6
+        }
+      }
+    },
+    {
+      "kind": 1,
+      "range": {
+        "end": {
+          "character": 43,
+          "line": 13
+        },
+        "start": {
+          "character": 32,
+          "line": 13
+        }
+      }
     }
   ]
 }
@@ -104,7 +143,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "highlightCount": 5,
+  "highlightCount": 8,
   "highlights": [
     {
       "anomaly": null,
@@ -177,6 +216,51 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "start": {
           "character": 39,
           "line": 6
+        }
+      },
+      "rangeText": "spreadState"
+    },
+    {
+      "anomaly": null,
+      "kind": "text",
+      "range": {
+        "end": {
+          "character": 76,
+          "line": 6
+        },
+        "start": {
+          "character": 65,
+          "line": 6
+        }
+      },
+      "rangeText": "spreadState"
+    },
+    {
+      "anomaly": null,
+      "kind": "text",
+      "range": {
+        "end": {
+          "character": 101,
+          "line": 6
+        },
+        "start": {
+          "character": 90,
+          "line": 6
+        }
+      },
+      "rangeText": "spreadState"
+    },
+    {
+      "anomaly": null,
+      "kind": "text",
+      "range": {
+        "end": {
+          "character": 43,
+          "line": 13
+        },
+        "start": {
+          "character": 32,
+          "line": 13
         }
       },
       "rangeText": "spreadState"
@@ -507,19 +591,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 23
         }
       }
-    },
-    {
-      "kind": 1,
-      "range": {
-        "end": {
-          "character": 14,
-          "line": 33
-        },
-        "start": {
-          "character": 4,
-          "line": 33
-        }
-      }
     }
   ]
 }
@@ -529,7 +600,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "highlightCount": 2,
+  "highlightCount": 1,
   "highlights": [
     {
       "anomaly": null,
@@ -542,21 +613,6 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "start": {
           "character": 4,
           "line": 23
-        }
-      },
-      "rangeText": "input-mark"
-    },
-    {
-      "anomaly": null,
-      "kind": "text",
-      "range": {
-        "end": {
-          "character": 14,
-          "line": 33
-        },
-        "start": {
-          "character": 4,
-          "line": 33
         }
       },
       "rangeText": "input-mark"

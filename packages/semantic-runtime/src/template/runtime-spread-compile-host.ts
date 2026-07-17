@@ -84,6 +84,10 @@ import type { CompilerBindingCommandResource } from './syntax-resource-materiali
 export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompilerSpreadCompileHost {
   private readonly valueSitePublisher: TemplateValueSitePublisher;
   private readonly compilerIssuePublisher: TemplateCompilerIssuePublisher;
+  private readonly stagedRecords: KernelStoreRecord[] = [];
+  private readonly stagedInstructions: TemplateInstruction[] = [];
+  private readonly stagedValueSites: TemplateValueSite[] = [];
+  private readonly stagedExpressionParses: TemplateExpressionParse[] = [];
   private instructionIndex = 0;
   private expressionIndex = 0;
 
@@ -103,7 +107,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     private readonly capturedAttributeContextInstructionProductHandle: ProductHandle,
     private readonly capturedAttributeContextControllerProductHandle: ProductHandle,
   ) {
-    this.valueSitePublisher = new TemplateValueSitePublisher(store);
+    this.valueSitePublisher = new TemplateValueSitePublisher(publication);
     this.compilerIssuePublisher = new TemplateCompilerIssuePublisher(store);
   }
 
@@ -131,6 +135,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       rootInstructions.push(...compiled.rootInstructions);
       createdInstructions.push(...compiled.createdInstructions);
     }
+    this.commitStagedOutputs();
     return TemplateCompilerSpreadCompileResult.compiled(
       request,
       rootInstructions,
@@ -486,7 +491,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       this.store.handles.product(instructionLocal),
       this.store.handles.identity(instructionLocal),
     );
-    this.records.push(
+    this.stagedRecords.push(
       new InstructionIdentity(
         allocation.identityHandle,
         request.spreadInstruction.identityHandle,
@@ -549,9 +554,9 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     if (publication.parse == null) {
       throw new Error('Spread-compiled expression parsing must publish an expression parse.');
     }
-    this.records.push(...publication.records);
-    this.dynamicValueSites.push(publication.site);
-    this.dynamicExpressionParses.push(publication.parse);
+    this.stagedRecords.push(...publication.records);
+    this.stagedValueSites.push(publication.site);
+    this.stagedExpressionParses.push(publication.parse);
     return publication.parse;
   }
 
@@ -560,23 +565,26 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     instruction: TemplateInstruction,
     syntax: AttributeSyntax,
   ): void {
-    if (!this.dynamicInstructions.some((candidate) => candidate.productHandle === instruction.productHandle)) {
-      this.dynamicInstructions.push(instruction);
-      this.records.push(new SemanticClaim(
+    if (
+      !this.dynamicInstructions.some((candidate) => candidate.productHandle === instruction.productHandle)
+      && !this.stagedInstructions.some((candidate) => candidate.productHandle === instruction.productHandle)
+    ) {
+      this.stagedInstructions.push(instruction);
+      this.stagedRecords.push(new SemanticClaim(
         this.store.handles.claim(`${request.localKey}:spread-compile:instruction-origin:${instruction.productHandle}:${syntax.productHandle}`),
         instruction.productHandle,
         KernelVocabulary.Instruction.DynamicInstructionOriginatesFromCapturedAttributeSyntax.key,
         syntax.productHandle,
         this.source.provenanceHandle,
       ));
-      this.records.push(new SemanticClaim(
+      this.stagedRecords.push(new SemanticClaim(
         this.store.handles.claim(`${request.localKey}:spread-compile:instruction-context-instruction:${instruction.productHandle}:${this.capturedAttributeContextInstructionProductHandle}`),
         instruction.productHandle,
         KernelVocabulary.Instruction.DynamicInstructionUsesCapturedAttributeContextInstruction.key,
         this.capturedAttributeContextInstructionProductHandle,
         this.source.provenanceHandle,
       ));
-      this.records.push(new SemanticClaim(
+      this.stagedRecords.push(new SemanticClaim(
         this.store.handles.claim(`${request.localKey}:spread-compile:instruction-context-controller:${instruction.productHandle}:${this.capturedAttributeContextControllerProductHandle}`),
         instruction.productHandle,
         KernelVocabulary.Instruction.DynamicInstructionUsesCapturedAttributeContextController.key,
@@ -584,6 +592,13 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
         this.source.provenanceHandle,
       ));
     }
+  }
+
+  private commitStagedOutputs(): void {
+    this.records.push(...this.stagedRecords);
+    this.dynamicInstructions.push(...this.stagedInstructions);
+    this.dynamicValueSites.push(...this.stagedValueSites);
+    this.dynamicExpressionParses.push(...this.stagedExpressionParses);
   }
 
   private expressionSourceAddressHandle(syntax: AttributeSyntax) {

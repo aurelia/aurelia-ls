@@ -53,6 +53,7 @@ export class EvaluationBinding {
 /** ECMAScript-like environment record for one module or evaluator-local function call. */
 export class ModuleEnvironmentRecord {
   private readonly bindings = new Map<string, EvaluationBinding>();
+  private graphOwner: object | null = null;
 
   constructor(
     /** Module or call-frame key that owns this environment. */
@@ -121,9 +122,27 @@ export class ModuleEnvironmentRecord {
     return [...this.bindings.values()];
   }
 
+  /** Install an exact binding snapshot while a separate evaluation session reconstructs an aliased value graph. */
+  installBinding(binding: EvaluationBinding): void {
+    this.bindings.set(binding.name, binding);
+  }
+
+  /** Mark this environment as part of one mutable evaluation graph. */
+  adoptGraphOwner(owner: object): void {
+    if (this.graphOwner != null && this.graphOwner !== owner) {
+      throw new Error(`Evaluation environment ${this.moduleKey} already belongs to another graph owner.`);
+    }
+    this.graphOwner = owner;
+  }
+
+  belongsToGraph(owner: object): boolean {
+    return this.graphOwner === owner;
+  }
+
   /** Clone the environment for branch/function interpretation while sharing evaluator-local values. */
   clone(moduleKey: string = this.moduleKey): ModuleEnvironmentRecord {
     const clone = new ModuleEnvironmentRecord(moduleKey);
+    clone.graphOwner = this.graphOwner;
     for (const binding of this.bindings.values()) {
       clone.bindings.set(
         binding.name,

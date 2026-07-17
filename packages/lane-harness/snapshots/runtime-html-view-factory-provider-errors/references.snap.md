@@ -48,11 +48,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 30,
-          "line": 28
+          "line": 31
         },
         "start": {
           "character": 9,
-          "line": 28
+          "line": 31
         }
       },
       "uri": "fixtures://pressure/runtime-html-view-factory-provider-errors/src/runtime-html-view-factory-provider-errors-app.ts"
@@ -89,11 +89,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 30,
-          "line": 28
+          "line": 31
         },
         "start": {
           "character": 9,
-          "line": 28
+          "line": 31
         }
       },
       "rangeText": "view-factory-template",

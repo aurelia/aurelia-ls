@@ -103,20 +103,21 @@ export class TemplateAuthoringCompilerWorldMaterializer {
   }
 
   private materializeAuthoringSyntax(): ReturnType<BuiltInSyntaxCatalogMaterializer['materialize']> {
-    return new BuiltInSyntaxCatalogMaterializer(this.store).materialize(Object.values(RuntimeHtmlBuiltInSyntaxCatalogs));
+    return new BuiltInSyntaxCatalogMaterializer(this.store, this.publication)
+      .materialize(Object.values(RuntimeHtmlBuiltInSyntaxCatalogs));
   }
 
   private materializeAuthoringBuiltInResources(
     typeSystem: TypeSystemProject | null,
   ): ReturnType<BuiltInResourceCatalogMaterializer['materialize']> {
-    return new BuiltInResourceCatalogMaterializer(this.store).materialize(
+    return new BuiltInResourceCatalogMaterializer(this.store, this.publication).materialize(
       Object.values(RuntimeHtmlBuiltInResourceCatalogs),
       typeSystem,
     );
   }
 
   private materializeAuthoringRenderers(): ReturnType<BuiltInRuntimeRendererCatalogMaterializer['materialize']> {
-    return new BuiltInRuntimeRendererCatalogMaterializer(this.store).materialize([{
+    return new BuiltInRuntimeRendererCatalogMaterializer(this.store, this.publication).materialize([{
       packageId: RuntimeRendererPackage.RuntimeHtml,
       group: RuntimeRendererGroup.RuntimeHtmlDefaultRenderers,
       renderers: RuntimeHtmlDefaultRenderers,
