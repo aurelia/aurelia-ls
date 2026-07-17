@@ -925,6 +925,7 @@ export class RuntimeBindingDataFlowMaterializer {
       const dependencyLocal = `${local}:observed-dependency:${index}`;
       return runtimeObservedDependencyRecords({
         store: this.store,
+        publication: this.publication,
         local: dependencyLocal,
         owner: {
           identityHandle: binding.identityHandle,

@@ -4,6 +4,7 @@ import { InstructionIdentity } from '../kernel/identity.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { KernelStore, KernelStoreRecord } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
@@ -88,6 +89,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
 
   constructor(
     private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
     private readonly world: TemplateCompilerWorldEmission,
     private readonly source: RuntimeRenderingSourceSet,
     private readonly bindingIssuePublisher: RuntimeBindingIssuePublisher,
@@ -587,7 +589,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
   private expressionSourceAddressHandle(syntax: AttributeSyntax) {
     const attribute = syntax.attribute.productHandle == null
       ? null
-      : this.store.productDetails.read(TemplateProductDetails.HtmlAttribute, syntax.attribute.productHandle);
+      : this.publication.readProductDetail(TemplateProductDetails.HtmlAttribute, syntax.attribute.productHandle);
     return attribute instanceof HtmlAttribute
       ? attribute.valueAddressHandle ?? attribute.sourceAddressHandle
       : syntax.sourceAddressHandle;
@@ -612,7 +614,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     if (productHandle == null) {
       return null;
     }
-    const node = this.store.productDetails.read(TemplateProductDetails.HtmlNode, productHandle);
+    const node = this.publication.readProductDetail(TemplateProductDetails.HtmlNode, productHandle);
     return node instanceof HtmlElement ? node : null;
   }
 
@@ -621,7 +623,10 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     targetNode: HtmlElement,
   ): CustomElementDefinition | null {
     if (request.targetDefinitionProductHandle != null) {
-      const definition = this.store.productDetails.read(ResourceProductDetails.Definition, request.targetDefinitionProductHandle);
+      const definition = this.publication.readProductDetail(
+        ResourceProductDetails.Definition,
+        request.targetDefinitionProductHandle,
+      );
       return definition instanceof CustomElementDefinition ? definition : null;
     }
     const resolution = this.world.resourceResolver.el(this.elementLookupName(targetNode));
@@ -632,7 +637,7 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     const attributes = targetNode.attributes
       .map((attribute) => attribute.productHandle == null
         ? null
-        : this.store.productDetails.read(TemplateProductDetails.HtmlAttribute, attribute.productHandle))
+        : this.publication.readProductDetail(TemplateProductDetails.HtmlAttribute, attribute.productHandle))
       .filter((attribute): attribute is NonNullable<typeof attribute> => attribute != null);
     return templateElementLookupNameFromAttributes(targetNode.tagName, attributes);
   }

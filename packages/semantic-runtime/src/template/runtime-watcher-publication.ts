@@ -11,6 +11,7 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { runtimeObservedDependencyRecords } from '../observation/runtime-observed-dependency-publication.js';
 import type { RuntimeControllerFrame } from './runtime-controller.js';
@@ -33,18 +34,28 @@ export function runtimeWatcherClaimsForController(
 
 export function runtimeWatcherRecordsForController(
   store: KernelStore,
+  publication: KernelPublicationContext,
   local: string,
   controller: RuntimeControllerFrame,
   provenanceHandle: ProvenanceHandle,
   claims: readonly SemanticClaim[],
 ): readonly KernelStoreRecord[] {
   return controller.readWatchers().flatMap((watcher) =>
-    runtimeWatcherRecords(store, `${local}:watcher:${watcher.productHandle}`, controller, watcher, provenanceHandle, claims)
+    runtimeWatcherRecords(
+      store,
+      publication,
+      `${local}:watcher:${watcher.productHandle}`,
+      controller,
+      watcher,
+      provenanceHandle,
+      claims,
+    )
   );
 }
 
 function runtimeWatcherRecords(
   store: KernelStore,
+  publication: KernelPublicationContext,
   local: string,
   controller: RuntimeControllerFrame,
   watcher: RuntimeWatcher,
@@ -70,12 +81,13 @@ function runtimeWatcherRecords(
       [watcher.productHandle],
       claimsForProduct(claims, watcher.productHandle).map((claim) => claim.handle),
     ),
-    ...runtimeWatcherObservedDependencyRecords(store, local, watcher, provenanceHandle),
+    ...runtimeWatcherObservedDependencyRecords(store, publication, local, watcher, provenanceHandle),
   ];
 }
 
 function runtimeWatcherObservedDependencyRecords(
   store: KernelStore,
+  publication: KernelPublicationContext,
   local: string,
   watcher: RuntimeWatcher,
   provenanceHandle: ProvenanceHandle,
@@ -84,6 +96,7 @@ function runtimeWatcherObservedDependencyRecords(
     const dependencyLocal = `${local}:observed-dependency:${index}`;
     return runtimeObservedDependencyRecords({
       store,
+      publication,
       local: dependencyLocal,
       owner: {
         identityHandle: watcher.identityHandle,

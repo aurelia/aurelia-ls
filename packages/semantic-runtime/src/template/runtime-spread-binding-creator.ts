@@ -4,6 +4,7 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   RuntimeHtmlBindingFrameworkErrorCode,
 } from './framework-error-code.js';
@@ -63,6 +64,7 @@ export class RuntimeSpreadBindingCreator {
 
   constructor(
     private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
   ) {
     this.bindingIssuePublisher = new RuntimeBindingIssuePublisher(store);
   }
@@ -109,6 +111,7 @@ export class RuntimeSpreadBindingCreator {
       request,
       new RuntimeTemplateCompilerSpreadCompileHost(
         this.store,
+        this.publication,
         compilerWorld,
         state.source,
         this.bindingIssuePublisher,
@@ -157,7 +160,10 @@ export class RuntimeSpreadBindingCreator {
       ? null
       : input.compiledTemplate.instructions.find((instruction) =>
         instruction.productHandle === contextController.instructionProductHandle
-      ) ?? this.store.productDetails.read(TemplateProductDetails.Instruction, contextController.instructionProductHandle);
+      ) ?? this.publication.readProductDetail(
+        TemplateProductDetails.Instruction,
+        contextController.instructionProductHandle,
+      );
     if (!(contextInstruction instanceof HydrateElementInstruction)
       || contextInstruction.captureSyntaxProductHandles.length === 0) {
       return RuntimeRendererSpreadCompileResult.noCapturedAttributes(spread.instruction.sourceAddressHandle);
@@ -175,14 +181,13 @@ export class RuntimeSpreadBindingCreator {
     usage: RuntimeCapturedAttributeUsage,
     input: RuntimeRenderingMaterializationRequest,
   ): readonly AttributeSyntax[] | null {
-    const syntaxesByProduct = new Map([
-      ...this.store.productDetails.readBySlot(TemplateProductDetails.AttributeSyntax).map((entry) =>
-        [entry.productHandle, entry.detail] as const
-      ),
-      ...input.attributeSyntax.syntaxes.map((syntax) => [syntax.productHandle, syntax] as const),
-    ]);
+    const syntaxesByProduct = new Map(
+      input.attributeSyntax.syntaxes.map((syntax) => [syntax.productHandle, syntax] as const),
+    );
     const capturedSyntaxes = usage.captureSyntaxProductHandles
-      .map((productHandle) => syntaxesByProduct.get(productHandle) ?? null)
+      .map((productHandle) => syntaxesByProduct.get(productHandle)
+        ?? this.publication.readProductDetail(TemplateProductDetails.AttributeSyntax, productHandle)
+      )
       .filter((syntax): syntax is AttributeSyntax => syntax != null);
     return capturedSyntaxes.length === usage.captureSyntaxProductHandles.length
       ? capturedSyntaxes

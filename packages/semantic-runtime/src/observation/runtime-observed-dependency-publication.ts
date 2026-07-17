@@ -14,6 +14,7 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   type ClaimPredicateKey,
   KernelVocabulary,
@@ -46,6 +47,7 @@ export interface RuntimeObservedDependencyPublicationClaim {
 
 export interface RuntimeObservedDependencyPublicationInput {
   readonly store: KernelStore;
+  readonly publication: KernelPublicationContext;
   readonly local: string;
   readonly owner: RuntimeObservedDependencyPublicationOwner;
   readonly dependency: RuntimeObservedDependencyProduct;
@@ -71,7 +73,7 @@ function runtimeObservedDependencyPublicationFrame(
   input: RuntimeObservedDependencyPublicationInput,
 ): RuntimeObservedDependencyPublicationFrame {
   const dependencySource = sourceAddressRecordsForRuntimeExpressionBounds(
-    input.store,
+    input.publication,
     input.dependency.sourceAddressHandle,
     input.owner.sourceAddressHandle,
     input.dependency.spanStart,

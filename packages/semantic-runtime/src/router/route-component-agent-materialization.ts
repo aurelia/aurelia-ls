@@ -388,7 +388,7 @@ function routedControllerEmission(
     sourceAddressHandle,
     provenanceHandle,
   );
-  for (const watcher of runtimeWatchersForDefinition(store, local, controller, definition, typeSystem)) {
+  for (const watcher of runtimeWatchersForDefinition(store, store, local, controller, definition, typeSystem)) {
     controller.addWatcher(watcher);
   }
   recordRoutedControllerHydration(controller, childContainer, sourceAddressHandle);
@@ -512,7 +512,7 @@ function recordsForRoutedController(
       [controller.productHandle],
       claims.map((claim) => claim.handle),
     ),
-    ...runtimeWatcherRecordsForController(store, local, controller, provenanceHandle, watcherClaims),
+    ...runtimeWatcherRecordsForController(store, store, local, controller, provenanceHandle, watcherClaims),
     ...claims,
   ];
 }

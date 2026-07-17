@@ -230,7 +230,7 @@ export class RuntimeCompositionMaterializer {
     private readonly store: KernelStore,
   ) {
     this.childContainerMaterializer = new ContainerChildMaterializer(store);
-    this.controllerPublication = new RuntimeControllerPublicationMaterializer(store);
+    this.controllerPublication = new RuntimeControllerPublicationMaterializer(store, store);
   }
 
   materialize(input: RuntimeCompositionMaterializationRequest): RuntimeCompositionEmission {

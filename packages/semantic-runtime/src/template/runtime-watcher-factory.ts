@@ -1,5 +1,6 @@
 import type { AddressHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import ts from 'typescript';
 import { ExpressionParser } from '../expression/expression-parser.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
@@ -41,6 +42,7 @@ const watcherExpressionParser = new ExpressionParser();
 
 export function runtimeWatchersForDefinition(
   store: KernelStore,
+  publication: KernelPublicationContext,
   local: string,
   frame: RuntimeControllerFrame,
   definition: CustomElementDefinition | CustomAttributeDefinition | null,
@@ -50,12 +52,22 @@ export function runtimeWatchersForDefinition(
     return [];
   }
   return definition.watches.map((watch, index) =>
-    runtimeWatcherForDefinitionWatch(store, `${local}:watch:${index}`, frame, definition, watch, index, typeSystem)
+    runtimeWatcherForDefinitionWatch(
+      store,
+      publication,
+      `${local}:watch:${index}`,
+      frame,
+      definition,
+      watch,
+      index,
+      typeSystem,
+    )
   );
 }
 
 function runtimeWatcherForDefinitionWatch(
   store: KernelStore,
+  publication: KernelPublicationContext,
   local: string,
   frame: RuntimeControllerFrame,
   definition: CustomElementDefinition | CustomAttributeDefinition,
@@ -72,6 +84,7 @@ function runtimeWatcherForDefinitionWatch(
   const watcherReference = new RuntimeWatcherReference(watcherKind, productHandle, identityHandle, sourceAddressHandle);
   const observedDependencies = runtimeWatcherObservedDependenciesForWatch(
     store,
+    publication,
     local,
     watcherReference,
     watch,
@@ -120,6 +133,7 @@ function sourceAddressForWatch(
 
 function runtimeWatcherObservedDependenciesForWatch(
   store: KernelStore,
+  publication: KernelPublicationContext,
   local: string,
   watcher: RuntimeWatcherReference,
   watch: WatchDefinition,
@@ -127,13 +141,13 @@ function runtimeWatcherObservedDependenciesForWatch(
   typeSystem: TypeSystemProject | null,
 ): readonly RuntimeWatcherObservedDependency[] {
   const drafts: readonly RuntimeObservedDependencyDraft[] = watch.expression.kind === WatchExpressionKind.DependencyCollectionFunction
-    ? proxyObservedDependencyDraftsForComputedWatcher(typeSystem, store, watch.expression.target)
-    : connectableObservedDependencyDraftsForExpressionWatcher(store, watch);
+    ? proxyObservedDependencyDraftsForComputedWatcher(typeSystem, store, publication, watch.expression.target)
+    : connectableObservedDependencyDraftsForExpressionWatcher(publication, watch);
   const dependencies = distinctRuntimeObservedDependencyDrafts(drafts);
   return dependencies.map((dependency, index) => {
     const dependencyLocal = `${local}:observed-dependency:${index}`;
     const dependencySource = sourceAddressForRuntimeExpressionBounds(
-      store,
+      publication,
       dependencyLocal,
       sourceAddressHandle,
       dependency.spanStart,
@@ -162,10 +176,10 @@ function runtimeWatcherObservedDependenciesForWatch(
 }
 
 function connectableObservedDependencyDraftsForExpressionWatcher(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   watch: WatchDefinition,
 ) {
-  const ast = expressionAstForExpressionWatcher(store, watch);
+  const ast = expressionAstForExpressionWatcher(publication, watch);
   return ast == null
     ? []
     : collectRuntimeConnectableObservedDependencyDrafts(ast);
@@ -174,18 +188,22 @@ function connectableObservedDependencyDraftsForExpressionWatcher(
 function proxyObservedDependencyDraftsForComputedWatcher(
   typeSystem: TypeSystemProject | null,
   store: KernelStore,
+  publication: KernelPublicationContext,
   target: ResourceTargetReference | null,
 ) {
-  const declaration = dependencyCollectionFunctionForTarget(typeSystem, store, target);
+  const declaration = dependencyCollectionFunctionForTarget(typeSystem, publication, target);
   return declaration == null
     ? []
     : ProxyObservable.collectObservedDependencyDrafts(
       declaration,
-      ProxyObservable.typeContextForTypeSystem(typeSystem, store, store),
+      ProxyObservable.typeContextForTypeSystem(typeSystem, store, publication),
     );
 }
 
-function expressionAstForExpressionWatcher(store: KernelStore, watch: WatchDefinition): ExpressionAstNode | null {
+function expressionAstForExpressionWatcher(
+  publication: KernelPublicationContext,
+  watch: WatchDefinition,
+): ExpressionAstNode | null {
   if (watch.expression.kind !== WatchExpressionKind.PropertyKey) {
     return null;
   }
@@ -196,7 +214,7 @@ function expressionAstForExpressionWatcher(store: KernelStore, watch: WatchDefin
   const result = watcherExpressionParser.parse(
     expression,
     'IsProperty',
-    runtimeExpressionParseContextForAddress(store, watch.expression.propertyKey?.target?.addressHandle ?? null),
+    runtimeExpressionParseContextForAddress(publication, watch.expression.propertyKey?.target?.addressHandle ?? null),
   );
   return result.kind === ExpressionParseResultKind.ExpressionSuccess
     || result.kind === ExpressionParseResultKind.EmptyExpressionSuccess
@@ -206,23 +224,23 @@ function expressionAstForExpressionWatcher(store: KernelStore, watch: WatchDefin
 
 function dependencyCollectionFunctionForTarget(
   typeSystem: TypeSystemProject | null,
-  store: KernelStore,
+  publication: KernelPublicationContext,
   target: ResourceTargetReference | null,
 ): ts.FunctionLikeDeclaration | null {
   if (typeSystem == null || target == null) {
     return null;
   }
-  const sourceFile = sourceFileForTarget(typeSystem, store, target);
+  const sourceFile = sourceFileForTarget(typeSystem, publication, target);
   if (sourceFile == null) {
     return null;
   }
-  const span = sourceSpanForAddress(store, target.addressHandle);
+  const span = sourceSpanForAddress(publication, target.addressHandle);
   return findDependencyCollectionFunction(sourceFile, target.localName, span);
 }
 
 function sourceFileForTarget(
   typeSystem: TypeSystemProject,
-  store: KernelStore,
+  publication: KernelPublicationContext,
   target: ResourceTargetReference,
 ): ts.SourceFile | null {
   if (target.moduleKey != null) {
@@ -233,7 +251,7 @@ function sourceFileForTarget(
       }
     }
   }
-  const sourceFileAddress = sourceFileAddressForAddress(store, target.addressHandle);
+  const sourceFileAddress = sourceFileAddressForAddress(publication, target.addressHandle);
   return sourceFileAddress == null
     ? null
     : typeSystem.readProgramSourceFileByPath(sourceFileAddress.path);
@@ -258,13 +276,13 @@ interface SourceSpanRange {
 }
 
 function sourceSpanForAddress(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   addressHandle: AddressHandle | null,
 ): SourceSpanRange | null {
   if (addressHandle == null) {
     return null;
   }
-  const address = store.readAddress(addressHandle);
+  const address = publication.read(addressHandle);
   return address?.kind === 'source-span-address'
     ? { start: address.start, end: address.end }
     : null;

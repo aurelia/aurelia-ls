@@ -18,6 +18,7 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
@@ -44,6 +45,7 @@ class RuntimeControllerPublication {
 export class RuntimeControllerPublicationMaterializer {
   constructor(
     private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
   ) {}
 
   recordController(
@@ -205,7 +207,7 @@ export class RuntimeControllerPublicationMaterializer {
     controller: RuntimeControllerFrame,
     source: RuntimeRenderingSourceSet,
   ): SemanticClaim | null {
-    const instructionSequenceProductHandle = instructionSequenceProductHandleForController(this.store, controller);
+    const instructionSequenceProductHandle = instructionSequenceProductHandleForController(this.publication, controller);
     return instructionSequenceProductHandle == null
       ? null
       : new SemanticClaim(
@@ -272,17 +274,24 @@ export class RuntimeControllerPublicationMaterializer {
         [controller.productHandle],
         publication.materializationClaimHandles,
       ),
-      ...runtimeWatcherRecordsForController(this.store, local, controller, source.provenanceHandle, publication.claims),
+      ...runtimeWatcherRecordsForController(
+        this.store,
+        this.publication,
+        local,
+        controller,
+        source.provenanceHandle,
+        publication.claims,
+      ),
       ...publication.claims,
     ];
   }
 }
 
 function childInstructionSequenceProductHandleForInstruction(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   instructionProductHandle: ProductHandle,
 ): ProductHandle | null {
-  const instruction = store.productDetails.read(TemplateProductDetails.Instruction, instructionProductHandle);
+  const instruction = publication.readProductDetail(TemplateProductDetails.Instruction, instructionProductHandle);
   if (instruction == null || !('childInstructionSequenceProductHandle' in instruction)) {
     return null;
   }
@@ -292,7 +301,7 @@ function childInstructionSequenceProductHandleForInstruction(
 }
 
 function instructionSequenceProductHandleForController(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   controller: RuntimeControllerFrame,
 ): ProductHandle | null {
   if (controller.instructionSequenceProductHandle != null) {
@@ -301,7 +310,7 @@ function instructionSequenceProductHandleForController(
   if (controller.instructionProductHandle == null) {
     return null;
   }
-  return childInstructionSequenceProductHandleForInstruction(store, controller.instructionProductHandle);
+  return childInstructionSequenceProductHandleForInstruction(publication, controller.instructionProductHandle);
 }
 
 function uniqueClaimHandles(

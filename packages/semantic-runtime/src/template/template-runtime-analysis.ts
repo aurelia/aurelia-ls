@@ -469,6 +469,7 @@ class TemplateRuntimeAnalysisFrame {
       projectContext: this.request.projectContext,
       resourceDefinitions: this.request.resourceDefinitions,
       typeSystem: this.request.typeSystem,
+      expressionWorld: this.expressionWorld,
       contextResolverRecordPolicy: contextResolverRecordPolicyForProfile(this.telemetry.inquiryProfile),
       profiling: this.profilingSink(),
     } satisfies RuntimeRenderingMaterializationRequest);

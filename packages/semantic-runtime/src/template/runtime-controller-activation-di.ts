@@ -9,9 +9,13 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import {
+  normalizeHostPath,
+  sourceFileAddressForAddress,
+} from '../kernel/source-address.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
-import { admittedSourceFileAddressHandleForCheckerNode } from '../type-system/declaration-source.js';
 import type { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 
@@ -53,32 +57,43 @@ class MutableImportBindings implements ImportBindings {
  */
 export function readControllerActivationViewFactoryResolveSites(
   store: KernelStore,
+  publication: KernelPublicationContext,
   definition: CustomElementDefinition | CustomAttributeDefinition,
 ): readonly RuntimeControllerActivationDiSite[] {
   const targetTypeProductHandle = definition.target.targetType?.productHandle ?? null;
   const shape = targetTypeProductHandle == null
     ? null
-    : store.productDetails.read(TypeSystemProductDetails.TypeShape, targetTypeProductHandle);
+    : publication.readProductDetail(TypeSystemProductDetails.TypeShape, targetTypeProductHandle);
   if (shape?.carrier == null) {
+    return [];
+  }
+  const definitionSourceFile = sourceFileAddressForAddress(
+    publication,
+    definition.target.declarationSourceAddressHandle ?? definition.target.addressHandle,
+  );
+  if (definitionSourceFile == null) {
     return [];
   }
   return shape.carrier.declarations.flatMap((declaration) =>
     ts.isClassDeclaration(declaration)
-      ? readClassActivationViewFactoryResolveSites(store, definition.name, declaration)
+      && normalizeHostPath(declaration.getSourceFile().fileName) === normalizeHostPath(definitionSourceFile.path)
+      ? readClassActivationViewFactoryResolveSites(
+        store,
+        definitionSourceFile.handle,
+        definition.name,
+        declaration,
+      )
       : []
   );
 }
 
 function readClassActivationViewFactoryResolveSites(
   store: KernelStore,
+  sourceFileAddressHandle: AddressHandle,
   definitionName: string,
   declaration: ts.ClassDeclaration,
 ): readonly RuntimeControllerActivationDiSite[] {
   const sourceFile = declaration.getSourceFile();
-  const sourceFileAddressHandle = admittedSourceFileAddressHandleForCheckerNode(store, declaration);
-  if (sourceFileAddressHandle == null) {
-    return [];
-  }
   const bindings = readImportBindings(sourceFile);
   const sites: RuntimeControllerActivationDiSite[] = [];
   for (const member of declaration.members) {

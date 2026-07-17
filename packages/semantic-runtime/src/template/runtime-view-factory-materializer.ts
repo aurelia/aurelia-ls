@@ -16,6 +16,7 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
@@ -84,6 +85,7 @@ class RuntimeEmbeddedViewDefinitionShape {
 export class RuntimeViewFactoryMaterializer {
   constructor(
     readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
   ) {}
 
   ensureForTemplateController(
@@ -311,7 +313,7 @@ export class RuntimeViewFactoryMaterializer {
   ): RuntimeEmbeddedViewDefinitionPublication {
     const allocation = this.allocate(local);
     const name = generatedEmbeddedViewName(controller);
-    const sequence = this.store.productDetails.read(
+    const sequence = this.publication.readProductDetail(
       TemplateProductDetails.InstructionSequence,
       instructionSequenceProductHandle,
     );

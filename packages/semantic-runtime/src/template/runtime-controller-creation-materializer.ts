@@ -18,6 +18,7 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   KernelVocabulary,
   type OpenSeamKindKey,
@@ -39,13 +40,12 @@ import {
   runtimeResourceKeyForKind,
 } from '../resources/resource-kind.js';
 import {
-  ObserverLocator,
   ObserverLocatorLookupRequest,
+  type ObserverLocator,
 } from '../observation/observer-locator.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
-import { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
 import { RuntimeHtmlControllerFrameworkErrorCode } from './framework-error-code.js';
 import {
@@ -136,15 +136,14 @@ const unmeasuredRuntimeControllerCreation: RuntimeControllerCreationMeasure = (_
 export class RuntimeControllerCreationMaterializer {
   private readonly childContainerMaterializer: ContainerChildMaterializer;
   private readonly controllerIssuePublisher: RuntimeControllerIssuePublisher;
-  private readonly observerLocator: ObserverLocator;
   private readonly resourceSlotPublication: DiResourceSlotPublicationMaterializer;
 
   constructor(
     private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
   ) {
     this.childContainerMaterializer = new ContainerChildMaterializer(store);
     this.controllerIssuePublisher = new RuntimeControllerIssuePublisher(store);
-    this.observerLocator = new ObserverLocator(store, new CheckerTypeProjector(store));
     this.resourceSlotPublication = new DiResourceSlotPublicationMaterializer(store, new DiKeyIdentityEmitter(store));
   }
 
@@ -204,6 +203,7 @@ export class RuntimeControllerCreationMaterializer {
   createChildController(
     creation: RuntimeControllerCreationRequest,
     typeSystem: TypeSystemProject | null,
+    observerLocator: ObserverLocator,
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     childContainerEmissions: ContainerChildMaterializationEmission[],
@@ -253,7 +253,15 @@ export class RuntimeControllerCreationMaterializer {
     );
     measure('child-hydration', () => this.recordChildControllerHydration(frame, childContainer));
     measure('observer-setup', () =>
-      this.recordControllerObserverSetupIssues(frame, definition, typeSystem, source, records, controllerIssues)
+      this.recordControllerObserverSetupIssues(
+        frame,
+        definition,
+        typeSystem,
+        observerLocator,
+        source,
+        records,
+        controllerIssues,
+      )
     );
     measure('activation-di-issues', () =>
       this.recordControllerActivationDiIssues(creation, frame, definition, source, records, controllerIssues)
@@ -399,7 +407,14 @@ export class RuntimeControllerCreationMaterializer {
     definition: CustomElementDefinition | CustomAttributeDefinition | null,
     typeSystem: TypeSystemProject | null = null,
   ): void {
-    for (const watcher of runtimeWatchersForDefinition(this.store, local, frame, definition, typeSystem)) {
+    for (const watcher of runtimeWatchersForDefinition(
+      this.store,
+      this.publication,
+      local,
+      frame,
+      definition,
+      typeSystem,
+    )) {
       frame.addWatcher(watcher);
     }
   }
@@ -459,6 +474,7 @@ export class RuntimeControllerCreationMaterializer {
     frame: RuntimeControllerFrame,
     definition: CustomElementDefinition | CustomAttributeDefinition | null,
     typeSystem: TypeSystemProject | null,
+    observerLocator: ObserverLocator,
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     controllerIssues: RuntimeControllerIssue[],
@@ -466,7 +482,7 @@ export class RuntimeControllerCreationMaterializer {
     if (definition == null || typeSystem == null || definition.target.targetType == null) {
       return;
     }
-    const hasTargetProperty = targetTypePropertyLookup(this.store, definition);
+    const hasTargetProperty = targetTypePropertyLookup(this.publication, definition);
     const hasAnyChangeCallback = hasTargetProperty('propertyChanged') || hasTargetProperty('propertiesChanged');
     definition.bindables.forEach((bindable, index) => {
       const requiresCoercer = bindableSetterRequiresCoercer(bindable);
@@ -474,7 +490,7 @@ export class RuntimeControllerCreationMaterializer {
       if (!requiresCoercer && !requiresCallback) {
         return;
       }
-      const lookup = this.observerLocator.getObserver(new ObserverLocatorLookupRequest(
+      const lookup = observerLocator.getObserver(new ObserverLocatorLookupRequest(
         `${frame.productHandle}:observer-setup:${index}:${bindable.name}`,
         RuntimeBindingTargetAccessLookup.Observer,
         RuntimeBindingTargetKind.ControllerViewModel,
@@ -557,7 +573,7 @@ export class RuntimeControllerCreationMaterializer {
     if (creation.creationKind === RuntimeControllerCreationKind.TemplateController) {
       return;
     }
-    const sites = readControllerActivationViewFactoryResolveSites(this.store, definition);
+    const sites = readControllerActivationViewFactoryResolveSites(this.store, this.publication, definition);
     sites.forEach((site, index) => {
       const publication = this.controllerIssuePublisher.publish(
         `${creation.local}:controller-issue:view-factory-provider:${index}`,
@@ -599,7 +615,7 @@ export class RuntimeControllerCreationMaterializer {
     }
 
     iterator.tailInstructionProductHandles.forEach((handle, index) => {
-      const tail = this.store.productDetails.read(TemplateProductDetails.Instruction, handle);
+      const tail = this.publication.readProductDetail(TemplateProductDetails.Instruction, handle);
       if (!(tail instanceof MultiAttrInstruction)) {
         return;
       }
@@ -635,7 +651,7 @@ export class RuntimeControllerCreationMaterializer {
       || creation.instruction.controllerName !== 'portal') {
       return;
     }
-    const instructions = staticSetPropertyInstructions(this.store, creation.instruction.bindingInstructionProductHandles);
+    const instructions = staticSetPropertyInstructions(this.publication, creation.instruction.bindingInstructionProductHandles);
     portalTemplateControllerActivationIssues(instructions).forEach((issue, index) => {
       const publication = this.controllerIssuePublisher.publish(
         `${creation.local}:controller-issue:portal-activation:${index}:${issue.kind}`,
@@ -759,7 +775,7 @@ export class RuntimeControllerCreationMaterializer {
     }
 
     creation.instruction.bindableInstructionProductHandles.forEach((handle, index) => {
-      const instruction = this.store.productDetails.read(TemplateProductDetails.Instruction, handle);
+      const instruction = this.publication.readProductDetail(TemplateProductDetails.Instruction, handle);
       if (!(instruction instanceof SetPropertyInstruction)) {
         return;
       }
@@ -872,7 +888,7 @@ export class RuntimeControllerCreationMaterializer {
     instruction: HydrateTemplateControllerInstruction,
   ): IteratorBindingInstruction | null {
     for (const handle of instruction.bindingInstructionProductHandles) {
-      const candidate = this.store.productDetails.read(TemplateProductDetails.Instruction, handle);
+      const candidate = this.publication.readProductDetail(TemplateProductDetails.Instruction, handle);
       if (candidate instanceof IteratorBindingInstruction) {
         return candidate;
       }
@@ -887,7 +903,7 @@ export class RuntimeControllerCreationMaterializer {
     if (productHandle == null) {
       return null;
     }
-    const definition = this.store.productDetails.read(ResourceProductDetails.Definition, productHandle);
+    const definition = this.publication.readProductDetail(ResourceProductDetails.Definition, productHandle);
     if (definition instanceof CustomElementDefinition || definition instanceof CustomAttributeDefinition) {
       return definition;
     }
@@ -1142,11 +1158,11 @@ function portalTemplateControllerActivationIssues(
 }
 
 function staticSetPropertyInstructions(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   handles: readonly ProductHandle[],
 ): readonly SetPropertyInstruction[] {
   return handles
-    .map((handle) => store.productDetails.read(TemplateProductDetails.Instruction, handle))
+    .map((handle) => publication.readProductDetail(TemplateProductDetails.Instruction, handle))
     .filter((instruction): instruction is SetPropertyInstruction => instruction instanceof SetPropertyInstruction);
 }
 
@@ -1221,14 +1237,14 @@ function bindableSetterRequiresCoercer(bindable: BindableDefinition): boolean {
 }
 
 function targetTypePropertyLookup(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   definition: CustomElementDefinition | CustomAttributeDefinition,
 ): (propertyName: string) => boolean {
   const productHandle = definition.target.targetType?.productHandle ?? null;
   if (productHandle == null) {
     return () => false;
   }
-  const carrier = store.productDetails.read(TypeSystemProductDetails.TypeShape, productHandle)?.carrier ?? null;
+  const carrier = publication.readProductDetail(TypeSystemProductDetails.TypeShape, productHandle)?.carrier ?? null;
   if (carrier == null) {
     return () => false;
   }
