@@ -28,22 +28,19 @@ import {
 import type { SemanticRuntimeTelemetryOptions } from '../telemetry/options.js';
 import {
   TemplateCompilerReadView,
-  type TemplateCompilerWorldAuthority,
 } from './compiler-read-view.js';
+import {
+  encodeTemplateCompilationKeyParts,
+  type TemplateCompilationCohort,
+  type TemplateCompilationCohortSetAuthority,
+} from './template-compilation-cohort.js';
 import {
   TemplateCompilationProjectPass,
   TemplateResourceFamilyCompilationRequest,
   type TemplateResourceCompilationEmission,
 } from './template-compilation-project-pass.js';
 
-export const enum TemplateCompilationCohortKind {
-  /** App-admitted component compilation inside one app-root compiler cohort. */
-  App = 'app',
-  /** Standalone authoring compilation outside an admitted app-root cohort. */
-  Authoring = 'authoring',
-}
-
-/** Stable domain locus for one top-level template compilation occurrence. */
+/** Stable domain locus for one top-level authored template family. */
 export class TemplateCompilationLocus implements ComputationLocus {
   readonly kind = 'template-compilation';
   readonly reconciliationKey: string;
@@ -53,50 +50,11 @@ export class TemplateCompilationLocus implements ComputationLocus {
     readonly projectKey: string,
     readonly ownerHandle: IdentityHandle | ProductHandle,
   ) {
-    this.reconciliationKey = encodeLocusParts([
+    this.reconciliationKey = encodeTemplateCompilationKeyParts([
       projectKey,
       ownerHandle,
     ]);
     this.summary = `template family ${ownerHandle} in ${projectKey}`;
-  }
-}
-
-/** One compiler cohort that derives compilation products from a shared authored template family. */
-export class TemplateCompilationCohort {
-  readonly key: string;
-
-  constructor(
-    readonly kind: TemplateCompilationCohortKind,
-    readonly analysisContextProductHandle: ProductHandle,
-    readonly appRootDefinitionProductHandle: ProductHandle | null,
-    readonly compilerWorldAuthority: TemplateCompilerWorldAuthority,
-  ) {
-    this.key = encodeLocusParts([
-      kind,
-      analysisContextProductHandle,
-      appRootDefinitionProductHandle ?? 'no-app-root',
-    ]);
-  }
-}
-
-/** Complete-set authority for every compiler cohort that currently owns one authored template family. */
-export class TemplateCompilationCohortSetAuthority {
-  constructor(
-    private readonly read: () => readonly TemplateCompilationCohort[],
-  ) {}
-
-  current(): readonly TemplateCompilationCohort[] {
-    const cohorts = [...this.read()].sort((left, right) => left.key.localeCompare(right.key));
-    for (let index = 1; index < cohorts.length; index++) {
-      if (cohorts[index - 1]!.key === cohorts[index]!.key) {
-        throw new Error(`Template compilation cohort set contains duplicate cohort ${cohorts[index]!.key}.`);
-      }
-    }
-    return cohorts;
-  }
-
-  static fixed(...cohorts: readonly TemplateCompilationCohort[]): TemplateCompilationCohortSetAuthority {
-    return new TemplateCompilationCohortSetAuthority(() => cohorts);
   }
 }
 
@@ -179,7 +137,7 @@ class TemplateCompilationCohortSetRead implements ComputationRead {
     ownerHandle: IdentityHandle | ProductHandle,
     readonly cohorts: readonly TemplateCompilationCohort[],
   ) {
-    this.readKey = `template-compilation-cohorts:${encodeLocusParts([projectKey, ownerHandle])}`;
+    this.readKey = `template-compilation-cohorts:${encodeTemplateCompilationKeyParts([projectKey, ownerHandle])}`;
     this.observedRevision = cohortSetRevision(cohorts);
   }
 
@@ -346,7 +304,7 @@ function coherentSourceAdmission(
 }
 
 function cohortSetRevision(cohorts: readonly TemplateCompilationCohort[]): string {
-  return encodeLocusParts(cohorts.map((cohort) => cohort.key));
+  return encodeTemplateCompilationKeyParts(cohorts.map((cohort) => cohort.key));
 }
 
 function externalMarkupTemplateFromSnapshot(
@@ -390,8 +348,4 @@ function externalMarkupTemplateFromSnapshot(
     addressHandle,
     null,
   );
-}
-
-function encodeLocusParts(parts: readonly string[]): string {
-  return parts.map((part) => `${part.length}:${part}`).join('|');
 }

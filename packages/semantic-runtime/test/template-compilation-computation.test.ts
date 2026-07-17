@@ -40,6 +40,8 @@ import {
   TemplateCompilationCohort,
   TemplateCompilationCohortKind,
   TemplateCompilationCohortSetAuthority,
+} from '../src/template/template-compilation-cohort.js';
+import {
   TemplateCompilationComputationRequest,
   TemplateCompilationComputationService,
 } from '../src/template/template-compilation-computation.js';

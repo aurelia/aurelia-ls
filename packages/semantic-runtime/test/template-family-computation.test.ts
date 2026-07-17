@@ -30,6 +30,8 @@ import {
   TemplateCompilationCohort,
   TemplateCompilationCohortKind,
   TemplateCompilationCohortSetAuthority,
+} from '../src/template/template-compilation-cohort.js';
+import {
   TemplateCompilationComputationRequest,
   TemplateCompilationComputationService,
   type TemplateCompilationComputationAttempt,
@@ -58,6 +60,42 @@ class MutableTemplateSourceProvider {
 }
 
 describe('template family computation', () => {
+  test('consumes the complete cohort authority published by the production project pass', async () => {
+    const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+    const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-completion-member-metadata');
+    const templateFileName = path.join(fixtureRoot, 'src/app.html');
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:template-family-computation:project-cohort-authority',
+    });
+    const app = await runtime.openApp();
+    const baseline = app.emission.templates.resources[0]?.compilation;
+    if (baseline == null) {
+      throw new Error('Expected the fixture app template to be compiled.');
+    }
+
+    const cohorts = app.emission.templates.cohortAuthority.cohortSetFor(baseline.definition);
+    expect(cohorts.current().map((cohort) => cohort.analysisContextProductHandle)).toEqual([
+      baseline.analysisContextProductHandle,
+    ]);
+    const sourceProvider = new MutableTemplateSourceProvider();
+    sourceProvider.write(templateFileName, readFileSync(templateFileName, 'utf8'));
+    const compiler = new TemplateCompilationComputationService(
+      runtime.workspace.store,
+      new ComputationLifecycleRegistry(runtime.workspace.store),
+      new SourceTextSnapshotAuthority(sourceProvider),
+    );
+    const attempt = compiler.prepare(new TemplateCompilationComputationRequest(
+      app.project.projectKey,
+      app.project.rootDir,
+      cohorts,
+      baseline.definition,
+    ));
+
+    expect(compilationNames(attempt)).toEqual(['app']);
+    expect(attempt.commit().commit.state).toBe(ComputationCommitState.Committed);
+  }, 30_000);
+
   test('reconciles recursive local-template families by authored identity across complete cohort sets', async () => {
     const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
     const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-completion-member-metadata');

@@ -35,10 +35,24 @@ classification, expression parsing, and instruction lowering converge on the sam
   known. It intentionally does not parse HTML yet; it establishes the product boundary where later template materializers
   attach. Claim publication stays in `TemplateCompilationClaimMaterializer` so product construction does not also own
   every `uses-*` relationship.
+- `template-compilation-cohort.ts` and `template-compilation-cohort-planner.ts` own the complete pre-compilation plan.
+  `App` and `Authoring` are the compiler-cohort kinds; app visibility, route components and fallbacks, declared resource
+  dependencies, and authoring policy are retained admission origins rather than competing cohort identities. The
+  planner partitions routeables by their owning app root, computes dependency closure before compilation, and gives
+  every owner a deterministic retained parent world containing that owner plus its own declared dependencies. Stable
+  project/app-root/owner keys and exact resource-scope comparison prevent queue order, array position, aliases, or
+  source-witness changes from silently selecting a different world. The project authority is fixed for the current
+  immutable app epoch; its callback-backed form admits later same-runtime plan replacement without asking an LSP caller
+  to reconstruct cohorts from compiled emissions. Component worlds and the standalone authoring container/world spend
+  the caller's publication context, so a staged project replan cannot leak those records before the transaction commits.
+  Framework authoring support catalogs are still immediate upstream inputs and must eventually be borrowed from their
+  owning catalog authority rather than brought under template-family ownership.
 - `template-compilation-project-pass.ts` is the current project-level template entrypoint. It consumes app-world
-  compiler worlds and compiler-visible custom element definitions, then runs compilation-unit materialization, HTML
-  parsing, attribute syntax parsing, attribute classification, compiler-owned value-site selection, binding-command
-  lowering, compiled-template handoff materialization, and the runtime-analysis phase.
+  compiler worlds and resource/router authority once, obtains the complete cohort plan, and uses that plan for eager
+  compilation-unit materialization, HTML parsing, attribute syntax parsing, attribute classification, compiler-owned
+  value-site selection, binding-command lowering, compiled-template handoff materialization, and runtime analysis.
+  Eager replay and `template-compilation-computation.ts` therefore share one owner/cohort derivation; there is no second
+  route/dependency queue or post-hoc cohort reconstruction.
   The pass owns the shared `CheckerExpressionTypeWorld` for all resource runtime-analysis frames in that project
   compilation, while each resource profile reports expression-cache deltas from a local marker. Keep future
   runtime/checker lifetime work at this project-pass boundary instead of rebuilding an expression world per resource.
@@ -67,7 +81,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   position, so reordering refreshes witnesses without churning semantic children. Owner/source absence, invalid local
   declarations, and cohort removal withdraw exactly their obsolete closure while failed or stale runs preserve the last
   coherent family. Inline TypeScript templates, runtime analysis, checker products, dependent public answers, and
-  production LSP epoch replacement remain outside this boundary.
+  production LSP epoch replacement remain outside this boundary. Configuration/DI lifecycle ownership also remains
+  upstream: the cohort planner spends the current app-world snapshot and must not grow a parallel registration or
+  resource catalog while that larger authority is introduced.
 - `compiled-template-comparison.ts` is the first rich-detail cutoff boundary. It compares compiled-template structure
   separately from source/provenance witnesses and resolves stable address handles against old and proposed record views.
   Other rich details remain conservative replacements until their downstream ownership justifies a comparator.

@@ -251,6 +251,10 @@ epoch without inventing local TypeChecker setup. Overlay sources may also declar
 segments as the diagnostic/hover/completion bridge back to authored Aurelia source instead of pointing public
 answers at `.semantic-runtime/overlays/*` files. Use `TypeSystemOverlaySourceBuilder` for generated overlays whose
 segments need exact generated offsets; segment end offsets are exclusive, matching TypeScript/source-span convention.
+Generated overlay filenames may compact semantic local keys, but every lossy filename projection must retain a stable
+hash of the full key. Punctuation normalization and prefix truncation can otherwise alias distinct overlay roots. The
+project builder admits one-to-one overlay path/origin identities and rejects conflicting generated content rather than
+making checker diagnostics depend on resource or prior-project order.
 Segments should also retain the semantic product handle that produced the generated text when one exists. Authored spans
 locate the user's code; product handles let later agreement/conflict checks join checker evidence back to
 semantic-runtime facts without relying only on file/span coincidence. Hand-counted offsets are a provenance smell once

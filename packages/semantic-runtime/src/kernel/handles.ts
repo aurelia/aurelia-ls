@@ -84,7 +84,7 @@ function compactHandlePart(
     value,
     role === 'store' ? compactHandleStorePrefixLength : compactHandleLocalPrefixLength,
   );
-  return `${role}~${prefix}~${stableHandleHash(value)}`;
+  return `${role}~${prefix}~${stableKernelLocalHash(value)}`;
 }
 
 function serializeKernelHandle<TKind extends KernelHandleKind>(
@@ -112,7 +112,8 @@ function readableCompactPrefix(value: string, maxLength: number): string {
   return normalized.length === 0 ? 'value' : normalized;
 }
 
-function stableHandleHash(value: string): string {
+/** Stable compact hash shared by kernel local-key carriers that must retain suffix entropy. */
+export function stableKernelLocalHash(value: string): string {
   let hash = 0xcbf29ce484222325n;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= BigInt(value.charCodeAt(index));

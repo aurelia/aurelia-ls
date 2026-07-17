@@ -2996,6 +2996,89 @@
       ],
       "createdAt": "2026-07-13",
       "updatedAt": "2026-07-13"
+    },
+    {
+      "id": "decision:template-compilation-cohort-authority",
+      "kind": "decision",
+      "domains": [
+        "template",
+        "compiler-world",
+        "kernel",
+        "incrementality",
+        "router"
+      ],
+      "summary": "One pre-compilation project plan is the complete authority for template-owner compiler cohorts and retained parent worlds.",
+      "rationale": "App/authoring cohort membership was previously discovered while an eager queue compiled resources, so route and dependency origins, parent-world choice, and complete membership disappeared before the family lifecycle could observe them. A project snapshot is the transaction boundary that can plan app-root additions and removals coherently, while stable app-root and owner identities preserve finer semantic ownership. The plan reuses admitted app worlds, route contexts, and resource definitions rather than creating another compiler catalog.",
+      "guidance": [
+        "Treat App and Authoring as the compiler-cohort kinds. App visibility, route components and fallbacks, resource dependencies, and authoring policy are admission origins, not cohort identities.",
+        "Derive the complete owner-to-cohort plan before compiling any family. Eager replay and lifecycle computations must consume that same plan; do not reconstruct membership from compiled emissions.",
+        "Partition routeable admissions by RouteConfigContext app-root ownership. Do not append every routeable to every app-root compiler world.",
+        "Give each owner a deterministic retained parent world containing the owner and its own declared dependencies. Do not preserve first-queue-path or framework first-container cache order as tooling policy.",
+        "Component and authoring container/world materialization must spend the project planner's publication context. Framework authoring support catalogs remain upstream inputs and should later be borrowed from their owning catalog authority, not reassigned to template-family ownership.",
+        "Keep cohort identity independent of owner identity, but key project-level parent-world authority by owner plus cohort because owners in one app root can require different component worlds.",
+        "Compare compiler-visible resource scopes with all semantic and witness fields, including definition detail, aliases, identities, visibility, and source address. Product-handle equality alone can hide stale detail.",
+        "ResourceDependencyReference currently lacks a per-entry source address. Until resource dependency provenance is sharpened, retain the depending definition as the honest broad admission carrier and do not present the dependency target declaration as the edge source.",
+        "When a semantic local key becomes a generated filename, always retain a stable hash of the full key. Prefix truncation and punctuation normalization are both lossy projections that can alias distinct TypeScript overlay roots.",
+        "Treat overlay origin keys and canonical generated paths as one-to-one identities at TypeSystem project admission. Coalesce only equivalent sources and reject conflicts instead of selecting the first source by order.",
+        "The current production authority is fixed to one immutable app epoch. Configuration/DI lifecycle and downstream runtime/checker closure are separate gates; do not add a second registration catalog or dual eager/lifecycle producer while connecting them."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-compilation-cohort-planner.ts",
+          "symbolName": "TemplateCompilationCohortPlanner",
+          "summary": "Complete pre-compilation membership and deterministic parent-world planner."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-compilation-cohort.ts",
+          "symbolName": "TemplateCompilationCohortProjectAuthority",
+          "summary": "Owner-specific complete-set and current parent-world authority."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
+          "symbolName": "TemplateCompilationProjectPass",
+          "summary": "Production eager replay consuming the shared cohort plan."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/compiler-read-view.ts",
+          "symbolName": "TemplateCompilerWorldAuthority",
+          "summary": "Retained parent-world currentness, including removed-world invalidation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-authoring-world.ts",
+          "symbolName": "TemplateAuthoringCompilerWorldMaterializer",
+          "summary": "Standalone authoring container and compiler world spending the project publication context."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProjectBuilder",
+          "summary": "TypeScript Program admission boundary that rejects conflicting overlay path and origin identities."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/template/README.md",
+          "summary": "Compiler-world planning, family ownership, and deferred lifecycle boundaries."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/template-compilation-cohort-planner.ts",
+          "symbolName": "TemplateCompilationCohortPlanner"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/template-compilation-cohort.ts",
+          "symbolName": "TemplateCompilationCohortProjectAuthority"
+        }
+      ],
+      "createdAt": "2026-07-17",
+      "updatedAt": "2026-07-17"
     }
   ]
 }

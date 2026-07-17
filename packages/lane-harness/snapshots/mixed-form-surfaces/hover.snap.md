@@ -32,7 +32,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 52,
+    "markdownCharacters": 100,
     "range": null
   }
 }
@@ -48,6 +48,8 @@ label: string
 ```
 
 kind: `property`
+owner: `LoosePicklist`
+owner shape: `class`
 ````
 
 ## open-member-option-label

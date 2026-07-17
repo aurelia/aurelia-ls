@@ -108,6 +108,32 @@ export class TemplateVisibleResource {
   }
 }
 
+/** Exact semantic-and-witness equality for an ordered compiler-visible resource scope. */
+export function sameTemplateVisibleResourceSet(
+  left: readonly TemplateVisibleResource[],
+  right: readonly TemplateVisibleResource[],
+): boolean {
+  return left.length === right.length
+    && left.every((resource, index) => sameTemplateVisibleResource(resource, right[index] ?? null));
+}
+
+function sameTemplateVisibleResource(
+  left: TemplateVisibleResource,
+  right: TemplateVisibleResource | null,
+): boolean {
+  return right != null
+    && left.resourceKind === right.resourceKind
+    && left.name === right.name
+    && left.aliases.length === right.aliases.length
+    && left.aliases.every((alias, index) => alias === right.aliases[index])
+    && left.resourceProductHandle === right.resourceProductHandle
+    && left.resourceIdentityHandle === right.resourceIdentityHandle
+    && left.definitionProductHandle === right.definitionProductHandle
+    && left.definition === right.definition
+    && left.visibilityKind === right.visibilityKind
+    && left.sourceAddressHandle === right.sourceAddressHandle;
+}
+
 /** Reference to a compiler service without retaining a runtime singleton instance. */
 export class TemplateCompilerServiceReference {
   constructor(

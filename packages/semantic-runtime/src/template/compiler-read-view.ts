@@ -90,13 +90,21 @@ class TemplateCompilerReadRevision {
   }
 }
 
-/** Authority for the compiler world currently admitted at one stable cohort locus. */
+/** Authority for the compiler world currently admitted at one stable owner/cohort locus. */
 export class TemplateCompilerWorldAuthority {
   constructor(
-    private readonly read: () => TemplateCompilerWorldEmission,
+    private readonly read: () => TemplateCompilerWorldEmission | null,
   ) {}
 
   current(): TemplateCompilerWorldEmission {
+    const world = this.read();
+    if (world == null) {
+      throw new Error('The compiler world is no longer current at this cohort locus.');
+    }
+    return world;
+  }
+
+  readCurrent(): TemplateCompilerWorldEmission | null {
     return this.read();
   }
 
@@ -347,7 +355,7 @@ export class TemplateCompilerReadView {
         return readRevision(
           current.scopeRevision,
           current.closure,
-          readCurrentResult(current.world),
+          current.world == null ? ['compiler-world-absent'] : readCurrentResult(current.world),
         );
       },
     );
@@ -362,7 +370,20 @@ export class TemplateCompilerReadView {
     if (this.currentValidationState != null) {
       return this.currentValidationState;
     }
-    const world = this.authority.current();
+    const world = this.authority.readCurrent();
+    if (world == null) {
+      return this.currentValidationState = new TemplateCompilerReadValidationState(
+        null,
+        'compiler-world-absent',
+        new TemplateCompilerScopeClosure(
+          TemplateCompilerScopeClosureState.Open,
+          [],
+          [],
+          [],
+          [],
+        ),
+      );
+    }
     return this.currentValidationState = new TemplateCompilerReadValidationState(
       world,
       compilerScopeRevision(world),
@@ -373,7 +394,7 @@ export class TemplateCompilerReadView {
 
 class TemplateCompilerReadValidationState {
   constructor(
-    readonly world: TemplateCompilerWorldEmission,
+    readonly world: TemplateCompilerWorldEmission | null,
     readonly scopeRevision: string,
     readonly closure: TemplateCompilerScopeClosure,
   ) {}

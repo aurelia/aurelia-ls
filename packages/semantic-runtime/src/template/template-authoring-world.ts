@@ -4,8 +4,12 @@ import { EvidenceKind, EvidenceRecord, EvidenceRole } from '../kernel/evidence.j
 import type { AddressHandle, EvidenceHandle, ProvenanceHandle } from '../kernel/handles.js';
 import { MaterializationRecord, MaterializedProduct } from '../kernel/materialization.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
-import { ImmediateKernelPublicationContext } from '../kernel/publication.js';
-import { KernelStoreBatch, type KernelStore, type KernelStoreRecord } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  KernelStoreBatch,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type { KernelStore, KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   BuiltInResourceCatalogMaterializer,
@@ -57,11 +61,12 @@ export class TemplateAuthoringCompilerWorldMaterializer {
   private readonly compilerWorldMaterializer: TemplateCompilerWorldMaterializer;
 
   constructor(
+    /** Store that owns the already-current framework support catalogs. */
     readonly store: KernelStore,
+    /** Transaction that owns the standalone authoring container and compiler world. */
+    private readonly publication: KernelPublicationContext,
   ) {
-    this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(
-      new ImmediateKernelPublicationContext(store),
-    );
+    this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(publication);
   }
 
   construct(request: TemplateAuthoringCompilerWorldRequest): TemplateCompilerWorldEmission | null {
@@ -73,7 +78,9 @@ export class TemplateAuthoringCompilerWorldMaterializer {
     const container = this.authoringContainer(request.projectKey, sourceAddressHandle);
     const containerRecords = this.recordsForAuthoringContainer(request.projectKey, container, sourceAddressHandle);
     if (containerRecords.length > 0) {
-      this.store.commit(new KernelStoreBatch(containerRecords, `template-authoring-container:${request.projectKey}`));
+      this.publication.publish(new KernelPublicationPlan(
+        new KernelStoreBatch(containerRecords, `template-authoring-container:${request.projectKey}`),
+      ));
     }
     const syntax = this.materializeAuthoringSyntax();
     const builtInResources = this.materializeAuthoringBuiltInResources(request.typeSystem);
@@ -135,7 +142,7 @@ export class TemplateAuthoringCompilerWorldMaterializer {
     container: Container,
     sourceAddressHandle: AddressHandle | null,
   ): readonly KernelStoreRecord[] {
-    if (this.store.readProduct(container.productHandle) != null) {
+    if (this.publication.read(container.productHandle) != null) {
       return [];
     }
     const local = `di-container:template-authoring:${projectKey}`;

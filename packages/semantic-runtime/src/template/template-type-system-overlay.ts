@@ -3,7 +3,11 @@ import type { ExpressionAstNode } from '../expression/ast.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import { TypeScriptDeclarationIdentity } from '../kernel/identity.js';
-import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import {
+  stableKernelLocalHash,
+  type AddressHandle,
+  type ProductHandle,
+} from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   BindingContextKind,
@@ -2306,7 +2310,11 @@ function resourceTargetTypeExpressionFromType(
 
 function sanitizeOverlayFilePart(value: string): string {
   const normalized = value.replace(/[^A-Z_a-z0-9]+/gu, '-').replace(/^-|-$/gu, '');
-  return normalized.length === 0 ? 'template' : normalized.slice(0, 120);
+  const maximumLength = 120;
+  const hash = stableKernelLocalHash(value);
+  const readable = normalized.length === 0 ? 'template' : normalized;
+  // Normalization and truncation are both lossy, so the full semantic key always retains the final say.
+  return `${readable.slice(0, maximumLength - hash.length - 1)}-${hash}`;
 }
 
 function sanitizeIdentifierPart(value: string): string {

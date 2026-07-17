@@ -658,20 +658,58 @@ function typeSystemProjectOverlaySources(
   defaultOverlaySources: readonly TypeSystemOverlaySource[],
   additionalOverlaySources: readonly TypeSystemOverlaySource[] | undefined,
 ): readonly TypeSystemOverlaySource[] {
-  if (additionalOverlaySources == null || additionalOverlaySources.length === 0) {
-    return defaultOverlaySources;
-  }
   const sources: TypeSystemOverlaySource[] = [];
-  const seen = new Set<string>();
-  for (const source of [...defaultOverlaySources, ...additionalOverlaySources]) {
-    const key = canonicalTypeSystemPath(source.fileName);
-    if (seen.has(key)) {
+  const byPath = new Map<string, TypeSystemOverlaySource>();
+  const byOriginKey = new Map<string, TypeSystemOverlaySource>();
+  for (const source of [...defaultOverlaySources, ...(additionalOverlaySources ?? [])]) {
+    const pathKey = canonicalTypeSystemPath(source.fileName);
+    const samePath = byPath.get(pathKey) ?? null;
+    const sameOrigin = byOriginKey.get(source.originKey) ?? null;
+    if (
+      samePath != null
+      && samePath === sameOrigin
+      && sameTypeSystemOverlaySource(samePath, source)
+    ) {
       continue;
     }
-    seen.add(key);
+    if (samePath != null) {
+      throw new Error(
+        `Type-system overlay path ${source.fileName} has conflicting origins or generated content.`,
+      );
+    }
+    if (sameOrigin != null) {
+      throw new Error(
+        `Type-system overlay origin ${source.originKey} maps to both ${sameOrigin.fileName} and ${source.fileName}.`,
+      );
+    }
+    byPath.set(pathKey, source);
+    byOriginKey.set(source.originKey, source);
     sources.push(source);
   }
   return sources;
+}
+
+function sameTypeSystemOverlaySource(
+  left: TypeSystemOverlaySource,
+  right: TypeSystemOverlaySource,
+): boolean {
+  return left.kind === right.kind
+    && left.text === right.text
+    && left.scriptKind === right.scriptKind
+    && left.diagnosticPolicy === right.diagnosticPolicy
+    && left.originKey === right.originKey
+    && left.segments.length === right.segments.length
+    && left.segments.every((segment, index) => {
+      const candidate = right.segments[index]!;
+      return segment.role === candidate.role
+        && segment.generatedStart === candidate.generatedStart
+        && segment.generatedEnd === candidate.generatedEnd
+        && segment.semanticProductHandle === candidate.semanticProductHandle
+        && segment.sourceAddressHandle === candidate.sourceAddressHandle
+        && segment.sourceStart === candidate.sourceStart
+        && segment.sourceEnd === candidate.sourceEnd
+        && segment.label === candidate.label;
+    });
 }
 
 function typeSystemOverlaySourceIndex(
