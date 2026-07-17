@@ -65,6 +65,7 @@ import {
   sourceSpanForCheckerDeclaration,
   type DeclarationSourcePublication,
 } from './declaration-source.js';
+import { typeSystemProjectEpochForChecker } from './checker-epoch.js';
 
 export interface CheckerTypeProjectionRequest {
   /** Store-local key for this type projection. */
@@ -185,17 +186,6 @@ interface TypeShapeRelatedTypes {
   readonly constructReturnType: CheckerTypeReference | null;
 }
 
-interface TypeShapeIndex {
-  readonly shapesByKey: Map<string, CheckerTypeShape>;
-  readonly key: string;
-  readonly summary: string;
-  readEntryCount(): number;
-  dispose(context: { readonly summary: { readonly productDetails: number } }): void;
-  hasProductDetail(productHandle: ProductHandle): boolean;
-}
-
-const typeShapeIndexByStore = new WeakMap<KernelStore, TypeShapeIndex>();
-
 class TypeShapePublicationFrame {
   constructor(
     readonly localKey: string,
@@ -251,26 +241,17 @@ export class CheckerTypeProjector {
   ) {}
 
   ensureProjection(input: CheckerTypeProjectionRequest): CheckerTypeShape {
-    const productHandle = this.store.handles.product(`type-shape:${input.localKey}`);
+    const descriptor = checkerTypeDescriptor(input);
+    const canonicalInput = checkerProjectionRequestAtLocalKey(
+      input,
+      canonicalCheckerProjectionLocalKey(input, descriptor),
+    );
+    const productHandle = this.store.handles.product(`type-shape:${canonicalInput.localKey}`);
     const existing = this.store.productDetails.read(TypeSystemProductDetails.TypeShape, productHandle);
     if (existing != null) {
       return existing;
     }
-
-    // `localKey` names the projection site. The durable shape is allowed to converge when the checker key, origin, and
-    // the shape-owned source lane are identical; caller-owned expression/binding/diagnostic products carry their own
-    // source loci, so declaration-backed and structurally checker-owned shapes do not need per-site products.
-    const descriptor = checkerTypeDescriptor(input);
-    const indexed = this.readIndexedTypeShape(
-      typeProjectionOrigin(input),
-      descriptor.checkerKey,
-      typeProjectionSourceAddress(input, descriptor),
-    );
-    if (indexed != null) {
-      return indexed;
-    }
-
-    return this.project(input).typeShape;
+    return this.publishProjection(this.recordsForType(canonicalInput, descriptor)).typeShape;
   }
 
   ensureSyntheticProjection(input: CheckerSyntheticTypeProjectionRequest): CheckerTypeShape {
@@ -284,15 +265,22 @@ export class CheckerTypeProjector {
   }
 
   project(input: CheckerTypeProjectionRequest): CheckerTypeProjectionEmission {
-    const emission = this.recordsForType(input);
-    this.store.commit(new KernelStoreBatch(emission.records, `type-system:${input.localKey}`));
-    this.registerProductDetails(emission.typeShape);
-    return emission;
+    const epochInput = checkerProjectionRequestAtLocalKey(
+      input,
+      `${input.localKey}:checker-epoch:${typeSystemProjectEpochForChecker(input.checker).key}`,
+    );
+    return this.publishProjection(this.recordsForType(epochInput));
   }
 
   projectSynthetic(input: CheckerSyntheticTypeProjectionRequest): CheckerTypeProjectionEmission {
     const emission = this.recordsForSyntheticType(input);
     this.store.commit(new KernelStoreBatch(emission.records, `type-system:${input.localKey}`));
+    this.registerProductDetails(emission.typeShape);
+    return emission;
+  }
+
+  private publishProjection(emission: CheckerTypeProjectionEmission): CheckerTypeProjectionEmission {
+    this.store.commit(new KernelStoreBatch(emission.records, `type-system:${emission.typeShape.productHandle}`));
     this.registerProductDetails(emission.typeShape);
     return emission;
   }
@@ -305,38 +293,13 @@ export class CheckerTypeProjector {
     for (const member of typeShape.members) {
       this.store.hotDetails.add(TypeSystemHotDetails.TypeMember, member.productHandle, member);
     }
-    this.writeIndexedTypeShape(typeShape);
   }
 
-  private readIndexedTypeShape(
-    origin: CheckerTypeProjectionOrigin,
-    checkerKey: string,
-    sourceAddressHandle: AddressHandle | null,
-  ): CheckerTypeShape | null {
-    const index = typeShapeIndexForStore(this.store);
-    const key = typeShapeIndexKey(origin, checkerKey, sourceAddressHandle);
-    const typeShape = index.shapesByKey.get(key) ?? null;
-    if (typeShape == null) {
-      return null;
-    }
-    if (this.store.productDetails.read(TypeSystemProductDetails.TypeShape, typeShape.productHandle) != null) {
-      return typeShape;
-    }
-    index.shapesByKey.delete(key);
-    return null;
-  }
-
-  private writeIndexedTypeShape(typeShape: CheckerTypeShape): void {
-    const index = typeShapeIndexForStore(this.store);
-    const key = typeShapeIndexKey(typeShape.origin, typeShape.checkerKey, typeShape.sourceAddressHandle);
-    if (!index.shapesByKey.has(key)) {
-      index.shapesByKey.set(key, typeShape);
-    }
-  }
-
-  private recordsForType(input: CheckerTypeProjectionRequest): CheckerTypeProjectionEmission {
+  private recordsForType(
+    input: CheckerTypeProjectionRequest,
+    descriptor: CheckerTypeDescriptor = checkerTypeDescriptor(input),
+  ): CheckerTypeProjectionEmission {
     const records: KernelStoreRecord[] = [];
-    const descriptor = checkerTypeDescriptor(input);
     const source = this.recordsForSource(
       input.localKey,
       typeProjectionSourceAddress(input, descriptor),
@@ -783,6 +746,21 @@ function checkerTypeIdentityForType(
   sourceNode: ts.Node | null,
   seen: Set<ts.Type> = new Set(),
 ): CheckerTypeIdentityDescriptor {
+  const identity = checkerTypeSemanticIdentityForType(checker, type, symbol, display, sourceNode, seen);
+  return {
+    checkerKey: `${typeSystemProjectEpochForChecker(checker).key}:${identity.checkerKey}`,
+    sourceIndependent: identity.sourceIndependent,
+  };
+}
+
+function checkerTypeSemanticIdentityForType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  symbol: ts.Symbol | null,
+  display: string,
+  sourceNode: ts.Node | null,
+  seen: Set<ts.Type> = new Set(),
+): CheckerTypeIdentityDescriptor {
   const declaration = declarationsForCheckerSymbol(symbol)[0] ?? null;
   if (declaration != null) {
     const sourceFile = declaration.getSourceFile();
@@ -793,11 +771,11 @@ function checkerTypeIdentityForType(
   }
 
   if (!seen.has(type) && type.isUnion()) {
-    return checkerCompoundTypeIdentity(checker, 'union', type.types, sourceNode, seen);
+    return checkerCompoundTypeSemanticIdentity(checker, 'union', type.types, sourceNode, seen);
   }
 
   if (!seen.has(type) && type.isIntersection()) {
-    return checkerCompoundTypeIdentity(checker, 'intersection', type.types, sourceNode, seen);
+    return checkerCompoundTypeSemanticIdentity(checker, 'intersection', type.types, sourceNode, seen);
   }
 
   if (type.aliasSymbol != null) {
@@ -813,7 +791,7 @@ function checkerTypeIdentityForType(
   };
 }
 
-function checkerCompoundTypeIdentity(
+function checkerCompoundTypeSemanticIdentity(
   checker: ts.TypeChecker,
   kind: 'union' | 'intersection',
   parts: readonly ts.Type[],
@@ -825,7 +803,7 @@ function checkerCompoundTypeIdentity(
     nextSeen.add(part);
     const partSymbol = part.aliasSymbol ?? part.symbol ?? null;
     const partDisplay = displayType(checker, part, sourceNode);
-    return checkerTypeIdentityForType(checker, part, partSymbol, partDisplay, sourceNode, nextSeen);
+    return checkerTypeSemanticIdentityForType(checker, part, partSymbol, partDisplay, sourceNode, nextSeen);
   });
   return {
     checkerKey: `type:${kind}:${partIdentities.map((identity) => identity.checkerKey).sort().join('|')}`,
@@ -847,61 +825,25 @@ function syntheticCheckerKey(input: CheckerSyntheticTypeProjectionRequest): stri
   return `type:synthetic:${syntheticProjectionOrigin(input)}:${input.localKey}`;
 }
 
-function typeShapeIndexForStore(store: KernelStore): TypeShapeIndex {
-  let index = typeShapeIndexByStore.get(store);
-  if (index != null) {
-    return index;
-  }
-  const shapesByKey = new Map<string, CheckerTypeShape>();
-  for (const entry of store.productDetails.readEntries()) {
-    if (entry.slot.detailKind !== TypeSystemProductDetails.TypeShape.detailKind) {
-      continue;
-    }
-    const typeShape = entry.detail as CheckerTypeShape;
-    shapesByKey.set(
-      typeShapeIndexKey(typeShape.origin, typeShape.checkerKey, typeShape.sourceAddressHandle),
-      typeShape,
-    );
-  }
-  index = {
-    key: 'type-system.checker-type-shape-index',
-    summary: 'Store-local reusable TypeChecker projection index; pruned when kernel product details are disposed.',
-    shapesByKey,
-    readEntryCount() {
-      return this.shapesByKey.size;
-    },
-    dispose(context) {
-      if (context.summary.productDetails === 0) {
-        return;
-      }
-      pruneTypeShapeIndex(store, this);
-    },
-    hasProductDetail(productHandle) {
-      return store.productDetails.read(TypeSystemProductDetails.TypeShape, productHandle) != null;
-    },
-  };
-  store.registerSidecarIndex(index);
-  typeShapeIndexByStore.set(store, index);
-  return index;
-}
-
-function pruneTypeShapeIndex(
-  store: KernelStore,
-  index: TypeShapeIndex,
-): void {
-  for (const [key, typeShape] of index.shapesByKey) {
-    if (store.productDetails.read(TypeSystemProductDetails.TypeShape, typeShape.productHandle) == null) {
-      index.shapesByKey.delete(key);
-    }
-  }
-}
-
-function typeShapeIndexKey(
-  origin: CheckerTypeProjectionOrigin,
-  checkerKey: string,
-  sourceAddressHandle: AddressHandle | null,
+function canonicalCheckerProjectionLocalKey(
+  input: CheckerTypeProjectionRequest,
+  descriptor: CheckerTypeDescriptor,
 ): string {
-  return `${origin}\0${checkerKey}\0${sourceAddressHandle ?? 'no-source'}`;
+  return [
+    'checker-type-shape',
+    typeProjectionOrigin(input),
+    descriptor.checkerKey,
+    typeProjectionSourceAddress(input, descriptor) ?? 'no-source',
+    input.ownerIdentityHandle ?? 'no-owner',
+    input.memberProjection ?? CheckerTypeMemberProjectionPolicy.Eager,
+  ].join(':');
+}
+
+function checkerProjectionRequestAtLocalKey(
+  input: CheckerTypeProjectionRequest,
+  localKey: string,
+): CheckerTypeProjectionRequest {
+  return { ...input, localKey };
 }
 
 function valueTypeForSymbol(

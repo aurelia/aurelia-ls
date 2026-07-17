@@ -425,6 +425,12 @@ dependency/plugin template overlay errors as editable app source.
 misses. Span remaps use a lazy per-Program-source span index, so the correctness guard should not silently become a
 repeated DFS hotspot as overlays and source-discovery nodes multiply. Keep those counters in routed app telemetry so
 large apps can still reveal unexpected remap volume.
+`checker-epoch.ts` gives every TypeChecker object one explicit process-local `TypeSystemProjectEpoch`. Checker-backed
+type keys include that epoch so coincident declaration spans or displays from distinct Programs cannot reconnect to one
+hot carrier. `CheckerTypeProjector.ensureProjection(...)` derives canonical kernel handles from epoch-qualified type
+identity, origin, source, owner, and member policy; equivalent projections in one epoch therefore converge through the
+ordinary product-detail catalog. Do not restore a store-local type-shape sidecar or compare unqualified checker keys:
+kernel lifetime owns projection retention and a fresh Program owns a fresh carrier generation.
 `checker-type-assignability.ts` owns the small shared question "is this projected checker reference assignable to that
 one?". Binding data-flow and runtime composition both use it because the CPU/memory trade-off and checker-epoch
 fallback policy should not be reimplemented at every feature boundary. It only answers when the retained carriers share

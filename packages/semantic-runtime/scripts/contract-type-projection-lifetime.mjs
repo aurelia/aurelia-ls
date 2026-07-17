@@ -4,16 +4,17 @@ import { CheckerTypeProjector } from '../out/type-system/checker-projector.js';
 
 const failures = [];
 
-verifyTypeShapeIndexPrunesWithKernelDisposal();
+verifyCanonicalProjectionFollowsKernelLifetime();
+verifyCheckerEpochsDoNotShareHotProjections();
 
 if (failures.length > 0) {
   console.error(failures.join('\n'));
   process.exit(1);
 }
 
-console.log('contract ok: TypeChecker projection indexes mirror kernel product-detail lifetime.');
+console.log('contract ok: TypeChecker projection identity follows kernel lifetime and Program epochs.');
 
-function verifyTypeShapeIndexPrunesWithKernelDisposal() {
+function verifyCanonicalProjectionFollowsKernelLifetime() {
   const fixture = createCheckerFixture();
   const store = new KernelStore('contract-type-projection-lifetime');
   const projector = new CheckerTypeProjector(store);
@@ -25,14 +26,20 @@ function verifyTypeShapeIndexPrunesWithKernelDisposal() {
     sourceNode: fixture.sourceNode,
   });
 
-  expect(typeShapeIndexEntryCount(store) === 1, 'Type-shape sidecar index should record the projected checker shape.');
   expect(store.productDetails.size === 1, 'Type projection should attach one product detail.');
+
+  const sameEpochOtherSite = projector.ensureProjection({
+    localKey: 'bar',
+    checker: fixture.checker,
+    type: fixture.type,
+    sourceNode: fixture.sourceNode,
+  });
+  expect(sameEpochOtherSite === first, 'Equivalent projections inside one checker epoch should converge canonically.');
 
   const disposal = store.disposeSince(marker);
   expect(disposal.productDetails === 1, 'Disposing the answer-local marker should remove the projected type detail.');
   expect(disposal.hotDetails === 2, 'Disposing the answer-local marker should remove hot member details for the projected type.');
   expect(store.productDetails.size === 0, 'Product details should be empty after marker disposal.');
-  expect(typeShapeIndexEntryCount(store) === 0, 'Type-shape sidecar index should prune disposed product-detail handles.');
 
   const second = projector.ensureProjection({
     localKey: 'foo',
@@ -43,12 +50,35 @@ function verifyTypeShapeIndexPrunesWithKernelDisposal() {
   expect(second !== first, 'Reprojecting after disposal should materialize a fresh type detail, not reuse a stale object.');
   expect(second.productHandle === first.productHandle, 'Reprojecting the same local key should reuse the stable product handle after disposal.');
   expect(store.productDetails.size === 1, 'Fresh projection should attach a new product detail after disposal.');
-  expect(typeShapeIndexEntryCount(store) === 1, 'Fresh projection should repopulate the sidecar index after disposal.');
 }
 
-function createCheckerFixture() {
+function verifyCheckerEpochsDoNotShareHotProjections() {
+  const firstFixture = createCheckerFixture('export interface Foo { bar: string; baz: number; }');
+  const secondFixture = createCheckerFixture('export interface Foo { bar: string; baz: number; }');
+  const store = new KernelStore('contract-type-projection-epochs');
+  const projector = new CheckerTypeProjector(store);
+  const first = projector.ensureProjection({
+    localKey: 'same-site',
+    checker: firstFixture.checker,
+    type: firstFixture.type,
+    sourceNode: firstFixture.sourceNode,
+  });
+  const second = projector.ensureProjection({
+    localKey: 'same-site',
+    checker: secondFixture.checker,
+    type: secondFixture.type,
+    sourceNode: secondFixture.sourceNode,
+  });
+
+  expect(first !== second, 'Distinct TypeChecker epochs must not reuse one hot type-shape object.');
+  expect(first.productHandle !== second.productHandle, 'Distinct TypeChecker epochs must own distinct product handles.');
+  expect(first.checkerKey !== second.checkerKey, 'Checker keys must carry the owning Program epoch.');
+  expect(first.carrier?.checker === firstFixture.checker, 'First projection must retain the first checker carrier.');
+  expect(second.carrier?.checker === secondFixture.checker, 'Second projection must retain the second checker carrier.');
+}
+
+function createCheckerFixture(sourceText = 'export interface Foo { bar: string; baz: number; }') {
   const fileName = 'contract-type-projection.ts';
-  const sourceText = 'export interface Foo { bar: string; baz: number; }';
   const sourceFile = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const compilerOptions = {
     module: ts.ModuleKind.ESNext,
@@ -83,13 +113,6 @@ function createCheckerFixture() {
     sourceNode: declaration.name,
     type: checker.getDeclaredTypeOfSymbol(symbol),
   };
-}
-
-function typeShapeIndexEntryCount(store) {
-  const row = store.readTelemetrySnapshot({ includeBreakdowns: true }).sidecarIndexes.find((candidate) =>
-    candidate.key === 'type-system.checker-type-shape-index'
-  );
-  return row?.entries ?? 0;
 }
 
 function expect(condition, message) {

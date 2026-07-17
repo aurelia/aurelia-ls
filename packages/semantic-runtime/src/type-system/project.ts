@@ -38,6 +38,10 @@ import {
   readTypeSystemTypeScriptEnvironment,
   type TypeSystemTypeScriptEnvironment,
 } from './typescript-environment.js';
+import {
+  typeSystemProjectEpochForChecker,
+  type TypeSystemProjectEpoch,
+} from './checker-epoch.js';
 export {
   clearTypeSystemCompilerHostSourceFileCache,
   readTypeSystemCompilerHostSourceFileCacheOverview,
@@ -168,6 +172,8 @@ export class TypeSystemProject {
   private programNodeRemapSpanMisses = 0;
 
   constructor(
+    /** Technical identity of the Program/checker objects retained by this project. */
+    readonly epoch: TypeSystemProjectEpoch,
     /** Project frame whose evaluated source files anchor this checker epoch. */
     readonly project: ProjectBootFrame,
     /** Static evaluation whose parsed source files are reused by this program. */
@@ -605,6 +611,7 @@ export class TypeSystemProjectBuilder {
       programSourceFilesByPath,
     );
     return new TypeSystemProject(
+      typeSystemProjectEpochForChecker(checker),
       project,
       evaluation,
       program,
