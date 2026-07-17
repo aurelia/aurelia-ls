@@ -42,6 +42,16 @@ export class CheckerExpressionTypeWorld {
     return evaluator;
   }
 
+  /** Start a store-backed generation after the publication that created this world has committed. */
+  freshCommittedGeneration(): CheckerExpressionTypeWorld {
+    return new CheckerExpressionTypeWorld(
+      this.store,
+      new CheckerTypeProjector(this.store),
+      new CheckerExpressionTypeEvaluationCache(),
+      this.stateStores,
+    );
+  }
+
   cacheSnapshot(): CheckerExpressionTypeEvaluationCacheStats {
     return this.cache.snapshot();
   }

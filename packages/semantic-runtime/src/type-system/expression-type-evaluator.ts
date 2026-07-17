@@ -21,6 +21,7 @@ import type {
 } from '../expression/ast.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { StateStoreConfiguration } from '../state/model.js';
 import { StateBindingScopeProjector } from '../state/state-binding-scope.js';
@@ -335,7 +336,7 @@ export class CheckerExpressionTypeEvaluator {
     return this.cache.readOrEvaluate(
       cacheKey,
       () => this.evaluateNodeUncached(effectiveContext),
-      (evaluation) => cachedExpressionEvaluationProductsAreLive(this.store, evaluation),
+      (evaluation) => cachedExpressionEvaluationProductsAreLive(this.projector.publication, evaluation),
     );
   }
 
@@ -1137,14 +1138,14 @@ export class CheckerExpressionTypeEvaluator {
 }
 
 function cachedExpressionEvaluationProductsAreLive(
-  store: KernelStore,
+  store: ProductDetailReadView,
   evaluation: CheckerExpressionTypeEvaluation,
 ): boolean {
   const reference = evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
     ? evaluation.typeReference
     : evaluation.partialTypeReference;
   return reference?.productHandle == null
-    || store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle) != null;
+    || store.readProductDetail(TypeSystemProductDetails.TypeShape, reference.productHandle) != null;
 }
 
 function typeReferenceForEvaluation(

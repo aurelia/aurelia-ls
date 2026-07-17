@@ -278,7 +278,7 @@ export class I18nTranslationBindingIssueMaterializer {
     if (expressionProductHandle == null) {
       return false;
     }
-    const ast = bindingExpressionAstForProduct(this.store, expressionProductHandle);
+    const ast = bindingExpressionAstForProduct(this.publication, expressionProductHandle);
     const scope = context.instructionScopes.scopeForBinding(context.runtimeRendering, binding);
     if (ast == null || scope == null) {
       return false;
@@ -306,7 +306,7 @@ export class I18nTranslationBindingIssueMaterializer {
     }
     const shape = typeReference.productHandle == null
       ? null
-      : this.store.productDetails.read(TypeSystemProductDetails.TypeShape, typeReference.productHandle);
+      : this.publication.readProductDetail(TypeSystemProductDetails.TypeShape, typeReference.productHandle);
     const carrier = shape?.carrier ?? null;
     if (carrier == null) {
       return typeReference.shapeKind === CheckerTypeShapeKind.Primitive

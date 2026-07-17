@@ -1,5 +1,6 @@
 import type { ProductHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   CheckerTypeMemberProjectionPolicy,
@@ -123,7 +124,7 @@ function withSyntheticRuntimeArrayMembers(
  * as value-converter `withContext` need to distinguish "missing is false" from "the value may become true".
  */
 export function checkerMemberStrictTrueComparisonKind(
-  store: KernelStore,
+  store: ProductDetailReadView,
   member: CheckerTypeMember | null,
 ): CheckerStrictTrueComparisonKind {
   if (member == null) {
@@ -135,7 +136,7 @@ export function checkerMemberStrictTrueComparisonKind(
   }
   const shape = reference.productHandle == null
     ? null
-    : store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
+    : store.readProductDetail(TypeSystemProductDetails.TypeShape, reference.productHandle);
   const display = shape?.display ?? reference.display;
   if (display === 'true') {
     return CheckerStrictTrueComparisonKind.DefinitelyTrue;

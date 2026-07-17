@@ -27,6 +27,7 @@ import {
   type CheckerExpressionTypeEvaluationCacheMarker,
 } from '../type-system/expression-type-evaluation.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
+import { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import {
   RuntimeBindingDataFlowEmission,
   RuntimeBindingDataFlowMaterializationRequest,
@@ -67,6 +68,7 @@ import {
   I18nTranslationBindingIssueMaterializer,
 } from '../i18n/translation-binding-issues.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
@@ -179,7 +181,7 @@ export class TemplateRuntimeAnalysisEmission {
     readonly bindingDataFlow: RuntimeBindingDataFlowEmission,
     /** Runtime-html AuCompose composition contexts/controllers derived after source values and data-flow are visible. */
     readonly runtimeComposition: RuntimeCompositionEmission,
-    /** Runtime-analysis expression world shared by scope, overlay, observation, and source-expression consumers. */
+    /** Run-local expression world shared by materializers; post-commit inquiries must start a fresh generation. */
     readonly expressionWorld: CheckerExpressionTypeWorld,
     /** Nested timing profile for the runtime/checker half of template analysis. */
     readonly profile: TemplateRuntimeAnalysisProfile,
@@ -216,21 +218,23 @@ export class TemplateRuntimeAnalysisMaterializer {
   constructor(
     /** Hot analysis store shared by child materializers. */
     readonly store: KernelStore,
+    /** Immediate or staged publication shared by the complete runtime-analysis generation. */
+    readonly publication: KernelPublicationContext,
   ) {
-    this.runtimeRendering = new RuntimeRenderingMaterializer(store);
+    this.runtimeRendering = new RuntimeRenderingMaterializer(store, publication);
     this.expressionResourcePlan = new RuntimeExpressionResourcePlanner(store);
     this.templateScopes = new TemplateControllerScopeMaterializer(store);
-    this.controllerBind = new RuntimeControllerBindMaterializer(store);
-    this.i18nTranslationBinding = new I18nTranslationBindingIssueMaterializer(store);
-    this.bindingBehavior = new RuntimeBindingBehaviorMaterializer(store);
-    this.valueConverter = new RuntimeValueConverterMaterializer(store);
-    this.bindingValueChannel = new RuntimeBindingValueChannelMaterializer(store);
-    this.bindingDataFlow = new RuntimeBindingDataFlowMaterializer(store);
-    this.runtimeComposition = new RuntimeCompositionMaterializer(store);
+    this.controllerBind = new RuntimeControllerBindMaterializer(store, publication);
+    this.i18nTranslationBinding = new I18nTranslationBindingIssueMaterializer(store, publication);
+    this.bindingBehavior = new RuntimeBindingBehaviorMaterializer(store, publication);
+    this.valueConverter = new RuntimeValueConverterMaterializer(store, publication);
+    this.bindingValueChannel = new RuntimeBindingValueChannelMaterializer(store, publication);
+    this.bindingDataFlow = new RuntimeBindingDataFlowMaterializer(store, publication);
+    this.runtimeComposition = new RuntimeCompositionMaterializer(store, publication);
   }
 
   materialize(request: TemplateRuntimeAnalysisRequest): TemplateRuntimeAnalysisEmission {
-    return new TemplateRuntimeAnalysisFrame(request, this.store, {
+    return new TemplateRuntimeAnalysisFrame(request, this.store, this.publication, {
       runtimeRendering: this.runtimeRendering,
       expressionResourcePlan: this.expressionResourcePlan,
       templateScopes: this.templateScopes,
@@ -271,10 +275,12 @@ class TemplateRuntimeAnalysisFrame {
   constructor(
     private readonly request: TemplateRuntimeAnalysisRequest,
     private readonly store: KernelStore,
+    publication: KernelPublicationContext,
     private readonly services: TemplateRuntimeAnalysisServices,
   ) {
     this.analysisDepth = normalizeSemanticAppAnalysisDepth(request.analysisDepth);
-    this.expressionWorld = request.expressionWorld ?? new CheckerExpressionTypeWorld(store);
+    this.expressionWorld = request.expressionWorld
+      ?? new CheckerExpressionTypeWorld(store, new CheckerTypeProjector(store, publication));
     this.expressionCacheMarker = this.expressionWorld.cacheMarker();
     this.telemetry = normalizeSemanticRuntimeTelemetryOptions(
       request.telemetry,
@@ -656,6 +662,7 @@ class TemplateRuntimeAnalysisFrame {
     );
     return new RuntimeBindingSourceValueEvaluator(
       this.store,
+      this.expressionWorld.projector,
       this.request.evaluation,
       runtimeAnalysisBoundControllerValues,
       this.sourceValueActivationContext,

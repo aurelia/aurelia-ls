@@ -1732,6 +1732,7 @@ export class TemplateControllerScopeMaterializer {
       ? null
       : new RuntimeBindingSourceValueEvaluator(
           this.store,
+          input.expressionWorld.projector,
           input.evaluation,
           input.boundControllerValues,
           input.sourceValueActivationContext ?? null,
@@ -2067,6 +2068,7 @@ export class TemplateControllerScopeMaterializer {
       targetType,
       sourceValueEvaluator: new RuntimeBindingSourceValueEvaluator(
         this.store,
+        input.expressionWorld.projector,
         input.evaluation,
         input.boundControllerValues,
         input.sourceValueActivationContext ?? null,

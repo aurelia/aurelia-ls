@@ -1,10 +1,11 @@
-import type { KernelStore } from '../kernel/store.js';
-import { TypeSystemProductDetails } from './product-details.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import {
   checkerMemberStrictTrueComparisonKind,
   type CheckerStrictTrueComparisonKind,
-  readOrProjectCheckerTypeMembers,
+  readOrProjectCheckerTypeMembersInProjection,
 } from './checker-type-member-surface.js';
+import type { CheckerTypeProjector } from './checker-projector.js';
+import { TypeSystemProductDetails } from './product-details.js';
 import type {
   CheckerTypeMember,
   CheckerTypeReference,
@@ -22,33 +23,33 @@ export type RuntimeValueConverterMethodName =
 
 /** Reads the checker-visible value-converter `withContext === true` policy from a target type reference. */
 export function valueConverterWithContextComparisonKindForReference(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   typeReference: CheckerTypeReference | null | undefined,
   localKey: string,
 ): CheckerStrictTrueComparisonKind | null {
   const typeShape = typeReference?.productHandle == null
     ? null
-    : store.productDetails.read(TypeSystemProductDetails.TypeShape, typeReference.productHandle);
+    : projector.publication.readProductDetail(TypeSystemProductDetails.TypeShape, typeReference.productHandle);
   return typeShape == null
     ? null
-    : valueConverterWithContextComparisonKind(store, typeShape, localKey);
+    : valueConverterWithContextComparisonKind(projector, typeShape, localKey);
 }
 
 /** Reads the checker-visible value-converter `withContext === true` policy from a projected target type shape. */
 export function valueConverterWithContextComparisonKind(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   converterType: CheckerTypeShape,
   localKey: string,
 ): CheckerStrictTrueComparisonKind {
   return valueConverterWithContextComparisonKindFromMembers(
-    store,
-    readOrProjectCheckerTypeMembers(store, converterType, localKey),
+    projector.publication,
+    readOrProjectCheckerTypeMembersInProjection(projector, converterType, localKey),
   );
 }
 
 /** Reads the value-converter `withContext === true` policy from already-projected checker members. */
 export function valueConverterWithContextComparisonKindFromMembers(
-  store: KernelStore,
+  store: ProductDetailReadView,
   members: readonly CheckerTypeMember[],
 ): CheckerStrictTrueComparisonKind {
   return checkerMemberStrictTrueComparisonKind(

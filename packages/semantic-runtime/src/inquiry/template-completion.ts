@@ -460,8 +460,7 @@ class TemplateCompletionCursorContextBuilder {
     this.page = input.page ?? new InquiryPageRequest();
     this.projection = input.projection ?? new InquiryProjection(InquiryProjectionKind.Compact);
     this.expressionWorld = input.expressionWorld
-      ?? input.resource.runtimeAnalysis.expressionWorld
-      ?? new CheckerExpressionTypeWorld(store);
+      ?? input.resource.runtimeAnalysis.expressionWorld.freshCommittedGeneration();
   }
 
   build(): TemplateCompletionCursorContext {

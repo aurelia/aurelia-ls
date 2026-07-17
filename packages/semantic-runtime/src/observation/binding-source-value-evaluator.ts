@@ -85,13 +85,14 @@ import {
 import {
   CheckerStrictTrueComparisonKind,
 } from '../type-system/checker-type-member-surface.js';
+import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import {
   CheckerTypeMember,
   CheckerTypeMemberKind,
   CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
 import { readCheckerTypeShapeByProductHandle } from '../type-system/checker-type-shape-access.js';
-import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
+import { readOrProjectCheckerTypeMembersInProjection } from '../type-system/checker-type-member-surface.js';
 import {
   type RuntimeValueConverterMethodName,
   VALUE_CONVERTER_TO_VIEW_METHOD,
@@ -183,6 +184,7 @@ export class RuntimeBindingSourceValueEvaluator {
 
   constructor(
     readonly store: KernelStore,
+    readonly projector: CheckerTypeProjector,
     readonly evaluation: StaticProjectEvaluationResult,
     readonly boundControllerValues: RuntimeBoundControllerValueTable = RuntimeBoundControllerValueTable.empty,
     readonly activationContext: RuntimeBindingSourceActivationContext | null = null,
@@ -203,6 +205,7 @@ export class RuntimeBindingSourceValueEvaluator {
   withDefaultActiveContainer(activeContainer: Container | null): RuntimeBindingSourceValueEvaluator {
     return new RuntimeBindingSourceValueEvaluator(
       this.store,
+      this.projector,
       this.evaluation,
       this.boundControllerValues,
       this.activationContext,
@@ -246,7 +249,7 @@ export class RuntimeBindingSourceValueEvaluator {
         `Bound controller property '${bound.propertyName}' did not retain its parent binding Scope.`,
       );
     }
-    const expression = bindingExpressionAstForProduct(this.store, bound.expressionProductHandle);
+    const expression = bindingExpressionAstForProduct(this.projector.publication, bound.expressionProductHandle);
     if (expression == null) {
       return openBindingSourceSlotNoStaticValue(
         `Bound controller property '${bound.propertyName}' did not retain a runtime-accepted binding expression.`,
@@ -557,7 +560,7 @@ export class RuntimeBindingSourceValueEvaluator {
     propertyName: string,
   ): { readonly absenceProven: boolean; readonly openReason: string | null } {
     const shape = readCheckerTypeShapeByProductHandle(
-      this.store,
+      this.projector.publication,
       definition.target.targetType?.productHandle,
     );
     if (shape == null
@@ -571,8 +574,8 @@ export class RuntimeBindingSourceValueEvaluator {
         openReason: `Value converter '${definition.name}' checker surface cannot prove whether '${propertyName}' is present.`,
       };
     }
-    const members = readOrProjectCheckerTypeMembers(
-      this.store,
+    const members = readOrProjectCheckerTypeMembersInProjection(
+      this.projector,
       shape,
       `value-converter:${definition.productHandle ?? definition.name}:${propertyName}`,
     );
@@ -636,7 +639,7 @@ export class RuntimeBindingSourceValueEvaluator {
     definition: ValueConverterDefinition,
   ): CheckerStrictTrueComparisonKind | null {
     return valueConverterWithContextComparisonKindForReference(
-      this.store,
+      this.projector,
       definition.target.targetType,
       `source-value:value-converter:${definition.name}:with-context`,
     );
@@ -802,7 +805,7 @@ export class RuntimeBindingSourceValueEvaluator {
     if (bound.sourceScope == null) {
       return openBindingSourceSlotNoStaticValue(`Bound controller property '${propertyName}' did not retain its parent binding Scope.`);
     }
-    const expression = bindingExpressionAstForProduct(this.store, bound.expressionProductHandle);
+    const expression = bindingExpressionAstForProduct(this.projector.publication, bound.expressionProductHandle);
     if (expression == null) {
       return openBindingSourceSlotNoStaticValue(`Bound controller property '${propertyName}' did not retain a runtime-accepted binding expression.`);
     }
@@ -1287,7 +1290,7 @@ export class RuntimeBindingSourceValueEvaluator {
       }
       return openBindingSourceSlotNoStaticValue(`Scope slot '${slot.name}' did not carry a TypeChecker member product.`);
     }
-    const member = this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+    const member = this.projector.publication.readHotDetail(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
     if (!(member instanceof CheckerTypeMember)) {
       return openBindingSourceSlotNoStaticValue(`Scope slot '${slot.name}' target product is not a TypeChecker member.`);
     }
@@ -1301,7 +1304,7 @@ export class RuntimeBindingSourceValueEvaluator {
     if (scope?.ownerKind !== BindingScopeOwnerKind.StateBinding || scope.bindingContext.ownerProductHandle == null) {
       return null;
     }
-    const storeConfiguration = this.store.productDetails.read(
+    const storeConfiguration = this.projector.publication.readProductDetail(
       StateProductDetails.StoreConfiguration,
       scope.bindingContext.ownerProductHandle,
     );
@@ -1447,7 +1450,7 @@ export class RuntimeBindingSourceValueEvaluator {
       scope?.bindingContext.ownerProductHandle ?? null,
       scope?.bindingContext.contextType ?? null,
     )) {
-      const expression = bindingExpressionAstForProduct(this.store, bound.expressionProductHandle);
+      const expression = bindingExpressionAstForProduct(this.projector.publication, bound.expressionProductHandle);
       if (expression == null || bound.sourceScope == null) {
         continue;
       }
@@ -1957,7 +1960,7 @@ export class RuntimeBindingSourceValueEvaluator {
     if (productHandle == null) {
       return null;
     }
-    const typeShape = this.store.productDetails.read(TypeSystemProductDetails.TypeShape, productHandle);
+    const typeShape = this.projector.publication.readProductDetail(TypeSystemProductDetails.TypeShape, productHandle);
     for (const declaration of typeShape?.carrier?.declarations ?? []) {
       const classNode = enclosingClassLike(declaration);
       if (classNode != null) {
@@ -1989,7 +1992,7 @@ export class RuntimeBindingSourceValueEvaluator {
     if (slot.targetProductHandle == null) {
       return null;
     }
-    const member = this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+    const member = this.projector.publication.readHotDetail(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
     return member instanceof CheckerTypeMember ? member : null;
   }
 

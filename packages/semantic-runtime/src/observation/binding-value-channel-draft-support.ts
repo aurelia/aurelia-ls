@@ -227,7 +227,7 @@ export class RuntimeBindingValueChannelTypeSupport {
       return first;
     }
 
-    const checkerBackedUnion = checkerBackedUnionTypeForReferences(this.store, references);
+    const checkerBackedUnion = checkerBackedUnionTypeForReferences(this.typeProjector.publication, references);
     if (checkerBackedUnion != null) {
       return this.projectCheckerType(
         local,
@@ -570,7 +570,7 @@ export class RuntimeBindingValueChannelDraftSupport {
 
   constructor(
     private readonly store: KernelStore,
-    typeProjector: CheckerTypeProjector,
+    private readonly typeProjector: CheckerTypeProjector,
   ) {
     this.types = new RuntimeBindingValueChannelTypeSupport(store, typeProjector);
   }
@@ -829,7 +829,7 @@ export class RuntimeBindingValueChannelDraftSupport {
     context: BindingValueChannelDraftContext,
     targetProperty: string | null = null,
   ): CheckerTypeReference | null {
-    const ast = runtimeBindingSourceExpression(this.store, binding);
+    const ast = runtimeBindingSourceExpression(this.typeProjector.publication, binding);
     if (ast == null) {
       return null;
     }
@@ -872,7 +872,7 @@ export class RuntimeBindingValueChannelDraftSupport {
 
   /** Reads the runtime-accepted binding AST through the template expression product substrate. */
   bindingExpressionAst(productHandle: ProductHandle | null): ExpressionAstNode | null {
-    return bindingExpressionAstForProduct(this.store, productHandle);
+    return bindingExpressionAstForProduct(this.typeProjector.publication, productHandle);
   }
 
   optionElementsFor(select: HtmlElement): readonly HtmlElement[] {
@@ -906,7 +906,7 @@ export class RuntimeBindingValueChannelDraftSupport {
   private textContent(element: HtmlElement): string {
     return element.children.map((child) => {
       if (child.nodeKind === HtmlIrNodeKind.Text && child.productHandle != null) {
-        const text = this.store.productDetails.read(TemplateProductDetails.HtmlNode, child.productHandle);
+        const text = this.typeProjector.publication.readProductDetail(TemplateProductDetails.HtmlNode, child.productHandle);
         return text instanceof HtmlText ? text.text : '';
       }
       const childElement = this.htmlElementFor(child);
@@ -918,7 +918,7 @@ export class RuntimeBindingValueChannelDraftSupport {
     if (reference?.productHandle == null) {
       return null;
     }
-    const node = this.store.productDetails.read(TemplateProductDetails.HtmlNode, reference.productHandle);
+    const node = this.typeProjector.publication.readProductDetail(TemplateProductDetails.HtmlNode, reference.productHandle);
     return node instanceof HtmlElement ? node : null;
   }
 
@@ -926,7 +926,7 @@ export class RuntimeBindingValueChannelDraftSupport {
     return element.attributes
       .map((attribute) => attribute.productHandle == null
         ? null
-        : this.store.productDetails.read(TemplateProductDetails.HtmlAttribute, attribute.productHandle))
+        : this.typeProjector.publication.readProductDetail(TemplateProductDetails.HtmlAttribute, attribute.productHandle))
       .filter((attribute): attribute is HtmlAttribute => attribute != null);
   }
 

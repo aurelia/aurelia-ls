@@ -194,7 +194,7 @@ export class RuntimeValueConverterMaterializer {
   ): RuntimeValueConverterPublication {
     const converter = entry.expression;
     const expressionSource = sourceAddressForRuntimeExpressionSpan(
-      this.store,
+      this.publication,
       local,
       entry.binding.sourceAddressHandle,
       converter.name.span,

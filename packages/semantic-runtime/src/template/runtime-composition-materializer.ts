@@ -44,10 +44,16 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
-  KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  KernelStoreBatch,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
@@ -79,6 +85,7 @@ import {
   type CheckerTypeReference,
   type CheckerTypeShape,
 } from '../type-system/type-shape.js';
+import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import {
   readCheckerTypeShape,
 } from '../type-system/checker-type-shape-access.js';
@@ -228,25 +235,25 @@ export class RuntimeCompositionMaterializer {
 
   constructor(
     private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
   ) {
     this.childContainerMaterializer = new ContainerChildMaterializer(store);
-    this.controllerPublication = new RuntimeControllerPublicationMaterializer(store, store);
+    this.controllerPublication = new RuntimeControllerPublicationMaterializer(store, publication);
   }
 
   materialize(input: RuntimeCompositionMaterializationRequest): RuntimeCompositionEmission {
     const emission = this.recordsForCompositions(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `runtime-composition:${input.localKey}`));
-    }
-    this.store.productDetails.addAll(TemplateProductDetails.CompositionContext, emission.contexts);
-    this.store.productDetails.addAll(TemplateProductDetails.CompositionController, emission.controllers);
-    for (const controller of emission.composedControllers) {
-      this.store.productDetails.add(
-        ConfigurationProductDetails.Controller,
-        controller.productHandle,
-        controller.toControllerProduct(),
-      );
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(emission.records, `runtime-composition:${input.localKey}`),
+      [
+        ...publishProductDetails(TemplateProductDetails.CompositionContext, emission.contexts),
+        ...publishProductDetails(TemplateProductDetails.CompositionController, emission.controllers),
+        ...publishProductDetails(
+          ConfigurationProductDetails.Controller,
+          emission.composedControllers.map((controller) => controller.toControllerProduct()),
+        ),
+      ],
+    ));
     return emission;
   }
 
@@ -277,7 +284,7 @@ export class RuntimeCompositionMaterializer {
       }
       const local = `${input.localKey}:composition:${index}`;
       const bindings = auComposeBindings(input.controllerBind, controller, bindingsByProduct);
-      const staticInputs = staticAuComposeInputs(this.store, controller);
+      const staticInputs = staticAuComposeInputs(this.publication, controller);
       const template = this.evaluateBinding(input, bindings.template, sourceExpressionContexts, bindingExpressionScopes);
       const component = this.evaluateBinding(input, bindings.component, sourceExpressionContexts, bindingExpressionScopes);
       const model = this.evaluateModelInput(input, bindings.model, sourceExpressionContexts, bindingExpressionScopes, staticInputs.model);
@@ -590,7 +597,7 @@ export class RuntimeCompositionMaterializer {
       };
     }
     const flow = input.bindingDataFlow.readDataFlowsForBinding(binding.productHandle)[0] ?? null;
-    const expression = bindingExpressionAstForProduct(this.store, binding.expressionProductHandle);
+    const expression = bindingExpressionAstForProduct(this.publication, binding.expressionProductHandle);
     if (expression == null || input.sourceValueEvaluator == null) {
       return {
         binding,
@@ -704,7 +711,7 @@ export class RuntimeCompositionMaterializer {
         candidates: [],
         resolutionKind: CompositionComponentResolutionKind.ObjectViewModel,
         objectViewModelActivationHandoff: activationModelHandoffForType(
-          this.store,
+          input.expressionWorld.projector,
           component.sourceType,
           model,
           `${local}:object-view-model-activation`,
@@ -754,10 +761,16 @@ export class RuntimeCompositionMaterializer {
     if (value.kind === EvaluationValueKind.String) {
       const slot = controller.parent?.containerFrame?.find('custom-element', value.value).resourceSlot ?? null;
       const definition = input.resourceDefinitions.lookupByProduct(slot?.resourceProductHandle ?? null);
-      return resolvedComponentRows(this.store, input, [definition], resolutionKind, model);
+      return resolvedComponentRows(input.expressionWorld.projector, input, [definition], resolutionKind, model);
     }
     if (value.kind === EvaluationValueKind.Class || value.kind === EvaluationValueKind.Function) {
-      return resolvedComponentRows(this.store, input, [input.resourceDefinitions.lookupValue(value)], resolutionKind, model);
+      return resolvedComponentRows(
+        input.expressionWorld.projector,
+        input,
+        [input.resourceDefinitions.lookupValue(value)],
+        resolutionKind,
+        model,
+      );
     }
     if (value.kind === EvaluationValueKind.Object || value.kind === EvaluationValueKind.Instance || value.kind === EvaluationValueKind.BoundaryObject) {
       return [];
@@ -776,7 +789,13 @@ export class RuntimeCompositionMaterializer {
     }
     const slot = controller.parent?.containerFrame?.find('custom-element', componentName).resourceSlot ?? null;
     const definition = input.resourceDefinitions.lookupByProduct(slot?.resourceProductHandle ?? null);
-    return resolvedComponentRows(this.store, input, [definition], CompositionComponentResolutionKind.StaticValue, model);
+    return resolvedComponentRows(
+      input.expressionWorld.projector,
+      input,
+      [definition],
+      CompositionComponentResolutionKind.StaticValue,
+      model,
+    );
   }
 
   private resolveComponentType(
@@ -787,13 +806,19 @@ export class RuntimeCompositionMaterializer {
     if (input.resourceDefinitions == null || sourceType?.productHandle == null) {
       return [];
     }
-    const shape = readCheckerTypeShape(this.store, sourceType);
+    const shape = readCheckerTypeShape(input.expressionWorld.projector.publication, sourceType);
     if (shape == null) {
       return [];
     }
     const definitions = candidateTypesForShape(shape)
       .flatMap((type) => definitionsForType(input.resourceDefinitions!, type));
-    return resolvedComponentRows(this.store, input, definitions, CompositionComponentResolutionKind.TypeCandidate, model);
+    return resolvedComponentRows(
+      input.expressionWorld.projector,
+      input,
+      definitions,
+      CompositionComponentResolutionKind.TypeCandidate,
+      model,
+    );
   }
 
   private openCompositionSeam(
@@ -876,18 +901,18 @@ function bindingForTarget(
 }
 
 function staticAuComposeInputs(
-  store: KernelStore,
+  store: ProductDetailReadView,
   controller: RuntimeControllerFrame,
 ): StaticAuComposeInputs {
   const instruction = controller.instructionProductHandle == null
     ? null
-    : store.productDetails.read(TemplateProductDetails.Instruction, controller.instructionProductHandle);
+    : store.readProductDetail(TemplateProductDetails.Instruction, controller.instructionProductHandle);
   if (!(instruction instanceof HydrateElementInstruction)) {
     return emptyStaticAuComposeInputs();
   }
   const valuesByTarget = new Map<string, string>();
   for (const handle of instruction.bindableInstructionProductHandles) {
-    const child = store.productDetails.read(TemplateProductDetails.Instruction, handle);
+    const child = store.readProductDetail(TemplateProductDetails.Instruction, handle);
     if (child instanceof SetPropertyInstruction) {
       valuesByTarget.set(child.targetProperty, child.value);
     }
@@ -1027,7 +1052,7 @@ function literalStringFromValue(value: EvaluationValue | null): string | null {
 }
 
 function resolvedComponentRows(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   input: RuntimeCompositionMaterializationRequest,
   definitions: readonly (FullResourceDefinition | null)[],
   resolutionKind: CompositionComponentResolutionKind,
@@ -1047,7 +1072,12 @@ function resolvedComponentRows(
       input.projectContext.readResourceForDefinition(definition.productHandle)?.compiledTemplateProductHandle ?? null,
       null,
       resolutionKind,
-      activationModelHandoff(store, definition, model, `runtime-composition:${localKeyPart(definition.productHandle)}:activation:${index}`),
+      activationModelHandoff(
+        projector,
+        definition,
+        model,
+        `runtime-composition:${localKeyPart(definition.productHandle)}:activation:${index}`,
+      ),
     ));
   });
   return rows;

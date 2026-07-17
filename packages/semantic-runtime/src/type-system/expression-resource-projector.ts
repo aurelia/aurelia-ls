@@ -432,7 +432,7 @@ export class CheckerExpressionResourceProjector {
     converterType: CheckerTypeShape,
     localKey: string,
   ): CheckerStrictTrueComparisonKind {
-    return valueConverterWithContextComparisonKind(this.support.store, converterType, localKey);
+    return valueConverterWithContextComparisonKind(this.support.projector, converterType, localKey);
   }
 
   private valueConverterCallerContext(

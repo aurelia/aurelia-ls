@@ -9,6 +9,7 @@ import {
   type ProductHandle,
 } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import {
   BindingContextKind,
   BindingContextSlotAssignmentAccessKind,
@@ -42,8 +43,9 @@ import type { ValueConverterDefinition } from '../resources/value-converter-defi
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
 import {
   CheckerStrictTrueComparisonKind,
-  readOrProjectCheckerTypeMembers,
+  readOrProjectCheckerTypeMembersInProjection,
 } from '../type-system/checker-type-member-surface.js';
+import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import {
   VALUE_CONVERTER_TO_VIEW_METHOD,
   VALUE_CONVERTER_WITH_CONTEXT_PROPERTY,
@@ -223,6 +225,7 @@ interface OverlayTypeExpression {
 }
 
 interface OverlayExpressionSourceProjectors {
+  readonly expressionWorld: CheckerExpressionTypeWorld;
   readonly sourceExpressions: RuntimeBindingSourceExpressionContextProjector;
 }
 
@@ -372,6 +375,7 @@ export class TemplateTypeSystemOverlayBuilder {
     overlayFileName: string,
     builder: TypeSystemOverlaySourceBuilder,
   ): TemplateTypeSystemOverlayBuildFrame {
+    const expressionWorld = resource.runtimeAnalysis.expressionWorld.freshCommittedGeneration();
     return {
       resource,
       localKey,
@@ -379,14 +383,15 @@ export class TemplateTypeSystemOverlayBuilder {
       builder,
       probes: [],
       skipped: [],
-      baseExpressionContext: this.expressionProjectionContext(resource, overlayFileName, builder),
+      baseExpressionContext: this.expressionProjectionContext(resource, overlayFileName, builder, expressionWorld),
       expressionSourceProjectors: {
+        expressionWorld,
         sourceExpressions: new RuntimeBindingSourceExpressionContextProjector(
           resource.runtimeAnalysis.runtimeRendering,
           instructionScopeLookup(resource.runtimeAnalysis.scopes.instructionScopes),
           new RuntimeBindingExpressionScopeProjector(
             this.store,
-            resource.runtimeAnalysis.expressionWorld,
+            expressionWorld,
             resource.runtimeAnalysis.expressionResourcePlan,
           ),
         ),
@@ -561,6 +566,7 @@ export class TemplateTypeSystemOverlayBuilder {
     resource: TemplateResourceRuntimeAnalysisEmission,
     overlayFileName: string,
     builder: TypeSystemOverlaySourceBuilder,
+    expressionWorld: CheckerExpressionTypeWorld,
   ): TemplateTypeSystemOverlayExpressionProjectionContext {
     const helpers = new Map<string, string>();
     const resourceHelper = (
@@ -605,7 +611,7 @@ export class TemplateTypeSystemOverlayBuilder {
         if (helperName == null) {
           return null;
         }
-        const callSurface = this.valueConverterCallSurface(definition);
+        const callSurface = this.valueConverterCallSurface(definition, expressionWorld);
         return {
           callKind: callSurface.hasToView
             ? TemplateTypeSystemOverlayValueConverterCallKind.DirectToView
@@ -620,33 +626,36 @@ export class TemplateTypeSystemOverlayBuilder {
 
   private valueConverterCallSurface(
     definition: ValueConverterDefinition,
+    expressionWorld: CheckerExpressionTypeWorld,
   ): { readonly hasToView: boolean; readonly callerContextKind: TemplateTypeSystemOverlayValueConverterCallerContextKind } {
-    const members = this.valueConverterTargetMembers(definition);
+    const members = this.valueConverterTargetMembers(definition, expressionWorld);
     const toView = members.find((member) => member.name === VALUE_CONVERTER_TO_VIEW_METHOD) ?? null;
     const withContext = members.find((member) => member.name === VALUE_CONVERTER_WITH_CONTEXT_PROPERTY) ?? null;
     return {
       hasToView: toView != null && toView.memberKind !== CheckerTypeMemberKind.IndexSignature,
-      callerContextKind: valueConverterCallerContextKind(this.store, withContext),
+      callerContextKind: valueConverterCallerContextKind(expressionWorld.projector.publication, withContext),
     };
   }
 
   private valueConverterTargetMembers(
     definition: ValueConverterDefinition,
+    expressionWorld: CheckerExpressionTypeWorld,
   ): readonly CheckerTypeMember[] {
-    return this.resourceTargetMembers(definition.target);
+    return this.resourceTargetMembers(definition.target, expressionWorld);
   }
 
   private resourceTargetMembers(
     target: ResourceTargetReference,
+    expressionWorld: CheckerExpressionTypeWorld,
   ): readonly CheckerTypeMember[] {
     const targetType = target.targetType;
     if (targetType?.productHandle == null) {
       return [];
     }
-    const targetShape = readCheckerTypeShape(this.store, targetType);
+    const targetShape = readCheckerTypeShape(expressionWorld.projector.publication, targetType);
     return targetShape == null
       ? []
-      : readOrProjectCheckerTypeMembers(this.store, targetShape, targetType.productHandle);
+      : readOrProjectCheckerTypeMembersInProjection(expressionWorld.projector, targetShape, targetType.productHandle);
   }
 
   private expressionProjectionContextForScope(
@@ -758,7 +767,7 @@ export class TemplateTypeSystemOverlayBuilder {
       null,
       'overlay-binding-behavior-arguments',
     );
-    const evaluator = resource.runtimeAnalysis.expressionWorld.evaluator(
+    const evaluator = projectors.expressionWorld.evaluator(
       resource.compilation.compilerWorld.resourceScope,
     );
     const argumentExpressionContext: TemplateTypeSystemOverlayExpressionProjectionContext = {
@@ -2107,7 +2116,7 @@ function runtimeBindingScopeEffectForCreator(
 }
 
 function valueConverterCallerContextKind(
-  store: KernelStore,
+  store: ProductDetailReadView,
   member: CheckerTypeMember | null,
 ): TemplateTypeSystemOverlayValueConverterCallerContextKind {
   switch (valueConverterWithContextComparisonKindFromMembers(store, member == null ? [] : [member])) {

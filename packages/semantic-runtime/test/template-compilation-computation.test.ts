@@ -45,6 +45,8 @@ import {
   TemplateCompilationComputationRequest,
   TemplateCompilationComputationService,
 } from '../src/template/template-compilation-computation.js';
+import { TemplateCompilationProjectPass } from '../src/template/template-compilation-project-pass.js';
+import { TemplateTypeSystemOverlayBuilder } from '../src/template/template-type-system-overlay.js';
 
 class MutableTemplateSourceProvider {
   private readonly sourceTextByFileName = new Map<string, string>();
@@ -67,6 +69,73 @@ class MutableTemplateSourceProvider {
 }
 
 describe('template compilation computation', () => {
+  test('keeps a full compiler and runtime analysis generation invisible until one publication', async () => {
+    const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+    const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/au-compose-dynamic-composition');
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:template-compilation-project-generation',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const store = runtime.workspace.store;
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const run = lifecycle.begin({
+      kind: 'template-analysis-project-generation-test',
+      reconciliationKey: app.project.projectKey,
+      summary: 'Full compiler/runtime transaction and post-commit expression-generation proof.',
+    });
+    const committedRecordCount = store.readAllRecords().length;
+    const emission = new TemplateCompilationProjectPass(store, run).compile(
+      app.emission.appWorld,
+      app.emission.typeSystem,
+      app.emission.resourceIndex,
+      app.emission.routeContexts,
+      {
+        projectKey: `${app.project.projectKey}:staged-generation`,
+        evaluation: app.emission.evaluation,
+        stateStores: app.emission.state.readStores(),
+        runtimeAnalysisDepth: app.emission.analysisDepth,
+      },
+    );
+    const resource = emission.resources.find((candidate) =>
+      candidate.runtimeAnalysis.runtimeRendering.bindings.length > 0
+    );
+    expect(resource).toBeDefined();
+    if (resource == null) {
+      throw new Error('Expected a staged template resource with runtime bindings.');
+    }
+    const source = resource.compilation.unit.templateSource;
+    const binding = resource.runtimeAnalysis.runtimeRendering.bindings[0]!;
+    const rootScope = resource.runtimeAnalysis.scopes.rootScope;
+    const composition = emission.resources
+      .flatMap((candidate) => candidate.runtimeAnalysis.runtimeComposition.contexts)[0];
+    expect(composition).toBeDefined();
+    if (composition == null) {
+      throw new Error('Expected the staged fixture to materialize a runtime composition context.');
+    }
+
+    expect(store.readAllRecords()).toHaveLength(committedRecordCount);
+    expect(store.read(source.productHandle)).toBeNull();
+    expect(store.productDetails.read(TemplateProductDetails.Source, source.productHandle)).toBeNull();
+    expect(store.productDetails.read(TemplateProductDetails.RuntimeBinding, binding.productHandle)).toBeNull();
+    expect(store.productDetails.read(TemplateProductDetails.CompositionContext, composition.productHandle)).toBeNull();
+    expect(run.read(source.productHandle)).not.toBeNull();
+    expect(run.readProductDetail(TemplateProductDetails.Source, source.productHandle)).toBe(source);
+    expect(run.readProductDetail(TemplateProductDetails.RuntimeBinding, binding.productHandle)).toBe(binding);
+    expect(run.readProductDetail(TemplateProductDetails.CompositionContext, composition.productHandle)).toBe(composition);
+    expect(run.read(rootScope.productHandle)).not.toBeNull();
+    expect(emission.expressionWorld.projector.publication).toBe(run);
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    expect(store.productDetails.read(TemplateProductDetails.Source, source.productHandle)).toBe(source);
+    expect(store.productDetails.read(TemplateProductDetails.RuntimeBinding, binding.productHandle)).toBe(binding);
+    expect(store.productDetails.read(TemplateProductDetails.CompositionContext, composition.productHandle)).toBe(composition);
+    expect(store.read(rootScope.productHandle)).not.toBeNull();
+    expect(emission.expressionWorld.freshCommittedGeneration().projector.publication).toBe(store);
+    expect(new TemplateTypeSystemOverlayBuilder(store, app.emission.typeSystem).build(resource).overlaySource)
+      .not.toBeNull();
+  }, 30_000);
+
   test('refreshes a compiled-template witness when a stable address handle moves', () => {
     const store = new KernelStore('compiled-template-witness-comparison');
     const sourceFileHandle = store.handles.address('source-file');

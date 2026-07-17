@@ -236,7 +236,7 @@ export class CheckerExpressionTypeSupport {
       return alternatives[0]!;
     }
 
-    const checkerBackedUnion = checkerBackedUnionTypeForReferences(this.store, references);
+    const checkerBackedUnion = checkerBackedUnionTypeForReferences(this.projector.publication, references);
     if (checkerBackedUnion != null) {
       const typeShape = this.projector.ensureProjection({
         localKey: `${localKey}:checker-union`,

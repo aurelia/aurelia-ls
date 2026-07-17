@@ -747,9 +747,13 @@ callback parameter typing, object-option typing, and nested literal context do n
   construction, value-channel projection, data-flow, and future speculative lifecycle contexts share the same cache and
   evaluator lifetime. Creating a bare `CheckerExpressionTypeEvaluator` should be a deliberate inquiry-local choice, not
   the default way to get expression facts.
-- Template project runtime analysis shares one `CheckerExpressionTypeWorld` across the resources in that compilation
-  pass, including selected authoring templates. Resource-level timing profiles mark the cache before each resource and
-  report deltas, so aggregate pressure can stay honest while the expression world itself has project-pass lifetime.
+- One template-analysis generation shares one `CheckerExpressionTypeWorld` across compiler/runtime materializers,
+  selected authoring templates, and app-level follow-up that still runs inside the same publication. The retained world
+  records that generation's checker/projection authority, but its projector is run-bound when the generation is staged.
+  Post-commit overlay and cursor inquiries call `freshCommittedGeneration()` so lazy projections publish through the
+  committed store with a fresh cache rather than attempting to write through a closed computation run.
+- Resource-level timing profiles mark the generation cache before each resource and report deltas, so aggregate
+  pressure can stay honest while same-generation materializers still share projection work.
 - Routed app profile summaries aggregate those resource-level expression-cache deltas before app disposal. Use that
   compact `templateExpressionTypeCache` row to decide whether a one-off public answer spent real expression-evaluator
   work before adding a new cache, retaining an app epoch, or reopening the app only for profiling.
@@ -866,8 +870,9 @@ callback parameter typing, object-option typing, and nested literal context do n
 - `contract:contextual-call-argument-completion` keeps the public cursor/completion side honest for TypeChecker-backed
   callback arguments, checker-backed arrays, and synthetic array method callbacks.
 - Template completion and file/app diagnostic scans also enter through `CheckerExpressionTypeWorld`. The query object
-  stays product-handle-shaped, but cursor-context construction may receive a hot world so repeated diagnostic probes
-  share the same projector/evaluator cache instead of rebuilding a local TypeChecker expression stack per member span.
+  stays product-handle-shaped. A caller may share one query-local world across repeated probes, but a query that starts
+  from a committed runtime emission must first derive a fresh committed generation; the materialization world's
+  run-bound cache is not a session cache.
 - Binding direction is part of expression meaning. Promise `then`/`catch` value expressions are from-view write
   targets that seed scoped locals; child interpolations read those locals afterward. Future expression inquiry should
   carry that direction instead of evaluating every parse as an ordinary read.

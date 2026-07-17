@@ -352,7 +352,10 @@ function boundControllerValuesForRuntimeAnalysis(
       propertyName: targetAccess.targetProperty,
       bindingProductHandle: binding.productHandle,
       expressionProductHandle,
-      sourceAddressHandle: readTemplateExpressionParse(store, expressionProductHandle)?.sourceAddressHandle ?? null,
+      sourceAddressHandle: readTemplateExpressionParse(
+        analysis.expressionWorld.projector.publication,
+        expressionProductHandle,
+      )?.sourceAddressHandle ?? null,
       sourceProvenanceHandle: readFieldProvenance(binding.fieldProvenance, 'expression')
         ?? readFieldProvenance(binding.fieldProvenance, 'source'),
       sourceScope: scopes.scopeForBinding(analysis.runtimeRendering, binding),

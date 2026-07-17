@@ -179,7 +179,7 @@ export class RuntimeBindingBehaviorMaterializer {
   ): RuntimeBindingBehaviorPublication {
     const behavior = entry.occurrence.expression;
     const expressionSource = sourceAddressForRuntimeExpressionSpan(
-      this.store,
+      this.publication,
       local,
       entry.binding.sourceAddressHandle,
       behavior.name.span,
@@ -277,7 +277,7 @@ export class RuntimeBindingBehaviorMaterializer {
         return addresses.get(key) ?? null;
       }
       const source = sourceAddressForRuntimeExpressionSpan(
-        this.store,
+        this.publication,
         `${local}:signal:${addresses.size}`,
         entry.binding.sourceAddressHandle,
         span,

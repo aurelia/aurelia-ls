@@ -35,6 +35,7 @@ import type { KernelPublicationContext } from '../kernel/publication.js';
 import type { ComputationRead } from '../kernel/computation-lifecycle.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
+import { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
 import {
   runtimeBoundControllerValueTableForTemplateResources,
@@ -284,6 +285,8 @@ export class TemplateCompilationProjectEmission {
     readonly resources: readonly TemplateResourceRuntimeAnalysisEmission[],
     /** Opt-in standalone resource-library template emissions for authoring/LSP inquiries. */
     readonly authoringResources: readonly TemplateResourceRuntimeAnalysisEmission[],
+    /** Checker-expression generation shared by every resource and app-level follow-up in this project emission. */
+    readonly expressionWorld: CheckerExpressionTypeWorld,
     /** Source files selected for standalone authoring compilation; empty means project-wide selection. */
     readonly authoringTemplateSourceFiles: readonly string[],
     /** Maximum standalone authoring templates requested for this emission; null means unbounded. */
@@ -333,7 +336,7 @@ export class TemplateCompilationProjectPass {
     this.valueSites = new TemplateValueSiteMaterializer(publication);
     this.bindingCommandLowering = new BindingCommandLoweringMaterializer(publication);
     this.compiledTemplate = new CompiledTemplateMaterializer(publication);
-    this.runtimeAnalysis = new TemplateRuntimeAnalysisMaterializer(store);
+    this.runtimeAnalysis = new TemplateRuntimeAnalysisMaterializer(store, publication);
   }
 
   compile(
@@ -380,7 +383,7 @@ export class TemplateCompilationProjectPass {
     );
     const expressionWorld = new CheckerExpressionTypeWorld(
       this.store,
-      undefined,
+      new CheckerTypeProjector(this.store, this.publication),
       undefined,
       options.stateStores ?? [],
     );
@@ -415,6 +418,7 @@ export class TemplateCompilationProjectPass {
       cohortPlan,
       resources,
       authoringResources,
+      expressionWorld,
       authoringTemplateSourceFiles,
       authoringTemplateLimit,
       profile,

@@ -441,6 +441,7 @@ class AureliaAppWorldProjectConstructionFrame {
     const state = this.materializeStateStoreLookupIssues(stateBase, templates, typeSystem);
     const bindingSourceValues = new RuntimeBindingSourceValueEvaluator(
       this.store,
+      templates.expressionWorld.projector,
       evaluation,
       runtimeBoundControllerValueTableForTemplateResources(this.store, templates.resources),
       new RuntimeBindingSourceActivationContext(this.store, evaluation, typeSystem),

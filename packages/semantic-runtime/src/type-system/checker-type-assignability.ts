@@ -1,4 +1,4 @@
-import type { KernelStore } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import { readCheckerTypeShape } from './checker-type-shape-access.js';
 import type {
   CheckerTypeReference,
@@ -17,7 +17,7 @@ export function checkerRawTypeAssignable(
 
 /** Checker-backed assignability for two retained type references. */
 export function checkerTypeReferenceAssignable(
-  store: KernelStore,
+  store: ProductDetailReadView,
   from: CheckerTypeReference | null,
   to: CheckerTypeReference | null,
 ): boolean | null {

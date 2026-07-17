@@ -38,6 +38,7 @@ import {
 import type {
   KernelStore,
 } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import { RuntimeNodeObserverConfigFieldState } from '../template/runtime-binding.js';
 import {
   runtimeBindingPrimitiveValueAssignableToType,
@@ -54,7 +55,7 @@ import {
 
 /** Type-system capability surface consumed by binding data-flow assignability policy. */
 export interface BindingDataFlowAssignabilityTypeAccess {
-  readonly store: KernelStore;
+  readonly publication: ProductDetailReadView;
   readTypeShape(reference: CheckerTypeReference | null): CheckerTypeShape | null;
   isRuntimeArrayInstanceType(reference: CheckerTypeReference | null): boolean;
   isRepeatSourceRuntimeAccepted(reference: CheckerTypeReference | null): boolean | null;
@@ -129,7 +130,7 @@ export class BindingDataFlowAssignabilityEvaluator {
     from: CheckerTypeReference | null,
     to: CheckerTypeReference | null,
   ): boolean | null {
-    return checkerTypeReferenceAssignable(this.typeAccess.store, from, to);
+    return checkerTypeReferenceAssignable(this.typeAccess.publication, from, to);
   }
 
   private isSourceAssignableToTarget(

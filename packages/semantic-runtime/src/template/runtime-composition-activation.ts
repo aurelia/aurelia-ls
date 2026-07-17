@@ -4,7 +4,6 @@ import type {
   AddressHandle,
   IdentityHandle,
 } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
 import type { EvaluationValue } from '../evaluation/values.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import {
@@ -52,13 +51,13 @@ export interface CompositionModelEvaluation {
 }
 
 export function activationModelHandoff(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   definition: CustomElementDefinition,
   model: CompositionModelEvaluation,
   localKey: string,
 ): CompositionActivationModelHandoff {
   return activationModelHandoffForType(
-    store,
+    projector,
     definition.target.targetType,
     model,
     localKey,
@@ -69,7 +68,7 @@ export function activationModelHandoff(
 }
 
 export function activationModelHandoffForType(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   targetType: CheckerTypeReference | null,
   model: CompositionModelEvaluation,
   localKey: string,
@@ -77,7 +76,7 @@ export function activationModelHandoffForType(
   ownerIdentityHandle: IdentityHandle | null,
   missingTypeReason: string,
 ): CompositionActivationModelHandoff {
-  const targetTypeShape = readCheckerTypeShape(store, targetType);
+  const targetTypeShape = readCheckerTypeShape(projector.publication, targetType);
   const targetCarrier = targetTypeShape?.carrier ?? null;
   if (targetCarrier == null) {
     return openActivationHandoff(
@@ -110,7 +109,7 @@ export function activationModelHandoffForType(
   }
 
   const parameterProjection = activationParameterTypeReference(
-    store,
+    projector,
     activate.checker,
     activate.signatures,
     localKey,
@@ -118,11 +117,11 @@ export function activationModelHandoffForType(
     ownerIdentityHandle,
     activate.location,
   );
-  return activationModelHandoffForParameterProjection(store, model, parameterProjection);
+  return activationModelHandoffForParameterProjection(projector, model, parameterProjection);
 }
 
 function activationModelHandoffForParameterProjection(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   model: CompositionModelEvaluation,
   parameterProjection: ActivationParameterProjection,
 ): CompositionActivationModelHandoff {
@@ -167,7 +166,7 @@ function activationModelHandoffForParameterProjection(
     );
   }
 
-  const assignable = checkerTypeReferenceAssignable(store, model.sourceType, parameterReference);
+  const assignable = checkerTypeReferenceAssignable(projector.publication, model.sourceType, parameterReference);
   return new CompositionActivationModelHandoff(
     CompositionActivateMethodKind.Present,
     assignable === true
@@ -266,7 +265,7 @@ function activateMethodProjection(
 }
 
 function activationParameterTypeReference(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   checker: ts.TypeChecker,
   signatures: readonly ts.Signature[],
   localKey: string,
@@ -275,7 +274,7 @@ function activationParameterTypeReference(
   fallbackLocation: ts.Node,
 ): ActivationParameterProjection {
   const frame = activationParameterProjectionFrame(
-    store,
+    projector,
     checker,
     signatures,
     localKey,
@@ -297,7 +296,7 @@ function activationParameterTypeReference(
     };
   }
 
-  const checkerUnion = checkerBackedUnionTypeForReferences(store, parameterReferences);
+  const checkerUnion = checkerBackedUnionTypeForReferences(projector.publication, parameterReferences);
   if (checkerUnion == null) {
     return {
       kind: 'open',
@@ -305,7 +304,7 @@ function activationParameterTypeReference(
     };
   }
 
-  const unionReference = new CheckerTypeProjector(store).ensureProjection({
+  const unionReference = projector.ensureProjection({
     localKey: `${localKey}:activate-parameter-union`,
     checker: checkerUnion.checker,
     type: checkerUnion.type,
@@ -323,7 +322,7 @@ function activationParameterTypeReference(
 }
 
 function activationParameterProjectionFrame(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   checker: ts.TypeChecker,
   signatures: readonly ts.Signature[],
   localKey: string,
@@ -334,7 +333,7 @@ function activationParameterProjectionFrame(
   const candidates = checkerSignatureCandidateBasis(signatures, 1);
   const parameterReferences = candidates
     .map((candidate) => activateParameterReference(
-      store,
+      projector,
       checker,
       candidate.signature,
       candidate.signatureIndex,
@@ -371,7 +370,7 @@ function activationParameterProjectionIssue(
 }
 
 function activateParameterReference(
-  store: KernelStore,
+  projector: CheckerTypeProjector,
   checker: ts.TypeChecker,
   signature: ts.Signature,
   signatureIndex: number,
@@ -387,7 +386,7 @@ function activateParameterReference(
   const parameterLocation = parameter.symbol.valueDeclaration
     ?? parameter.symbol.declarations?.[0]
     ?? fallbackLocation;
-  const parameterShape = new CheckerTypeProjector(store).ensureProjection({
+  const parameterShape = projector.ensureProjection({
     localKey: `${localKey}:activate-parameter:${signatureIndex}`,
     checker,
     type: parameter.type,

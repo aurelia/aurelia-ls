@@ -174,6 +174,12 @@ read-your-writes view for a known handle. They deliberately do not expose staged
 prior manifest's rows with candidate rows would manufacture a mixed generation. Aggregate phases must pass their
 complete candidate emissions explicitly, while exact links may follow a staged detail by handle.
 
+A projector or expression world backed by a `ComputationRun` is a candidate-generation capability, not a retained
+query cache. It may be shared by every materializer in that generation and by follow-up work that runs before commit,
+but the run is closed after commit. Post-commit inquiries must start a fresh store-backed expression generation from
+the committed emission; reusing the closed projector would turn a later lazy TypeChecker projection into a write
+against a completed transaction.
+
 There is one `ComputationLifecycleRegistry` per `KernelStore`. The store enforces that ownership boundary and notifies the
 registry when lifetime disposal reclaims a complete publication, so a later run cannot reuse a stale manifest or steal
 handles republished by another owner. `ComputationRecordReadView` adapts existing normalized-record traversals into exact
