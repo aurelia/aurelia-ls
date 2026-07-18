@@ -3,7 +3,6 @@ import type { BindingContextSlot, BindingScope } from '../configuration/scope.js
 import { bindingContextSlotTargetTypeSourceMember } from '../configuration/binding-scope-slot-projector.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import type { AddressHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
 import {
   type CheckerTypeProjectionRequest,
   CheckerTypeMemberProjectionPolicy,
@@ -68,7 +67,6 @@ export interface CheckerExpressionTypeProjectionOptions {
  */
 export class CheckerExpressionTypeSupport {
   constructor(
-    readonly store: KernelStore,
     readonly projector: CheckerTypeProjector,
     readonly typeAccess: CheckerTypeShapeAccess,
     readonly synthesis: CheckerExpressionTypeSynthesizer,

@@ -2,7 +2,6 @@ import { TypeScriptDeclarationIdentity } from '../kernel/identity.js';
 import type { AddressHandle, KernelRecordHandle } from '../kernel/handles.js';
 import {
   KernelStoreBatch,
-  type KernelStore,
   type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
@@ -54,12 +53,12 @@ export function checkerTypeMemberSourceAddressHandle(
 
 /** Materialize a navigable member declaration source for a raw checker symbol. */
 export function checkerSymbolMemberSourceProjection(
-  store: KernelStore,
   publication: KernelPublicationContext,
+  checker: ts.TypeChecker,
   symbol: ts.Symbol,
   declarations: readonly ts.Declaration[] = declarationsForCheckerSymbol(symbol),
 ): CheckerSymbolMemberSourceProjection {
-  const source = sourceSpanForCheckerDeclaration(store, publication, symbol, declarations, SourceSpanRole.Name);
+  const source = sourceSpanForCheckerDeclaration(publication, checker, symbol, declarations, SourceSpanRole.Name);
   publishMissingSourceRecords(
     publication,
     source?.records ?? [],
@@ -73,7 +72,6 @@ export function checkerSymbolMemberSourceProjection(
 
 /** Read the best source address for the value type produced by a checker member. */
 export function checkerTypeMemberValueSourceAddressHandle(
-  store: KernelStore,
   publication: KernelPublicationContext,
   member: CheckerTypeMember,
 ): AddressHandle | null {
@@ -81,8 +79,8 @@ export function checkerTypeMemberValueSourceAddressHandle(
     return checkerTypeMemberSourceAddressHandle(publication, member);
   }
   return checkerSymbolMemberValueSourceProjection(
-    store,
     publication,
+    member.carrier.checker,
     member.carrier.symbol,
     member.carrier.declarations,
   ).sourceAddressHandle;
@@ -90,18 +88,18 @@ export function checkerTypeMemberValueSourceAddressHandle(
 
 /** Materialize the type annotation / return type source for a raw checker member when it exists. */
 export function checkerSymbolMemberValueSourceProjection(
-  store: KernelStore,
   publication: KernelPublicationContext,
+  checker: ts.TypeChecker,
   symbol: ts.Symbol,
   declarations: readonly ts.Declaration[] = declarationsForCheckerSymbol(symbol),
 ): CheckerSymbolMemberSourceProjection {
   const typeNode = memberValueTypeNode(declarations);
   if (typeNode == null) {
-    return checkerSymbolMemberSourceProjection(store, publication, symbol, declarations);
+    return checkerSymbolMemberSourceProjection(publication, checker, symbol, declarations);
   }
   const source = sourceSpanForCheckerNode(
-    store,
     publication,
+    checker,
     `checker-symbol-member-value-source:${symbol.getName()}`,
     typeNode,
     SourceSpanRole.Type,

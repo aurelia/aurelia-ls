@@ -21,7 +21,7 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
-  type KernelStore,
+  type KernelSourceFileReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -101,7 +101,7 @@ export class BindingScopeMaterializer {
 
   constructor(
     /** Hot analysis store that receives scope records. */
-    readonly store: KernelStore,
+    readonly store: KernelSourceFileReadView,
     /** Generation-local checker projector and publication authority for all slot details. */
     readonly projector: CheckerTypeProjector,
   ) {

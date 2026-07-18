@@ -138,7 +138,7 @@ export class CheckerExpressionTypeEvaluator {
   ) {
     this.typeAccess = new CheckerTypeShapeAccess(store, projector);
     this.synthesis = new CheckerExpressionTypeSynthesizer(projector);
-    this.support = new CheckerExpressionTypeSupport(store, projector, this.typeAccess, this.synthesis);
+    this.support = new CheckerExpressionTypeSupport(projector, this.typeAccess, this.synthesis);
     this.branchScopes = new CheckerExpressionBranchScopeProjector(store, projector);
     this.access = new CheckerExpressionAccessProjector(this.support, this.typeAccess, {
       evaluateNode: (context) => this.evaluateNode(context),

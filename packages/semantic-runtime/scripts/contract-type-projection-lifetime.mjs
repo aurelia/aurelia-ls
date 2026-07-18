@@ -1,6 +1,7 @@
 import ts from 'typescript';
 import { KernelStore } from '../out/kernel/store.js';
 import { CheckerTypeProjector } from '../out/type-system/checker-projector.js';
+import { registerIsolatedCheckerDeclarationSourceContext } from '../out/type-system/declaration-source.js';
 
 const failures = [];
 
@@ -17,7 +18,7 @@ console.log('contract ok: TypeChecker projection identity follows kernel lifetim
 function verifyCanonicalProjectionFollowsKernelLifetime() {
   const fixture = createCheckerFixture();
   const store = new KernelStore('contract-type-projection-lifetime');
-  const projector = new CheckerTypeProjector(store);
+  const projector = new CheckerTypeProjector(store, store);
   const marker = store.markLifetime();
   const first = projector.ensureProjection({
     localKey: 'foo',
@@ -56,7 +57,7 @@ function verifyCheckerEpochsDoNotShareHotProjections() {
   const firstFixture = createCheckerFixture('export interface Foo { bar: string; baz: number; }');
   const secondFixture = createCheckerFixture('export interface Foo { bar: string; baz: number; }');
   const store = new KernelStore('contract-type-projection-epochs');
-  const projector = new CheckerTypeProjector(store);
+  const projector = new CheckerTypeProjector(store, store);
   const first = projector.ensureProjection({
     localKey: 'same-site',
     checker: firstFixture.checker,
@@ -102,6 +103,7 @@ function createCheckerFixture(sourceText = 'export interface Foo { bar: string; 
   };
   const program = ts.createProgram([fileName], compilerOptions, host);
   const checker = program.getTypeChecker();
+  registerIsolatedCheckerDeclarationSourceContext(checker, 'contract-type-projection-lifetime');
   const programSourceFile = program.getSourceFile(fileName);
   const declaration = programSourceFile?.statements.find(ts.isInterfaceDeclaration) ?? null;
   const symbol = declaration == null ? null : checker.getSymbolAtLocation(declaration.name);

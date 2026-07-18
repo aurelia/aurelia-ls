@@ -4,8 +4,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   createSemanticRuntime,
+  NodeSemanticRuntimeProjectInputHost,
   readSemanticAppQueryCatalog,
   SemanticAppQueryKind,
+  SemanticRuntimeProjectInputAuthority,
 } from '../out/index.js';
 import { readFieldProvenance } from '../out/kernel/provenance.js';
 import { ResourceProductDetails } from '../out/resources/product-details.js';
@@ -44,14 +46,14 @@ assert.equal(catalog.value.rows[0].minimumAnalysisDepth, 'binding-observation', 
 const runtime = await createSemanticRuntime({
   workspaceRoot: fixtureRoot,
   storeKey: 'contract:template-references',
-  sourceTextProvider: {
+  projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
     readFile(fileName) {
       return samePath(fileName, templatePath) ? templateText : undefined;
     },
     fileExists(fileName) {
       return samePath(fileName, templatePath) ? true : undefined;
     },
-  },
+  })),
 });
 
 const withoutDeclaration = await askReferences(false);

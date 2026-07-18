@@ -7,7 +7,7 @@ import {
   SemanticRuntimeLspSession,
   isSemanticRuntimeLspRequestAborted,
 } from "../../src/runtime/semantic-runtime-session.js";
-import type { OpenTextDocumentStore } from "../../src/runtime/open-document-source-text-provider.js";
+import type { OpenTextDocumentStore } from "../../src/runtime/open-document-source-text-overlay.js";
 
 class TestDocumentStore implements OpenTextDocumentStore {
   private readonly documents = new Map<string, TextDocument>();

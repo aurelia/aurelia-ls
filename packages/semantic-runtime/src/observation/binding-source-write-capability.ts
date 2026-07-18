@@ -231,7 +231,7 @@ export class BindingDataFlowSourceWriteCapabilityProjector {
         RuntimeBindingDataFlowSourceAssignmentReasonKind.ScopeSlotTypeCheckerMemberUnavailable,
       )
       : sourceWriteCapabilityForMemberAccess(
-        checkerTypeMemberWriteAccess(member, this.store, this.publication),
+        checkerTypeMemberWriteAccess(member, this.publication),
         member.ownerType.display,
         member.ownerType,
         member.ownerType.sourceAddressHandle,

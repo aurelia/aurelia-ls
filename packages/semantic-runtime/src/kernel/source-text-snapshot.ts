@@ -1,9 +1,8 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import type { ComputationRead, ComputationReadValidation } from './computation-lifecycle.js';
-import type { SemanticRuntimeSourceTextProvider } from './source-text-provider.js';
+import type { SemanticRuntimeProjectInputGeneration } from './project-input.js';
 
 export const enum SourceTextSnapshotState {
   /** The admitted source authority returned complete text. */
@@ -67,7 +66,7 @@ export class SourceTextSnapshot implements ComputationRead {
 /** Source authority that captures immutable values and can validate them before publication. */
 export class SourceTextSnapshotAuthority {
   constructor(
-    private readonly sourceTextProvider: SemanticRuntimeSourceTextProvider | null = null,
+    private readonly inputGeneration: SemanticRuntimeProjectInputGeneration,
   ) {}
 
   capture(fileName: string): SourceTextSnapshot {
@@ -83,29 +82,16 @@ export class SourceTextSnapshotAuthority {
   }
 
   readCurrent(fileName: string): SourceTextSnapshotValue {
-    const providerExists = this.sourceTextProvider?.fileExists?.(fileName);
-    if (providerExists === false) {
+    const exists = this.inputGeneration.currentFileExists(fileName);
+    if (!exists) {
       return new SourceTextSnapshotValue(SourceTextSnapshotState.Absent, null, null);
     }
 
-    const providerText = this.sourceTextProvider?.readFile(fileName);
-    if (providerText !== undefined) {
-      return presentSourceText(providerText);
+    const text = this.inputGeneration.readCurrentFile(fileName);
+    if (text !== undefined) {
+      return presentSourceText(text);
     }
-
-    if (!existsSync(fileName)) {
-      return new SourceTextSnapshotValue(
-        providerExists === true ? SourceTextSnapshotState.Unavailable : SourceTextSnapshotState.Absent,
-        null,
-        null,
-      );
-    }
-
-    try {
-      return presentSourceText(readFileSync(fileName, 'utf8'));
-    } catch {
-      return new SourceTextSnapshotValue(SourceTextSnapshotState.Unavailable, null, null);
-    }
+    return new SourceTextSnapshotValue(SourceTextSnapshotState.Unavailable, null, null);
   }
 }
 

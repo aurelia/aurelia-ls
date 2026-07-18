@@ -17,6 +17,10 @@ import {
 } from '../src/kernel/publication.js';
 import { SourceTextSnapshotAuthority, SourceTextSnapshotState } from '../src/kernel/source-text-snapshot.js';
 import {
+  NodeSemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputAuthority,
+} from '../src/kernel/project-input.js';
+import {
   CustomElementDefinition,
   CustomElementTemplateDefinition,
   CustomElementTemplateKind,
@@ -46,12 +50,6 @@ import {
 } from '../src/template/template-compilation-computation.js';
 import { TemplateCompilationProjectPass } from '../src/template/template-compilation-project-pass.js';
 import { TemplateTypeSystemOverlayBuilder } from '../src/template/template-type-system-overlay.js';
-import {
-  TemplateAnalysisProjectComputationRequest,
-  TemplateAnalysisProjectAuthority,
-  TemplateAnalysisProjectInput,
-  TemplateAnalysisProjectInputAuthority,
-} from '../src/template/template-analysis-computation.js';
 import { ObservationProductDetails } from '../src/observation/product-details.js';
 
 class MutableTemplateSourceProvider {
@@ -125,7 +123,7 @@ describe('template compilation computation', () => {
       summary: 'Full compiler/runtime transaction and post-commit expression-generation proof.',
     });
     const committedRecordCount = store.readAllRecords().length;
-    const emission = new TemplateCompilationProjectPass(store, run).compile(
+    const emission = new TemplateCompilationProjectPass(store, run, runtime.frameworkSupport).compile(
       app.emission.appWorld,
       app.emission.typeSystem,
       app.emission.resourceIndex,
@@ -183,279 +181,11 @@ describe('template compilation computation', () => {
     if (committedResource == null) {
       throw new Error('Expected the committed generation to retain the staged template resource.');
     }
-    expect(committedEmission.expressionWorld.freshInquiryGeneration().projector.publication).toBe(store);
+    expect(committedEmission.expressionWorld.freshInquiryGeneration().projector.publication)
+      .toBe(committedEmission.expressionWorld.projector.publication);
     expect(new TemplateTypeSystemOverlayBuilder(store, app.emission.typeSystem).build(committedResource).overlaySource)
       .not.toBeNull();
   }, 30_000);
-
-  test('makes only committed project generations current and invalidates pinned generations on replacement', async () => {
-    const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
-    const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/au-compose-dynamic-composition');
-    const sourceProvider = new OverlayTemplateSourceProvider();
-    const runtime = await createSemanticRuntime({
-      workspaceRoot: fixtureRoot,
-      storeKey: 'contract:template-analysis-project-authority',
-      sourceTextProvider: sourceProvider,
-    });
-    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
-    const store = runtime.workspace.store;
-    const lifecycle = runtime.computationLifecycle;
-    const service = runtime.templateAnalysisComputations;
-    const projectKey = `${app.project.projectKey}:current-generation`;
-    const lifetime = store.markLifetime();
-    const input = (analysisDepth: 'runtime-topology' | 'binding-observation') => new TemplateAnalysisProjectInput(
-      projectKey,
-      app.emission.appWorld,
-      app.emission.typeSystem,
-      app.emission.resourceIndex,
-      app.emission.routeContexts,
-      app.emission.evaluation,
-      app.emission.state.readStores(),
-      analysisDepth,
-      false,
-      [],
-      null,
-    );
-    let currentInput = input('binding-observation');
-    const inputAuthority = new TemplateAnalysisProjectInputAuthority(() => currentInput);
-    const request = new TemplateAnalysisProjectComputationRequest(projectKey, inputAuthority);
-    const authority = service.authorityFor(projectKey);
-
-    const firstAttempt = service.prepare(request);
-    const firstDataFlow = firstAttempt.candidateEmission.resources
-      .flatMap((resource) => resource.runtimeAnalysis.bindingDataFlow.dataFlows)[0];
-    expect(firstDataFlow).toBeDefined();
-    if (firstDataFlow == null) {
-      throw new Error('Expected binding-observation analysis to stage at least one data-flow product.');
-    }
-    expect(authority.current()).toBeNull();
-    expect(firstAttempt.candidateEmission.expressionWorld.projector.publication).not.toBe(store);
-    expect(store.productDetails.read(
-      ObservationProductDetails.RuntimeBindingDataFlow,
-      firstDataFlow.productHandle,
-    )).toBeNull();
-
-    const first = firstAttempt.commit();
-    const firstGeneration = first.committedGeneration;
-    expect(first.commit.state).toBe(ComputationCommitState.Committed);
-    expect(firstGeneration).not.toBeNull();
-    if (firstGeneration == null) {
-      throw new Error('Expected the first project generation to become current.');
-    }
-    expect(authority.current()).toBe(firstGeneration);
-    expect(() => authority.accept(
-      firstAttempt.computationId,
-      firstAttempt.runSequence,
-      firstAttempt.candidateEmission,
-    )).toThrow(/already admitted/);
-    const competingAuthority = new TemplateAnalysisProjectAuthority(projectKey, lifecycle);
-    expect(() => competingAuthority.accept(
-      firstAttempt.computationId,
-      firstAttempt.runSequence,
-      firstAttempt.candidateEmission,
-    )).toThrow(/already admitted template-analysis-project/);
-    const firstEmission = firstGeneration.requireCurrentEmission();
-    expect(firstGeneration.emission).toBe(firstEmission);
-    expect(firstEmission.cohortAuthority.current()).toBe(firstEmission.cohortPlan);
-    expect(firstEmission.expressionWorld.projector.publication).not.toBe(store);
-    expect(firstEmission.expressionWorld.projector.publication.isCurrent()).toBe(true);
-    const retainedExpressionWorld = firstEmission.expressionWorld;
-    const retainedExpressionEvaluator = retainedExpressionWorld.evaluator();
-    for (const resource of [...firstEmission.resources, ...firstEmission.authoringResources]) {
-      expect(resource.runtimeAnalysis.expressionWorld).toBe(firstEmission.expressionWorld);
-    }
-    expect(firstAttempt.candidateEmission.expressionWorld.projector.publication).not.toBe(store);
-    expect(store.productDetails.read(
-      ObservationProductDetails.RuntimeBindingDataFlow,
-      firstDataFlow.productHandle,
-    )).toBe(firstDataFlow);
-    expect(firstAttempt.sourceSnapshots.length).toBeGreaterThan(0);
-    expect(lifecycle.readState(firstAttempt.computationId)?.reads.map((read) => read.domain)).toEqual(
-      expect.arrayContaining([
-        'template-analysis-project-input',
-        'template-compiler',
-        'source-text',
-        'kernel-record',
-      ]),
-    );
-
-    const admittedSource = firstAttempt.sourceSnapshots.find((snapshot) =>
-      snapshot.state === SourceTextSnapshotState.Present
-    );
-    expect(admittedSource).toBeDefined();
-    if (admittedSource == null) {
-      throw new Error('Expected a source revision admitted by the resource-definition input.');
-    }
-    sourceProvider.write(admittedSource.fileName, `${admittedSource.requireText()}\n<!-- newer source -->`);
-    expect(() => service.prepare(request)).toThrow(/changed after its resource definition was admitted/);
-    expect(authority.current()).toBe(firstGeneration);
-    sourceProvider.clear(admittedSource.fileName);
-
-    const sourceRaceAttempt = service.prepare(request);
-    const racedSource = sourceRaceAttempt.sourceSnapshots.find((snapshot) =>
-      snapshot.state === SourceTextSnapshotState.Present
-    );
-    expect(racedSource).toBeDefined();
-    if (racedSource == null) {
-      throw new Error('Expected the project generation to retain at least one authored source snapshot.');
-    }
-    sourceProvider.write(racedSource.fileName, `${racedSource.requireText()}\n`);
-    const sourceRace = sourceRaceAttempt.commit();
-    expect(sourceRace.commit.state).toBe(ComputationCommitState.RejectedInputsChanged);
-    expect(sourceRace.commit.transition.invalidReads).toContainEqual(expect.objectContaining({
-      domain: 'source-text',
-      changedFacets: ['content'],
-    }));
-    expect(authority.current()).toBe(firstGeneration);
-    sourceProvider.clear(racedSource.fileName);
-
-    currentInput = input('runtime-topology');
-    const secondAttempt = service.prepare(request);
-    const second = secondAttempt.commit();
-    const secondGeneration = second.committedGeneration;
-    expect(second.commit.state).toBe(ComputationCommitState.Committed);
-    expect(secondGeneration).not.toBeNull();
-    if (secondGeneration == null) {
-      throw new Error('Expected the lower-depth replacement to become current.');
-    }
-    expect(secondAttempt.computationId).toBe(firstAttempt.computationId);
-    expect(authority.current()).toBe(secondGeneration);
-    expect(firstGeneration.isCurrent()).toBe(false);
-    expect(() => firstGeneration.requireCurrentEmission()).toThrow('is no longer current');
-    expect(() => firstGeneration.emission).toThrow('is no longer current');
-    expect(retainedExpressionWorld.projector.publication.isCurrent()).toBe(false);
-    expect(() => retainedExpressionWorld.projector.publication.readMaterializations()).toThrow('is no longer current');
-    expect(() => retainedExpressionWorld.evaluator()).toThrow('is no longer current');
-    expect(() => retainedExpressionWorld.freshInquiryGeneration()).toThrow('is no longer current');
-    expect(() => retainedExpressionEvaluator.memberValueAccessForReference(
-      null,
-      'stale',
-      'stale-generation',
-    )).toThrow('is no longer current');
-    expect(second.commit.transition.publications).toContainEqual(expect.objectContaining({
-      handle: firstDataFlow.productHandle,
-      decision: KernelPublicationDecisionKind.Withdraw,
-    }));
-    expect(store.productDetails.read(
-      ObservationProductDetails.RuntimeBindingDataFlow,
-      firstDataFlow.productHandle,
-    )).toBeNull();
-
-    const staleAttempt = service.prepare(request);
-    currentInput = input('binding-observation');
-    const stale = staleAttempt.commit();
-    expect(stale.commit.state).toBe(ComputationCommitState.RejectedInputsChanged);
-    expect(stale.commit.transition.invalidReads).toContainEqual(expect.objectContaining({
-      domain: 'template-analysis-project-input',
-      changedFacets: expect.arrayContaining(['input-generation', 'analysis-depth']),
-    }));
-    expect(stale.currentGeneration).toBe(secondGeneration);
-    expect(authority.current()).toBe(secondGeneration);
-
-    const olderAttempt = service.prepare(request);
-    currentInput = input('runtime-topology');
-    const winningAttempt = service.prepare(request);
-    const winning = winningAttempt.commit();
-    const winningGeneration = winning.committedGeneration;
-    expect(winning.commit.state).toBe(ComputationCommitState.Committed);
-    expect(winningGeneration).not.toBeNull();
-    expect(olderAttempt.commit().commit.state).toBe(ComputationCommitState.RejectedSuperseded);
-    expect(authority.current()).toBe(winningGeneration);
-
-    const pendingProjectKey = `${projectKey}:pending-first-generation`;
-    const pendingInput = new TemplateAnalysisProjectInput(
-      pendingProjectKey,
-      app.emission.appWorld,
-      app.emission.typeSystem,
-      app.emission.resourceIndex,
-      app.emission.routeContexts,
-      app.emission.evaluation,
-      app.emission.state.readStores(),
-      'runtime-topology',
-      false,
-      [],
-      null,
-    );
-    const pendingAuthority = service.authorityFor(pendingProjectKey);
-    const pendingLifetime = store.markLifetime();
-    const pendingAttempt = service.prepare(new TemplateAnalysisProjectComputationRequest(
-      pendingProjectKey,
-      TemplateAnalysisProjectInputAuthority.fixed(pendingInput),
-    ));
-    store.disposeSince(pendingLifetime);
-    expect(pendingAttempt.commit().commit.state).toBe(ComputationCommitState.RejectedSuperseded);
-    expect(pendingAuthority.current()).toBeNull();
-    expect(service.authorityFor(pendingProjectKey)).not.toBe(pendingAuthority);
-
-    expect(() => service.prepare(new TemplateAnalysisProjectComputationRequest(
-      `${projectKey}:other`,
-      inputAuthority,
-    ))).toThrow('does not match requested project');
-    expect(authority.current()).toBe(winningGeneration);
-
-    store.disposeSince(lifetime);
-    expect(authority.current()).toBeNull();
-    expect(winningGeneration?.isCurrent()).toBe(false);
-    expect(() => winningGeneration?.requireCurrentEmission()).toThrow('is no longer current');
-  }, 45_000);
-
-  test('pins a semantic app to one template generation and rebuilds after replacement', async () => {
-    const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
-    const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/au-compose-dynamic-composition');
-    const runtime = await createSemanticRuntime({
-      workspaceRoot: fixtureRoot,
-      storeKey: 'contract:template-analysis-app-generation-pin',
-    });
-    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
-    const retainedTemplateQueries = app.templateQueries;
-    const projectKey = app.project.projectKey;
-    const originalGeneration = app.emission.templateAnalysisGeneration;
-    const input = new TemplateAnalysisProjectInput(
-      projectKey,
-      app.emission.appWorld,
-      app.emission.typeSystem,
-      app.emission.resourceIndex,
-      app.emission.routeContexts,
-      app.emission.evaluation,
-      app.emission.state.readStores(),
-      'runtime-topology',
-      false,
-      [],
-      null,
-    );
-
-    const replacement = runtime.templateAnalysisComputations.prepare(
-      new TemplateAnalysisProjectComputationRequest(
-        projectKey,
-        TemplateAnalysisProjectInputAuthority.fixed(input),
-      ),
-    ).commit();
-    expect(replacement.commit.state).toBe(ComputationCommitState.Committed);
-    expect(replacement.committedGeneration).not.toBeNull();
-    expect(originalGeneration.isCurrent()).toBe(false);
-    expect(app.isCurrent()).toBe(false);
-    expect(() => app.emission.templates).toThrow('is no longer current');
-    expect(() => app.emission.typeSystem).toThrow('is no longer current');
-    expect(() => app.queryClaims).toThrow('is no longer current');
-    expect(() => app.templateQueries).toThrow('is no longer current');
-    expect(() => retainedTemplateQueries.templateCompilations()).toThrow('is no longer current');
-    expect(() => app.summary()).toThrow('is no longer current');
-    expect(runtime.analysisCacheOverview().value?.cachedAppCount).toBe(0);
-    await expect(runtime.templateCursorInfo({
-      projectKey,
-      cursor: {
-        filePath: path.join(fixtureRoot, 'src/compose-dashboard-app.html'),
-        offset: 0,
-      },
-    })).resolves.toBeDefined();
-
-    const rebuilt = await runtime.openApp({ analysisDepth: 'binding-observation' });
-    expect(rebuilt).not.toBe(app);
-    expect(rebuilt.isCurrent()).toBe(true);
-    expect(rebuilt.emission.templates.expressionWorld.projector.publication).not.toBe(runtime.workspace.store);
-    expect(rebuilt.emission.templates.expressionWorld.projector.publication.isCurrent()).toBe(true);
-    expect(rebuilt.summary().value).toBeDefined();
-  }, 45_000);
 
   test('refreshes a compiled-template witness when a stable address handle moves', () => {
     const store = new KernelStore('compiled-template-witness-comparison');
@@ -514,8 +244,8 @@ describe('template compilation computation', () => {
     const store = runtime.workspace.store;
     const lifecycle = runtime.computationLifecycle;
     const sourceProvider = new MutableTemplateSourceProvider();
-    const sourceAuthority = new SourceTextSnapshotAuthority(sourceProvider);
-    const compiler = new TemplateCompilationComputationService(store, lifecycle, sourceAuthority);
+    const sourceAuthority = sourceSnapshotAuthority(sourceProvider, fixtureRoot, 'template-compilation');
+    const compiler = new TemplateCompilationComputationService(store, lifecycle, sourceAuthority, runtime.frameworkSupport);
     const compilerWorldAuthority = TemplateCompilerWorldAuthority.fixed(baseline.parentCompilerWorld);
     const appCohort = new TemplateCompilationCohort(
       TemplateCompilationCohortKind.App,
@@ -709,7 +439,8 @@ describe('template compilation computation', () => {
     const compiler = new TemplateCompilationComputationService(
       store,
       lifecycle,
-      new SourceTextSnapshotAuthority(sourceProvider),
+      sourceSnapshotAuthority(sourceProvider, fixtureRoot, 'template-compilation-cohort'),
+      runtime.frameworkSupport,
     );
     const request = new TemplateCompilationComputationRequest(
       app.project.projectKey,
@@ -927,6 +658,17 @@ describe('template compilation computation', () => {
     expect(restoredOwnerAttempt.commit().commit.state).toBe(ComputationCommitState.Committed);
   }, 30_000);
 });
+
+function sourceSnapshotAuthority(
+  sourceProvider: MutableTemplateSourceProvider,
+  rootDir: string,
+  projectKey: string,
+): SourceTextSnapshotAuthority {
+  const authority = new SemanticRuntimeProjectInputAuthority(
+    new NodeSemanticRuntimeProjectInputHost(sourceProvider),
+  );
+  return new SourceTextSnapshotAuthority(authority.capture({ projectKey, rootDir }));
+}
 
 function compilerWorldWithoutResource(
   world: TemplateCompilerWorldEmission,

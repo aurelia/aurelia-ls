@@ -9,9 +9,13 @@ import type {
   IdentityHandle,
 } from '../kernel/handles.js';
 import {
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStore,
-  type KernelStoreRecord,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type {
+  KernelStoreReadView,
+  KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
@@ -132,7 +136,7 @@ export class RouteConfigContextMaterializationProjectResult {
 /** Materialize the RouteConfigContext topology that owns child route registration and recognizer instances. */
 export class RouteConfigContextMaterializationProjectPass {
   materializeAndEmit(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
     routes: RouteConfigConvergenceProjectResult,
     routerOptions: RouterOptionsMaterializationProjectResult,
@@ -140,11 +144,11 @@ export class RouteConfigContextMaterializationProjectPass {
   ): RouteConfigContextMaterializationProjectResult {
     const graph = new RouteConfigGraph(routes.readRouteConfigs());
     const rootRouteConfigs = rootRouteConfigsForContextMaterialization(graph, configuration, routerOptions);
-    const emissions = this.materializeRootContextTrees(store, graph, rootRouteConfigs);
+    const emissions = this.materializeRootContextTrees(publication, graph, rootRouteConfigs);
     const records = emissions.flatMap((emission) => emission.records);
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `router-route-config-context:${project.projectKey}`));
-    }
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `router-route-config-context:${project.projectKey}`),
+    ));
     return new RouteConfigContextMaterializationProjectResult(
       project,
       graph.routeConfigs,
@@ -155,7 +159,7 @@ export class RouteConfigContextMaterializationProjectPass {
   }
 
   private materializeRootContextTrees(
-    store: KernelStore,
+    store: KernelStoreReadView,
     graph: RouteConfigGraph,
     rootRouteConfigs: readonly RootRouteConfigUse[],
   ): readonly RouteConfigContextEmission[] {
@@ -174,7 +178,7 @@ export class RouteConfigContextMaterializationProjectPass {
   }
 
   private materializeContextTree(
-    store: KernelStore,
+    store: KernelStoreReadView,
     graph: RouteConfigGraph,
     routeConfig: RouteConfigModel,
     appRoot: AppRoot | null,
@@ -220,7 +224,7 @@ export class RouteConfigContextMaterializationProjectPass {
   }
 
   private materializeRouteConfigContext(
-    store: KernelStore,
+    store: KernelStoreReadView,
     routeConfig: RouteConfigModel,
     appRoot: AppRoot | null,
     options: RouterOptionsModel | null,
@@ -271,7 +275,7 @@ export class RouteConfigContextMaterializationProjectPass {
 }
 
 function routeConfigContextReference(
-  store: KernelStore,
+  store: KernelStoreReadView,
   contextLocal: string,
   routeConfig: RouteConfigModel,
   friendlyPath: string,
@@ -286,7 +290,7 @@ function routeConfigContextReference(
 }
 
 function routeConfigContextRecognizerReference(
-  store: KernelStore,
+  store: KernelStoreReadView,
   recognizerLocal: string,
   routeConfig: RouteConfigModel,
   parent: RouteConfigContextModel | null,
@@ -305,7 +309,7 @@ function routeConfigContextRecognizerReference(
 }
 
 function materializedRouteConfigContext(
-  store: KernelStore,
+  store: KernelStoreReadView,
   contextLocal: string,
   routeConfig: RouteConfigModel,
   appRoot: AppRoot | null,
@@ -336,7 +340,7 @@ function materializedRouteConfigContext(
 }
 
 function ownedRouteRecognizer(
-  store: KernelStore,
+  store: KernelStoreReadView,
   recognizerLocal: string,
   routeConfig: RouteConfigModel,
   contextReference: RouterReference,
@@ -351,7 +355,7 @@ function ownedRouteRecognizer(
 }
 
 function routeConfigContextRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   contextLocal: string,
   routeConfig: RouteConfigModel,
   parent: RouteConfigContextModel | null,
@@ -377,7 +381,7 @@ function routeConfigContextRecords(
 }
 
 function routeRecognizerRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   recognizerLocal: string,
   context: RouteConfigContextModel,
   recognizer: RouteRecognizerModel | null,

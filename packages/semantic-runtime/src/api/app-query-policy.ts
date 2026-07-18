@@ -19,6 +19,7 @@ import type {
 } from './contracts.js';
 import {
   SemanticAppQueryKind,
+  SemanticRuntimeDetail,
 } from './contracts.js';
 import {
   semanticAppQueryCatalogShape,
@@ -230,9 +231,12 @@ export function defaultInquiryProfileForRoutedAppQueryBatch(
 }
 
 export function shouldDisposeAppAfterRoutedQuery(
-  request: { readonly appRetention?: SemanticAppRetentionPolicy | null },
+  request: RoutedAppRetentionRequest,
   inquiryProfile: SemanticRuntimeInquiryProfile,
 ): boolean {
+  if (routedQueryRequiresRetainedApp(request)) {
+    return false;
+  }
   switch (request.appRetention) {
     case 'retain-app':
       return false;
@@ -245,11 +249,34 @@ export function shouldDisposeAppAfterRoutedQuery(
   }
 }
 
+/** Reject an answer boundary that would return opaque handles after revoking their owning app generation. */
+export function assertCompatibleRoutedAppRetention(request: RoutedAppRetentionRequest): void {
+  if (request.appRetention === 'dispose-app' && routedQueryRequiresRetainedApp(request)) {
+    throw new Error(
+      "Routed app queries with detail='handles' cannot use appRetention='dispose-app'; "
+      + 'opaque kernel handles remain navigable only while their app generation is retained.',
+    );
+  }
+}
+
+interface RoutedAppRetentionRequest {
+  readonly appRetention?: SemanticAppRetentionPolicy | null;
+  readonly detail?: SemanticAppQuery['detail'];
+  readonly queries?: readonly SemanticAppQuery[];
+  readonly typeSystemDependencyCacheClearPolicy?: SemanticTypeSystemDependencyCacheClearPolicy | null;
+}
+
+function routedQueryRequiresRetainedApp(request: RoutedAppRetentionRequest): boolean {
+  if (request.queries == null) {
+    return request.detail === SemanticRuntimeDetail.Handles;
+  }
+  return request.queries.some((query) =>
+    query.detail === SemanticRuntimeDetail.Handles && !isAppWorldFreeAppQuery(query)
+  );
+}
+
 export function typeSystemDependencyCacheClearPolicyForRoutedQuery(
-  request: {
-    readonly appRetention?: SemanticAppRetentionPolicy | null;
-    readonly typeSystemDependencyCacheClearPolicy?: SemanticTypeSystemDependencyCacheClearPolicy | null;
-  },
+  request: RoutedAppRetentionRequest,
   inquiryProfile: SemanticRuntimeInquiryProfile,
 ): SemanticTypeSystemDependencyCacheClearPolicy {
   if (request.typeSystemDependencyCacheClearPolicy != null) {

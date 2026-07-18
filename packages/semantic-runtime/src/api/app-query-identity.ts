@@ -185,11 +185,15 @@ export function semanticAppQueryLocusKey(
 
 export function semanticAppQueryEpochKeys(
   projectKey: string,
+  projectInputRevision: string,
   query: SemanticAppQuery,
 ): readonly string[] {
   const shapedQuery = semanticAppQueryCatalogShape(query);
   const sourceFilePath = shapedQuery.cursor?.filePath ?? shapedQuery.sourceFile?.filePath ?? null;
-  const keys = [semanticAppProjectEpochKey(projectKey)];
+  const keys = [
+    semanticAppProjectEpochKey(projectKey),
+    semanticAppProjectInputEpochKey(projectKey, projectInputRevision),
+  ];
   if (sourceFilePath != null) {
     keys.push(semanticAppSourceEpochKey(projectKey, sourceFilePath));
   }
@@ -199,22 +203,24 @@ export function semanticAppQueryEpochKeys(
 export function semanticRuntimeRoutedAppQueryEpochKeys(
   workspaceKey: string,
   projectKey: string,
+  projectInputRevision: string,
   query: SemanticAppQuery,
 ): readonly string[] {
   return [
     semanticRuntimeWorkspaceEpochKey(workspaceKey),
-    ...semanticAppQueryEpochKeys(projectKey, query),
+    ...semanticAppQueryEpochKeys(projectKey, projectInputRevision, query),
   ];
 }
 
 export function semanticRuntimeRoutedAppQueryBatchEpochKeys(
   workspaceKey: string,
   projectKey: string,
+  projectInputRevision: string,
   queries: readonly SemanticAppQuery[],
 ): readonly string[] {
   return [...new Set([
     semanticRuntimeWorkspaceEpochKey(workspaceKey),
-    ...queries.flatMap((query) => semanticAppQueryEpochKeys(projectKey, query)),
+    ...queries.flatMap((query) => semanticAppQueryEpochKeys(projectKey, projectInputRevision, query)),
   ])].sort();
 }
 
@@ -231,6 +237,10 @@ export function semanticAppSourceEpochKey(
 
 export function semanticAppProjectEpochKey(projectKey: string): string {
   return `project:${queryKeyPart(projectKey)}`;
+}
+
+export function semanticAppProjectInputEpochKey(projectKey: string, revision: string): string {
+  return `project-input:${queryKeyPart(projectKey)}:${queryKeyPart(revision)}`;
 }
 
 function normalizeQuerySourceFileKey(filePath: string): string {

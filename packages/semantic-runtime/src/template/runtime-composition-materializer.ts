@@ -7,6 +7,7 @@ import {
   ContainerContextResolverSlotRequest,
   type ContainerChildMaterializationEmission,
 } from '../di/container-materializer.js';
+import { FrameworkIntrinsicDiKey } from '../di/framework-intrinsic-di-key.js';
 import type { Container } from '../di/container.js';
 import {
   EvaluationStringValue,
@@ -1015,13 +1016,13 @@ function composedCustomElementContextResolverSlots(
   sourceAddressHandle: AddressHandle | null,
 ): readonly ContainerContextResolverSlotRequest[] {
   return [
-    'INode',
-    'IController',
-    'IInstruction',
-    'IRenderLocation',
-    'IViewFactory',
-    'IAuSlotsInfo',
-    'IHydrationContext',
+    FrameworkIntrinsicDiKey.INode,
+    FrameworkIntrinsicDiKey.IController,
+    FrameworkIntrinsicDiKey.IInstruction,
+    FrameworkIntrinsicDiKey.IRenderLocation,
+    FrameworkIntrinsicDiKey.IViewFactory,
+    FrameworkIntrinsicDiKey.IAuSlotsInfo,
+    FrameworkIntrinsicDiKey.IHydrationContext,
   ].map((name) => new ContainerContextResolverSlotRequest(name, sourceAddressHandle));
 }
 

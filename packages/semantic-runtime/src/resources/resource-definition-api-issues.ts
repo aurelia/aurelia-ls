@@ -10,12 +10,18 @@ import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   sourceSpanAddressForSite,
   type SourceSpanAddressPublication,
 } from '../kernel/source-address.js';
 import {
   KernelStore,
   KernelStoreBatch,
+  type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -93,6 +99,7 @@ export class ResourceDefinitionApiIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new ResourceIssuePublisher(store);
   }
@@ -109,10 +116,13 @@ export class ResourceDefinitionApiIssueMaterializer {
       ...source.records,
       ...publications.flatMap((publication) => publication.records),
     ];
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `resource-definition-api-issues:${project.projectKey}`));
-    }
-    this.store.productDetails.addAll(ResourceProductDetails.Issue, publications.map((publication) => publication.issue));
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `resource-definition-api-issues:${project.projectKey}`),
+      publishProductDetails(
+        ResourceProductDetails.Issue,
+        publications.map((publication) => publication.issue),
+      ),
+    ));
     return new ResourceDefinitionApiIssueProjectResult(
       publications.map((publication) => publication.issue),
       records,
@@ -126,7 +136,7 @@ export class ResourceDefinitionApiIssueMaterializer {
     site: ResourceDefinitionApiCallSite,
     index: number,
   ): readonly ResourceIssuePublication[] {
-    const issue = issueForResourceDefinitionApiCall(site, definitions, this.store);
+    const issue = issueForResourceDefinitionApiCall(site, definitions, this.publication);
     if (issue == null) {
       return [];
     }
@@ -174,7 +184,7 @@ export class ResourceDefinitionApiIssueMaterializer {
     local: string,
     site: ResourceDefinitionApiCallSite,
   ): SourceSpanAddressPublication {
-    return sourceSpanAddressForSite(this.store, local, site);
+    return sourceSpanAddressForSite(this.publication, local, site);
   }
 }
 
@@ -379,7 +389,7 @@ function sourceDeclarationReferenceForDeclaration(
 function issueForResourceDefinitionApiCall(
   site: ResourceDefinitionApiCallSite,
   definitions: readonly FullResourceDefinition[],
-  store: KernelStore,
+  store: KernelStoreReadView,
 ): {
   readonly issueKind: ResourceIssueKind;
   readonly message: string;
@@ -438,7 +448,7 @@ function issueForResourceDefinitionApiCall(
 function definitionCallIssue(
   site: ResourceDefinitionApiCallSite,
   definitions: readonly FullResourceDefinition[],
-  store: KernelStore,
+  store: KernelStoreReadView,
   expectedKind: ResourceDefinitionKind,
   issueKind: ResourceIssueKind,
   frameworkErrorCode: ResourceFrameworkErrorCode,
@@ -460,7 +470,7 @@ function definitionCallIssue(
 
 function resourceDefinitionExistsForTarget(
   definitions: readonly FullResourceDefinition[],
-  store: KernelStore,
+  store: KernelStoreReadView,
   expectedKind: ResourceDefinitionKind,
   target: SourceDeclarationReference,
 ): boolean {
@@ -471,17 +481,17 @@ function resourceDefinitionExistsForTarget(
 }
 
 function definitionTargetMatches(
-  store: KernelStore,
+  store: KernelStoreReadView,
   definition: FullResourceDefinition,
   target: SourceDeclarationReference,
 ): boolean {
-  const address = definition.target.addressHandle == null
+  const address = definition.target.declarationSourceAddressHandle == null
     ? null
-    : store.readAddress(definition.target.addressHandle);
+    : store.read(definition.target.declarationSourceAddressHandle);
   if (address?.kind !== 'source-span-address' || address.start !== target.start || address.end !== target.end) {
     return false;
   }
-  const file = store.readAddress(address.fileHandle);
+  const file = store.read(address.fileHandle);
   return file?.kind === 'source-file-address'
     && sourcePathEqual(file.path, target.sourcePath);
 }

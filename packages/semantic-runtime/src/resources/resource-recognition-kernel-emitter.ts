@@ -30,10 +30,9 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
-  KernelPublicationManifest,
   KernelPublicationPlan,
   publishProductDetail,
-  StagedKernelPublicationContext,
+  type KernelPublicationContext,
 } from '../kernel/publication.js';
 import { KernelStoreBatch } from '../kernel/store.js';
 import { projectModuleSourceNodeOrdinalLocalKey } from '../kernel/local-key.js';
@@ -64,7 +63,7 @@ export type ResourceRecognitionEmissionPhaseName =
   | 'kernel-emission:resource-identity-records'
   | 'kernel-emission:open-seam-records'
   | 'kernel-emission:definition-product-records'
-  | 'kernel-emission:batch-commit'
+  | 'kernel-emission:batch-publication'
   | 'kernel-emission:definition-header-details';
 
 export interface ResourceRecognitionEmissionPhaseTiming {
@@ -116,8 +115,10 @@ interface ResourceObservationParts {
 /** Emits source observations from resource recognition into the durable kernel graph. */
 export class ResourceRecognitionKernelEmitter {
   constructor(
-    /** Hot analysis store that receives resource-recognition records. */
+    /** Store that owns stable handles and committed upstream records. */
     readonly store: KernelStore,
+    /** Immediate or staged owner of the complete recognition publication. */
+    private readonly publication: KernelPublicationContext,
   ) {}
 
   emit(
@@ -126,10 +127,9 @@ export class ResourceRecognitionKernelEmitter {
   ): ResourceRecognitionKernelEmission {
     const started = performance.now();
     const phases: ResourceRecognitionEmissionPhaseTiming[] = [];
-    const staged = new StagedKernelPublicationContext(this.store, KernelPublicationManifest.empty);
     const publication = new ResourceRecognitionPublicationSupport(
       this.store,
-      staged,
+      this.publication,
       (name, read) => measureResourceRecognitionEmissionPhase(phases, name, read),
     );
     const records: KernelStoreRecord[] = [];
@@ -143,22 +143,23 @@ export class ResourceRecognitionKernelEmitter {
         }
       });
     });
-    measureResourceRecognitionEmissionPhase(phases, 'kernel-emission:definition-header-details', () => {
-      staged.publish(new KernelPublicationPlan(
+    const plan = measureResourceRecognitionEmissionPhase(
+      phases,
+      'kernel-emission:definition-header-details',
+      () => new KernelPublicationPlan(
         new KernelStoreBatch(records, `resource-recognition:${context.moduleKey}`),
         definitions.map((definition) => publishProductDetail(
           ResourceProductDetails.DefinitionHeader,
           definition.productHandle,
           definition,
         )),
-      ));
-    });
-    measureResourceRecognitionEmissionPhase(phases, 'kernel-emission:batch-commit', () => {
-      const plan = staged.toPlan(`resource-recognition:${context.moduleKey}`);
-      if (plan.batch.records.length > 0 || plan.productDetails.length > 0 || plan.hotDetails.length > 0) {
-        this.store.replacePublication(KernelPublicationManifest.empty, plan);
-      }
-    });
+      ),
+    );
+    measureResourceRecognitionEmissionPhase(
+      phases,
+      'kernel-emission:batch-publication',
+      () => this.publication.publish(plan),
+    );
     return new ResourceRecognitionKernelEmission(definitions, records, {
       totalMilliseconds: performance.now() - started,
       phases,

@@ -9,6 +9,11 @@ import {
   ComputationCommitState,
 } from '../src/kernel/computation-lifecycle.js';
 import { KernelPublicationDecisionKind } from '../src/kernel/publication.js';
+import {
+  NodeSemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputAuthority,
+  type SemanticRuntimeProjectInputScope,
+} from '../src/kernel/project-input.js';
 import { SourceTextSnapshotAuthority } from '../src/kernel/source-text-snapshot.js';
 import { ResourceProductDetails } from '../src/resources/product-details.js';
 import { CustomAttributeDefinition } from '../src/resources/custom-attribute-definition.js';
@@ -58,6 +63,16 @@ class MutableTemplateSourceProvider {
   }
 }
 
+function mutableSourceSnapshotAuthority(
+  project: SemanticRuntimeProjectInputScope,
+  sourceProvider: MutableTemplateSourceProvider,
+): SourceTextSnapshotAuthority {
+  const inputAuthority = new SemanticRuntimeProjectInputAuthority(
+    new NodeSemanticRuntimeProjectInputHost(sourceProvider),
+  );
+  return new SourceTextSnapshotAuthority(inputAuthority.capture(project));
+}
+
 describe('template family computation', () => {
   test('consumes the complete cohort authority published by the production project pass', async () => {
     const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -82,7 +97,8 @@ describe('template family computation', () => {
     const compiler = new TemplateCompilationComputationService(
       runtime.workspace.store,
       runtime.computationLifecycle,
-      new SourceTextSnapshotAuthority(sourceProvider),
+      mutableSourceSnapshotAuthority(app.project, sourceProvider),
+      runtime.frameworkSupport,
     );
     const attempt = compiler.prepare(new TemplateCompilationComputationRequest(
       app.project.projectKey,
@@ -137,7 +153,8 @@ describe('template family computation', () => {
     const compiler = new TemplateCompilationComputationService(
       store,
       lifecycle,
-      new SourceTextSnapshotAuthority(sourceProvider),
+      mutableSourceSnapshotAuthority(app.project, sourceProvider),
+      runtime.frameworkSupport,
     );
     const unrelatedBaselineProduct = store.read(baseline.compiledTemplate.compiledTemplate.productHandle);
 
@@ -323,7 +340,8 @@ describe('template family computation', () => {
     const compiler = new TemplateCompilationComputationService(
       store,
       lifecycle,
-      new SourceTextSnapshotAuthority(sourceProvider),
+      mutableSourceSnapshotAuthority(app.project, sourceProvider),
+      runtime.frameworkSupport,
     );
     const request = new TemplateCompilationComputationRequest(
       app.project.projectKey,

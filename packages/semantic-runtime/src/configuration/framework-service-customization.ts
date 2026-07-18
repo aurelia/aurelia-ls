@@ -18,6 +18,11 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   AttributeMapperConfiguration,
   AttributeMapperMapping,
   AttributeMapperTwoWayRule,
@@ -301,8 +306,13 @@ class FrameworkServiceCustomizationDraft {
  * runtime state, while this recognizer admits only configuration calls whose arguments close through static evaluation.
  */
 export class FrameworkServiceCustomizationRecognitionPass {
-  recognize(store: KernelStore, configuration: ConfigurationRecognitionProjectResult): FrameworkServiceCustomizationProjectResult {
-    const draft = new FrameworkServiceCustomizationDraft(new ConfigurationIssuePublisher(store));
+  constructor(
+    private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
+  ) {}
+
+  recognize(configuration: ConfigurationRecognitionProjectResult): FrameworkServiceCustomizationProjectResult {
+    const draft = new FrameworkServiceCustomizationDraft(new ConfigurationIssuePublisher(this.store));
     const evaluatedByAdmission = new Map(
       configuration.evaluation.readEvaluatedSources().map((source) => [source.admission.addressHandle, source]),
     );
@@ -342,12 +352,13 @@ export class FrameworkServiceCustomizationRecognitionPass {
       }
     }
     const result = draft.toResult();
-    if (result.records.length > 0) {
-      store.commit(new KernelStoreBatch(result.records, `framework-service-customization:${configuration.project.projectKey}`));
-      for (const issue of result.issues) {
-        store.productDetails.add(ConfigurationProductDetails.Issue, issue.productHandle, issue);
-      }
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(
+        result.records,
+        `framework-service-customization:${configuration.project.projectKey}`,
+      ),
+      publishProductDetails(ConfigurationProductDetails.Issue, result.issues),
+    ));
     return result;
   }
 }

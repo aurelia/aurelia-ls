@@ -30,10 +30,16 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetail,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import type { SourceSpanSite } from '../kernel/source-address.js';
 import {
-  KernelStore,
   KernelStoreBatch,
+  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
@@ -135,6 +141,7 @@ interface RuntimeEffectObservedDependencyPublication {
 export class RuntimeEffectMaterializer {
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   materialize(
@@ -144,23 +151,20 @@ export class RuntimeEffectMaterializer {
     const publications = readRuntimeEffectSourceSites(project, typeSystem)
       .map((site, index) => this.publicationForSite(project, typeSystem, site, index));
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `runtime-effects:${project.projectKey}`));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(
-        ObservationProductDetails.RuntimeEffect,
-        publication.effect.productHandle!,
-        publication.effect,
-      );
-      for (const dependency of publication.effect.observedDependencies) {
-        this.store.productDetails.add(
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `runtime-effects:${project.projectKey}`),
+      [
+        ...publications.map((publication) => publishProductDetail(
+          ObservationProductDetails.RuntimeEffect,
+          publication.effect.productHandle!,
+          publication.effect,
+        )),
+        ...publishProductDetails(
           ObservationProductDetails.RuntimeEffectObservedDependency,
-          dependency.productHandle,
-          dependency,
-        );
-      }
-    }
+          publications.flatMap((publication) => publication.effect.observedDependencies),
+        ),
+      ],
+    ));
     return new RuntimeEffectProjectResult(publications.map((publication) => publication.effect));
   }
 
@@ -190,6 +194,7 @@ export class RuntimeEffectMaterializer {
     );
     const dependencies = runtimeEffectObservedDependenciesForSite(
       this.store,
+      this.publication,
       `${local}:observed-dependency`,
       site,
       effectReference,
@@ -454,7 +459,7 @@ function parameterIsInjectedObservation(
   }
   const injectArguments = classInjectArguments(classNode, bindings);
   return injectArguments[parameterIndex] != null
-    && expressionReferencesObservationKey(injectArguments[parameterIndex]!, bindings);
+    && expressionReferencesObservationKey(injectArguments[parameterIndex], bindings);
 }
 
 function classInjectArguments(
@@ -521,13 +526,14 @@ function watchImmediateOption(
 
 function runtimeEffectObservedDependenciesForSite(
   store: KernelStore,
+  publication: KernelPublicationContext,
   local: string,
   site: RuntimeEffectSourceSite,
   effect: RuntimeEffectReference,
   typeSystem: TypeSystemProject,
   provenanceHandle: ProvenanceHandle,
 ): readonly RuntimeEffectObservedDependencyPublication[] {
-  const drafts = observedDependencyDraftsForEffectSite(store, site, typeSystem);
+  const drafts = observedDependencyDraftsForEffectSite(store, publication, site, typeSystem);
   return distinctRuntimeObservedDependencyDrafts(drafts).map((draft, index) =>
     runtimeEffectObservedDependencyForDraft(store, `${local}:${index}`, site, effect, draft, index, provenanceHandle)
   );
@@ -535,6 +541,7 @@ function runtimeEffectObservedDependenciesForSite(
 
 function observedDependencyDraftsForEffectSite(
   store: KernelStore,
+  publication: KernelPublicationContext,
   site: RuntimeEffectSourceSite,
   typeSystem: TypeSystemProject,
 ): readonly RuntimeObservedDependencyDraft[] {
@@ -561,16 +568,17 @@ function observedDependencyDraftsForEffectSite(
   if (site.getter != null) {
     return ProxyObservable.collectObservedDependencyDrafts(
       site.getter,
-      ProxyObservable.typeContextForTypeSystem(typeSystem, store, store),
+      ProxyObservable.typeContextForTypeSystem(typeSystem, store, publication),
     );
   }
   return site.runFunction == null
     ? []
-    : collectRunEffectObservedDependencyDrafts(store, site.runFunction, typeSystem);
+    : collectRunEffectObservedDependencyDrafts(store, publication, site.runFunction, typeSystem);
 }
 
 function collectRunEffectObservedDependencyDrafts(
   store: KernelStore,
+  publication: KernelPublicationContext,
   declaration: ts.FunctionLikeDeclaration,
   typeSystem: TypeSystemProject,
 ): readonly RuntimeObservedDependencyDraft[] {
@@ -584,7 +592,7 @@ function collectRunEffectObservedDependencyDrafts(
       return;
     }
     if (ts.isPropertyAccessExpression(node)) {
-      const draft = observablePropertyReadDraft(store, node, typeSystem);
+      const draft = observablePropertyReadDraft(store, publication, node, typeSystem);
       if (draft != null) {
         rows.set(runtimeObservedDependencySemanticKey(draft), draft);
       }
@@ -598,6 +606,7 @@ function collectRunEffectObservedDependencyDrafts(
 
   function observablePropertyReadDraft(
     store: KernelStore,
+    publication: KernelPublicationContext,
     expression: ts.PropertyAccessExpression,
     typeSystem: TypeSystemProject,
   ): RuntimeObservedDependencyDraft | null {
@@ -613,7 +622,11 @@ function collectRunEffectObservedDependencyDrafts(
       memberName: expression.name.text,
       keyExpression: null,
       methodName: null,
-      ...observedMemberSourceFields(observedMemberSourceForCheckerSymbol(store, store, symbol)),
+      ...observedMemberSourceFields(observedMemberSourceForCheckerSymbol(
+        publication,
+        typeSystem.checker,
+        symbol,
+      )),
       spanStart: expression.getStart(sourceFile),
       spanEnd: expression.end,
     };

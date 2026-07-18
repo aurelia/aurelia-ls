@@ -34,6 +34,11 @@ import {
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   recordsForSourceOpenSeams,
   type SourceOpenSeamInput,
 } from '../kernel/source-open-seam.js';
@@ -113,6 +118,7 @@ export class FrameworkServiceRootMaterializationResult extends FrameworkServiceR
 export class FrameworkServiceRootMaterializer {
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   materializeAndEmit(
@@ -135,16 +141,13 @@ export class FrameworkServiceRootMaterializer {
       ...allPublications.flatMap((publication) => publication.records),
       ...candidateSeams.records,
     ];
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `framework-service-roots:${project.projectKey}`));
-    }
-    for (const publication of allPublications) {
-      this.store.productDetails.add(
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `framework-service-roots:${project.projectKey}`),
+      publishProductDetails(
         FrameworkProductDetails.ServiceRoot,
-        publication.root.productHandle,
-        publication.root,
-      );
-    }
+        allPublications.map((publication) => publication.root),
+      ),
+    ));
     const enrichedRoots = sourceApiRoots.withFrameworkServiceRootProducts(rootFactsForPublications(allPublications));
     return new FrameworkServiceRootMaterializationResult(
       allPublications.map((publication) => publication.root),

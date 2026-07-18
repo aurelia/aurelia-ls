@@ -30,6 +30,7 @@ import {
 import {
   KernelStoreBatch,
   type KernelStore,
+  type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -92,6 +93,7 @@ import type {
   CompilerBindingCommandResource,
 } from './syntax-resource-materializer.js';
 import { SyntaxResourceExecutableMaterializer } from './syntax-resource-materializer.js';
+import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 
 export interface BuiltInSyntaxCatalogInput {
   readonly packageId: BuiltInSyntaxPackage;
@@ -599,21 +601,27 @@ export class BuiltInSyntaxCatalogMaterializer {
  * built-in syntax catalogs available to later attribute-parser and binding-command resolver input.
  */
 export class ConfiguredBuiltInSyntaxCatalogMaterializer {
-  private readonly catalogMaterializer: BuiltInSyntaxCatalogMaterializer;
-
   constructor(
-    /** Hot analysis store that receives configured syntax-catalog selection records. */
+    /** Store used for deterministic configured-selection handles. */
     readonly store: KernelStore,
-  ) {
-    this.catalogMaterializer = new BuiltInSyntaxCatalogMaterializer(store, store);
-  }
+    /** App generation that owns configured syntax selections. */
+    private readonly publication: KernelPublicationContext,
+    /** Stable owner of checker-independent built-in syntax catalogs. */
+    private readonly support: FrameworkSupportCatalogs,
+  ) {}
 
   materialize(configuration: ConfigurationKernelEmission): ConfiguredBuiltInSyntaxCatalogEmission {
-    const selectionRequests = readConfiguredSyntaxCatalogRequests(configuration, this.store);
+    const selectionRequests = readConfiguredSyntaxCatalogRequests(configuration, this.publication);
     const catalogEmission = this.catalogEmissionForRequests(selectionRequests);
     const selectionEmission = this.selectionEmissionForRequests(selectionRequests, catalogEmission);
-    this.commitSelectionRecords(selectionEmission.records);
-    this.registerSelectionDetails(selectionEmission.selections);
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(selectionEmission.records, 'configured-built-in-syntax-catalogs'),
+      selectionEmission.selections.map((selection) => publishProductDetail(
+        TemplateProductDetails.ConfiguredBuiltInSyntaxCatalogSelection,
+        selection.productHandle,
+        selection,
+      )),
+    ));
 
     return new ConfiguredBuiltInSyntaxCatalogEmission(
       catalogEmission,
@@ -629,7 +637,7 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
       selectionRequests.flatMap((request) => request.catalogInputs),
       syntaxCatalogInputKey,
     );
-    return this.catalogMaterializer.materialize(catalogInputs);
+    return this.support.materializeSyntaxCatalogs(catalogInputs);
   }
 
   private selectionEmissionForRequests(
@@ -648,7 +656,7 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
         continue;
       }
       const emission = this.recordsForSelection(request.admission, request.frameworkKind, catalogs);
-      if (this.store.readProduct(emission.selection.productHandle) == null) {
+      if (this.publication.read(emission.selection.productHandle) == null) {
         records.push(...emission.records);
       }
       selections.push(emission.selection);
@@ -663,22 +671,6 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
     return request.catalogInputs
       .map((catalogInput) => catalogsByKey.get(syntaxCatalogInputKey(catalogInput)) ?? null)
       .filter((catalog): catalog is BuiltInSyntaxCatalog => catalog != null);
-  }
-
-  private commitSelectionRecords(records: readonly KernelStoreRecord[]): void {
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'configured-built-in-syntax-catalogs'));
-    }
-  }
-
-  private registerSelectionDetails(selections: readonly ConfiguredBuiltInSyntaxCatalogSelection[]): void {
-    for (const selection of selections) {
-      this.store.productDetails.addIfAbsent(
-        TemplateProductDetails.ConfiguredBuiltInSyntaxCatalogSelection,
-        selection.productHandle,
-        selection,
-      );
-    }
   }
 
   private recordsForSelection(
@@ -810,7 +802,7 @@ class ConfiguredSyntaxCatalogRequest {
 
 function readConfiguredSyntaxCatalogRequests(
   configuration: ConfigurationKernelEmission,
-  store: KernelStore,
+  store: KernelStoreReadView,
 ): readonly ConfiguredSyntaxCatalogRequest[] {
   const requests: ConfiguredSyntaxCatalogRequest[] = [];
   for (const admission of configuration.registrationAdmissions) {
@@ -831,7 +823,7 @@ function syntaxCatalogInputsForAdmission(
   frameworkKind: FrameworkRegistrationKind,
   admission: RegistrationAdmissionProduct,
   configuration: ConfigurationKernelEmission,
-  store: KernelStore,
+  store: KernelStoreReadView,
 ): readonly BuiltInSyntaxCatalogInput[] {
   const inputs: BuiltInSyntaxCatalogInput[] = [];
   for (const capability of frameworkRegistrationCapabilitiesForKind(frameworkKind)) {
@@ -883,7 +875,7 @@ function syntaxCatalogInputsForAdmission(
 function readI18nTranslationAttributeAliases(
   admission: RegistrationAdmissionProduct,
   configuration: ConfigurationKernelEmission,
-  store: KernelStore,
+  store: KernelStoreReadView,
 ): readonly string[] | null {
   let aliases: readonly string[] | null = null;
 
@@ -919,15 +911,15 @@ function isI18nTranslationAliasContribution(
 }
 
 function sourceSpanHandleContains(
-  store: KernelStore,
+  store: KernelStoreReadView,
   containerHandle: AddressHandle | null,
   candidateHandle: AddressHandle | null,
 ): boolean {
   if (containerHandle == null || candidateHandle == null) {
     return false;
   }
-  const container = store.readAddress(containerHandle);
-  const candidate = store.readAddress(candidateHandle);
+  const container = store.read(containerHandle);
+  const candidate = store.read(candidateHandle);
   return container instanceof SourceSpanAddress
     && candidate instanceof SourceSpanAddress
     && sourceSpanContains(container, candidate);

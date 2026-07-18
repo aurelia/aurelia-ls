@@ -8,7 +8,7 @@ import type {
 import {
   sourceSpanAddressForAddress,
 } from '../kernel/source-address.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelStore, KernelStoreReadView } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type {
   RuntimeBindingDataFlow,
@@ -102,7 +102,7 @@ export function resourceLocalTemplateInstructions(
 }
 
 export function resourceLocalRuntimeBindings(
-  store: KernelStore,
+  store: KernelStoreReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly RuntimeBinding[] {
   return resource.runtimeAnalysis.runtimeRendering.bindings.filter((binding) =>
@@ -111,7 +111,7 @@ export function resourceLocalRuntimeBindings(
 }
 
 export function resourceLocalBindingTargetAccesses(
-  store: KernelStore,
+  store: KernelStoreReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly RuntimeBindingTargetAccess[] {
   return resource.runtimeAnalysis.controllerBind.targetAccesses.filter((access) =>
@@ -120,7 +120,7 @@ export function resourceLocalBindingTargetAccesses(
 }
 
 export function resourceLocalBindingSourceOperations(
-  store: KernelStore,
+  store: KernelStoreReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly RuntimeBindingSourceOperation[] {
   return resource.runtimeAnalysis.controllerBind.sourceOperations.filter((operation) =>
@@ -129,7 +129,7 @@ export function resourceLocalBindingSourceOperations(
 }
 
 export function resourceLocalBindingBehaviorApplications(
-  store: KernelStore,
+  store: KernelStoreReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly RuntimeBindingBehaviorApplication[] {
   return resource.runtimeAnalysis.bindingBehavior.applications.filter((application) =>
@@ -138,7 +138,7 @@ export function resourceLocalBindingBehaviorApplications(
 }
 
 export function resourceLocalValueConverterApplications(
-  store: KernelStore,
+  store: KernelStoreReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly RuntimeValueConverterApplication[] {
   return resource.runtimeAnalysis.valueConverter.applications.filter((application) =>
@@ -147,7 +147,7 @@ export function resourceLocalValueConverterApplications(
 }
 
 export function resourceLocalBindingTargetOperations(
-  store: KernelStore,
+  store: KernelStoreReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly RuntimeBindingTargetOperation[] {
   return [
@@ -161,7 +161,7 @@ export function resourceLocalBindingTargetOperations(
 }
 
 export function resourceLocalBindingValueChannels(
-  store: KernelStore,
+  store: KernelStoreReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly RuntimeBindingValueChannel[] {
   return resource.runtimeAnalysis.bindingValueChannel.valueChannels.filter((valueChannel) =>
@@ -170,7 +170,7 @@ export function resourceLocalBindingValueChannels(
 }
 
 export function resourceLocalBindingDataFlows(
-  store: KernelStore,
+  store: KernelStoreReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly RuntimeBindingDataFlow[] {
   return resource.runtimeAnalysis.bindingDataFlow.dataFlows.filter((dataFlow) =>
@@ -179,7 +179,7 @@ export function resourceLocalBindingDataFlows(
 }
 
 export function resourceLocalBindingObservedDependencies(
-  store: KernelStore,
+  store: KernelStoreReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly RuntimeBindingObservedDependency[] {
   return resource.runtimeAnalysis.bindingDataFlow.observedDependencies.filter((dependency) =>
@@ -188,7 +188,7 @@ export function resourceLocalBindingObservedDependencies(
 }
 
 function runtimeBindingReferenceBelongsToResource(
-  store: KernelStore,
+  store: KernelStoreReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
   binding: RuntimeBindingReference,
 ): boolean {
@@ -228,7 +228,7 @@ function controllerTemplateOwnerDefinitionProductHandle(
 }
 
 function sourceAddressBelongsToResourceTemplate(
-  store: KernelStore,
+  store: KernelStoreReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
   addressHandle: AddressHandle | null,
 ): boolean {
@@ -274,7 +274,7 @@ function dynamicInstructionBelongsToResource(
 }
 
 function sourceAddressResourceOwnership(
-  store: KernelStore,
+  store: KernelStoreReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
   addressHandle: AddressHandle | null,
 ): boolean | null {

@@ -36,10 +36,12 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStore,
-  type KernelStoreRecord,
-} from '../kernel/store.js';
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type { KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ProjectBootFrame, SourceFileAdmission } from '../boot/frames.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
@@ -303,7 +305,7 @@ export class RouteConfigRecognitionProjectResult {
 /** Recognize source-backed router route configs without executing navigation or recognizer state. */
 export class RouteConfigRecognitionProjectPass {
   recognizeAndEmit(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
     evaluation: StaticProjectEvaluationResult,
     resourceIndex: ResourceDefinitionIndex,
@@ -311,13 +313,13 @@ export class RouteConfigRecognitionProjectPass {
     return new RouteConfigRecognitionProjectResult(
       project,
       evaluation.sources.map((source) =>
-        this.recognizeSource(store, project, source, resourceIndex)
+        this.recognizeSource(publication, project, source, resourceIndex)
       ),
     );
   }
 
   private recognizeSource(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
     source: StaticProjectEvaluationResult['sources'][number],
     resourceIndex: ResourceDefinitionIndex,
@@ -335,7 +337,7 @@ export class RouteConfigRecognitionProjectPass {
       resourceIndex,
     );
     const observations = recognizeRouteConfigs(context);
-    const emittedSubtrees = new RouteConfigKernelEmitter(store).emit(context, observations);
+    const emittedSubtrees = new RouteConfigKernelEmitter(publication).emit(context, observations);
     return new RouteConfigRecognitionSourceResult(
       source.admission,
       source.moduleKey,
@@ -347,7 +349,7 @@ export class RouteConfigRecognitionProjectPass {
 
 class RouteConfigKernelEmitter {
   constructor(
-    readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   emit(
@@ -358,12 +360,13 @@ class RouteConfigKernelEmitter {
       this.emitRouteConfigSubtree(context, observation, `${context.projectKey}:${context.moduleKey}:${index}`, null)
     );
     const records = emittedSubtrees.flatMap((subtree) => subtree.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `router-route-config-contribution:${context.moduleKey}`));
-      for (const contribution of emittedSubtrees.flatMap((subtree) => subtree.subtreeContributions)) {
-        this.store.productDetails.add(RouterProductDetails.RouteConfigContribution, contribution.productHandle, contribution);
-      }
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `router-route-config-contribution:${context.moduleKey}`),
+      publishProductDetails(
+        RouterProductDetails.RouteConfigContribution,
+        emittedSubtrees.flatMap((subtree) => subtree.subtreeContributions),
+      ),
+    ));
     return emittedSubtrees;
   }
 
@@ -374,8 +377,8 @@ class RouteConfigKernelEmitter {
     parentIdentityHandle: IdentityHandle | null,
   ): RouteConfigSubtreeEmission {
     const sources = this.recordsForRouteConfigSources(context, observation, local);
-    const productHandle = this.store.handles.product(`router-route-config-contribution:${local}`);
-    const identityHandle = this.store.handles.identity(`router-route-config-contribution:${local}`);
+    const productHandle = this.publication.handles.product(`router-route-config-contribution:${local}`);
+    const identityHandle = this.publication.handles.identity(`router-route-config-contribution:${local}`);
     const routeables = this.routeableComponentEmissions(context, observation, local, identityHandle);
     const childSubtrees = this.emitChildRouteConfigSubtrees(context, observation, local, identityHandle);
     const contribution = this.contributionModelForObservation(
@@ -472,8 +475,8 @@ class RouteConfigKernelEmitter {
       );
       const sourceAddressHandle = issueSource.addressHandle;
       const model = new RouterIssueModel(
-        this.store.handles.product(issueLocal),
-        this.store.handles.identity(issueLocal),
+        this.publication.handles.product(issueLocal),
+        this.publication.handles.identity(issueLocal),
         observed.phase,
         observed.issueKind,
         observed.message,
@@ -494,7 +497,7 @@ class RouteConfigKernelEmitter {
       models.push(model);
       records.push(
         ...issueSource.records,
-        ...routerIssueProductRecords(this.store, {
+        ...routerIssueProductRecords(this.publication, {
           local: issueLocal,
           issue: model,
           ownerHandle: contribution.identityHandle,
@@ -554,7 +557,7 @@ class RouteConfigKernelEmitter {
     contribution: RouteConfigContributionModel,
     parentIdentityHandle: IdentityHandle | null,
   ): readonly KernelStoreRecord[] {
-    return routerIdentityProductRecords(this.store, {
+    return routerIdentityProductRecords(this.publication, {
       local: `router-route-config-contribution:${local}`,
       productHandle: contribution.productHandle,
       identityHandle: contribution.identityHandle,
@@ -651,8 +654,8 @@ class RouteConfigKernelEmitter {
       `router-routeable:${local}:source`,
       'Router routeable component reference.',
     );
-    const productHandle = this.store.handles.product(`router-routeable:${local}`);
-    const identityHandle = this.store.handles.identity(`router-routeable:${local}`);
+    const productHandle = this.publication.handles.product(`router-routeable:${local}`);
+    const identityHandle = this.publication.handles.identity(`router-routeable:${local}`);
     const routeable = this.routeableComponentModel(observation, source, productHandle, identityHandle);
     return new RouteableComponentEmission(
       [
@@ -691,7 +694,7 @@ class RouteConfigKernelEmitter {
     identityHandle: IdentityHandle,
     ownerIdentityHandle: IdentityHandle,
   ): readonly KernelStoreRecord[] {
-    return routerIdentityProductRecords(this.store, {
+    return routerIdentityProductRecords(this.publication, {
       local: `router-routeable:${local}`,
       productHandle,
       identityHandle,
@@ -709,9 +712,9 @@ class RouteConfigKernelEmitter {
     local: string,
     evidenceSummary: string,
   ): SourceRecordSet {
-    const addressHandle = this.store.handles.address(local);
-    const evidenceHandle = this.store.handles.evidence(local);
-    const provenanceHandle = this.store.handles.provenance(local);
+    const addressHandle = this.publication.handles.address(local);
+    const evidenceHandle = this.publication.handles.evidence(local);
+    const provenanceHandle = this.publication.handles.provenance(local);
     return new SourceRecordSet(
       [
         new SourceSpanAddress(

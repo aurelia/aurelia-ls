@@ -31,11 +31,11 @@ later materializers that consume admitted sources and emit their own evidence, c
   resource-library, or all-package scope before paying TypeChecker/evaluator/materializer cost.
 - Share package-manifest, directory, and path-normalization host helpers through `host-files.ts` so project discovery,
   compiler-option construction, evaluation module resolution, and future boot inputs do not grow parallel filesystem
-  micro-policies. Package manifests are cached at this host boundary for the current process.
-- Cache project compiler-option shapes by project root for the current process and clone them on read. Static
-  evaluation and TypeSystem construction both need the same filesystem-derived tsconfig/path-mapping shape during one
-  app open; caching this at boot avoids repeating package/source-root discovery without sharing a mutable
-  `ts.CompilerOptions` object between TypeScript consumers.
+  micro-policies. Package-manifest and directory reads flow through the captured project-input host, so their
+  memoization is bounded by that immutable generation rather than a process-global path cache.
+- Capture one immutable project-input host generation before an app open and build one compiler-options result on its
+  `ProjectBootFrame`. Static evaluation and TypeSystem construction spend that same result, so tsconfig/path-mapping
+  shape cannot split within a candidate generation and no process-global project-root cache can outlive changed input.
 - Admit package-source roots from local workspace manifests and, during clean-room pressure runs, from
   `SEMANTIC_RUNTIME_EXTERNAL_SOURCE_ROOTS` / `ATLAS_EXTERNAL_SOURCE_ROOTS`. These roots supply TypeScript path
   mappings for sibling/plugin package source; they are input wiring, not checked-in app facts.
@@ -79,8 +79,7 @@ source without copying those paths into fixtures or durable docs. Materializers 
 configuration, and registration bodies in the linked package source if project evaluation reaches those modules through
 ordinary import edges.
 
-Project compiler-option caching is a CPU/read-amplification trade-off, not a semantic claim about the app. It caches
-small configuration objects and path-mapping strings, while app-world products, TypeScript dependency SourceFiles, and
-query outcomes retain their own lifetimes. If a long-lived host changes tsconfig or workspace/package wiring, it should
-restart the semantic-runtime session or clear that boot cache through the owning control path once a config-epoch
-invalidation policy exists.
+Boot admissions define project/source membership for the runtime session. Existing admitted file contents, tsconfig,
+and package wiring are read through `SemanticRuntimeProjectInputAuthority`; advancing that authority revokes captured
+hosts and lets the next app request rebuild compiler options and semantic products coherently. Project discovery,
+newly admitted files, and removed project frames are topology changes and still require a fresh booted runtime.

@@ -1,11 +1,18 @@
 import type { AddressHandle, EvidenceHandle, ProvenanceHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
-import type { SemanticRuntimeSourceTextProvider } from '../kernel/source-text-provider.js';
+import {
+  type SemanticRuntimeProjectInputAuthority,
+  type SemanticRuntimeProjectInputGeneration,
+} from '../kernel/project-input.js';
 import type {
   SourceFileRole,
   SourceLanguage,
 } from '../kernel/address.js';
 import type { SourceDiscoveryOptions } from './source-discovery.js';
+import {
+  buildProjectCompilerOptionsResult,
+  type ProjectCompilerOptionsResult,
+} from './project-compiler-options.js';
 
 /** Input source admitted during boot before Aurelia semantics are interpreted. */
 export interface BootSourceFileInput {
@@ -43,8 +50,8 @@ export interface BootWorkspaceInput {
   readonly projects?: readonly BootProjectInput[];
   /** Project discovery strategy used when `projects` is omitted. */
   readonly projectDiscovery?: BootProjectDiscoveryMode | `${BootProjectDiscoveryMode}`;
-  /** Host-provided source text for editor buffers or other non-filesystem source epochs. */
-  readonly sourceTextProvider?: SemanticRuntimeSourceTextProvider | null;
+  /** Runtime-owned authority for coherent source/config generations. */
+  readonly projectInputAuthority?: SemanticRuntimeProjectInputAuthority;
 }
 
 export const enum BootProjectDiscoveryMode {
@@ -92,6 +99,9 @@ export class SourceFileAdmission {
 
 /** Booted project frame before TypeScript or Aurelia semantics are interpreted. */
 export class ProjectBootFrame {
+  /** One config/compiler-options product derived from this frame's captured input generation. */
+  readonly compilerOptions: ProjectCompilerOptionsResult;
+
   constructor(
     /** Workspace root that owns this project frame. */
     readonly workspaceRootDir: string,
@@ -103,9 +113,32 @@ export class ProjectBootFrame {
     readonly sourceFiles: readonly SourceFileAdmission[],
     /** Discovery result when boot discovered sources itself; null when the host supplied sources. */
     readonly sourceDiscovery: SourceDiscoveryResult | null = null,
-    /** Host-provided source text for editor buffers or other non-filesystem source epochs. */
-    readonly sourceTextProvider: SemanticRuntimeSourceTextProvider | null = null,
-  ) {}
+    /** Exact source/config generation consumed by this project frame. */
+    readonly inputGeneration: SemanticRuntimeProjectInputGeneration,
+  ) {
+    this.compilerOptions = buildProjectCompilerOptionsResult(
+      inputGeneration.host,
+      rootDir,
+      [workspaceRootDir],
+    );
+  }
+
+  /** Rebind immutable boot admissions to a newly captured source/config generation. */
+  forInputGeneration(inputGeneration: SemanticRuntimeProjectInputGeneration): ProjectBootFrame {
+    if (inputGeneration.projectKey !== this.projectKey || inputGeneration.rootDir !== this.inputGeneration.rootDir) {
+      throw new Error(`Project-input generation ${inputGeneration.revision} does not belong to ${this.projectKey}.`);
+    }
+    return inputGeneration === this.inputGeneration
+      ? this
+      : new ProjectBootFrame(
+          this.workspaceRootDir,
+          this.rootDir,
+          this.projectKey,
+          this.sourceFiles,
+          this.sourceDiscovery,
+          inputGeneration,
+        );
+  }
 }
 
 /** Booted workspace frame and the hot kernel store it populated. */
@@ -119,5 +152,7 @@ export class WorkspaceBootFrame {
     readonly store: KernelStore,
     /** Project frames admitted into this workspace. */
     readonly projects: readonly ProjectBootFrame[],
+    /** Sole source/config generation authority for every project in this runtime. */
+    readonly projectInputAuthority: SemanticRuntimeProjectInputAuthority,
   ) {}
 }

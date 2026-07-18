@@ -7,6 +7,7 @@ import {
   type ContainerChildMaterializationPhaseName,
   type ContainerChildMaterializationEmission,
 } from '../di/container-materializer.js';
+import { FrameworkIntrinsicDiKey } from '../di/framework-intrinsic-di-key.js';
 import { ContainerLookupState } from '../di/container-lookup.js';
 import { DiKeyIdentityEmitter } from '../di/di-key-identity-emitter.js';
 import { DiResourceSlotPublicationMaterializer } from '../di/world-publication.js';
@@ -576,7 +577,7 @@ export class RuntimeControllerCreationMaterializer {
     if (creation.creationKind === RuntimeControllerCreationKind.TemplateController) {
       return;
     }
-    const sites = readControllerActivationViewFactoryResolveSites(this.store, this.publication, definition);
+    const sites = readControllerActivationViewFactoryResolveSites(this.publication, definition);
     sites.forEach((site, index) => {
       const publication = this.controllerIssuePublisher.publish(
         `${creation.local}:controller-issue:view-factory-provider:${index}`,
@@ -1273,15 +1274,15 @@ function contextResolverSlotsForController(
   creation: RuntimeControllerCreationRequest,
 ): readonly ContainerContextResolverSlotRequest[] {
   const common = [
-    'INode',
-    'IController',
-    'IInstruction',
-    'IRenderLocation',
-    'IViewFactory',
-    'IAuSlotsInfo',
+    FrameworkIntrinsicDiKey.INode,
+    FrameworkIntrinsicDiKey.IController,
+    FrameworkIntrinsicDiKey.IInstruction,
+    FrameworkIntrinsicDiKey.IRenderLocation,
+    FrameworkIntrinsicDiKey.IViewFactory,
+    FrameworkIntrinsicDiKey.IAuSlotsInfo,
   ];
   const names = creation.creationKind === RuntimeControllerCreationKind.CustomElement
-    ? [...common, 'IHydrationContext']
+    ? [...common, FrameworkIntrinsicDiKey.IHydrationContext]
     : common;
   return names.map((name) => new ContainerContextResolverSlotRequest(
     name,

@@ -11,10 +11,14 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import {
-  KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  KernelStoreBatch,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { projectModuleSourceNodeOrdinalLocalKey } from '../kernel/local-key.js';
 import {
   KernelVocabulary,
@@ -77,7 +81,7 @@ export class ConfigurationKernelEmission {
     readonly optionContributions: readonly ConfigurationOptionContribution[],
     /** Registration admissions emitted while materializing configuration steps. */
     readonly registrationAdmissions: readonly RegistrationAdmissionProduct[],
-    /** Kernel records committed for configuration products and registration admissions by this emission. */
+    /** Kernel records published for configuration products and registration admissions by this emission. */
     readonly records: readonly KernelStoreRecord[],
   ) {}
 }
@@ -139,15 +143,17 @@ class ConfigurationSequenceProductEmission {
   ) {}
 }
 
-/** Emits configuration observations into the durable kernel graph. */
+/** Emits configuration observations into the caller-owned kernel publication. */
 export class ConfigurationKernelEmitter {
   private readonly publication: ConfigurationKernelPublication;
   private readonly appFrames: AureliaAppFrameMaterializer;
   private readonly steps: ConfigurationStepMaterializer;
 
   constructor(
-    /** Hot analysis store that receives configuration records. */
+    /** Hot analysis store used only for deterministic handle allocation. */
     readonly store: KernelStore,
+    /** Caller-owned app-generation publication. */
+    readonly kernelPublication: KernelPublicationContext,
   ) {
     this.publication = new ConfigurationKernelPublication(store);
     this.appFrames = new AureliaAppFrameMaterializer(store, this.publication);
@@ -167,7 +173,9 @@ export class ConfigurationKernelEmitter {
     });
 
     if (frame.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(frame.records, `configuration:${context.moduleKey}`));
+      this.kernelPublication.publish(new KernelPublicationPlan(
+        new KernelStoreBatch(frame.records, `configuration:${context.moduleKey}`),
+      ));
     }
 
     return frame.toEmission();

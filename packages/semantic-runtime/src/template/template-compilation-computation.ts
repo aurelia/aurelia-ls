@@ -26,6 +26,7 @@ import {
   CustomElementDefinition,
 } from '../resources/custom-element-definition.js';
 import type { SemanticRuntimeTelemetryOptions } from '../telemetry/options.js';
+import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 import {
   TemplateCompilerReadView,
 } from './compiler-read-view.js';
@@ -157,6 +158,7 @@ export class TemplateCompilationComputationService {
     private readonly store: KernelStore,
     private readonly lifecycle: ComputationLifecycleRegistry,
     private readonly sourceText: SourceTextSnapshotAuthority,
+    private readonly support: FrameworkSupportCatalogs,
   ) {}
 
   prepare(
@@ -214,7 +216,7 @@ export class TemplateCompilationComputationService {
         sourceAdmission.sourceFileAddressHandle,
         sourceAdmission.snapshot,
       );
-      const pass = new TemplateCompilationProjectPass(this.store, run);
+      const pass = new TemplateCompilationProjectPass(this.store, run, this.support);
       for (const resolved of resolvedCohorts) {
         if (resolved.definition == null) {
           continue;

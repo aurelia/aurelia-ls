@@ -75,6 +75,22 @@ const openBind = converterRow('openSignalProducts', 'bind');
 assert.equal(openBind.lifecycleEffects.openReason, 'The signals array may contain additional runtime elements.');
 assert.equal(sourceText(openBind.lifecycleEffects.signals[0].source), 'known-refresh');
 
+const customSanitizerRoot = path.join(packageRoot, 'fixtures/pressure/sanitize-value-converter-custom');
+const customSanitizerRuntime = await createSemanticRuntime({
+  workspaceRoot: customSanitizerRoot,
+  storeKey: 'contract:value-converter-custom-sanitizer',
+});
+const customSanitizerDiagnostics = await customSanitizerRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.AppDiagnostics,
+  analysisDepth: 'binding-observation',
+  page: { size: 20 },
+});
+assert.equal(
+  customSanitizerDiagnostics.value.rows.some((row) => row.frameworkErrorCode === 'AUR0099'),
+  false,
+  'An app-provided ISanitizer resolver should suppress the built-in sanitize value-converter diagnostic.',
+);
+
 console.log(`Value converter applications contract passed (${rows.length} row(s)).`);
 
 function expectConverterRows(converterName) {

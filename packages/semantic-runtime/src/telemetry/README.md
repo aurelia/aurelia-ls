@@ -174,10 +174,9 @@ full recomputation and cursor-style warm local state.
 The retained heap cost of cached TypeScript `SourceFile` objects can be far larger than their raw source text. Treat
 source-text density as attribution, not as heap-size accounting: the AST/object graph is the reason one-off MCP-style
 routed calls may need to clear dependency SourceFiles even when retained text looks modest.
-The project compiler-options cache row is a different, much smaller lane. It shows whether static evaluation and
-TypeSystem construction are reusing the same root-level tsconfig/path-mapping shape inside a process; hits there remove
-repeated filesystem/source-root discovery but do not imply that TypeScript Program objects or app-world products are
-being retained.
+The compact compiler-options profile describes the one options result captured for the current project-input
+generation. Static evaluation and TypeSystem construction share that frame; telemetry should not report a separate
+process-global compiler-options cache or imply cross-generation reuse.
 Routed-batch telemetry keeps compact nested construction phases even when the app epoch is disposed after answering.
 Use those rows when MCP-style calls need to explain TypeSystem, static-evaluation, resource-recognition, template, or
 template-runtime cost without retaining the app world just to inspect it. The TypeSystem lane also prints the compact

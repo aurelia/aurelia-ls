@@ -16,7 +16,6 @@ export * from './runtime.js';
 export * from './router-overview.js';
 export * from './source-reference.js';
 export * from './state-projections.js';
-export * from './template-completion.js';
 export * from './typescript-environment.js';
 export * from './typescript-diagnostics.js';
 export * from '../inquiry/continuation-intent.js';
@@ -36,9 +35,17 @@ export {
 export {
   BUILT_IN_RESOURCE_PACKAGES,
 } from '../resources/built-in-resources.js';
+export {
+  NodeSemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputAuthority,
+  SemanticRuntimeProjectInputGeneration,
+  SemanticRuntimeProjectInputReadKind,
+} from '../kernel/project-input.js';
 export type {
-  SemanticRuntimeSourceTextProvider,
-} from '../kernel/source-text-provider.js';
+  SemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputScope,
+  SemanticRuntimeSourceTextOverlay,
+} from '../kernel/project-input.js';
 export {
   RESOURCE_DEFINITION_KINDS,
   registrationResourceKindFor,

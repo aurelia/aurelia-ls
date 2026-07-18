@@ -6,7 +6,7 @@ import type {
   ContainerIdentity,
   DiProductIdentity,
 } from '../kernel/identity.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelRecordCollectionReadView } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 
 /** Read-only projection of existing DI container and slot facts. */
@@ -76,50 +76,49 @@ export class DiContainerChainFacts {
   }
 }
 
-export function readDiContainerChainFacts(store: KernelStore): DiContainerChainFacts {
+export function readDiContainerChainFacts(store: KernelRecordCollectionReadView): DiContainerChainFacts {
   const containersByIdentity = new Map<IdentityHandle, ContainerIdentity>();
   const containerIdentitiesByProduct = new Map<ProductHandle, IdentityHandle>();
   const diProductIdentitiesByIdentity = new Map<IdentityHandle, DiProductIdentity>();
   const diProductIdentitiesByProduct = new Map<ProductHandle, DiProductIdentity>();
   const providerContainerIdentitiesByKey = new Map<IdentityHandle, Set<IdentityHandle>>();
 
-  for (const identity of store.readIdentities()) {
-    if (identity.kind === 'container-identity') {
-      containersByIdentity.set(identity.handle, identity);
-    } else if (identity.kind === 'di-product-identity') {
-      diProductIdentitiesByIdentity.set(identity.handle, identity);
+  const records = store.readAllRecords();
+  for (const record of records) {
+    if (record.kind === 'container-identity') {
+      containersByIdentity.set(record.handle, record);
+    } else if (record.kind === 'di-product-identity') {
+      diProductIdentitiesByIdentity.set(record.handle, record);
     }
   }
 
-  for (const product of store.readProducts()) {
-    if (product.identityHandle == null) {
-      continue;
-    }
-    if (
-      product.productKindKey === KernelVocabulary.Di.Container.key
-      && containersByIdentity.has(product.identityHandle)
-    ) {
-      containerIdentitiesByProduct.set(product.handle, product.identityHandle);
-    }
-    const productIdentity = diProductIdentitiesByIdentity.get(product.identityHandle) ?? null;
-    if (productIdentity != null) {
-      diProductIdentitiesByProduct.set(product.handle, productIdentity);
+  for (const record of records) {
+    if (record.kind === 'materialized-product' && record.identityHandle != null) {
+      if (
+        record.productKindKey === KernelVocabulary.Di.Container.key
+        && containersByIdentity.has(record.identityHandle)
+      ) {
+        containerIdentitiesByProduct.set(record.handle, record.identityHandle);
+      }
+      const productIdentity = diProductIdentitiesByIdentity.get(record.identityHandle) ?? null;
+      if (productIdentity != null) {
+        diProductIdentitiesByProduct.set(record.handle, productIdentity);
+      }
     }
   }
 
-  for (const claim of store.readClaims()) {
-    if (claim.predicateKey !== KernelVocabulary.Di.ProvidesKey.key) {
+  for (const record of records) {
+    if (record.kind !== 'semantic-claim' || record.predicateKey !== KernelVocabulary.Di.ProvidesKey.key) {
       continue;
     }
-    const productIdentity = diProductIdentitiesByProduct.get(claim.subjectHandle as ProductHandle) ?? null;
-    if (productIdentity?.containerHandle == null) {
-      continue;
+    const productIdentity = diProductIdentitiesByProduct.get(record.subjectHandle as ProductHandle) ?? null;
+    if (productIdentity?.containerHandle != null) {
+      addToSet(
+        providerContainerIdentitiesByKey,
+        record.objectHandle as IdentityHandle,
+        productIdentity.containerHandle,
+      );
     }
-    addToSet(
-      providerContainerIdentitiesByKey,
-      claim.objectHandle as IdentityHandle,
-      productIdentity.containerHandle,
-    );
   }
 
   return new DiContainerChainFacts(

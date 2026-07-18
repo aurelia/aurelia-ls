@@ -1,5 +1,5 @@
 import type { AddressHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelStoreReadView } from '../kernel/store.js';
 import {
   BindingContext,
   BindingContextKind,
@@ -24,7 +24,7 @@ export interface UncommittedScopeFromParentRequest {
 
 /** Models framework `Scope.fromParent(parent, context)` when a speculative consumer needs lookup semantics only. */
 export function uncommittedScopeFromParent(
-  store: KernelStore,
+  store: KernelStoreReadView,
   request: UncommittedScopeFromParentRequest,
 ): BindingScope {
   const localKey = `uncommitted-scope-from-parent:${request.localKey}`;

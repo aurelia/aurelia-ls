@@ -18,10 +18,16 @@ import {
 import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
-import type {
-  KernelStore,
-  KernelStoreRecord,
+import {
+  KernelStoreBatch,
+  type KernelStore,
+  type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { Container } from './container.js';
 import type { ContainerResourceSlot } from './container-slot.js';
@@ -36,12 +42,35 @@ import { DiFrameworkErrorCode } from './framework-error-code.js';
 import type { DiContainerApiCallSite } from './container-api-recognition.js';
 import type { DiInjectDecoratorSite } from './inject-decorator-recognition.js';
 import type { DiResolveCallSite } from './resolve-call-recognition.js';
+import { DiProductDetails } from './product-details.js';
 
 export class DiIssuePublication {
   constructor(
     readonly issue: DiIssue,
     readonly records: readonly KernelStoreRecord[],
   ) {}
+}
+
+export class DiIssuePublicationSet {
+  constructor(
+    readonly issues: readonly DiIssue[],
+    readonly records: readonly KernelStoreRecord[],
+  ) {}
+}
+
+/** Publish one coherent source-issue set through its caller-owned analysis generation. */
+export function publishDiIssuePublications(
+  publication: KernelPublicationContext,
+  label: string,
+  publications: readonly DiIssuePublication[],
+): DiIssuePublicationSet {
+  const issues = publications.map((candidate) => candidate.issue);
+  const records = publications.flatMap((candidate) => candidate.records);
+  publication.publish(new KernelPublicationPlan(
+    new KernelStoreBatch(records, label),
+    publishProductDetails(DiProductDetails.Issue, issues),
+  ));
+  return new DiIssuePublicationSet(issues, records);
 }
 
 export function withDiIssueSourceAddressRecords(

@@ -4,23 +4,25 @@ import type { MaterializationRecord } from './materialization.js';
 import type { ProductDetailSlot } from './product-details.js';
 import {
   KernelPublicationManifest,
-  type KernelPublicationPlan,
+  KernelPublicationPlan,
   type KernelPublicationContext,
   StagedKernelPublicationContext,
   type KernelPublicationDecision,
 } from './publication.js';
-import type {
-  KernelStore,
-  KernelStoreComputationLifecycle,
-  KernelStoreDensityDelta,
-  KernelStoreDetailDensityDelta,
-  KernelStoreDisposalContext,
-  KernelStoreObservationMarker,
-  KernelStoreReadView,
-  KernelStoreRecord,
+import {
+  KernelStoreBatch,
+  type KernelStore,
+  type KernelStoreComputationLifecycle,
+  type KernelStoreDensityDelta,
+  type KernelStoreDetailDensityDelta,
+  type KernelStoreDisposalContext,
+  type KernelStoreObservationMarker,
+  type KernelStoreReadView,
+  type KernelStoreRecord,
 } from './store.js';
 import type { SemanticRuntimeKernelCountSnapshot } from '../telemetry/kernel-density.js';
 import type { GenerationAuthority } from './generation-authority.js';
+import type { SourceFileAddress } from './address.js';
 
 declare const computationIdBrand: unique symbol;
 
@@ -258,6 +260,16 @@ export class ComputationRun implements KernelPublicationContext {
     return this.publications.read(handle);
   }
 
+  readAllRecords(): readonly KernelStoreRecord[] {
+    this.requireCurrent();
+    return this.publications.readAllRecords();
+  }
+
+  readSourceFileAddressesByFileName(fileName: string): readonly SourceFileAddress[] {
+    this.requireCurrent();
+    return this.publications.readSourceFileAddressesByFileName(fileName);
+  }
+
   readMaterializations(): readonly MaterializationRecord[] {
     this.requireCurrent();
     return this.publications.readMaterializations();
@@ -399,6 +411,26 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     }
     entry.admittedGenerationDomains.add(domain);
     return new LifecycleComputationGenerationAuthority(this, computationId, runSequence);
+  }
+
+  /** Withdraw one exact current generation without relying on its relative store lifetime. */
+  retireCommittedGeneration(computationId: ComputationId, runSequence: number): boolean {
+    const entry = this.entriesById.get(computationId);
+    const state = entry?.state ?? null;
+    if (entry == null || state?.committedRunSequence !== runSequence) {
+      return false;
+    }
+    this.store.replacePublication(
+      state.publication,
+      new KernelPublicationPlan(new KernelStoreBatch([], `retire:${computationId}@${runSequence}`)),
+      this.publicationOwner,
+    );
+    this.replaceReadIndex(state.reads, [], computationId);
+    entry.state = null;
+    entry.admittedGenerationDomains.clear();
+    entry.latestRunSequence += 1;
+    entry.latestFinishedRunSequence = entry.latestRunSequence;
+    return true;
   }
 
   /** Whether a prepared run still owns the newest candidate position at its stable locus. */

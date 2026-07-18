@@ -8,7 +8,7 @@ import {
   type BindingScopeConstructionEmission,
 } from '../configuration/scope-materializer.js';
 import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelSourceFileReadView } from '../kernel/store.js';
 import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
@@ -45,11 +45,11 @@ export class StateBindingScopeProjector {
   private readonly scopeMaterializer: BindingScopeMaterializer;
 
   constructor(
-    readonly store: KernelStore,
+    readonly kernel: KernelSourceFileReadView,
     readonly stateStores: readonly StateStoreConfiguration[],
     readonly projector: CheckerTypeProjector,
   ) {
-    this.scopeMaterializer = new BindingScopeMaterializer(store, projector);
+    this.scopeMaterializer = new BindingScopeMaterializer(kernel, projector);
   }
 
   scopeForBindingBehavior(

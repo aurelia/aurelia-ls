@@ -2,7 +2,7 @@ import type { SemanticSupportState } from '../support-state.js';
 import type { BootProjectDiscoveryMode, BootProjectInput } from '../boot/frames.js';
 import type { ApplicationFileRole } from '../application/topology.js';
 import type { SourceFileRole } from '../kernel/address.js';
-import type { SemanticRuntimeSourceTextProvider } from '../kernel/source-text-provider.js';
+import type { SemanticRuntimeProjectInputAuthority } from '../kernel/project-input.js';
 import type {
   DiagnosticRepairAffordance,
   DiagnosticSuggestion,
@@ -544,7 +544,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
 export const enum SemanticRuntimeDetail {
   /** Default API projection: readable rows with compact navigation labels. */
   Compact = 'compact',
-  /** Include opaque kernel handles for exact in-process follow-up navigation. */
+  /** Include opaque handles and retain their owning app generation for exact in-process follow-up navigation. */
   Handles = 'handles',
 }
 
@@ -581,8 +581,8 @@ export interface SemanticRuntimeOptions {
   readonly projects?: readonly SemanticRuntimeProjectInput[];
   /** Project discovery strategy used when projects are omitted. */
   readonly projectDiscovery?: BootProjectDiscoveryMode | `${BootProjectDiscoveryMode}`;
-  /** Host-provided source text for editor buffers or other non-filesystem source epochs. */
-  readonly sourceTextProvider?: SemanticRuntimeSourceTextProvider | null;
+  /** Sole authority for captured project source/config generations. */
+  readonly projectInputAuthority?: SemanticRuntimeProjectInputAuthority;
 }
 
 export interface SemanticRuntimeSummaryRequest {
@@ -716,7 +716,7 @@ export interface SemanticRuntimeAppQueryRequest extends SemanticAppQuery {
   readonly authoringTemplateLimit?: number | null;
   /** Optional profiling controls; inquiryProfile on the query remains the product-facing consumer lane. */
   readonly telemetry?: SemanticRuntimeTelemetryOptions | null;
-  /** Override profile-default app-epoch retention for this routed query. */
+  /** Override profile-default app-epoch retention; `dispose-app` is incompatible with app-world handle detail. */
   readonly appRetention?: SemanticAppRetentionPolicy | null;
   /**
    * Clear the process-local TypeScript dependency SourceFile cache at this answer boundary.
@@ -745,7 +745,7 @@ export interface SemanticRuntimeAppQueryBatchRequest {
   readonly inquiryProfile?: SemanticRuntimeInquiryProfile | `${SemanticRuntimeInquiryProfile}` | null;
   /** Optional profiling controls; inquiryProfile on the batch remains the product-facing consumer lane. */
   readonly telemetry?: SemanticRuntimeTelemetryOptions | null;
-  /** Override profile-default app-epoch retention for this routed batch. */
+  /** Override profile-default app-epoch retention; `dispose-app` is incompatible with app-world handle detail. */
   readonly appRetention?: SemanticAppRetentionPolicy | null;
   /**
    * Include the app construction profile in the public batch value.
@@ -1005,28 +1005,10 @@ export interface SemanticRuntimeAnalysisCacheOverviewResult {
   readonly cachedAppCount: number;
   readonly cachedApps: readonly SemanticRuntimeCachedAppSummary[];
   readonly runtimeQueryClaimProfiles: readonly SemanticRuntimeCachedAppQueryClaimProfileSummary[];
-  readonly projectCompilerOptionsCache: SemanticRuntimeProjectCompilerOptionsCacheSummary;
   readonly typeSystemDependencyCache: SemanticRuntimeTypeSystemDependencyCacheSummary;
   readonly processMemory: SemanticRuntimeMemorySample;
   readonly workspaceKernel: SemanticRuntimeKernelCountSnapshot | SemanticRuntimeKernelDensitySnapshot;
   readonly retention: SemanticRuntimeCacheRetentionSummary;
-  readonly summary: string;
-}
-
-export interface SemanticRuntimeProjectCompilerOptionsCacheSummary {
-  readonly entries: number;
-  readonly hits: number;
-  readonly misses: number;
-  readonly writes: number;
-  readonly clearOperations: number;
-  readonly clearedEntries: number;
-  readonly pathMappingCount: number;
-  readonly pathMappingTargetCount: number;
-  readonly configDiagnosticCount: number;
-  readonly configRootFileCount: number;
-  readonly cacheScope: 'process';
-  readonly counterScope: 'process-lifetime';
-  readonly cachedValuePolicy: 'compiler-options-by-project-root';
   readonly summary: string;
 }
 

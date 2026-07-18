@@ -1,20 +1,20 @@
 import ts from 'typescript';
-import { SourceSpanAddress } from '../kernel/address.js';
+import { SourceFileAddress, SourceSpanAddress } from '../kernel/address.js';
 import type { AddressHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelStoreReadView } from '../kernel/store.js';
 
 /** Resolves an authored source-span address into the smallest TypeScript expression that exactly owns the span. */
 export function sourceExpressionForSourceAddress(
-  store: KernelStore,
+  kernel: KernelStoreReadView,
   sourceAddressHandle: AddressHandle,
   readSourceFileByPath: (path: string) => ts.SourceFile | null,
 ): ts.Expression | null {
-  const span = sourceSpanAddressForHandle(store, sourceAddressHandle);
+  const span = sourceSpanAddressForHandle(kernel, sourceAddressHandle);
   if (span == null) {
     return null;
   }
-  const fileAddress = store.readAddress(span.fileHandle);
-  if (fileAddress?.kind !== 'source-file-address') {
+  const fileAddress = kernel.read(span.fileHandle);
+  if (!(fileAddress instanceof SourceFileAddress)) {
     return null;
   }
   const sourceFile = readSourceFileByPath(fileAddress.path);
@@ -23,10 +23,10 @@ export function sourceExpressionForSourceAddress(
 
 /** Reads a source-span address from a handle when the caller expects an authored range. */
 export function sourceSpanAddressForHandle(
-  store: KernelStore,
+  kernel: KernelStoreReadView,
   sourceAddressHandle: AddressHandle,
 ): SourceSpanAddress | null {
-  const address = store.readAddress(sourceAddressHandle);
+  const address = kernel.read(sourceAddressHandle);
   return address instanceof SourceSpanAddress ? address : null;
 }
 

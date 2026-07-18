@@ -5,10 +5,11 @@ import {
 } from '../kernel/evidence.js';
 import type { IdentityHandle } from '../kernel/handles.js';
 import {
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStore,
-  type KernelStoreRecord,
-} from '../kernel/store.js';
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type { KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
@@ -127,7 +128,7 @@ export class RouteRecognitionMaterializationProjectResult {
 /** Walk route-recognizer state graphs for static ViewportInstruction path strings. */
 export class RouteRecognitionMaterializationProjectPass {
   materializeAndEmit(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
     routeConfigContexts: RouteConfigContextMaterializationProjectResult,
     routeRuntime: RouteRuntimeTopologyProjectResult,
@@ -137,12 +138,12 @@ export class RouteRecognitionMaterializationProjectPass {
     const indexes = routeRecognitionIndexes(routeConfigContexts, routeRuntime, routeRecognizer, routeInstructions);
 
     const emissions = routeInstructions.readViewportInstructionTrees().flatMap((tree) =>
-      this.materializeInstructionTreeRecognitions(store, tree, indexes)
+      this.materializeInstructionTreeRecognitions(publication, tree, indexes)
     );
     const records = emissions.flatMap((emission) => emission.records);
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `router-recognition:${project.projectKey}`));
-    }
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `router-recognition:${project.projectKey}`),
+    ));
     return new RouteRecognitionMaterializationProjectResult(
       project,
       emissions.flatMap((emission) => emission.recognizedRoutes),
@@ -151,7 +152,7 @@ export class RouteRecognitionMaterializationProjectPass {
   }
 
   private materializeInstructionTreeRecognitions(
-    store: KernelStore,
+    store: KernelPublicationContext,
     tree: ViewportInstructionTreeModel,
     indexes: RouteRecognitionIndexes,
   ): readonly RouteRecognitionEmission[] {
@@ -188,7 +189,7 @@ export class RouteRecognitionMaterializationProjectPass {
   }
 
   private materializeViewportInstructionRecognitions(
-    store: KernelStore,
+    store: KernelPublicationContext,
     tree: ViewportInstructionTreeModel,
     indexes: RouteRecognitionIndexes,
     routeContext: RouteContextModel | null,
@@ -237,7 +238,7 @@ export class RouteRecognitionMaterializationProjectPass {
   }
 
   private materializeRecognizedRoutes(
-    store: KernelStore,
+    store: KernelPublicationContext,
     graph: RecognizerGraph,
     tree: ViewportInstructionTreeModel,
     viewportInstruction: ViewportInstructionModel,
@@ -283,7 +284,7 @@ export class RouteRecognitionMaterializationProjectPass {
   }
 
   private materializeResidueChildRecognitions(
-    store: KernelStore,
+    store: KernelPublicationContext,
     tree: ViewportInstructionTreeModel,
     indexes: RouteRecognitionIndexes,
     parentRouteContext: RouteContextModel | null,
@@ -328,7 +329,7 @@ export class RouteRecognitionMaterializationProjectPass {
   }
 
   private noFallbackEmission(
-    store: KernelStore,
+    store: KernelPublicationContext,
     routeConfigContext: RouteConfigContextModel,
     routeConfig: RouteConfigModel,
     viewportInstruction: ViewportInstructionModel,
@@ -381,7 +382,7 @@ export class RouteRecognitionMaterializationProjectPass {
 }
 
 function unknownRedirectIssueRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   tree: ViewportInstructionTreeModel,
   viewportInstruction: ViewportInstructionModel,
   draft: RedirectExpansionIssueDraft,
@@ -400,7 +401,7 @@ function unknownRedirectIssueRecords(
 }
 
 function unknownRedirectIssueModel(
-  store: KernelStore,
+  store: KernelPublicationContext,
   tree: ViewportInstructionTreeModel,
   viewportInstruction: ViewportInstructionModel,
   draft: RedirectExpansionIssueDraft,
@@ -1207,7 +1208,7 @@ function satisfiesPattern(pattern: string | null, value: string): boolean {
 }
 
 function recognizedRouteModel(
-  store: KernelStore,
+  store: KernelPublicationContext,
   graph: RecognizerGraph,
   tree: ViewportInstructionTreeModel,
   viewportInstruction: ViewportInstructionModel,
@@ -1249,7 +1250,7 @@ function routeParameterValues(
 }
 
 function recognizedRouteRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   graph: RecognizerGraph,
   tree: ViewportInstructionTreeModel,
   viewportInstruction: ViewportInstructionModel,

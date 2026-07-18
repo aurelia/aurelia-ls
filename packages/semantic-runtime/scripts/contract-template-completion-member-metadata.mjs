@@ -4,6 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   createSemanticRuntime,
+  NodeSemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputAuthority,
   SemanticAppQueryKind,
 } from '../out/index.js';
 
@@ -16,14 +18,14 @@ const templateText = originalTemplateText.replace('${}', '${title}');
 const runtime = await createSemanticRuntime({
   workspaceRoot: fixtureRoot,
   storeKey: 'contract:template-completion-member-metadata',
-  sourceTextProvider: {
+  projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
     readFile(fileName) {
       return samePath(fileName, templatePath) ? templateText : undefined;
     },
     fileExists(fileName) {
       return samePath(fileName, templatePath) ? true : undefined;
     },
-  },
+  })),
 });
 const app = await runtime.openApp({
   analysisDepth: 'binding-observation',

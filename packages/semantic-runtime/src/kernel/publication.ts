@@ -8,16 +8,20 @@ import type { ProductDetailEntry, ProductDetailReadView, ProductDetailSlot } fro
 import type {
   KernelStore,
   KernelMaterializationReadView,
+  KernelRecordCollectionReadView,
+  KernelSourceFileReadView,
   KernelStoreDensityDelta,
   KernelStoreDetailDensityDelta,
   KernelStoreObservationMarker,
   KernelStoreRecord,
   KernelTelemetryReadView,
 } from './store.js';
+import { SourceFileAddress } from './address.js';
 import type { MaterializationRecord } from './materialization.js';
 import {
   isSemanticAddressRecord,
   isSemanticIdentityRecord,
+  sourceFilePathMatches,
 } from './source-address.js';
 import {
   countSemanticRuntimeRowsBy,
@@ -241,7 +245,9 @@ function maxLifetimeOrdinal(left: number | null, right: number | null): number |
 
 /** Required read/write boundary used by materializers in immediate or staged mode. */
 export interface KernelPublicationContext
-  extends KernelMaterializationReadView, ProductDetailReadView, HotDetailReadView, KernelTelemetryReadView,
+  extends KernelRecordCollectionReadView, KernelSourceFileReadView, KernelMaterializationReadView,
+    ProductDetailReadView, HotDetailReadView,
+    KernelTelemetryReadView,
     GenerationAuthority {
   publish(plan: KernelPublicationPlan): void;
 }
@@ -270,6 +276,16 @@ export class GenerationBoundKernelPublicationContext implements KernelPublicatio
   read(handle: KernelRecordHandle): KernelStoreRecord | null {
     this.requireCurrent();
     return this.delegate.read(handle);
+  }
+
+  readAllRecords(): readonly KernelStoreRecord[] {
+    this.requireCurrent();
+    return this.delegate.readAllRecords();
+  }
+
+  readSourceFileAddressesByFileName(fileName: string): readonly SourceFileAddress[] {
+    this.requireCurrent();
+    return this.delegate.readSourceFileAddressesByFileName(fileName);
   }
 
   readMaterializations(): readonly MaterializationRecord[] {
@@ -357,6 +373,29 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
     this.requireCurrent();
     return this.records.get(handle)
       ?? (this.previousRecordHandles.has(handle) ? null : this.store.read(handle));
+  }
+
+  readAllRecords(): readonly KernelStoreRecord[] {
+    this.requireCurrent();
+    return [
+      ...this.store.readAllRecords().filter((record) => !this.previousRecordHandles.has(record.handle)),
+      ...this.records.values(),
+    ];
+  }
+
+  readSourceFileAddressesByFileName(fileName: string): readonly SourceFileAddress[] {
+    this.requireCurrent();
+    const addresses = new Map(
+      this.store.readSourceFileAddressesByFileName(fileName)
+        .filter((address) => !this.previousRecordHandles.has(address.handle))
+        .map((address) => [address.handle, address]),
+    );
+    for (const record of this.records.values()) {
+      if (record instanceof SourceFileAddress && sourceFilePathMatches(record, fileName)) {
+        addresses.set(record.handle, record);
+      }
+    }
+    return [...addresses.values()];
   }
 
   readMaterializations(): readonly MaterializationRecord[] {

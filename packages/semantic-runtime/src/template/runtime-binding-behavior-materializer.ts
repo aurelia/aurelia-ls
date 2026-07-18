@@ -130,7 +130,7 @@ class RuntimeBindingBehaviorLifecyclePublication {
 export class RuntimeBindingBehaviorMaterializer {
   constructor(
     readonly store: KernelStore,
-    readonly publication: KernelPublicationContext = store,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   materialize(input: RuntimeBindingBehaviorMaterializationRequest): RuntimeBindingBehaviorEmission {

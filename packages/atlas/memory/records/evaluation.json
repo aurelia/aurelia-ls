@@ -15,7 +15,7 @@
         "Prefer extending evaluator capabilities and open-seam modeling over adding feature-local evaluator shortcuts.",
         "StaticEvaluationExpressionReader should keep one evaluator per reader, matching RuntimeBindingSourceEvaluationFrame's per-source evaluator lifetime, so guardrails and seam checkpoints do not reset for every follow-up property, target, or expression probe.",
         "StaticEvaluationExpressionReader is not an isolation boundary. A speculative or replaceable analysis owner should call StaticProjectEvaluationResult.forkSession() once and share that graph-preserving session across all of its readers; forking per reader destroys authored alias identity and breaks cross-reader joins.",
-        "StaticEvaluationSessionFork must clone every mutable evaluator carrier, captured environment, and completion while preserving aliases and cycles, including Promise back-edges and class/instance knots. Runtime-host call/new results are adopted into the active session realm so host-installed aliases and call-frame closures remain exact; metadata transfer must fork any mutable child values held outside the generic value graph. Template-analysis candidates and later binding/router value evaluation use separate explicit sessions so rejected work cannot mutate the admitted project graph.",
+        "StaticEvaluationSessionFork must clone every mutable evaluator carrier, captured environment, and completion while preserving aliases and cycles, including Promise back-edges and class/instance knots. Runtime-host call/new results are adopted into the active session realm so host-installed aliases and call-frame closures remain exact; metadata transfer must fork any mutable child values held outside the generic value graph. Template compilation inside a complete app-analysis candidate and later binding/router value evaluation use separate explicit sessions so rejected work cannot mutate the admitted project graph or leak mutable evaluator state across lifecycle phases.",
         "When a gap appears, also check whether Atlas needs better flow or capability projection to expose the evaluator route.",
         "Use `framework:evaluator` for targeted framework evaluator effects, open seams, and module summaries before expanding semantic-runtime evaluator/world-construction support.",
         "`framework:evaluator --memberName=...` narrows the traced root; `--calleeName=...` only filters returned effects. Use memberName when checking whether one framework method closes without open seams.",
@@ -302,7 +302,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-17"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "frontier:static-module-graph-evaluator",

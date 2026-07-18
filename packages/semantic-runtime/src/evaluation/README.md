@@ -142,9 +142,10 @@ forks mutable child values retained by that metadata. Call-frame environments in
 through the wrapped intrinsic host and returned by runtime-host call/new hooks are adopted into that realm rather than
 cloned a second time, so host-installed aliases and captured closures stay exact. Forking per reader is incorrect: one authored
 configuration/resource value would acquire several unrelated
-identities, breaking joins such as two app roots that intentionally share one router configuration. Template-analysis
-candidates and post-template binding/router evaluation own separate explicit sessions so rejected work cannot mutate
-the admitted project-evaluation graph.
+identities, breaking joins such as two app roots that intentionally share one router configuration. Template compilation
+inside a complete app-analysis candidate and its post-template binding/router evaluation each own an explicit forked
+session, separate from the admitted project-evaluation graph and from one another, so rejected work cannot mutate the
+incumbent or leak mutable evaluator state across lifecycle phases.
 Product runtime hosts may expose framework-shaped intrinsics only at the host boundary. Aurelia's host handles browser
 ambient globals such as `document`, `window`, `self`, `customElements`, and `console` as host-environment boundaries so
 app admission can preserve host-dependent setup expressions without reporting them as missing identifiers. It also

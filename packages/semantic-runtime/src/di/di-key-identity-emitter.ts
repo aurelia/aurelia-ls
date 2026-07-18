@@ -10,6 +10,12 @@ import type {
   KernelStoreReadView,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import { localKeyPart } from '../kernel/local-key.js';
+import {
+  frameworkIntrinsicDiKeyForName,
+  frameworkIntrinsicDiKeyLocal,
+  type FrameworkIntrinsicDiKey,
+} from './framework-intrinsic-di-key.js';
 
 export class DiKeyIdentityEmitter {
   private readonly emittedIdentityHandles = new Set<IdentityHandle>();
@@ -21,13 +27,21 @@ export class DiKeyIdentityEmitter {
     this.emittedIdentityHandles.clear();
   }
 
-  interfaceKeyIdentityHandle(interfaceName: string): IdentityHandle {
+  interfaceKeyIdentityHandle(interfaceName: FrameworkIntrinsicDiKey): IdentityHandle {
     let handle = this.interfaceKeyIdentityHandles.get(interfaceName);
     if (handle === undefined) {
-      handle = this.records.handles.identity(`di-key:interface:${interfaceName}`);
+      handle = this.records.handles.identity(frameworkIntrinsicDiKeyLocal(interfaceName));
       this.interfaceKeyIdentityHandles.set(interfaceName, handle);
     }
     return handle;
+  }
+
+  frameworkOrLocalInterfaceKeyIdentityHandle(
+    interfaceName: string,
+    localHandle: IdentityHandle,
+  ): IdentityHandle {
+    const intrinsic = frameworkIntrinsicDiKeyForName(interfaceName);
+    return intrinsic == null ? localHandle : this.interfaceKeyIdentityHandle(intrinsic);
   }
 
   emitInterfaceKeyIdentity(
@@ -66,4 +80,12 @@ export class DiKeyIdentityEmitter {
       addressHandle,
     ));
   }
+}
+
+/** Stable identity local for one canonical resource identity exposed through one exact runtime key. */
+export function resourceDiKeyIdentityLocal(
+  resourceIdentityHandle: IdentityHandle,
+  resourceKey: string,
+): string {
+  return `di-key:resource:${localKeyPart(resourceIdentityHandle)}:${localKeyPart(resourceKey)}`;
 }

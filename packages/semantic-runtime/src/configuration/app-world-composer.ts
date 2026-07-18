@@ -1,4 +1,6 @@
 import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
+import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type {
   ProductHandle,
@@ -110,13 +112,17 @@ export class AureliaAppWorldComposer {
   constructor(
     /** Hot analysis store shared by the composed materializers. */
     readonly store: KernelStore,
+    /** Publication owner for app-specific catalogs and compiler worlds. */
+    readonly publication: KernelPublicationContext,
+    /** Stable framework catalogs borrowed by this app composition. */
+    readonly support: FrameworkSupportCatalogs,
   ) {
-    this.diWorldConstructor = new DiWorldConstructor(store);
-    this.configuredSyntaxMaterializer = new ConfiguredBuiltInSyntaxCatalogMaterializer(store);
-    this.configuredResourceMaterializer = new ConfiguredBuiltInResourceCatalogMaterializer(store);
-    this.configuredRendererMaterializer = new ConfiguredBuiltInRuntimeRendererCatalogMaterializer(store);
+    this.diWorldConstructor = new DiWorldConstructor(store, publication);
+    this.configuredSyntaxMaterializer = new ConfiguredBuiltInSyntaxCatalogMaterializer(store, publication, support);
+    this.configuredResourceMaterializer = new ConfiguredBuiltInResourceCatalogMaterializer(store, publication, support);
+    this.configuredRendererMaterializer = new ConfiguredBuiltInRuntimeRendererCatalogMaterializer(store, publication, support);
     this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(
-      store,
+      publication,
     );
     this.resourceVisibilityComposer = new AppWorldResourceVisibilityComposer();
   }
@@ -128,7 +134,10 @@ export class AureliaAppWorldComposer {
     project: ProjectBootFrame | null = null,
   ): AureliaAppWorldEmission {
     const kernelConfiguration = configuration.readConfiguration();
-    const frameworkServiceCustomizations = new FrameworkServiceCustomizationRecognitionPass().recognize(this.store, configuration);
+    const frameworkServiceCustomizations = new FrameworkServiceCustomizationRecognitionPass(
+      this.store,
+      this.publication,
+    ).recognize(configuration);
     const configuredSyntax = this.configuredSyntaxMaterializer.materialize(kernelConfiguration);
     const configuredResources = this.configuredResourceMaterializer.materialize(kernelConfiguration, typeSystem);
     const configuredRenderers = this.configuredRendererMaterializer.materialize(kernelConfiguration);
@@ -177,10 +186,10 @@ export class AureliaAppWorldComposer {
       return diWorld;
     }
     const sourceIssues = [
-      new DiResolveCallIssueMaterializer(this.store).materialize(project, typeSystem),
-      new DiInjectDecoratorIssueMaterializer(this.store).materialize(project, typeSystem),
-      new DiContainerApiIssueMaterializer(this.store).materialize(project, typeSystem),
-      new DiDependencyCycleIssueMaterializer(this.store).materialize(project, typeSystem),
+      new DiResolveCallIssueMaterializer(this.store, this.publication).materialize(project, typeSystem),
+      new DiInjectDecoratorIssueMaterializer(this.store, this.publication).materialize(project, typeSystem),
+      new DiContainerApiIssueMaterializer(this.store, this.publication).materialize(project, typeSystem),
+      new DiDependencyCycleIssueMaterializer(this.store, this.publication).materialize(project, typeSystem),
     ];
     return appendDiSourceIssues(diWorld, sourceIssues);
   }
@@ -195,7 +204,7 @@ export class AureliaAppWorldComposer {
     resourceDefinitions: ResourceDefinitionIndex | null,
   ): readonly TemplateCompilerWorldEmission[] {
     return new AppRootCompilerWorldFrame(
-      this.store,
+      this.publication,
       this.compilerWorldMaterializer,
       this.resourceVisibilityComposer,
       configuration,
@@ -248,7 +257,7 @@ class AppRootCompilerWorldFrame {
   private readonly registeredSyntaxResourceMaterializer: RegisteredSyntaxResourceMaterializer;
 
   constructor(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     private readonly compilerWorldMaterializer: TemplateCompilerWorldMaterializer,
     private readonly resourceVisibilityComposer: AppWorldResourceVisibilityComposer,
     private readonly configuration: ConfigurationKernelEmission,
@@ -260,8 +269,8 @@ class AppRootCompilerWorldFrame {
     private readonly resourceDefinitions: ResourceDefinitionIndex | null,
   ) {
     this.containersByProduct = new Map(configuration.containers.map((container) => [container.productHandle, container]));
-    this.registryBodyIndex = buildRegistryBodyStepIndex(store, configuration);
-    this.registeredSyntaxResourceMaterializer = new RegisteredSyntaxResourceMaterializer(store);
+    this.registryBodyIndex = buildRegistryBodyStepIndex(publication, configuration);
+    this.registeredSyntaxResourceMaterializer = new RegisteredSyntaxResourceMaterializer(publication);
   }
 
   construct(): readonly TemplateCompilerWorldEmission[] {

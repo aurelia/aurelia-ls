@@ -1,4 +1,4 @@
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelSourceFileReadView } from '../kernel/store.js';
 import type { HotDetailReadView } from '../kernel/hot-details.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import { TypeSystemHotDetails, TypeSystemProductDetails } from '../type-system/product-details.js';
@@ -26,7 +26,7 @@ import {
 /** Projects TypeChecker-backed context type surfaces into runtime binding-context slot drafts. */
 export class BindingScopeSlotProjector {
   constructor(
-    readonly store: KernelStore,
+    readonly store: KernelSourceFileReadView,
     readonly projector: CheckerTypeProjector,
   ) {}
 
@@ -62,7 +62,7 @@ function explicitContextSlotsByName(
 }
 
 function addTypeShapeSlots(
-  store: KernelStore,
+  store: KernelSourceFileReadView,
   projector: CheckerTypeProjector,
   slotsByName: Map<string, BindingContextSlotDraft>,
   typeShape: CheckerTypeShape,
@@ -77,11 +77,11 @@ function addTypeShapeSlots(
 }
 
 export function bindingContextSlotDraftForTypeMember(
-  store: KernelStore,
+  store: KernelSourceFileReadView,
   projector: CheckerTypeProjector,
   member: CheckerTypeMember,
 ): BindingContextSlotDraft {
-  const valueSourceAddressHandle = checkerTypeMemberValueSourceAddressHandle(store, projector.publication, member);
+  const valueSourceAddressHandle = checkerTypeMemberValueSourceAddressHandle(projector.publication, member);
   return new BindingContextSlotDraft(
     member.name,
     checkerTypeMemberReachableIdentityHandle(member),
@@ -98,7 +98,7 @@ export function bindingContextSlotDraftForTypeMember(
 }
 
 export function bindingContextSlotDraftForContextTypeMember(
-  store: KernelStore,
+  store: KernelSourceFileReadView,
   projector: CheckerTypeProjector,
   contextType: BindingScopeConstructionRequest['bindingContextType'],
   memberName: string,
@@ -161,7 +161,7 @@ export function bindingContextSlotTargetTypeShape(
 
 /** Projects an Aurelia source expression to the exact slot-shaped value it preserves through transparent wrappers. */
 export function bindingContextSlotDraftForExpressionAccess(
-  store: KernelStore,
+  store: KernelSourceFileReadView,
   projector: CheckerTypeProjector,
   sourceScope: BindingScope,
   expression: ExpressionAstNode,
@@ -195,7 +195,7 @@ export function bindingContextSlotDraftForExpressionAccess(
 }
 
 function bindingContextSlotDraftForMemberAccess(
-  store: KernelStore,
+  store: KernelSourceFileReadView,
   projector: CheckerTypeProjector,
   owner: BindingContextSlotDraft,
   memberName: string,

@@ -38,7 +38,7 @@ import {
   StringDiKeyIdentity,
   TypeScriptDeclarationIdentity,
 } from '../kernel/identity.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelStoreReadView } from '../kernel/store.js';
 import {
   RegistrationValueKind,
   type RegistrationValueReference,
@@ -98,7 +98,7 @@ export class RuntimeBindingSourceActivationContext {
   private readonly sourcesByFileName = new Map<string, EvaluatedProjectSource>();
 
   constructor(
-    private readonly store: KernelStore,
+    private readonly kernel: KernelStoreReadView,
     private readonly evaluation: StaticProjectEvaluationResult,
     private readonly typeSystem: TypeSystemProject,
   ) {
@@ -331,7 +331,7 @@ export class RuntimeBindingSourceActivationContext {
   ): DiActivationClassValue | null {
     const identity = reference.identityHandle == null
       ? null
-      : this.store.readIdentity(reference.identityHandle);
+      : this.kernel.read(reference.identityHandle);
     if (!(identity instanceof TypeScriptDeclarationIdentity) || identity.moduleKey == null || identity.localName == null) {
       return null;
     }
@@ -415,7 +415,7 @@ export class RuntimeBindingSourceActivationContext {
   private keySignatureForIdentity(
     identityHandle: IdentityHandle,
   ): DiActivationKeySignature | null {
-    const identity = this.store.readIdentity(identityHandle);
+    const identity = this.kernel.read(identityHandle);
     if (identity instanceof InterfaceDiKeyIdentity) {
       return { kind: 'interface', name: identity.interfaceName };
     }
@@ -423,7 +423,7 @@ export class RuntimeBindingSourceActivationContext {
       return { kind: 'string', value: identity.value };
     }
     if (identity instanceof ConstructableDiKeyIdentity) {
-      const declaration = this.store.readIdentity(identity.declarationHandle);
+      const declaration = this.kernel.read(identity.declarationHandle);
       return declaration instanceof TypeScriptDeclarationIdentity && declaration.moduleKey != null && declaration.localName != null
         ? { kind: 'constructable', moduleKey: normalizeModuleKey(declaration.moduleKey), localName: declaration.localName }
         : null;

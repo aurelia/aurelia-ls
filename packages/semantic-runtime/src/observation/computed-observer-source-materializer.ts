@@ -10,8 +10,13 @@ import type {
 } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
-  KernelStore,
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
+  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
@@ -102,6 +107,7 @@ interface RuntimeControlledComputedDeepObservedDependencyDraft extends RuntimeOb
 export class ComputedObserverSourceMaterializer {
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   materialize(
@@ -112,23 +118,19 @@ export class ComputedObserverSourceMaterializer {
       .map((site, index) => this.publicationForSite(project, typeSystem, site, index));
 
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'computed-observer-sources'));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(
-        ObservationProductDetails.ComputedObserverSource,
-        publication.observer.productHandle,
-        publication.observer,
-      );
-      for (const dependency of publication.observer.observedDependencies) {
-        this.store.productDetails.add(
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, 'computed-observer-sources'),
+      [
+        ...publishProductDetails(
+          ObservationProductDetails.ComputedObserverSource,
+          publications.map((publication) => publication.observer),
+        ),
+        ...publishProductDetails(
           ObservationProductDetails.ComputedObserverObservedDependency,
-          dependency.productHandle,
-          dependency,
-        );
-      }
-    }
+          publications.flatMap((publication) => publication.observer.observedDependencies),
+        ),
+      ],
+    ));
 
     return new ComputedObserverSourceProjectResult(publications.map((publication) => publication.observer));
   }
@@ -158,6 +160,7 @@ export class ComputedObserverSourceMaterializer {
     };
     const dependencies = computedObserverObservedDependenciesForSite(
       this.store,
+      this.publication,
       `${local}:observed-dependency`,
       site,
       observerReference,
@@ -277,6 +280,7 @@ interface ComputedObserverObservedDependencyPublication {
 
 function computedObserverObservedDependenciesForSite(
   store: KernelStore,
+  publication: KernelPublicationContext,
   local: string,
   site: ComputedObserverSourceSite,
   observer: {
@@ -288,7 +292,7 @@ function computedObserverObservedDependenciesForSite(
   typeSystem: TypeSystemProject,
   provenanceHandle: ProvenanceHandle,
 ): readonly ComputedObserverObservedDependencyPublication[] {
-  const drafts = observedDependencyDraftsForSite(store, site, typeSystem);
+  const drafts = observedDependencyDraftsForSite(store, publication, site, typeSystem);
   return distinctRuntimeObservedDependencyDrafts(drafts).map((draft, index) =>
     computedObserverObservedDependencyForDraft(store, `${local}:${index}`, site, observer, draft, index, provenanceHandle)
   );
@@ -296,6 +300,7 @@ function computedObserverObservedDependenciesForSite(
 
 function observedDependencyDraftsForSite(
   store: KernelStore,
+  publication: KernelPublicationContext,
   site: ComputedObserverSourceSite,
   typeSystem: TypeSystemProject,
 ): readonly ComputedObserverObservedDependencyDraft[] {
@@ -307,7 +312,7 @@ function observedDependencyDraftsForSite(
       return [
         ...ProxyObservable.collectObservedDependencyDrafts(
           site.getter,
-          ProxyObservable.typeContextForTypeSystem(typeSystem, store, store),
+          ProxyObservable.typeContextForTypeSystem(typeSystem, store, publication),
           { rootNames: ['this'] },
         ),
         ...deepDrafts,
@@ -316,7 +321,7 @@ function observedDependencyDraftsForSite(
     case ComputedObservationDependencyMode.DependencyFunction:
     case ComputedObservationDependencyMode.Open:
       return [
-        ...computedExplicitDependencyDraftsForSite(store, site, typeSystem),
+        ...computedExplicitDependencyDraftsForSite(store, publication, site, typeSystem),
         ...deepDrafts,
       ];
     case ComputedObservationDependencyMode.Disabled:
@@ -326,6 +331,7 @@ function observedDependencyDraftsForSite(
 
 function computedExplicitDependencyDraftsForSite(
   store: KernelStore,
+  publication: KernelPublicationContext,
   site: ComputedObserverSourceSite,
   typeSystem: TypeSystemProject,
 ): readonly ComputedObserverObservedDependencyDraft[] {
@@ -336,7 +342,7 @@ function computedExplicitDependencyDraftsForSite(
     ...site.dependency.dependencyFunctions.flatMap((dependency) =>
       ProxyObservable.collectObservedDependencyDrafts(
         dependency,
-        ProxyObservable.typeContextForTypeSystem(typeSystem, store, store),
+        ProxyObservable.typeContextForTypeSystem(typeSystem, store, publication),
       )
     ),
   ];

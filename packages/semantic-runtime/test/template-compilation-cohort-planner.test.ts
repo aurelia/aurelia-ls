@@ -23,6 +23,27 @@ import {
 import { TemplateTypeSystemOverlayBuilder } from '../src/template/template-type-system-overlay.js';
 
 describe('template compilation cohort planning', () => {
+  test('selects source-filtered authoring owners from the staged app generation', async () => {
+    const fixtureRoot = fixturePath('resource-metadata-errors');
+    const sourceFile = path.join(fixtureRoot, 'src/resource-metadata-errors-app.ts');
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:template-compilation-cohort-plan:staged-authoring-source',
+    });
+    const app = await runtime.openApp({
+      includeAuthoringTemplates: true,
+      authoringTemplateSourceFiles: [sourceFile],
+    });
+
+    expect(owner(app.emission.templates.cohortPlan, 'containerless-slot-conflict').cohorts.map((cohort) => cohort.kind))
+      .toEqual([TemplateCompilationCohortKind.Authoring]);
+    const slotConflict = app.emission.templates.authoringResources.find((resource) =>
+      resource.compilation.definition.name === 'containerless-slot-conflict'
+    );
+    expect(slotConflict?.compilation.compiledTemplate.issues.map((issue) => issue.frameworkErrorCode))
+      .toContain('AUR0717');
+  }, 30_000);
+
   test('partitions routeable owners by app-root context and retains every admission origin', async () => {
     const fixtureRoot = fixturePath('router-configuration-root-ownership');
     const runtime = await createSemanticRuntime({
@@ -82,16 +103,20 @@ describe('template compilation cohort planning', () => {
       [...app.emission.appWorld.compilerWorlds].reverse(),
     );
     const committedRecordCount = runtime.workspace.store.readAllRecords().length;
-    const currentComputation = runtime.computationLifecycle.readState(
-      app.emission.templateAnalysisGeneration.computationId,
-    );
+    const appGeneration = runtime.appAnalysisComputations.authorityFor(app.project.projectKey).current();
+    expect(appGeneration).not.toBeNull();
+    if (appGeneration == null) {
+      throw new Error('Expected a current app-analysis generation.');
+    }
+    const currentComputation = runtime.computationLifecycle.readState(appGeneration.computationId);
     expect(currentComputation).not.toBeNull();
     if (currentComputation == null) {
-      throw new Error('Expected a current template-analysis computation.');
+      throw new Error('Expected a current app-analysis computation.');
     }
     const reorderedPlan = new TemplateCompilationCohortPlanner(
       runtime.workspace.store,
       new StagedKernelPublicationContext(runtime.workspace.store, currentComputation.publication),
+      runtime.frameworkSupport,
     ).plan(new TemplateCompilationCohortPlanningRequest(
       app.project.projectKey,
       reorderedAppWorld,

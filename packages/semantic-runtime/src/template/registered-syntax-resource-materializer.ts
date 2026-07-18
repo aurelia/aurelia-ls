@@ -1,7 +1,11 @@
 import { MaterializationRecord } from '../kernel/materialization.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetail,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
-  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { AttributePatternDefinition } from '../resources/attribute-pattern-definition.js';
@@ -41,8 +45,8 @@ export interface RegisteredSyntaxResourceMaterializationInput {
 export class RegisteredSyntaxResourceMaterializer {
   private readonly executables: SyntaxResourceExecutableMaterializer;
 
-  constructor(private readonly store: KernelStore) {
-    this.executables = new SyntaxResourceExecutableMaterializer(store);
+  constructor(private readonly publication: KernelPublicationContext) {
+    this.executables = new SyntaxResourceExecutableMaterializer(publication);
   }
 
   materialize(input: RegisteredSyntaxResourceMaterializationInput): RegisteredSyntaxResourceEmission {
@@ -90,30 +94,28 @@ export class RegisteredSyntaxResourceMaterializer {
       }
     });
 
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `registered-syntax-resources:${input.localKey}`));
-    }
-    for (const pattern of attributePatterns) {
-      this.store.productDetails.addIfAbsent(
-        TemplateProductDetails.AttributePatternExecutable,
-        pattern.executable.productHandle,
-        pattern.executable,
-      );
-      for (const compiled of pattern.compiledPatterns) {
-        this.store.productDetails.addIfAbsent(
-          TemplateProductDetails.CompiledAttributePattern,
-          compiled.productHandle,
-          compiled,
-        );
-      }
-    }
-    for (const command of bindingCommands) {
-      this.store.productDetails.addIfAbsent(
-        TemplateProductDetails.BindingCommandExecutable,
-        command.executable.productHandle,
-        command.executable,
-      );
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `registered-syntax-resources:${input.localKey}`),
+      [
+        ...attributePatterns.flatMap((pattern) => [
+          publishProductDetail(
+            TemplateProductDetails.AttributePatternExecutable,
+            pattern.executable.productHandle,
+            pattern.executable,
+          ),
+          ...pattern.compiledPatterns.map((compiled) => publishProductDetail(
+            TemplateProductDetails.CompiledAttributePattern,
+            compiled.productHandle,
+            compiled,
+          )),
+        ]),
+        ...bindingCommands.map((command) => publishProductDetail(
+          TemplateProductDetails.BindingCommandExecutable,
+          command.executable.productHandle,
+          command.executable,
+        )),
+      ],
+    ));
     return new RegisteredSyntaxResourceEmission(attributePatterns, bindingCommands, records);
   }
 
@@ -141,7 +143,7 @@ export class RegisteredSyntaxResourceMaterializer {
       provenanceHandle,
     });
     const materialization = new MaterializationRecord(
-      this.store.handles.materialization(localKey),
+      this.publication.handles.materialization(localKey),
       definition.identityHandle,
       [publication.executable.productHandle, ...publication.compiledPatterns.map((pattern) => pattern.productHandle)],
       publication.claimHandles,
@@ -192,7 +194,7 @@ export class RegisteredSyntaxResourceMaterializer {
       records: [
         ...publication.records,
         new MaterializationRecord(
-          this.store.handles.materialization(localKey),
+          this.publication.handles.materialization(localKey),
           definition.identityHandle,
           [publication.executable.productHandle],
         ),
@@ -204,8 +206,12 @@ export class RegisteredSyntaxResourceMaterializer {
     admission: ResourceRegistrationAdmission,
     definitionProductHandle: NonNullable<AttributePatternDefinition['productHandle'] | BindingCommandDefinition['productHandle']>,
   ) {
-    return this.store.readProduct(admission.productHandle)?.provenanceHandle
-      ?? this.store.readProduct(definitionProductHandle)?.provenanceHandle
-      ?? null;
+    const admissionProduct = this.publication.read(admission.productHandle);
+    const definitionProduct = this.publication.read(definitionProductHandle);
+    return admissionProduct?.kind === 'materialized-product'
+      ? admissionProduct.provenanceHandle
+      : definitionProduct?.kind === 'materialized-product'
+        ? definitionProduct.provenanceHandle
+        : null;
   }
 }

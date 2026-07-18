@@ -294,7 +294,6 @@ function trackableDependenciesForMember(
     ...dependency.dependencyKeyReads.flatMap((key) =>
       connectableDraftsForTrackableDependencyKey(key)
         .map((draft) => trackableReceiverDependencyDraft(
-          store,
           publication,
           carrier.checker,
           receiverType,
@@ -327,14 +326,12 @@ function methodBodyProxyDependencies(
 }
 
 function trackableReceiverDependencyDraft<TDraft extends RuntimeObservedDependencyDraft>(
-  store: KernelStore,
   publication: KernelPublicationContext,
   checker: ts.TypeChecker,
   receiverType: ts.Type | null,
   draft: TDraft,
 ): TDraft {
   return observedDependencyWithMemberSourceForCheckerType(
-    store,
     publication,
     checker,
     receiverType,

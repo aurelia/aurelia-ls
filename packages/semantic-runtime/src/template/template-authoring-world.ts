@@ -12,13 +12,12 @@ import {
 import type { KernelStore, KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
-  BuiltInResourceCatalogMaterializer,
+  BuiltInResourceTargetProjectionMaterializer,
   type BuiltInResourceEmission,
 } from '../resources/built-in-resource-catalog-materializer.js';
 import { RuntimeHtmlBuiltInResourceCatalogs } from '../resources/built-in-resources.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { TypeSystemProject } from '../type-system/project.js';
-import { BuiltInSyntaxCatalogMaterializer } from './built-in-syntax-catalog-materializer.js';
 import { RuntimeHtmlBuiltInSyntaxCatalogs } from './built-in-syntax.js';
 import { TemplateCompilerWorldKind } from './compiler-world.js';
 import {
@@ -31,8 +30,8 @@ import {
   type TemplateCompilerWorldEmission,
 } from './compiler-world-materializer.js';
 import { visibleResourceForDefinition } from './resource-scope-builder.js';
-import { BuiltInRuntimeRendererCatalogMaterializer } from './runtime-renderer-catalog-materializer.js';
-import { RuntimeHtmlDefaultRenderers, RuntimeRendererGroup, RuntimeRendererPackage } from './runtime-renderer.js';
+import { RuntimeRendererCatalogs } from './runtime-renderer-catalog-materializer.js';
+import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 
 interface AuthoringContainerSourceSet {
   readonly records: readonly KernelStoreRecord[];
@@ -59,14 +58,18 @@ export interface TemplateAuthoringCompilerWorldRequest {
  */
 export class TemplateAuthoringCompilerWorldMaterializer {
   private readonly compilerWorldMaterializer: TemplateCompilerWorldMaterializer;
+  private readonly builtInResourceTargets: BuiltInResourceTargetProjectionMaterializer;
 
   constructor(
     /** Store that owns the already-current framework support catalogs. */
     readonly store: KernelStore,
     /** Transaction that owns the standalone authoring container and compiler world. */
     private readonly publication: KernelPublicationContext,
+    /** Stable framework catalogs borrowed by the authoring compiler world. */
+    private readonly support: FrameworkSupportCatalogs,
   ) {
     this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(publication);
+    this.builtInResourceTargets = new BuiltInResourceTargetProjectionMaterializer(store, publication);
   }
 
   construct(request: TemplateAuthoringCompilerWorldRequest): TemplateCompilerWorldEmission | null {
@@ -102,26 +105,21 @@ export class TemplateAuthoringCompilerWorldMaterializer {
     ));
   }
 
-  private materializeAuthoringSyntax(): ReturnType<BuiltInSyntaxCatalogMaterializer['materialize']> {
-    return new BuiltInSyntaxCatalogMaterializer(this.store, this.publication)
-      .materialize(Object.values(RuntimeHtmlBuiltInSyntaxCatalogs));
+  private materializeAuthoringSyntax() {
+    return this.support.materializeSyntaxCatalogs(Object.values(RuntimeHtmlBuiltInSyntaxCatalogs));
   }
 
   private materializeAuthoringBuiltInResources(
     typeSystem: TypeSystemProject | null,
-  ): ReturnType<BuiltInResourceCatalogMaterializer['materialize']> {
-    return new BuiltInResourceCatalogMaterializer(this.store, this.publication).materialize(
-      Object.values(RuntimeHtmlBuiltInResourceCatalogs),
+  ) {
+    return this.builtInResourceTargets.project(
+      this.support.materializeResourceCatalogs(Object.values(RuntimeHtmlBuiltInResourceCatalogs)),
       typeSystem,
     );
   }
 
-  private materializeAuthoringRenderers(): ReturnType<BuiltInRuntimeRendererCatalogMaterializer['materialize']> {
-    return new BuiltInRuntimeRendererCatalogMaterializer(this.store, this.publication).materialize([{
-      packageId: RuntimeRendererPackage.RuntimeHtml,
-      group: RuntimeRendererGroup.RuntimeHtmlDefaultRenderers,
-      renderers: RuntimeHtmlDefaultRenderers,
-    }]);
+  private materializeAuthoringRenderers() {
+    return this.support.materializeRendererCatalogs([RuntimeRendererCatalogs.RuntimeHtmlDefaultRenderers]);
   }
 
   private authoringContainer(

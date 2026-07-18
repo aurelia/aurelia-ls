@@ -10,6 +10,11 @@ import {
 import type { AddressHandle } from '../kernel/handles.js';
 import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
   type KernelStore,
 } from '../kernel/store.js';
@@ -47,19 +52,21 @@ export class I18nTranslationCatalogMaterializationProjectPass {
   materializeAndEmit(
     store: KernelStore,
     configuration: ConfigurationRecognitionProjectResult,
+    publication: KernelPublicationContext,
   ): I18nTranslationCatalogProjectResult {
-    const sourceTextCache = new AuthoredSourceTextCache('', configuration.project.sourceTextProvider);
+    const sourceTextCache = new AuthoredSourceTextCache('', configuration.project.inputGeneration.host);
     const seeds = uniqueTranslationKeySeeds(readTranslationKeySeeds(configuration));
     const emissions = seeds.map((seed, index) =>
       i18nTranslationKeyProductEmission(store, configuration.project.projectKey, seed, index, sourceTextCache)
     );
     const records = emissions.flatMap((emission) => emission.records);
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `i18n-translation-catalog:${configuration.project.projectKey}`));
-    }
-    for (const emission of emissions) {
-      store.productDetails.add(I18nProductDetails.TranslationKey, emission.key.productHandle, emission.key);
-    }
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `i18n-translation-catalog:${configuration.project.projectKey}`),
+      publishProductDetails(
+        I18nProductDetails.TranslationKey,
+        emissions.map((emission) => emission.key),
+      ),
+    ));
     return new I18nTranslationCatalogProjectResult(
       configuration,
       emissions.map((emission) => emission.key),

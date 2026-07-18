@@ -15,8 +15,9 @@ import {
 import {
   SourceFileRole,
 } from '../kernel/address.js';
-import type { SemanticRuntimeSourceTextProvider } from '../kernel/source-text-provider.js';
-import { buildWorkspaceTypeSystemProjectOptions } from './project-options.js';
+import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
+import { sourceTextContentRevision } from '../kernel/source-text-snapshot.js';
+import { typeSystemProjectOptions } from './project-options.js';
 import {
   diffCompilerHostSourceFileCacheStats,
   sharedCompilerHostSourceFileCache,
@@ -42,6 +43,11 @@ import {
   typeSystemProjectEpochForChecker,
   type TypeSystemProjectEpoch,
 } from './checker-epoch.js';
+import {
+  CheckerDeclarationSourceContext,
+  registerCheckerDeclarationSourceContext,
+} from './declaration-source.js';
+import type { TypeSystemProgramSourceCatalog } from './program-source-authority.js';
 export {
   clearTypeSystemCompilerHostSourceFileCache,
   readTypeSystemCompilerHostSourceFileCacheOverview,
@@ -188,6 +194,8 @@ export class TypeSystemProject {
     readonly configFilePath: string | null,
     /** Timing profile for this checker epoch. */
     readonly profile: TypeSystemProjectProfile,
+    /** Ownership policy for checker-only source locations reached by this Program. */
+    readonly programSources: TypeSystemProgramSourceCatalog,
     private readonly sourceFilesByModuleKey: ReadonlyMap<string, ts.SourceFile>,
     private readonly sourceFilesByPath: ReadonlyMap<string, ts.SourceFile>,
     private readonly moduleKeysByPath: ReadonlyMap<string, string>,
@@ -195,7 +203,12 @@ export class TypeSystemProject {
     private readonly overlaySourcesByPath: ReadonlyMap<string, TypeSystemOverlaySource>,
     private readonly overlaySourcePaths: ReadonlySet<string>,
     private readonly diagnosticSourcePaths: ReadonlySet<string> | null,
-  ) {}
+  ) {
+    registerCheckerDeclarationSourceContext(
+      checker,
+      new CheckerDeclarationSourceContext(project.projectKey, programSources, overlaySourcePaths),
+    );
+  }
 
   /** Read an evaluator-owned source file by evaluator module key. */
   readEvaluatedSourceFileByModuleKey(moduleKey: string): ts.SourceFile | null {
@@ -538,6 +551,8 @@ export class TypeSystemProject {
 
 /** Builds the TypeChecker epoch shared by resource, template, and inquiry passes. */
 export class TypeSystemProjectBuilder {
+  constructor(private readonly programSources: TypeSystemProgramSourceCatalog) {}
+
   build(
     project: ProjectBootFrame,
     evaluation: StaticProjectEvaluationResult,
@@ -556,7 +571,7 @@ export class TypeSystemProjectBuilder {
     const evaluatedSourcePaths = normalizedTypeSystemPathSet(sourceFiles.byPath.keys());
 
     const projectOptions = measureTypeSystemProjectPhase(phases, 'project-options', () =>
-      buildWorkspaceTypeSystemProjectOptions(project.rootDir, project.workspaceRootDir)
+      typeSystemProjectOptions(project)
     );
     const overlaySources = typeSystemProjectOverlaySources(projectOptions.overlaySources, buildOptions.overlaySources);
     const overlaySourceFiles = overlaySources.map(createTypeSystemOverlaySourceFile);
@@ -575,7 +590,7 @@ export class TypeSystemProjectBuilder {
     const host = measureTypeSystemProjectPhase(
       phases,
       'compiler-host',
-      () => createTypeSystemCompilerHost(options, sourceFiles.byPath, project.rootDir, project.sourceTextProvider),
+      () => createTypeSystemCompilerHost(options, sourceFiles.byPath, project.rootDir, project.inputGeneration.host),
       () => sourceFiles.byPath.size,
     );
 
@@ -642,6 +657,7 @@ export class TypeSystemProjectBuilder {
           overlaySourcePaths,
         ),
       },
+      this.programSources,
       sourceFiles.byModuleKey,
       sourceFiles.byPath,
       sourceFiles.moduleKeyByPath,
@@ -1233,16 +1249,18 @@ function createTypeSystemCompilerHost(
   options: ts.CompilerOptions,
   byPath: ReadonlyMap<string, ts.SourceFile>,
   projectRootDir: string,
-  sourceTextProvider: SemanticRuntimeSourceTextProvider | null,
+  inputHost: SemanticRuntimeProjectInputHost,
 ): ts.CompilerHost {
   const compilerHost = ts.createCompilerHost(options, true);
-  const defaultGetSourceFile = compilerHost.getSourceFile.bind(compilerHost);
-  const defaultFileExists = compilerHost.fileExists.bind(compilerHost);
-  const defaultReadFile = compilerHost.readFile.bind(compilerHost);
-  compilerHost.fileExists = (fileName) =>
-    sourceTextProvider?.fileExists?.(fileName) ?? defaultFileExists(fileName);
-  compilerHost.readFile = (fileName) =>
-    sourceTextProvider?.readFile(fileName) ?? defaultReadFile(fileName);
+  compilerHost.fileExists = (fileName) => inputHost.fileExists(fileName);
+  compilerHost.readFile = (fileName) => inputHost.readFile(fileName);
+  compilerHost.directoryExists = (directoryName) => inputHost.directoryExists(directoryName);
+  compilerHost.getDirectories = (directoryName) => inputHost.readDirectory(directoryName)
+    .map((entry) => path.join(directoryName, entry))
+    .filter((entry) => inputHost.directoryExists(entry));
+  compilerHost.realpath = (fileName) => inputHost.realpath(fileName);
+  compilerHost.readDirectory = (rootDir, extensions, excludes, includes, depth) =>
+    [...inputHost.matchFiles(rootDir, extensions, excludes, includes, depth)];
   compilerHost.getSourceFile = (
     fileName,
     languageVersionOrOptions,
@@ -1250,22 +1268,27 @@ function createTypeSystemCompilerHost(
     shouldCreateNewSourceFile,
   ) => {
     const existing = byPath.get(canonicalTypeSystemPath(fileName));
-    const providerText = sourceTextProvider?.readFile(fileName);
-    if (providerText !== undefined) {
-      return ts.createSourceFile(
-        fileName,
-        providerText,
-        languageVersionOrOptions,
-        true,
-        scriptKindForTypeSystemPath(fileName),
-      );
+    if (existing != null) {
+      return existing;
     }
-    return existing ?? sharedCompilerHostSourceFileCache.readOrCreate(
+    const text = inputHost.readFile(fileName);
+    if (text === undefined) {
+      onError?.(`Source file '${fileName}' is unavailable in the current project-input generation.`);
+      return undefined;
+    }
+    return sharedCompilerHostSourceFileCache.readOrCreate(
       fileName,
       languageVersionOrOptions,
       projectRootDir,
       shouldCreateNewSourceFile,
-      () => defaultGetSourceFile(fileName, languageVersionOrOptions, onError, shouldCreateNewSourceFile),
+      sourceTextContentRevision(text),
+      () => ts.createSourceFile(
+        fileName,
+        text,
+        languageVersionOrOptions,
+        true,
+        scriptKindForTypeSystemPath(fileName),
+      ),
     );
   };
   return compilerHost;

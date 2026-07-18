@@ -1,4 +1,5 @@
-import type { KernelStore } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
+import type { KernelMaterializationReadView, KernelStoreReadView } from '../kernel/store.js';
 import type { BuiltInResource } from '../resources/built-in-resources.js';
 import { readBuiltInResourceForDefinition } from '../resources/resource-definition-lineage.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
@@ -21,7 +22,7 @@ export function findVisibleTemplateResource(
 
 /** Recover framework catalog identity without confusing an app resource that shadows a built-in lookup name. */
 export function readBuiltInVisibleTemplateResource(
-  store: KernelStore,
+  store: KernelStoreReadView & KernelMaterializationReadView & ProductDetailReadView,
   resource: TemplateVisibleResource | null,
 ): BuiltInResource | null {
   const productHandle = resource?.definitionProductHandle ?? resource?.resourceProductHandle ?? null;

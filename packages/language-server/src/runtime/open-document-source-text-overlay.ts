@@ -1,14 +1,14 @@
 import path from "node:path";
 import { URI } from "vscode-uri";
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import type { SemanticRuntimeSourceTextProvider } from "@aurelia-ls/semantic-runtime";
+import type { SemanticRuntimeSourceTextOverlay } from "@aurelia-ls/semantic-runtime";
 
 export interface OpenTextDocumentStore {
   get(uri: string): TextDocument | undefined;
   all(): TextDocument[];
 }
 
-export class OpenDocumentSourceTextProvider implements SemanticRuntimeSourceTextProvider {
+export class OpenDocumentSourceTextOverlay implements SemanticRuntimeSourceTextOverlay {
   constructor(
     private readonly documents: OpenTextDocumentStore,
   ) {}

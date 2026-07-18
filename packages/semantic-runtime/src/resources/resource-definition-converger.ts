@@ -37,6 +37,11 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetail,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   OpenSeam,
   OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
@@ -322,6 +327,7 @@ class CustomElementConvergenceFrame {
     private readonly header: ResourceDefinitionHeaderEmission,
     private readonly provenanceHandle: ProvenanceHandle,
     private readonly sourceTextCache: AuthoredSourceTextCache,
+    private readonly publication: KernelPublicationContext,
   ) {
     this.targetClass = resourceTargetClassLikeNode(definition.target);
     this.definitionExpression = expressionNode(observation.definitionNode);
@@ -408,6 +414,7 @@ class CustomElementConvergenceFrame {
       target,
       this.header.primaryIdentityHandle,
       this.provenanceHandle,
+      this.publication,
     );
   }
 
@@ -693,9 +700,11 @@ function newAliasNames(
 /** Turns recognized resource headers and source metadata into compiler-consumable definition products. */
 export class ResourceDefinitionConverger {
   constructor(
-    /** Hot analysis store that receives converged resource definition records. */
+    /** Store that owns stable handles and committed upstream records. */
     readonly store: KernelStore,
-    private readonly sourceTextCache = new AuthoredSourceTextCache(''),
+    private readonly sourceTextCache: AuthoredSourceTextCache,
+    /** Immediate or staged owner of the complete convergence publication. */
+    private readonly publication: KernelPublicationContext,
   ) {}
 
   converge(
@@ -720,17 +729,15 @@ export class ResourceDefinitionConverger {
       }
     }
 
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `resource-definition-convergence:${context.moduleKey}`));
-    }
-    for (const definition of definitions) {
-      if (definition.productHandle != null) {
-        this.store.productDetails.add(ResourceProductDetails.Definition, definition.productHandle, definition);
-      }
-    }
-    for (const issue of issues) {
-      this.store.productDetails.add(ResourceProductDetails.Issue, issue.productHandle, issue);
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `resource-definition-convergence:${context.moduleKey}`),
+      [
+        ...definitions.flatMap((definition) => definition.productHandle == null
+          ? []
+          : [publishProductDetail(ResourceProductDetails.Definition, definition.productHandle, definition)]),
+        ...issues.map((issue) => publishProductDetail(ResourceProductDetails.Issue, issue.productHandle, issue)),
+      ],
+    ));
 
     return new ResourceDefinitionConvergenceEmission(definitions, issues, records);
   }
@@ -744,7 +751,7 @@ export class ResourceDefinitionConverger {
       return new ResourceDefinitionConvergenceProduct([], null);
     }
     const definitionProductHandle = this.store.handles.product(`resource-definition-converged:${header.localKey}`);
-    if (this.store.readProduct(definitionProductHandle) != null) {
+    if (this.publication.read(definitionProductHandle) != null) {
       return new ResourceDefinitionConvergenceProduct([], null);
     }
 
@@ -844,7 +851,8 @@ export class ResourceDefinitionConverger {
   }
 
   private evidenceHandlesForProvenance(provenanceHandle: ProvenanceHandle): readonly EvidenceHandle[] {
-    return this.store.readProvenance(provenanceHandle)?.evidenceHandles ?? [];
+    const provenance = this.publication.read(provenanceHandle);
+    return provenance instanceof ProvenanceRecord ? provenance.evidenceHandles : [];
   }
 
   private convergeDefinition(
@@ -889,6 +897,7 @@ export class ResourceDefinitionConverger {
       header,
       provenanceHandle,
       this.sourceTextCache,
+      this.publication,
     ).read();
     if (facts == null) {
       return null;
@@ -1001,6 +1010,7 @@ export class ResourceDefinitionConverger {
       target,
       header.primaryIdentityHandle,
       provenanceHandle,
+      this.publication,
     );
     const watches = readWatches(
       this.store,

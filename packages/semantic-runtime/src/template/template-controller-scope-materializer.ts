@@ -1729,9 +1729,9 @@ export class TemplateControllerScopeMaterializer {
   ): IteratorScopeMaterializationFrame {
     const input = frame.input;
     const sourceValueEvaluator = input.evaluation == null
-      ? null
-      : RuntimeBindingSourceValueEvaluator.create(
-          this.store,
+       ? null
+       : RuntimeBindingSourceValueEvaluator.create(
+          input.expressionWorld.projector.publication,
           input.expressionWorld.projector,
           input.evaluation,
           input.boundControllerValues,
@@ -1742,7 +1742,7 @@ export class TemplateControllerScopeMaterializer {
       ? null
       : input.runtimeBindings.readBinding(effect.binding.productHandle);
     const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-      this.store,
+      input.expressionWorld.projector.publication,
       input.expressionWorld,
       input.expressionResourcePlan,
     );
@@ -2049,7 +2049,7 @@ export class TemplateControllerScopeMaterializer {
       ? null
       : input.runtimeBindings.readBinding(effect.binding.productHandle);
     const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-      this.store,
+      input.expressionWorld.projector.publication,
       input.expressionWorld,
       input.expressionResourcePlan,
     );
@@ -2067,7 +2067,7 @@ export class TemplateControllerScopeMaterializer {
       effect,
       targetType,
       sourceValueEvaluator: RuntimeBindingSourceValueEvaluator.create(
-        this.store,
+        input.expressionWorld.projector.publication,
         input.expressionWorld.projector,
         input.evaluation,
         input.boundControllerValues,

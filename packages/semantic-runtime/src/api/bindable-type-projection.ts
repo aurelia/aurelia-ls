@@ -19,6 +19,7 @@ export interface SemanticBindableTypeSurfaceProjection {
 
 export function projectBindableTypeSurface(
   store: KernelStore,
+  projector: CheckerTypeProjector,
   target: ResourceTargetReference,
   bindable: BindableDefinition,
 ): SemanticBindableTypeSurfaceProjection {
@@ -30,7 +31,7 @@ export function projectBindableTypeSurface(
   const member = targetType?.members.find((candidate) => candidate.name === bindable.name) ?? null;
   const surface = member != null
     ? readCheckerMemberValueSurface(member)
-    : lazyBindableTypeSurface(store, target, bindable);
+    : lazyBindableTypeSurface(store, projector, target, bindable);
   return {
     valueType: surface.display,
     valueTypeShapeKind: surface.shapeKind,
@@ -43,6 +44,7 @@ export function projectBindableTypeSurface(
 
 function lazyBindableTypeSurface(
   store: KernelStore,
+  projector: CheckerTypeProjector,
   target: ResourceTargetReference,
   bindable: BindableDefinition,
 ) {
@@ -53,7 +55,7 @@ function lazyBindableTypeSurface(
   if (targetType == null) {
     return readCheckerReferenceSurface(store, null);
   }
-  const access = new CheckerTypeShapeAccess(store, new CheckerTypeProjector(store));
+  const access = new CheckerTypeShapeAccess(store, projector);
   const value = access.memberValueAccess(
     targetType,
     bindable.name,

@@ -47,11 +47,12 @@ import {
   ResolverStrategy,
 } from './resolver.js';
 import { DiKeyIdentityEmitter } from './di-key-identity-emitter.js';
+import { FrameworkIntrinsicDiKey } from './framework-intrinsic-di-key.js';
 
 export class ContainerContextResolverSlotRequest {
   constructor(
     /** Interface symbol name used as the DI key identity. */
-    readonly interfaceName: string,
+    readonly interfaceName: FrameworkIntrinsicDiKey,
     /** Source address for the renderer/controller operation that installed the contextual provider. */
     readonly sourceAddressHandle: AddressHandle | null = null,
   ) {}
@@ -285,8 +286,13 @@ export class ContainerChildMaterializer {
   ): ContainerSlotEmission<ContainerSelfResolverSlot> {
     const local = `di-self-resolver:${container.productHandle}`;
     const records: KernelStoreRecord[] = [];
-    const keyIdentityHandle = this.keyIdentityEmitter.interfaceKeyIdentityHandle('IContainer');
-    this.keyIdentityEmitter.emitInterfaceKeyIdentity(records, keyIdentityHandle, 'IContainer', container.sourceAddressHandle);
+    const keyIdentityHandle = this.keyIdentityEmitter.interfaceKeyIdentityHandle(FrameworkIntrinsicDiKey.IContainer);
+    this.keyIdentityEmitter.emitInterfaceKeyIdentity(
+      records,
+      keyIdentityHandle,
+      FrameworkIntrinsicDiKey.IContainer,
+      container.sourceAddressHandle,
+    );
 
     const handles = this.containerSlotProductHandles(local, keyIdentityHandle);
     const slot = this.containerSelfResolverSlot(container, handles);

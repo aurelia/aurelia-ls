@@ -8,8 +8,14 @@ import {
   type SourceFileRole,
 } from '../kernel/address.js';
 import { EvidenceKind, EvidenceRecord, EvidenceRole } from '../kernel/evidence.js';
+import type { AddressHandle, EvidenceHandle, ProvenanceHandle } from '../kernel/handles.js';
+import { KernelPublicationPlan, type KernelPublicationContext } from '../kernel/publication.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import { KernelStore, KernelStoreBatch } from '../kernel/store.js';
+import {
+  nodeSemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputAuthority,
+} from '../kernel/project-input.js';
 import {
   ProjectBootFrame,
   SourceFileAdmission,
@@ -62,9 +68,9 @@ class SourceFileAdmissionPaths {
 
 class SourceFileAdmissionHandles {
   constructor(
-    readonly addressHandle: ReturnType<KernelStore['handles']['address']>,
-    readonly evidenceHandle: ReturnType<KernelStore['handles']['evidence']>,
-    readonly provenanceHandle: ReturnType<KernelStore['handles']['provenance']>,
+    readonly addressHandle: AddressHandle,
+    readonly evidenceHandle: EvidenceHandle,
+    readonly provenanceHandle: ProvenanceHandle,
   ) {}
 }
 
@@ -72,14 +78,31 @@ class SourceFileAdmissionHandles {
 export function bootWorkspace(input: BootWorkspaceInput): WorkspaceBootFrame {
   const workspaceKey = input.storeKey ?? `workspace:${input.rootDir}`;
   const store = input.store ?? new KernelStore(workspaceKey);
+  const projectInputAuthority = input.projectInputAuthority ?? new SemanticRuntimeProjectInputAuthority();
   const projectInputs = input.projects ?? discoverBootProjects(
     input.rootDir,
+    nodeSemanticRuntimeProjectInputHost,
     input.projectDiscovery ?? BootProjectDiscoveryMode.PackageTsconfig,
   );
+  assertUniqueProjectKeys(projectInputs);
   const projects = projectInputs
-    .map((project) => bootProject(store, input.rootDir, project, input.sourceTextProvider ?? null));
+    .map((project) => bootProject(store, input.rootDir, project, projectInputAuthority));
 
-  return new WorkspaceBootFrame(input.rootDir, workspaceKey, store, projects);
+  return new WorkspaceBootFrame(input.rootDir, workspaceKey, store, projects, projectInputAuthority);
+}
+
+function assertUniqueProjectKeys(projects: readonly BootProjectInput[]): void {
+  const rootsByKey = new Map<string, string>();
+  for (const project of projects) {
+    const projectKey = project.projectKey ?? defaultProjectKey(project.rootDir);
+    const existingRoot = rootsByKey.get(projectKey) ?? null;
+    if (existingRoot != null) {
+      throw new Error(
+        `Cannot boot projects '${existingRoot}' and '${project.rootDir}' with duplicate project key '${projectKey}'.`,
+      );
+    }
+    rootsByKey.set(projectKey, project.rootDir);
+  }
 }
 
 /** Boot one project frame and admit source files into the kernel. */
@@ -87,7 +110,7 @@ export function bootProject(
   store: KernelStore,
   workspaceRootDir: string,
   input: BootProjectInput,
-  sourceTextProvider: BootWorkspaceInput['sourceTextProvider'] = null,
+  projectInputAuthority: SemanticRuntimeProjectInputAuthority = new SemanticRuntimeProjectInputAuthority(),
 ): ProjectBootFrame {
   const projectKey = input.projectKey ?? defaultProjectKey(input.rootDir);
   const discovery: SourceDiscoveryResult | null = input.sourceFiles == null
@@ -98,37 +121,38 @@ export function bootProject(
     admitSourceFile(store, workspaceRootDir, input.rootDir, projectKey, source)
   );
 
-  return new ProjectBootFrame(workspaceRootDir, input.rootDir, projectKey, admissions, discovery, sourceTextProvider ?? null);
+  const inputGeneration = projectInputAuthority.capture({ projectKey, rootDir: input.rootDir });
+  return new ProjectBootFrame(workspaceRootDir, input.rootDir, projectKey, admissions, discovery, inputGeneration);
 }
 
 /** Admit one source file as an address plus evidence/provenance records. */
 export function admitSourceFile(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   workspaceRootDir: string,
   projectRootDir: string,
   projectKey: string,
   source: BootSourceFileInput,
 ): SourceFileAdmission {
   const paths = sourceFileAdmissionPaths(workspaceRootDir, projectRootDir, source);
-  const handles = sourceFileAdmissionHandles(store, projectKey, paths.projectPath);
-  const existing = existingSourceFileAdmission(store, projectKey, paths, handles);
+  const handles = sourceFileAdmissionHandles(publication, projectKey, paths.projectPath);
+  const existing = existingSourceFileAdmission(publication, projectKey, paths, handles);
   if (existing != null) {
     return existing;
   }
-  store.commit(new KernelStoreBatch(
+  publication.publish(new KernelPublicationPlan(new KernelStoreBatch(
     recordsForSourceFileAdmission(projectKey, source, paths, handles),
-    `boot-source:${projectKey}:${paths.projectPath}`,
-  ));
+    `source-admission:${projectKey}:${paths.projectPath}`,
+  )));
   return sourceFileAdmission(projectKey, paths, handles);
 }
 
 function existingSourceFileAdmission(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   projectKey: string,
   paths: SourceFileAdmissionPaths,
   handles: SourceFileAdmissionHandles,
 ): SourceFileAdmission | null {
-  const existing = store.readAddress(handles.addressHandle);
+  const existing = publication.read(handles.addressHandle);
   return existing?.kind === 'source-file-address'
     ? sourceFileAdmission(projectKey, new SourceFileAdmissionPaths(
       paths.projectPath,
@@ -170,14 +194,14 @@ function sourceFileAdmissionPaths(
 }
 
 function sourceFileAdmissionHandles(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   projectKey: string,
   path: string,
 ): SourceFileAdmissionHandles {
   return new SourceFileAdmissionHandles(
-    store.handles.address(sourceLocalKey(projectKey, path)),
-    store.handles.evidence(evidenceLocalKey(projectKey, path)),
-    store.handles.provenance(provenanceLocalKey(projectKey, path)),
+    publication.handles.address(sourceLocalKey(projectKey, path)),
+    publication.handles.evidence(evidenceLocalKey(projectKey, path)),
+    publication.handles.provenance(provenanceLocalKey(projectKey, path)),
   );
 }
 

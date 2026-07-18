@@ -1,6 +1,6 @@
-import { sourceSpanContains, type SourceSpanAddress } from '../kernel/address.js';
+import { SourceSpanAddress, sourceSpanContains } from '../kernel/address.js';
 import type { ProductHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelStoreReadView } from '../kernel/store.js';
 import {
   RegistryRegistrationAdmission,
   type RegistrationAdmissionProduct,
@@ -33,10 +33,10 @@ export class RegistryBodyStepIndex {
 }
 
 export function buildRegistryBodyStepIndex(
-  store: KernelStore,
+  records: KernelStoreReadView,
   configuration: ConfigurationKernelEmission,
 ): RegistryBodyStepIndex {
-  const registrySequences = registrySequenceSpans(store, configuration);
+  const registrySequences = registrySequenceSpans(records, configuration);
   if (registrySequences.length === 0) {
     return new RegistryBodyStepIndex();
   }
@@ -47,7 +47,7 @@ export function buildRegistryBodyStepIndex(
     if (!(admission instanceof RegistryRegistrationAdmission)) {
       continue;
     }
-    const valueSpan = readSourceSpan(store, admission.registryValue?.addressHandle ?? admission.sourceAddressHandle);
+    const valueSpan = readSourceSpan(records, admission.registryValue?.addressHandle ?? admission.sourceAddressHandle);
     if (valueSpan == null) {
       continue;
     }
@@ -63,7 +63,7 @@ export function buildRegistryBodyStepIndex(
 }
 
 function registrySequenceSpans(
-  store: KernelStore,
+  records: KernelStoreReadView,
   configuration: ConfigurationKernelEmission,
 ): readonly {
   readonly sequence: ConfigurationSequence;
@@ -80,7 +80,7 @@ function registrySequenceSpans(
     if (sequence.sequenceKind !== ConfigurationSequenceKind.Registry) {
       continue;
     }
-    const span = readSourceSpan(store, sequence.sourceAddressHandle);
+    const span = readSourceSpan(records, sequence.sourceAddressHandle);
     if (span == null) {
       continue;
     }
@@ -110,12 +110,12 @@ function stepsBySequenceProduct(
 }
 
 function readSourceSpan(
-  store: KernelStore,
+  records: KernelStoreReadView,
   handle: SourceSpanAddress['handle'] | null | undefined,
 ): SourceSpanAddress | null {
   if (handle == null) {
     return null;
   }
-  const address = store.readAddress(handle);
-  return address?.kind === 'source-span-address' ? address : null;
+  const address = records.read(handle);
+  return address instanceof SourceSpanAddress ? address : null;
 }

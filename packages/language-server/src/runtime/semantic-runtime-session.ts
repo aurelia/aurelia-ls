@@ -4,6 +4,8 @@ import type { TextDocument } from "vscode-languageserver-textdocument";
 import {
   createSemanticRuntime,
   appDiagnosticPresentation,
+  NodeSemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputAuthority,
   SemanticAppQueryKind,
   type SemanticRouteNodesResult,
   type SemanticRuntime,
@@ -25,9 +27,9 @@ import {
   type SemanticValueConverterApplicationResult,
 } from "@aurelia-ls/semantic-runtime";
 import {
-  OpenDocumentSourceTextProvider,
+  OpenDocumentSourceTextOverlay,
   type OpenTextDocumentStore,
-} from "./open-document-source-text-provider.js";
+} from "./open-document-source-text-overlay.js";
 
 export interface SemanticRuntimeLspSessionOptions {
   readonly workspaceRoot: string | null;
@@ -61,18 +63,18 @@ export function isSemanticRuntimeLspRequestAborted(
 }
 
 export class SemanticRuntimeLspSession {
-  private readonly sourceTextProvider: OpenDocumentSourceTextProvider;
+  private readonly projectInputAuthority: SemanticRuntimeProjectInputAuthority;
   private runtime: Promise<SemanticRuntime> | null = null;
   private workspaceRoot: string | null;
   private workspaceGeneration = 0;
-  private sourceGeneration = 0;
-  private pendingAppWorldClear: Promise<void> | null = null;
 
   constructor(
     options: SemanticRuntimeLspSessionOptions,
   ) {
     this.workspaceRoot = options.workspaceRoot;
-    this.sourceTextProvider = new OpenDocumentSourceTextProvider(options.documents);
+    this.projectInputAuthority = new SemanticRuntimeProjectInputAuthority(
+      new NodeSemanticRuntimeProjectInputHost(new OpenDocumentSourceTextOverlay(options.documents)),
+    );
   }
 
   configureWorkspace(workspaceRoot: string | null): void {
@@ -85,32 +87,27 @@ export class SemanticRuntimeLspSession {
 
   recordProjectTopologyChanged(): SemanticRuntimeLspGeneration {
     this.workspaceGeneration += 1;
-    this.sourceGeneration += 1;
+    this.projectInputAuthority.advance();
     this.runtime = null;
-    this.pendingAppWorldClear = null;
     return this.currentGeneration();
   }
 
   async recordSourceTextChanged(): Promise<SemanticRuntimeLspGeneration> {
-    this.sourceGeneration += 1;
-    const runtime = this.runtime;
-    if (runtime != null) {
-      await this.queueAppWorldClear(runtime);
-    }
+    this.projectInputAuthority.advance();
     return this.currentGeneration();
   }
 
   currentGeneration(): SemanticRuntimeLspGeneration {
     return {
       workspaceGeneration: this.workspaceGeneration,
-      sourceGeneration: this.sourceGeneration,
-      fingerprint: `semantic-runtime:${this.workspaceRoot ?? "no-root"}:workspace-${this.workspaceGeneration}:source-${this.sourceGeneration}`,
+      sourceGeneration: this.projectInputAuthority.currentEventSequence,
+      fingerprint: `semantic-runtime:${this.workspaceRoot ?? "no-root"}:workspace-${this.workspaceGeneration}:source-${this.projectInputAuthority.currentEventSequence}`,
     };
   }
 
   isCurrentGeneration(generation: SemanticRuntimeLspGeneration): boolean {
     return generation.workspaceGeneration === this.workspaceGeneration
-      && generation.sourceGeneration === this.sourceGeneration;
+      && generation.sourceGeneration === this.projectInputAuthority.currentEventSequence;
   }
 
   requestGuard(isCancellationRequested: (() => boolean) | null): SemanticRuntimeLspRequestGuard {
@@ -531,47 +528,11 @@ export class SemanticRuntimeLspSession {
     this.runtime ??= createSemanticRuntime({
       workspaceRoot: this.workspaceRoot,
       storeKey: `lsp:${this.workspaceGeneration}:${this.workspaceRoot}`,
-      sourceTextProvider: this.sourceTextProvider,
+      projectInputAuthority: this.projectInputAuthority,
     });
-    const runtime = this.pendingAppWorldClear == null
-      ? await this.runtime
-      : await this.pendingAppWorldClear.then(() => this.openRuntime(guard));
+    const runtime = await this.runtime;
     this.assertRequestActive(guard);
     return runtime;
-  }
-
-  private queueAppWorldClear(runtime: Promise<SemanticRuntime>): Promise<void> {
-    if (this.pendingAppWorldClear != null) {
-      return this.pendingAppWorldClear;
-    }
-    const clear = (async () => {
-      try {
-        const openedRuntime = await runtime;
-        if (this.runtime !== runtime) {
-          return;
-        }
-        openedRuntime.clearAnalysisCache({ typeSystemDependencyCacheClearPolicy: "preserve" });
-      } catch (error) {
-        if (this.runtime === runtime) {
-          this.runtime = null;
-        }
-        throw error;
-      }
-    })();
-    this.pendingAppWorldClear = clear;
-    void clear.then(
-      () => {
-        if (this.pendingAppWorldClear === clear) {
-          this.pendingAppWorldClear = null;
-        }
-      },
-      () => {
-        if (this.pendingAppWorldClear === clear) {
-          this.pendingAppWorldClear = null;
-        }
-      },
-    );
-    return clear;
   }
 
   private async collectRows<T extends { readonly rows: readonly unknown[] }>(

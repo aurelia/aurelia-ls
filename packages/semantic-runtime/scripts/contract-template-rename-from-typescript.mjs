@@ -4,8 +4,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   createSemanticRuntime,
+  NodeSemanticRuntimeProjectInputHost,
   readSemanticAppQueryCatalog,
   SemanticAppQueryKind,
+  SemanticRuntimeProjectInputAuthority,
 } from '../out/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -32,14 +34,14 @@ assert.equal(catalog.value.rows[0].materializationPolicy, 'query-type-projection
 const runtime = await createSemanticRuntime({
   workspaceRoot: fixtureRoot,
   storeKey: 'contract:template-rename-from-typescript',
-  sourceTextProvider: {
+  projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
     readFile(fileName) {
       return samePath(fileName, templatePath) ? templateText : undefined;
     },
     fileExists(fileName) {
       return samePath(fileName, templatePath) ? true : undefined;
     },
-  },
+  })),
 });
 const aliasedBindableRuntime = await createSemanticRuntime({
   workspaceRoot: aliasedBindableRoot,

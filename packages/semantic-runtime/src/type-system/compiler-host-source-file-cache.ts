@@ -147,6 +147,7 @@ class TypeSystemCompilerHostSourceFileCache {
     languageVersionOrOptions: ts.ScriptTarget | ts.CreateSourceFileOptions,
     projectRootDir: string,
     shouldCreateNewSourceFile: boolean | undefined,
+    sourceRevision: string,
     create: () => ts.SourceFile | undefined,
   ): ts.SourceFile | undefined {
     const decision = typeSystemHostSourceFileCacheDecision(fileName, projectRootDir, shouldCreateNewSourceFile);
@@ -156,7 +157,7 @@ class TypeSystemCompilerHostSourceFileCache {
       return create();
     }
 
-    const key = typeSystemHostSourceFileCacheKey(fileName, languageVersionOrOptions);
+    const key = `${typeSystemHostSourceFileCacheKey(fileName, languageVersionOrOptions)}\0${sourceRevision}`;
     const existing = this.sourceFiles.get(key);
     if (existing !== undefined) {
       this.hits += 1;

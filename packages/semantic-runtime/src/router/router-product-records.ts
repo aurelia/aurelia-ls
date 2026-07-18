@@ -21,7 +21,7 @@ import {
 import { OpenSeam, type OpenSeamReasonKind, type OpenSeamReasonSource } from '../kernel/open-seam.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import type {
-  KernelStore,
+  KernelStoreReadView,
   KernelStoreRecord,
 } from '../kernel/store.js';
 import type { OpenSeamKindKey, ProductKindKey } from '../kernel/vocabulary.js';
@@ -66,28 +66,28 @@ export interface RouterOpenSeamRecordEmission {
 }
 
 export function routerProductRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   spec: RouterProductRecordSpec,
 ): readonly KernelStoreRecord[] {
   return evidenceBackedProductRecords(store, spec, routerIdentity(spec));
 }
 
 export function routerIdentityProductRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   spec: RouterIdentityProductRecordSpec,
 ): readonly KernelStoreRecord[] {
   return productEnvelopeRecords(store, spec, routerIdentity(spec));
 }
 
 export function routeRecognizerProductRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   spec: RouterProductRecordSpec,
 ): readonly KernelStoreRecord[] {
   return evidenceBackedProductRecords(store, spec, routeRecognizerIdentity(spec));
 }
 
 function evidenceBackedProductRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   spec: RouterProductRecordSpec,
   identity: SemanticIdentity,
 ): readonly KernelStoreRecord[] {
@@ -105,7 +105,7 @@ function evidenceBackedProductRecords(
 }
 
 function productEnvelopeRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   spec: RouterIdentityProductRecordSpec,
   identity: SemanticIdentity,
 ): readonly KernelStoreRecord[] {
@@ -153,7 +153,7 @@ function routeRecognizerIdentity(
 }
 
 export function routerOpenSeamRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   spec: RouterOpenSeamRecordSpec,
 ): RouterOpenSeamRecordEmission {
   const evidenceHandle = store.handles.evidence(spec.local);

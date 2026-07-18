@@ -147,7 +147,6 @@ async function profileRoot({ root, rootIndex, depth, profile, iteration, repeatC
     typeSystemCompilerOptions: null,
     typeSystemPhases: [],
     typeSystemHostSourceFileCache: null,
-    projectCompilerOptionsCache: null,
     typeSystemDependencyCache: null,
     typeSystemDependencyCacheClear: null,
     typeSystemDependencyCacheAfterClear: null,
@@ -277,7 +276,6 @@ async function profileRoot({ root, rootIndex, depth, profile, iteration, repeatC
     includeTypeSystemDependencyEntries: includeTypeSystemDependencyCacheEntries,
     rowLimit: 8,
   }).value;
-  run.projectCompilerOptionsCache = cache.projectCompilerOptionsCache;
   run.typeSystemDependencyCache = cache.typeSystemDependencyCache;
   applyTypeSystemDependencyCacheClear(run, runtime);
   run.typeShapeDuplicates = captureKernelBreakdowns
@@ -335,7 +333,6 @@ async function profileRoutedQueries(run, runtime, appCandidate, depth, profile, 
   run.queryClaimGraph = cache.value.runtimeQueryClaimProfiles
     .find((entry) => entry.inquiryProfile === profile)?.queryClaims
     ?? null;
-  run.projectCompilerOptionsCache = cache.value.projectCompilerOptionsCache;
   run.typeSystemDependencyCache = cache.value.typeSystemDependencyCache;
   applyTypeSystemDependencyCacheClear(run, runtime);
   const kernelAfterQueries = runtime.workspace.store.readTelemetrySnapshot({
@@ -403,7 +400,6 @@ async function profileRoutedQueryBatch(run, runtime, appCandidate, depth, profil
   run.queryClaimGraph = cache.value.runtimeQueryClaimProfiles
     .find((entry) => entry.inquiryProfile === profile)?.queryClaims
     ?? null;
-  run.projectCompilerOptionsCache = cache.value.projectCompilerOptionsCache;
   run.typeSystemDependencyCache = cache.value.typeSystemDependencyCache;
   applyTypeSystemDependencyCacheClear(run, runtime);
   const kernelAfterQueries = runtime.workspace.store.readTelemetrySnapshot({
@@ -1218,16 +1214,6 @@ function createAggregate() {
       clearedExternalDeclarationEntries: 0,
       clearedExternalDeclarationSourceTextCharacters: 0,
     },
-    projectCompilerOptionsCache: {
-      maxEntries: 0,
-      maxHits: 0,
-      maxMisses: 0,
-      maxWrites: 0,
-      maxClearOperations: 0,
-      maxClearedEntries: 0,
-      maxPathMappingCount: 0,
-      maxPathMappingTargetCount: 0,
-    },
     typeSystemDependencyCache: createTypeSystemDependencyCacheAggregate(),
     typeSystemDependencyCacheClear: {
       operations: 0,
@@ -1435,7 +1421,6 @@ function addToAggregate(aggregate, run, options = {}) {
   addTypeShapeDuplicates(aggregate.typeShapeDuplicates, run.typeShapeDuplicates);
   addStaticEvaluationHost(aggregate.staticEvaluationHost, run.staticEvaluationHost);
   addHostSourceFileCache(aggregate.typeSystemHostSourceFileCache, run.typeSystemHostSourceFileCache);
-  addProjectCompilerOptionsCache(aggregate.projectCompilerOptionsCache, run.projectCompilerOptionsCache);
   addTypeSystemDependencyCache(aggregate.typeSystemDependencyCache, run.typeSystemDependencyCache);
   addTypeSystemDependencyCacheClear(aggregate.typeSystemDependencyCacheClear, run.typeSystemDependencyCacheClear);
   addTypeSystemDependencyCache(aggregate.typeSystemDependencyCacheAfterClear, run.typeSystemDependencyCacheAfterClear);
@@ -1561,20 +1546,6 @@ function addTypeSystemDependencyCache(target, source) {
   target.maxClearedDefaultLibrarySourceTextCharacters = Math.max(target.maxClearedDefaultLibrarySourceTextCharacters ?? 0, source.clearedDefaultLibrarySourceTextCharacters ?? 0);
   target.maxClearedExternalDeclarationEntries = Math.max(target.maxClearedExternalDeclarationEntries ?? 0, source.clearedExternalDeclarationEntries ?? 0);
   target.maxClearedExternalDeclarationSourceTextCharacters = Math.max(target.maxClearedExternalDeclarationSourceTextCharacters ?? 0, source.clearedExternalDeclarationSourceTextCharacters ?? 0);
-}
-
-function addProjectCompilerOptionsCache(target, source) {
-  if (source == null) {
-    return;
-  }
-  target.maxEntries = Math.max(target.maxEntries, source.entries ?? 0);
-  target.maxHits = Math.max(target.maxHits, source.hits ?? 0);
-  target.maxMisses = Math.max(target.maxMisses, source.misses ?? 0);
-  target.maxWrites = Math.max(target.maxWrites, source.writes ?? 0);
-  target.maxClearOperations = Math.max(target.maxClearOperations, source.clearOperations ?? 0);
-  target.maxClearedEntries = Math.max(target.maxClearedEntries, source.clearedEntries ?? 0);
-  target.maxPathMappingCount = Math.max(target.maxPathMappingCount, source.pathMappingCount ?? 0);
-  target.maxPathMappingTargetCount = Math.max(target.maxPathMappingTargetCount, source.pathMappingTargetCount ?? 0);
 }
 
 function addTypeSystemDependencyCacheLargestEntries(target, entries) {
@@ -2163,7 +2134,6 @@ function printRun(run) {
   printProgramSourceFileGroups('- type-system source file groups', run.typeSystemProgramSourceFileGroups, 12);
   printProgramNodeRemaps('- type-system program-node remaps', run.typeSystemProgramNodeRemaps);
   printHostSourceFileCache('- type-system host cache', run.typeSystemHostSourceFileCache);
-  printProjectCompilerOptionsCache('- project compiler-options cache', run.projectCompilerOptionsCache);
   printTypeSystemDependencyCache('- type-system dependency cache', run.typeSystemDependencyCache);
   printTypeSystemDependencyCacheClear('- type-system dependency cache clear', run.typeSystemDependencyCacheClear);
   printTypeSystemDependencyCache('- type-system dependency cache after clear', run.typeSystemDependencyCacheAfterClear);
@@ -2312,7 +2282,6 @@ function printAggregate(aggregate) {
   printProgramNodeRemaps('- type-system program-node remap totals', aggregate.typeSystemProgramNodeRemaps);
   printStaticEvaluationHost('- static-evaluation host totals', aggregate.staticEvaluationHost);
   printHostSourceFileCache('- type-system host cache totals', aggregate.typeSystemHostSourceFileCache);
-  printProjectCompilerOptionsCacheAggregate('- project compiler-options cache max', aggregate.projectCompilerOptionsCache);
   printTypeSystemDependencyCacheAggregate('- type-system dependency cache max', aggregate.typeSystemDependencyCache);
   printTypeSystemDependencyCacheClearAggregate('- type-system dependency cache clear totals', aggregate.typeSystemDependencyCacheClear);
   printTypeSystemDependencyCacheAggregate('- type-system dependency cache after clear max', aggregate.typeSystemDependencyCacheAfterClear);
@@ -2546,17 +2515,6 @@ function printHostSourceFileCache(label, cache) {
   );
 }
 
-function printProjectCompilerOptionsCache(label, cache) {
-  if (cache == null) {
-    return;
-  }
-  console.log(
-    `${label}: entries=${cache.entries ?? 0}, hits=${cache.hits ?? 0}, misses=${cache.misses ?? 0}, ` +
-    `writes=${cache.writes ?? 0}, clears=${cache.clearOperations ?? 0}/${cache.clearedEntries ?? 0}, ` +
-    `paths=${cache.pathMappingCount ?? 0}/${cache.pathMappingTargetCount ?? 0}`,
-  );
-}
-
 function printTypeSystemDependencyCache(label, cache) {
   if (cache == null) {
     return;
@@ -2610,17 +2568,6 @@ function printTypeSystemDependencyCacheClearAggregate(label, clear) {
     `defaultLibs=${clear.defaultLibraryFiles}/${formatCharacterCount(clear.defaultLibrarySourceTextCharacters)}, ` +
     `externalDecls=${clear.externalDeclarationFiles}/${formatCharacterCount(clear.externalDeclarationSourceTextCharacters)}, ` +
     `policies=${compactMap(clear.policies, 4)}`,
-  );
-}
-
-function printProjectCompilerOptionsCacheAggregate(label, cache) {
-  if (cache == null || cache.maxEntries === 0) {
-    return;
-  }
-  console.log(
-    `${label}: entries=${cache.maxEntries}, hits=${cache.maxHits}, misses=${cache.maxMisses}, ` +
-    `writes=${cache.maxWrites}, clears=${cache.maxClearOperations}/${cache.maxClearedEntries}, ` +
-    `paths=${cache.maxPathMappingCount}/${cache.maxPathMappingTargetCount}`,
   );
 }
 

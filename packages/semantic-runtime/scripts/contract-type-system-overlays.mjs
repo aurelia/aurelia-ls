@@ -15,6 +15,7 @@ import {
 import {
   TypeSystemProjectBuilder,
 } from '../out/type-system/project.js';
+import { projectTypeSystemProgramSources } from '../out/type-system/program-source-authority.js';
 import { TypeSystemHotDetails } from '../out/type-system/product-details.js';
 import { checkerTypeMemberSourceAddressHandle } from '../out/type-system/checker-type-member-source.js';
 import {
@@ -47,6 +48,7 @@ import {
   SourceSpan,
 } from '../out/expression/source-span.js';
 import { KernelVocabulary } from '../out/kernel/vocabulary/index.js';
+import { nodeSemanticRuntimeProjectInputHost } from '../out/kernel/project-input.js';
 import {
   readTypeSystemProjectDiagnostics,
   readTypeSystemOverlayDiagnostics,
@@ -166,7 +168,7 @@ const runtime = await createSemanticRuntime({
 const app = await runtime.openApp({
   analysisDepth: 'runtime-topology',
 });
-const overlayTypeSystem = new TypeSystemProjectBuilder().build(
+const overlayTypeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
   app.project,
   app.emission.evaluation,
   {
@@ -1116,7 +1118,7 @@ async function readTemplateOverlayProbe() {
     })
     .append(';\n')
     .build();
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1209,7 +1211,7 @@ async function readRepeatScopeOverlayProbe() {
     })
     .append(';\n')
     .build();
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1261,7 +1263,7 @@ async function readGeneratedTemplateScopeOverlayProbe() {
       preciseDiagnosticMapped: false,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1316,7 +1318,7 @@ async function readGeneratedLetScopeOverlayProbe() {
       overlayDiagnosticCount: 0,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1365,7 +1367,7 @@ async function readGeneratedEventScopeOverlayProbe() {
       overlayDiagnosticCount: 0,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1417,7 +1419,7 @@ async function readGeneratedRuntimeAssignmentOverlayProbe() {
       runtimeAssignmentDataFlows: [],
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1490,7 +1492,7 @@ async function readGeneratedRuntimeAssignmentConverterOverlayProbe() {
       runtimeAssignmentDataFlows: [],
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1559,7 +1561,7 @@ async function readGeneratedScopeAliasOverlayProbe() {
       scopeStateTopology: emptyScopeStateTopology(),
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1687,7 +1689,7 @@ async function readGeneratedValueConverterOverlayProbe() {
       argumentMismatchHasSemanticProductHandle: false,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1816,7 +1818,10 @@ function readGeneratedChildSpliceOverlayProbe() {
     0,
     false,
   );
-  const projector = new TemplateTypeSystemOverlayExpressionProjector(valueConverterFixtureRoot);
+  const projector = new TemplateTypeSystemOverlayExpressionProjector(
+    valueConverterFixtureRoot,
+    nodeSemanticRuntimeProjectInputHost,
+  );
   const projection = projector.copyableExpression(call, {
     valueConverterCallSurface(expression, semanticProductHandle) {
       return {
@@ -1914,7 +1919,7 @@ async function readGeneratedBoundControllerOverlayProbe() {
       bindingScopeTypeSourceMemberFile: null,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -1988,7 +1993,7 @@ async function readGeneratedStateSourceOverlayProbe() {
       overlayDiagnosticCount: 0,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -2049,7 +2054,7 @@ async function readGeneratedStateConditionBoundaryOverlayProbe() {
       stateBoundChildType: null,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -2193,7 +2198,7 @@ async function readLetSourceFormOverlayProbe() {
       interpolatedLabelType: null,
     };
   }
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     { overlaySources: [emission.overlaySource] },
@@ -2502,7 +2507,7 @@ function generatedTemplateOverlayPreciseDiagnosticMapped(
     originKey: `${overlaySource.originKey}:bad-member`,
     segments: overlaySource.segments,
   };
-  const typeSystem = new TypeSystemProjectBuilder().build(
+  const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {

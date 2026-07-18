@@ -20,9 +20,13 @@ import {
   FieldProvenance,
 } from '../kernel/provenance.js';
 import {
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStore,
-  type KernelStoreRecord,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type {
+  KernelStoreReadView,
+  KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
@@ -135,26 +139,26 @@ export class RouterOptionsMaterializationProjectResult {
 /** Fold source-backed RouterConfiguration option contributions through RouterOptions.create(...) defaults. */
 export class RouterOptionsMaterializationProjectPass {
   materializeAndEmit(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
     configuration: ConfigurationRecognitionProjectResult,
     diWorld: DiWorldConstructionEmission,
   ): RouterOptionsMaterializationProjectResult {
     const kernel = configuration.readConfiguration();
-    const seedSet = routerOptionsSeeds(store, kernel, diWorld);
+    const seedSet = routerOptionsSeeds(publication, kernel, diWorld);
     const emissions = seedSet.seeds.map((seed, index) =>
-      this.materializeRouterOptions(store, project, seed, index)
+      this.materializeRouterOptions(publication, project, seed, index)
     );
     const issueEmissions = seedSet.duplicateGroups.flatMap((group) =>
-      this.materializeDuplicateRegistrationIssues(store, project, group)
+      this.materializeDuplicateRegistrationIssues(publication, project, group)
     );
     const records = [
       ...emissions.flatMap((emission) => emission.records),
       ...issueEmissions.flatMap((emission) => emission.records),
     ];
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `router-options:${project.projectKey}`));
-    }
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `router-options:${project.projectKey}`),
+    ));
     return new RouterOptionsMaterializationProjectResult(
       project,
       emissions.map((emission) => emission.options),
@@ -163,7 +167,7 @@ export class RouterOptionsMaterializationProjectPass {
   }
 
   private materializeRouterOptions(
-    store: KernelStore,
+    store: KernelStoreReadView,
     project: ProjectBootFrame,
     seed: RouterOptionsSeed,
     index: number,
@@ -191,7 +195,7 @@ export class RouterOptionsMaterializationProjectPass {
   }
 
   private materializeDuplicateRegistrationIssues(
-    store: KernelStore,
+    store: KernelStoreReadView,
     project: ProjectBootFrame,
     uses: readonly RouterRegistrationUse[],
   ): readonly RouterIssueEmission[] {
@@ -250,7 +254,7 @@ export class RouterOptionsMaterializationProjectPass {
 }
 
 function routerOptionsModel(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   seed: RouterOptionsSeed,
   draft: RouterOptionsDraft,
@@ -280,7 +284,7 @@ function routerOptionsModel(
 }
 
 function routerOptionsRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   seed: RouterOptionsSeed,
   options: RouterOptionsModel,
@@ -303,7 +307,7 @@ function routerOptionsRecords(
 }
 
 function routerOptionsSeeds(
-  store: KernelStore,
+  store: KernelStoreReadView,
   configuration: ConfigurationKernelEmission,
   diWorld: DiWorldConstructionEmission,
 ): RouterOptionsSeedSet {
@@ -393,13 +397,13 @@ function registrationValueSourceAddressHandle(
 }
 
 function configurationValueSourceKey(
-  store: KernelStore,
+  store: KernelStoreReadView,
   addressHandle: AddressHandle | null,
 ): string | null {
   if (addressHandle == null) {
     return null;
   }
-  const address = store.readAddress(addressHandle);
+  const address = store.read(addressHandle);
   return address?.kind === 'source-span-address'
     ? `${address.fileHandle}\0${address.start}\0${address.end}`
     : null;

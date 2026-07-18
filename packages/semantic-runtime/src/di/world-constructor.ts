@@ -21,6 +21,11 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
   KernelVocabulary,
@@ -538,10 +543,12 @@ export class DiWorldConstructor {
   private readonly selfResolverPublication: DiContainerSelfResolverPublicationMaterializer;
 
   constructor(
-    /** Hot analysis store that receives DI world-construction records. */
+    /** Hot analysis store used only for deterministic handle allocation. */
     readonly store: KernelStore,
+    /** Caller-owned app-generation publication and candidate read view. */
+    readonly publication: KernelPublicationContext,
   ) {
-    this.keyIdentityEmitter = new DiKeyIdentityEmitter(store);
+    this.keyIdentityEmitter = new DiKeyIdentityEmitter(publication);
     this.resolverPublication = new DiResolverPublicationMaterializer(store, this.keyIdentityEmitter);
     this.resourceSlotPublication = new DiResourceSlotPublicationMaterializer(store, this.keyIdentityEmitter);
     this.registryPublication = new DiRegistryPublicationMaterializer(store);
@@ -579,15 +586,13 @@ export class DiWorldConstructor {
       registrationCascade,
     );
 
-    if (frame.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(frame.records, 'di-world-construction'));
-    }
-    for (const issue of frame.issues) {
-      this.store.productDetails.add(DiProductDetails.Issue, issue.productHandle, issue);
-    }
-    for (const issue of frame.resourceIssues) {
-      this.store.productDetails.add(ResourceProductDetails.Issue, issue.productHandle, issue);
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(frame.records, 'di-world-construction'),
+      [
+        ...publishProductDetails(DiProductDetails.Issue, frame.issues),
+        ...publishProductDetails(ResourceProductDetails.Issue, frame.resourceIssues),
+      ],
+    ));
 
     return frame.toEmission(configuration.containers);
   }
@@ -602,7 +607,7 @@ export class DiWorldConstructor {
   ): DiRegistrationSpendingCascade {
     return new DiRegistrationSpendingCascade({
       admissionsByProduct,
-      registryBodyIndex: buildRegistryBodyStepIndex(this.store, configuration),
+      registryBodyIndex: buildRegistryBodyStepIndex(this.publication, configuration),
       issuePublisher: new DiIssuePublisher(this.store),
       spendDirect: (container, step, admission, registryBodyInterpreted) =>
         this.recordsForRegistrationSpending(

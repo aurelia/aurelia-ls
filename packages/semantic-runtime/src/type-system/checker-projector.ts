@@ -245,7 +245,7 @@ export class CheckerTypeProjector {
     /** Hot analysis store that receives type-system projection records. */
     private readonly store: KernelStore,
     /** Immediate or staged owner of projected records and hot details. */
-    readonly publication: KernelPublicationContext = store,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   ensureProjection(input: CheckerTypeProjectionRequest): CheckerTypeShape {
@@ -320,7 +320,7 @@ export class CheckerTypeProjector {
     source: TypeProjectionSourceSet,
     records: KernelStoreRecord[],
   ): TypeShapePublicationFrame {
-    const declarationSource = typeShapeDeclarationSource(this.store, this.publication, descriptor);
+    const declarationSource = typeShapeDeclarationSource(this.publication, input.checker, descriptor);
     appendDeclarationSourceRecords(this.publication, records, declarationSource);
     const handles = this.typeShapeHandles(input.localKey);
     const shapeReference = typeShapeReferenceFor(
@@ -544,8 +544,8 @@ export class CheckerTypeProjector {
     const localKey = `${input.localKey}:member:${localKeyPart(name)}`;
     const valueType = valueTypeForSymbol(input.checker, symbol, input.sourceNode ?? null, declarations);
     const declarationSource = sourceSpanForCheckerDeclaration(
-      this.store,
       this.publication,
+      input.checker,
       symbol,
       declarations,
       SourceSpanRole.Name,
@@ -662,15 +662,15 @@ const sourceIndependentCheckerTypeDisplays = new Set([
 ]);
 
 function typeShapeDeclarationSource(
-  store: KernelStore,
   publication: KernelPublicationContext,
+  checker: ts.TypeChecker,
   descriptor: CheckerTypeDescriptor,
 ): DeclarationSourcePublication | null {
   return descriptor.symbol == null
     ? null
     : sourceSpanForCheckerDeclaration(
-      store,
       publication,
+      checker,
       descriptor.symbol,
       descriptor.declarations,
       SourceSpanRole.Name,

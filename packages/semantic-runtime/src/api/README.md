@@ -90,8 +90,9 @@ Default `openApp()` uses `runtime-topology`, the cheapest complete app-world tie
 methods default to `binding-observation` because those answers intentionally need observer/data-flow diagnostics and
 weak-member pressure. Generic adapters should read `runtime.appQueryCatalog()` and open the catalog row's
 `minimumAnalysisDepth` instead of treating the deepest tier as a default.
-An opened `SemanticApp` pins one exact committed template-analysis generation together with every app-level product
-derived from it. Same-runtime replacement or lifetime disposal makes that app stale; `ask(...)`, profile/cache reads,
+An opened `SemanticApp` pins one exact committed app-analysis generation from static evaluation through resources, DI,
+templates, observation, state, capability, and router fan-in. Same-runtime replacement or lifetime disposal makes that
+app stale; `ask(...)`, profile/cache reads,
 and template access fail closed rather than combining current kernel rows with an old object graph. Runtime cache and
 cursor-locus admission skip stale apps and rebuild a coherent app epoch on the next request. Template-query objects
 also spend that authority on every operation; capturing one before replacement does not preserve access to stale rows.
@@ -104,6 +105,9 @@ app epoch, it also clears the process-local TypeScript dependency SourceFile cac
 Program warm. Long-lived adapters can still force `appRetention: 'retain-app'` when they intend to reuse the opened app
 world, or `appRetention: 'dispose-app'` when a public transport must reclaim even a previously cached compatible app
 epoch after a one-off answer.
+App-world queries at `detail: 'handles'` automatically retain their owning app generation because those handles are
+opaque navigable pointers into that generation. An explicit `appRetention: 'dispose-app'` combination is rejected
+instead of returning dead handles. App-world-free handle answers remain independent of app retention.
 When a client needs several related app answers, prefer `runtime.answerAppQueries(...)` over issuing several routed
 queries from the transport. The batch opens the smallest app-world depth satisfying every child query, compiles the
 union of child cursor/file authoring templates by default, records one runtime-level batch claim, and lets each child
@@ -197,8 +201,10 @@ Opened-app convenience answers such as `app.summary()`, `app.openSeams()`, and `
 claim-backed too. They re-enter `SemanticApp.ask(...)` when called outside an active answer materialization, so direct
 library use and routed transport use share the same answer-boundary claim graph instead of creating a second untracked
 projection path.
-One runtime instance memoizes opened app-worlds by project key; create a fresh runtime for an edit/reopen cycle that
-needs new source admission.
+One runtime instance memoizes opened app-worlds by project-input revision and semantic request shape. Existing admitted
+source/config edits should advance the shared `SemanticRuntimeProjectInputAuthority`; the next request captures one
+immutable host generation, rejects stale retained facades, and replaces only that project's app generation. Rebuild the
+runtime only when project discovery or source-admission membership changes.
 `runtime.summary()` is the cheap project-selection answer: it returns project shape/analysis rollups, the default app
 candidate key, app candidates with root directories, and opt-in paged project rows. It defaults to no project rows so
 large monorepos stay summary-first. Use it before `openApp(...)` in monorepos so callers can open a specific app project
@@ -209,16 +215,15 @@ first project-selection answer counted with the same consumer lane as later rout
 need to iterate project rows must request `projectPage.size`; otherwise they should rely on the rollups and
 `appCandidates` only.
 `runtime.analysisCacheOverview(...)` is the session-retention x-ray for long-lived adapters such as MCP. It reports
-runtime-level static and routed-app query claims, cached app epochs, their construction inquiry profile/top phases, per-consumer
-query-claim graph telemetry, the small process-local project compiler-options cache, current process memory, and
+runtime-level static and routed-app query claims, cached app epochs, their construction inquiry profile/top phases,
+per-consumer query-claim graph telemetry, current process memory, and
 optional kernel-density breakdowns. App-world cache identity is semantic shape
-(project, depth, and authoring-template scope), not query-retention profile: the same app epoch can answer MCP, LSP,
+(project, project-input revision, depth, and authoring-template scope), not query-retention profile: the same app epoch can answer MCP, LSP,
 fixture, AOT, and exploration queries while `SemanticApp.ask(...)` records those answers in separate profile-shaped
 query-claim graphs.
-The compiler-options cache is reported separately from TypeSystem dependency SourceFile caching because it retains only
-tsconfig/path-mapping/root-file shape and config diagnostics by project root, then returns cloned options, root filenames,
-and diagnostic rows to TypeScript consumers. Treat it as boot/input read amplification visibility, not as app-world
-semantic retention.
+Project compiler options are rebuilt once for each captured project-input generation and shared by static evaluation
+and TypeSystem construction through the `ProjectBootFrame`. TypeScript dependency `SourceFile` caching remains the
+separate process-local CPU/memory trade-off reported by cache telemetry.
 Ordinary TypeScript diagnostics exposed through `TypeScriptDiagnostics`, `TypeScriptDiagnosticSummary`, and unified app
 diagnostics are Program/tsconfig correctness rows. They intentionally do not include LanguageService suggestion
 diagnostics, quick fixes, organize-import actions, or refactor edits; those are a future LSP/code-action surface that
@@ -245,11 +250,10 @@ which rich details are retaining mass.
 Use `includeTypeSystemDependencyEntries` with a small `rowLimit` when dependency SourceFile cache density says a bucket
 is hot but the next decision needs the largest retained TypeScript dependency entries. Keep it off for ordinary adapter
 status reads because bucket counts and source-text totals are usually enough.
-Treat the workspace
-`KernelStore` as session-lifetime for boot/source records and dependency declaration cache state. App-world products now
-have an explicit reclaim boundary: `runtime.clearAnalysisCache()` drops cached app epochs and disposes kernel records,
-product details, hot details, and their record-handle character mass back to the first app-construction marker while
-leaving the booted workspace available for reuse. The TypeSystemProject compiler-host source-file cache is
+Treat the workspace `KernelStore` as session-lifetime for boot/source records and workspace support. The TypeScript
+dependency `SourceFile` cache is a separate process-local structure. App-world products have an explicit reclaim
+boundary: `runtime.clearAnalysisCache()` first disposes unowned answer-local rows, then retires each exact cached app
+generation while preserving boot and workspace-support ownership. The TypeSystemProject compiler-host source-file cache is
 process-local because it trades memory for much
 cheaper repeated Program construction over dependency and library declaration files; pass
 `typeSystemDependencyCacheClearPolicy: 'all'` to `clearAnalysisCache(...)` when reclaiming that memory is more
@@ -268,16 +272,14 @@ external-source bypasses, and include hit/write source-text traffic so warm-sess
 newly admitted dependency/library text. Cacheability remains a named policy rather than an accidental filesystem side
 effect.
 Analysis-cache overview and clear answers own compact `displayText` for public shells: overview text reports retained
-app epochs, workspace kernel mass, process memory, TypeScript dependency-cache policy, compiler-options cache counters,
-query-claim retention, and whether high-cardinality breakdowns were omitted; clear text reports reclaimed app epochs,
+app epochs, workspace kernel mass, process memory, TypeScript dependency-cache policy, query-claim retention, and
+whether high-cardinality breakdowns were omitted; clear text reports reclaimed app epochs,
 query claims, kernel records/details/handles, and dependency-cache buckets. Public adapters may add their own
 server-session wrapper text, but they should not reinterpret semantic-runtime cache telemetry locally.
-Restart the runtime session when
-source admission, dependency declarations, or project
-discovery must be rebuilt from disk. Until app-world handles are salted by request shape, opening a non-compatible app
-epoch for a project
-that already has cached app records clears cached app epochs before rebuilding; this prevents shallow-to-deep upgrades
-from duplicating kernel handles in one workspace store.
+Advance the project-input authority for content/config changes inside the admitted project topology. Restart the runtime
+when project discovery or source-admission membership must be rebuilt. Opening a non-compatible analysis-depth or
+authoring-template shape atomically replaces the prior generation at that project locus without disturbing other
+project generations in the workspace store.
 
 Authoring/LSP callers can opt into standalone resource-library templates without changing the default app topology:
 

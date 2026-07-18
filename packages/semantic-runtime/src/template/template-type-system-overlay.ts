@@ -328,7 +328,7 @@ export class TemplateTypeSystemOverlayBuilder {
   ) {
     this.expressions = new TemplateTypeSystemOverlayExpressionProjector(
       typeSystem.project.rootDir,
-      typeSystem.project.sourceTextProvider,
+      typeSystem.project.inputGeneration.host,
     );
   }
 

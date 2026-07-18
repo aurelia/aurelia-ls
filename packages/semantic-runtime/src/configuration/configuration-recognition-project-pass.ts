@@ -11,6 +11,7 @@ import {
 } from '../evaluation/project-evaluation.js';
 import type { EvaluationModuleResolutionOpen } from '../evaluation/module-host.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
@@ -76,24 +77,34 @@ export class ConfigurationRecognitionProjectPass {
   recognizeAndEmit(
     store: KernelStore,
     project: ProjectBootFrame,
-    resources: ResourceDefinitionIndex | null = null,
-    evaluation: StaticProjectEvaluationResult | null = null,
-    typeSystem: TypeSystemProject | null = null,
+    resources: ResourceDefinitionIndex | null,
+    evaluation: StaticProjectEvaluationResult | null,
+    typeSystem: TypeSystemProject | null,
+    publication: KernelPublicationContext,
   ): ConfigurationRecognitionProjectResult {
-    const projectEvaluation = evaluation ?? evaluateAndEmitAureliaProject(store, project);
+    const projectEvaluation = evaluation ?? evaluateAndEmitAureliaProject(store, project, publication);
     const recognition = new ConfigurationRecognitionPass();
     const sourceFileAddressHandlesByFileName = readSourceFileAddressHandlesByFileName(projectEvaluation);
     return new ConfigurationRecognitionProjectResult(
       project,
       projectEvaluation,
       projectEvaluation.sources.map((source) =>
-        this.recognizeSource(store, recognition, source, resources, typeSystem, sourceFileAddressHandlesByFileName)
+        this.recognizeSource(
+          store,
+          publication,
+          recognition,
+          source,
+          resources,
+          typeSystem,
+          sourceFileAddressHandlesByFileName,
+        )
       ),
     );
   }
 
   private recognizeSource(
     store: KernelStore,
+    publication: KernelPublicationContext,
     recognition: ConfigurationRecognitionPass,
     source: StaticProjectEvaluationResult['sources'][number],
     resources: ResourceDefinitionIndex | null,
@@ -110,6 +121,7 @@ export class ConfigurationRecognitionProjectPass {
     }
     const result: ConfigurationRecognitionResult = recognition.recognizeAndEmit(
       store,
+      publication,
       new ConfigurationRecognitionContext(
         source.sourceFile,
         source.moduleKey,

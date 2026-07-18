@@ -154,6 +154,7 @@ import {
 } from '../template/template-expression-selection.js';
 import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
 import { expressionResourceOccurrences } from '../template/expression-resource-occurrence.js';
+import type { GenerationAuthority } from '../kernel/generation-authority.js';
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
@@ -163,11 +164,12 @@ export class SemanticAppTemplateQueries {
 
   constructor(
     private readonly emission: AureliaAppWorldProjectEmission,
+    private readonly generation: GenerationAuthority,
     private readonly store: KernelStore,
     private readonly workspaceRootDir: string,
     private readonly projectRootDir: string,
   ) {
-    this.sourceTextCache = new AuthoredSourceTextCache('', emission.project.sourceTextProvider);
+    this.sourceTextCache = new AuthoredSourceTextCache('', emission.project.inputGeneration.host);
   }
 
   templateCompilations(
@@ -457,7 +459,7 @@ export class SemanticAppTemplateQueries {
       this.workspaceRootDir,
       this.projectRootDir,
       query.cursor,
-      this.emission.project.sourceTextProvider,
+      this.emission.project.inputGeneration.host,
     );
     return resolution.cursor == null ? query : { ...query, cursor: resolution.cursor };
   }
@@ -711,7 +713,7 @@ export class SemanticAppTemplateQueries {
   }
 
   private requireCurrentGeneration(): void {
-    this.emission.requireCurrentTemplateAnalysis();
+    this.generation.requireCurrent();
   }
 
   private templateReferenceContext(
@@ -771,7 +773,7 @@ export class SemanticAppTemplateQueries {
       : this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, memberProductHandle);
     const valueSource = semanticExactSourceReference(describeAddress(
       this.store,
-      member == null ? null : checkerTypeMemberValueSourceAddressHandle(this.store, this.store, member),
+      member == null ? null : checkerTypeMemberValueSourceAddressHandle(this.store, member),
     ));
     return valueSource == null || sourceReferencesMatchExactSpan(valueSource, targetSource)
       ? [targetSource]

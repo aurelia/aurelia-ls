@@ -1,8 +1,8 @@
 import {
-  KernelStore,
-  KernelStoreBatch,
+  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
   sourceSpanAddressForSite,
@@ -17,12 +17,12 @@ import {
 import {
   DiIssuePublication,
   DiIssuePublisher,
+  publishDiIssuePublications,
 } from './di-issue-publication.js';
 import {
   DiInjectDecoratorSite,
   readInvalidDiInjectDecoratorSites,
 } from './inject-decorator-recognition.js';
-import { DiProductDetails } from './product-details.js';
 
 export class DiInjectDecoratorIssueMaterialization {
   constructor(
@@ -37,6 +37,7 @@ export class DiInjectDecoratorIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new DiIssuePublisher(store);
   }
@@ -48,15 +49,11 @@ export class DiInjectDecoratorIssueMaterializer {
     const publications = readInvalidDiInjectDecoratorSites(project, typeSystem)
       .map((site, index) => this.publicationForSite(project, site, index));
 
-    const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'di-inject-decorator-issues'));
-    }
-    this.store.productDetails.addAll(DiProductDetails.Issue, publications.map((publication) => publication.issue));
+    const emission = publishDiIssuePublications(this.publication, 'di-inject-decorator-issues', publications);
 
     return new DiInjectDecoratorIssueMaterialization(
-      publications.map((publication) => publication.issue),
-      records,
+      emission.issues,
+      emission.records,
     );
   }
 

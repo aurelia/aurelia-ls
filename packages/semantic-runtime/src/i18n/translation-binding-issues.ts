@@ -145,7 +145,7 @@ export class I18nTranslationBindingIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
-    readonly publication: KernelPublicationContext = store,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new RuntimeBindingIssuePublisher(store);
   }

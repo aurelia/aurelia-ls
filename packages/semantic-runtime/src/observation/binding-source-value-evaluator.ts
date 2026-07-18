@@ -76,7 +76,7 @@ import {
   type EvaluationInstanceValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelSourceFileReadView } from '../kernel/store.js';
 import type { Container } from '../di/container.js';
 import {
   TypeSystemHotDetails,
@@ -182,7 +182,7 @@ export class RuntimeBindingSourceValueEvaluator {
   private readonly valueConverterInstances = new Map<string, RuntimeValueConverterInstanceRead>();
 
   private constructor(
-    readonly store: KernelStore,
+    readonly kernel: KernelSourceFileReadView,
     readonly projector: CheckerTypeProjector,
     readonly evaluation: StaticProjectEvaluationResult,
     private readonly evaluationFrame: RuntimeBindingSourceEvaluationFrame,
@@ -191,14 +191,14 @@ export class RuntimeBindingSourceValueEvaluator {
     private readonly defaultActiveContainer: Container | null = null,
   ) {
     this.arrayMethods = new RuntimeBindingSourceArrayMethodEvaluator(
-      store,
+      kernel,
       (context) => this.evaluateNode(context),
     );
     this.memberValues = new RuntimeBindingSourceMemberValueReader(this.evaluationFrame);
   }
 
   static create(
-    store: KernelStore,
+    kernel: KernelSourceFileReadView,
     projector: CheckerTypeProjector,
     evaluation: StaticProjectEvaluationResult,
     boundControllerValues: RuntimeBoundControllerValueTable = RuntimeBoundControllerValueTable.empty,
@@ -206,7 +206,7 @@ export class RuntimeBindingSourceValueEvaluator {
     defaultActiveContainer: Container | null = null,
   ): RuntimeBindingSourceValueEvaluator {
     return new RuntimeBindingSourceValueEvaluator(
-      store,
+      kernel,
       projector,
       evaluation,
       new RuntimeBindingSourceEvaluationFrame(evaluation, activationContext),
@@ -219,7 +219,7 @@ export class RuntimeBindingSourceValueEvaluator {
   /** Returns a source-value evaluator whose root requests default to the supplied DI activation container. */
   withDefaultActiveContainer(activeContainer: Container | null): RuntimeBindingSourceValueEvaluator {
     return new RuntimeBindingSourceValueEvaluator(
-      this.store,
+      this.kernel,
       this.projector,
       this.evaluation,
       this.evaluationFrame,
@@ -452,7 +452,7 @@ export class RuntimeBindingSourceValueEvaluator {
       return openValueConverterInstance(`Value converter '${definition.name}' target does not carry an authored value address.`);
     }
     const target = this.evaluationFrame.evaluateSourceAddressExpression(
-      this.store,
+      this.kernel,
       definition.target.addressHandle,
     );
     if (target == null) {
@@ -1328,7 +1328,7 @@ export class RuntimeBindingSourceValueEvaluator {
       return null;
     }
     const initialState = this.evaluationFrame.evaluateSourceAddressExpression(
-      this.store,
+      this.kernel,
       storeConfiguration.initialStateSourceAddressHandle,
     );
     if (initialState == null) {

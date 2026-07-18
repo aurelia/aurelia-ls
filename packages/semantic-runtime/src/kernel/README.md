@@ -190,12 +190,13 @@ recomputation protocol: it has no prior manifest, cannot withdraw omitted output
 references before an outer owner batch exists. Do not use it to approximate replacement with cleanup calls. Migrate a
 logical owner to one staged closure when rollback, currentness, or same-runtime replacement becomes part of its contract.
 
-Materializers whose closure proof depends on products staged earlier in the same run consume
-`KernelMaterializationReadView`, not the committed store directly. Its staged implementation overlays pending
-materialization records on the committed view, so support and closure checks see one candidate generation without
-publishing an intermediate world. Template-family compilation is the first recursive consumer: one owner-family run
-shares authored local definitions across a complete observed cohort set while retaining cohort-specific compiler
-products under one publication replacement.
+Materializers whose closure proof depends on records staged earlier in the same run consume the narrow candidate-aware
+read view they need, not the committed store directly. `KernelRecordCollectionReadView`, `KernelSourceFileReadView`,
+and `KernelMaterializationReadView` hide the prior owned manifest and overlay pending records, source-file addresses,
+and materializations on unrelated committed facts. Support and closure checks therefore see one candidate generation
+without publishing an intermediate world or locally merging side lists. Template-family compilation is the first
+recursive consumer: one owner-family run shares authored local definitions across a complete observed cohort set while
+retaining cohort-specific compiler products under one publication replacement.
 `KernelPublicationContext.readProductDetail(...)` and `readHotDetail(...)` provide the corresponding typed
 read-your-writes view for a known handle. They deliberately do not expose staged whole-slot enumeration: combining a
 prior manifest's rows with candidate rows would manufacture a mixed generation. Aggregate phases must pass their
@@ -205,7 +206,8 @@ A projector or expression world backed by a `ComputationRun` is a candidate-gene
 query cache. It may be shared by every materializer in that generation and by follow-up work that runs before commit,
 but the run is closed after commit. A committed emission rebinds its retained expression world to a store-backed
 publication guarded by the exact committed generation authority; replacement or disposal revokes reads as well as
-lazy writes. Inquiry-local work that is not retained by a generation starts a separate fresh store-backed world.
+lazy writes. Inquiry-local work that is not retained by a generation starts a fresh evaluator/cache over that same
+generation-bound store publication; "fresh" does not mean a new semantic generation or an unguarded store writer.
 
 There is one `ComputationLifecycleRegistry` per `KernelStore`. The store enforces that ownership boundary and notifies the
 registry when lifetime disposal reclaims a complete publication, so a later run cannot reuse a stale manifest or steal
@@ -215,8 +217,9 @@ kernel graph contributes to an output; observing only the final file text leaves
 
 `record-comparison.ts` exhaustively compares normalized kernel record kinds and keeps semantic replacement distinct from
 source/provenance witness refresh. Rich details use slot-specific comparators where one has been earned; an unsupported
-detail comparison conservatively replaces. `source-text-snapshot.ts` owns immutable source admission and content/
-existence revision validation for computation runs. These technical lifecycle products do not replace semantic claims,
+detail comparison conservatively replaces. `project-input.ts` owns coherent, revocable source/configuration generations
+and their captured host reads. `source-text-snapshot.ts` validates exact per-file source values within one such generation
+when a computation needs a source-specific witness. These technical lifecycle products do not replace semantic claims,
 materialization records, evidence, or provenance.
 
 The store indexes normalized kernel records first. A `MaterializedProduct` is an envelope that names kind, identity,

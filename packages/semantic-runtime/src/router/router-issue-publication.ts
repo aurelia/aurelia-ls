@@ -3,7 +3,7 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type { AddressHandle, IdentityHandle } from '../kernel/handles.js';
-import type { KernelStore, KernelStoreRecord } from '../kernel/store.js';
+import type { KernelStoreReadView, KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { RouterIssueModel } from './model.js';
 import { routerProductRecords } from './router-product-records.js';
@@ -18,7 +18,7 @@ export interface RouterIssuePublicationInput {
 }
 
 export function routerIssueProductRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   input: RouterIssuePublicationInput,
 ): readonly KernelStoreRecord[] {
   return routerProductRecords(store, {

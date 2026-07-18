@@ -5,6 +5,11 @@ import { SourceSpanRole } from '../kernel/address.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   sourceFileAddressForAddress,
   sourceSpanAddressForAddress,
 } from '../kernel/source-address.js';
@@ -52,6 +57,7 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new ObservationIssuePublisher(store);
   }
@@ -64,16 +70,13 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
     const publications = this.readNonTrackableMethodCalls(project, typeSystem, templates)
       .map((call, index) => this.publicationForCall(project, call, index));
     const records = uniqueKernelStoreRecords(publications.flatMap((publication) => publication.records));
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'non-trackable-template-method-call-issues'));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, 'non-trackable-template-method-call-issues'),
+      publishProductDetails(
         ObservationProductDetails.Issue,
-        publication.issue.productHandle,
-        publication.issue,
-      );
-    }
+        publications.map((publication) => publication.issue),
+      ),
+    ));
 
     return new ObservationSourceIssueProjectResult(
       publications.map((publication) => publication.issue),
@@ -89,7 +92,7 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
     const calls: NonTrackableTemplateMethodCall[] = [];
     const seen = new Set<string>();
     for (const resource of templates.resources) {
-      for (const dependency of resourceLocalBindingObservedDependencies(this.store, resource)) {
+      for (const dependency of resourceLocalBindingObservedDependencies(this.publication, resource)) {
         const call = this.nonTrackableMethodCallForDependency(project, typeSystem, dependency);
         if (call == null) {
           continue;
@@ -117,7 +120,13 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
     if (method == null || readTrackableMethodDependency(method) != null) {
       return null;
     }
-    const bodyReads = collectHiddenTemplateMethodReads(this.store, project, method);
+    const bodyReads = collectHiddenTemplateMethodReads(
+      this.store,
+      this.publication,
+      typeSystem.checker,
+      project,
+      method,
+    );
     if (bodyReads.length === 0) {
       return null;
     }
@@ -133,8 +142,8 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
     typeSystem: TypeSystemProject,
     dependency: RuntimeBindingObservedDependency,
   ): ts.MethodDeclaration | null {
-    const sourceSpan = sourceSpanAddressForAddress(this.store, dependency.observedMemberSourceAddressHandle);
-    const sourceFileAddress = sourceFileAddressForAddress(this.store, dependency.observedMemberSourceAddressHandle);
+    const sourceSpan = sourceSpanAddressForAddress(this.publication, dependency.observedMemberSourceAddressHandle);
+    const sourceFileAddress = sourceFileAddressForAddress(this.publication, dependency.observedMemberSourceAddressHandle);
     if (sourceSpan == null || sourceFileAddress == null) {
       return null;
     }
@@ -152,7 +161,7 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
   ): ObservationIssuePublication {
     const local = nonTrackableTemplateMethodCallLocalKey(project, call, index);
     const source = sourceAddressForRuntimeExpressionBounds(
-      this.store,
+      this.publication,
       `${local}:source`,
       call.dependency.sourceAddressHandle,
       call.dependency.memberNameSpanStart,
@@ -239,6 +248,8 @@ function findMethodDeclarationAtSourceSpan(
 
 function collectHiddenTemplateMethodReads(
   store: KernelStore,
+  publication: KernelPublicationContext,
+  checker: ts.TypeChecker,
   project: ProjectBootFrame,
   method: ts.MethodDeclaration,
 ): readonly HiddenTemplateMethodRead[] {
@@ -249,14 +260,14 @@ function collectHiddenTemplateMethodReads(
   const sourceFile = method.getSourceFile();
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
-      addThisReadExpression(store, project, method, sourceFile, reads, node.expression.expression);
+      addThisReadExpression(store, publication, checker, project, method, sourceFile, reads, node.expression.expression);
       for (const argument of node.arguments) {
         visit(argument);
       }
       return;
     }
     if (isThisPathExpression(node) && shouldRecordThisPathExpression(node)) {
-      addThisReadExpression(store, project, method, sourceFile, reads, node);
+      addThisReadExpression(store, publication, checker, project, method, sourceFile, reads, node);
       return;
     }
     ts.forEachChild(node, visit);
@@ -267,6 +278,8 @@ function collectHiddenTemplateMethodReads(
 
 function addThisReadExpression(
   store: KernelStore,
+  publication: KernelPublicationContext,
+  checker: ts.TypeChecker,
   project: ProjectBootFrame,
   method: ts.MethodDeclaration,
   sourceFile: ts.SourceFile,
@@ -288,7 +301,7 @@ function addThisReadExpression(
     method.name == null ? 'method' : localKeyPart(method.name.getText(sourceFile)),
     localKeyPart(sourceName),
   ].join(':');
-  const source = sourceSpanForCheckerNode(store, store, local, node, SourceSpanRole.Range);
+  const source = sourceSpanForCheckerNode(publication, checker, local, node, SourceSpanRole.Range);
   reads.set(sourceName, {
     sourceName,
     sourceAddressHandle: source.address.handle,

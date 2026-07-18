@@ -10,6 +10,7 @@ import {
   SourceFileRole,
   SourceLanguage,
 } from '../kernel/address.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { StaticModuleEvaluationResult } from './evaluator.js';
 import type { StaticEvaluationRuntimeHost } from './evaluator.js';
@@ -181,9 +182,10 @@ export class StaticProjectEvaluationPass {
   evaluateAndEmit(
     store: KernelStore,
     project: ProjectBootFrame,
-    options: StaticProjectEvaluationOptions = new StaticProjectEvaluationOptions(),
+    options: StaticProjectEvaluationOptions,
+    publication: KernelPublicationContext,
   ): StaticProjectEvaluationResult {
-    return this.evaluateCore(project, new EvaluationKernelEmitter(store), options);
+    return this.evaluateCore(project, new EvaluationKernelEmitter(store, publication), options);
   }
 
   private evaluateCore(
@@ -212,9 +214,9 @@ class StaticProjectEvaluationFrame {
   ) {
     this.host = new FileSystemEvaluationModuleSourceHost(
       this.project.rootDir,
-      undefined,
+      this.project.inputGeneration.host,
+      this.project.compilerOptions.options,
       this.options.moduleResolutionPolicy,
-      this.project.sourceTextProvider,
     );
     this.runtimeHost = withStaticEvaluationAmbientGlobals(
       this.options.runtimeHost,
@@ -358,7 +360,7 @@ class StaticProjectEvaluationFrame {
     const kernelEmitter = this.kernelEmitter;
     if (kernelEmitter != null) {
       kernelEmitter.emitOpenSeams(evaluation, (seam) =>
-        resolveOpenSeamSource(kernelEmitter.store, this.project, this.admissionsByModuleKey, seam)
+        resolveOpenSeamSource(kernelEmitter.publication, this.project, this.admissionsByModuleKey, seam)
       );
     }
     this.publishSourceResult(new StaticProjectEvaluationSourceResult(
@@ -382,7 +384,7 @@ class StaticProjectEvaluationFrame {
     if (this.kernelEmitter == null) {
       return null;
     }
-    const admitted = linkedSourceAdmission(this.kernelEmitter.store, this.project, sourceFile);
+    const admitted = linkedSourceAdmission(this.kernelEmitter.publication, this.project, sourceFile);
     indexSourceAdmission(this.admissionsByModuleKey, this.project, admitted);
     this.admissionsByModuleKey.set(graphModuleKey, admitted);
     this.admissionsByModuleKey.set(normalizeModuleKey(sourceFile.fileName), admitted);
@@ -467,7 +469,7 @@ function measureStaticProjectEvaluationPhase<TValue>(
 }
 
 function resolveOpenSeamSource(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   project: ProjectBootFrame,
   admissionsByModuleKey: Map<string, SourceFileAdmission>,
   seam: EvaluationOpenSeam,
@@ -481,7 +483,7 @@ function resolveOpenSeamSource(
       sourceFileAddressHandle: existing.addressHandle,
     };
   }
-  const admitted = linkedSourceAdmission(store, project, sourceFile);
+  const admitted = linkedSourceAdmission(publication, project, sourceFile);
   indexSourceAdmission(admissionsByModuleKey, project, admitted);
   admissionsByModuleKey.set(sourceModuleKey, admitted);
   return {
@@ -500,11 +502,11 @@ function indexSourceAdmission(
 }
 
 function linkedSourceAdmission(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   project: ProjectBootFrame,
   sourceFile: ts.SourceFile,
 ): SourceFileAdmission {
-  return admitSourceFile(store, project.workspaceRootDir, project.rootDir, project.projectKey, {
+  return admitSourceFile(publication, project.workspaceRootDir, project.rootDir, project.projectKey, {
     path: sourceFile.fileName,
     note: 'Source file admitted as a static evaluation dependency.',
   });

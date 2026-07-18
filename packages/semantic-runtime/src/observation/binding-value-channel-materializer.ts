@@ -166,7 +166,7 @@ export class RuntimeBindingValueChannelMaterializer {
   constructor(
     /** Hot analysis store that receives binding value-channel products. */
     readonly store: KernelStore,
-    readonly publication: KernelPublicationContext = store,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   materialize(input: RuntimeBindingValueChannelMaterializationRequest): RuntimeBindingValueChannelEmission {

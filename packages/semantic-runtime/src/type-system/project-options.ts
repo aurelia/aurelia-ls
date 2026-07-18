@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import { buildProjectCompilerOptionsResult } from '../boot/project-compiler-options.js';
+import type { ProjectBootFrame } from '../boot/frames.js';
 import {
   buildInitialTypeSystemOverlaySources,
   type TypeSystemOverlaySource,
@@ -15,27 +15,15 @@ export class TypeSystemProjectOptions {
   ) {}
 }
 
-export function buildTypeSystemProjectOptions(rootDir: string): TypeSystemProjectOptions {
-  const result = buildProjectCompilerOptionsResult(rootDir);
-  return new TypeSystemProjectOptions(
-    result.options,
-    result.configFilePath,
-    result.diagnostics,
-    result.rootFileNames,
-    buildInitialTypeSystemOverlaySources(rootDir),
-  );
-}
-
-export function buildWorkspaceTypeSystemProjectOptions(
-  rootDir: string,
-  workspaceRootDir: string,
+export function typeSystemProjectOptions(
+  project: ProjectBootFrame,
 ): TypeSystemProjectOptions {
-  const result = buildProjectCompilerOptionsResult(rootDir, [workspaceRootDir]);
+  const result = project.compilerOptions;
   return new TypeSystemProjectOptions(
     result.options,
     result.configFilePath,
     result.diagnostics,
     result.rootFileNames,
-    buildInitialTypeSystemOverlaySources(rootDir),
+    buildInitialTypeSystemOverlaySources(project.rootDir),
   );
 }

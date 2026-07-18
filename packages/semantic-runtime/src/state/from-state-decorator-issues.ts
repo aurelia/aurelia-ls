@@ -1,5 +1,10 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
 import { issuePublicationWithRecords } from '../kernel/issue-publication.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { sourceSpanAddressForSite } from '../kernel/source-address.js';
 import {
   KernelStore,
@@ -29,6 +34,7 @@ export class FromStateDecoratorIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new StateIssuePublisher(store);
   }
@@ -40,12 +46,13 @@ export class FromStateDecoratorIssueMaterializer {
     const publications = readInvalidFromStateDecoratorSites(project, typeSystem)
       .map((site, index) => this.publicationForSite(project, site, index));
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `from-state-decorator-issues:${project.projectKey}`));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(StateProductDetails.Issue, publication.issue.productHandle, publication.issue);
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `from-state-decorator-issues:${project.projectKey}`),
+      publishProductDetails(
+        StateProductDetails.Issue,
+        publications.map((publication) => publication.issue),
+      ),
+    ));
     return new StateSourceIssueProjectResult(
       publications.map((publication) => publication.issue),
       records,

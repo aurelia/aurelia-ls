@@ -90,7 +90,7 @@
     "contract:typescript-diagnostics": "pnpm build && node scripts/contract-typescript-diagnostics.mjs",
     "contract:typescript-program-fidelity": "pnpm build && node scripts/contract-typescript-program-fidelity.mjs",
     "contract:type-projection-lifetime": "pnpm build && node scripts/contract-type-projection-lifetime.mjs",
-    "contract:source-text-provider": "pnpm build && node scripts/contract-source-text-provider.mjs",
+    "contract:project-input-authority": "pnpm build && node scripts/contract-project-input-authority.mjs",
     "contract:checker-value-access": "pnpm build && node scripts/contract-checker-value-access.mjs",
     "contract:source-anchor-identity": "pnpm build && node scripts/contract-source-anchor-identity.mjs",
     "contract:source-plan-admission-origins": "pnpm build && node scripts/contract-source-plan-admission-origins.mjs",

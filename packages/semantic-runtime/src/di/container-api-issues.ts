@@ -1,10 +1,10 @@
 import ts from 'typescript';
 
 import {
-  KernelStore,
-  KernelStoreBatch,
+  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
   sourceSpanAddressForSite,
@@ -40,9 +40,9 @@ import {
 import {
   DiIssuePublication,
   DiIssuePublisher,
+  publishDiIssuePublications,
   withDiIssueSourceAddressRecords,
 } from './di-issue-publication.js';
-import { DiProductDetails } from './product-details.js';
 
 export class DiContainerApiIssueMaterialization {
   constructor(
@@ -57,6 +57,7 @@ export class DiContainerApiIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new DiIssuePublisher(store);
   }
@@ -72,15 +73,11 @@ export class DiContainerApiIssueMaterializer {
         this.publicationsForContainerApiCall(project, site, index, nullReturningRegistryNames, noDefaultInterfaceNames)
       );
 
-    const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'di-container-api-issues'));
-    }
-    this.store.productDetails.addAll(DiProductDetails.Issue, publications.map((publication) => publication.issue));
+    const emission = publishDiIssuePublications(this.publication, 'di-container-api-issues', publications);
 
     return new DiContainerApiIssueMaterialization(
-      publications.map((publication) => publication.issue),
-      records,
+      emission.issues,
+      emission.records,
     );
   }
 

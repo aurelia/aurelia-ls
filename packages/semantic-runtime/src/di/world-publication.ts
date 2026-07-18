@@ -90,7 +90,14 @@ import {
   ContainerSelfResolverSlot,
 } from './container-slot.js';
 import type { DiIssue } from './di-issue.js';
-import { DiKeyIdentityEmitter } from './di-key-identity-emitter.js';
+import {
+  DiKeyIdentityEmitter,
+  resourceDiKeyIdentityLocal,
+} from './di-key-identity-emitter.js';
+import {
+  FrameworkIntrinsicDiKey,
+  frameworkIntrinsicDiKeyLocal,
+} from './framework-intrinsic-di-key.js';
 import { DiIssuePublisher } from './di-issue-publication.js';
 import {
   Resolver,
@@ -463,7 +470,10 @@ export class DiFrameworkAppTaskPublicationMaterializer {
     provenanceHandle: ProvenanceHandle,
   ): DiFrameworkAppTaskPublicationEmission {
     const records: KernelStoreRecord[] = [];
-    const keyIdentityHandle = this.store.handles.identity(`${local}:key:${effect.keyName}`);
+    const keyIdentityHandle = this.keyIdentityEmitter.frameworkOrLocalInterfaceKeyIdentityHandle(
+      effect.keyName,
+      this.store.handles.identity(`${local}:key:${effect.keyName}`),
+    );
     this.keyIdentityEmitter.emitInterfaceKeyIdentity(records, keyIdentityHandle, effect.keyName, admission.sourceAddressHandle);
 
     const task = this.frameworkAppTaskDefinition(admission, effect, local, keyIdentityHandle);
@@ -640,7 +650,10 @@ class DiResourceSlotPublication {
     readonly registrationName: string,
     readonly resourceIdentityHandle: IdentityHandle,
     readonly resourceProductHandle: ProductHandle,
-    readonly sourceAddressHandle: AddressHandle | null,
+    /** Registration site that owns the container slot. */
+    readonly registrationSourceAddressHandle: AddressHandle | null,
+    /** Definition, alias, or override token that supplied this exact runtime key. */
+    readonly keySourceAddressHandle: AddressHandle | null,
     readonly projectKey: string | null,
     readonly duplicateDiagnostic: ResourceDuplicateDiagnostic | null,
   ) {}
@@ -739,7 +752,10 @@ export class DiResolverPublicationMaterializer {
     readonly resolverSlot: ContainerResolverSlot;
   } {
     const records: KernelStoreRecord[] = [];
-    const keyIdentityHandle = this.store.handles.identity(`${local}:key:${effect.keyName}`);
+    const keyIdentityHandle = this.keyIdentityEmitter.frameworkOrLocalInterfaceKeyIdentityHandle(
+      effect.keyName,
+      this.store.handles.identity(`${local}:key:${effect.keyName}`),
+    );
     this.keyIdentityEmitter.emitInterfaceKeyIdentity(records, keyIdentityHandle, effect.keyName, admission.sourceAddressHandle);
 
     const publication = this.frameworkResolverPublication(
@@ -764,7 +780,10 @@ export class DiResolverPublicationMaterializer {
     provenanceHandle: ProvenanceHandle,
   ): DiFactoryPublicationEmission {
     const records: KernelStoreRecord[] = [];
-    const keyIdentityHandle = this.store.handles.identity(`${local}:key:${effect.keyName}`);
+    const keyIdentityHandle = this.keyIdentityEmitter.frameworkOrLocalInterfaceKeyIdentityHandle(
+      effect.keyName,
+      this.store.handles.identity(`${local}:key:${effect.keyName}`),
+    );
     this.keyIdentityEmitter.emitInterfaceKeyIdentity(records, keyIdentityHandle, effect.keyName, admission.sourceAddressHandle);
 
     const identityHandle = this.store.handles.identity(`${local}:factory-slot`);
@@ -966,6 +985,7 @@ export class DiResourceSlotPublicationMaterializer {
         definition.identityHandle,
         definition.productHandle,
         registrationSourceAddressHandle ?? definition.sourceAddressHandle,
+        resourceKeySourceAddress(definition, lookupName, registrationSourceAddressHandle),
         projectKey,
         resourceDuplicateDiagnosticForLookup(definition.type, registrationName, lookupName),
       ),
@@ -1001,6 +1021,7 @@ export class DiResourceSlotPublicationMaterializer {
         resource.identityHandle,
         resource.productHandle,
         registrationSourceAddressHandle ?? resource.sourceAddressHandle,
+        resource.sourceAddressHandle,
         projectKey,
         resourceDuplicateDiagnosticForLookup(resource.resourceKind, resource.name, lookupName),
       ),
@@ -1062,13 +1083,18 @@ export class DiResourceSlotPublicationMaterializer {
     }
 
     const records: KernelStoreRecord[] = [];
-    const handles = this.resourceSlotHandles(container, local, resourceKey);
+    const handles = this.resourceSlotHandles(
+      container,
+      local,
+      publication.resourceIdentityHandle,
+      resourceKey,
+    );
     this.keyIdentityEmitter.emitResourceKeyIdentity(
       records,
       handles.keyIdentityHandle,
       publication.resourceIdentityHandle,
       resourceKey,
-      this.resourceSlotSourceAddress(container, publication),
+      publication.keySourceAddressHandle,
     );
 
     const slot = this.resourceSlotForPublication(container, publication, resourceKey, handles);
@@ -1122,6 +1148,7 @@ export class DiResourceSlotPublicationMaterializer {
   private resourceSlotHandles(
     container: Container,
     local: string,
+    resourceIdentityHandle: IdentityHandle,
     resourceKey: string,
   ): DiResourceSlotHandles {
     const slotLocal = `di-resource-slot:${container.productHandle}:${resourceKey}`;
@@ -1129,7 +1156,10 @@ export class DiResourceSlotPublicationMaterializer {
       slotLocal,
       this.store.handles.product(slotLocal),
       this.store.handles.identity(slotLocal),
-      this.store.handles.identity(`di-key:resource:${resourceKey}`),
+      this.store.handles.identity(resourceDiKeyIdentityLocal(
+        resourceIdentityHandle,
+        resourceKey,
+      )),
       this.store.handles.claim(`${local}:provides-key`),
     );
   }
@@ -1157,7 +1187,7 @@ export class DiResourceSlotPublicationMaterializer {
     container: Container,
     publication: DiResourceSlotPublication,
   ): AddressHandle | null {
-    return publication.sourceAddressHandle ?? container.sourceAddressHandle;
+    return publication.registrationSourceAddressHandle ?? container.sourceAddressHandle;
   }
 
   private recordsForResourceSlotProduct(
@@ -1289,6 +1319,21 @@ function resourceRegistrationName(definition: FullResourceDefinition): string | 
   return 'name' in definition ? definition.name : null;
 }
 
+function resourceKeySourceAddress(
+  definition: FullResourceDefinition,
+  lookupName: string,
+  registrationSourceAddressHandle: AddressHandle | null,
+): AddressHandle | null {
+  if (definition.type === ResourceDefinitionKind.AttributePattern) {
+    return registrationSourceAddressHandle ?? definition.sourceAddressHandle;
+  }
+  if (lookupName === definition.name) {
+    return definition.nameSourceAddressHandle ?? definition.sourceAddressHandle;
+  }
+  const alias = definition.aliases.find((candidate) => candidate.name === lookupName) ?? null;
+  return alias?.addressHandle ?? registrationSourceAddressHandle ?? definition.sourceAddressHandle;
+}
+
 export class DiContainerSelfResolverPublicationMaterializer {
   constructor(
     private readonly store: KernelStore,
@@ -1308,7 +1353,7 @@ export class DiContainerSelfResolverPublicationMaterializer {
     this.keyIdentityEmitter.emitInterfaceKeyIdentity(
       records,
       handles.keyIdentityHandle,
-      'IContainer',
+      FrameworkIntrinsicDiKey.IContainer,
       container.sourceAddressHandle,
     );
 
@@ -1333,7 +1378,7 @@ export class DiContainerSelfResolverPublicationMaterializer {
     return new DiContainerSelfResolverHandles(
       this.store.handles.product(local),
       this.store.handles.identity(local),
-      this.store.handles.identity('di-key:interface:IContainer'),
+      this.store.handles.identity(frameworkIntrinsicDiKeyLocal(FrameworkIntrinsicDiKey.IContainer)),
       this.store.handles.claim(`${local}:provides-key`),
       this.store.handles.claim(`${local}:container-produces-product`),
     );

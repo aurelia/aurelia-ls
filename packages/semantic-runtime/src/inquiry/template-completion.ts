@@ -70,7 +70,8 @@ import {
   checkerTypeMemberVisibilityKind,
 } from '../type-system/checker-member-surface.js';
 import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
-import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
+import { readOrProjectCheckerTypeMembersInProjection } from '../type-system/checker-type-member-surface.js';
+import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import {
   RouteConfigKind,
   type EndpointModel,
@@ -378,6 +379,8 @@ export class TemplateCompletionCursorContext {
   constructor(
     /** Product-handle query ready for `answerTemplateCompletion`. */
     readonly query: TemplateCompletionQuery,
+    /** Generation-bound expression world shared by cursor derivation and answer materialization. */
+    readonly expressionWorld: CheckerExpressionTypeWorld,
     /** HTML node under the cursor, when one could be selected. */
     readonly htmlNodeProductHandle: ProductHandle | null,
     /** HTML attribute under the cursor, when one could be selected. */
@@ -487,6 +490,7 @@ class TemplateCompletionCursorContextBuilder {
         [],
         this.input.i18nTranslationKeyProductHandles ?? [],
       ),
+      this.expressionWorld,
       null,
       null,
       null,
@@ -609,6 +613,7 @@ class TemplateCompletionCursorContextBuilder {
         routeParameterEndpointProductHandles,
         this.input.i18nTranslationKeyProductHandles ?? [],
       ),
+      this.expressionWorld,
       htmlNode?.productHandle ?? null,
       htmlAttribute?.productHandle ?? null,
       valueSite?.productHandle ?? null,
@@ -817,7 +822,9 @@ class TemplateCompletionCursorContextBuilder {
         bindingScope,
         this.input.resource,
         this.input.resource.compilation.compilerWorld.resourceScope,
-        valueSite == null ? null : bindableTypeMember(this.store, valueSite)?.valueType ?? null,
+        valueSite == null
+          ? null
+          : bindableTypeMember(this.store, this.expressionWorld.projector, valueSite)?.valueType ?? null,
         this.expressionWorld,
         missingInputs,
       )
@@ -1015,8 +1022,9 @@ function sameNullableCheckerTypeReference(
 export function answerTemplateCompletion(
   store: KernelStore,
   query: TemplateCompletionQuery,
+  expressionWorld: CheckerExpressionTypeWorld,
 ): InquiryAnswer<TemplateCompletionResult, TemplateCompletionQuery> {
-  const frame = createTemplateCompletionAnswerFrame(store, query);
+  const frame = createTemplateCompletionAnswerFrame(store, query, expressionWorld);
   collectTemplateCompletionCandidates(frame);
   const uniqueCandidates = uniqueCandidatesByKey(frame.candidates);
   const page = pageCandidates(uniqueCandidates, query.page);
@@ -1026,6 +1034,7 @@ export function answerTemplateCompletion(
 function createTemplateCompletionAnswerFrame(
   store: KernelStore,
   query: TemplateCompletionQuery,
+  expressionWorld: CheckerExpressionTypeWorld,
 ): TemplateCompletionAnswerFrame {
   const missingInputs: string[] = [];
   const expressionParse = siteKindUsesExpressionParse(query.siteKind)
@@ -1051,7 +1060,7 @@ function createTemplateCompletionAnswerFrame(
   return {
     store,
     query,
-    expressionWorld: new CheckerExpressionTypeWorld(store),
+    expressionWorld,
     missingInputs,
     candidates: [],
     expressionParse,
@@ -1155,7 +1164,12 @@ function collectExpressionMemberCandidates(
     frame.missingInputs.push('member-owner-type');
     return;
   }
-  const members = readTypeMembers(frame.store, frame.memberOwnerTypeProductHandle, frame.missingInputs);
+  const members = readTypeMembers(
+    frame.store,
+    frame.expressionWorld.projector,
+    frame.memberOwnerTypeProductHandle,
+    frame.missingInputs,
+  );
   if (members != null) {
     frame.candidates.push(...typeMemberCandidates(frame, members));
   }
@@ -1173,6 +1187,7 @@ function collectAttributeValueDomainCandidates(
   }
   const candidates = attributeValueDomainCandidates(
     frame.store,
+    frame.expressionWorld.projector,
     site,
     frame.query.routeConfigProductHandles,
     frame.query.i18nTranslationKeyProductHandles,
@@ -1181,7 +1196,7 @@ function collectAttributeValueDomainCandidates(
     frame.candidates.push(...candidates);
     return;
   }
-  const reason = attributeValueCompletionMissingInput(frame.store, site);
+  const reason = attributeValueCompletionMissingInput(frame.store, frame.expressionWorld.projector, site);
   if (reason != null) {
     frame.missingInputs.push(reason);
   }
@@ -1409,6 +1424,7 @@ function cursorFocusedExpressionResult(
 
 function readTypeMembers(
   store: KernelStore,
+  projector: CheckerTypeProjector,
   productHandle: ProductHandle | null,
   missingInputs: string[],
 ): readonly CheckerTypeMember[] | null {
@@ -1421,7 +1437,7 @@ function readTypeMembers(
     missingInputs.push('type-shape-detail');
     return null;
   }
-  const members = readOrProjectCheckerTypeMembers(store, detail, productHandle);
+  const members = readOrProjectCheckerTypeMembersInProjection(projector, detail, productHandle);
   if (members.length === 0) {
     missingInputs.push(expressionMemberSurfaceMissingInput(
       detail.shapeKind,
@@ -1450,6 +1466,7 @@ function readValueSite(
 
 function attributeValueCompletionMissingInput(
   store: KernelStore,
+  projector: CheckerTypeProjector,
   site: TemplateValueSite,
 ): string | null {
   switch (site.siteKind) {
@@ -1459,7 +1476,7 @@ function attributeValueCompletionMissingInput(
       }
       return `attribute-value-domain:binding-command:${site.bindingCommand?.name ?? 'unknown'}`;
     case TemplateValueSiteKind.BindableValue:
-      if (bindableValueHasOpenEndedScalarDomain(store, site)) {
+      if (bindableValueHasOpenEndedScalarDomain(store, projector, site)) {
         return null;
       }
       return `attribute-value-domain:bindable:${site.bindable?.reference.attribute ?? 'unknown'}`;
@@ -1468,7 +1485,7 @@ function attributeValueCompletionMissingInput(
         return null;
       }
       if (site.bindable != null) {
-        if (bindableValueHasOpenEndedScalarDomain(store, site)) {
+        if (bindableValueHasOpenEndedScalarDomain(store, projector, site)) {
           return null;
         }
         return `attribute-value-domain:bindable:${site.bindable.reference.attribute}`;
@@ -1514,15 +1531,17 @@ function templateControllerSemanticsForValueSite(
 
 function bindableValueHasOpenEndedScalarDomain(
   store: KernelStore,
+  projector: CheckerTypeProjector,
   site: TemplateValueSite,
 ): boolean {
-  const member = bindableTypeMember(store, site);
+  const member = bindableTypeMember(store, projector, site);
   const carrier = member?.carrier;
   return carrier?.valueType == null ? false : isOpenEndedScalarType(carrier.checker, carrier.valueType);
 }
 
 function attributeValueDomainCandidates(
   store: KernelStore,
+  projector: CheckerTypeProjector,
   site: TemplateValueSite,
   routeConfigProductHandles: readonly ProductHandle[],
   i18nTranslationKeyProductHandles: readonly ProductHandle[],
@@ -1531,7 +1550,7 @@ function attributeValueDomainCandidates(
     ...routerResourceRouteCandidates(store, site, routeConfigProductHandles),
     ...i18nTranslationKeyCandidates(store, site, i18nTranslationKeyProductHandles),
     ...inlineMultiBindingTargetCandidates(store, site),
-    ...(site.bindable == null ? [] : bindableAttributeValueCandidates(store, site)),
+    ...(site.bindable == null ? [] : bindableAttributeValueCandidates(store, projector, site)),
   ];
 }
 
@@ -1732,9 +1751,10 @@ function inlineMultiBindingTargetCandidates(
 
 function bindableAttributeValueCandidates(
   store: KernelStore,
+  projector: CheckerTypeProjector,
   site: TemplateValueSite,
 ): readonly TemplateCompletionCandidate[] {
-  const member = bindableTypeMember(store, site);
+  const member = bindableTypeMember(store, projector, site);
   if (member == null) {
     return [];
   }
@@ -1762,6 +1782,7 @@ function valueSiteResourceDefinition(
 
 function bindableTypeMember(
   store: KernelStore,
+  projector: CheckerTypeProjector,
   site: TemplateValueSite,
 ): CheckerTypeMember | null {
   const ownerDefinitionHandle = site.bindable?.reference.ownerDefinitionProductHandle ?? null;
@@ -1777,7 +1798,7 @@ function bindableTypeMember(
   const targetType = store.productDetails.read(TypeSystemProductDetails.TypeShape, targetTypeProductHandle);
   const members = targetType == null
     ? []
-    : readOrProjectCheckerTypeMembers(store, targetType, targetTypeProductHandle);
+    : readOrProjectCheckerTypeMembersInProjection(projector, targetType, targetTypeProductHandle);
   return members.find((member) => member.name === bindableName) ?? null;
 }
 

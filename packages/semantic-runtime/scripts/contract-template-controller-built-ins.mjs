@@ -8,6 +8,7 @@ import {
 import {
   TypeSystemProjectBuilder,
 } from '../out/type-system/project.js';
+import { projectTypeSystemProgramSources } from '../out/type-system/program-source-authority.js';
 import {
   readTypeSystemOverlayDiagnostics,
 } from '../out/type-system/diagnostics.js';
@@ -61,7 +62,7 @@ const overlayEmission = resource == null
     .build(resource, 'contract-template-controller-built-ins');
 const overlayTypeSystem = overlayEmission?.overlaySource == null
   ? null
-  : new TypeSystemProjectBuilder().build(
+  : new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {
@@ -377,7 +378,7 @@ async function readVirtualRepeatProbe() {
       skippedExpressionCount: overlayEmission.skippedExpressions.length,
     };
   }
-  const overlayTypeSystem = new TypeSystemProjectBuilder().build(
+  const overlayTypeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
     app.project,
     app.emission.evaluation,
     {

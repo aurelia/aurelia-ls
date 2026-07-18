@@ -402,7 +402,7 @@ export class RuntimeExpressionResourcePlanner {
               occurrence.expression.name.name,
             );
             const builtInResource = asBuiltInBindingBehaviorResource(
-              readBuiltInVisibleTemplateResource(this.store, resource),
+              readBuiltInVisibleTemplateResource(input.expressionWorld.projector.publication, resource),
             );
             const resourceBindEffects = bindEffects.readEffects(resource);
             const issue = reached
@@ -450,7 +450,7 @@ export class RuntimeExpressionResourcePlanner {
                 projected.name.name,
               );
               const projectedBuiltInResource = asBuiltInValueConverterResource(
-                readBuiltInVisibleTemplateResource(this.store, projectedResource),
+                readBuiltInVisibleTemplateResource(input.expressionWorld.projector.publication, projectedResource),
               );
               entries.push(new RuntimeValueConverterPlanEntry(
                 bindingIndex,
@@ -485,7 +485,7 @@ export class RuntimeExpressionResourcePlanner {
             occurrence.expression.name.name,
           );
           const builtInResource = asBuiltInValueConverterResource(
-            readBuiltInVisibleTemplateResource(this.store, resource),
+            readBuiltInVisibleTemplateResource(input.expressionWorld.projector.publication, resource),
           );
           entries.push(new RuntimeValueConverterPlanEntry(
             bindingIndex,

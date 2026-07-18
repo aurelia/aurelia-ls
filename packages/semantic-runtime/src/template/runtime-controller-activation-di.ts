@@ -6,14 +6,13 @@ import {
 } from '../kernel/address.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import type {
-  KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
-  normalizeHostPath,
   sourceFileAddressForAddress,
+  sourcePathMatchesFileName,
 } from '../kernel/source-address.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import type { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
@@ -56,7 +55,6 @@ class MutableImportBindings implements ImportBindings {
  * controller kind.
  */
 export function readControllerActivationViewFactoryResolveSites(
-  store: KernelStore,
   publication: KernelPublicationContext,
   definition: CustomElementDefinition | CustomAttributeDefinition,
 ): readonly RuntimeControllerActivationDiSite[] {
@@ -76,9 +74,9 @@ export function readControllerActivationViewFactoryResolveSites(
   }
   return shape.carrier.declarations.flatMap((declaration) =>
     ts.isClassDeclaration(declaration)
-      && normalizeHostPath(declaration.getSourceFile().fileName) === normalizeHostPath(definitionSourceFile.path)
+      && sourcePathMatchesFileName(definitionSourceFile.path, declaration.getSourceFile().fileName)
       ? readClassActivationViewFactoryResolveSites(
-        store,
+        publication,
         definitionSourceFile.handle,
         definition.name,
         declaration,
@@ -88,7 +86,7 @@ export function readControllerActivationViewFactoryResolveSites(
 }
 
 function readClassActivationViewFactoryResolveSites(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   sourceFileAddressHandle: AddressHandle,
   definitionName: string,
   declaration: ts.ClassDeclaration,
@@ -101,18 +99,18 @@ function readClassActivationViewFactoryResolveSites(
       continue;
     }
     if (ts.isPropertyDeclaration(member) && member.initializer != null) {
-      visitActivationNode(store, sourceFileAddressHandle, sourceFile, bindings, definitionName, member.initializer, sites);
+      visitActivationNode(publication, sourceFileAddressHandle, sourceFile, bindings, definitionName, member.initializer, sites);
       continue;
     }
     if (ts.isConstructorDeclaration(member) && member.body != null) {
-      visitActivationNode(store, sourceFileAddressHandle, sourceFile, bindings, definitionName, member.body, sites);
+      visitActivationNode(publication, sourceFileAddressHandle, sourceFile, bindings, definitionName, member.body, sites);
     }
   }
   return sites;
 }
 
 function visitActivationNode(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
   bindings: ImportBindings,
@@ -124,10 +122,10 @@ function visitActivationNode(
     return;
   }
   if (ts.isCallExpression(node) && isResolveIViewFactoryCall(node, bindings)) {
-    sites.push(sourceSiteForNode(store, sourceFileAddressHandle, sourceFile, definitionName, node));
+    sites.push(sourceSiteForNode(publication, sourceFileAddressHandle, sourceFile, definitionName, node));
   }
   ts.forEachChild(node, (child) =>
-    visitActivationNode(store, sourceFileAddressHandle, sourceFile, bindings, definitionName, child, sites)
+    visitActivationNode(publication, sourceFileAddressHandle, sourceFile, bindings, definitionName, child, sites)
   );
 }
 
@@ -201,7 +199,7 @@ function isIViewFactoryExpression(
 }
 
 function sourceSiteForNode(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
   definitionName: string,
@@ -209,7 +207,7 @@ function sourceSiteForNode(
 ): RuntimeControllerActivationDiSite {
   const start = node.getStart(sourceFile);
   const end = node.end;
-  const handle = store.handles.address([
+  const handle = publication.handles.address([
     'runtime-controller-activation-di',
     localKeyPart(definitionName),
     localKeyPart(sourceFile.fileName),

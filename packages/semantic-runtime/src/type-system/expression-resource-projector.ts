@@ -522,7 +522,11 @@ export class CheckerExpressionResourceProjector {
     primitive: 'string' | 'number',
   ): boolean {
     return input.kind === CheckerExpressionTypeEvaluationResultKind.Type
-      && checkerTypeReferenceAssignableToPrimitiveType(this.support.store, input.typeReference, primitive) === true;
+      && checkerTypeReferenceAssignableToPrimitiveType(
+        this.support.projector.publication,
+        input.typeReference,
+        primitive,
+      ) === true;
   }
 
   private inputDisplayDefinitely(

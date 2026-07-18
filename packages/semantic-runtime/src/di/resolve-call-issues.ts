@@ -1,8 +1,8 @@
 import {
-  KernelStore,
-  KernelStoreBatch,
+  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
   sourceSpanAddressForSite,
@@ -18,13 +18,13 @@ import {
 import {
   DiIssuePublication,
   DiIssuePublisher,
+  publishDiIssuePublications,
   withDiIssueSourceAddressRecords,
 } from './di-issue-publication.js';
 import {
   DiResolveCallSite,
   readDiResolveCallSites,
 } from './resolve-call-recognition.js';
-import { DiProductDetails } from './product-details.js';
 
 export class DiResolveCallIssueMaterialization {
   constructor(
@@ -39,6 +39,7 @@ export class DiResolveCallIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new DiIssuePublisher(store);
   }
@@ -50,15 +51,11 @@ export class DiResolveCallIssueMaterializer {
     const publications = readDiResolveCallSites(project, typeSystem)
       .flatMap((site, index) => this.publicationsForResolveCall(project, site, index));
 
-    const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'di-resolve-call-issues'));
-    }
-    this.store.productDetails.addAll(DiProductDetails.Issue, publications.map((publication) => publication.issue));
+    const emission = publishDiIssuePublications(this.publication, 'di-resolve-call-issues', publications);
 
     return new DiResolveCallIssueMaterialization(
-      publications.map((publication) => publication.issue),
-      records,
+      emission.issues,
+      emission.records,
     );
   }
 

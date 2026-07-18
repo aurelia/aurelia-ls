@@ -6,6 +6,7 @@ import {
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   aureliaExternalEvaluationValueResolver,
   aureliaStaticEvaluationRuntimeHost,
@@ -36,10 +37,12 @@ export function evaluateAureliaProject(
 export function evaluateAndEmitAureliaProject(
   store: KernelStore,
   project: ProjectBootFrame,
+  publication: KernelPublicationContext,
 ): StaticProjectEvaluationResult {
   return new StaticProjectEvaluationPass().evaluateAndEmit(
     store,
     project,
     aureliaProjectEvaluationOptions(),
+    publication,
   );
 }

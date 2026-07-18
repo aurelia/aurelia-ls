@@ -25,6 +25,7 @@ import {
 import {
   KernelStoreBatch,
   type KernelStore,
+  type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
@@ -147,7 +148,7 @@ export class RuntimeValueConverterMaterializer {
 
   constructor(
     readonly store: KernelStore,
-    readonly publication: KernelPublicationContext = store,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   materialize(input: RuntimeValueConverterMaterializationRequest): RuntimeValueConverterEmission {
@@ -424,7 +425,7 @@ export class RuntimeValueConverterMaterializer {
     switch (entry.builtInResource?.name) {
       case BuiltInValueConverterName.Sanitize:
         return this.sanitize.toView({
-          hasCustomSanitizer: hasResolverForInterface(this.store, input.container, 'ISanitizer'),
+          hasCustomSanitizer: hasResolverForInterface(this.publication, input.container, 'ISanitizer'),
         });
       default:
         return null;
@@ -657,14 +658,14 @@ function openValueConverterLifecycle(reason: string): RuntimeValueConverterLifec
 }
 
 function hasResolverForInterface(
-  store: KernelStore,
+  store: KernelStoreReadView,
   container: Container,
   interfaceName: string,
 ): boolean {
   let current: Container | null = container;
   while (current != null) {
     if (current.readResolverSlots().some((slot) =>
-      isInterfaceIdentity(store.readIdentity(slot.keyIdentityHandle), interfaceName)
+      isInterfaceIdentity(store.read(slot.keyIdentityHandle), interfaceName)
     )) {
       return true;
     }
@@ -674,7 +675,7 @@ function hasResolverForInterface(
 }
 
 function isInterfaceIdentity(
-  identity: ReturnType<KernelStore['readIdentity']>,
+  identity: ReturnType<KernelStoreReadView['read']>,
   interfaceName: string,
 ): boolean {
   return identity instanceof InterfaceDiKeyIdentity

@@ -291,7 +291,8 @@ function verifyCatalogShapeAndIdentityNormalization() {
     'App-query locus keys should ignore unsupported source/cursor fields.',
   );
   expect(
-    JSON.stringify(semanticAppQueryEpochKeys('contract-project', noisyProjectQuery)) === JSON.stringify(['project:contract-project']),
+    JSON.stringify(semanticAppQueryEpochKeys('contract-project', 'input-1', noisyProjectQuery))
+      === JSON.stringify(['project:contract-project', 'project-input:contract-project:input-1']),
     'App-query epoch keys should ignore unsupported source/cursor fields.',
   );
   expect(
@@ -978,7 +979,7 @@ async function verifyFamilySpecificContinuationCanaries() {
       workspaceRoot: path.join(pressureRoot, 'resource-definition-api-errors'),
       queries: [
         { kind: SemanticAppQueryKind.ResourceDefinitions, page: { size: 5 } },
-        { kind: SemanticAppQueryKind.ResourceIssues, page: { size: 5 } },
+        { kind: SemanticAppQueryKind.ResourceIssues, page: { size: 20 } },
         { kind: SemanticAppQueryKind.ResourceVisibility, page: { size: 5 } },
         { kind: SemanticAppQueryKind.AppDiagnostics, page: { size: 5 } },
       ],
@@ -995,6 +996,7 @@ async function verifyFamilySpecificContinuationCanaries() {
         {
           queryKind: SemanticAppQueryKind.ResourceIssues,
           minRows: 1,
+          exactRows: 5,
           targets: [SemanticAppQueryKind.ResourceDefinitions, SemanticAppQueryKind.AppDiagnosticSummary],
           evidence: [{ target: SemanticAppQueryKind.ResourceDefinitions, sourcePrecision: 'exact-authored-span' }],
         },
@@ -1218,6 +1220,10 @@ async function verifyFamilySpecificContinuationCanaries() {
       if (expectation.minRows != null) {
         const rowCount = row.answer.value?.rows?.length ?? 0;
         expect(rowCount >= expectation.minRows, `${canary.label}: ${expectation.queryKind} should return at least ${expectation.minRows} row(s), returned ${rowCount}.`);
+      }
+      if (expectation.exactRows != null) {
+        const rowCount = row.answer.value?.rows?.length ?? 0;
+        expect(rowCount === expectation.exactRows, `${canary.label}: ${expectation.queryKind} should return exactly ${expectation.exactRows} row(s), returned ${rowCount}.`);
       }
       expectContinuationTargets(row.answer, expectation.queryKind, expectation.targets, canary.label);
       for (const evidenceExpectation of expectation.evidence ?? []) {

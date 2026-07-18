@@ -60,6 +60,10 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 
 const AURELIA_VITE_PLUGIN_MODULES = new Set(['@aurelia/vite-plugin']);
@@ -365,6 +369,7 @@ export class ResourceConventionTransformAdmissionMaterializer {
   materializeAndEmit(
     store: KernelStore,
     project: ProjectBootFrame,
+    publication: KernelPublicationContext,
   ): ResourceConventionTransformAdmissionIndex {
     const toolingHost = new ConventionToolingEvaluationHost();
     const evaluation = new StaticProjectEvaluationPass().evaluate(
@@ -415,7 +420,9 @@ export class ResourceConventionTransformAdmissionMaterializer {
       ...openRecords,
     ];
     if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `resource-convention-transforms:${project.projectKey}`));
+      publication.publish(new KernelPublicationPlan(
+        new KernelStoreBatch(records, `resource-convention-transforms:${project.projectKey}`),
+      ));
     }
     return new ResourceConventionTransformAdmissionIndex(
       emissions.map((emission) => emission.admission),

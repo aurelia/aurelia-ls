@@ -1093,7 +1093,12 @@ function applicationComponentReference(
     roles: componentRoleRowsForDefinition(componentRoles, definition),
     bindables: definition.bindables.map((bindable) => {
       const typeSurface = includeTypeSurfaces
-        ? projectBindableTypeSurface(store, definition.target, bindable)
+        ? projectBindableTypeSurface(
+            store,
+            emission.templates.expressionWorld.projector,
+            definition.target,
+            bindable,
+          )
         : nullBindableTypeSurface();
       return {
         name: bindable.name,

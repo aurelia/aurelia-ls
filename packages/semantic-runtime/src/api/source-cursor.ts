@@ -3,7 +3,7 @@ import {
   authoredSourceHostPathCandidates,
   authoredSourceOffsetForLineCharacter,
 } from '../kernel/authored-source-text.js';
-import type { SemanticRuntimeSourceTextProvider } from '../kernel/source-text-provider.js';
+import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
 import type { SemanticRuntimeSourceCursorInput } from './contracts.js';
 
 export interface SemanticSourceCursorResolution {
@@ -17,12 +17,12 @@ export function resolveSemanticSourceCursor(
   workspaceRootDir: string,
   projectRootDir: string,
   cursor: SemanticRuntimeSourceCursorInput,
-  sourceTextProvider: SemanticRuntimeSourceTextProvider | null,
+  inputHost: SemanticRuntimeProjectInputHost,
 ): SemanticSourceCursorResolution {
   if (cursor.offset != null) {
     return { cursor, missingInputs: [], summary: null };
   }
-  const source = new AuthoredSourceTextCache('', sourceTextProvider).readFirst(authoredSourceHostPathCandidates(
+  const source = new AuthoredSourceTextCache('', inputHost).readFirst(authoredSourceHostPathCandidates(
     workspaceRootDir,
     projectRootDir,
     cursor.filePath,

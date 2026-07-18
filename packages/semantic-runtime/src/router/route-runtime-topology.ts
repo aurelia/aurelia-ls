@@ -6,6 +6,7 @@ import {
   ContainerChildMaterializer,
   ContainerContextResolverSlotRequest,
 } from '../di/container-materializer.js';
+import { FrameworkIntrinsicDiKey } from '../di/framework-intrinsic-di-key.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -24,9 +25,14 @@ import {
   readFieldProvenance,
 } from '../kernel/provenance.js';
 import {
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStore,
-  type KernelStoreRecord,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type {
+  KernelStore,
+  KernelStoreReadView,
+  KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
@@ -273,8 +279,9 @@ export class RouteRuntimeTopologyProjectPass {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
-    this.childContainerMaterializer = new ContainerChildMaterializer(store, store);
+    this.childContainerMaterializer = new ContainerChildMaterializer(store, publication);
   }
 
   materializeAndEmit(
@@ -284,16 +291,16 @@ export class RouteRuntimeTopologyProjectPass {
     sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
   ): RouteRuntimeTopologyProjectResult {
     const state = new RouteRuntimeTopologyFrame(
-      this.store,
+      this.publication,
       this.childContainerMaterializer,
       routeConfigContexts,
       templates,
       sourceValueEvaluator,
     ).materialize();
     const records = state.readRecords();
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `router-runtime-topology:${project.projectKey}`));
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `router-runtime-topology:${project.projectKey}`),
+    ));
     return new RouteRuntimeTopologyProjectResult(
       project,
       state.routeContexts.map((emission) => emission.routeContext),
@@ -313,7 +320,7 @@ class RouteRuntimeTopologyFrame {
   private readonly state = new RouteRuntimeTopologyState();
 
   constructor(
-    private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
     private readonly childContainerMaterializer: ContainerChildMaterializer,
     routeConfigContexts: RouteConfigContextMaterializationProjectResult,
     private readonly templates: TemplateCompilationProjectEmission,
@@ -323,7 +330,7 @@ class RouteRuntimeTopologyFrame {
     this.configs = routeConfigIndex(routeConfigContexts);
     this.childrenByParent = routeConfigContextChildrenByParent(contexts);
     this.viewportDraftsByOwner = viewportDraftsByOwnerContext(
-      store,
+      publication,
       routeConfigContexts,
       templates,
       sourceValueEvaluator,
@@ -392,7 +399,7 @@ class RouteRuntimeTopologyFrame {
       parentContainer,
     );
     const routeContext = materializedRouteContext(
-      this.store,
+      this.publication,
       local,
       routeConfigContext,
       parent,
@@ -402,7 +409,7 @@ class RouteRuntimeTopologyFrame {
     return {
       records: [
         ...(containerEmission?.records ?? []),
-        ...routeContextRecords(this.store, local, routeConfigContext, routeContext),
+        ...routeContextRecords(this.publication, local, routeConfigContext, routeContext),
       ],
       routeConfigContext,
       routeContext,
@@ -428,12 +435,12 @@ class RouteRuntimeTopologyFrame {
   ): ViewportRuntimeEmission {
     const local = `router-viewport:${routeContext.identityHandle}:${draft.localKey}:${index}:${draft.controller.productHandle}`;
     const agentLocal = `${local}:agent`;
-    const viewport = materializedViewport(this.store, local, routeContext, draft);
-    const viewportAgent = materializedViewportAgent(this.store, agentLocal, routeContext, draft, viewport);
-    const topologyOpenSeams = viewportTopologyOpenSeams(this.store, local, routeContext, draft);
+    const viewport = materializedViewport(this.publication, local, routeContext, draft);
+    const viewportAgent = materializedViewportAgent(this.publication, agentLocal, routeContext, draft, viewport);
+    const topologyOpenSeams = viewportTopologyOpenSeams(this.publication, local, routeContext, draft);
     return {
       records: [
-        ...viewportRuntimeRecords(this.store, local, agentLocal, owner, draft, viewport, viewportAgent),
+        ...viewportRuntimeRecords(this.publication, local, agentLocal, owner, draft, viewport, viewportAgent),
         ...topologyOpenSeams.flatMap((emission) => emission.records),
       ],
       openSeams: topologyOpenSeams.map((emission) => emission.openSeam),
@@ -460,15 +467,15 @@ function materializedRouteContextContainer(
     sourceAddressHandle,
     `${routeConfigContext.friendlyPath}:route-context-container`,
     [
-      new ContainerContextResolverSlotRequest('IController', sourceAddressHandle),
-      new ContainerContextResolverSlotRequest('IRouteContext', sourceAddressHandle),
-      new ContainerContextResolverSlotRequest('IContextRouter', sourceAddressHandle),
+      new ContainerContextResolverSlotRequest(FrameworkIntrinsicDiKey.IController, sourceAddressHandle),
+      new ContainerContextResolverSlotRequest(FrameworkIntrinsicDiKey.IRouteContext, sourceAddressHandle),
+      new ContainerContextResolverSlotRequest(FrameworkIntrinsicDiKey.IContextRouter, sourceAddressHandle),
     ],
   ));
 }
 
 function materializedRouteContext(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   routeConfigContext: RouteConfigContextModel,
   parent: RouteRuntimeContextEmission | null,
@@ -499,7 +506,7 @@ function materializedRouteContext(
 }
 
 function routeContextRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   routeConfigContext: RouteConfigContextModel,
   routeContext: RouteContextModel,
@@ -523,7 +530,7 @@ function routeContextRecords(
 }
 
 function materializedViewport(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   routeContext: RouterReference,
   draft: ViewportDraft,
@@ -546,7 +553,7 @@ function materializedViewport(
 }
 
 function materializedViewportAgent(
-  store: KernelStore,
+  store: KernelStoreReadView,
   agentLocal: string,
   routeContext: RouterReference,
   draft: ViewportDraft,
@@ -566,7 +573,7 @@ function materializedViewportAgent(
 }
 
 function viewportRuntimeRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   agentLocal: string,
   owner: RouteConfigContextModel,
@@ -584,7 +591,7 @@ function viewportRuntimeRecords(
 }
 
 function viewportTopologyOpenSeams(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   routeContext: RouterReference,
   draft: ViewportDraft,
@@ -649,7 +656,7 @@ function viewportRuntimeSourceRecords(
 }
 
 function viewportProductRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   owner: RouteConfigContextModel,
   draft: ViewportDraft,
@@ -669,7 +676,7 @@ function viewportProductRecords(
 }
 
 function viewportAgentProductRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   draft: ViewportDraft,
   viewport: ViewportCustomElementModel,
@@ -708,7 +715,7 @@ function routeConfigContextChildrenByParent(
 }
 
 function viewportDraftsByOwnerContext(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   routeConfigContexts: RouteConfigContextMaterializationProjectResult,
   templates: TemplateCompilationProjectEmission,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
@@ -731,7 +738,7 @@ function viewportDraftsByOwnerContext(
           ownerRouteConfigContext: owner,
           localKey: resource.compilation.localKey,
           controller,
-          properties: viewportPropertiesFromController(store, controller, sourceValueEvaluator),
+          properties: viewportPropertiesFromController(publication, controller, sourceValueEvaluator),
           presenceCardinality: viewportPresenceCardinality(controller),
           index,
         };
@@ -924,17 +931,17 @@ function isViewportController(controller: RuntimeControllerFrame): boolean {
 }
 
 function viewportPropertiesFromController(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   controller: RuntimeControllerFrame,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
 ): ViewportProperties {
   const instruction = controller.instructionProductHandle == null
     ? null
-    : store.productDetails.read(TemplateProductDetails.Instruction, controller.instructionProductHandle);
+    : publication.readProductDetail(TemplateProductDetails.Instruction, controller.instructionProductHandle);
   const bindableInstructions = new Map<string, SetPropertyInstruction | PropertyBindingInstruction | InterpolationInstruction>();
   if (instruction instanceof HydrateElementInstruction) {
     for (const handle of instruction.bindableInstructionProductHandles) {
-      const bindableInstruction = store.productDetails.read(TemplateProductDetails.Instruction, handle);
+      const bindableInstruction = publication.readProductDetail(TemplateProductDetails.Instruction, handle);
       if (
         bindableInstruction instanceof SetPropertyInstruction
         || bindableInstruction instanceof PropertyBindingInstruction

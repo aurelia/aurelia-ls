@@ -8,6 +8,7 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
   FieldProvenance,
@@ -25,7 +26,8 @@ import {
   type EvaluationValue,
 } from '../evaluation/values.js';
 import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
-import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
+import { readOrProjectCheckerTypeMembersInProjection } from '../type-system/checker-type-member-surface.js';
+import { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import { bindableAttributeNameForProperty } from './bindable-attribute.js';
@@ -217,6 +219,7 @@ export function readBindables(
   target: ResourceTargetReference,
   ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
+  publication: KernelPublicationContext,
 ): BindableRead {
   const classPrototypeChain = readClassPrototypeChain(context, targetClass);
   const bindableMetadataChain = [...classPrototypeChain].reverse();
@@ -263,7 +266,7 @@ export function readBindables(
     issues.push(...read.issues);
   }
   return {
-    bindables: [...byName.values()].map((bindable) => bindableWithMemberTargets(store, target, bindable)),
+    bindables: [...byName.values()].map((bindable) => bindableWithMemberTargets(store, publication, target, bindable)),
     contributions,
     open,
     records,
@@ -685,6 +688,7 @@ function bindableFieldProvenance(
 
 function bindableWithMemberTargets(
   store: KernelStore,
+  publication: KernelPublicationContext,
   ownerTarget: ResourceTargetReference,
   bindable: BindableDefinition,
 ): BindableDefinition {
@@ -701,29 +705,34 @@ function bindableWithMemberTargets(
     bindable.callbackSourceAddressHandle,
     bindable.modeSourceAddressHandle,
     bindable.setSourceAddressHandle,
-    bindableMemberTarget(store, ownerTarget, bindable.name),
-    bindableMemberTarget(store, ownerTarget, bindable.callback),
+    bindableMemberTarget(store, publication, ownerTarget, bindable.name),
+    bindableMemberTarget(store, publication, ownerTarget, bindable.callback),
   );
 }
 
 function bindableMemberTarget(
   store: KernelStore,
+  publication: KernelPublicationContext,
   ownerTarget: ResourceTargetReference,
   memberName: string,
 ): ResourceTargetReference | null {
   const targetTypeProductHandle = ownerTarget.targetType?.productHandle ?? null;
   const targetType = targetTypeProductHandle == null
     ? null
-    : store.productDetails.read(TypeSystemProductDetails.TypeShape, targetTypeProductHandle);
+    : publication.readProductDetail(TypeSystemProductDetails.TypeShape, targetTypeProductHandle);
   const member = targetType == null
     ? null
-    : readOrProjectCheckerTypeMembers(store, targetType, targetType.productHandle)
+    : readOrProjectCheckerTypeMembersInProjection(
+        new CheckerTypeProjector(store, publication),
+        targetType,
+        targetType.productHandle,
+      )
       .find((candidate) => candidate.name === memberName) ?? null;
   return member == null
     ? null
     : new ResourceTargetReference(
         member.declarationIdentityHandle,
-        checkerTypeMemberSourceAddressHandle(store, member),
+        checkerTypeMemberSourceAddressHandle(publication, member),
         member.name,
         member.valueType,
       );

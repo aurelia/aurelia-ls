@@ -315,6 +315,14 @@ const contractSuites = [
     'query-claim',
     'lifetime',
   ], 'contract-type-projection-lifetime.mjs', 'Canonical TypeChecker projections follow kernel lifetime and Program epochs.'),
+  contract('api', 'fast', [
+    'api',
+    'incrementality',
+    'kernel',
+    'lsp',
+    'project-input',
+    'source-text',
+  ], 'contract-project-input-authority.mjs', 'A long-lived runtime advances one project-input generation across open-document edits while resource metadata keeps precise source-backed diagnostics.'),
   contract('type-system', 'fast', [
     'type-system',
     'checker',

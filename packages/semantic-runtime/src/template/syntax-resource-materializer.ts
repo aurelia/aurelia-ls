@@ -7,7 +7,7 @@ import type {
 } from '../kernel/handles.js';
 import { CompilerIdentity } from '../kernel/identity.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
-import type { KernelStore, KernelStoreRecord } from '../kernel/store.js';
+import type { KernelStore, KernelStoreReadView, KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { AttributePatternDefinition } from '../resources/attribute-pattern-definition.js';
 import type { BindingCommandDefinition } from '../resources/binding-command-definition.js';
@@ -106,7 +106,7 @@ export interface BindingCommandExecutableMaterializationInput {
 
 /** Publishes syntax-resource executables shared by framework catalogs and source registrations. */
 export class SyntaxResourceExecutableMaterializer {
-  constructor(private readonly store: KernelStore) {}
+  constructor(private readonly store: KernelStoreReadView) {}
 
   materializeAttributePattern(
     input: AttributePatternExecutableMaterializationInput,

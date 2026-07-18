@@ -19,9 +19,14 @@ import {
   type SourceSpanAddressPublication,
 } from '../kernel/source-address.js';
 import {
-  KernelStore,
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStoreRecord,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type {
+  KernelStoreReadView,
+  KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
@@ -129,7 +134,7 @@ export class RouteContextParameterReadProjectResult {
 /** Materializes RouteContext.getRouteParameters(...) source reads without pretending to execute navigation. */
 export class RouteContextParameterReadMaterializer {
   materializeAndEmit(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
     resourceIndex: ResourceDefinitionIndex,
@@ -148,7 +153,7 @@ export class RouteContextParameterReadMaterializer {
     );
     const sites = readRouteContextParameterReadSites(project, typeSystem);
     const emissions = sites.map((site, index) => emitRouteContextParameterReadSite(
-      store,
+      publication,
       project,
       site,
       site.enclosingClass == null ? [] : ownersByClass.get(site.enclosingClass) ?? [],
@@ -157,13 +162,13 @@ export class RouteContextParameterReadMaterializer {
     const records = emissions.flatMap((emission) => emission.records);
     const reads = emissions.flatMap((emission) => emission.reads);
     const issues = emissions.flatMap((emission) => emission.issues);
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `router-route-context-parameter-reads:${project.projectKey}`));
-      store.productDetails.addAll(
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `router-route-context-parameter-reads:${project.projectKey}`),
+      publishProductDetails(
         RouterProductDetails.RouteContextParameterRead,
         reads,
-      );
-    }
+      ),
+    ));
     return new RouteContextParameterReadProjectResult(
       project,
       reads,
@@ -549,7 +554,7 @@ function routePathParameterNames(
 }
 
 function emitRouteContextParameterReadSite(
-  store: KernelStore,
+  store: KernelStoreReadView,
   project: ProjectBootFrame,
   site: RouteContextParameterReadSite,
   owners: readonly ComponentRouteContextParameterOwner[],
@@ -597,7 +602,7 @@ function emitRouteContextParameterReadSite(
 }
 
 function emitRouteContextParameterRead(
-  store: KernelStore,
+  store: KernelStoreReadView,
   site: RouteContextParameterReadSite,
   owner: ComponentRouteContextParameterOwner | null,
   knownOwnerCount: number,
@@ -644,7 +649,7 @@ function emitRouteContextParameterRead(
 }
 
 function sharedBaseRouteContextParameterReadIssue(
-  store: KernelStore,
+  store: KernelStoreReadView,
   site: RouteContextParameterReadSite,
   owners: readonly ComponentRouteContextParameterOwner[],
   siteLocal: string,
@@ -709,7 +714,7 @@ function componentRouteContextParameterOwnerName(
 }
 
 function routeContextParameterReadRecords(
-  store: KernelStore,
+  store: KernelStoreReadView,
   local: string,
   read: RouteContextParameterReadModel,
   facts: ComponentRouteContextParameterFacts | undefined,

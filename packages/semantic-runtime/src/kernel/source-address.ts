@@ -18,7 +18,6 @@ import type {
 import type { SemanticIdentity } from './identity.js';
 import { ProvenanceRecord } from './provenance.js';
 import type {
-  KernelStore,
   KernelStoreReadView,
   KernelStoreRecord,
 } from './store.js';
@@ -189,19 +188,6 @@ export function sourcePathMatchesFileName(sourcePath: string, fileName: string):
   return normalizedSourcePath === normalizedFileName
     || normalizedSourcePath.endsWith(`/${normalizedFileName}`)
     || normalizedFileName.endsWith(`/${normalizedSourcePath}`);
-}
-
-export function sourceFileAddressHandlesForFileNames(
-  store: KernelStore,
-  fileNames: readonly string[],
-): ReadonlySet<AddressHandle> {
-  const handles = new Set<AddressHandle>();
-  for (const fileName of fileNames) {
-    for (const address of store.readSourceFileAddressesByFileName(fileName)) {
-      handles.add(address.handle);
-    }
-  }
-  return handles;
 }
 
 export function addressBelongsToSourceFiles(

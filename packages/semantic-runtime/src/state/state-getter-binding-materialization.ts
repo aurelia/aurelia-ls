@@ -2,6 +2,11 @@ import ts from 'typescript';
 
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type { AddressHandle } from '../kernel/handles.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { sourceSpanAddressForSite } from '../kernel/source-address.js';
 import {
   KernelStoreBatch,
@@ -55,20 +60,22 @@ export class StateGetterBindingMaterializationProjectPass {
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
     stateStores: readonly StateStoreConfiguration[],
+    publication: KernelPublicationContext,
   ): StateGetterBindingProjectResult {
     const seeds = readFromStateDecoratorBindingSites(project, typeSystem).map((site, index) =>
-      stateGetterBindingProductSeed(store, project, typeSystem, stateStores, site, index)
+      stateGetterBindingProductSeed(store, publication, project, typeSystem, stateStores, site, index)
     );
     const emissions = seeds.map((seed, index) =>
       stateGetterBindingProductEmission(store, seed, index)
     );
     const records = emissions.flatMap((emission) => emission.records);
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `state-getter-bindings:${project.projectKey}`));
-    }
-    for (const emission of emissions) {
-      store.productDetails.add(StateProductDetails.GetterBinding, emission.binding.productHandle, emission.binding);
-    }
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `state-getter-bindings:${project.projectKey}`),
+      publishProductDetails(
+        StateProductDetails.GetterBinding,
+        emissions.map((emission) => emission.binding),
+      ),
+    ));
     return new StateGetterBindingProjectResult(
       emissions.map((emission) => emission.binding),
       records,
@@ -78,6 +85,7 @@ export class StateGetterBindingMaterializationProjectPass {
 
 function stateGetterBindingProductSeed(
   store: KernelStore,
+  publication: KernelPublicationContext,
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
   stateStores: readonly StateStoreConfiguration[],
@@ -110,6 +118,7 @@ function stateGetterBindingProductSeed(
     ? null
     : selectorReturnTypeReference(
       store,
+      publication,
       typeSystem,
       programSourceFile,
       site,
@@ -120,6 +129,7 @@ function stateGetterBindingProductSeed(
     ? null
     : targetMemberTypeReference(
       store,
+      publication,
       typeSystem,
       programSourceFile,
       site,
@@ -207,6 +217,7 @@ function stateGetterBindingOpenReason(
 
 function selectorReturnTypeReference(
   store: KernelStore,
+  publication: KernelPublicationContext,
   typeSystem: TypeSystemProject,
   sourceFile: ts.SourceFile,
   site: FromStateDecoratorBindingSite,
@@ -231,7 +242,7 @@ function selectorReturnTypeReference(
     return null;
   }
   const returnType = checker.getReturnTypeOfSignature(signature);
-  return new CheckerTypeProjector(store).ensureProjection({
+  return new CheckerTypeProjector(store, publication).ensureProjection({
     localKey,
     checker,
     type: returnType,
@@ -244,6 +255,7 @@ function selectorReturnTypeReference(
 
 function targetMemberTypeReference(
   store: KernelStore,
+  publication: KernelPublicationContext,
   typeSystem: TypeSystemProject,
   sourceFile: ts.SourceFile,
   site: FromStateDecoratorBindingSite,
@@ -265,7 +277,7 @@ function targetMemberTypeReference(
   if (targetType == null) {
     return null;
   }
-  return new CheckerTypeProjector(store).ensureProjection({
+  return new CheckerTypeProjector(store, publication).ensureProjection({
     localKey,
     checker,
     type: targetType,

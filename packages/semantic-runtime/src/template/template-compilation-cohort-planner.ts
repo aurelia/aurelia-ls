@@ -1,6 +1,9 @@
 import type { AureliaAppWorldEmission } from '../configuration/app-world-composer.js';
 import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
-import { addressBelongsToSourceFiles, sourceFileAddressHandlesForFileNames } from '../kernel/source-address.js';
+import {
+  sourceFileAddressForAddress,
+  sourcePathMatchesFileName,
+} from '../kernel/source-address.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
@@ -42,6 +45,7 @@ import {
   TemplateCompilationOwnerPlan,
 } from './template-compilation-cohort.js';
 import { TemplateAuthoringCompilerWorldMaterializer } from './template-authoring-world.js';
+import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 
 export const enum TemplateCompilationCohortPlanningPhase {
   /** Build an owner-specific compiler world from one admitted app-root world. */
@@ -83,10 +87,11 @@ export class TemplateCompilationCohortPlanner {
 
   constructor(
     private readonly store: KernelStore,
-    publication: KernelPublicationContext,
+    private readonly publication: KernelPublicationContext,
+    support: FrameworkSupportCatalogs,
   ) {
     this.compilerWorlds = new TemplateCompilerWorldMaterializer(publication);
-    this.authoringWorlds = new TemplateAuthoringCompilerWorldMaterializer(store, publication);
+    this.authoringWorlds = new TemplateAuthoringCompilerWorldMaterializer(store, publication, support);
   }
 
   plan(request: TemplateCompilationCohortPlanningRequest): TemplateCompilationCohortProjectPlan {
@@ -100,7 +105,7 @@ export class TemplateCompilationCohortPlanner {
     const appOwnerHandles = new Set(owners.keys());
     const authoringDefinitions = request.includeAuthoringTemplates
       ? selectAuthoringTemplateDefinitions(
-        this.store,
+        this.publication,
         request.resourceDefinitions?.entries.map((entry) => entry.definition) ?? [],
         appOwnerHandles,
         request.authoringTemplateSourceFiles,
@@ -359,22 +364,22 @@ function appRootDefinitionProductHandleForCompilerWorld(
 }
 
 function selectAuthoringTemplateDefinitions(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   definitions: readonly FullResourceDefinition[],
   appOwnerHandles: ReadonlySet<IdentityHandle | ProductHandle>,
   authoringTemplateSourceFiles: readonly string[],
   authoringTemplateLimit: number | null,
 ): readonly CustomElementDefinition[] {
-  const sourceFileHandles = authoringTemplateSourceFiles.length === 0
-    ? null
-    : sourceFileAddressHandlesForFileNames(store, authoringTemplateSourceFiles);
   const selected: CustomElementDefinition[] = [];
   for (const definition of definitions) {
     if (
       !(definition instanceof CustomElementDefinition)
       || !hasCompilableAuthoredTemplate(definition)
       || appOwnerHandles.has(stableOwnerHandle(definition))
-      || (sourceFileHandles != null && !definitionBelongsToAuthoringSourceFile(store, definition, sourceFileHandles))
+      || (
+        authoringTemplateSourceFiles.length > 0
+        && !definitionBelongsToAuthoringSourceFile(publication, definition, authoringTemplateSourceFiles)
+      )
     ) {
       continue;
     }
@@ -393,15 +398,19 @@ function hasCompilableAuthoredTemplate(definition: CustomElementDefinition): boo
 }
 
 function definitionBelongsToAuthoringSourceFile(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   definition: CustomElementDefinition,
-  sourceFileHandles: ReadonlySet<AddressHandle>,
+  sourceFileNames: readonly string[],
 ): boolean {
   return [
     definition.template?.addressHandle ?? null,
     definition.sourceAddressHandle,
     definition.target.addressHandle,
-  ].some((handle) => handle != null && addressBelongsToSourceFiles(store, handle, sourceFileHandles));
+  ].some((handle) => {
+    const sourceFile = sourceFileAddressForAddress(publication, handle);
+    return sourceFile != null
+      && sourceFileNames.some((fileName) => sourcePathMatchesFileName(sourceFile.path, fileName));
+  });
 }
 
 function appendOwnerPlan(

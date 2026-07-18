@@ -93,7 +93,7 @@ import {
   checkerTypeMemberReachableIdentityHandle,
 } from '../type-system/type-shape.js';
 import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
-import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
+import { readOrProjectCheckerTypeMembersInProjection } from '../type-system/checker-type-member-surface.js';
 import type { RuntimeBindingDataFlow } from '../observation/runtime-binding-observation.js';
 import type { TemplateBindableReference } from '../template/compiler-world-reference.js';
 import {
@@ -606,7 +606,7 @@ function readTemplateCompletion(
     routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
   });
-  const answer = answerTemplateCompletion(store, cursorContext.query);
+  const answer = answerTemplateCompletion(store, cursorContext.query, cursorContext.expressionWorld);
   return templateCompletionReadResult(store, { cursorContext, selection: readContext.selection }, answer, includeHandles);
 }
 
@@ -626,7 +626,7 @@ function readContextForCursor(
     workspaceRootDir,
     projectRootDir,
     cursor,
-    emission.project.sourceTextProvider,
+    emission.project.inputGeneration.host,
   );
   if (resolution.cursor == null || resolution.cursor.offset == null) {
     return missingTemplateCompletion(
@@ -775,7 +775,7 @@ function templateOverlayDiagnosticCache(
   const overlaySources = overlaySelections.flatMap((selection) =>
     selection.emission.overlaySource == null ? [] : [selection.emission.overlaySource]
   );
-  const overlayTypeSystem = new TypeSystemProjectBuilder().build(
+  const overlayTypeSystem = new TypeSystemProjectBuilder(emission.typeSystem.programSources).build(
     emission.project,
     emission.evaluation,
     { overlaySources },
@@ -1037,7 +1037,7 @@ function templateDiagnosticsScanContext(
     routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
     routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
-    sourceTextCache: new AuthoredSourceTextCache(workspaceRootDir, emission.project.sourceTextProvider),
+    sourceTextCache: new AuthoredSourceTextCache(workspaceRootDir, emission.project.inputGeneration.host),
     seenRows: new Set(),
   };
 }
@@ -2520,7 +2520,11 @@ function cursorSelectedMemberRow(
   const ownerType = store.productDetails.read(TypeSystemProductDetails.TypeShape, cursorContext.query.memberOwnerTypeProductHandle);
   const members = ownerType == null
     ? []
-    : readOrProjectCheckerTypeMembers(store, ownerType, cursorContext.query.memberOwnerTypeProductHandle);
+    : readOrProjectCheckerTypeMembersInProjection(
+        cursorContext.expressionWorld.projector,
+        ownerType,
+        cursorContext.query.memberOwnerTypeProductHandle,
+      );
   const member = members.find((candidate) => candidate.name === memberName) ?? null;
   if (
     member == null

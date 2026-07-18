@@ -32,6 +32,7 @@ import type { ResourceDefinitionIndex } from '../resources/resource-definition-i
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { KernelStore, KernelTelemetryReadView } from '../kernel/store.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
+import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 import type { GenerationAuthority } from '../kernel/generation-authority.js';
 import type { ComputationRead } from '../kernel/computation-lifecycle.js';
 import type { TypeSystemProject } from '../type-system/project.js';
@@ -126,7 +127,6 @@ import {
   TemplateCompilerWorldAuthority,
 } from './compiler-read-view.js';
 import {
-  TemplateCompilationCohortProjectAuthority,
   TemplateCompilationCohortKind,
   type TemplateCompilationCohortProjectPlan,
   type TemplateCompilationCohortPlan,
@@ -275,9 +275,6 @@ class TemplateCompilationPhaseRecorder {
 
 /** Template compilation-front-door result for one app-world composition. */
 export class TemplateCompilationProjectEmission {
-  /** Generation-pinned cohort authority retained for direct template-compilation consumers. */
-  readonly cohortAuthority: TemplateCompilationCohortProjectAuthority;
-
   get compilerWorlds(): readonly TemplateCompilerWorldEmission[] {
     return uniqueCompilerWorlds([
       ...this.cohortPlan.appRootCompilerWorlds,
@@ -303,9 +300,7 @@ export class TemplateCompilationProjectEmission {
     readonly authoringTemplateLimit: number | null,
     /** Nested timing profile for template front-door and runtime-analysis pressure. */
     readonly profile: TemplateCompilationProjectProfile,
-  ) {
-    this.cohortAuthority = TemplateCompilationCohortProjectAuthority.fixed(cohortPlan);
-  }
+  ) {}
 
   /** Replace a run-bound expression world with a fresh store-backed world after this generation commits. */
   forCommittedGeneration(authority: GenerationAuthority): TemplateCompilationProjectEmission {
@@ -350,9 +345,11 @@ export class TemplateCompilationProjectPass {
     readonly store: KernelStore,
     /** Publication context shared by the compiler-front-door phases. */
     readonly publication: KernelPublicationContext,
+    /** Stable framework support borrowed by standalone authoring compiler worlds. */
+    readonly support: FrameworkSupportCatalogs,
   ) {
     this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(publication);
-    this.cohortPlanner = new TemplateCompilationCohortPlanner(store, publication);
+    this.cohortPlanner = new TemplateCompilationCohortPlanner(store, publication, support);
     this.unitMaterializer = new TemplateCompilationUnitMaterializer(publication);
     this.htmlParser = new HtmlParseMaterializer(publication);
     this.localTemplateDefinitions = new LocalTemplateDefinitionMaterializer(publication);
@@ -498,7 +495,10 @@ export class TemplateCompilationProjectPass {
       const projectContext = templateRuntimeAnalysisProjectContext(cohort);
       const cohortResources: TemplateResourceRuntimeAnalysisEmission[] = [];
       for (const group of runtimeAnalysisScheduleGroups(cohort, resourceDefinitions)) {
-        const boundControllerValues = runtimeBoundControllerValueTableForTemplateResources(this.store, cohortResources);
+        const boundControllerValues = runtimeBoundControllerValueTableForTemplateResources(
+          this.publication,
+          cohortResources,
+        );
         const groupResources = group.map((compilation) =>
           new TemplateResourceRuntimeAnalysisEmission(
             compilation,

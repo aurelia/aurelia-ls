@@ -1,6 +1,7 @@
 import { performance } from 'node:perf_hooks';
 
 import type { KernelStore } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import type {
   ProjectBootFrame,
   SourceFileAdmission,
@@ -8,7 +9,6 @@ import type {
 import type { EvaluationModuleResolutionOpen } from '../evaluation/module-host.js';
 import {
   isEvaluatedProjectSource,
-  StaticProjectEvaluationPass,
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
 import type { TypeSystemProject } from '../type-system/project.js';
@@ -201,28 +201,28 @@ export class ResourceRecognitionProjectPass {
   recognizeAndEmit(
     store: KernelStore,
     project: ProjectBootFrame,
-    evaluation: StaticProjectEvaluationResult | null = null,
-    typeSystem: TypeSystemProject | null = null,
+    evaluation: StaticProjectEvaluationResult,
+    typeSystem: TypeSystemProject | null,
+    publication: KernelPublicationContext,
   ): ResourceRecognitionProjectResult {
     const started = performance.now();
     const phases: ResourceRecognitionProjectPhaseTiming[] = [];
-    const projectEvaluation = evaluation ?? new StaticProjectEvaluationPass().evaluateAndEmit(store, project);
-    const recognition = new ResourceRecognitionPass(project.sourceTextProvider);
+    const recognition = new ResourceRecognitionPass(project.inputGeneration.host);
     const sourceFiles = measureResourceRecognitionProjectPhase(phases, 'source-file-selection', () =>
-      resourceRecognitionSourceFiles(project, projectEvaluation)
+      resourceRecognitionSourceFiles(project, evaluation)
     );
     const conventionTransforms = new ResourceConventionTransformAdmissionMaterializer()
-      .materializeAndEmit(store, project);
+      .materializeAndEmit(store, project, publication);
     const contexts = evaluatedResourceRecognitionContexts(
       project,
-      projectEvaluation,
+      evaluation,
       typeSystem,
       sourceFiles,
       conventionTransforms,
     );
-    const sources = projectEvaluation.sources.map((source) => {
+    const sources = evaluation.sources.map((source) => {
       const sourceStarted = performance.now();
-      const result = this.recognizeSource(store, recognition, source, contexts);
+      const result = this.recognizeSource(store, publication, recognition, source, contexts);
       phases.push({
         name: isEvaluatedProjectSource(source) ? 'evaluated-source' : 'open-source',
         milliseconds: performance.now() - sourceStarted,
@@ -242,6 +242,7 @@ export class ResourceRecognitionProjectPass {
 
   private recognizeSource(
     store: KernelStore,
+    publication: KernelPublicationContext,
     recognition: ResourceRecognitionPass,
     source: StaticProjectEvaluationResult['sources'][number],
     contexts: ReadonlyMap<string, ResourceRecognitionContext>,
@@ -256,6 +257,7 @@ export class ResourceRecognitionProjectPass {
     const result = recognition.recognizeAndEmit(
       store,
       context,
+      publication,
     );
     return new ResourceRecognitionSourceResult(
       source.admission,

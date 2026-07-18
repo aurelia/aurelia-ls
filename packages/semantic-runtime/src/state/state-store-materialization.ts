@@ -8,6 +8,12 @@ import type { ConfigurationRecognitionProjectResult } from '../configuration/con
 import { ConfigurationStepKind } from '../configuration/configuration-sequence.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import { sourceSpanAddressForAddress } from '../kernel/source-address.js';
+import {
   KernelStoreBatch,
   type KernelStore,
 } from '../kernel/store.js';
@@ -15,7 +21,7 @@ import { FrameworkRegistrationKind } from '../registration/registration-referenc
 import {
   CheckerTypeProjector,
 } from '../type-system/checker-projector.js';
-import { sourceExpressionForSourceAddress } from '../type-system/source-address-expression.js';
+import { smallestExpressionForSpan } from '../type-system/source-address-expression.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   CheckerTypeProjectionOrigin,
@@ -66,9 +72,10 @@ export class StateStoreConfigurationMaterializationProjectPass {
   materializeAndEmit(
     store: KernelStore,
     configuration: ConfigurationRecognitionProjectResult,
-    typeSystem: TypeSystemProject | null = null,
+    typeSystem: TypeSystemProject | null,
+    publication: KernelPublicationContext,
   ): StateProjectResult {
-    const seeds = readStateStoreConfigurationSeeds(store, configuration, typeSystem);
+    const seeds = readStateStoreConfigurationSeeds(store, publication, configuration, typeSystem);
     const issuePublications = stateIssuePublications(store, seeds);
     const validSeeds = seeds.filter((seed) => !stateStoreSeedIsReservedDefaultWithStore(seed));
     const emissions = validSeeds.map((seed, index) =>
@@ -78,15 +85,19 @@ export class StateStoreConfigurationMaterializationProjectPass {
       ...emissions.flatMap((emission) => emission.records),
       ...issuePublications.flatMap((publication) => publication.records),
     ];
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `state-store-configuration:${configuration.project.projectKey}`));
-    }
-    for (const emission of emissions) {
-      store.productDetails.add(StateProductDetails.StoreConfiguration, emission.store.productHandle, emission.store);
-    }
-    for (const publication of issuePublications) {
-      store.productDetails.add(StateProductDetails.Issue, publication.issue.productHandle, publication.issue);
-    }
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `state-store-configuration:${configuration.project.projectKey}`),
+      [
+        ...publishProductDetails(
+          StateProductDetails.StoreConfiguration,
+          emissions.map((emission) => emission.store),
+        ),
+        ...publishProductDetails(
+          StateProductDetails.Issue,
+          issuePublications.map((publication) => publication.issue),
+        ),
+      ],
+    ));
     return new StateProjectResult(
       configuration,
       emissions.map((emission) => emission.store),
@@ -166,6 +177,7 @@ function stateStoreSeedIsReservedDefaultWithStore(
 
 function readStateStoreConfigurationSeeds(
   store: KernelStore,
+  publication: KernelPublicationContext,
   configuration: ConfigurationRecognitionProjectResult,
   typeSystem: TypeSystemProject | null,
 ): readonly StateStoreConfigurationProductSeed[] {
@@ -187,6 +199,7 @@ function readStateStoreConfigurationSeeds(
       );
     const seed = stateStoreConfigurationSeedForBuilderStep(
       store,
+      publication,
       configuration.project.projectKey,
       step,
       contributions,
@@ -202,6 +215,7 @@ function readStateStoreConfigurationSeeds(
 
 function stateStoreConfigurationSeedForBuilderStep(
   store: KernelStore,
+  publication: KernelPublicationContext,
   projectKey: string,
   step: { readonly identityHandle: StateStoreConfigurationProductSeed['ownerIdentityHandle']; readonly sourceAddressHandle: AddressHandle | null },
   contributions: readonly ConfigurationOptionContribution[],
@@ -210,10 +224,10 @@ function stateStoreConfigurationSeedForBuilderStep(
 ): StateStoreConfigurationProductSeed | null {
   const methodName = stateStoreBuilderMethodName(contributions);
   if (methodName === 'init') {
-    return stateStoreConfigurationSeedForInit(store, projectKey, step, contributions, storeIndex, typeSystem);
+    return stateStoreConfigurationSeedForInit(store, publication, projectKey, step, contributions, storeIndex, typeSystem);
   }
   if (methodName === 'withStore') {
-    return stateStoreConfigurationSeedForWithStore(store, projectKey, step, contributions, storeIndex, typeSystem);
+    return stateStoreConfigurationSeedForWithStore(store, publication, projectKey, step, contributions, storeIndex, typeSystem);
   }
   return null;
 }
@@ -230,6 +244,7 @@ function stateStoreBuilderMethodName(
 
 function stateStoreConfigurationSeedForInit(
   store: KernelStore,
+  publication: KernelPublicationContext,
   projectKey: string,
   step: { readonly identityHandle: StateStoreConfigurationProductSeed['ownerIdentityHandle']; readonly sourceAddressHandle: AddressHandle | null },
   contributions: readonly ConfigurationOptionContribution[],
@@ -252,6 +267,7 @@ function stateStoreConfigurationSeedForInit(
     initialStateSourceAddressHandle: initialState?.value.addressHandle ?? null,
     initialStateType: stateStoreInitialStateType(
       store,
+      publication,
       typeSystem,
       initialState,
       `state-store-configuration:${projectKey}:${storeIndex}:${DEFAULT_STATE_STORE_NAME}`,
@@ -263,6 +279,7 @@ function stateStoreConfigurationSeedForInit(
 
 function stateStoreConfigurationSeedForWithStore(
   store: KernelStore,
+  publication: KernelPublicationContext,
   projectKey: string,
   step: { readonly identityHandle: StateStoreConfigurationProductSeed['ownerIdentityHandle']; readonly sourceAddressHandle: AddressHandle | null },
   contributions: readonly ConfigurationOptionContribution[],
@@ -286,6 +303,7 @@ function stateStoreConfigurationSeedForWithStore(
     initialStateSourceAddressHandle: initialState?.value.addressHandle ?? null,
     initialStateType: stateStoreInitialStateType(
       store,
+      publication,
       typeSystem,
       initialState,
       `state-store-configuration:${projectKey}:${storeIndex}:${
@@ -299,6 +317,7 @@ function stateStoreConfigurationSeedForWithStore(
 
 function stateStoreInitialStateType(
   store: KernelStore,
+  publication: KernelPublicationContext,
   typeSystem: TypeSystemProject | null,
   contribution: ConfigurationOptionContribution | null,
   localKey: string,
@@ -306,11 +325,14 @@ function stateStoreInitialStateType(
   if (typeSystem == null || contribution?.value.addressHandle == null) {
     return null;
   }
-  const node = sourceExpressionForSourceAddress(
-    store,
-    contribution.value.addressHandle,
-    (path) => typeSystem.readProgramSourceFileByPath(path),
-  );
+  const sourceSpan = sourceSpanAddressForAddress(publication, contribution.value.addressHandle);
+  const sourceFileAddress = sourceSpan == null ? null : publication.read(sourceSpan.fileHandle);
+  const sourceFile = sourceFileAddress?.kind === 'source-file-address'
+    ? typeSystem.readProgramSourceFileByPath(sourceFileAddress.path)
+    : null;
+  const node = sourceFile == null || sourceSpan == null
+    ? null
+    : smallestExpressionForSpan(sourceFile, sourceSpan.start, sourceSpan.end);
   if (node == null) {
     return null;
   }
@@ -319,7 +341,7 @@ function stateStoreInitialStateType(
   if (type == null) {
     return null;
   }
-  return new CheckerTypeProjector(store).ensureProjection({
+  return new CheckerTypeProjector(store, publication).ensureProjection({
     localKey: `${localKey}:initial-state-type`,
     checker,
     type,

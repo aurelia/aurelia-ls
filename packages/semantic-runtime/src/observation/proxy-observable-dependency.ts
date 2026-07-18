@@ -631,7 +631,6 @@ class RuntimeProxyObservedDependencyDraftCollector {
     receiverType: ts.Type | null,
   ): TDraft {
     const withSource = observedDependencyWithMemberSourceForCheckerType(
-      this.typeContext!.store,
       this.typeContext!.publication,
       this.typeContext!.checker,
       receiverType,
@@ -1021,7 +1020,11 @@ function observedMemberSourceForPropertyAccess(
     return null;
   }
   const symbol = symbolForExpression(typeContext.checker, programExpression.name);
-  return observedMemberSourceForCheckerSymbol(typeContext.store, typeContext.publication, symbol);
+  return observedMemberSourceForCheckerSymbol(
+    typeContext.publication,
+    typeContext.checker,
+    symbol,
+  );
 }
 
 /** Reads a TypeChecker type through the admitted Program node before proxy-observation policy uses it. */
@@ -1049,7 +1052,11 @@ function observedMemberSourceForElementAccess(
     return null;
   }
   const symbol = checkerPropertySymbol(typeContext.checker, ownerType, key);
-  return observedMemberSourceForCheckerSymbol(typeContext.store, typeContext.publication, symbol);
+  return observedMemberSourceForCheckerSymbol(
+    typeContext.publication,
+    typeContext.checker,
+    symbol,
+  );
 }
 
 function propertyChainSegmentForElementAccess(
@@ -1156,7 +1163,11 @@ function observedMemberSourceForImplicitPropertyRead(
     return null;
   }
   const symbol = checkerPropertySymbol(typeContext.checker, receiverType, key);
-  return observedMemberSourceForCheckerSymbol(typeContext.store, typeContext.publication, symbol);
+  return observedMemberSourceForCheckerSymbol(
+    typeContext.publication,
+    typeContext.checker,
+    symbol,
+  );
 }
 
 function sourceNameForChain(

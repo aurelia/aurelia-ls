@@ -2603,7 +2603,7 @@
         "Bound-controller child root slot projection should spend the same source-expression lifecycle helper as ordinary runtime bindings before overlays read the child slot type. Do not let overlay aliases compensate for a bound-controller-specific AstBindThenEvaluate/AstEvaluateOnly branch.",
         "Bound-controller child root aliases should use the scope-materialized slot type even when the parent-bound value is structural. If the type needs an importable generated spelling, fix generated-type-expression.ts instead of falling back to the child bindable initializer or suppressing overlay arity diagnostics.",
         "Do not leak a source-scope-changing template-controller condition into child-view scope. A state-backed `if.bind` condition can type-check through the state source scope, but ordinary child bindings still see the original child view unless they also use `& state`.",
-        "Template completions and weak-member diagnostics must use the resource's runtime-analysis expression world before asking RuntimeBindingSourceExpressionContextProjector for cursor source scope; a fresh expression world loses app/runtime facts such as configured state stores and i18n binding-behavior lifecycle.",
+        "Template completions and weak-member diagnostics must use the resource's runtime-analysis expression world or its freshInquiryGeneration() before asking RuntimeBindingSourceExpressionContextProjector for cursor source scope. The factory preserves the generation-bound publication and state stores while replacing only the evaluator/cache; a bare independent expression world loses app/runtime facts such as configured state stores and i18n binding-behavior lifecycle.",
         "If completions work before diagnostics but lose `type-shape-detail` afterward, inspect expression-cache product lifetime first. Diagnostics can cache expression evaluations whose answer-local TypeShape products are then disposed; CheckerExpressionTypeEvaluator should invalidate stale cache entries instead of completion code tolerating missing details.",
         "Definition-level expression parses can have several runtime instruction-scope applications. Overlay generation should spend `bindingScopesForTemplateExpressionParse(...)` and emit probes for each unique materialized BindingScope; singular scope lookup is intentionally unambiguous-only so consumers do not silently choose the first recursive render-context row.",
         "Statement-shaped surfaces such as DestructuringAssignment need statement/block overlay emission or a lower shared primitive when they are actually parser-admitted. The current semantic parser carries repeat destructuring through BindingPattern projection; use the expression coverage script before turning a support-matrix frontier row into implementation work.",
@@ -2922,7 +2922,7 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-07-12"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "decision:attribute-pattern-part-loci-and-ref-listener-closure",
@@ -3082,39 +3082,40 @@
       "updatedAt": "2026-07-17"
     },
     {
-      "id": "decision:template-analysis-current-generation",
+      "id": "decision:app-analysis-current-generation",
       "kind": "decision",
       "domains": [
         "semantic-runtime",
         "template",
+        "configuration",
         "type-system",
         "api",
         "incrementality"
       ],
-      "summary": "A semantic app pins one exact committed project template-analysis generation and rebuilds as a unit when it becomes stale.",
-      "rationale": "Compiler/runtime/checker kernel rows and their retained TypeScript-backed object graph are one logical generation. Replacing only kernel rows or hot-swapping only the template pointer would pair current products with stale expression worlds, observation, state, capability, and router fan-in. The production authority therefore commits one complete project template-analysis closure, installs a generation-guarded store-backed expression world, and makes every app query fail closed when its exact generation is replaced or disposed.",
+      "summary": "A semantic app pins one exact committed project app-analysis generation and rebuilds the complete fan-in as a unit when it becomes stale.",
+      "rationale": "Static evaluation, resources, configuration, DI, compiler/runtime/checker rows, observation, state, capability, router products, and their retained TypeScript-backed object graph are one logical generation. The former template-only authority could atomically replace template products while upstream and downstream fan-in remained outside the transaction. The production authority now commits one complete project app-analysis closure, installs a generation-guarded store-backed expression world, and makes every app query fail closed when its exact generation is replaced or disposed.",
       "guidance": [
-        "One project template-analysis locus owns the current generation regardless of analysis depth or authoring policy. Those policies are replacement inputs, not parallel owners of the same stable handles.",
-        "A prepared TemplateCompilationProjectEmission is run-bound and never public current state. Promote only after a successful lifecycle commit; rejected, stale, superseded, or throwing attempts preserve the previous current generation.",
+        "One project app-analysis locus owns the current generation regardless of analysis depth or authoring policy. Those policies are replacement inputs, not parallel owners of the same stable handles.",
+        "A prepared AureliaAppWorldProjectEmission is run-bound and never public current state. Promote only after a successful lifecycle commit; rejected, stale, superseded, or throwing attempts preserve the previous current generation.",
         "After commit, bind every retained resource emission to one generation-guarded store-backed CheckerExpressionTypeWorld. Replacement and disposal must revoke retained evaluator reads and lazy projections; do not retain a mix of run-backed, unguarded store-backed, and committed worlds behind different object paths.",
-        "AureliaAppWorldProjectEmission pins the exact template generation used to derive its downstream observation, state, capability, and router products. Replacement or disposal makes the whole app emission stale.",
+        "AureliaAppWorldProjectEmission is the exact generation-owned fan-in, not a wrapper around a separately current template generation. Replacement or disposal makes the whole app emission stale.",
         "SemanticApp queries, cache summaries, and template access must check currentness before reading kernel state. A retained SemanticAppTemplateQueries object rechecks that authority on every operation; runtime cache and cursor admission skip stale apps and rebuild a coherent app epoch rather than hot-swapping templates underneath old fan-in.",
         "Carry the exact complete-file revision that produced each inline or external template into resource metadata. Preparation must match it to the current immutable source snapshot, and commit must revalidate that snapshot; input-bundle revision, source text, compiler lookup, and kernel record changes remain separately attributable validation domains.",
-        "Keep one TemplateAnalysisProjectComputationService and one ComputationLifecycleRegistry per SemanticRuntime/KernelStore. Do not create feature-local registries or authorities.",
-        "Dynamic replacement of app-level fan-in remains a later project-computation boundary. Do not weaken exact generation pinning to make partial reuse appear incremental."
+        "Keep one AureliaAppWorldProjectComputationService and one ComputationLifecycleRegistry per SemanticRuntime/KernelStore. Do not create feature-local registries or authorities.",
+        "This complete-generation boundary is the correctness bridge to later fine-grained scheduling. Do not weaken exact generation pinning or restore nested producer commits to make partial reuse appear incremental."
       ],
       "anchors": [
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/template/template-analysis-computation.ts",
-          "symbolName": "TemplateAnalysisProjectComputationService",
-          "summary": "Preparation, validation, commit, current authority, and lifetime reconciliation for complete project generations."
+          "filePath": "packages/semantic-runtime/src/configuration/app-analysis-computation.ts",
+          "symbolName": "AureliaAppWorldProjectComputationService",
+          "summary": "Preparation, validation, commit, current authority, and lifetime reconciliation for complete app-analysis generations."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
           "symbolName": "AureliaAppWorldProjectEmission",
-          "summary": "Immutable app fan-in pinned to one exact current template-analysis generation."
+          "summary": "Immutable app fan-in owned by one exact current app-analysis generation."
         },
         {
           "kind": "source",
@@ -3154,8 +3155,8 @@
       "liveChecks": [
         {
           "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/template/template-analysis-computation.ts",
-          "symbolName": "TemplateAnalysisProjectComputationService"
+          "filePath": "packages/semantic-runtime/src/configuration/app-analysis-computation.ts",
+          "symbolName": "AureliaAppWorldProjectComputationService"
         },
         {
           "kind": "source-declaration-exists",
@@ -3174,7 +3175,7 @@
         }
       ],
       "createdAt": "2026-07-17",
-      "updatedAt": "2026-07-17"
+      "updatedAt": "2026-07-18"
     }
   ]
 }

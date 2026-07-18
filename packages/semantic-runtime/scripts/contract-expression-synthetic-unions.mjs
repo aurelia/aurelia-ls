@@ -11,6 +11,7 @@ import { CheckerExpressionTypeEvaluationContext } from '../out/type-system/expre
 import { CheckerExpressionTypeEvaluationResultKind } from '../out/type-system/expression-type-evaluation.js';
 import { TypeSystemProductDetails } from '../out/type-system/product-details.js';
 import { CheckerTypeProjectionOrigin } from '../out/type-system/type-shape.js';
+import { registerIsolatedCheckerDeclarationSourceContext } from '../out/type-system/declaration-source.js';
 
 const sourceFileName = 'contract-expression-synthetic-unions.ts';
 const sourceText = 'export interface ContractRoot { value: string; }\n';
@@ -26,11 +27,12 @@ host.fileExists = (fileName) => fileName === sourceFileName || ts.sys.fileExists
 
 const program = ts.createProgram([sourceFileName], { strict: true, target: ts.ScriptTarget.Latest, noEmit: true }, host);
 const checker = program.getTypeChecker();
+registerIsolatedCheckerDeclarationSourceContext(checker, 'contract-expression-synthetic-unions');
 const rootInterface = sourceFile.statements.find(ts.isInterfaceDeclaration);
 assert.notEqual(rootInterface, undefined);
 
 const store = new KernelStore('contract-expression-synthetic-unions');
-const projector = new CheckerTypeProjector(store);
+const projector = new CheckerTypeProjector(store, store);
 const rootReference = projector.ensureProjection({
   localKey: 'contract-expression-synthetic-unions:root',
   checker,

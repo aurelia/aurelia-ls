@@ -24,7 +24,7 @@ export class CheckerExpressionTypeWorld {
 
   constructor(
     private readonly store: KernelStore,
-    readonly projector: CheckerTypeProjector = new CheckerTypeProjector(store),
+    readonly projector: CheckerTypeProjector,
     readonly cache: CheckerExpressionTypeEvaluationCache = new CheckerExpressionTypeEvaluationCache(),
     readonly stateStores: readonly StateStoreConfiguration[] = [],
   ) {
@@ -58,12 +58,12 @@ export class CheckerExpressionTypeWorld {
     );
   }
 
-  /** Start an inquiry-local store-backed world that is not retained as a replaceable project generation. */
+  /** Start an inquiry-local cache whose writes remain bound to the parent app generation. */
   freshInquiryGeneration(): CheckerExpressionTypeWorld {
     this.projector.publication.requireCurrent();
     return new CheckerExpressionTypeWorld(
       this.store,
-      new CheckerTypeProjector(this.store),
+      new CheckerTypeProjector(this.store, this.projector.publication),
       new CheckerExpressionTypeEvaluationCache(),
       this.stateStores,
     );

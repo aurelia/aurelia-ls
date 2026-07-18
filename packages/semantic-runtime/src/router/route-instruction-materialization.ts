@@ -23,10 +23,11 @@ import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/han
 import { localKeyPart } from '../kernel/local-key.js';
 import { OpenSeam, OpenSeamReasonKind, type OpenSeamReasonSource } from '../kernel/open-seam.js';
 import {
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStore,
-  type KernelStoreRecord,
-} from '../kernel/store.js';
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type { KernelSourceFileReadView, KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   RuntimeBindingSourceValueEvaluator,
@@ -237,7 +238,7 @@ export class RouteInstructionMaterializationProjectResult {
 /** Materialize static load/href ViewportInstructionTree products from router resource controllers. */
 export class RouteInstructionMaterializationProjectPass {
   materializeAndEmit(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
     routeConfigContexts: RouteConfigContextMaterializationProjectResult,
     routeRecognizer: RouteRecognizerMaterializationProjectResult,
@@ -248,7 +249,7 @@ export class RouteInstructionMaterializationProjectPass {
     sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
   ): RouteInstructionMaterializationProjectResult {
     const state = createRouteInstructionMaterializationState(
-      store,
+      publication,
       resourceIndex,
       templates,
       routeConfigContexts,
@@ -256,16 +257,16 @@ export class RouteInstructionMaterializationProjectPass {
       routeRuntime,
       sourceValueEvaluator,
     );
-    this.collectRouteInstructionEmissions(store, templates, routerOptions, state);
+    this.collectRouteInstructionEmissions(publication, templates, routerOptions, state);
 
     const records = [
       ...state.emissions.flatMap((emission) => emission.records),
       ...state.issueRecords,
       ...state.openRecords,
     ];
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `router-instructions:${project.projectKey}`));
-    }
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `router-instructions:${project.projectKey}`),
+    ));
     return new RouteInstructionMaterializationProjectResult(
       project,
       state.emissions.flatMap((emission) => emission.typedNavigationInstructions),
@@ -278,7 +279,7 @@ export class RouteInstructionMaterializationProjectPass {
   }
 
   private collectRouteInstructionEmissions(
-    store: KernelStore,
+    store: KernelPublicationContext,
     templates: TemplateCompilationProjectEmission,
     routerOptions: RouterOptionsMaterializationProjectResult,
     state: RouteInstructionMaterializationState,
@@ -289,7 +290,7 @@ export class RouteInstructionMaterializationProjectPass {
   }
 
   private collectResourceInstructionEmissions(
-    store: KernelStore,
+    store: KernelPublicationContext,
     resource: RouteInstructionTemplateResource,
     routerOptions: RouterOptionsMaterializationProjectResult,
     state: RouteInstructionMaterializationState,
@@ -306,14 +307,20 @@ export class RouteInstructionMaterializationProjectPass {
   }
 
   private collectControllerInstructionEmission(
-    store: KernelStore,
+    store: KernelPublicationContext,
     resource: RouteInstructionTemplateResource,
     controller: RuntimeControllerFrame,
     routeContext: RouteContextModel | null,
     routerOptions: RouterOptionsMaterializationProjectResult,
     state: RouteInstructionMaterializationState,
   ): void {
-    const site = routerResourceInstructionSite(store, controller, routeContext, resource);
+    const site = routerResourceInstructionSite(
+      state.sourceValueEvaluator.kernel,
+      store,
+      controller,
+      routeContext,
+      resource,
+    );
     if (site == null) {
       return;
     }
@@ -350,7 +357,7 @@ export class RouteInstructionMaterializationProjectPass {
 }
 
 function createRouteInstructionMaterializationState(
-  store: KernelStore,
+  store: KernelPublicationContext,
   resourceIndex: ResourceDefinitionIndex,
   templates: TemplateCompilationProjectEmission,
   routeConfigContexts: RouteConfigContextMaterializationProjectResult,
@@ -481,7 +488,8 @@ function rootRouteContextsByParentContainerIdentity(
 }
 
 function routerResourceInstructionSite(
-  store: KernelStore,
+  kernelStore: KernelSourceFileReadView,
+  store: KernelPublicationContext,
   controller: RuntimeControllerFrame,
   routeContext: RouteContextModel | null,
   resource: RouteInstructionTemplateResource,
@@ -498,13 +506,13 @@ function routerResourceInstructionSite(
   if (kind == null || controller.instructionProductHandle == null) {
     return null;
   }
-  const instruction = store.productDetails.read(TemplateProductDetails.Instruction, controller.instructionProductHandle);
+  const instruction = store.readProductDetail(TemplateProductDetails.Instruction, controller.instructionProductHandle);
   if (!(instruction instanceof HydrateAttributeInstruction)) {
     return null;
   }
   const instructionScopes = instructionScopeLookup(runtimeAnalysis.scopes.instructionScopes);
   const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-    store,
+    kernelStore,
     runtimeAnalysis.expressionWorld,
     runtimeAnalysis.expressionResourcePlan,
   );
@@ -582,7 +590,7 @@ function routeContextsFromContainerAncestry(
 }
 
 function closeRouterResourceInstruction(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   state: RouteInstructionMaterializationState,
   routerOptions: RouterOptionsMaterializationProjectResult,
@@ -722,7 +730,7 @@ function activeContainerForRouterInstructionSite(
 }
 
 function materializeInstructionTree(
-  store: KernelStore,
+  store: KernelPublicationContext,
   closed: ClosedRouteExpressionInstruction,
   routeContextsByIdentity: ReadonlyMap<RouteContextModel['identityHandle'], RouteContextModel>,
   routerOptions: RouterOptionsMaterializationProjectResult,
@@ -766,7 +774,7 @@ function viewportInstructionTreeLocal(
 }
 
 function materializeEagerInstructionTree(
-  store: KernelStore,
+  store: KernelPublicationContext,
   closed: ClosedEagerRouterResourceInstruction,
   state: RouteInstructionMaterializationState,
   routerOptions: RouterOptionsMaterializationProjectResult,
@@ -877,7 +885,7 @@ interface GeneratedEagerRouteExpression {
 }
 
 function generatedEagerRouteExpression(
-  store: KernelStore,
+  store: KernelPublicationContext,
   closed: ClosedEagerRouterResourceInstruction,
   state: RouteInstructionMaterializationState,
   routeConfigContext: RouteConfigContextModel,
@@ -1010,7 +1018,7 @@ function routePathWithViewport(
 }
 
 function recordEagerPathGenerationIssue(
-  store: KernelStore,
+  store: KernelPublicationContext,
   closed: ClosedEagerRouterResourceInstruction,
   routeConfigContext: RouteConfigContextModel,
   result: Extract<ReturnType<RouteEagerPathGenerationIndex['generate']>, { readonly kind: 'failed' }>,
@@ -1058,7 +1066,7 @@ function recordEagerPathGenerationIssue(
 }
 
 function recordInvalidInstructionIssue(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   value: Extract<StaticRouterResourceValue, { readonly state: 'invalid-instruction' }>,
   issues: RouterIssueModel[],
@@ -1106,7 +1114,7 @@ function recordInvalidInstructionIssue(
 }
 
 function viewportInstructionTreeModel(
-  store: KernelStore,
+  store: KernelPublicationContext,
   treeLocal: string,
   parsed: RouterResourceExpression,
   viewportInstructionEmissions: readonly MaterializedViewportInstructionEmission[],
@@ -1135,7 +1143,7 @@ function routeQueryParameterValues(
 }
 
 function viewportInstructionTreeRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   treeLocal: string,
   viewportInstructionTree: ViewportInstructionTreeModel,
   ownerHandle: RouteContextModel['identityHandle'],
@@ -1162,7 +1170,7 @@ function viewportInstructionTreeRecords(
 }
 
 function parseClosedRouteExpression(
-  store: KernelStore,
+  store: KernelPublicationContext,
   closed: ClosedRouteExpressionInstruction,
   routeContextsByIdentity: ReadonlyMap<RouteContextModel['identityHandle'], RouteContextModel>,
   openSeams: OpenSeam[],
@@ -1196,7 +1204,7 @@ function parseClosedRouteExpression(
 }
 
 function recordRouteExpressionParseIssue(
-  store: KernelStore,
+  store: KernelPublicationContext,
   closed: ClosedRouteExpressionInstruction,
   failure: RouteExpressionParseFailure,
   issues: RouterIssueModel[],
@@ -1316,7 +1324,7 @@ function requiredRouteContextForReference(
 }
 
 function materializeViewportInstruction(
-  store: KernelStore,
+  store: KernelPublicationContext,
   closed: ClosedRouteExpressionInstruction,
   ownerHandle: RouteContextModel['identityHandle'],
   treeLocal: string,
@@ -1366,7 +1374,7 @@ function materializeViewportInstruction(
 }
 
 function materializeChildViewportInstructions(
-  store: KernelStore,
+  store: KernelPublicationContext,
   closed: ClosedRouteExpressionInstruction,
   ownerHandle: RouteContextModel['identityHandle'],
   treeLocal: string,
@@ -1379,7 +1387,7 @@ function materializeChildViewportInstructions(
 }
 
 function typedNavigationInstructionForViewport(
-  store: KernelStore,
+  store: KernelPublicationContext,
   typedLocal: string,
   closed: ClosedRouteExpressionInstruction,
   instruction: ParsedViewportInstruction,
@@ -1395,7 +1403,7 @@ function typedNavigationInstructionForViewport(
 }
 
 function viewportInstructionForParsedInstruction(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   site: RouterResourceInstructionSite,
   instruction: ParsedViewportInstruction,
@@ -1418,7 +1426,7 @@ function viewportInstructionForParsedInstruction(
 }
 
 function viewportInstructionRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   typedLocal: string,
   ownerHandle: RouteContextModel['identityHandle'],
@@ -1433,7 +1441,7 @@ function viewportInstructionRecords(
 }
 
 function typedNavigationInstructionRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   ownerHandle: RouteContextModel['identityHandle'],
   instruction: ParsedViewportInstruction,
@@ -1456,7 +1464,7 @@ function typedNavigationInstructionRecords(
 }
 
 function viewportInstructionProductRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   ownerHandle: RouteContextModel['identityHandle'],
   instruction: ParsedViewportInstruction,
@@ -1511,7 +1519,7 @@ interface DynamicBindingReason {
 }
 
 function staticLoadRouterResourceValue(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
   routeValue: StaticRouterResourceValue,
@@ -1563,7 +1571,7 @@ function staticLoadRouterResourceValue(
 }
 
 function staticRouterResourceValue(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   property: string,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null = null,
@@ -1574,7 +1582,7 @@ function staticRouterResourceValue(
   let dynamicReasonKinds: readonly OpenSeamReasonKind[] = [];
   let dynamicSourceAddressHandle: AddressHandle | null = null;
   for (const productHandle of site.instruction.bindingInstructionProductHandles) {
-    const instruction = store.productDetails.read(TemplateProductDetails.Instruction, productHandle);
+    const instruction = store.readProductDetail(TemplateProductDetails.Instruction, productHandle);
     if (instruction instanceof SetPropertyInstruction && instruction.targetProperty === property) {
       const valueSourceAddressHandle = instructionValueSourceAddressHandle(store, instruction);
       return {
@@ -1665,7 +1673,7 @@ function staticRouterResourceValue(
 }
 
 function instructionValueSourceAddressHandle(
-  store: KernelStore,
+  store: KernelPublicationContext,
   instruction:
     | SetPropertyInstruction
     | MultiAttrInstruction
@@ -1674,19 +1682,19 @@ function instructionValueSourceAddressHandle(
 ): AddressHandle | null {
   const attribute = instruction.attribute?.productHandle == null
     ? null
-    : store.productDetails.read(TemplateProductDetails.HtmlAttribute, instruction.attribute.productHandle);
+    : store.readProductDetail(TemplateProductDetails.HtmlAttribute, instruction.attribute.productHandle);
   return attribute instanceof HtmlAttribute
     ? attribute.valueAddressHandle ?? instruction.sourceAddressHandle
     : instruction.sourceAddressHandle;
 }
 
 function routerInstructionBindableSourceAddressHandle(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   property: string,
 ): AddressHandle | null {
   for (const productHandle of site.instruction.bindingInstructionProductHandles) {
-    const instruction = store.productDetails.read(TemplateProductDetails.Instruction, productHandle);
+    const instruction = store.readProductDetail(TemplateProductDetails.Instruction, productHandle);
     if (
       instruction instanceof SetPropertyInstruction
       && instruction.targetProperty === property
@@ -1716,12 +1724,12 @@ function routerInstructionBindableSourceAddressHandle(
 }
 
 function loadRouteParameters(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
 ): LoadRouteParametersRead {
   for (const productHandle of site.instruction.bindingInstructionProductHandles) {
-    const instruction = store.productDetails.read(TemplateProductDetails.Instruction, productHandle);
+    const instruction = store.readProductDetail(TemplateProductDetails.Instruction, productHandle);
     if (
       instruction instanceof SetPropertyInstruction
       && instruction.targetProperty === RouterLoadBindableName.Params
@@ -1768,7 +1776,7 @@ function loadRouteParameters(
 }
 
 function loadRouteParametersFromExpression(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   bindingInstructionProductHandle: ProductHandle,
   expressionProductHandle: ProductHandle | null,
@@ -1808,7 +1816,7 @@ function loadRouteParametersFromExpression(
 }
 
 function expressionRouterResourceValue(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   bindingInstructionProductHandle: ProductHandle,
   expressionProductHandle: ProductHandle | null,
@@ -2600,7 +2608,7 @@ function expressionStringValue(
 }
 
 function interpolatedStringValue(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   bindingInstructionProductHandle: ProductHandle,
   expressionProductHandle: ProductHandle | null,
@@ -2756,7 +2764,7 @@ function definitelyInvalidInstructionValueKind(
 }
 
 function dynamicBindingReason(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   bindingInstructionProductHandle: ProductHandle,
   expressionProductHandle: ProductHandle | null,
@@ -2797,7 +2805,7 @@ function dynamicBindingReasonForEvaluation(
 }
 
 function expressionSourceAddressHandleForProduct(
-  store: KernelStore,
+  store: KernelPublicationContext,
   expressionProductHandle: ProductHandle | null,
 ): AddressHandle | null {
   if (expressionProductHandle == null) {
@@ -2807,7 +2815,7 @@ function expressionSourceAddressHandleForProduct(
 }
 
 function evaluatedBindingExpressionProduct(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   bindingInstructionProductHandle: ProductHandle,
   expressionProductHandle: ProductHandle | null,
@@ -2850,7 +2858,7 @@ function hasStaticRoutePrefix(prefix: string): boolean {
 }
 
 function hrefRouteExpressionIsExternal(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   value: StaticStringBindingValue,
 ): boolean {
@@ -2861,7 +2869,7 @@ function hrefRouteExpressionIsExternal(
 }
 
 function hrefHostHasExplicitExternalMarker(
-  store: KernelStore,
+  store: KernelPublicationContext,
   host: HtmlElement | null,
 ): boolean {
   return hasHostAttribute(store, host, 'external') || hasHostAttribute(store, host, 'data-external');
@@ -2887,7 +2895,7 @@ function hrefStringIsExternal(value: string): boolean {
 }
 
 function dynamicRouterInstructionSummary(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   routerOptions: RouterOptionsMaterializationProjectResult,
   property: string,
@@ -2901,7 +2909,7 @@ function dynamicRouterInstructionSummary(
 }
 
 function dynamicRouterInstructionReasonKinds(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   routerOptions: RouterOptionsMaterializationProjectResult,
   reasonKinds: readonly OpenSeamReasonKind[],
@@ -2917,7 +2925,7 @@ function dynamicRouterInstructionReasonKinds(
 }
 
 function dynamicRouterInstructionReasonSources(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   routerOptions: RouterOptionsMaterializationProjectResult,
   valueSourceAddressHandle: AddressHandle | null,
@@ -2953,7 +2961,7 @@ function dynamicRouterInstructionReasonSources(
 }
 
 function hrefClickInterceptionSummary(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   routerOptions: RouterOptionsMaterializationProjectResult,
 ): string | null {
@@ -2965,7 +2973,7 @@ function hrefClickInterceptionSummary(
 }
 
 function hrefClickInterceptionReasonKinds(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   routerOptions: RouterOptionsMaterializationProjectResult,
 ): readonly OpenSeamReasonKind[] {
@@ -2979,7 +2987,7 @@ interface HrefClickInterceptionFact {
 }
 
 function hrefClickInterceptionFacts(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   routerOptions: RouterOptionsMaterializationProjectResult,
 ): readonly HrefClickInterceptionFact[] {
@@ -3027,7 +3035,7 @@ function hrefClickInterceptionFacts(
 }
 
 function hostHasRouterLoadResource(
-  store: KernelStore,
+  store: KernelPublicationContext,
   host: HtmlElement | null,
 ): boolean {
   return hasHostAttribute(store, host, RouterResourceInstructionKind.Load);
@@ -3038,19 +3046,19 @@ function hostIsAnchor(host: HtmlElement | null): boolean {
 }
 
 function htmlElementForInstruction(
-  store: KernelStore,
+  store: KernelPublicationContext,
   instruction: HydrateAttributeInstruction,
 ): HtmlElement | null {
   const productHandle = instruction.node.productHandle;
   if (productHandle == null) {
     return null;
   }
-  const node = store.productDetails.read(TemplateProductDetails.HtmlNode, productHandle);
+  const node = store.readProductDetail(TemplateProductDetails.HtmlNode, productHandle);
   return node instanceof HtmlElement ? node : null;
 }
 
 function hasHostAttribute(
-  store: KernelStore,
+  store: KernelPublicationContext,
   host: HtmlElement | null,
   attributeName: string,
 ): boolean {
@@ -3058,7 +3066,7 @@ function hasHostAttribute(
 }
 
 function hostAttribute(
-  store: KernelStore,
+  store: KernelPublicationContext,
   host: HtmlElement | null,
   attributeName: string,
 ): HtmlAttribute | null {
@@ -3068,7 +3076,7 @@ function hostAttribute(
   for (const attributeReference of host.attributes) {
     const attribute = attributeReference.productHandle == null
       ? null
-      : store.productDetails.read(TemplateProductDetails.HtmlAttribute, attributeReference.productHandle);
+      : store.readProductDetail(TemplateProductDetails.HtmlAttribute, attributeReference.productHandle);
     if (attribute instanceof HtmlAttribute && attribute.rawName.toLowerCase() === attributeName) {
       return attribute;
     }
@@ -3077,7 +3085,7 @@ function hostAttribute(
 }
 
 function hostAttributeValue(
-  store: KernelStore,
+  store: KernelPublicationContext,
   host: HtmlElement | null,
   attributeName: string,
 ): string | null {
@@ -3085,7 +3093,7 @@ function hostAttributeValue(
 }
 
 function recordOpenSeam(
-  store: KernelStore,
+  store: KernelPublicationContext,
   site: RouterResourceInstructionSite,
   summary: string,
   reasonKinds: readonly OpenSeamReasonKind[],

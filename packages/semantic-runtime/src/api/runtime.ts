@@ -7,18 +7,23 @@ import {
   type SemanticProjectShape,
 } from '../boot/project-shape.js';
 import { safeIsDirectory } from '../boot/host-files.js';
-import {
-  readProjectCompilerOptionsCacheOverview,
-} from '../boot/project-compiler-options.js';
+import { nodeSemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
 import { SourceFileRole } from '../kernel/address.js';
 import {
   KernelStore,
   type KernelStoreDisposalSummary,
   type KernelStoreLifetimeMarker,
 } from '../kernel/store.js';
-import { ComputationLifecycleRegistry } from '../kernel/computation-lifecycle.js';
-import { AureliaAppWorldProjectEmission, AureliaAppWorldProjectPass } from '../configuration/app-world-project-pass.js';
-import { TemplateAnalysisProjectComputationService } from '../template/template-analysis-computation.js';
+import {
+  ComputationCommitState,
+  ComputationLifecycleRegistry,
+} from '../kernel/computation-lifecycle.js';
+import { FrameworkSupportAuthority } from '../framework/framework-support-authority.js';
+import { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
+import {
+  AureliaAppWorldProjectComputationService,
+  type AureliaAppWorldProjectGeneration,
+} from '../configuration/app-analysis-computation.js';
 import {
   evaluateAureliaProject,
 } from '../configuration/aurelia-project-evaluation.js';
@@ -90,6 +95,7 @@ import {
   semanticAppQueryKey,
   semanticAppQueryLocusKey,
   semanticAppProjectEpochKey,
+  semanticAppProjectInputEpochKey,
   semanticAppSourceEpochKey,
   semanticRuntimeAppWorldFreeQueryBatchKey,
   semanticRuntimeAppWorldFreeQueryKey,
@@ -120,6 +126,7 @@ import {
   semanticAppQueryBatchMaterializationPolicy,
   semanticAppQueryMaterializationPolicy,
   semanticRuntimeQueryClaimDisposalStrategy,
+  assertCompatibleRoutedAppRetention,
   shouldDisposeAppAfterRoutedQuery,
   typeSystemDependencyCacheClearPolicyForRoutedQuery,
 } from './app-query-policy.js';
@@ -296,7 +303,6 @@ import {
   type SemanticRuntimeCachedAppSummary,
   type SemanticRuntimeCachedAppQueryClaimProfileSummary,
   type SemanticRuntimePhaseTimingSummary,
-  type SemanticRuntimeProjectCompilerOptionsCacheSummary,
   type SemanticRuntimeTypeSystemDependencyCacheSummary,
   type SemanticRuntimeTypeSystemProgramSourceFileGroupStats,
   type SemanticTypeSystemDependencyCacheSourceBucket,
@@ -436,24 +442,32 @@ type SemanticAppCurrentQueryAnswerer = <TValue>(
 /** Booted workspace facade. It owns source admission and app-world opening. */
 export class SemanticRuntime {
   private readonly appsByCacheKey = new Map<string, SemanticApp>();
-  private readonly projectShapesByProjectKey = new Map<string, SemanticProjectShape>();
+  private readonly projectShapesByGenerationKey = new Map<string, SemanticProjectShape>();
   private readonly queryClaimsByProfile = new Map<SemanticRuntimeInquiryProfile, QueryClaimGraph>();
   readonly computationLifecycle: ComputationLifecycleRegistry;
-  readonly templateAnalysisComputations: TemplateAnalysisProjectComputationService;
+  readonly frameworkSupport: FrameworkSupportAuthority;
+  readonly appAnalysisComputations: AureliaAppWorldProjectComputationService;
 
   private constructor(
     readonly workspace: WorkspaceBootFrame,
   ) {
     this.computationLifecycle = new ComputationLifecycleRegistry(workspace.store);
-    this.templateAnalysisComputations = new TemplateAnalysisProjectComputationService(
+    this.frameworkSupport = new FrameworkSupportAuthority(
       workspace.store,
       this.computationLifecycle,
+      workspace.workspaceKey,
+    );
+    this.frameworkSupport.initializeKnownSupport();
+    this.appAnalysisComputations = new AureliaAppWorldProjectComputationService(
+      workspace.store,
+      this.computationLifecycle,
+      this.frameworkSupport,
     );
   }
 
   static async open(options: SemanticRuntimeOptions): Promise<SemanticRuntime> {
     const workspaceRoot = path.resolve(options.workspaceRoot);
-    if (!safeIsDirectory(workspaceRoot)) {
+    if (!safeIsDirectory(nodeSemanticRuntimeProjectInputHost, workspaceRoot)) {
       throw new Error(`Cannot open semantic-runtime workspace: workspaceRoot '${workspaceRoot}' does not exist or is not a directory.`);
     }
     const projects = options.projects?.map((project): BootProjectInput => ({
@@ -461,7 +475,7 @@ export class SemanticRuntime {
       rootDir: path.resolve(workspaceRoot, project.rootDir),
     }));
     for (const project of projects ?? []) {
-      if (!safeIsDirectory(project.rootDir)) {
+      if (!safeIsDirectory(nodeSemanticRuntimeProjectInputHost, project.rootDir)) {
         throw new Error(
           `Cannot open semantic-runtime workspace: project rootDir '${project.rootDir}' does not exist or is not a directory.`,
         );
@@ -472,25 +486,37 @@ export class SemanticRuntime {
       storeKey: options.storeKey,
       projects,
       projectDiscovery: options.projectDiscovery,
-      sourceTextProvider: options.sourceTextProvider ?? null,
+      projectInputAuthority: options.projectInputAuthority,
     });
     return new SemanticRuntime(workspace);
   }
 
   summary(request: SemanticRuntimeSummaryRequest = {}): SemanticRuntimeAnswer<SemanticRuntimeSummary> {
+    const projects = this.workspace.projects.map((project) => this.captureProject(project));
     return this.answerRuntimeQuery(
       {
         inquiryProfile: normalizeSemanticRuntimeInquiryProfile(request.inquiryProfile),
         queryKind: 'runtime-summary',
         queryKey: semanticRuntimeSummaryKey(request),
+        locusKey: semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey),
+        epochKeys: [
+          semanticRuntimeWorkspaceEpochKey(this.workspace.workspaceKey),
+          ...projects.flatMap((project) => [
+            semanticAppProjectEpochKey(project.projectKey),
+            semanticAppProjectInputEpochKey(project.projectKey, project.inputGeneration.revision),
+          ]),
+        ],
         materializationPolicy: 'projection-only',
       },
-      () => this.readSummary(request),
+      () => this.readSummary(request, projects),
     );
   }
 
-  private readSummary(request: SemanticRuntimeSummaryRequest): SemanticRuntimeAnswer<SemanticRuntimeSummary> {
-    const projects = this.workspace.projects.map((project) => {
+  private readSummary(
+    request: SemanticRuntimeSummaryRequest,
+    capturedProjects: readonly ProjectBootFrame[],
+  ): SemanticRuntimeAnswer<SemanticRuntimeSummary> {
+    const projects = capturedProjects.map((project) => {
       const shape = this.readProjectShape(project);
       return {
         projectKey: project.projectKey,
@@ -567,7 +593,6 @@ export class SemanticRuntime {
         || left.authoringTemplateSourceFileCount - right.authoringTemplateSourceFileCount
       );
     const runtimeQueryClaimProfiles = this.runtimeQueryClaimProfileSummaries(rowLimit, request.includeQueryClaimRows === true);
-    const projectCompilerOptionsCache = projectCompilerOptionsCacheSummary();
     const typeSystemDependencyCache = typeSystemDependencyCacheSummary(
       rowLimit,
       request.includeTypeSystemDependencyEntries === true,
@@ -577,7 +602,6 @@ export class SemanticRuntime {
       cachedAppCount: cachedApps.length,
       cachedApps,
       runtimeQueryClaimProfiles,
-      projectCompilerOptionsCache,
       typeSystemDependencyCache,
       processMemory,
       workspaceKernel,
@@ -589,9 +613,10 @@ export class SemanticRuntime {
         reclaimAction: 'clear-analysis-cache',
         notes: [
           'Cached app objects can be reused by compatible analysis-depth and authoring-template requests.',
-          'clearAnalysisCache() drops cached app epochs and disposes kernel records back to the first app-construction marker while keeping boot/source discovery alive.',
-          'Opening a non-compatible app epoch for a project that already has cached app records clears cached app epochs first, because app-world handles are not yet salted by analysis-depth or authoring-template request.',
-          'Project compiler options are cached process-locally by project root and cloned on read, so static evaluation and TypeSystem construction can share one filesystem-derived config shape without sharing a mutable options object.',
+          'Independent project app generations coexist in one workspace store; a replacement retires only the prior generation at the same project locus.',
+          'clearAnalysisCache() reclaims unowned answer-local products, retires each cached app generation exactly, and keeps boot/source discovery alive.',
+          'Analysis-depth and authoring-template variants share one project locus, so opening a non-compatible variant replaces that project generation without disturbing other projects.',
+          'Project compiler options are read through the captured project-input generation; evaluation and TypeSystem construction share that immutable generation instead of a process-global path cache.',
           'The TypeScript dependency declaration/source-file cache is process-local and survives ordinary app-cache clearing; recompute-friendly routed answers clear it when they dispose the app epoch, and warm sessions can pass typeSystemDependencyCacheClearPolicy=preserve.',
           'Runtime-level static answers and opened-app answers use separate query-claim graphs so static catalog reuse does not force app-world construction.',
           'Routed app answers also record a lightweight runtime-level query claim before optional app-epoch disposal, so one-off MCP-style calls can explain their cost without retaining the opened app.',
@@ -865,6 +890,7 @@ export class SemanticRuntime {
         epochKeys: semanticRuntimeRoutedAppQueryEpochKeys(
           this.workspace.workspaceKey,
           plan.project.projectKey,
+          plan.project.inputGeneration.revision,
           canonicalRequest,
         ),
         materializationPolicy: semanticAppQueryMaterializationPolicy(canonicalRequest, catalogRow.materializationPolicy),
@@ -888,6 +914,7 @@ export class SemanticRuntime {
     catalogRow: SemanticAppQueryCatalogRow,
     inquiryProfile: SemanticRuntimeInquiryProfile,
   ): SemanticRuntimeAnswer<unknown> {
+    assertCompatibleRoutedAppRetention(request);
     const typeSystemDependencyCacheClearPolicy = normalizeTypeSystemDependencyCacheClearPolicy(
       typeSystemDependencyCacheClearPolicyForRoutedQuery(request, inquiryProfile),
     );
@@ -905,6 +932,7 @@ export class SemanticRuntime {
     });
     const cachedBefore = this.readCachedApp(
       plan.project.projectKey,
+      plan.project.inputGeneration.revision,
       plan.analysisDepth,
       plan.includeAuthoringTemplates,
       plan.authoringTemplateSourceFiles,
@@ -921,6 +949,7 @@ export class SemanticRuntime {
         epochKeys: semanticRuntimeRoutedAppQueryEpochKeys(
           this.workspace.workspaceKey,
           plan.project.projectKey,
+          plan.project.inputGeneration.revision,
           canonicalRequest,
         ),
         materializationPolicy: semanticAppQueryMaterializationPolicy(canonicalRequest, catalogRow.materializationPolicy),
@@ -979,6 +1008,7 @@ export class SemanticRuntime {
     }
     const cachedBefore = this.readCachedApp(
       plan.project.projectKey,
+      plan.project.inputGeneration.revision,
       plan.analysisDepth,
       plan.includeAuthoringTemplates,
       plan.authoringTemplateSourceFiles,
@@ -1096,6 +1126,7 @@ export class SemanticRuntime {
         epochKeys: semanticRuntimeRoutedAppQueryBatchEpochKeys(
           this.workspace.workspaceKey,
           plan.project.projectKey,
+          plan.project.inputGeneration.revision,
           canonicalQueries,
         ),
         materializationPolicy: semanticAppQueryBatchMaterializationPolicy(canonicalQueries),
@@ -1170,6 +1201,7 @@ export class SemanticRuntime {
             epochKeys: semanticRuntimeRoutedAppQueryEpochKeys(
               this.workspace.workspaceKey,
               plan.project.projectKey,
+              plan.project.inputGeneration.revision,
               childQuery,
             ),
             materializationPolicy,
@@ -1193,6 +1225,7 @@ export class SemanticRuntime {
     cachedBefore: SemanticApp | null,
     typeSystemDependencyCacheClearPolicy: SemanticTypeSystemDependencyCacheClearPolicy,
   ): SemanticRuntimeAnswer<SemanticRuntimeAppQueryBatchResult> {
+    assertCompatibleRoutedAppRetention({ ...request, queries: canonicalQueries });
     let appOpened = false;
     return this.answerRuntimeQuery(
       {
@@ -1203,6 +1236,7 @@ export class SemanticRuntime {
         epochKeys: semanticRuntimeRoutedAppQueryBatchEpochKeys(
           this.workspace.workspaceKey,
           plan.project.projectKey,
+          plan.project.inputGeneration.revision,
           canonicalQueries,
         ),
         materializationPolicy: semanticAppQueryBatchMaterializationPolicy(canonicalQueries),
@@ -1470,9 +1504,10 @@ export class SemanticRuntime {
     const includeAuthoringTemplates = options.includeAuthoringTemplates === true;
     const sourceFilePath = normalizeSourceFilePathOption(options.sourceFilePath);
     const requestedAuthoringSourceFiles = normalizeAuthoringTemplateSourceFiles(options.authoringTemplateSourceFiles);
-    const project = options.projectKey == null
+    const bootProject = options.projectKey == null
       ? this.selectProjectForOpen(sourceFilePath)
       : selectProject(this.workspace.projects, options.projectKey);
+    const project = this.captureProject(bootProject);
     const projectSourceFilePath = sourceFilePath == null
       ? null
       : canonicalProjectSourceFilePath(project, sourceFilePath);
@@ -1552,6 +1587,7 @@ export class SemanticRuntime {
   ): SemanticApp {
     const existing = this.readCachedApp(
       project.projectKey,
+      project.inputGeneration.revision,
       analysisDepth,
       includeAuthoringTemplates,
       authoringTemplateSourceFiles,
@@ -1560,24 +1596,22 @@ export class SemanticRuntime {
     if (existing != null) {
       return existing;
     }
-    if (this.hasCachedAppForProject(project.projectKey)) {
-      this.disposeCachedAppEpochs(QueryClaimDisposalReason.AppEpochDisposed);
+    if (this.appsByCacheKey.size > 0) {
+      this.disposeCachedAppAnswerState(QueryClaimDisposalReason.AppEpochDisposed);
     }
-    const kernelMarker = this.workspace.store.markLifetime();
-    let emission: AureliaAppWorldProjectEmission;
-    try {
-      emission = new AureliaAppWorldProjectPass(this.templateAnalysisComputations).constructAndEmit(this.workspace.store, project, {
+    const result = this.appAnalysisComputations.prepare(project, {
         analysisDepth,
         includeAuthoringTemplates,
         authoringTemplateSourceFiles,
         authoringTemplateLimit,
         telemetry,
-      });
-    } catch (error) {
-      this.workspace.store.disposeSince(kernelMarker);
-      throw error;
+      }).commit();
+    if (result.commit.state !== ComputationCommitState.Committed || result.committedGeneration == null) {
+      throw new Error(`App analysis for ${project.projectKey} did not commit: ${result.commit.state}.`);
     }
-    const app = new SemanticApp(this, project, emission, {
+    this.retireStaleCachedApps(QueryClaimDisposalReason.AppEpochDisposed);
+    const kernelMarker = this.workspace.store.markLifetime();
+    const app = new SemanticApp(this, project, result.committedGeneration, {
       analysisDepth,
       includeAuthoringTemplates,
       authoringTemplateSourceFileCount: authoringTemplateSourceFiles.length,
@@ -1585,7 +1619,14 @@ export class SemanticRuntime {
       kernelMarker,
     });
     this.appsByCacheKey.set(
-      appCacheKey(project.projectKey, analysisDepth, includeAuthoringTemplates, authoringTemplateSourceFiles, authoringTemplateLimit),
+      appCacheKey(
+        project.projectKey,
+        project.inputGeneration.revision,
+        analysisDepth,
+        includeAuthoringTemplates,
+        authoringTemplateSourceFiles,
+        authoringTemplateLimit,
+      ),
       app,
     );
     return app;
@@ -1599,12 +1640,6 @@ export class SemanticRuntime {
     const requestedProject = query.projectKey == null
       ? null
       : selectProject(this.workspace.projects, query.projectKey);
-    const cached = sourceFilePath == null
-      ? null
-      : this.readCachedTemplateCursorApp(requestedProject, analysisDepth, sourceFilePath);
-    if (cached != null) {
-      return cached;
-    }
     const project = requestedProject ?? this.selectProjectForOpen(sourceFilePath);
     return this.openApp({
       projectKey: project.projectKey,
@@ -1625,12 +1660,6 @@ export class SemanticRuntime {
     const requestedProject = query.projectKey == null
       ? null
       : selectProject(this.workspace.projects, query.projectKey);
-    const cached = sourceFilePath == null
-      ? null
-      : this.readCachedTemplateCursorApp(requestedProject, analysisDepth, sourceFilePath);
-    if (cached != null) {
-      return cached;
-    }
     const project = requestedProject ?? this.selectProjectForOpen(sourceFilePath);
     return this.openApp({
       projectKey: project.projectKey,
@@ -1643,33 +1672,23 @@ export class SemanticRuntime {
     });
   }
 
-  private readCachedTemplateCursorApp(
-    project: ProjectBootFrame | null,
-    requestedDepth: SemanticAppAnalysisDepth,
-    sourceFilePath: string,
-  ): SemanticApp | null {
-    for (const app of this.appsByCacheKey.values()) {
-      if (
-        app.isCurrent()
-        && (project == null || app.project.projectKey === project.projectKey)
-        && semanticAppAnalysisDepthSatisfies(app.emission.analysisDepth, requestedDepth)
-        && appContainsTemplateSourceFile(app, sourceFilePath)
-      ) {
-        return app;
-      }
-    }
-    return null;
-  }
-
   private readCachedApp(
     projectKey: string,
+    projectInputRevision: string,
     requestedDepth: SemanticAppAnalysisDepth,
     includeAuthoringTemplates: boolean,
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
   ): SemanticApp | null {
     const exact = this.appsByCacheKey.get(
-      appCacheKey(projectKey, requestedDepth, includeAuthoringTemplates, authoringTemplateSourceFiles, authoringTemplateLimit),
+      appCacheKey(
+        projectKey,
+        projectInputRevision,
+        requestedDepth,
+        includeAuthoringTemplates,
+        authoringTemplateSourceFiles,
+        authoringTemplateLimit,
+      ),
     );
     if (exact?.isCurrent() === true) {
       return exact;
@@ -1679,6 +1698,7 @@ export class SemanticRuntime {
         app.isCurrent()
         &&
         app.project.projectKey === projectKey
+        && app.project.inputGeneration.revision === projectInputRevision
         && semanticAppAnalysisDepthSatisfies(app.emission.analysisDepth, requestedDepth)
         && app.satisfiesAuthoringTemplateRequest(includeAuthoringTemplates, authoringTemplateSourceFiles, authoringTemplateLimit)
       ) {
@@ -1692,10 +1712,42 @@ export class SemanticRuntime {
     return [...this.appsByCacheKey.values()].some((app) => app.project.projectKey === projectKey);
   }
 
+  private retireStaleCachedApps(reason: QueryClaimDisposalReason): number {
+    const staleApps = new Set<SemanticApp>();
+    for (const [cacheKey, app] of this.appsByCacheKey) {
+      if (app.isCurrent()) {
+        continue;
+      }
+      this.appsByCacheKey.delete(cacheKey);
+      staleApps.add(app);
+    }
+    let queryClaimRecords = 0;
+    for (const app of staleApps) {
+      queryClaimRecords += app.disposeQueryClaims(reason);
+      app.retireGeneration();
+    }
+    return queryClaimRecords;
+  }
+
+  /** Reclaim answer-local publications while preserving the incumbent semantic generation during replacement. */
+  private disposeCachedAppAnswerState(
+    reason: QueryClaimDisposalReason,
+  ): { readonly queryClaimRecords: number; readonly kernel: KernelStoreDisposalSummary } {
+    const apps = [...new Set(this.appsByCacheKey.values())];
+    const queryClaimRecords = apps.reduce(
+      (total, app) => total + app.disposeQueryClaims(reason),
+      0,
+    );
+    const kernel = apps.length === 0
+      ? emptyKernelStoreDisposalSummary()
+      : this.workspace.store.disposeUnownedSince(earliestKernelMarker(apps.map((app) => app.kernelMarker)));
+    return { queryClaimRecords, kernel };
+  }
+
   private disposeCachedAppEpochs(
     reason: QueryClaimDisposalReason,
   ): { readonly apps: number; readonly queryClaimRecords: number; readonly kernel: KernelStoreDisposalSummary } {
-    const apps = [...this.appsByCacheKey.values()];
+    const apps = [...new Set(this.appsByCacheKey.values())];
     if (apps.length === 0) {
       return {
         apps: 0,
@@ -1708,13 +1760,21 @@ export class SemanticRuntime {
         },
       };
     }
+    const kernelBefore = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
     const earliestMarker = earliestKernelMarker(apps.map((app) => app.kernelMarker));
     const queryClaimRecords = apps.reduce(
       (total, app) => total + app.disposeQueryClaims(reason),
       0,
     );
+    this.workspace.store.disposeUnownedSince(earliestMarker);
+    for (const app of apps) {
+      app.retireGeneration();
+    }
+    const kernel = kernelDisposalBetween(
+      kernelBefore,
+      this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false }),
+    );
     this.appsByCacheKey.clear();
-    const kernel = this.workspace.store.disposeSince(earliestMarker);
     return {
       apps: apps.length,
       queryClaimRecords,
@@ -1723,19 +1783,20 @@ export class SemanticRuntime {
   }
 
   private readProjectShape(project: ProjectBootFrame): SemanticProjectShape {
-    const existing = this.projectShapesByProjectKey.get(project.projectKey);
+    const generationKey = `${project.projectKey}\0${project.inputGeneration.revision}`;
+    const existing = this.projectShapesByGenerationKey.get(generationKey);
     if (existing != null) {
       return existing;
     }
     const shape = readSemanticProjectShape(project);
-    this.projectShapesByProjectKey.set(project.projectKey, shape);
+    this.projectShapesByGenerationKey.set(generationKey, shape);
     return shape;
   }
 
   private selectDefaultProject(): ProjectBootFrame {
-    const aureliaAppProject = this.workspace.projects.find((project) =>
-      this.readProjectShape(project).shapeKind === SemanticProjectShapeKind.AureliaApp
-    );
+    const aureliaAppProject = this.workspace.projects
+      .map((project) => this.captureProject(project))
+      .find((project) => this.readProjectShape(project).shapeKind === SemanticProjectShapeKind.AureliaApp);
     if (aureliaAppProject != null) {
       return aureliaAppProject;
     }
@@ -1750,7 +1811,7 @@ export class SemanticRuntime {
   private projectShapeSummary(): string {
     const counts = new Map<string, number>();
     for (const project of this.workspace.projects) {
-      const shapeKind = this.readProjectShape(project).shapeKind;
+      const shapeKind = this.readProjectShape(this.captureProject(project)).shapeKind;
       counts.set(shapeKind, (counts.get(shapeKind) ?? 0) + 1);
     }
     return [...counts.entries()]
@@ -1775,6 +1836,10 @@ export class SemanticRuntime {
       }
     }
     throw new Error(`Cannot open semantic app: source file '${sourceFilePath}' was not admitted into any project.`);
+  }
+
+  private captureProject(project: ProjectBootFrame): ProjectBootFrame {
+    return project.forInputGeneration(this.workspace.projectInputAuthority.capture(project));
   }
 }
 
@@ -1947,7 +2012,6 @@ function semanticRuntimeAnalysisCacheOverviewDisplayText(
     `Analysis cache: ${value.cachedAppCount} cached app epoch(s); workspace kernel ${workspaceKernel.totalRecords} record(s), ${workspaceKernel.productDetails} product detail(s), ${workspaceKernel.hotDetails} hot detail(s), ${workspaceKernel.handleCharacters} handle character(s).`,
     `Process memory: rss=${formatSemanticRuntimeBytes(value.processMemory.rssBytes)}, heapUsed=${formatSemanticRuntimeBytes(value.processMemory.heapUsedBytes)}, heapTotal=${formatSemanticRuntimeBytes(value.processMemory.heapTotalBytes)}, rssOther=${formatSemanticRuntimeBytes(value.processMemory.rssOtherBytes)}.`,
     `TypeScript dependency cache: ${value.typeSystemDependencyCache.entries} file(s), ${value.typeSystemDependencyCache.sourceTextCharacters} source-text character(s), suggestedClearPolicy=${value.typeSystemDependencyCache.suggestedClearPolicy} (${value.typeSystemDependencyCache.dominantSourceTextBucket}).`,
-    `Project compiler-options cache: ${value.projectCompilerOptionsCache.entries} project-root shape(s), hits=${value.projectCompilerOptionsCache.hits}, misses=${value.projectCompilerOptionsCache.misses}, writes=${value.projectCompilerOptionsCache.writes}.`,
   ];
   if (value.runtimeQueryClaimProfiles.length > 0) {
     lines.push(`Runtime query claims: ${value.runtimeQueryClaimProfiles.map((profile) =>
@@ -2461,13 +2525,15 @@ export class SemanticApp {
   constructor(
     readonly runtime: SemanticRuntime,
     readonly project: ProjectBootFrame,
-    private readonly appEmission: AureliaAppWorldProjectEmission,
+    private readonly appGeneration: AureliaAppWorldProjectGeneration,
     private readonly cacheRequest: SemanticAppCacheRequest,
   ) {
+    const appEmission = appGeneration.emission;
     this.defaultQueryClaims = this.queryClaimsForProfile(appEmission.profile.inquiryProfile);
     this.routeQueries = new SemanticAppRouteQueries(appEmission, runtime.workspace.store);
     this.currentTemplateQueries = new SemanticAppTemplateQueries(
       appEmission,
+      appGeneration,
       runtime.workspace.store,
       runtime.workspace.rootDir,
       project.rootDir,
@@ -2478,26 +2544,30 @@ export class SemanticApp {
     return this.cacheRequest.kernelMarker;
   }
 
-  /** Complete app fan-in guarded by the exact template-analysis generation that produced it. */
+  /** Complete app fan-in guarded by the exact app-analysis generation that produced it. */
   get emission(): AureliaAppWorldProjectEmission {
-    this.appEmission.requireCurrentTemplateAnalysis();
-    return this.appEmission;
+    return this.appGeneration.emission;
   }
 
   /** Default retained-answer graph guarded by the app generation whose answers it contains. */
   get queryClaims(): QueryClaimGraph {
-    this.appEmission.requireCurrentTemplateAnalysis();
+    this.appGeneration.emission;
     return this.defaultQueryClaims;
   }
 
-  /** Public template-query surface guarded by the app's pinned template-analysis generation. */
-  get templateQueries(): SemanticAppTemplateQueries {
-    this.appEmission.requireCurrentTemplateAnalysis();
+  /** Internal template projection surface; public callers enter through `ask()` so query lifetime policy applies. */
+  private get templateQueries(): SemanticAppTemplateQueries {
+    this.appGeneration.emission;
     return this.currentTemplateQueries;
   }
 
   isCurrent(): boolean {
-    return this.appEmission.templateAnalysisGeneration.isCurrent();
+    return this.project.inputGeneration.isCurrent()
+      && this.appGeneration.isCurrent();
+  }
+
+  retireGeneration(): boolean {
+    return this.runtime.appAnalysisComputations.retire(this.appGeneration);
   }
 
   satisfiesAuthoringTemplateRequest(
@@ -2505,7 +2575,6 @@ export class SemanticApp {
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
   ): boolean {
-    this.emission.requireCurrentTemplateAnalysis();
     return !includeAuthoringTemplates
       || (
         this.cacheRequest.includeAuthoringTemplates
@@ -2519,7 +2588,6 @@ export class SemanticApp {
   }
 
   cacheSummary(rowLimit: number, includeQueryClaimRows: boolean): SemanticRuntimeCachedAppSummary {
-    this.emission.requireCurrentTemplateAnalysis();
     return {
       projectKey: this.project.projectKey,
       analysisDepth: this.cacheRequest.analysisDepth,
@@ -2560,7 +2628,7 @@ export class SemanticApp {
   }
 
   ask(query: SemanticAppQuery): SemanticRuntimeAnswer<unknown> {
-    this.emission.requireCurrentTemplateAnalysis();
+    this.project.inputGeneration.requireCurrent();
     const unsupportedFilterAnswer = this.answerUnsupportedQueryFilters(query);
     if (unsupportedFilterAnswer != null) {
       return unsupportedFilterAnswer;
@@ -2856,6 +2924,7 @@ export class SemanticApp {
     const catalogRow = semanticAppQueryCatalogRow(query.kind as SemanticAppQueryKind);
     const inquiryProfile = this.inquiryProfileForQuery(query);
     const queryClaims = this.queryClaimsForProfile(inquiryProfile);
+    const retainNavigableHandles = query.detail === SemanticRuntimeDetail.Handles;
     return withAnswerAnalysisDepth(
       filterSemanticAppQueryContinuations(
         continuationQuery,
@@ -2863,7 +2932,11 @@ export class SemanticApp {
           queryKind: query.kind,
           queryKey: semanticAppQueryKey(query),
           locusKey: semanticAppQueryLocusKey(this.project.projectKey, query),
-          epochKeys: semanticAppQueryEpochKeys(this.project.projectKey, query),
+          epochKeys: semanticAppQueryEpochKeys(
+            this.project.projectKey,
+            this.project.inputGeneration.revision,
+            query,
+          ),
           materializationPolicy: semanticAppQueryMaterializationPolicy(query, catalogRow.materializationPolicy),
         }, () => {
           this.activeInquiryProfileStack.push(inquiryProfile);
@@ -2879,7 +2952,11 @@ export class SemanticApp {
         }, {
           readKernelMarker: () => this.runtime.workspace.store.markLifetime(),
           readKernelSnapshot: () => this.runtime.workspace.store.readTelemetrySnapshot(),
-          disposeKernelSince: (marker) => this.runtime.workspace.store.disposeSince(marker),
+          // Handle-detail answers promise exact in-process follow-up navigation, so any lazily projected targets must
+          // survive with the app epoch instead of becoming dead handles before the caller receives the answer.
+          disposeKernelSince: retainNavigableHandles
+            ? undefined
+            : (marker) => this.runtime.workspace.store.disposeSince(marker),
         }),
       ),
       this.emission.analysisDepth,
@@ -3122,7 +3199,7 @@ export class SemanticApp {
       return claimed;
     }
     const seamRows = this.openSeamRows(detail, filter);
-    const sourceTextCache = new AuthoredSourceTextCache('', this.project.sourceTextProvider);
+    const sourceTextCache = new AuthoredSourceTextCache('', this.project.inputGeneration.host);
     const rows = openSeamSummaryRows(
       seamRows,
       (source) => this.sourceRangeForSourceReference(source, sourceTextCache),
@@ -3163,7 +3240,7 @@ export class SemanticApp {
       return claimed;
     }
     const seamRows = this.openSeamRows(detail, filter);
-    const sourceTextCache = new AuthoredSourceTextCache('', this.project.sourceTextProvider);
+    const sourceTextCache = new AuthoredSourceTextCache('', this.project.inputGeneration.host);
     const rows = openSeamSiteRows(
       seamRows,
       (source) => this.sourceRangeForSourceReference(source, sourceTextCache),
@@ -3189,7 +3266,7 @@ export class SemanticApp {
     filter: SemanticOpenSeamQueryFilter = {},
   ): readonly SemanticOpenSeamRow[] {
     const handles = includeHandles(detail);
-    const sourceTextCache = new AuthoredSourceTextCache('', this.project.sourceTextProvider);
+    const sourceTextCache = new AuthoredSourceTextCache('', this.project.inputGeneration.host);
     return readAppOpenSeams(this.emission, this.runtime.workspace.store)
       .map((seam): SemanticOpenSeamRow => {
         const source = describeAddress(this.runtime.workspace.store, seam.addressHandle);
@@ -4534,36 +4611,32 @@ function earliestKernelMarker(
   );
 }
 
+function emptyKernelStoreDisposalSummary(): KernelStoreDisposalSummary {
+  return {
+    records: 0,
+    productDetails: 0,
+    hotDetails: 0,
+    handleCharacters: 0,
+  };
+}
+
+function kernelDisposalBetween(
+  before: SemanticRuntimeKernelCountSnapshot,
+  after: SemanticRuntimeKernelCountSnapshot,
+): KernelStoreDisposalSummary {
+  return {
+    records: Math.max(0, before.totalRecords - after.totalRecords),
+    productDetails: Math.max(0, before.productDetails - after.productDetails),
+    hotDetails: Math.max(0, before.hotDetails - after.hotDetails),
+    handleCharacters: Math.max(0, before.handleCharacters - after.handleCharacters),
+  };
+}
+
 function describeKernelDisposal(
   disposal: KernelStoreDisposalSummary,
 ): string {
   return `${disposal.records} kernel record(s), ${disposal.productDetails} product detail(s), ` +
     `${disposal.hotDetails} hot detail(s), and ${disposal.handleCharacters} handle character(s)`;
-}
-
-function projectCompilerOptionsCacheSummary(): SemanticRuntimeProjectCompilerOptionsCacheSummary {
-  const cache = readProjectCompilerOptionsCacheOverview();
-  return {
-    entries: cache.entries,
-    hits: cache.hits,
-    misses: cache.misses,
-    writes: cache.writes,
-    clearOperations: cache.clearOperations,
-    clearedEntries: cache.clearedEntries,
-    pathMappingCount: cache.pathMappingCount,
-    pathMappingTargetCount: cache.pathMappingTargetCount,
-    configDiagnosticCount: cache.configDiagnosticCount,
-    configRootFileCount: cache.configRootFileCount,
-    cacheScope: 'process',
-    counterScope: 'process-lifetime',
-    cachedValuePolicy: 'compiler-options-by-project-root',
-    summary:
-      `Project compiler-options cache retains ${cache.entries} project-root option shape(s) ` +
-      `with ${cache.pathMappingCount} path mapping(s) and ${cache.pathMappingTargetCount} target(s); ` +
-      `cached config diagnostics=${cache.configDiagnosticCount}; config root files=${cache.configRootFileCount}; ` +
-      `lifetime counters are ${cache.hits} hit(s), ${cache.misses} miss(es), ${cache.writes} write(s), ` +
-      `${cache.clearOperations} clear operation(s), and ${cache.clearedEntries} cleared entry(s).`,
-  };
 }
 
 function typeSystemDependencyCacheSummary(
@@ -5252,6 +5325,7 @@ function roundMilliseconds(value: number): number {
 
 function appCacheKey(
   projectKey: string,
+  projectInputRevision: string,
   analysisDepth: SemanticAppAnalysisDepth,
   includeAuthoringTemplates: boolean,
   authoringTemplateSourceFiles: readonly string[],
@@ -5260,7 +5334,7 @@ function appCacheKey(
   const sourceFileKey = authoringTemplateSourceFiles.length === 0
     ? 'project'
     : authoringTemplateSourceFiles.join('|');
-  return `${projectKey}:${analysisDepth}:authoring=${includeAuthoringTemplates}:${sourceFileKey}:${authoringTemplateLimit ?? 'all'}`;
+  return `${projectKey}:${projectInputRevision}:${analysisDepth}:authoring=${includeAuthoringTemplates}:${sourceFileKey}:${authoringTemplateLimit ?? 'all'}`;
 }
 
 function normalizeAuthoringTemplateLimit(value: number | null | undefined): number | null {

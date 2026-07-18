@@ -6,7 +6,7 @@ import {
 import type { SourceSpan } from '../expression/source-span.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
-import type { SemanticRuntimeSourceTextProvider } from '../kernel/source-text-provider.js';
+import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
 import type { TypeSystemOverlaySourceBuilder } from '../type-system/overlay.js';
 import {
   VALUE_CONVERTER_TO_VIEW_METHOD,
@@ -176,9 +176,9 @@ export class TemplateTypeSystemOverlayExpressionProjector {
 
   constructor(
     rootDir: string,
-    sourceTextProvider: SemanticRuntimeSourceTextProvider | null = null,
+    inputHost: SemanticRuntimeProjectInputHost,
   ) {
-    this.sourceTextCache = new AuthoredSourceTextCache(rootDir, sourceTextProvider);
+    this.sourceTextCache = new AuthoredSourceTextCache(rootDir, inputHost);
   }
 
   copyableExpression(

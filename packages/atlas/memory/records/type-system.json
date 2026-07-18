@@ -31,7 +31,8 @@
         "Keep compiler-host source-text traffic visible beside hit/miss/write counts. Write text shows dependency/library SourceFiles admitted into the warm cache during cold Program construction; hit text shows how much cached SourceFile text the next Program reused.",
         "Keep optional phase-memory attribution flowing through routed app profile summaries. One-off public calls need to see whether TypeSystem Program construction is the heap/RSS frontier even after the app epoch and dependency SourceFile cache are disposed.",
         "Keep the TypeSystem compiler-options profile visible beside Program source-file counts. Target, module resolution, configured library count, baseUrl, and path-mapping counts explain whether TypeScript breadth came from app config, fallback fixture defaults, or source-map discovery before source admission is changed.",
-        "Project compiler options are boot-owned and process-cached by project root plus discovery roots, then cloned for each TypeScript consumer alongside config root filenames and config diagnostic rows. If static evaluation and TypeSystem setup both need options for the same root/discovery set, the second read should hit that cache rather than rediscovering workspace/source-root mappings. Aurelia framework package type mappings are discovered dynamically from `aurelia/packages/*/package.json` plus `dist/types/index.d.ts`; do not reintroduce a hand-maintained package list, because generated fixtures may import validation-html, i18n, state, dialog, or other framework package APIs that need exact checker types.",
+        "Project compiler options are built once from the captured project-input host on each ProjectBootFrame, then shared by static evaluation and TypeSystem construction for that generation. Do not restore the removed process-global project-root cache: tsconfig, path mappings, roots, and config diagnostics must advance with the same immutable input generation. Aurelia framework package type mappings are discovered dynamically from `aurelia/packages/*/package.json` plus `dist/types/index.d.ts`; do not reintroduce a hand-maintained package list, because generated fixtures may import validation-html, i18n, state, dialog, or other framework package APIs that need exact checker types.",
+        "Keep source ownership explicit during checker projection. Boot-admitted app sources and generated overlay sources are project-qualified; physical checker-only dependency, framework, ambient, and default-library source addresses are workspace-support-owned through TypeSystemProgramSourceAuthority so no app generation becomes their accidental first owner.",
         "Out-of-tree generated fixtures must build TypeSystem compiler options with both the fixture root and the semantic-runtime workspace root as a discovery root. Otherwise local Aurelia checkout paths and workspace package mappings disappear, DI state projections degrade to `any`, and correct template scope/observer behavior can be mistaken for a binding semantics failure.",
         "No-tsconfig roots use semantic-runtime's fallback modern web library profile instead of TypeScript's full Latest library universe; real app tsconfig files remain authoritative and should keep TypeScript's own lib defaults when they omit an explicit lib.",
         "Treat decorator-mode diagnostics as compiler-options truth, not as semantic-runtime noise. The current local Aurelia declarations are standard-decorator-shaped; fixture tsconfigs that opt into legacy `experimentalDecorators` can legitimately surface TS1238/TS1240 and should be corrected or marked as intentional pressure rather than filtered.",
@@ -101,9 +102,9 @@
         "Keep clear counters visible in analysis-cache overview. Lifetime clear operations, cleared entries, cleared source-text characters, cleared default-library/external-declaration bucket mass, and last clear policy are cache-churn evidence for CPU-vs-memory decisions after the immediate clear result has scrolled away.",
         "For routed one-off answers, read the query-claim cleared dependency-cache bucket split before changing the profile default. The cache may already be empty by the time analysis-cache overview runs, so the answer claim is the right layer for explaining what the clear reclaimed.",
         "Keep dependency-cache density cached and invalidated on cache write/clear so repeated analysis-cache overview reads do not rescan retained TypeScript SourceFiles.",
-        "Cache keys should stay canonical-path plus TypeScript parse-option keys. If duplicate canonical-path entries appear, treat that as parse-option pressure before changing cacheability or clearing behavior.",
-        "declaration-source.ts is the intentional filename-to-source-address bridge for TypeChecker declarations. Reuse admitted source-file addresses when present, and only materialize `type-system-program` source files for checker-only ambient/framework/dependency declarations; scanned app-source diagnostics should carry admitted handles instead.",
-        "Use admittedSourceFileAddressHandleForCheckerNode when a checker-carrier consumer scans declaration bodies for app diagnostics and should skip checker-only framework/ambient/dependency files instead of admitting them as diagnostic sources.",
+        "Cache keys should stay canonical-path plus TypeScript parse-option and source-text revision keys. If duplicate canonical-path entries appear, distinguish legitimate option/revision separation from cache drift before changing cacheability or clearing behavior.",
+        "declaration-source.ts is the intentional filename-to-source-address bridge for TypeChecker declarations. Read app and generated-overlay admissions through the candidate-aware project publication; delegate checker-only ambient/framework/dependency physical sources to the workspace TypeSystemProgramSourceAuthority. Only isolated lower-level contracts use project-owned fallback publication.",
+        "When a checker-carrier consumer scans declaration bodies for app diagnostics, spend the project admission/site evidence it already carries. A workspace-owned checker-only source address proves a Program location, not authored app admission or diagnostic ownership.",
         "Checker type members are hot details, not durable kernel products. Use their hot product handle for in-process follow-up only; value-type projections and binding-scope slots should parent to the declaration identity when present, otherwise the owning type-shape identity.",
         "Do not store direct member source addresses when a TypeScriptDeclarationIdentity already owns the declaration span. Use checkerTypeMemberSourceAddressHandle to derive the source for API rows, completion candidates, and value-type projections.",
         "Completion candidates may read checker TypeMember hot details when they already hold a slot/member product handle. This is the intended middle layer for member kind, visibility, readonly/optional, and hook-name facts; do not promote TypeMember rows back into durable kernel products merely for public answer shaping.",
@@ -113,10 +114,16 @@
         "Route checker index-signature reads through checkerStringIndexValueType and checkerNumberIndexValueType. checker-related-types.ts owns the union-aware getIndexTypeOfType call; router, observation, binding, and template consumers should not grow feature-local index-access helpers.",
         "Use checkerTypeHasAnyName when a feature needs generic exported/interface-style checker type-name matching. Feature materializers should not grow local apparent-type/name/display candidate lists unless they are modeling a domain-specific runtime rule such as proxy-observation wrapping.",
         "Use checkerArrayOrTupleType(...) for the low-level TypeScript Array/tuple predicate, checker-collection-types.ts for reusable literal-domain, runtime Array/tuple, and collection/map element/key/value checker facts, and checker-primitive-types.ts for broad primitive assignability plus callable-return primitive checks. Observation value channels, proxy observation, binding-pattern runtime checks, and binding data-flow are consumers of that type-system substrate rather than owners of local collection/primitive-shape helpers.",
-        "Runtime binding-scope construction is an intentional enumeration consumer. If a lazy context type must support Aurelia name lookup, project the member surface through BindingScopeSlotProjector/readOrProjectCheckerTypeMembers instead of adding feature-local fallbacks in router, observation, completion, or diagnostics code.",
+        "Runtime binding-scope construction is an intentional enumeration consumer. If a lazy context type must support Aurelia name lookup, project the member surface through BindingScopeSlotProjector/readOrProjectCheckerTypeMembersInProjection instead of adding feature-local fallbacks in router, observation, completion, or diagnostics code.",
         "When an Aurelia source expression must become a source slot, route AccessScope/AccessThis/AccessMember through bindingContextSlotDraftForExpressionAccess(...) so Scope lookup and TypeChecker member continuation stay on one path."
       ],
       "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/program-source-authority.ts",
+          "symbolName": "TypeSystemProgramSourceAuthority",
+          "summary": "Workspace ownership for canonical checker-only physical source locations, distinct from project-owned app and overlay sources."
+        },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/project.ts",
@@ -350,7 +357,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-13"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "reuse:checker-expression-type-world",
@@ -423,7 +430,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-25"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "frontier:checker-type-shape-access",
@@ -480,7 +487,7 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/checker-type-member-surface.ts",
-          "symbolName": "projectCheckerTypeMemberSurface",
+          "symbolName": "projectCheckerTypeMemberSurfaceInProjection",
           "summary": "Lazy member-surface projection through the checker non-nullable value lane while retaining owner identity."
         },
         {

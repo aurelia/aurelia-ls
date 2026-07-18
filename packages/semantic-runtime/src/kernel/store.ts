@@ -175,6 +175,16 @@ export interface KernelStoreReadView {
   read(handle: KernelRecordHandle): KernelStoreRecord | null;
 }
 
+/** Candidate-aware source-file lookup shared by committed stores and staged publications. */
+export interface KernelSourceFileReadView extends KernelStoreReadView {
+  readSourceFileAddressesByFileName(fileName: string): readonly SourceFileAddress[];
+}
+
+/** Candidate-aware enumeration of the complete normalized kernel record set. */
+export interface KernelRecordCollectionReadView extends KernelStoreReadView {
+  readAllRecords(): readonly KernelStoreRecord[];
+}
+
 /** Read boundary for consumers whose support/closure proof depends on materialization ownership. */
 export interface KernelMaterializationReadView extends KernelStoreReadView {
   readMaterializations(): readonly MaterializationRecord[];
@@ -552,7 +562,9 @@ export class KernelStore {
     if (previous !== KernelPublicationManifest.empty) {
       this.activePublicationOwners.delete(previous);
     }
-    this.activePublicationOwners.set(manifest, owner);
+    if (manifest !== KernelPublicationManifest.empty) {
+      this.activePublicationOwners.set(manifest, owner);
+    }
     return new KernelPublicationReplacement(manifest, decisions);
   }
 
@@ -1083,6 +1095,58 @@ export class KernelStore {
         this.activePublicationOwners.delete(manifest);
       }
     }
+    this.notifySidecarIndexes({ marker, summary });
+    return summary;
+  }
+
+  /**
+   * Reclaim direct answer-local entries without crossing active computation ownership.
+   *
+   * Unlike `disposeSince`, this does not retire computation generations. It preserves every entry
+   * named by an active publication manifest, including publications committed after the marker.
+   */
+  disposeUnownedSince(marker: KernelStoreLifetimeMarker): KernelStoreDisposalSummary {
+    const retainedRecordHandles = new Set<KernelRecordHandle>();
+    const retainedProductDetailHandles = new Set<ProductHandle>();
+    const retainedHotDetailHandles = new Set<string>();
+    for (const manifest of this.activePublicationOwners.keys()) {
+      for (const handle of manifest.recordHandles) {
+        retainedRecordHandles.add(handle);
+      }
+      for (const handle of manifest.productDetailHandles) {
+        retainedProductDetailHandles.add(handle);
+      }
+      for (const handle of manifest.hotDetailHandles) {
+        retainedHotDetailHandles.add(handle);
+      }
+    }
+
+    const productDetails = this.productDetails.removeUnretainedAtOrAfterLifetime(
+      marker.nextLifetimeOrdinal,
+      retainedProductDetailHandles,
+    );
+    const hotDetails = this.hotDetails.removeUnretainedAtOrAfterLifetime(
+      marker.nextLifetimeOrdinal,
+      retainedHotDetailHandles,
+    );
+    let records = 0;
+    let handleCharacters = 0;
+    for (const handle of [...this.recordOrder].reverse()) {
+      if (
+        retainedRecordHandles.has(handle)
+        || (this.recordLifetimeOrdinalByHandle.get(handle) ?? -1) < marker.nextLifetimeOrdinal
+      ) {
+        continue;
+      }
+      const record = this.records.get(handle) ?? null;
+      if (record == null) {
+        continue;
+      }
+      this.removeRecord(handle);
+      handleCharacters += record.handle.length;
+      records += 1;
+    }
+    const summary = { records, productDetails, hotDetails, handleCharacters };
     this.notifySidecarIndexes({ marker, summary });
     return summary;
   }

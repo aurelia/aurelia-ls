@@ -1,14 +1,13 @@
-import {
-  existsSync,
-  readFileSync,
-  realpathSync,
-} from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import ts from 'typescript';
-import { isHostPathWithin, readPackageManifest, sameHostPath } from '../boot/host-files.js';
-import type { SemanticRuntimeSourceTextProvider } from '../kernel/source-text-provider.js';
-import { buildProjectCompilerOptions } from '../boot/project-compiler-options.js';
+import {
+  type BootPackageManifest,
+  isHostPathWithin,
+  readPackageManifest,
+  sameHostPath,
+} from '../boot/host-files.js';
+import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
 import {
   EvaluationModuleGraph,
   normalizeModuleKey,
@@ -162,7 +161,7 @@ class CachedEvaluationModuleHostFileSystem {
   private getDirectoriesMisses = 0;
 
   constructor(
-    private readonly sourceTextProvider: SemanticRuntimeSourceTextProvider | null = null,
+    private readonly inputHost: SemanticRuntimeProjectInputHost,
   ) {}
 
   fileExists(fileName: string): boolean {
@@ -174,8 +173,7 @@ class CachedEvaluationModuleHostFileSystem {
       return cached;
     }
     this.fileExistsMisses += 1;
-    const providerExists = this.sourceTextProvider?.fileExists?.(fileName);
-    const exists = providerExists ?? existsSync(fileName);
+    const exists = this.inputHost.fileExists(fileName);
     this.fileExistsResults.set(key, exists);
     return exists;
   }
@@ -189,7 +187,7 @@ class CachedEvaluationModuleHostFileSystem {
       return cached;
     }
     this.directoryExistsMisses += 1;
-    const exists = ts.sys.directoryExists?.(directoryName) ?? false;
+    const exists = this.inputHost.directoryExists(directoryName);
     this.directoryExistsResults.set(key, exists);
     return exists;
   }
@@ -202,14 +200,7 @@ class CachedEvaluationModuleHostFileSystem {
       return this.fileTextResults.get(key);
     }
     this.readFileMisses += 1;
-    let text = this.sourceTextProvider?.readFile(fileName);
-    if (text === undefined) {
-      try {
-        text = readFileSync(fileName, 'utf8');
-      } catch {
-        text = undefined;
-      }
-    }
+    const text = this.inputHost.readFile(fileName);
     this.fileTextResults.set(key, text);
     return text;
   }
@@ -223,7 +214,7 @@ class CachedEvaluationModuleHostFileSystem {
       return cached;
     }
     this.realpathMisses += 1;
-    const real = canonicalExistingPath(fileName);
+    const real = this.inputHost.realpath(fileName);
     this.realpathResults.set(key, real);
     return real;
   }
@@ -237,9 +228,15 @@ class CachedEvaluationModuleHostFileSystem {
       return cached;
     }
     this.getDirectoriesMisses += 1;
-    const directories = ts.sys.getDirectories?.(directoryName) ?? [];
+    const directories = this.inputHost.readDirectory(directoryName)
+      .map((entry) => path.join(directoryName, entry))
+      .filter((entry) => this.inputHost.directoryExists(entry));
     this.directoryListings.set(key, directories);
     return directories;
+  }
+
+  readPackageManifest(packageRoot: string): BootPackageManifest | null {
+    return readPackageManifest(this.inputHost, packageRoot);
   }
 
   snapshot(): EvaluationModuleHostFileSystemProfile {
@@ -315,14 +312,14 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
   constructor(
     /** Root directory for relative module keys. */
     readonly rootDir: string,
+    /** Exact project-input host used for every positive and negative module probe. */
+    inputHost: SemanticRuntimeProjectInputHost,
     /** Compiler options used to resolve authored module specifiers. */
-    readonly compilerOptions: ts.CompilerOptions = buildProjectCompilerOptions(rootDir),
+    readonly compilerOptions: ts.CompilerOptions,
     /** Completeness/performance policy for non-TypeScript module-resolution fallbacks. */
     readonly moduleResolutionPolicy: EvaluationModuleResolutionPolicy = DefaultEvaluationModuleResolutionPolicy,
-    /** Host-provided source text for editor buffers or other non-filesystem source epochs. */
-    sourceTextProvider: SemanticRuntimeSourceTextProvider | null = null,
   ) {
-    this.fileSystem = new CachedEvaluationModuleHostFileSystem(sourceTextProvider);
+    this.fileSystem = new CachedEvaluationModuleHostFileSystem(inputHost);
     this.moduleResolutionHost = {
       fileExists: (fileName) => this.fileSystem.fileExists(fileName),
       readFile: (fileName) => this.fileSystem.readFile(fileName),
@@ -652,10 +649,10 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
       return cached;
     }
     this.packagePolicyMisses += 1;
-    const shouldMap = readExternalPackageSourceMappingPolicy(packageRoot)
+    const shouldMap = readExternalPackageSourceMappingPolicy(this.fileSystem, packageRoot)
       || (
         this.moduleResolutionPolicy.admitSourceShippedPackageEntrypoints
-        && packageManifestPublishesAuthoredSourceEntrypoint(packageRoot)
+        && packageManifestPublishesAuthoredSourceEntrypoint(this.fileSystem, packageRoot)
       );
     this.externalPackagePolicyCache.set(cacheKey, shouldMap);
     return shouldMap;
@@ -967,14 +964,6 @@ function candidateDirectModulePaths(base: string): readonly string[] {
   return MODULE_EXTENSIONS.map((candidateExtension) => `${base}${candidateExtension}`);
 }
 
-function canonicalExistingPath(fileName: string): string {
-  try {
-    return realpathSync.native(fileName);
-  } catch {
-    return fileName;
-  }
-}
-
 function hostFileCacheKey(fileName: string): string {
   const normalized = normalizeModuleKey(path.resolve(fileName));
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
@@ -1006,8 +995,11 @@ function isDeclarationFile(fileName: string): boolean {
   return lower.endsWith('.d.ts') || lower.endsWith('.d.mts') || lower.endsWith('.d.cts');
 }
 
-function readExternalPackageSourceMappingPolicy(packageRoot: string): boolean {
-  const manifest = readPackageManifest(packageRoot);
+function readExternalPackageSourceMappingPolicy(
+  fileSystem: CachedEvaluationModuleHostFileSystem,
+  packageRoot: string,
+): boolean {
+  const manifest = fileSystem.readPackageManifest(packageRoot);
   if (manifest == null) {
     return false;
   }
@@ -1023,13 +1015,16 @@ function readExternalPackageSourceMappingPolicy(packageRoot: string): boolean {
   );
 }
 
-function packageManifestPublishesAuthoredSourceEntrypoint(packageRoot: string): boolean {
-  const manifest = readPackageManifest(packageRoot);
+function packageManifestPublishesAuthoredSourceEntrypoint(
+  fileSystem: CachedEvaluationModuleHostFileSystem,
+  packageRoot: string,
+): boolean {
+  const manifest = fileSystem.readPackageManifest(packageRoot);
   if (manifest == null) {
     return false;
   }
   return packageManifestEntrypoints(manifest).some((entrypoint) =>
-    packageEntrypointIsAuthoredSource(packageRoot, entrypoint)
+    packageEntrypointIsAuthoredSource(fileSystem, packageRoot, entrypoint)
   );
 }
 
@@ -1068,12 +1063,13 @@ function uniquePackageEntrypoints(values: readonly string[]): readonly string[] 
 }
 
 function packageEntrypointIsAuthoredSource(
+  fileSystem: CachedEvaluationModuleHostFileSystem,
   packageRoot: string,
   entrypoint: string,
 ): boolean {
   const base = path.resolve(packageRoot, entrypoint);
   return candidateModulePaths(base).some((candidate) =>
-    existsSync(candidate) && isAuthoredPackageSourceModule(candidate, packageRoot)
+    fileSystem.fileExists(candidate) && isAuthoredPackageSourceModule(candidate, packageRoot)
   );
 }
 

@@ -1,11 +1,11 @@
 import path from 'node:path';
 import ts from 'typescript';
 import type { ProjectBootFrame, SourceFileAdmission } from '../boot/frames.js';
-import { buildProjectCompilerOptionsResult } from '../boot/project-compiler-options.js';
 import {
   SourceFileRole,
   SourceLanguage,
 } from '../kernel/address.js';
+import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
 import { EvaluationBoundaryKind, EvaluationBoundaryValue } from './values.js';
 import type { StaticEvaluationRuntimeHost } from './evaluator.js';
 
@@ -98,7 +98,7 @@ function collectCompilerOptionAmbientGlobalNames(
   project: ProjectBootFrame,
   names: Set<string>,
 ): void {
-  const options = buildProjectCompilerOptionsResult(project.rootDir, [project.workspaceRootDir]).options;
+  const options = project.compilerOptions.options;
   if (options.noLib === true) {
     return;
   }
@@ -109,11 +109,12 @@ function collectCompilerOptionAmbientGlobalNames(
     : options.lib.map((lib) => resolveCompilerLibFileName(libDirectory, lib));
   const visited = new Set<string>();
   for (const entry of entries) {
-    collectCompilerLibAmbientGlobalNames(entry, names, visited);
+    collectCompilerLibAmbientGlobalNames(project.inputGeneration.host, entry, names, visited);
   }
 }
 
 function collectCompilerLibAmbientGlobalNames(
+  inputHost: SemanticRuntimeProjectInputHost,
   fileName: string,
   names: Set<string>,
   visited: Set<string>,
@@ -123,7 +124,7 @@ function collectCompilerLibAmbientGlobalNames(
     return;
   }
   visited.add(normalized);
-  const text = ts.sys.readFile(fileName);
+  const text = inputHost.readFile(fileName);
   if (text == null) {
     return;
   }
@@ -131,7 +132,12 @@ function collectCompilerLibAmbientGlobalNames(
   collectAmbientValueNames(sourceFile.statements, names);
   const directory = path.dirname(fileName);
   for (const reference of sourceFile.libReferenceDirectives) {
-    collectCompilerLibAmbientGlobalNames(resolveCompilerLibFileName(directory, reference.fileName), names, visited);
+    collectCompilerLibAmbientGlobalNames(
+      inputHost,
+      resolveCompilerLibFileName(directory, reference.fileName),
+      names,
+      visited,
+    );
   }
 }
 

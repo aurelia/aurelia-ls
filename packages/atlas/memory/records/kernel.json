@@ -64,17 +64,17 @@
         "diagnostics",
         "overlay"
       ],
-      "summary": "AuthoredSourceTextCache is the shared raw-file text reader for source slicing and cursor coordinate conversion.",
-      "rationale": "Template markup can be decoded or source-mapped while diagnostics, overlays, cursor inquiries, and edit surfaces still need exact authored HTML or TypeScript host text. Centralizing the raw read/cache and line math prevents API/template-local filesystem readers and offset requirements from drifting.",
+      "summary": "AuthoredSourceTextCache is the shared convenience reader over one captured project-input generation for source slicing and cursor coordinate conversion.",
+      "rationale": "Template markup can be decoded or source-mapped while diagnostics, overlays, cursor inquiries, and edit surfaces still need exact authored HTML or TypeScript host text. Centralizing raw reads, generation-bounded memoization, and line math prevents API/template-local filesystem readers, stale source values, and offset requirements from drifting.",
       "guidance": [
         "Use AuthoredSourceTextCache when a product already has a source path/span and needs to slice raw authored text or convert between offset and line/character coordinates.",
         "Use resolveSemanticSourceCursor at the public query boundary before any cursor containment operation. Line and character are the complete contract; an explicit offset is only a caller optimization.",
-        "Use AuthoredSourceTextCache for app-source text scans that read authored project files, including boot project-shape source-signal scans; boot package/tsconfig discovery and evaluation module-host reads have separate lifetimes.",
+        "Use AuthoredSourceTextCache for app-source text scans over the captured project-input host, including boot project-shape source-signal scans; package/tsconfig discovery and evaluation module-host reads share that generation but retain their own domain APIs.",
         "Do not replace this with TemplateSource.markup unless the consumer only needs decoded compiler input and not authored-source coordinates.",
         "Resource convergence should use the same cache for conventional/imported external template text so template-file reads, decoded metadata, diagnostics, cursor loci, and overlays stay on one authored-text boundary.",
         "I18n imported JSON key spans should use the evaluator asset-module helper over this cache so source addresses point at authored JSON properties rather than the generated module wrapper.",
         "Use product.architecture source-file read pressure before adding new direct readFileSync, existsSync, or line-offset helpers in semantic-runtime.",
-        "If a future source epoch or content-hash layer appears, thread it through this cache boundary instead of adding local defensive reads in diagnostics, overlays, completion, references, or rename."
+        "Project-input generations are the source/configuration epoch. Construct this cache over the captured host and advance the owning authority after input changes instead of adding local defensive reads in diagnostics, overlays, completion, references, or rename."
       ],
       "anchors": [
         {
@@ -132,7 +132,7 @@
         }
       ],
       "createdAt": "2026-05-24",
-      "updatedAt": "2026-07-12"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "frontier:open-seam-reason-provenance",
@@ -371,7 +371,7 @@
         "Start here when a cache/index points at product details, hot details, TypeChecker carriers, or query-local materialized products.",
         "Register store-local acceleration indexes with KernelStore.registerSidecarIndex(...) instead of hiding them in package-level WeakMaps with no disposal contract.",
         "Use sidecar index telemetry rows to check whether an index is retaining answer-local work after QueryClaimGraph disposal.",
-        "The template-analysis project authority registry is a sidecar because lifecycle-owned publications remain semantic truth; disposal prunes authorities whose committed generations have been retired.",
+        "The app-analysis project authority registry is a sidecar because lifecycle-owned publications remain semantic truth; disposal prunes authorities whose committed generations have been retired.",
         "Do not turn sidecar indexes into semantic storage; durable semantics still belong in kernel records, claims, identities, products, product details, or hot details with explicit lifetimes."
       ],
       "anchors": [
@@ -383,8 +383,8 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/template/template-analysis-computation.ts",
-          "symbolName": "TemplateAnalysisProjectComputationService",
+          "filePath": "packages/semantic-runtime/src/configuration/app-analysis-computation.ts",
+          "symbolName": "AureliaAppWorldProjectComputationService",
           "summary": "Current project-generation authority registry registered as a disposable kernel sidecar index."
         },
         {
@@ -407,19 +407,19 @@
         },
         {
           "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/template/template-analysis-computation.ts",
-          "symbolName": "TemplateAnalysisProjectComputationService"
+          "filePath": "packages/semantic-runtime/src/configuration/app-analysis-computation.ts",
+          "symbolName": "AureliaAppWorldProjectComputationService"
         },
         {
           "kind": "product-large-class",
-          "className": "TemplateAnalysisProjectComputationService",
-          "filePath": "packages/semantic-runtime/src/template/template-analysis-computation.ts",
+          "className": "AureliaAppWorldProjectComputationService",
+          "filePath": "packages/semantic-runtime/src/configuration/app-analysis-computation.ts",
           "minLineCount": 100,
           "minMethodCount": 5
         }
       ],
       "createdAt": "2026-05-17",
-      "updatedAt": "2026-07-17"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "decision:kernel-handle-compaction",
@@ -599,12 +599,12 @@
         "telemetry"
       ],
       "summary": "Kernel computations validate typed run-scoped reads and atomically replace complete owned publication closures.",
-      "rationale": "The same-runtime template-analysis front door now proves complete compiler, runtime, and checker closure replacement against production materializers. A replacement candidate must be a logical next world, not an overlay on its own previous output: the active publication hides the prior owned manifest, exposes current run writes, and is the shared read, commit, and telemetry authority. KernelStore still performs the single prevalidated replacement across records and sidecars, while QueryClaimGraph remains the answer-retention layer above product computation.",
+      "rationale": "The same-runtime app-analysis front door now proves complete static-evaluation, resource, DI, template, observation, state, capability, and router fan-in replacement against production materializers. A replacement candidate must be a logical next world, not an overlay on its own previous output: the active publication hides the prior owned manifest, exposes current run writes, and is the shared read, commit, and telemetry authority. KernelStore still performs the single prevalidated replacement across records and sidecars, while QueryClaimGraph remains the answer-retention layer above product computation.",
       "guidance": [
         "Use a stable semantic computation locus for reconciliation; never make a source path, run sequence, compiler cohort, or copied input object the computation identity when the owning semantic definition is stable.",
         "A replacement run must not read its own prior publication as upstream state. Hide the previous owned record/detail closure, restage every still-current output, and let omitted outputs withdraw at commit.",
         "Publish the complete owned record, product-detail, and hot-detail closure through one KernelPublicationPlan. Do not patch an old publication or maintain a second ownership list in a materializer.",
-        "Use the active KernelPublicationContext for nested materialization, TypeChecker declaration/source lookup, DI identity lookup, and any other same-generation read. Reading KernelStore directly inside a staged run can silently omit records from the replacement closure.",
+        "Use the active KernelPublicationContext for nested materialization, candidate-aware record/source/materialization enumeration, TypeChecker declaration/source lookup, DI identity lookup, and any other same-generation read. Reading KernelStore directly inside a staged run can silently omit candidate records or borrow the prior generation from the replacement closure.",
         "The staged record/detail maps are the candidate read authority, the final commit payload, and the phase-telemetry source. Do not reconstruct a second flattened plan or sample the committed store to describe an atomic candidate.",
         "Authenticate replacement with the exact frozen manifest object and the owner that created its lineage; copied, earlier, or wrong-owner manifests are stale. Advance the complete owned closure to the youngest positive dependency lifetime so an older lineage cannot survive disposal after consuming answer-local truth, and enumerate active manifests during lifetime disposal so empty store-owned closures retire too. Capture exact foreign detail admission entries during staging; apply fallible detail-field normalization as one reversible descriptor transaction before live mutation and defer weak envelope ownership admission to the callback-free tail. A failed staged write poisons the run; never commit its accepted prefix.",
         "Register every positive and negative dependency read, including traversed source-address records and exact child lookups, then validate those reads before publication.",
@@ -613,7 +613,7 @@
         "Use markLifetime for reclamation boundaries and markObservation for telemetry deltas. Publication replacement preserves lifetime identity while advancing mutation observation order.",
         "KernelStore.publish is an immediate first-publication boundary, not a recomputation protocol. Do not approximate replacement with cleanup calls or split one replaceable owner across legacy immediate publications.",
         "Keep QueryClaimGraph focused on answer shape, lazy materialization, retention, and answer-side disposal. Do not move durable product dependency ownership or computation invalidation into the answer graph.",
-        "The admitted production boundary covers one complete same-runtime project template-analysis generation and exact app pinning. It does not establish upstream configuration/DI scheduling, dynamic project fan-in replacement, cross-runtime persistence, cycles/fixed points, or a global incremental scheduler."
+        "The admitted production boundary covers one complete same-runtime project app-analysis generation and exact app pinning. It does not yet establish cross-runtime persistence, cycles/fixed points, or a global fine-grained incremental scheduler. The former template-only boundary was superseded because it left upstream and downstream fan-in outside atomic ownership."
       ],
       "anchors": [
         {
@@ -636,9 +636,9 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/template/template-analysis-computation.ts",
-          "symbolName": "TemplateAnalysisProjectComputationService",
-          "summary": "Production project template-analysis closure admitted to the computation lifecycle."
+          "filePath": "packages/semantic-runtime/src/configuration/app-analysis-computation.ts",
+          "symbolName": "AureliaAppWorldProjectComputationService",
+          "summary": "Production complete app-analysis closure admitted to the computation lifecycle."
         },
         {
           "kind": "source",
@@ -671,8 +671,8 @@
         },
         {
           "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/template/template-analysis-computation.ts",
-          "symbolName": "TemplateAnalysisProjectComputationService"
+          "filePath": "packages/semantic-runtime/src/configuration/app-analysis-computation.ts",
+          "symbolName": "AureliaAppWorldProjectComputationService"
         },
         {
           "kind": "source-declaration-exists",
@@ -681,7 +681,7 @@
         }
       ],
       "createdAt": "2026-07-17",
-      "updatedAt": "2026-07-17"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "decision:template-family-computation-ownership",

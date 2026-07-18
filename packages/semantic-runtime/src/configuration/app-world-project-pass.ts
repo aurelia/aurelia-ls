@@ -1,4 +1,7 @@
 import { performance } from 'node:perf_hooks';
+import type {
+  SemanticRuntimeSupport,
+} from '../framework/framework-support-authority.js';
 
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type {
@@ -14,8 +17,9 @@ import {
   mergeEvaluationIssueProjectResults,
   type EvaluationIssueProjectResult,
 } from '../evaluation/evaluation-source-issues.js';
-import type { KernelStore } from '../kernel/store.js';
-import { ComputationCommitState } from '../kernel/computation-lifecycle.js';
+import type { GenerationAuthority } from '../kernel/generation-authority.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
+import type { KernelStore, KernelTelemetryReadView } from '../kernel/store.js';
 import {
   ResourceDefinitionIndex,
 } from '../resources/resource-definition-index.js';
@@ -57,15 +61,10 @@ import {
   type SemanticRuntimePhaseMemoryProfile,
 } from '../telemetry/phase.js';
 import {
+  TemplateCompilationProjectPass,
   type TemplateCompilationProjectEmission,
 } from '../template/template-compilation-project-pass.js';
-import {
-  TemplateAnalysisProjectComputationRequest,
-  TemplateAnalysisProjectComputationService,
-  type TemplateAnalysisProjectGeneration,
-  TemplateAnalysisProjectInput,
-  TemplateAnalysisProjectInputAuthority,
-} from '../template/template-analysis-computation.js';
+import type { TemplateCompilationCohortProjectAuthority } from '../template/template-compilation-cohort.js';
 import { RuntimeBindingSourceValueEvaluator } from '../observation/binding-source-value-evaluator.js';
 import { RuntimeBindingSourceActivationContext } from '../observation/binding-source-activation-context.js';
 import { runtimeBoundControllerValueTableForTemplateResources } from '../observation/runtime-bound-controller-value.js';
@@ -349,8 +348,10 @@ export class AureliaAppWorldProjectEmission {
     readonly dialog: DialogSourceIssueProjectResult,
     /** App-world composition over the aggregated project configuration. */
     readonly appWorld: AureliaAppWorldEmission,
-    /** Exact committed template-analysis generation consumed by every downstream app-level product. */
-    readonly templateAnalysisGeneration: TemplateAnalysisProjectGeneration,
+    /** Complete template-analysis candidate or generation-bound committed emission. */
+    readonly templates: TemplateCompilationProjectEmission,
+    /** Project-level cohort capability installed only after the complete app candidate commits. */
+    private readonly currentTemplateCohorts: TemplateCompilationCohortProjectAuthority | null,
     /** Authored framework capability uses joined to app admission and package/import availability evidence. */
     readonly capabilityDemands: FrameworkCapabilityDemandProjectResult,
     /** Router RouteContext/viewport/agent topology discovered after route configs and runtime rendering are known. */
@@ -367,37 +368,75 @@ export class AureliaAppWorldProjectEmission {
     readonly profile: AureliaAppWorldProjectProfile,
   ) {}
 
-  /** Current template products, guarded against replacement or lifetime disposal. */
-  get templates(): TemplateCompilationProjectEmission {
-    return this.templateAnalysisGeneration.requireCurrentEmission();
-  }
-
   /** Dynamic cohort authority for family computations that intentionally follow committed replacement. */
-  get templateCohorts() {
-    this.templateAnalysisGeneration.requireCurrentEmission();
-    return this.templateAnalysisGeneration.cohortAuthority;
+  get templateCohorts(): TemplateCompilationCohortProjectAuthority {
+    if (this.currentTemplateCohorts == null) {
+      throw new Error('Template cohorts are not current until the complete app-analysis candidate commits.');
+    }
+    return this.currentTemplateCohorts;
   }
 
-  requireCurrentTemplateAnalysis(): void {
-    this.templateAnalysisGeneration.requireCurrentEmission();
+  /** Bind run-local checker/template state to the app generation admitted after the outer transaction commits. */
+  forCommittedGeneration(
+    authority: GenerationAuthority,
+    templateCohorts: TemplateCompilationCohortProjectAuthority,
+  ): AureliaAppWorldProjectEmission {
+    return new AureliaAppWorldProjectEmission(
+      this.analysisDepth,
+      this.project,
+      this.evaluation,
+      this.typeSystem,
+      this.evaluationIssues,
+      this.observation,
+      this.computedObservation,
+      this.computedObserverSources,
+      this.runtimeEffects,
+      this.proxyObservableEscapes,
+      this.resources,
+      this.resourceIndex,
+      this.routeConfigContributions,
+      this.routes,
+      this.routerOptions,
+      this.routeContexts,
+      this.routeRecognizer,
+      this.routeContextParameterReads,
+      this.configuration,
+      this.i18n,
+      this.state,
+      this.validation,
+      this.fetchClient,
+      this.dialog,
+      this.appWorld,
+      this.templates.forCommittedGeneration(authority),
+      templateCohorts,
+      this.capabilityDemands,
+      this.routeRuntimeTopology,
+      this.routeInstructions,
+      this.routeRecognition,
+      this.routeTree,
+      this.routeComponentAgents,
+      this.profile,
+    );
   }
 }
 
 /** Compose the current project-level Aurelia semantic passes over one booted project frame. */
 export class AureliaAppWorldProjectPass {
   constructor(
-    private readonly templateAnalysis: TemplateAnalysisProjectComputationService,
+    private readonly support: SemanticRuntimeSupport,
   ) {}
 
   constructAndEmit(
     store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
     options: AureliaAppWorldProjectOptions = {},
   ): AureliaAppWorldProjectEmission {
     return new AureliaAppWorldProjectConstructionFrame(
       store,
+      publication,
       project,
-      this.templateAnalysis,
+      this.support,
       options,
     ).constructAndEmit();
   }
@@ -414,8 +453,9 @@ class AureliaAppWorldProjectConstructionFrame {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
     readonly project: ProjectBootFrame,
-    private readonly templateAnalysis: TemplateAnalysisProjectComputationService,
+    private readonly support: SemanticRuntimeSupport,
     options: AureliaAppWorldProjectOptions,
   ) {
     this.analysisDepth = normalizeSemanticAppAnalysisDepth(
@@ -466,7 +506,7 @@ class AureliaAppWorldProjectConstructionFrame {
     const fetchClient = this.materializeFetchClientSourceIssues(typeSystem, sourceApiRoots);
     const dialog = this.materializeDialogSourceIssues(typeSystem, sourceApiRoots);
     this.enrichFrameworkServiceRoots(serviceRoots);
-    const templateAnalysisGeneration = this.compileTemplates(
+    const templates = this.compileTemplates(
       evaluation,
       appWorld,
       typeSystem,
@@ -474,18 +514,17 @@ class AureliaAppWorldProjectConstructionFrame {
       routeContexts,
       stateBase,
     );
-    const templates = templateAnalysisGeneration.requireCurrentEmission();
     const capabilityDemands = this.materializeFrameworkCapabilityDemands(typeSystem, templates, configuration, serviceRoots);
     const bindingObservation = this.materializeBindingObservationIssues(typeSystem, templates);
     const observation = mergeObservationSourceIssueProjectResults([sourceObservation, bindingObservation]);
     const state = this.materializeStateStoreLookupIssues(stateBase, templates, typeSystem);
     const bindingSourceEvaluation = evaluation.forkSession();
     const bindingSourceValues = RuntimeBindingSourceValueEvaluator.create(
-      this.store,
+      this.publication,
       templates.expressionWorld.projector,
       bindingSourceEvaluation,
-      runtimeBoundControllerValueTableForTemplateResources(this.store, templates.resources),
-      new RuntimeBindingSourceActivationContext(this.store, bindingSourceEvaluation, typeSystem),
+      runtimeBoundControllerValueTableForTemplateResources(this.publication, templates.resources),
+      new RuntimeBindingSourceActivationContext(this.publication, bindingSourceEvaluation, typeSystem),
     );
     const routeRuntimeTopology = this.materializeRouteRuntimeTopology(routeContexts, templates, bindingSourceValues);
     const routeInstructions = this.materializeRouteInstructions(
@@ -543,7 +582,8 @@ class AureliaAppWorldProjectConstructionFrame {
       fetchClient,
       dialog,
       appWorld,
-      templateAnalysisGeneration,
+      templates,
+      null,
       capabilityDemands,
       routeRuntimeTopology,
       routeInstructions,
@@ -556,13 +596,13 @@ class AureliaAppWorldProjectConstructionFrame {
 
   private evaluateProject(): StaticProjectEvaluationResult {
     return this.measure('static-evaluation', () =>
-      evaluateAndEmitAureliaProject(this.store, this.project)
+      evaluateAndEmitAureliaProject(this.store, this.project, this.publication)
     );
   }
 
   private buildTypeSystem(evaluation: StaticProjectEvaluationResult): TypeSystemProject {
     return this.measure('type-system', () =>
-      new TypeSystemProjectBuilder().build(this.project, evaluation)
+      new TypeSystemProjectBuilder(this.support).build(this.project, evaluation)
     );
   }
 
@@ -571,10 +611,10 @@ class AureliaAppWorldProjectConstructionFrame {
     typeSystem: TypeSystemProject,
   ): EvaluationIssueProjectResult {
     const moduleLoaderIssues = this.measure('module-loader-issues', () =>
-      new ModuleLoaderIssueMaterializer(this.store).materializeAndEmit(this.project, evaluation)
+      new ModuleLoaderIssueMaterializer(this.store, this.publication).materializeAndEmit(this.project, evaluation)
     );
     const frameworkApiIssues = this.measure('framework-api-issues', () =>
-      new FrameworkApiIssueMaterializer(this.store).materializeAndEmit(this.project, typeSystem)
+      new FrameworkApiIssueMaterializer(this.store, this.publication).materializeAndEmit(this.project, typeSystem)
     );
     return mergeEvaluationIssueProjectResults([moduleLoaderIssues, frameworkApiIssues]);
   }
@@ -584,9 +624,9 @@ class AureliaAppWorldProjectConstructionFrame {
   ): ObservationSourceIssueProjectResult {
     return this.measure('observation-source-issues', () =>
       mergeObservationSourceIssueProjectResults([
-        new AstTrackDecoratorIssueMaterializer(this.store).materialize(this.project, typeSystem),
-        new ComputedDecoratorIssueMaterializer(this.store).materialize(this.project, typeSystem),
-        new ObservableDecoratorIssueMaterializer(this.store).materialize(this.project, typeSystem),
+        new AstTrackDecoratorIssueMaterializer(this.store, this.publication).materialize(this.project, typeSystem),
+        new ComputedDecoratorIssueMaterializer(this.store, this.publication).materialize(this.project, typeSystem),
+        new ObservableDecoratorIssueMaterializer(this.store, this.publication).materialize(this.project, typeSystem),
       ])
     );
   }
@@ -596,7 +636,8 @@ class AureliaAppWorldProjectConstructionFrame {
     templates: TemplateCompilationProjectEmission,
   ): ObservationSourceIssueProjectResult {
     return this.measure('binding-observation-issues', () =>
-      new NonTrackableTemplateMethodCallIssueMaterializer(this.store).materialize(this.project, typeSystem, templates)
+      new NonTrackableTemplateMethodCallIssueMaterializer(this.store, this.publication)
+        .materialize(this.project, typeSystem, templates)
     );
   }
 
@@ -607,7 +648,7 @@ class AureliaAppWorldProjectConstructionFrame {
     serviceRoots: FrameworkServiceRootMaterializationResult,
   ): FrameworkCapabilityDemandProjectResult {
     return this.measure('framework-capability-demands', () =>
-      new FrameworkCapabilityDemandMaterializer(this.store).materializeAndEmit(
+      new FrameworkCapabilityDemandMaterializer(this.store, this.publication).materializeAndEmit(
         this.project,
         typeSystem,
         templates,
@@ -621,7 +662,7 @@ class AureliaAppWorldProjectConstructionFrame {
     typeSystem: TypeSystemProject,
   ): ComputedObservationProjectResult {
     return this.measure('computed-observation-definitions', () =>
-      new ComputedObservationMaterializer(this.store).materialize(this.project, typeSystem)
+      new ComputedObservationMaterializer(this.store, this.publication).materialize(this.project, typeSystem)
     );
   }
 
@@ -629,7 +670,7 @@ class AureliaAppWorldProjectConstructionFrame {
     typeSystem: TypeSystemProject,
   ): ComputedObserverSourceProjectResult {
     return this.measure('computed-observer-sources', () =>
-      new ComputedObserverSourceMaterializer(this.store).materialize(this.project, typeSystem)
+      new ComputedObserverSourceMaterializer(this.store, this.publication).materialize(this.project, typeSystem)
     );
   }
 
@@ -637,7 +678,7 @@ class AureliaAppWorldProjectConstructionFrame {
     typeSystem: TypeSystemProject,
   ): RuntimeEffectProjectResult {
     return this.measure('runtime-effects', () =>
-      new RuntimeEffectMaterializer(this.store).materialize(this.project, typeSystem)
+      new RuntimeEffectMaterializer(this.store, this.publication).materialize(this.project, typeSystem)
     );
   }
 
@@ -645,7 +686,7 @@ class AureliaAppWorldProjectConstructionFrame {
     typeSystem: TypeSystemProject,
   ): ProxyObservableEscapeProjectResult {
     return this.measure('proxy-observable-escapes', () =>
-      new ProxyObservableEscapeMaterializer(this.store).materialize(this.project, typeSystem)
+      new ProxyObservableEscapeMaterializer(this.store, this.publication).materialize(this.project, typeSystem)
     );
   }
 
@@ -654,7 +695,13 @@ class AureliaAppWorldProjectConstructionFrame {
     typeSystem: TypeSystemProject,
   ): ResourceRecognitionProjectResult {
     return this.measure('resource-recognition', () =>
-      new ResourceRecognitionProjectPass().recognizeAndEmit(this.store, this.project, evaluation, typeSystem)
+      new ResourceRecognitionProjectPass().recognizeAndEmit(
+        this.store,
+        this.project,
+        evaluation,
+        typeSystem,
+        this.publication,
+      )
     );
   }
 
@@ -669,7 +716,7 @@ class AureliaAppWorldProjectConstructionFrame {
     resources: ResourceRecognitionProjectResult,
   ): void {
     this.measure('resource-definition-api-issues', () =>
-      new ResourceDefinitionApiIssueMaterializer(this.store).materializeAndEmit(
+      new ResourceDefinitionApiIssueMaterializer(this.store, this.publication).materializeAndEmit(
         this.project,
         typeSystem,
         resources.readDefinitions(),
@@ -681,7 +728,7 @@ class AureliaAppWorldProjectConstructionFrame {
     typeSystem: TypeSystemProject,
   ): void {
     this.measure('scope-api-issues', () =>
-      new ScopeApiIssueMaterializer(this.store).materializeAndEmit(
+      new ScopeApiIssueMaterializer(this.store, this.publication).materializeAndEmit(
         this.project,
         typeSystem,
       )
@@ -694,7 +741,7 @@ class AureliaAppWorldProjectConstructionFrame {
   ): RouteConfigRecognitionProjectResult {
     return this.measure('route-config-recognition', () =>
       new RouteConfigRecognitionProjectPass().recognizeAndEmit(
-        this.store,
+        this.publication,
         this.project,
         evaluation,
         resourceIndex,
@@ -714,6 +761,7 @@ class AureliaAppWorldProjectConstructionFrame {
         resourceIndex,
         evaluation,
         typeSystem,
+        this.publication,
       )
     );
   }
@@ -725,7 +773,7 @@ class AureliaAppWorldProjectConstructionFrame {
   ): RouteConfigConvergenceProjectResult {
     return this.measure('route-config-convergence', () =>
       new RouteConfigConvergenceProjectPass().convergeAndEmit(
-        this.store,
+        this.publication,
         this.project,
         contributions,
         resourceIndex,
@@ -740,7 +788,7 @@ class AureliaAppWorldProjectConstructionFrame {
   ): RouterOptionsMaterializationProjectResult {
     return this.measure('router-options-materialization', () =>
       new RouterOptionsMaterializationProjectPass().materializeAndEmit(
-        this.store,
+        this.publication,
         this.project,
         configuration,
         appWorld.diWorld,
@@ -755,7 +803,7 @@ class AureliaAppWorldProjectConstructionFrame {
   ): RouteConfigContextMaterializationProjectResult {
     return this.measure('route-context-materialization', () =>
       new RouteConfigContextMaterializationProjectPass().materializeAndEmit(
-        this.store,
+        this.publication,
         this.project,
         routes,
         routerOptions,
@@ -769,7 +817,7 @@ class AureliaAppWorldProjectConstructionFrame {
   ): RouteRecognizerMaterializationProjectResult {
     return this.measure('route-recognizer-materialization', () =>
       new RouteRecognizerMaterializationProjectPass().materializeAndEmit(
-        this.store,
+        this.publication,
         this.project,
         routeContexts,
       )
@@ -784,7 +832,7 @@ class AureliaAppWorldProjectConstructionFrame {
   ): RouteContextParameterReadProjectResult {
     return this.measure('route-context-parameter-reads', () =>
       new RouteContextParameterReadMaterializer().materializeAndEmit(
-        this.store,
+        this.publication,
         this.project,
         typeSystem,
         resourceIndex,
@@ -798,7 +846,8 @@ class AureliaAppWorldProjectConstructionFrame {
     configuration: ConfigurationRecognitionProjectResult,
   ): void {
     this.measure('configuration-option-shape-issues', () =>
-      new ConfigurationOptionShapeIssueMaterializer(this.store).materializeAndEmit(configuration)
+      new ConfigurationOptionShapeIssueMaterializer(this.store, this.publication)
+        .materializeAndEmit(configuration)
     );
   }
 
@@ -806,7 +855,11 @@ class AureliaAppWorldProjectConstructionFrame {
     configuration: ConfigurationRecognitionProjectResult,
   ): I18nTranslationCatalogProjectResult {
     return this.measure('i18n-translation-catalog', () =>
-      new I18nTranslationCatalogMaterializationProjectPass().materializeAndEmit(this.store, configuration)
+      new I18nTranslationCatalogMaterializationProjectPass().materializeAndEmit(
+        this.store,
+        configuration,
+        this.publication,
+      )
     );
   }
 
@@ -834,7 +887,7 @@ class AureliaAppWorldProjectConstructionFrame {
     typeSystem: TypeSystemProject,
   ): StateProjectResult {
     const lookupIssues = this.measure('state-store-lookup-issues', () =>
-      new StateStoreLookupIssueMaterializer(this.store).materializeAndEmit(
+      new StateStoreLookupIssueMaterializer(this.store, this.publication).materializeAndEmit(
         this.project,
         typeSystem,
         state.readStores(),
@@ -857,7 +910,12 @@ class AureliaAppWorldProjectConstructionFrame {
     typeSystem: TypeSystemProject,
   ): StateProjectResult {
     return this.measure('state-store-materialization', () =>
-      new StateStoreConfigurationMaterializationProjectPass().materializeAndEmit(this.store, configuration, typeSystem)
+      new StateStoreConfigurationMaterializationProjectPass().materializeAndEmit(
+        this.store,
+        configuration,
+        typeSystem,
+        this.publication,
+      )
     );
   }
 
@@ -866,8 +924,10 @@ class AureliaAppWorldProjectConstructionFrame {
   ): StateSourceIssueProjectResult {
     return this.measure('state-source-issues', () =>
       mergeStateSourceIssueProjectResults([
-        new FromStateDecoratorIssueMaterializer(this.store).materializeAndEmit(this.project, typeSystem),
-        new WithStoreAfterRegistrationIssueMaterializer(this.store).materializeAndEmit(this.project, typeSystem),
+        new FromStateDecoratorIssueMaterializer(this.store, this.publication)
+          .materializeAndEmit(this.project, typeSystem),
+        new WithStoreAfterRegistrationIssueMaterializer(this.store, this.publication)
+          .materializeAndEmit(this.project, typeSystem),
       ])
     );
   }
@@ -882,6 +942,7 @@ class AureliaAppWorldProjectConstructionFrame {
         this.project,
         typeSystem,
         state.readStores(),
+        this.publication,
       )
     );
   }
@@ -902,7 +963,7 @@ class AureliaAppWorldProjectConstructionFrame {
     sourceApiRoots: AureliaSourceApiRootFacts,
   ): FrameworkServiceRootMaterializationResult {
     return this.measure('framework-service-roots', () =>
-      new FrameworkServiceRootMaterializer(this.store).materializeAndEmit(
+      new FrameworkServiceRootMaterializer(this.store, this.publication).materializeAndEmit(
         this.project,
         typeSystem,
         sourceApiRoots,
@@ -914,7 +975,7 @@ class AureliaAppWorldProjectConstructionFrame {
     serviceRoots: FrameworkServiceRootMaterializationResult,
   ): FrameworkServiceRootEnrichmentProjectResult {
     return this.measure('framework-service-root-enrichment', () =>
-      new FrameworkServiceRootEnrichmentMaterializer(this.store).materializeAndEmit(
+      new FrameworkServiceRootEnrichmentMaterializer(this.store, this.publication).materializeAndEmit(
         this.project.projectKey,
         serviceRoots.readRoots(),
       )
@@ -927,7 +988,7 @@ class AureliaAppWorldProjectConstructionFrame {
     sourceApiRoots: AureliaSourceApiRootFacts,
   ): ValidationSourceIssueProjectResult {
     return this.measure('validation-source-issues', () =>
-      new ValidationSourceIssueMaterializer(this.store).materializeAndEmit(
+      new ValidationSourceIssueMaterializer(this.store, this.publication).materializeAndEmit(
         this.project,
         typeSystem,
         configuration,
@@ -941,7 +1002,7 @@ class AureliaAppWorldProjectConstructionFrame {
     sourceApiRoots: AureliaSourceApiRootFacts,
   ): FetchClientSourceIssueProjectResult {
     return this.measure('fetch-client-source-issues', () =>
-      new FetchClientSourceIssueMaterializer(this.store).materializeAndEmit(
+      new FetchClientSourceIssueMaterializer(this.store, this.publication).materializeAndEmit(
         this.project,
         typeSystem,
         sourceApiRoots,
@@ -954,7 +1015,7 @@ class AureliaAppWorldProjectConstructionFrame {
     sourceApiRoots: AureliaSourceApiRootFacts,
   ): DialogSourceIssueProjectResult {
     return this.measure('dialog-source-issues', () =>
-      new DialogSourceIssueMaterializer(this.store).materializeAndEmit(
+      new DialogSourceIssueMaterializer(this.store, this.publication).materializeAndEmit(
         this.project,
         typeSystem,
         sourceApiRoots,
@@ -968,7 +1029,8 @@ class AureliaAppWorldProjectConstructionFrame {
     typeSystem: TypeSystemProject,
   ): AureliaAppWorldEmission {
     return this.measure('app-world-composition', () =>
-      new AureliaAppWorldComposer(this.store).construct(configuration, resourceIndex, typeSystem, this.project)
+      new AureliaAppWorldComposer(this.store, this.publication, this.support)
+        .construct(configuration, resourceIndex, typeSystem, this.project)
     );
   }
 
@@ -979,36 +1041,25 @@ class AureliaAppWorldProjectConstructionFrame {
     resourceIndex: ResourceDefinitionIndex,
     routeContexts: RouteConfigContextMaterializationProjectResult,
     state: StateProjectResult,
-  ): TemplateAnalysisProjectGeneration {
-    return this.measure('template-compilation', () => {
-      const input = new TemplateAnalysisProjectInput(
-        this.project.projectKey,
+  ): TemplateCompilationProjectEmission {
+    return this.measure('template-compilation', () =>
+      new TemplateCompilationProjectPass(this.store, this.publication, this.support).compile(
         appWorld,
         typeSystem,
         resourceIndex,
         routeContexts,
-        evaluation,
-        state.readStores(),
-        this.analysisDepth,
-        this.includeAuthoringTemplates,
-        this.authoringTemplateSourceFiles,
-        this.authoringTemplateLimit,
-      );
-      const attempt = this.templateAnalysis.prepare(
-        new TemplateAnalysisProjectComputationRequest(
-          this.project.projectKey,
-          TemplateAnalysisProjectInputAuthority.fixed(input),
-        ),
-        this.telemetry,
-      );
-      const result = attempt.commit();
-      if (result.commit.state !== ComputationCommitState.Committed || result.committedGeneration == null) {
-        throw new Error(
-          `Template analysis for ${this.project.projectKey} did not commit: ${result.commit.state}.`,
-        );
-      }
-      return result.committedGeneration;
-    });
+        {
+          projectKey: this.project.projectKey,
+          evaluation,
+          stateStores: state.readStores(),
+          runtimeAnalysisDepth: this.analysisDepth,
+          includeAuthoringTemplates: this.includeAuthoringTemplates,
+          authoringTemplateSourceFiles: this.authoringTemplateSourceFiles,
+          authoringTemplateLimit: this.authoringTemplateLimit,
+          telemetry: this.telemetry,
+        },
+      )
+    );
   }
 
   private materializeRouteRuntimeTopology(
@@ -1017,7 +1068,7 @@ class AureliaAppWorldProjectConstructionFrame {
     bindingSourceValues: RuntimeBindingSourceValueEvaluator,
   ): RouteRuntimeTopologyProjectResult {
     return this.measure('route-runtime-topology', () =>
-      new RouteRuntimeTopologyProjectPass(this.store).materializeAndEmit(
+      new RouteRuntimeTopologyProjectPass(this.store, this.publication).materializeAndEmit(
         this.project,
         routeContexts,
         templates,
@@ -1037,7 +1088,7 @@ class AureliaAppWorldProjectConstructionFrame {
   ): RouteInstructionMaterializationProjectResult {
     return this.measure('route-instruction-materialization', () =>
       new RouteInstructionMaterializationProjectPass().materializeAndEmit(
-        this.store,
+        this.publication,
         this.project,
         routeContexts,
         routeRecognizer,
@@ -1058,7 +1109,7 @@ class AureliaAppWorldProjectConstructionFrame {
   ): RouteRecognitionMaterializationProjectResult {
     return this.measure('route-recognition-materialization', () =>
       new RouteRecognitionMaterializationProjectPass().materializeAndEmit(
-        this.store,
+        this.publication,
         this.project,
         routeContexts,
         routeRuntimeTopology,
@@ -1078,7 +1129,7 @@ class AureliaAppWorldProjectConstructionFrame {
   ): RouteTreeMaterializationProjectResult {
     return this.measure('route-tree-materialization', () =>
       new RouteTreeMaterializationProjectPass().materializeAndEmit(
-        this.store,
+        this.publication,
         this.project,
         routeContexts,
         routeRuntimeTopology,
@@ -1097,7 +1148,7 @@ class AureliaAppWorldProjectConstructionFrame {
     typeSystem: TypeSystemProject,
   ): RouteComponentAgentMaterializationProjectResult {
     return this.measure('route-component-agent-materialization', () =>
-      new RouteComponentAgentMaterializationProjectPass(this.store).materializeAndEmit(
+      new RouteComponentAgentMaterializationProjectPass(this.store, this.publication).materializeAndEmit(
         this.project,
         routeRuntimeTopology,
         routeTree,
@@ -1119,16 +1170,16 @@ class AureliaAppWorldProjectConstructionFrame {
     name: AureliaAppWorldProjectPhaseName,
     read: () => TValue,
   ): TValue {
-    return measureAppWorldProjectPhase(this.phases, name, this.store, this.telemetry, read);
+    return measureAppWorldProjectPhase(this.phases, name, this.publication, this.telemetry, read);
   }
 }
 
 function measureAppWorldProjectPhase<TValue>(
   phases: AureliaAppWorldProjectPhaseTiming[],
   name: AureliaAppWorldProjectPhaseName,
-  store: KernelStore,
+  kernel: KernelTelemetryReadView,
   telemetry: NormalizedSemanticRuntimeTelemetryOptions,
   read: () => TValue,
 ): TValue {
-  return measureSemanticRuntimePhase(phases, name, store, telemetry, read);
+  return measureSemanticRuntimePhase(phases, name, kernel, telemetry, read);
 }

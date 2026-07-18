@@ -7,7 +7,7 @@ import { ValueConverterExpression } from '../expression/ast.js';
 import { unwrapExpressionAstNodeParens } from '../expression/parse-result-inspection.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import { auLink } from '../kernel/au-link.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelSourceFileReadView } from '../kernel/store.js';
 import {
   STATE_BINDING_BEHAVIOR_NAME,
   StateBindingScopeProjector,
@@ -47,12 +47,12 @@ export class RuntimeBindingExpressionScopeProjector {
   private readonly stateScopes: StateBindingScopeProjector;
 
   constructor(
-    readonly store: KernelStore,
+    readonly kernel: KernelSourceFileReadView,
     readonly expressionWorld: CheckerExpressionTypeWorld,
     readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
   ) {
     this.stateScopes = new StateBindingScopeProjector(
-      store,
+      kernel,
       expressionWorld.stateStores,
       expressionWorld.projector,
     );

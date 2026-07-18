@@ -19,7 +19,7 @@ import {
 import type { Container } from '../di/container.js';
 import type { RuntimeBindingSourceActivationContext } from './binding-source-activation-context.js';
 import type { AddressHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelStoreReadView } from '../kernel/store.js';
 import { sourceExpressionForSourceAddress } from '../type-system/source-address-expression.js';
 
 /**
@@ -117,10 +117,10 @@ export class RuntimeBindingSourceEvaluationFrame {
 
   /** Evaluates the TypeScript expression at an authored source address inside its original module environment. */
   evaluateSourceAddressExpression(
-    store: KernelStore,
+    kernel: KernelStoreReadView,
     sourceAddressHandle: AddressHandle,
   ): StaticExpressionEvaluationResult | null {
-    const expression = this.expressionForSourceAddress(store, sourceAddressHandle);
+    const expression = this.expressionForSourceAddress(kernel, sourceAddressHandle);
     if (expression == null) {
       return null;
     }
@@ -152,11 +152,11 @@ export class RuntimeBindingSourceEvaluationFrame {
   }
 
   private expressionForSourceAddress(
-    store: KernelStore,
+    kernel: KernelStoreReadView,
     sourceAddressHandle: AddressHandle,
   ): ts.Expression | null {
     return sourceExpressionForSourceAddress(
-      store,
+      kernel,
       sourceAddressHandle,
       (path) => this.sourcesByFileName.get(normalizeModuleKey(path))?.sourceFile ?? null,
     );

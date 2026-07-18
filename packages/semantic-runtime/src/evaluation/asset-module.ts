@@ -25,7 +25,7 @@ export function assetModuleText(fileName: string, text: string): string | null {
 export function authoredAssetModuleSpanForNode(
   sourceFile: ts.SourceFile,
   node: ts.Node,
-  sourceTextCache = new AuthoredSourceTextCache(''),
+  sourceTextCache: AuthoredSourceTextCache,
 ): AssetModuleSourceSpan | null {
   return authoredJsonAssetSpan(
     sourceFile.fileName,

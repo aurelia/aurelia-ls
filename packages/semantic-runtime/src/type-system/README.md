@@ -197,9 +197,10 @@ so a fixture tsconfig that opts into legacy `experimentalDecorators` can legitim
 the fixture config or keep it as explicit pressure; do not make ordinary diagnostics disappear in semantic-runtime.
 Out-of-tree temporary fixtures still need the analysis workspace as a discovery root. A generated project under the
 host temp directory may not contain the local Aurelia checkout or workspace package paths, but its TypeChecker epoch
-must still resolve those declarations relative to the semantic-runtime workspace that opened it. `TypeSystemProject`
-therefore builds compiler options with both `project.rootDir` and `project.workspaceRootDir`; otherwise DI state and
-framework imports degrade to `any`, which can look like a scope/observer bug even when template semantics are correct.
+must still resolve those declarations relative to the semantic-runtime workspace that opened it. `ProjectBootFrame`
+therefore builds compiler options from both `project.rootDir` and `project.workspaceRootDir`; `TypeSystemProject`
+consumes that captured result. Otherwise DI state and framework imports degrade to `any`, which can look like a
+scope/observer bug even when template semantics are correct.
 
 Type-system profiles should keep time, item volume, and source-text mass visible. App-level pressure can make TypeScript Program
 construction look like undifferentiated semantic-runtime cost, but the useful question is often whether the epoch is
@@ -448,9 +449,9 @@ hit/write source-text traffic, cacheable-read lanes, bypass lanes, and Program s
 `type-system:program` timing; inspect those numbers before changing source admission, adding a second checker host
 path, or widening cacheability to authored source. The traffic counters are the CPU/memory trade-off unit: write text
 shows dependency/library text admitted into the warm cache during a cold Program, while hit text shows how much cached
-text a later Program reused. Cache keys use canonical file paths plus the TypeScript parse options that affect
-SourceFile shape, so duplicate canonical-path entries are visible as intentional parse-option duplication rather than
-hidden map growth.
+text a later Program reused. Cache keys use canonical file paths, the TypeScript parse options that affect `SourceFile`
+shape, and the source-text revision. Duplicate canonical-path entries are therefore visible as intentional
+parse-option/revision separation rather than hidden map growth or stale source reuse.
 `runtime.analysisCacheOverview()` exposes the same process-local cache entry count and lifetime counters, plus
 source-text density counts split by dependency, declaration, default-library, and external-declaration class. Counts
 and text-character mass are both reported because a small number of declaration or default-library files can dominate
@@ -495,16 +496,14 @@ of growing parallel path predicates in `project.ts` and `compiler-host-source-fi
 
 Checker declaration source is the one intentional source-address bridge that may start from a filename. Materializers
 that scan boot-admitted app sources should carry the admitted source-file address handle through their site records
-instead. `declaration-source.ts` first reuses an admitted source-file address for checker declarations and only then
-materializes a `type-system-program` source-file address for ambient/framework/dependency declarations that the
-TypeScript Program can see but the boot frame did not admit as app source.
-During a staged generation, declaration lookup filters the store's path index through the active publication view.
-That makes a prior computation-owned Program source address absent until the candidate restages it, while declarations
-projected earlier in the same candidate remain visible. Reading the committed path index directly can otherwise omit a
-source-file record from the replacement closure while preserving spans that still reference it.
-When a checker-carrier consumer scans declaration bodies for app diagnostics, use
-`admittedSourceFileAddressHandleForCheckerNode(...)`; it returns only already-admitted source files and leaves
-checker-only files out of app-authored diagnostic publication.
+instead. During a staged generation, `declaration-source.ts` first reads candidate-aware project admissions and generated
+overlays through the active publication view. Boot-admitted app sources and overlays remain project-qualified, so two
+logical projects over the same physical files cannot borrow each other's source identity. Physical checker-only
+dependency, framework, ambient, and default-library sources are delegated to the workspace
+`TypeSystemProgramSourceAuthority`; no app becomes their accidental first owner. Only isolated lower-level contracts
+without a workspace support authority use the project-owned fallback publication.
+Consumers deciding whether a checker node is authored app source should spend the project admission/site record they
+already carry, not infer editability from the presence of a checker-only source address.
 
 For template work, the split begins after compiled-template/render-row assembly. The compiler side can still be modeled
 as evaluation-shaped construction because it consumes closed resource metadata, DI/compiler-world products, HTML IR, and
@@ -687,8 +686,8 @@ callback parameter typing, object-option typing, and nested literal context do n
   every member up front; expression/member access can still resolve the exact member through `CheckerTypeShapeAccess`,
   and cursor/completion-shaped inquiries should request or materialize the richer member surface when enumeration is
   the product they actually need. Runtime binding-scope construction is also a legitimate enumeration consumer:
-  `BindingScopeSlotProjector` may spend `readOrProjectCheckerTypeMembers(...)` so view-model fields such as route
-  class references are visible to Aurelia expression lookup.
+  `BindingScopeSlotProjector` may spend `readOrProjectCheckerTypeMembersInProjection(...)` so view-model fields such as
+  route class references are visible to Aurelia expression lookup.
 - `checkerMemberStrictTrueComparisonKind(...)` is the shared policy for framework branches that literally test
   `member === true`. It keeps absent members separate from dynamic maybe-true values, so products can decide early
   whether a branch is definitely off, definitely on, or must remain represented as both possible runtime branches.
@@ -751,14 +750,15 @@ callback parameter typing, object-option typing, and nested literal context do n
   construction, value-channel projection, data-flow, and future speculative lifecycle contexts share the same cache and
   evaluator lifetime. Creating a bare `CheckerExpressionTypeEvaluator` should be a deliberate inquiry-local choice, not
   the default way to get expression facts.
-- One template-analysis generation shares one `CheckerExpressionTypeWorld` across compiler/runtime materializers,
-  selected authoring templates, and app-level follow-up that still runs inside the same publication. The retained world
-  records that generation's checker/projection authority, but its projector is run-bound when the generation is staged.
+- One app-analysis generation shares one `CheckerExpressionTypeWorld` across compiler/runtime materializers, selected
+  authoring templates, and app-level follow-up that still runs inside the same publication. The retained world records
+  that generation's checker/projection authority, but its projector is run-bound when the generation is staged.
   Commit rebinds every retained resource emission to one store-backed world guarded by the committed generation
   authority; replacement or disposal revokes retained evaluators and lazy projections instead of allowing them to read
   a newer kernel world. Overlay, completion, and cursor work that is not retained by a committed generation calls
-  `freshInquiryGeneration()` for a separate store-backed cache. That factory first proves its source world is current;
-  a revoked world cannot mint a fresh unguarded writer into the store. Retaining per-resource run-bound worlds would
+  `freshInquiryGeneration()` for a separate evaluator/cache over the same generation-bound store publication. That
+  factory first proves its source world is current; a revoked world cannot mint a fresh unguarded writer into the
+  store. Retaining per-resource run-bound worlds would
   make lazy follow-up projection depend on which object path a query happened to traverse.
 - Resource-level timing profiles mark the generation cache before each resource and report deltas, so aggregate
   pressure can stay honest while same-generation materializers still share projection work.

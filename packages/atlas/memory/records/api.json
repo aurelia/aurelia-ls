@@ -87,6 +87,8 @@
         "Open bindable configuration should not fabricate confident defaults. Preserve explicit fields from an open `@bindable(...)` object, but report open setter/configuration facts and use the neutral default binding mode when membership did not close.",
         "Public app-query selectors that a query family cannot consume should return `unsupported` with accepted query-kind menus instead of being silently catalog-shaped away. Keep `diagnosticProjection` separate from selectors: it may be a continuation target-policy hint even when the current source query does not consume it.",
         "Public answers carry both coarse `outcome` and precise `closure`. Use `closure` for transport/UI decisions about paging, open semantic facts, ambiguity, reroutes, and unsupported selectors; keep `outcome` backward-compatible for hit/miss/partial/unsupported grouping.",
+        "App-world handle answers retain the app generation that owns those handles. Reject an explicit `appRetention: \"dispose-app\"` request combined with `detail: \"handles\"`; returning already-revoked handles is a contradictory contract, not a cache-policy choice.",
+        "Treat SemanticRuntimeProjectInputAuthority as the source/configuration correctness boundary for long-lived adapters. Advance it when project inputs change so old app generations are revoked; reserve clearAnalysisCache for explicit retention control rather than source invalidation.",
         "Public app-query answers should expose the analysis depth actually used when an app world answered the query. Presentation prose should say depth is auto-selected/auto-raised by query policy rather than teaching callers a manual prerequisite step.",
         "MCP text previews are part of the trust surface, not decoration: bounded row previews should preserve identity fields, source labels, and source spans even when structuredContent carries the full row payload.",
         "MCP `tools/list` schemas should be described but compact. Put one-line field purpose/default/use hints in schemas, keep workflow prose in the orientation resource and catalogs, and preserve a measured startup-surface budget in the adversarial MCP contract.",
@@ -272,7 +274,13 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/app-query-policy.ts",
           "symbolName": "shouldDisposeAppAfterRoutedQuery",
-          "summary": "Routed app-query default profile, analysis-depth, materialization, and app-retention policy helpers."
+          "summary": "Routed app-query default profile, analysis-depth, materialization, app-retention, and app-world handle compatibility policy helpers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/project-input.ts",
+          "symbolName": "SemanticRuntimeProjectInputAuthority",
+          "summary": "Monotone project-input generation authority that revokes app generations built from stale source or configuration inputs."
         },
         {
           "kind": "source",
@@ -338,10 +346,17 @@
           "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
           "minLineCount": 70,
           "minMethodCount": 4
+        },
+        {
+          "kind": "product-large-class",
+          "className": "SemanticRuntimeProjectInputAuthority",
+          "filePath": "packages/semantic-runtime/src/kernel/project-input.ts",
+          "minLineCount": 60,
+          "minMethodCount": 6
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-06-11"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "frontier:app-diagnostics-substrate",
@@ -596,7 +611,7 @@
         "When topology-depth selected app opening is still slow, inspect template compilation/runtime-analysis timings first; runtime rendering and scope construction can dominate before binding-observation products are even requested.",
         "Use semantic-runtime `pressure:app-api` project-key or project-root filters for selected-app profiling before adding a one-off probe.",
         "Use `aurelia_analysis_cache_overview` while hand-testing long-lived MCP sessions; request kernel breakdowns when the question is what the session is retaining, and use `aurelia_clear_analysis_cache` to clear app epochs. Do not describe this as clearing the whole runtime session: boot/source-discovery workspace kernel records and preserved TypeScript dependency/lib SourceFiles may intentionally remain.",
-        "For one-off routed MCP-style calls, use `answerAppQuery(...)` / `answerAppQueries(...)` with `appRetention='dispose-app'` and `typeSystemDependencyCacheClearPolicy` so app-world products, nested app query claims, and dependency SourceFile cache disposal are recorded on the runtime query claim.",
+        "For one-off routed MCP-style calls that return values rather than app-world handles, use `answerAppQuery(...)` / `answerAppQueries(...)` with `appRetention='dispose-app'` and `typeSystemDependencyCacheClearPolicy` so app-world products, nested app query claims, and dependency SourceFile cache disposal are recorded on the runtime query claim. Handle detail retains the owning app generation and rejects explicit dispose-app.",
         "Interpret RSS and rssOther together with heap-total, heap-used, dependency-cache counters, V8 heap statistics, and query-claim net kernel deltas. V8 can retain process heap capacity after semantic products and dependency SourceFiles have been reclaimed.",
         "Profile app-world construction by phase before refactoring; likely owners include SemanticRuntime.openApp, AureliaAppWorldProjectConstructionFrame, TypeSystemProject, template runtime analysis, and query-depth policy.",
         "Keep the MCP workaround operational and visible, but do not treat a larger heap as the product fix."
@@ -672,7 +687,7 @@
         }
       ],
       "createdAt": "2026-05-16",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "decision:mcp-preview-prioritizes-idiomatic-code-economy",
@@ -948,14 +963,14 @@
         "incrementality",
         "cancellation"
       ],
-      "summary": "The LSP bridge uses explicit source/workspace generations, a convergent diagnostic drain, and required request guards over semantic-runtime app-world clearing; this is not the grand incremental compiler.",
-      "rationale": "The prior LSP lifecycle used one invalidate path for ordinary text edits, source topology changes, and configuration changes. The first generation bridge separated those boundaries, but consumed vscode-languageserver's onDidChangeContent open echo as a second source event and relied on one stale retry. Cold document bursts could therefore exhaust the retry and never publish the latest diagnostics. The bridge now classifies document events by version, coalesces pending app-world clears, and retains affected documents in one context-owned drain until a current generation publishes or analysis genuinely fails.",
+      "summary": "The LSP bridge advances semantic-runtime's project-input generation for source events, restarts only for topology changes, and retains convergent diagnostics plus required request guards; this is not the grand incremental compiler.",
+      "rationale": "The prior LSP lifecycle maintained parallel source/workspace counters and translated ordinary text edits into adapter-owned app-cache clears. Semantic-runtime now owns one monotone project-input authority and publishes each app analysis as one atomic generation over its captured inputs. The LSP bridge advances that authority for ordinary edits to already-admitted source so the same runtime can replace stale app generations, while configuration, topology, and source-admission membership changes still replace the runtime. Document-version classification, the convergent diagnostic drain, and request guards remain adapter responsibilities.",
       "guidance": [
-        "For existing admitted source text edits, call recordSourceTextChanged(); it advances the source generation and clears retained app-world products through clearAnalysisCache({ typeSystemDependencyCacheClearPolicy: 'preserve' }) when a runtime exists.",
-        "For project topology, configuration, workspace root, or source-admission changes, call recordProjectTopologyChanged(); it advances workspace/source generations and drops the runtime facade.",
+        "For ordinary edits to existing admitted source, call recordSourceTextChanged(); it advances SemanticRuntimeProjectInputAuthority and lets the same runtime replace stale app generations without an eager cache clear.",
+        "For client configuration, tsconfig/jsconfig, project discovery, workspace-root, source-admission membership, or other topology changes, call recordProjectTopologyChanged(); it advances the project-input generation and drops the runtime facade.",
         "vscode-languageserver TextDocuments.onDidChangeContent fires for both open and change. onDidOpen owns the initial source event; ignore the immediately following same-version content event instead of invalidating twice.",
         "Diagnostics refreshes are a latest-generation drain. Keep every affected open document queued across stale generations and publish only under a current guard; do not restore fixed retry counts or independent fire-and-forget refresh ownership.",
-        "Concurrent source notifications may share one pending app-world clear. A later generation still stales older guards, while one clear after runtime opening covers every source change observed before that clear executes.",
+        "Concurrent source notifications share one monotone project-input sequence. A later generation stales older guards and app publications directly; do not restore a second pending-clear lifecycle in the adapter.",
         "Do not reintroduce adapter-local invalidate calls or optional request guards. Runtime/session-backed handlers must capture a guard from the session and pass it through to paged query loops.",
         "When a VS Code provider supplies a cancellation token, carry it through custom language-client requests. TS-origin rename composition must stop before conversion/application when cancellation wins.",
         "Use `pnpm --filter @aurelia-ls/language-server measure:incrementality` for bridge telemetry. It measures the largest pressure fixture by default, records generation/timing/cache snapshots, and samples stale/cancelled request abort pressure without adding timing thresholds to tests.",
@@ -968,7 +983,7 @@
           "kind": "source",
           "filePath": "packages/language-server/src/runtime/semantic-runtime-session.ts",
           "line": 63,
-          "summary": "LSP session owns workspace/source generations, runtime facade retention, coalesced app-world clearing, and required request guards."
+          "summary": "LSP session bridges document events into semantic-runtime project-input generations, owns topology-driven runtime replacement, and issues required request guards."
         },
         {
           "kind": "source",
@@ -990,10 +1005,9 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
-          "symbolName": "SemanticRuntime.clearAnalysisCache",
-          "line": 600,
-          "summary": "Semantic-runtime app-world reclaim primitive used by the LSP source-text lifecycle bridge."
+          "filePath": "packages/semantic-runtime/src/kernel/project-input.ts",
+          "symbolName": "SemanticRuntimeProjectInputAuthority",
+          "summary": "Semantic-runtime-owned monotone source/configuration generation used by the LSP lifecycle bridge."
         },
         {
           "kind": "source",
@@ -1005,12 +1019,12 @@
       "liveChecks": [
         {
           "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
-          "symbolName": "clearAnalysisCache"
+          "filePath": "packages/semantic-runtime/src/kernel/project-input.ts",
+          "symbolName": "SemanticRuntimeProjectInputAuthority"
         }
       ],
       "createdAt": "2026-07-08",
-      "updatedAt": "2026-07-12"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "decision:ide-assurance-layer-ownership",

@@ -14,9 +14,17 @@ import {
   DiKeyIdentityKind,
   type InterfaceDiKeyIdentity,
 } from '../kernel/identity.js';
+import {
+  frameworkIntrinsicDiKeyForName,
+  frameworkIntrinsicDiKeyLocal,
+} from '../di/framework-intrinsic-di-key.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { MaterializationRecord } from '../kernel/materialization.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
+import {
+  KernelPublicationPlan,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import {
   KernelStoreBatch,
   type KernelStore,
@@ -42,13 +50,14 @@ export class FrameworkServiceRootEnrichmentProjectResult {
 export class FrameworkServiceRootEnrichmentMaterializer {
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   materializeAndEmit(
     projectKey: string,
     roots: readonly FrameworkServiceRoot[],
   ): FrameworkServiceRootEnrichmentProjectResult {
-    const keyIdentities = interfaceDiKeyIdentitiesByName(this.store);
+    const keyIdentities = interfaceDiKeyIdentitiesByName(this.publication);
     const records: KernelStoreRecord[] = [];
     const claimHandles: ClaimHandle[] = [];
     for (const root of roots) {
@@ -56,9 +65,9 @@ export class FrameworkServiceRootEnrichmentMaterializer {
       records.push(...enrichment.records);
       claimHandles.push(...enrichment.claimHandles);
     }
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `framework-service-root-enrichment:${projectKey}`));
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `framework-service-root-enrichment:${projectKey}`),
+    ));
     return new FrameworkServiceRootEnrichmentProjectResult(records, claimHandles);
   }
 
@@ -77,11 +86,18 @@ export class FrameworkServiceRootEnrichmentMaterializer {
         });
       }
     }
-    if (root.ownerProductHandle != null && this.store.readProduct(root.ownerProductHandle)?.productKindKey === KernelVocabulary.Framework.ServiceRoot.key) {
+    const ownerProductHandle = root.ownerProductHandle;
+    const ownerProduct = ownerProductHandle == null
+      ? null
+      : this.publication.read(ownerProductHandle);
+    if (
+      ownerProduct?.kind === 'materialized-product'
+      && ownerProduct.productKindKey === KernelVocabulary.Framework.ServiceRoot.key
+    ) {
       claimSpecs.push({
-        localSuffix: `uses-container-root:${localKeyPart(root.ownerProductHandle)}`,
+        localSuffix: `uses-container-root:${localKeyPart(ownerProduct.handle)}`,
         predicateKey: KernelVocabulary.Framework.RootUsesContainerRoot.key,
-        objectHandle: root.ownerProductHandle,
+        objectHandle: ownerProduct.handle,
       });
     }
     if (claimSpecs.length === 0) {
@@ -135,13 +151,20 @@ interface ClaimSpec {
 }
 
 function interfaceDiKeyIdentitiesByName(
-  store: KernelStore,
+  publication: KernelPublicationContext,
 ): ReadonlyMap<string, readonly InterfaceDiKeyIdentity[]> {
   const result = new Map<string, InterfaceDiKeyIdentity[]>();
-  for (const identity of store.readIdentities()) {
+  for (const identity of publication.readAllRecords()) {
     if (
       identity.kind !== 'di-key-identity'
       || identity.keyKind !== DiKeyIdentityKind.Interface
+    ) {
+      continue;
+    }
+    const intrinsicKey = frameworkIntrinsicDiKeyForName(identity.interfaceName);
+    if (
+      intrinsicKey != null
+      && identity.handle !== publication.handles.identity(frameworkIntrinsicDiKeyLocal(intrinsicKey))
     ) {
       continue;
     }

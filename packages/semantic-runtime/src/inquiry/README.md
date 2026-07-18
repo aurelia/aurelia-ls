@@ -150,8 +150,9 @@ Runtime-level routed answers now use the same source-epoch discipline. `Semantic
 `answerAppQueries(...)` canonicalize source-file loci to project-relative paths before they compute query keys, locus
 keys, and epoch keys, then `SemanticRuntime.disposeQueryClaims(...)` can prune both runtime-level routed claims and
 cached-app claims for a project or source file. That method intentionally disposes only query outcomes; retained app
-products remain an app-epoch concern and should be reclaimed with `clearAnalysisCache()` when source edits require a
-new world.
+products remain an app-generation concern. Source/config events advance `SemanticRuntimeProjectInputAuthority`, which
+revokes the old app generation and causes the next request to replace it; `clearAnalysisCache()` is an explicit
+retention-control operation, not the correctness mechanism for ordinary source edits.
 Runtime disposal request handling now goes through a named query-claim disposal strategy before it reaches the graph.
 That strategy resolves the public scope, manual/project/source invalidation kind, canonical epoch keys, query-kind
 filters, materialization-policy filters, and profile filter in one place. The graph still owns matching and disposal;
@@ -287,10 +288,10 @@ token from that same owner type without rescanning template source. Empty
 start-tag attribute positions, such as `<my-element |>` before an authored attribute product exists, are still
 classified from the materialized element and template-source span rather than by rescanning project source. That keeps
 cursor-sensitive editor/tooling entry points above the compiler products without creating a second completion path.
-The cursor adapter must use the resource's runtime-analysis expression world, not a fresh checker world, when it asks
-binding-owned source-expression context for the completion scope. State stores, binding-behavior lifecycle, and other
-runtime-discovered expression facts are already on that world; rebuilding it at cursor time makes completions diverge
-from overlays, diagnostics, and data-flow.
+The cursor adapter must use the resource's runtime-analysis expression world, or `freshInquiryGeneration()` from that
+world, when it asks binding-owned source-expression context for the completion scope. The latter creates a fresh
+evaluator/cache while preserving the same generation-bound publication and state stores. A bare independent checker
+world loses those runtime-discovered facts and makes completions diverge from overlays, diagnostics, and data-flow.
 File-level template diagnostics reuse the same cursor adapter for weak-member rows, so they must not override that
 world either. A diagnostic scan may cache authored source text and row de-duplication state, but expression owner
 typing should still spend the resource runtime-analysis world so `t.bind` evaluate-only, `t-params.bind` bind-time

@@ -347,7 +347,7 @@
         "Opened-app convenience methods should re-enter SemanticApp.ask(...) when called outside active materialization. Do not add new direct SemanticApp answer methods that bypass answerPublicQueryIfNeeded.",
         "Keep exact answer loci separate from invalidation epoch keys. Cursor/file answers should carry source/project epoch keys so source-change disposal can stay graph-owned instead of adapter-local.",
         "Canonicalize source-file query loci before computing query keys, locus keys, and epoch keys. Runtime routed queries should converge absolute host paths and project-relative paths to the same project-relative source epoch.",
-        "Use SemanticRuntime.disposeQueryClaims for long-lived public sessions that need to prune answer-outcome storage by project/source/query policy without clearing the app-world kernel. Use clearAnalysisCache when retained app products themselves are stale.",
+        "Use SemanticRuntime.disposeQueryClaims for long-lived public sessions that need to prune answer-outcome storage by project/source/query policy without clearing the app-world kernel. Source/configuration correctness comes from advancing SemanticRuntimeProjectInputAuthority, which revokes the old app generation; use clearAnalysisCache only as an explicit retention-control operation.",
         "Route public query-claim disposal through the semantic-runtime disposal strategy layer before touching QueryClaimGraph. The strategy should resolve scope, manual/project/source invalidation kind, canonical epoch keys, query-kind filters, materialization-policy filters, and profile selection; the graph should own indexed matching and disposal.",
         "Source-file invalidation should include the containing project epoch as well as the canonical source epoch. Project-wide and sibling-file answers can depend on a changed resource, route, registration, or type surface, so do not treat the source key as an isolated cache key.",
         "Use QueryClaimGraph.disposeWithSummary when invalidating by source, query family, or session policy. The summary should show candidate, matched, disposed, evaluation-state, materialization-policy, and profile/retention details so disposal stays graph-owned rather than adapter-local guesswork.",
@@ -369,7 +369,7 @@
         "Kernel disposal summaries should carry disposed handle-character mass beside record/detail counts. Use root handle deltas, disposed handle characters, and net handle characters when investigating handle-string memory pressure from one-off answers.",
         "Route process-local TypeScript dependency SourceFile cache clears through the same answer-side disposal summary when they are part of a one-off public answer. The graph should count cleared dependency files/text beside app-world disposal rather than leaving that cleanup hidden in adapter-local finally blocks.",
         "Keep dependency SourceFile cache clearing inquiry-shaped. Recompute-friendly routed answers that dispose the app epoch default to clearing all dependency/lib SourceFiles, while warm sessions can pass `preserve` to keep TypeChecker Program construction cheap.",
-        "Retained answer hits must still run answer-side disposal policy. Reusing a small answer value should not bypass an explicit dispose-app request or any future transport-owned cleanup hook.",
+        "Retained answer hits must still run answer-side disposal policy for compatible non-handle app-world answers. Reusing a small value should not bypass an explicit dispose-app request or future transport-owned cleanup; app-world handle detail instead retains its owning app, explicit dispose-app is rejected, and app-world-free handles open no app.",
         "Let answer boundaries veto retained-answer reuse when materialization is the requested side effect, such as retain-app routed queries that need to warm a compatible app epoch.",
         "Session profiles should carry explicit retained-record budgets. Budget disposal belongs in QueryClaimGraph, should be visible in telemetry, and should prune only answered/failed nodes so pending lazy claims remain materializable.",
         "Discard-after-answer profiles should still retain pending lazy nodes until materialization resolves or fails; the graph is the storage owner before serialization even when the profile keeps no records afterward.",
@@ -527,7 +527,7 @@
         }
       ],
       "createdAt": "2026-05-17",
-      "updatedAt": "2026-05-24"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "frontier:semantic-contract-harness",

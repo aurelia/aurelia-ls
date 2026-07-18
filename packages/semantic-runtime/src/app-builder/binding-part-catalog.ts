@@ -110,6 +110,7 @@ export interface AppBuilderBindingPartDescriptor {
 /** Candidate value channels selected after generic binding-command targets pass through ObserverLocator semantics. */
 export const APP_BUILDER_TARGET_OBSERVER_VALUE_CHANNELS: readonly RuntimeBindingValueChannelKind[] = [
   RuntimeBindingValueChannelKind.RawProperty,
+  RuntimeBindingValueChannelKind.ValueAttributeObserverProperty,
   RuntimeBindingValueChannelKind.AttributeValue,
   RuntimeBindingValueChannelKind.ClassAttributeTokens,
   RuntimeBindingValueChannelKind.StyleAttributeRules,

@@ -4,9 +4,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   createSemanticRuntime,
+  NodeSemanticRuntimeProjectInputHost,
   registrationResourceKindFor,
   readSemanticAppQueryCatalog,
   SemanticAppQueryKind,
+  SemanticRuntimeProjectInputAuthority,
 } from '../out/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -59,14 +61,14 @@ assert.equal(catalog.value.rows[0].materializationPolicy, 'query-type-projection
 const runtime = await createSemanticRuntime({
   workspaceRoot: fixtureRoot,
   storeKey: 'contract:template-rename',
-  sourceTextProvider: {
+  projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
     readFile(fileName) {
       return samePath(fileName, templatePath) ? templateText : undefined;
     },
     fileExists(fileName) {
       return samePath(fileName, templatePath) ? true : undefined;
     },
-  },
+  })),
 });
 
 const firstTitleStart = templateText.indexOf('title');
@@ -116,14 +118,14 @@ const templateControllerRuntime = await createSemanticRuntime({
 const templateControllerDecoratorRuntime = await createSemanticRuntime({
   workspaceRoot: templateControllerFixtureRoot,
   storeKey: 'contract:template-controller-resource-rename-decorator-equivalence',
-  sourceTextProvider: {
+  projectInputAuthority: new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost({
     readFile(fileName) {
       return samePath(fileName, templateControllerDefinitionPath) ? templateControllerDecoratorDefinitionText : undefined;
     },
     fileExists() {
       return undefined;
     },
-  },
+  })),
 });
 const aliasedBindableRuntime = await createSemanticRuntime({
   workspaceRoot: aliasedBindableRoot,

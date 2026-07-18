@@ -10,6 +10,7 @@ import { CheckerExpressionTypeEvaluator } from '../out/type-system/expression-ty
 import { CheckerExpressionTypeEvaluationContext } from '../out/type-system/expression-type-context.js';
 import { CheckerExpressionTypeEvaluationResultKind } from '../out/type-system/expression-type-evaluation.js';
 import { CheckerTypeProjectionOrigin } from '../out/type-system/type-shape.js';
+import { registerIsolatedCheckerDeclarationSourceContext } from '../out/type-system/declaration-source.js';
 
 const sourceFileName = 'contract-expression-branch-narrowing.ts';
 const sourceText = `
@@ -53,13 +54,14 @@ host.fileExists = (fileName) => fileName === sourceFileName || ts.sys.fileExists
 
 const program = ts.createProgram([sourceFileName], { strict: true, target: ts.ScriptTarget.Latest, noEmit: true }, host);
 const checker = program.getTypeChecker();
+registerIsolatedCheckerDeclarationSourceContext(checker, 'contract-expression-branch-narrowing');
 const rootInterface = sourceFile.statements.find((statement) =>
   ts.isInterfaceDeclaration(statement) && statement.name.text === 'ContractRoot'
 );
 assert.notEqual(rootInterface, undefined);
 
 const store = new KernelStore('contract-expression-branch-narrowing');
-const projector = new CheckerTypeProjector(store);
+const projector = new CheckerTypeProjector(store, store);
 const rootReference = projector.ensureProjection({
   localKey: 'contract-expression-branch-narrowing:root',
   checker,

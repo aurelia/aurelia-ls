@@ -1,7 +1,6 @@
 import type { KernelHandleFactory, ProductHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
-import type { KernelStore } from '../kernel/store.js';
 import {
   CheckerTypeMemberProjectionPolicy,
   CheckerTypeProjector,
@@ -28,24 +27,6 @@ export const enum CheckerStrictTrueComparisonKind {
   MaybeTrue = 'maybe-true',
 }
 
-/**
- * Read an enumerable member surface, projecting it only when an answer actually needs members.
- *
- * Flow-oriented type projections may intentionally keep members lazy. Completion and cursor-info answers can pay the
- * eager member cost at the API edge, where query-claim retention/disposal policy can account for the trade-off.
- */
-export function readOrProjectCheckerTypeMembers(
-  store: KernelStore,
-  typeShape: CheckerTypeShape,
-  localKeySeed: ProductHandle | string,
-): readonly CheckerTypeMember[] {
-  return readOrProjectCheckerTypeMembersInProjection(
-    new CheckerTypeProjector(store),
-    typeShape,
-    localKeySeed,
-  );
-}
-
 /** Read an enumerable member surface without escaping the active checker projection generation. */
 export function readOrProjectCheckerTypeMembersInProjection(
   projector: CheckerTypeProjector,
@@ -61,18 +42,6 @@ export function readOrProjectCheckerTypeMembersInProjection(
   return projected == null
     ? withSyntheticRuntimeArrayMembers(handles, typeShape, [], localKey)
     : withSyntheticRuntimeArrayMembers(handles, projected, projected.members, localKey);
-}
-
-export function projectCheckerTypeMemberSurface(
-  store: KernelStore,
-  typeShape: CheckerTypeShape,
-  localKeySeed: ProductHandle | string,
-): CheckerTypeShape | null {
-  return projectCheckerTypeMemberSurfaceInProjection(
-    new CheckerTypeProjector(store),
-    typeShape,
-    localKeySeed,
-  );
 }
 
 /** Project an enumerable member surface through the active checker generation. */

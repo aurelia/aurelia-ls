@@ -169,7 +169,7 @@ export interface RuntimeRenderingMaterializationRequest {
   readonly resourceDefinitions: ResourceDefinitionIndex | null;
   /** Current TypeChecker epoch available to controller hydration observer setup, when available. */
   readonly typeSystem: TypeSystemProject | null;
-  /** Shared checker projection/cache world for this complete template-analysis generation. */
+  /** Shared checker projection/cache world for this complete app-analysis generation. */
   readonly expressionWorld: CheckerExpressionTypeWorld;
   /** Whether framework contextual resolver slots should be published as kernel records during rendering. */
   readonly contextResolverRecordPolicy: ContainerContextResolverRecordPolicy;
@@ -392,8 +392,8 @@ export class RuntimeRenderingMaterializer {
   constructor(
     /** Hot analysis store that receives runtime binding products. */
     readonly store: KernelStore,
-    /** Immediate or staged publication shared by the complete template-analysis generation. */
-    readonly publication: KernelPublicationContext = store,
+    /** Immediate or staged publication shared by the complete app-analysis generation. */
+    readonly publication: KernelPublicationContext,
   ) {
     this.controllerCreation = new RuntimeControllerCreationMaterializer(store, publication);
     this.renderedInstructionRecorder = new RuntimeRenderedInstructionRecorder(store);

@@ -275,7 +275,7 @@ export class RuntimeControllerBindMaterializer {
   constructor(
     /** Hot analysis store that receives controller bind-time products. */
     readonly store: KernelStore,
-    readonly publication: KernelPublicationContext = store,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new RuntimeControllerBindPublisher(store);
     this.bindingIssuePublisher = new RuntimeBindingIssuePublisher(store);

@@ -6,7 +6,6 @@ import type {
 import {
   localKeyPart,
 } from '../kernel/local-key.js';
-import type { KernelStore } from '../kernel/store.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   checkerSymbolMemberSourceProjection,
@@ -37,15 +36,20 @@ export interface RuntimeObservedMemberSourceProjection {
 }
 
 export function observedMemberSourceForCheckerSymbol(
-  store: KernelStore,
   publication: KernelPublicationContext,
+  checker: ts.TypeChecker,
   symbol: ts.Symbol | null | undefined,
   declarations: readonly ts.Declaration[] | null = null,
 ): RuntimeObservedMemberSourceProjection | null {
   if (symbol == null) {
     return null;
   }
-  const projection = checkerSymbolMemberSourceProjection(store, publication, symbol, declarations ?? undefined);
+  const projection = checkerSymbolMemberSourceProjection(
+    publication,
+    checker,
+    symbol,
+    declarations ?? undefined,
+  );
   return {
     observedMemberKind: projection.memberKind,
     observedMemberSourceAddressHandle: projection.sourceAddressHandle,
@@ -97,7 +101,6 @@ export function isRuntimeObservedDependencyScopeOpenRoot(
 }
 
 export function observedDependencyWithMemberSourceForCheckerType<TDraft extends RuntimeObservedDependencyDraft>(
-  store: KernelStore,
   publication: KernelPublicationContext,
   checker: ts.TypeChecker,
   ownerType: ts.Type | null | undefined,
@@ -110,7 +113,7 @@ export function observedDependencyWithMemberSourceForCheckerType<TDraft extends 
   if (path.length === 0) {
     return draft;
   }
-  const projection = observedMemberSourceForCheckerPath(store, publication, checker, ownerType, path);
+  const projection = observedMemberSourceForCheckerPath(publication, checker, ownerType, path);
   return projection == null
     ? draft
     : {
@@ -183,7 +186,6 @@ export function observedMemberSourceForBindingDependency(input: {
 }
 
 export function observedMemberSourceForCheckerPath(
-  store: KernelStore,
   publication: KernelPublicationContext,
   checker: ts.TypeChecker,
   ownerType: ts.Type,
@@ -201,7 +203,7 @@ export function observedMemberSourceForCheckerPath(
     }
     current = checkerSymbolValueType(checker, currentSymbol);
   }
-  return observedMemberSourceForCheckerSymbol(store, publication, currentSymbol);
+  return observedMemberSourceForCheckerSymbol(publication, checker, currentSymbol);
 }
 
 function simpleObservedDependencyPath(

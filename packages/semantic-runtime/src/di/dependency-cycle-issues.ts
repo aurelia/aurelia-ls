@@ -9,10 +9,10 @@ import {
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
 import {
-  KernelStore,
-  KernelStoreBatch,
+  type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
   sourceSpanAddressForSite,
@@ -32,13 +32,13 @@ import {
 import {
   DiIssuePublication,
   DiIssuePublisher,
+  publishDiIssuePublications,
   withDiIssueSourceAddressRecords,
 } from './di-issue-publication.js';
 import {
   readDiResolveCallSites,
   type DiResolveCallSite,
 } from './resolve-call-recognition.js';
-import { DiProductDetails } from './product-details.js';
 
 const AURELIA_DI_MODULES = new Set([
   'aurelia',
@@ -62,6 +62,7 @@ export class DiDependencyCycleIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new DiIssuePublisher(store);
   }
@@ -74,15 +75,11 @@ export class DiDependencyCycleIssueMaterializer {
     const publications = readDiContainerApiCallSites(project, typeSystem)
       .flatMap((site, index) => this.publicationsForEntrySite(project, graph, site, index));
 
-    const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'di-dependency-cycle-issues'));
-    }
-    this.store.productDetails.addAll(DiProductDetails.Issue, publications.map((publication) => publication.issue));
+    const emission = publishDiIssuePublications(this.publication, 'di-dependency-cycle-issues', publications);
 
     return new DiDependencyCycleIssueMaterialization(
-      publications.map((publication) => publication.issue),
-      records,
+      emission.issues,
+      emission.records,
     );
   }
 

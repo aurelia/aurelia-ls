@@ -2,7 +2,7 @@ import { BindingScope } from '../configuration/scope.js';
 import type { Container } from '../di/container.js';
 import type { AddressHandle, ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
 import { readFieldProvenance } from '../kernel/provenance.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelSourceFileReadView } from '../kernel/store.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import {
@@ -275,13 +275,13 @@ export class RuntimeBoundControllerValueTable {
 }
 
 export function runtimeBoundControllerValueTableForTemplateResources(
-  store: KernelStore,
+  kernel: KernelSourceFileReadView,
   resources: readonly RuntimeBindingSourceValueTemplateResource[],
 ): RuntimeBoundControllerValueTable {
   return new RuntimeBoundControllerValueTable(
     resources.flatMap((resource) =>
       boundControllerValuesForRuntimeAnalysis(
-        store,
+        kernel,
         resource.runtimeAnalysis,
         resource.compilation.compilerWorld.resourceScope,
         resource.compilation.compilerWorld.container,
@@ -292,7 +292,7 @@ export function runtimeBoundControllerValueTableForTemplateResources(
 }
 
 export function extendRuntimeBoundControllerValueTable(
-  store: KernelStore,
+  kernel: KernelSourceFileReadView,
   base: RuntimeBoundControllerValueTable,
   rootDefinition: RuntimeControllerDefinitionReference,
   runtimeAnalysis: RuntimeBindingSourceValueRuntimeAnalysis,
@@ -302,7 +302,7 @@ export function extendRuntimeBoundControllerValueTable(
   return new RuntimeBoundControllerValueTable(
     [
       ...base.values,
-      ...boundControllerValuesForRuntimeAnalysis(store, runtimeAnalysis, resourceScope, sourceDefaultContainer),
+      ...boundControllerValuesForRuntimeAnalysis(kernel, runtimeAnalysis, resourceScope, sourceDefaultContainer),
     ],
     [
       ...base.readControllerDefinitions(),
@@ -313,7 +313,7 @@ export function extendRuntimeBoundControllerValueTable(
 }
 
 function boundControllerValuesForRuntimeAnalysis(
-  store: KernelStore,
+  kernel: KernelSourceFileReadView,
   analysis: RuntimeBindingSourceValueRuntimeAnalysis,
   resourceScope: TemplateResourceScope | null,
   sourceDefaultContainer: Container | null,
@@ -324,7 +324,7 @@ function boundControllerValuesForRuntimeAnalysis(
     .map((controller) => [controller.productHandle, controller]));
   const scopes = instructionScopeLookup(analysis.scopes.instructionScopes);
   const sourceBindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-    store,
+    kernel,
     analysis.expressionWorld,
     analysis.expressionResourcePlan,
   );

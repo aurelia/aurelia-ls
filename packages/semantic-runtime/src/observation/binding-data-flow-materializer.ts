@@ -480,7 +480,7 @@ export class RuntimeBindingDataFlowMaterializer {
   constructor(
     /** Hot analysis store that receives binding data-flow products. */
     readonly store: KernelStore,
-    readonly publication: KernelPublicationContext = store,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   materialize(input: RuntimeBindingDataFlowMaterializationRequest): RuntimeBindingDataFlowEmission {

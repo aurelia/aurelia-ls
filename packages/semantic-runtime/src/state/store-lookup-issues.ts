@@ -1,6 +1,11 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import { issuePublicationWithRecords } from '../kernel/issue-publication.js';
+import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { sourceSpanAddressForSite } from '../kernel/source-address.js';
 import {
   KernelStore,
@@ -82,6 +87,7 @@ export class StateStoreLookupIssueMaterializer {
 
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {
     this.publisher = new StateIssuePublisher(store);
   }
@@ -99,18 +105,19 @@ export class StateStoreLookupIssueMaterializer {
         .filter((name): name is string => name != null),
     );
     const publications = [
-      ...fromStateStoreLookupSites(this.store, project, typeSystem),
-      ...templateStoreLookupSites(this.store, templates),
+      ...fromStateStoreLookupSites(this.publication, project, typeSystem),
+      ...templateStoreLookupSites(this.publication, templates),
     ]
       .filter((site) => !configuredStoreNames.has(site.storeName))
       .map((site, index) => this.publicationForSite(project, site, index));
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `state-store-lookup-issues:${project.projectKey}`));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(StateProductDetails.Issue, publication.issue.productHandle, publication.issue);
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `state-store-lookup-issues:${project.projectKey}`),
+      publishProductDetails(
+        StateProductDetails.Issue,
+        publications.map((publication) => publication.issue),
+      ),
+    ));
     return new StateStoreLookupIssueProjectResult(
       publications.map((publication) => publication.issue),
       records,
@@ -138,7 +145,7 @@ export class StateStoreLookupIssueMaterializer {
 }
 
 function fromStateStoreLookupSites(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
 ): readonly StateStoreLookupSite[] {
@@ -151,7 +158,7 @@ function fromStateStoreLookupSites(
       site.end,
       index,
     ].join(':');
-    const source = sourceSpanAddressForSite(store, local, site);
+    const source = sourceSpanAddressForSite(publication, local, site);
     return new StateStoreLookupSite(
       StateStoreLookupSiteKind.FromStateDecorator,
       site.storeName,
@@ -165,26 +172,26 @@ function fromStateStoreLookupSites(
 }
 
 function templateStoreLookupSites(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   templates: TemplateCompilationProjectEmission,
 ): readonly StateStoreLookupSite[] {
   return [
     ...templates.resources,
     ...templates.authoringResources,
   ].flatMap((resource) =>
-    resourceLocalRuntimeBindings(store, resource).flatMap((binding) =>
-      bindingStateStoreLookupSites(store, binding)
+    resourceLocalRuntimeBindings(publication, resource).flatMap((binding) =>
+      bindingStateStoreLookupSites(publication, binding)
     )
   );
 }
 
 function bindingStateStoreLookupSites(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   binding: RuntimeBinding,
 ): readonly StateStoreLookupSite[] {
   return [
     ...stateCommandStoreLookupSites(binding),
-    ...stateBindingBehaviorStoreLookupSites(store, binding),
+    ...stateBindingBehaviorStoreLookupSites(publication, binding),
   ];
 }
 
@@ -221,11 +228,11 @@ function stateCommandStoreLookupSites(
 }
 
 function stateBindingBehaviorStoreLookupSites(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   binding: RuntimeBinding,
 ): readonly StateStoreLookupSite[] {
   return expressionProductHandlesForRuntimeBinding(binding).flatMap((productHandle) => {
-    const parse = readTemplateExpressionParse(store, productHandle);
+    const parse = readTemplateExpressionParse(publication, productHandle);
     const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
     if (ast == null || parse?.sourceAddressHandle == null) {
       return [];

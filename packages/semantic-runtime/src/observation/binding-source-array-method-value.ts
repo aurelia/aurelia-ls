@@ -47,7 +47,7 @@ import {
   readSliceBound,
   stringCoercionText,
 } from '../evaluation/value-coercion.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { KernelStoreReadView } from '../kernel/store.js';
 import {
   openBindingSourceNeedsRuntimeValue,
   RuntimeBindingSourceValueEvaluation,
@@ -60,7 +60,7 @@ const maxSourceValueCallbackEvaluations = 1_000;
 /** Binding-source reducer for native array methods on closed source-value arrays. */
 export class RuntimeBindingSourceArrayMethodEvaluator {
   constructor(
-    private readonly store: KernelStore,
+    private readonly store: KernelStoreReadView,
     private readonly evaluateContext: (
       context: RuntimeBindingSourceValueEvaluationContext,
     ) => RuntimeBindingSourceValueEvaluation,

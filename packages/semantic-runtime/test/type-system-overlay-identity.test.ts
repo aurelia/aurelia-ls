@@ -32,7 +32,7 @@ describe('type-system overlay identity', () => {
       ...source,
       segments: source.segments.map((segment) => ({ ...segment })),
     };
-    const projectBuilder = new TypeSystemProjectBuilder();
+    const projectBuilder = new TypeSystemProjectBuilder(app.emission.typeSystem.programSources);
     const typeSystem = projectBuilder.build(app.project, app.emission.evaluation, {
       overlaySources: [source, equivalent],
     });

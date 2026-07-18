@@ -481,6 +481,24 @@ export class ProductDetailCatalog {
     return removed;
   }
 
+  /** Remove direct/unowned details after a lifetime boundary while preserving active computation publications. */
+  removeUnretainedAtOrAfterLifetime(
+    marker: number,
+    retainedHandles: ReadonlySet<ProductHandle>,
+  ): number {
+    let removed = 0;
+    for (const handle of [...this.handleOrder].reverse()) {
+      if (
+        !retainedHandles.has(handle)
+        && (this.lifetimeOrdinalByHandle.get(handle) ?? -1) >= marker
+        && this.remove(handle) != null
+      ) {
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
   private addHandleForSlot(
     slot: ProductDetailSlot<unknown>,
     productHandle: ProductHandle,

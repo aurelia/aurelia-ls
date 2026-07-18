@@ -9,10 +9,11 @@ import type {
 import { localKeyPart } from '../kernel/local-key.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
+  KernelPublicationPlan,
   KernelStoreBatch,
-  type KernelStore,
-  type KernelStoreRecord,
-} from '../kernel/store.js';
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type { KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   RouteNodeModel,
@@ -154,7 +155,7 @@ export class RouteTreeMaterializationProjectResult {
 /** Materialize initial RouteTree roots plus static transition trees that can close before activation. */
 export class RouteTreeMaterializationProjectPass {
   materializeAndEmit(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
     routeConfigContexts: RouteConfigContextMaterializationProjectResult,
     routeRuntime: RouteRuntimeTopologyProjectResult,
@@ -164,7 +165,7 @@ export class RouteTreeMaterializationProjectPass {
     routerOptions: RouterOptionsMaterializationProjectResult | null,
   ): RouteTreeMaterializationProjectResult {
     const frame = new RouteTreeMaterializationFrame(
-      store,
+      publication,
       routeConfigContexts,
       routeRuntime,
       routeRecognizer,
@@ -174,9 +175,9 @@ export class RouteTreeMaterializationProjectPass {
     );
     const emissions = frame.materialize();
     const records = frame.readRecords(emissions);
-    if (records.length > 0) {
-      store.commit(new KernelStoreBatch(records, `router-route-tree:${project.projectKey}`));
-    }
+    publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `router-route-tree:${project.projectKey}`),
+    ));
     return new RouteTreeMaterializationProjectResult(
       project,
       emissions.map((emission) => emission.routeTree),
@@ -193,7 +194,7 @@ class RouteTreeMaterializationFrame {
   private readonly issues: RouterIssueModel[] = [];
 
   constructor(
-    private readonly store: KernelStore,
+    private readonly store: KernelPublicationContext,
     private readonly routeConfigContexts: RouteConfigContextMaterializationProjectResult,
     private readonly routeRuntime: RouteRuntimeTopologyProjectResult,
     private readonly routeRecognizer: RouteRecognizerMaterializationProjectResult,
@@ -281,7 +282,7 @@ class RouteTreeTransitionMaterializationFrame {
   private readonly redirectIssueRouteConfigIdentities: ReadonlySet<RouteConfigModel['identityHandle']>;
 
   constructor(
-    private readonly store: KernelStore,
+    private readonly store: KernelPublicationContext,
     private readonly routeConfigContexts: RouteConfigContextMaterializationProjectResult,
     private readonly routeRuntime: RouteRuntimeTopologyProjectResult,
     private readonly routeRecognizer: RouteRecognizerMaterializationProjectResult,
@@ -497,7 +498,7 @@ class RouteTreeTransitionMaterializationFrame {
 }
 
 function initialRootRouteNode(
-  store: KernelStore,
+  store: KernelPublicationContext,
   nodeLocal: string,
   routeConfig: RouteConfigModel,
   routeContext: RouteContextModel,
@@ -530,7 +531,7 @@ function initialRootRouteNode(
 }
 
 function initialRouteTree(
-  store: KernelStore,
+  store: KernelPublicationContext,
   treeLocal: string,
   routeContext: RouteContextModel,
   rootNode: RouteNodeModel,
@@ -553,7 +554,7 @@ function initialRouteTree(
 }
 
 function initialRouteTreeRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   treeLocal: string,
   nodeLocal: string,
   routeContext: RouteContextModel,
@@ -567,7 +568,7 @@ function initialRouteTreeRecords(
 }
 
 function initialRootRouteNodeRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   routeContext: RouteContextModel,
   rootNode: RouteNodeModel,
@@ -589,7 +590,7 @@ function initialRootRouteNodeRecords(
 }
 
 function initialRouteTreeProductRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   routeContext: RouteContextModel,
   routeTree: RouteTreeModel,
@@ -611,7 +612,7 @@ function initialRouteTreeProductRecords(
 }
 
 function materializedRouteNode(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   fields: RouteNodeMaterializationFields,
 ): RouteNodeModel {
@@ -646,7 +647,7 @@ function materializedRouteNode(
 }
 
 function transitionRootRouteNodeReference(
-  store: KernelStore,
+  store: KernelPublicationContext,
   rootLocal: string,
   instructionTree: ViewportInstructionTreeModel,
   routeContext: RouteContextModel,
@@ -661,7 +662,7 @@ function transitionRootRouteNodeReference(
 }
 
 function transitionRouteNodeSites(
-  store: KernelStore,
+  store: KernelPublicationContext,
   treeLocal: string,
   trees: readonly ResolvedTransitionRouteNodeTree[],
   parentIndexPath = '',
@@ -685,7 +686,7 @@ function transitionRouteNodeSites(
 }
 
 function transitionRouteNodeEmissions(
-  store: KernelStore,
+  store: KernelPublicationContext,
   instructionTree: ViewportInstructionTreeModel,
   rootReference: RouterReference,
   sites: readonly TransitionRouteNodeSite[],
@@ -705,7 +706,7 @@ function transitionRouteNodeEmissions(
 }
 
 function transitionRootRouteNode(
-  store: KernelStore,
+  store: KernelPublicationContext,
   rootLocal: string,
   instructionTree: ViewportInstructionTreeModel,
   routeContext: RouteContextModel,
@@ -740,7 +741,7 @@ function transitionRootRouteNode(
 }
 
 function transitionRouteTree(
-  store: KernelStore,
+  store: KernelPublicationContext,
   treeLocal: string,
   instructionTree: ViewportInstructionTreeModel,
   rootNode: RouteNodeModel,
@@ -762,7 +763,7 @@ function transitionRouteTree(
 }
 
 function transitionRouteTreeRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   treeLocal: string,
   rootLocal: string,
   routeContext: RouteContextModel,
@@ -778,7 +779,7 @@ function transitionRouteTreeRecords(
 }
 
 function transitionRootRouteNodeRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   routeContext: RouteContextModel,
   rootNode: RouteNodeModel,
@@ -800,7 +801,7 @@ function transitionRootRouteNodeRecords(
 }
 
 function transitionChildRouteNodeRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   childNodes: readonly TransitionRouteNodeEmission[],
 ): readonly KernelStoreRecord[] {
   return flattenTransitionRouteNodeEmissions(childNodes).flatMap((emission) =>
@@ -818,7 +819,7 @@ function flattenTransitionRouteNodeEmissions(
 }
 
 function transitionRouteTreeProductRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   routeContext: RouteContextModel,
   instructionTree: ViewportInstructionTreeModel,
@@ -840,7 +841,7 @@ function transitionRouteTreeProductRecords(
 }
 
 function transitionRouteNode(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   instructionTree: ViewportInstructionTreeModel,
   seed: ResolvedTransitionRouteNodeSeed,
@@ -884,7 +885,7 @@ function routeNodeParams(
 }
 
 function transitionRouteNodeRecords(
-  store: KernelStore,
+  store: KernelPublicationContext,
   local: string,
   node: RouteNodeModel,
 ): readonly KernelStoreRecord[] {
@@ -1212,7 +1213,7 @@ function resolveTransitionRouteNodeSeed(
 }
 
 function recordViewportResolutionFailure(
-  store: KernelStore,
+  store: KernelPublicationContext,
   open: OpenViewportResolution,
   issues: RouterIssueModel[],
   records: KernelStoreRecord[],
@@ -1226,7 +1227,7 @@ function recordViewportResolutionFailure(
 }
 
 function recordViewportResolutionOpenSeam(
-  store: KernelStore,
+  store: KernelPublicationContext,
   open: OpenViewportResolution,
   requestLabel: string,
   records: KernelStoreRecord[],
@@ -1253,7 +1254,7 @@ function viewportResolutionRequestLabel(open: OpenViewportResolution): string {
 }
 
 function recordNoAvailableViewportAgentIssue(
-  store: KernelStore,
+  store: KernelPublicationContext,
   open: OpenViewportResolution,
   requestLabel: string,
   issues: RouterIssueModel[],
@@ -1297,7 +1298,7 @@ function recordNoAvailableViewportAgentIssue(
 }
 
 function recordRedirectMigrationIssue(
-  store: KernelStore,
+  store: KernelPublicationContext,
   recognizedRoute: RecognizedRouteModel,
   configurableRoute: ConfigurableRouteModel,
   routeConfig: RouteConfigModel,
@@ -1373,7 +1374,7 @@ function hasRecognizedRedirectTarget(
 }
 
 function recordRedirectTargetOpenSeam(
-  store: KernelStore,
+  store: KernelPublicationContext,
   recognizedRoute: RecognizedRouteModel,
   routeConfig: RouteConfigModel,
   records: KernelStoreRecord[],

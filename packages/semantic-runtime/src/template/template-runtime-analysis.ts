@@ -308,7 +308,7 @@ class TemplateRuntimeAnalysisFrame {
     this.boundControllerValues = request.boundControllerValues;
     this.sourceValueActivationContext = request.evaluation == null || request.typeSystem == null
       ? null
-      : new RuntimeBindingSourceActivationContext(store, request.evaluation, request.typeSystem);
+      : new RuntimeBindingSourceActivationContext(publication, request.evaluation, request.typeSystem);
   }
 
   materialize(): TemplateRuntimeAnalysisEmission {
@@ -662,7 +662,7 @@ class TemplateRuntimeAnalysisFrame {
       return null;
     }
     const runtimeAnalysisBoundControllerValues = extendRuntimeBoundControllerValueTable(
-      this.store,
+      this.publication,
       this.boundControllerValues,
       {
         controllerProductHandle: null,
@@ -680,7 +680,7 @@ class TemplateRuntimeAnalysisFrame {
       this.request.compilerWorld.container,
     );
     return RuntimeBindingSourceValueEvaluator.create(
-      this.store,
+      this.publication,
       this.expressionWorld.projector,
       this.request.evaluation,
       runtimeAnalysisBoundControllerValues,

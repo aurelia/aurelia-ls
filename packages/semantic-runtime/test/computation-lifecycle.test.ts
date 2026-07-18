@@ -33,6 +33,11 @@ import {
   SourceTextSnapshotAuthority,
   SourceTextSnapshotState,
 } from "../src/kernel/source-text-snapshot.js";
+import {
+  NodeSemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputAuthority,
+  type SemanticRuntimeSourceTextOverlay,
+} from "../src/kernel/project-input.js";
 import { KernelStore, KernelStoreBatch } from "../src/kernel/store.js";
 import { KernelVocabulary } from "../src/kernel/vocabulary.js";
 
@@ -69,7 +74,7 @@ class MutableRevisionAuthority {
   }
 }
 
-class MutableSourceTextProvider {
+class MutableSourceHost {
   private readonly sourceTextByFileName = new Map<string, string>();
 
   write(fileName: string, sourceText: string): void {
@@ -87,6 +92,14 @@ class MutableSourceTextProvider {
   fileExists(fileName: string): boolean {
     return this.sourceTextByFileName.has(path.resolve(fileName));
   }
+}
+
+function sourceTextSnapshotAuthority(overlay: SemanticRuntimeSourceTextOverlay): SourceTextSnapshotAuthority {
+  const inputs = new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost(overlay));
+  return new SourceTextSnapshotAuthority(inputs.capture({
+    projectKey: "source-text-snapshot-test",
+    rootDir: "C:/virtual",
+  }));
 }
 
 function locus(owner: string, cohort = "app-root:default"): ComputationLocus {
@@ -125,16 +138,26 @@ describe("computation lifecycle", () => {
 
     const run0 = lifecycle.begin(locus("prior-publication"));
     run0.publish(publication("owned:0", [owned0]));
+    expect(run0.readSourceFileAddressesByFileName("src/owned.html")).toEqual([owned0]);
+    expect(run0.readAllRecords()).toEqual(expect.arrayContaining([upstream, owned0]));
+    expect(store.readSourceFileAddressesByFileName("src/owned.html")).toEqual([]);
     expect(run0.commit().state).toBe(ComputationCommitState.Committed);
 
     const run1 = lifecycle.begin(locus("prior-publication"));
     expect(run1.read(ownedHandle)).toBeNull();
     expect(run1.read(upstreamHandle)).toBe(upstream);
+    expect(run1.readSourceFileAddressesByFileName("src/owned.html")).toEqual([]);
+    expect(run1.readSourceFileAddressesByFileName("src/upstream.html")).toEqual([upstream]);
+    expect(run1.readAllRecords()).toEqual([upstream]);
     expect(run1.readKernelCountSnapshot().totalRecords).toBe(1);
     const replacementMarker = run1.markObservation();
     const owned1 = new SourceFileAddress(ownedHandle, "test", "src/owned-next.html", SourceLanguage.Html);
     run1.publish(publication("owned:1", [owned1]));
     expect(run1.read(ownedHandle)).toBe(owned1);
+    expect(run1.readSourceFileAddressesByFileName("C:/workspace/src/owned-next.html")).toEqual([owned1]);
+    expect(run1.readAllRecords()).toEqual(expect.arrayContaining([upstream, owned1]));
+    expect(run1.readAllRecords()).not.toContain(owned0);
+    expect(store.readSourceFileAddressesByFileName("src/owned-next.html")).toEqual([]);
     expect(run1.readKernelCountSnapshot().totalRecords).toBe(2);
     expect(run1.readDensitySince(replacementMarker).recordKinds).toEqual([
       { key: "source-file-address", count: 1 },
@@ -943,6 +966,76 @@ describe("computation lifecycle", () => {
     expect(store.hotDetails.read(hotSlot, "hot:lifetime:answer-local")).toBeNull();
   });
 
+  test("reclaims unowned answer-local rows without crossing interleaved computation publications", () => {
+    const store = new KernelStore("computation-selective-lifetime");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const detailSlot = defineProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.selective-lifetime-product",
+      "Selective lifetime product detail.",
+    );
+    const hotSlot = defineHotDetailSlot<{ readonly owner: string }>(
+      "test.selective-lifetime-hot",
+      "Selective lifetime hot detail.",
+    );
+
+    const publish = (owner: string) => {
+      const productHandle = store.handles.product(`selective-lifetime:${owner}`);
+      const provenanceHandle = store.handles.provenance(`selective-lifetime:${owner}`);
+      const hotHandle = `hot:selective-lifetime:${owner}`;
+      const run = lifecycle.begin(locus(`selective-lifetime:${owner}`));
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(provenanceHandle),
+          new MaterializedProduct(
+            productHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            provenanceHandle,
+          ),
+        ], `selective-lifetime:${owner}`),
+        [publishProductDetail(detailSlot, productHandle, { owner })],
+        [publishHotDetail(hotSlot, hotHandle, { owner })],
+      ));
+      expect(run.commit().state).toBe(ComputationCommitState.Committed);
+      return { run, productHandle, hotHandle };
+    };
+
+    const earlier = publish("earlier");
+    const answerMarker = store.markLifetime();
+    const later = publish("later");
+
+    const answerProductHandle = store.handles.product("selective-lifetime:answer-local");
+    const answerProvenanceHandle = store.handles.provenance("selective-lifetime:answer-local");
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(answerProvenanceHandle),
+      new MaterializedProduct(
+        answerProductHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        answerProvenanceHandle,
+      ),
+    ], "selective-lifetime:answer-local"));
+    store.productDetails.add(detailSlot, answerProductHandle, { owner: "answer-local" });
+    store.hotDetails.add(hotSlot, "hot:selective-lifetime:answer-local", { owner: "answer-local" });
+
+    const disposal = store.disposeUnownedSince(answerMarker);
+
+    expect(disposal).toEqual(expect.objectContaining({ records: 2, productDetails: 1, hotDetails: 1 }));
+    expect(store.read(answerProductHandle)).toBeNull();
+    expect(store.productDetails.read(detailSlot, answerProductHandle)).toBeNull();
+    expect(store.hotDetails.read(hotSlot, "hot:selective-lifetime:answer-local")).toBeNull();
+    for (const publication of [earlier, later]) {
+      expect(store.read(publication.productHandle)).not.toBeNull();
+      expect(store.productDetails.read(detailSlot, publication.productHandle)).not.toBeNull();
+      expect(store.hotDetails.read(hotSlot, publication.hotHandle)).not.toBeNull();
+      expect(lifecycle.readState(publication.run.computationId)?.committedRunSequence)
+        .toBe(publication.run.runSequence);
+    }
+  });
+
   test("promotes a replacement closure to the youngest foreign reference and registered record read", () => {
     const store = new KernelStore("computation-lifetime-dependency-closure");
     const lifecycle = new ComputationLifecycleRegistry(store);
@@ -1064,8 +1157,8 @@ describe("computation lifecycle", () => {
 describe("source text snapshots", () => {
   test("keeps one admitted source value immutable while reporting a later content revision", () => {
     const fileName = "C:/virtual/src/app.html";
-    const provider = new MutableSourceTextProvider();
-    const authority = new SourceTextSnapshotAuthority(provider);
+    const provider = new MutableSourceHost();
+    const authority = sourceTextSnapshotAuthority(provider);
     provider.write(fileName, "<p>first</p>");
 
     const admitted = authority.capture(fileName);
@@ -1082,8 +1175,8 @@ describe("source text snapshots", () => {
 
   test("distinguishes an authoritative absence from a later present source", () => {
     const fileName = "C:/virtual/src/late.html";
-    const provider = new MutableSourceTextProvider();
-    const authority = new SourceTextSnapshotAuthority(provider);
+    const provider = new MutableSourceHost();
+    const authority = sourceTextSnapshotAuthority(provider);
 
     const absent = authority.capture(fileName);
     expect(absent.state).toBe(SourceTextSnapshotState.Absent);
@@ -1096,8 +1189,8 @@ describe("source text snapshots", () => {
   });
 
   test("does not fall through to disk after the source provider proves absence", () => {
-    const provider = new MutableSourceTextProvider();
-    const authority = new SourceTextSnapshotAuthority(provider);
+    const provider = new MutableSourceHost();
+    const authority = sourceTextSnapshotAuthority(provider);
     const existingFileName = fileURLToPath(import.meta.url);
 
     const snapshot = authority.capture(existingFileName);
@@ -1107,7 +1200,7 @@ describe("source text snapshots", () => {
   });
 
   test("keeps a provider-claimed file without readable text distinct from absence", () => {
-    const authority = new SourceTextSnapshotAuthority({
+    const authority = sourceTextSnapshotAuthority({
       readFile: () => undefined,
       fileExists: () => true,
     });

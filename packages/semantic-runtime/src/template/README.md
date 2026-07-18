@@ -41,8 +41,8 @@ classification, expression parsing, and instruction lowering converge on the sam
   planner partitions routeables by their owning app root, computes dependency closure before compilation, and gives
   every owner a deterministic retained parent world containing that owner plus its own declared dependencies. Stable
   project/app-root/owner keys and exact resource-scope comparison prevent queue order, array position, aliases, or
-  source-witness changes from silently selecting a different world. `template-analysis-computation.ts` owns the current
-  committed project generation and its callback-backed cohort authority, so family computations can follow complete
+  source-witness changes from silently selecting a different world. `configuration/app-analysis-computation.ts` owns the
+  current committed app generation and its generation-bound cohort authority, so family computations can follow complete
   same-runtime replacement without asking an LSP caller to reconstruct cohorts from compiled emissions. Component
   worlds, the standalone authoring container/world, and its built-in syntax/resource/renderer catalogs all spend the
   caller's publication context, so a staged project replan cannot leak support records before the transaction commits.
@@ -55,8 +55,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   The pass owns the shared `CheckerExpressionTypeWorld` for all resource runtime-analysis frames in that project
   compilation, while each resource profile reports expression-cache deltas from a local marker. Keep future
   runtime/checker lifetime work at this project-pass boundary instead of rebuilding an expression world per resource.
-  Production runs enter through `TemplateAnalysisProjectComputationService`: compiler and runtime products, checker
-  projections, exact compiler/kernel/source reads, and omitted-output withdrawal form one project publication. A
+  Production runs enter through `AureliaAppWorldProjectComputationService`: configuration, DI, resources, compiler and
+  runtime products, checker projections, exact compiler/kernel/source reads, and omitted-output withdrawal form one app
+  publication. A
   prepared emission remains run-bound and invisible; commit installs one generation-guarded, store-backed expression
   world shared by every retained resource. Replacement or disposal revokes retained checker reads and lazy projections
   together with the kernel closure. Resource convergence records the complete authored-file revision that produced each inline
@@ -90,8 +91,8 @@ classification, expression parsing, and instruction lowering converge on the sam
   coherent family. Inline TypeScript templates, runtime analysis, checker products, dependent public answers, and
   production LSP epoch replacement remain outside this boundary. Configuration/DI lifecycle ownership also remains
   upstream: the cohort planner spends the current app-world snapshot and must not grow a parallel registration or
-  resource catalog while that larger authority is introduced.
-- `template-analysis-computation.ts` is the larger production authority around the complete project pass. One project
+  resource catalog; the complete app-analysis authority already owns that larger replacement boundary.
+- `configuration/app-analysis-computation.ts` is the production authority around the complete app project pass. One project
   locus owns one current generation regardless of analysis depth or authoring policy; those are replacement inputs, not
   parallel owners of stable handles. `AureliaAppWorldProjectEmission` pins the exact generation used by its downstream
   observation, state, capability, and router products. Replacement or disposal makes that whole app emission stale and

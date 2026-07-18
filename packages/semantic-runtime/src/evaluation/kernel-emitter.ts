@@ -2,10 +2,11 @@ import type ts from 'typescript';
 import {
   EvidenceRole,
 } from '../kernel/evidence.js';
-import type {
-  AddressHandle,
-  KernelRecordHandle,
-} from '../kernel/handles.js';
+import type { AddressHandle } from '../kernel/handles.js';
+import {
+  KernelPublicationPlan,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
 import { recordsForSourceOpenSeam } from '../kernel/source-open-seam.js';
 import {
   KernelStoreBatch,
@@ -13,7 +14,7 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import type { StaticModuleEvaluationResult } from './evaluator.js';
-import { EvaluationOpenSeam } from './seams.js';
+import type { EvaluationOpenSeam } from './seams.js';
 
 export interface EvaluationOpenSeamSource {
   readonly sourceFile: ts.SourceFile;
@@ -25,8 +26,10 @@ export type EvaluationOpenSeamSourceResolver = (seam: EvaluationOpenSeam) => Eva
 /** Emits durable kernel records for evaluator boundary pressure. */
 export class EvaluationKernelEmitter {
   constructor(
-    /** Hot analysis store that receives evaluator boundary records. */
+    /** Store that owns stable handles and committed upstream records. */
     readonly store: KernelStore,
+    /** Immediate or staged owner of evaluator boundary records. */
+    readonly publication: KernelPublicationContext,
   ) {}
 
   /** Emit source spans, evidence, provenance, and open seams for one module evaluation result. */
@@ -39,11 +42,13 @@ export class EvaluationKernelEmitter {
       const source = resolveSource(seam);
       records.push(...this.recordsForOpenSeam(source.sourceFile, source.sourceFileAddressHandle, result.moduleKey, seam, index));
     });
-    const newRecords = records.filter((record) => this.store.read(record.handle as KernelRecordHandle) == null);
+    const newRecords = records.filter((record) => this.publication.read(record.handle) == null);
     if (newRecords.length === 0) {
       return;
     }
-    this.store.commit(new KernelStoreBatch(newRecords, `evaluation-open-seams:${result.moduleKey}`));
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(newRecords, `evaluation-open-seams:${result.moduleKey}`),
+    ));
   }
 
   private recordsForOpenSeam(

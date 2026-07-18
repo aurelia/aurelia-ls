@@ -2,10 +2,16 @@ import type { ProjectBootFrame } from '../boot/frames.js';
 import type { ConfigurationRecognitionProjectResult } from '../configuration/configuration-recognition-project-pass.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import { EvidenceKind, EvidenceRole } from '../kernel/evidence.js';
-import type { IdentityHandle, ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
+import type { EvidenceHandle, IdentityHandle, ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { FieldProvenance, ProvenanceRecord, readFieldProvenance } from '../kernel/provenance.js';
-import { KernelStoreBatch, type KernelStore, type KernelStoreRecord } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  KernelStoreBatch,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import type { KernelStoreReadView, KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
@@ -86,14 +92,14 @@ export class RouteConfigConvergenceProjectResult {
 /** Converge source contributions through RouteConfig._create and _applyChildRouteConfig semantics. */
 export class RouteConfigConvergenceProjectPass {
   convergeAndEmit(
-    store: KernelStore,
+    publication: KernelPublicationContext,
     project: ProjectBootFrame,
     recognition: RouteConfigRecognitionProjectResult,
     resourceIndex: ResourceDefinitionIndex,
     configuration: ConfigurationRecognitionProjectResult,
   ): RouteConfigConvergenceProjectResult {
     return new RouteConfigConvergenceFrame(
-      store,
+      publication,
       project,
       recognition,
       resourceIndex,
@@ -154,7 +160,7 @@ class RouteConfigConvergenceFrame {
   private readonly links: RouteConfigConvergenceLink[] = [];
 
   constructor(
-    readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
     readonly project: ProjectBootFrame,
     readonly recognition: RouteConfigRecognitionProjectResult,
     readonly resourceIndex: ResourceDefinitionIndex,
@@ -208,12 +214,10 @@ class RouteConfigConvergenceFrame {
       this.materializeStandaloneContribution(contribution);
     }
 
-    if (this.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(this.records, `router-route-config-convergence:${this.project.projectKey}`));
-    }
-    for (const routeConfig of this.routeConfigs) {
-      this.store.productDetails.add(RouterProductDetails.RouteConfig, routeConfig.productHandle, routeConfig);
-    }
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(this.records, `router-route-config-convergence:${this.project.projectKey}`),
+      publishProductDetails(RouterProductDetails.RouteConfig, this.routeConfigs),
+    ));
     return new RouteConfigConvergenceProjectResult(
       this.project,
       this.recognition,
@@ -363,10 +367,10 @@ class RouteConfigConvergenceFrame {
     }
 
     const productProvenance = selection.contributions.flatMap((contribution) =>
-      contributionProductProvenance(this.store, contribution)
+      contributionProductProvenance(this.publication, contribution)
     );
     if (productProvenance.length === 0 && definition.productHandle != null) {
-      const provenance = this.store.readProduct(definition.productHandle)?.provenanceHandle ?? null;
+      const provenance = readProductProvenance(this.publication, definition.productHandle);
       if (provenance != null) {
         productProvenance.push(provenance);
       }
@@ -385,8 +389,8 @@ class RouteConfigConvergenceFrame {
         : []),
     ];
     return {
-      productHandle: this.store.handles.product(local),
-      identityHandle: this.store.handles.identity(local),
+      productHandle: this.publication.handles.product(local),
+      identityHandle: this.publication.handles.identity(local),
       ownerIdentityHandle: definition.target.identityHandle!,
       stage: RouteConfigStageKind.Definition,
       routeKind: effectiveRouteKind(explicit?.routeKind ?? statics?.routeKind ?? RouteConfigKind.Route, component, readContributionValue(explicit, 'redirectTo', (entry) => entry.redirectTo) ?? readContributionValue(statics, 'redirectTo', (entry) => entry.redirectTo)),
@@ -448,7 +452,7 @@ class RouteConfigConvergenceFrame {
       return null;
     }
     const local = `router-route-config-applied:${parent.identityHandle}:${contribution.identityHandle}`;
-    const identityHandle = this.store.handles.identity(local);
+    const identityHandle = this.publication.handles.identity(local);
     const base = contribution.component?.resolvedIdentityHandle == null
       ? null
       : this.definitionSeedForTarget(contribution.component.resolvedIdentityHandle);
@@ -502,13 +506,13 @@ class RouteConfigConvergenceFrame {
       }
     }
     const productProvenance = unique([
-      ...contributionProductProvenance(this.store, contribution),
+      ...contributionProductProvenance(this.publication, contribution),
       ...(base?.productProvenance ?? []),
       ...(parent == null ? [] : parent.productProvenance),
     ]);
     return {
-      productHandle: this.store.handles.product(local),
-      identityHandle: this.store.handles.identity(local),
+      productHandle: this.publication.handles.product(local),
+      identityHandle: this.publication.handles.identity(local),
       ownerIdentityHandle,
       stage: RouteConfigStageKind.Applied,
       routeKind: effectiveRouteKind(contribution.routeKind, component, contribution.redirectTo ?? base?.redirectTo ?? null),
@@ -577,7 +581,7 @@ class RouteConfigConvergenceFrame {
     });
     const sourceProvenance = seed.sourceContribution == null
       ? null
-      : contributionProductProvenance(this.store, seed.sourceContribution)[0] ?? null;
+      : contributionProductProvenance(this.publication, seed.sourceContribution)[0] ?? null;
     if (sourceProvenance != null) {
       fieldProvenance.push(new FieldProvenance<RouteConfigField>('source', sourceProvenance));
     }
@@ -611,15 +615,15 @@ class RouteConfigConvergenceFrame {
       fieldProvenance,
     );
     const claimRecords = [...effects].map(([contribution], index) => new SemanticClaim(
-      this.store.handles.claim(`${local}:contribution:${index}:converges`),
+      this.publication.handles.claim(`${local}:contribution:${index}:converges`),
       contribution.productHandle,
       KernelVocabulary.Router.ConvergesToRouteConfig.key,
       routeConfig.productHandle,
-      contributionProductProvenance(this.store, contribution)[0] ?? provenance,
+      contributionProductProvenance(this.publication, contribution)[0] ?? provenance,
     ));
     const open = seed.openFields.size === 0
       ? null
-      : routerOpenSeamRecords(this.store, {
+      : routerOpenSeamRecords(this.publication, {
           local: `${local}:open`,
           seamKindKey: KernelVocabulary.Router.OpenRouteConfig.key,
           ownerHandle: routeConfig.identityHandle,
@@ -634,7 +638,7 @@ class RouteConfigConvergenceFrame {
     this.records.push(
       ...claimRecords,
       ...(open?.records ?? []),
-      ...routerIdentityProductRecords(this.store, {
+      ...routerIdentityProductRecords(this.publication, {
         local,
         productHandle: routeConfig.productHandle,
         identityHandle: routeConfig.identityHandle,
@@ -660,9 +664,9 @@ class RouteConfigConvergenceFrame {
     if (uniqueHandles.length === 1) {
       return uniqueHandles[0]!;
     }
-    const handle = this.store.handles.provenance(local);
+    const handle = this.publication.handles.provenance(local);
     const evidenceHandles = unique(uniqueHandles.flatMap((provenanceHandle) =>
-      this.store.readProvenance(provenanceHandle)?.evidenceHandles ?? []
+      provenanceEvidenceHandles(this.publication, provenanceHandle)
     ));
     this.records.push(new ProvenanceRecord(handle, evidenceHandles));
     return handle;
@@ -868,11 +872,27 @@ function contributionFieldProvenance(
 }
 
 function contributionProductProvenance(
-  store: KernelStore,
+  store: KernelStoreReadView,
   contribution: RouteConfigContributionModel,
 ): readonly ProvenanceHandle[] {
-  const provenance = store.readProduct(contribution.productHandle)?.provenanceHandle ?? null;
+  const provenance = readProductProvenance(store, contribution.productHandle);
   return provenance == null ? [] : [provenance];
+}
+
+function readProductProvenance(
+  store: KernelStoreReadView,
+  productHandle: ProductHandle,
+): ProvenanceHandle | null {
+  const product = store.read(productHandle);
+  return product?.kind === 'materialized-product' ? product.provenanceHandle : null;
+}
+
+function provenanceEvidenceHandles(
+  store: KernelStoreReadView,
+  provenanceHandle: ProvenanceHandle,
+): readonly EvidenceHandle[] {
+  const provenance = store.read(provenanceHandle);
+  return provenance?.kind === 'provenance-record' ? provenance.evidenceHandles : [];
 }
 
 function definitionFieldStates(

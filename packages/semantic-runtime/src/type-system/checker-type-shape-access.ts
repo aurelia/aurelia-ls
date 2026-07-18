@@ -163,7 +163,6 @@ export class CheckerTypeShapeAccess {
       const valueType = this.declaredMemberValueType(member, localKey);
       const memberSourceAddressHandle = checkerTypeMemberSourceAddressHandle(this.projector.publication, member);
       const sourceAddressHandle = checkerTypeMemberValueSourceAddressHandle(
-        this.store,
         this.projector.publication,
         member,
       )
@@ -282,7 +281,7 @@ export class CheckerTypeShapeAccess {
 
     const member = ownerType.members.find((candidate) => candidate.name === memberName) ?? null;
     if (member != null) {
-      return checkerTypeMemberWriteAccess(member, this.store, this.projector.publication);
+      return checkerTypeMemberWriteAccess(member, this.projector.publication);
     }
 
     const checkerMember = checkerMemberForOwnerType(ownerType, memberName);
@@ -606,7 +605,6 @@ export class CheckerTypeShapeAccess {
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceNode: member.carrier.declarations[0] ?? null,
       sourceAddressHandle: checkerTypeMemberValueSourceAddressHandle(
-        this.store,
         this.projector.publication,
         member,
       )
@@ -654,8 +652,8 @@ export class CheckerTypeShapeAccess {
     member: CheckerTypeShapeCheckerMember,
   ): AddressHandle | null {
     return checkerSymbolMemberValueSourceProjection(
-      this.store,
       this.projector.publication,
+      member.checker,
       member.symbol,
       member.declarations,
     ).sourceAddressHandle;
@@ -665,8 +663,8 @@ export class CheckerTypeShapeAccess {
     member: CheckerTypeShapeCheckerMember,
   ): AddressHandle | null {
     return checkerSymbolMemberSourceProjection(
-      this.store,
       this.projector.publication,
+      member.checker,
       member.symbol,
       member.declarations,
     ).sourceAddressHandle;
@@ -675,7 +673,6 @@ export class CheckerTypeShapeAccess {
 
 export function checkerTypeMemberWriteAccess(
   member: CheckerTypeMember,
-  store: KernelStore,
   publication: KernelPublicationContext,
 ): CheckerTypeShapeMemberWriteAccess {
   return checkerTypeMemberWriteAccessFromSurface(
@@ -683,7 +680,7 @@ export function checkerTypeMemberWriteAccess(
     member.memberKind,
     member.isReadonly,
     member.carrier?.declarations ?? [],
-    checkerTypeMemberValueSourceAddressHandle(store, publication, member)
+    checkerTypeMemberValueSourceAddressHandle(publication, member)
       ?? checkerTypeMemberSourceAddressHandle(publication, member),
   );
 }
@@ -853,6 +850,7 @@ function checkerTypeMemberValueAccessResult(
 }
 
 interface CheckerTypeShapeCheckerMember {
+  readonly checker: ts.TypeChecker;
   readonly symbol: ts.Symbol;
   readonly declarations: readonly ts.Declaration[];
 }
@@ -870,6 +868,7 @@ function checkerMemberForOwnerType(
     return null;
   }
   return {
+    checker: carrier.checker,
     symbol,
     declarations: declarationsForCheckerSymbol(symbol),
   };

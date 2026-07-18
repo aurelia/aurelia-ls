@@ -9,6 +9,7 @@ import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { ResourceIssue } from '../resources/resource-issue.js';
 import type { ResourceDependencyReference } from '../resources/resource-reference.js';
+import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import type {
   WatchCallbackDefinition,
   WatchDefinition,
@@ -79,7 +80,14 @@ function resourceDefinitionRow(
     targetName: definition.target.localName,
     captureKind: 'capture' in definition ? definition.capture.kind : null,
     template: 'template' in definition ? templateRow(definition.template, store) : null,
-    bindables: 'bindables' in definition ? bindableRows(definition.bindables, definition.target, store) : [],
+    bindables: 'bindables' in definition
+      ? bindableRows(
+          definition.bindables,
+          definition.target,
+          store,
+          emission.templates.expressionWorld.projector,
+        )
+      : [],
     watches: 'watches' in definition ? watchRows(definition.watches, store) : [],
     issues: issues
       .filter((issue) => issue.ownerDefinitionIdentityHandle === definition.identityHandle)
@@ -249,6 +257,7 @@ function bindableRows(
   bindables: readonly BindableDefinition[],
   target: FullResourceDefinition['target'],
   store: KernelStore,
+  projector: CheckerTypeProjector,
 ): readonly SemanticResourceDefinitionBindableRow[] {
   return bindables
     .map((bindable): SemanticResourceDefinitionBindableRow => ({
@@ -257,7 +266,7 @@ function bindableRows(
       callback: bindable.callback,
       mode: bindable.mode,
       setterKind: bindable.set.kind,
-      ...projectBindableTypeSurface(store, target, bindable),
+      ...projectBindableTypeSurface(store, projector, target, bindable),
       source: describeAddress(store, bindable.sourceAddressHandle),
       nameSource: describeAddress(store, bindable.nameSourceAddressHandle),
       attributeSource: describeAddress(store, bindable.attributeSourceAddressHandle),

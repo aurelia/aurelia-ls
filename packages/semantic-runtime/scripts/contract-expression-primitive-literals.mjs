@@ -9,6 +9,7 @@ import { CheckerExpressionTypeEvaluator } from '../out/type-system/expression-ty
 import { CheckerExpressionTypeEvaluationContext } from '../out/type-system/expression-type-context.js';
 import { CheckerExpressionTypeEvaluationResultKind } from '../out/type-system/expression-type-evaluation.js';
 import { CheckerTypeProjectionOrigin } from '../out/type-system/type-shape.js';
+import { registerIsolatedCheckerDeclarationSourceContext } from '../out/type-system/declaration-source.js';
 
 const sourceFileName = 'contract-expression-primitive-literals.ts';
 const sourceText = 'export interface ContractRoot { value: string; }\n';
@@ -24,10 +25,11 @@ host.fileExists = (fileName) => fileName === sourceFileName || ts.sys.fileExists
 
 const program = ts.createProgram([sourceFileName], { strict: true, target: ts.ScriptTarget.Latest, noEmit: true }, host);
 const checker = program.getTypeChecker();
+registerIsolatedCheckerDeclarationSourceContext(checker, 'contract-expression-primitive-literals');
 const rootInterface = sourceFile.statements.find(ts.isInterfaceDeclaration);
 const rootType = rootInterface == null ? checker.getUnknownType() : checker.getTypeAtLocation(rootInterface.name);
 const store = new KernelStore('contract-expression-primitive-literals');
-const projector = new CheckerTypeProjector(store);
+const projector = new CheckerTypeProjector(store, store);
 const rootReference = projector.ensureProjection({
   localKey: 'contract-expression-primitive-literals:root',
   checker,

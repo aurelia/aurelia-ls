@@ -32,7 +32,7 @@
         "Route Array method classification through aureliaArrayMethodSemanticsFor before changing type projection, source-value reduction, or connectable observation. The descriptor keeps framework collection observation, native callback execution, and synthetic Array type projection separate but visibly joined.",
         "Array method coverage exposes whether callback body return shape drives synthetic Array type projection. `callback-body-type-independent` methods need callback scope construction but must not recursively reduce arbitrary callback body expressions to prove the whole-call type; `callback-body-drives-type` methods such as map/flatMap/reduce genuinely need callback return projection.",
         "CheckerExpressionArrayMethodProjector.evaluateMemberCall is currently an intentional descriptor-driven dispatch surface. Do not split it merely to satisfy large-function pressure; split only when a real reusable policy emerges across type projection, source-value reduction, observation, or overlay.",
-        "Synthetic Array method existence belongs in synthetic-array-type-surface/readOrProjectCheckerTypeMembers, not in completion or diagnostic policy. The member surface may prove method presence without a fake declaration/value type while CheckerExpressionArrayMethodProjector still owns call result typing.",
+        "Synthetic Array method existence belongs in synthetic-array-type-surface/readOrProjectCheckerTypeMembersInProjection, not in completion or diagnostic policy. The member surface may prove method presence without a fake declaration/value type while CheckerExpressionArrayMethodProjector still owns call result typing.",
         "Keep Array method tables honest about authority: framework autoObserveArrayMethods is the exact collection-observe list, while aureliaArrayMethodSemanticsFor exposes the product-recognized native-method set whose callback closures execute Aurelia ArrowFunction bodies under astEvaluate. If modern native callback methods are absent from framework observation, record that as Aurelia framework update pressure rather than permanent semantic-runtime observation policy.",
         "Use `pnpm --filter @aurelia-ls/atlas expression:coverage -- --projection=collection-methods --detail` when Array method pressure crosses checker projection, source-value reduction, static evaluator host prototype boundaries, astEvaluate collection reads, or ProxyObservable wrapping. Flags such as `modern-array-framework-observation-gap`, `descriptor-without-static-host-boundary`, `type-visible-source-value-open`, `source-value-mutating-receiver-open`, and `source-value-unmodeled-host-array-open` are boundary signals, not automatic semantic-runtime implementation orders.",
         "Modern non-mutating Array copy methods `toSpliced(...)` and `with(...)` close through shared evaluator array-value operations in both StaticEvaluator intrinsics and RuntimeBindingSourceArrayMethodEvaluator. Mutating receiver methods remain source-value-open for rendered bindings unless a future product consumer proves a safe mutation-state model is needed.",
@@ -324,7 +324,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-25"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "frontier:completed-input-companion-builder",

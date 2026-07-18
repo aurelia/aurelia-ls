@@ -37,8 +37,14 @@ import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
+  KernelPublicationPlan,
+  publishProductDetails,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
   KernelStoreBatch,
   type KernelStore,
+  type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -53,8 +59,8 @@ import type {
   ConfigurationStep,
 } from '../configuration/configuration-sequence.js';
 import {
-  type DiContainerChainFacts,
   readDiContainerChainFacts,
+  type DiContainerChainFacts,
 } from '../di/container-chain.js';
 import {
   FrameworkRegistrationCapability,
@@ -91,11 +97,14 @@ import type {
   TemplateCompilationProjectEmission,
   TemplateResourceRuntimeAnalysisEmission,
 } from '../template/template-compilation-project-pass.js';
-import { resourceLocalTemplateExpressionParses } from '../template/runtime-resource-ownership.js';
+import { TemplateProductDetails } from '../template/product-details.js';
 import {
   sourceAddressForRuntimeExpressionSpan,
 } from '../template/runtime-expression-source-address.js';
-import type { TemplateExpressionParse } from '../template/value-site.js';
+import type {
+  TemplateExpressionParse,
+  TemplateValueSite,
+} from '../template/value-site.js';
 import {
   allBuiltInResources,
   BuiltInResourcePackage,
@@ -152,6 +161,7 @@ class CapabilityDemandPublication {
 export class FrameworkCapabilityDemandMaterializer {
   constructor(
     readonly store: KernelStore,
+    readonly publication: KernelPublicationContext,
   ) {}
 
   materializeAndEmit(
@@ -162,20 +172,17 @@ export class FrameworkCapabilityDemandMaterializer {
     serviceRoots: readonly FrameworkServiceRoot[] = [],
   ): FrameworkCapabilityDemandProjectResult {
     const availability = readCapabilityAvailabilityEvidence(project, typeSystem);
-    const publications = capabilityDemandSites(this.store, typeSystem, templates, configuration, serviceRoots).map((site, index) =>
+    const publications = capabilityDemandSites(this.publication, typeSystem, templates, configuration, serviceRoots).map((site, index) =>
       this.publishDemand(project, site, availability, index)
     );
     const records = publications.flatMap((publication) => publication.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `framework-capability-demands:${project.projectKey}`));
-    }
-    for (const publication of publications) {
-      this.store.productDetails.add(
+    this.publication.publish(new KernelPublicationPlan(
+      new KernelStoreBatch(records, `framework-capability-demands:${project.projectKey}`),
+      publishProductDetails(
         FrameworkProductDetails.CapabilityDemand,
-        publication.demand.productHandle,
-        publication.demand,
-      );
-    }
+        publications.map((publication) => publication.demand),
+      ),
+    ));
     return new FrameworkCapabilityDemandProjectResult(
       publications.map((publication) => publication.demand),
       records,
@@ -257,7 +264,7 @@ export class FrameworkCapabilityDemandMaterializer {
 }
 
 function capabilityDemandSites(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   typeSystem: TypeSystemProject,
   templates: TemplateCompilationProjectEmission,
   configuration: ConfigurationKernelEmission | null,
@@ -270,19 +277,19 @@ function capabilityDemandSites(
     ...syntaxCapabilityDemandSites(resource),
     ...bindingCommandCapabilityDemandSites(resource),
     ...resourceCapabilityDemandSites(resource),
-    ...expressionResourceCapabilityDemandSites(store, resource),
-  ]).concat(sourceServiceApiCapabilityDemandSites(store, typeSystem, templates, configuration, serviceRoots)));
+    ...expressionResourceCapabilityDemandSites(publication, resource),
+  ]).concat(sourceServiceApiCapabilityDemandSites(publication, typeSystem, templates, configuration, serviceRoots)));
 }
 
 function sourceServiceApiCapabilityDemandSites(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   typeSystem: TypeSystemProject,
   templates: TemplateCompilationProjectEmission,
   configuration: ConfigurationKernelEmission | null,
   serviceRoots: readonly FrameworkServiceRoot[],
 ): readonly CapabilityDemandSite[] {
   const admissionContext = new SourceServiceApiAdmissionContext(
-    store,
+    publication,
     typeSystem,
     templates,
     configuration,
@@ -341,16 +348,20 @@ class SourceServiceApiAdmissionContext {
   private readonly consultingContainerStack = new Set<ProductHandle>();
 
   constructor(
-    private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
     private readonly typeSystem: TypeSystemProject,
     private readonly templates: TemplateCompilationProjectEmission,
     private readonly configuration: ConfigurationKernelEmission | null,
     serviceRoots: readonly FrameworkServiceRoot[],
   ) {
-    this.chainFacts = readDiContainerChainFacts(store);
-    this.resolvedDiKeyClaimsByRoot = rootResolvedDiKeyClaimsByRoot(store);
-    this.registrationHidingOpenSeams = registrationHidingOpenSeams(store);
-    this.registrationHidingOpenSeamContainerScopes = registrationHidingOpenSeamContainerScopes(store, configuration, this.chainFacts);
+    this.chainFacts = readDiContainerChainFacts(publication);
+    this.resolvedDiKeyClaimsByRoot = rootResolvedDiKeyClaimsByRoot(publication);
+    this.registrationHidingOpenSeams = registrationHidingOpenSeams(publication);
+    this.registrationHidingOpenSeamContainerScopes = registrationHidingOpenSeamContainerScopes(
+      publication,
+      configuration,
+      this.chainFacts,
+    );
     this.serviceRootsByProduct = new Map(serviceRoots.map((root) => [root.productHandle, root]));
   }
 
@@ -402,11 +413,11 @@ class SourceServiceApiAdmissionContext {
     const scopedContainers = this.registrationHidingOpenSeamContainerScopes.get(seam.handle) ?? [];
     if (scopedContainers.length > 0) {
       return consultingChain == null
-        ? sourceAddressesMayShareFile(this.store, root.sourceAddressHandle, seam.addressHandle)
+        ? sourceAddressesMayShareFile(this.publication, root.sourceAddressHandle, seam.addressHandle)
         : scopedContainers.some((container) => consultingChain.has(container));
     }
     return consultingChain == null
-      && sourceAddressesMayShareFile(this.store, root.sourceAddressHandle, seam.addressHandle);
+      && sourceAddressesMayShareFile(this.publication, root.sourceAddressHandle, seam.addressHandle);
   }
 
   private consultingContainerIdentityForRoot(root: FrameworkServiceRoot): IdentityHandle | null {
@@ -453,12 +464,12 @@ class SourceServiceApiAdmissionContext {
     if (this.configuration == null) {
       return null;
     }
-    const rootSpan = sourceSpanAddressForAddress(this.store, root.sourceAddressHandle);
+    const rootSpan = sourceSpanAddressForAddress(this.publication, root.sourceAddressHandle);
     if (rootSpan == null) {
       return null;
     }
     const containerHandles = this.configuration.appTasks.flatMap((appTask) => {
-      if (!appTaskContainsRoot(this.store, appTask, rootSpan)) {
+      if (!appTaskContainsRoot(this.publication, appTask, rootSpan)) {
         return [];
       }
       const appRootContainerProductHandle = this.appRootContainerProductHandleForAppTask(appTask);
@@ -484,7 +495,7 @@ class SourceServiceApiAdmissionContext {
   }
 
   private resourceActivationConsultingContainerIdentity(root: FrameworkServiceRoot): IdentityHandle | null {
-    const rootSpan = sourceSpanAddressForAddress(this.store, root.sourceAddressHandle);
+    const rootSpan = sourceSpanAddressForAddress(this.publication, root.sourceAddressHandle);
     if (rootSpan == null) {
       return null;
     }
@@ -492,7 +503,7 @@ class SourceServiceApiAdmissionContext {
       ...this.templates.resources,
       ...this.templates.authoringResources,
     ].filter((resource) =>
-      resourceDefinitionContainsSpan(this.store, this.typeSystem, resource, rootSpan)
+      resourceDefinitionContainsSpan(this.publication, this.typeSystem, resource, rootSpan)
     );
     const appRootResources = matchingResources.filter((resource) =>
       resource.compilation.definition.productHandle != null
@@ -511,7 +522,7 @@ class SourceServiceApiAdmissionContext {
 }
 
 function appTaskContainsRoot(
-  store: KernelStore,
+  store: KernelStoreReadView,
   appTask: AppTaskDefinition,
   rootSpan: SourceSpanAddress,
 ): boolean {
@@ -541,7 +552,7 @@ function sequenceForStep(
 }
 
 function resourceDefinitionContainsSpan(
-  store: KernelStore,
+  store: KernelStoreReadView,
   typeSystem: TypeSystemProject,
   resource: TemplateResourceRuntimeAnalysisEmission,
   rootSpan: SourceSpanAddress,
@@ -574,10 +585,10 @@ function spanContains(
 }
 
 function sourceFilePathForSpan(
-  store: KernelStore,
+  store: KernelStoreReadView,
   span: SourceSpanAddress,
 ): string | null {
-  const file = store.readAddress(span.fileHandle);
+  const file = store.read(span.fileHandle);
   return file?.kind === 'source-file-address' ? file.path : null;
 }
 
@@ -720,10 +731,10 @@ function attributeResourceCapabilityDemandSites(
 }
 
 function expressionResourceCapabilityDemandSites(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly CapabilityDemandSite[] {
-  return resourceLocalTemplateExpressionParses(store, resource).flatMap((parse, parseIndex) => {
+  return publicationLocalTemplateExpressionParses(publication, resource).flatMap((parse, parseIndex) => {
     const expression = runtimeAcceptedBindingExpressionAstForParse(parse);
     if (expression == null) {
       return [];
@@ -731,7 +742,7 @@ function expressionResourceCapabilityDemandSites(
     return [
       ...valueConverterResourceOccurrences(expression).flatMap(({ expression: converter }, converterIndex) =>
         siteForExpressionResource(
-          store,
+          publication,
           resource,
           parse,
           FrameworkCapabilityDemandSiteKind.TemplateValueConverter,
@@ -743,7 +754,7 @@ function expressionResourceCapabilityDemandSites(
       ),
       ...bindingBehaviorResourceOccurrences(expression).flatMap(({ expression: behavior }, behaviorIndex) =>
         siteForExpressionResource(
-          store,
+          publication,
           resource,
           parse,
           FrameworkCapabilityDemandSiteKind.TemplateBindingBehavior,
@@ -755,6 +766,58 @@ function expressionResourceCapabilityDemandSites(
       ),
     ];
   });
+}
+
+function publicationLocalTemplateExpressionParses(
+  publication: KernelPublicationContext,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): readonly TemplateExpressionParse[] {
+  return [
+    ...resource.runtimeAnalysis.runtimeRendering.dynamicExpressionParses.filter((parse) =>
+      dynamicExpressionParseBelongsToResource(publication, resource, parse)
+    ),
+    ...resource.compilation.bindingCommandLowering.expressionParses,
+    ...resource.compilation.valueSites.parses,
+  ];
+}
+
+function dynamicExpressionParseBelongsToResource(
+  publication: KernelPublicationContext,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  parse: TemplateExpressionParse,
+): boolean {
+  const site = publication.readProductDetail(TemplateProductDetails.ValueSite, parse.site.productHandle);
+  return site == null
+    ? sourceAddressBelongsToResourceTemplate(publication, resource, parse.sourceAddressHandle)
+    : dynamicValueSiteBelongsToResource(publication, resource, site);
+}
+
+function dynamicValueSiteBelongsToResource(
+  publication: KernelPublicationContext,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  site: TemplateValueSite,
+): boolean {
+  if (site.syntax == null) {
+    return sourceAddressBelongsToResourceTemplate(publication, resource, site.sourceAddressHandle);
+  }
+  return resource.compilation.authoredAttributeSyntaxes.some((syntax) =>
+    syntax.productHandle === site.syntax?.productHandle
+  );
+}
+
+function sourceAddressBelongsToResourceTemplate(
+  publication: KernelPublicationContext,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  addressHandle: AddressHandle | null,
+): boolean {
+  const resourceSpan = sourceSpanAddressForAddress(
+    publication,
+    resource.compilation.unit.templateSource.sourceAddressHandle,
+  );
+  const sourceSpan = sourceSpanAddressForAddress(publication, addressHandle);
+  return resourceSpan != null
+    && sourceSpan != null
+    && sourceSpanContains(resourceSpan, sourceSpan);
 }
 
 function siteForAttributeSyntax(
@@ -795,7 +858,7 @@ function siteForElementResource(
 }
 
 function siteForExpressionResource(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   resource: TemplateResourceRuntimeAnalysisEmission,
   parse: TemplateExpressionParse,
   siteKind: FrameworkCapabilityDemandSiteKind.TemplateValueConverter | FrameworkCapabilityDemandSiteKind.TemplateBindingBehavior,
@@ -813,7 +876,7 @@ function siteForExpressionResource(
     return [];
   }
   const expressionSource = sourceAddressForRuntimeExpressionSpan(
-    store,
+    publication,
     [
       'framework-capability-demand-expression',
       localKeyPart(resource.compilation.localKey),
@@ -1094,31 +1157,36 @@ function frameworkCapabilityDemandLocalKey(
 }
 
 function rootResolvedDiKeyClaimsByRoot(
-  store: KernelStore,
+  publication: KernelPublicationContext,
 ): ReadonlyMap<ProductHandle, readonly IdentityHandle[]> {
   const result = new Map<ProductHandle, IdentityHandle[]>();
-  for (const claim of store.readClaims()) {
-    if (claim.predicateKey !== KernelVocabulary.Framework.RootResolvesDiKey.key) {
+  for (const record of publication.readAllRecords()) {
+    if (
+      record.kind !== 'semantic-claim'
+      || record.predicateKey !== KernelVocabulary.Framework.RootResolvesDiKey.key
+    ) {
       continue;
     }
-    const existing = result.get(claim.subjectHandle as ProductHandle);
+    const existing = result.get(record.subjectHandle as ProductHandle);
     if (existing == null) {
-      result.set(claim.subjectHandle as ProductHandle, [claim.objectHandle as IdentityHandle]);
+      result.set(record.subjectHandle as ProductHandle, [record.objectHandle as IdentityHandle]);
     } else {
-      existing.push(claim.objectHandle as IdentityHandle);
+      existing.push(record.objectHandle as IdentityHandle);
     }
   }
   return result;
 }
 
 function registrationHidingOpenSeams(
-  store: KernelStore,
+  publication: KernelPublicationContext,
 ): readonly OpenSeam[] {
-  return store.readOpenSeams().filter(isRegistrationHidingOpenSeam);
+  return publication.readAllRecords()
+    .filter((record): record is OpenSeam => record.kind === 'open-seam')
+    .filter(isRegistrationHidingOpenSeam);
 }
 
 function registrationHidingOpenSeamContainerScopes(
-  store: KernelStore,
+  publication: KernelPublicationContext,
   configuration: ConfigurationKernelEmission | null,
   chainFacts: DiContainerChainFacts,
 ): ReadonlyMap<OpenSeamHandle, readonly IdentityHandle[]> {
@@ -1137,7 +1205,7 @@ function registrationHidingOpenSeamContainerScopes(
     ),
   );
   const result = new Map<OpenSeamHandle, IdentityHandle[]>();
-  for (const materialization of store.readMaterializations()) {
+  for (const materialization of publication.readMaterializations()) {
     if (materialization.openSeamHandles.length === 0) {
       continue;
     }
@@ -1266,7 +1334,7 @@ function isRegistrationHidingOpenSeam(
 }
 
 function sourceAddressesMayShareFile(
-  store: KernelStore,
+  store: KernelStoreReadView,
   leftHandle: AddressHandle | null,
   rightHandle: AddressHandle | null,
 ): boolean {
@@ -1304,7 +1372,7 @@ function readCapabilityAvailabilityEvidence(
   typeSystem: TypeSystemProject,
 ): CapabilityAvailabilityEvidenceContext {
   const rows = [
-    ...manifestDependencyEvidence(project, readPackageManifest(project.rootDir), FrameworkCapabilityPackageEvidenceKind.ProjectManifestDependency),
+    ...manifestDependencyEvidence(project, readPackageManifest(project.inputGeneration.host, project.rootDir), FrameworkCapabilityPackageEvidenceKind.ProjectManifestDependency),
     ...manifestDependencyEvidence(project, nearestWorkspaceManifestForProject(project), FrameworkCapabilityPackageEvidenceKind.WorkspaceManifestDependency),
     ...sourceImportEvidence(project, typeSystem),
   ];
@@ -1460,7 +1528,7 @@ function nearestWorkspaceManifestForProject(
   let current = path.dirname(projectRoot);
 
   while (isHostPathWithin(current, workspaceRoot)) {
-    const manifest = readPackageManifest(current);
+    const manifest = readPackageManifest(project.inputGeneration.host, current);
     if (manifest != null && manifestWorkspacesIncludeProject(manifest, current, projectRoot)) {
       return manifest;
     }

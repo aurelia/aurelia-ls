@@ -19,7 +19,12 @@ import { KernelStore } from '../src/kernel/store.js';
 import { SourceSpanRole } from '../src/kernel/address.js';
 import { CheckerTypeProjector } from '../src/type-system/checker-projector.js';
 import { CheckerTypeShapeAccess } from '../src/type-system/checker-type-shape-access.js';
-import { sourceSpanForCheckerNode } from '../src/type-system/declaration-source.js';
+import {
+  CheckerDeclarationSourceContext,
+  registerCheckerDeclarationSourceContext,
+  sourceSpanForCheckerNode,
+} from '../src/type-system/declaration-source.js';
+import { projectTypeSystemProgramSources } from '../src/type-system/program-source-authority.js';
 import { TypeSystemProductDetails } from '../src/type-system/product-details.js';
 
 describe('checker projection lifecycle', () => {
@@ -87,8 +92,8 @@ describe('checker projection lifecycle', () => {
     )).scope;
     const item = access.memberValueAccess(root, 'item', 'view-model:item');
     const laterSource = sourceSpanForCheckerNode(
-      store,
       run,
+      checker,
       'view-model:later-source',
       declaration,
       SourceSpanRole.Name,
@@ -147,5 +152,10 @@ function checkerFixture(sourceText: string): {
   if (declaration == null || !ts.isIdentifier(declaration.name)) {
     throw new Error('Expected checker fixture identifier declaration.');
   }
-  return { checker: program.getTypeChecker(), declaration };
+  const checker = program.getTypeChecker();
+  registerCheckerDeclarationSourceContext(
+    checker,
+    new CheckerDeclarationSourceContext('checker-projection-lifecycle', projectTypeSystemProgramSources, new Set()),
+  );
+  return { checker, declaration };
 }
