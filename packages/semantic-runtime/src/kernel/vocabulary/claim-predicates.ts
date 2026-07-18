@@ -35,17 +35,6 @@ export const KernelClaimPredicates = {
   Evaluation: {
   },
   TypeSystem: {
-
-    /** A type projection exposes a member projection. */
-    TypeShapeHasMember: defineClaimPredicate(
-      KernelVocabularyNamespace.TypeSystem,
-      'type-shape-has-member',
-      'A type-system type projection exposes a member projection.',
-      claimSignature(
-        productEndpoint(KernelProductKinds.TypeSystem.TypeShape),
-        productEndpoint(KernelProductKinds.TypeSystem.TypeMember),
-      ),
-    ),
   },
   Resource: {
 

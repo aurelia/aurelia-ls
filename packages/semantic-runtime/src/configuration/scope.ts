@@ -1,6 +1,7 @@
 import { auLink } from '../kernel/au-link.js';
 import type {
   AddressHandle,
+  HotDetailHandle,
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
@@ -149,8 +150,8 @@ export class BindingContextSlot {
     readonly name: string,
     /** Identity reached by this name, if known. */
     readonly targetIdentityHandle: IdentityHandle | null,
-    /** Product reached by this name, if known. */
-    readonly targetProductHandle: ProductHandle | null,
+    /** Product-owned type-member detail reached by this name, if known. */
+    readonly targetTypeMemberHandle: HotDetailHandle | null,
     /** Static type reached by this name, if known through the TypeChecker substrate. */
     readonly targetType: CheckerTypeReference | null,
     /** Source address for the property, bindable, let declaration, repeat local, or inferred slot. */
@@ -163,8 +164,8 @@ export class BindingContextSlot {
     readonly memberTypes: readonly BindingContextSlotMemberType[] = [],
     /** Assignment authority when framework construction, rather than TypeScript, owns the slot. */
     readonly assignmentAccessKind: BindingContextSlotAssignmentAccessKind | null = null,
-    /** Member product that supplied the current target type when it differs from the declaration reached by this name. */
-    readonly targetTypeSourceProductHandle: ProductHandle | null = null,
+    /** Type-member detail that supplied the current type when it differs from the declaration reached by this name. */
+    readonly targetTypeSourceMemberHandle: HotDetailHandle | null = null,
   ) {}
 }
 
@@ -180,8 +181,8 @@ export class BindingContextSlotDraft {
     readonly name: string,
     /** Identity reached by this name, if known. */
     readonly targetIdentityHandle: IdentityHandle | null = null,
-    /** Product reached by this name, if known. */
-    readonly targetProductHandle: ProductHandle | null = null,
+    /** Product-owned type-member detail reached by this name, if known. */
+    readonly targetTypeMemberHandle: HotDetailHandle | null = null,
     /** Static type reached by this name, if known through the TypeChecker substrate. */
     readonly targetType: CheckerTypeReference | null = null,
     /** Source address for the property, bindable, let declaration, repeat local, or inferred slot. */
@@ -194,22 +195,22 @@ export class BindingContextSlotDraft {
     readonly memberTypes: readonly BindingContextSlotMemberType[] = [],
     /** Assignment authority when framework construction, rather than TypeScript, owns the slot. */
     readonly assignmentAccessKind: BindingContextSlotAssignmentAccessKind | null = null,
-    /** Member product that supplied the current target type when it differs from the declaration reached by this name. */
-    readonly targetTypeSourceProductHandle: ProductHandle | null = null,
+    /** Type-member detail that supplied the current type when it differs from the declaration reached by this name. */
+    readonly targetTypeSourceMemberHandle: HotDetailHandle | null = null,
   ) {}
 
   static fromSlot(slot: BindingContextSlot): BindingContextSlotDraft {
     return new BindingContextSlotDraft(
       slot.name,
       slot.targetIdentityHandle,
-      slot.targetProductHandle,
+      slot.targetTypeMemberHandle,
       slot.targetType,
       slot.sourceAddressHandle,
       slot.fieldProvenance,
       slot.staticValue,
       slot.memberTypes,
       slot.assignmentAccessKind,
-      slot.targetTypeSourceProductHandle,
+      slot.targetTypeSourceMemberHandle,
     );
   }
 
@@ -217,14 +218,14 @@ export class BindingContextSlotDraft {
     return new BindingContextSlot(
       this.name,
       this.targetIdentityHandle,
-      this.targetProductHandle,
+      this.targetTypeMemberHandle,
       this.targetType,
       this.sourceAddressHandle,
       this.fieldProvenance,
       this.staticValue,
       this.memberTypes,
       this.assignmentAccessKind,
-      this.targetTypeSourceProductHandle,
+      this.targetTypeSourceMemberHandle,
     );
   }
 }

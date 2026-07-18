@@ -592,8 +592,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   view-model member, an explicit ancestor, or the nearest boundary binding context for an unresolved name. Descendant
   scopes are rebased onto the updated ancestor state without confusing state predecessors with runtime-parent ancestry.
   The source expression is analyzed with that post-assignment state visible, and later sibling/descendant expressions
-  see the same write. Scope slots keep declaration identity (`targetProductHandle`) separate from the member that
-  supplied their current value type (`targetTypeSourceProductHandle`). A runtime-only slot can therefore use a target
+  see the same write. Scope slots keep the declaration member (`targetTypeMemberHandle`) separate from the member that
+  supplied their current value type (`targetTypeSourceMemberHandle`), while `targetIdentityHandle` owns durable
+  declaration identity. A runtime-only slot can therefore use a target
   bindable member as an indexed-access type carrier without claiming that the authored scope name denotes that
   bindable. Existing slots keep their declaration identity and source while their value type is refined. When
   a value converter participates in target-to-source writeback, scope construction spends the same
@@ -974,9 +975,9 @@ Scope construction projects unambiguous table entries into the child custom-elem
 overlay aliases those slots with importable member types when possible. This is what lets a child template type-check a
 parent-bound callback bindable against the parent's function type instead of the child class's placeholder initializer.
 The child bindable declaration remains the slot's identity and source for references, rename, and assignment policy.
-When direct value flow retains a parent member's type, only `targetTypeSourceProductHandle` points at that parent member
+When direct value flow retains a parent member's type, only `targetTypeSourceMemberHandle` points at that parent member
 as the current type carrier. A value converter is not transparent for this purpose: its `toView` return supplies the
-current type even when the printed signature happens to equal the input member. Do not make one product handle serve
+current type even when the printed signature happens to equal the input member. Do not make one member handle serve
 both roles or carry provenance through a transforming wrapper; either mistake turns a value-flow fact into a false
 declaration/type-source relationship.
 The table is the resource-boundary carrier: once a child template is being analyzed, the parent `RuntimeBinding` is not

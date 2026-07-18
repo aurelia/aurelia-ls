@@ -11,6 +11,7 @@ import {
   type PreparedObjectFieldNormalization,
 } from './object-field-normalization.js';
 import type { ProductKindKey } from './vocabulary.js';
+import { DetailCatalog } from './detail-catalog.js';
 
 declare const productDetailSlotBrand: unique symbol;
 
@@ -268,17 +269,19 @@ function productDetailProvenanceHandleGetter(this: object): ProvenanceHandle {
 
 /** Hot in-memory catalog for typed product details keyed by durable product handles. */
 export class ProductDetailCatalog {
-  private readonly entriesByHandle = new Map<ProductHandle, ProductDetailEntry<unknown>>();
-  private readonly handlesByDetailKind = new Map<string, Set<ProductHandle>>();
-  private readonly handleOrder: ProductHandle[] = [];
-  private readonly lifetimeOrdinalByHandle = new Map<ProductHandle, number>();
-  private readonly mutationOrdinalByHandle = new Map<ProductHandle, number>();
+  private readonly catalog: DetailCatalog<ProductHandle, ProductDetailEntry<unknown>>;
 
   constructor(
     private readonly readProduct: ReadProduct,
     private readonly allocateLifetimeOrdinal: AllocateOrdinal,
-    private readonly allocateMutationOrdinal: AllocateOrdinal,
-  ) {}
+    allocateMutationOrdinal: AllocateOrdinal,
+  ) {
+    this.catalog = new DetailCatalog(
+      (entry) => entry.productHandle,
+      (entry) => entry.slot.detailKind,
+      allocateMutationOrdinal,
+    );
+  }
 
   /** Attach a typed detail to an already-committed materialized product. */
   add<TDetail, TProductKind extends ProductKindKey>(
@@ -311,7 +314,7 @@ export class ProductDetailCatalog {
     product: MaterializedProduct,
     detail: TDetail,
   ): PreparedProductDetailEntry<TDetail, TProductKind> {
-    if (this.entriesByHandle.has(product.handle)) {
+    if (this.catalog.read(product.handle) != null) {
       throw new Error(`Duplicate product detail for ${product.handle}.`);
     }
     return this.prepareReplacementEntry(slot, product, detail);
@@ -342,13 +345,8 @@ export class ProductDetailCatalog {
   ): ProductDetailEntry<TDetail, TProductKind> {
     const entry = prepared.entry;
     const productHandle = entry.productHandle;
-    const slot = entry.slot;
     admitProductDetailEnvelopeBinding(prepared.binding);
-    this.entriesByHandle.set(productHandle, entry as ProductDetailEntry<unknown>);
-    this.handleOrder.push(productHandle);
-    this.lifetimeOrdinalByHandle.set(productHandle, lifetimeOrdinal);
-    this.mutationOrdinalByHandle.set(productHandle, this.allocateMutationOrdinal());
-    this.addHandleForSlot(slot, productHandle);
+    this.catalog.add(entry as ProductDetailEntry<unknown>, lifetimeOrdinal);
     return entry;
   }
 
@@ -370,7 +368,7 @@ export class ProductDetailCatalog {
     productHandle: ProductHandle,
     detail: TDetail,
   ): ProductDetailEntry<TDetail, TProductKind> {
-    const existing = this.entriesByHandle.get(productHandle);
+    const existing = this.catalog.read(productHandle);
     if (existing == null) {
       return this.add(slot, productHandle, detail);
     }
@@ -399,7 +397,7 @@ export class ProductDetailCatalog {
     slot: ProductDetailSlot<TDetail, TProductKind>,
     productHandle: ProductHandle,
   ): TDetail | null {
-    const entry = this.entriesByHandle.get(productHandle);
+    const entry = this.catalog.read(productHandle);
     if (entry == null || entry.slot.detailKind !== slot.detailKind) {
       return null;
     }
@@ -408,77 +406,49 @@ export class ProductDetailCatalog {
 
   /** Read the unexpanded detail entry when the caller only knows a product handle. */
   readEntry(productHandle: ProductHandle): ProductDetailEntry<unknown> | null {
-    return this.entriesByHandle.get(productHandle) ?? null;
+    return this.catalog.read(productHandle);
   }
 
   /** Lifetime shared by the committed publication that owns this entry. */
   readLifetimeOrdinal(productHandle: ProductHandle): number | null {
-    return this.lifetimeOrdinalByHandle.get(productHandle) ?? null;
+    return this.catalog.readLifetimeOrdinal(productHandle);
   }
 
   /** Advance an admitted detail with the complete publication closure that owns it. */
   promoteLifetimeOrdinal(productHandle: ProductHandle, lifetimeOrdinal: number): void {
-    this.lifetimeOrdinalByHandle.set(productHandle, lifetimeOrdinal);
+    this.catalog.promoteLifetimeOrdinal(productHandle, lifetimeOrdinal);
   }
 
   /** Read all details attached through one typed slot. */
   readBySlot<TDetail, TProductKind extends ProductKindKey>(
     slot: ProductDetailSlot<TDetail, TProductKind>,
   ): readonly ProductDetailEntry<TDetail, TProductKind>[] {
-    return [...(this.handlesByDetailKind.get(slot.detailKind) ?? [])]
-      .map((handle) => this.entriesByHandle.get(handle) ?? null)
-      .filter((entry): entry is ProductDetailEntry<unknown> => entry != null)
+    return this.catalog.readByDetailKind(slot.detailKind)
       .map((entry) => entry as ProductDetailEntry<TDetail, TProductKind>);
   }
 
   readEntries(): readonly ProductDetailEntry<unknown>[] {
-    return [...this.entriesByHandle.values()];
+    return this.catalog.readEntries();
   }
 
   readEntriesChangedSince(marker: number): readonly ProductDetailEntry<unknown>[] {
-    return this.handleOrder
-      .filter((handle) => (this.mutationOrdinalByHandle.get(handle) ?? -1) >= marker)
-      .map((handle) => this.entriesByHandle.get(handle) ?? null)
-      .filter((entry): entry is ProductDetailEntry<unknown> => entry != null);
+    return this.catalog.readEntriesChangedSince(marker);
   }
 
   get size(): number {
-    return this.entriesByHandle.size;
+    return this.catalog.size;
   }
 
   readDetailKindCounts(): ReadonlyMap<string, number> {
-    return new Map([...this.handlesByDetailKind.entries()]
-      .map(([detailKind, handles]) => [detailKind, handles.size]));
+    return this.catalog.readDetailKindCounts();
   }
 
   remove(productHandle: ProductHandle): ProductDetailEntry<unknown> | null {
-    const entry = this.entriesByHandle.get(productHandle) ?? null;
-    if (entry == null) {
-      return null;
-    }
-    this.entriesByHandle.delete(productHandle);
-    const orderIndex = this.handleOrder.indexOf(productHandle);
-    if (orderIndex >= 0) {
-      this.handleOrder.splice(orderIndex, 1);
-    }
-    this.lifetimeOrdinalByHandle.delete(productHandle);
-    this.mutationOrdinalByHandle.delete(productHandle);
-    const handles = this.handlesByDetailKind.get(entry.slot.detailKind);
-    handles?.delete(productHandle);
-    if (handles?.size === 0) {
-      this.handlesByDetailKind.delete(entry.slot.detailKind);
-    }
-    return entry;
+    return this.catalog.remove(productHandle);
   }
 
   removeAtOrAfterLifetime(marker: number): number {
-    let removed = 0;
-    for (const handle of [...this.handleOrder].reverse()) {
-      if ((this.lifetimeOrdinalByHandle.get(handle) ?? -1) >= marker && this.remove(handle) != null) {
-        removed += 1;
-      }
-    }
-    return removed;
+    return this.catalog.removeAtOrAfterLifetime(marker);
   }
 
   /** Remove direct/unowned details after a lifetime boundary while preserving active computation publications. */
@@ -486,29 +456,7 @@ export class ProductDetailCatalog {
     marker: number,
     retainedHandles: ReadonlySet<ProductHandle>,
   ): number {
-    let removed = 0;
-    for (const handle of [...this.handleOrder].reverse()) {
-      if (
-        !retainedHandles.has(handle)
-        && (this.lifetimeOrdinalByHandle.get(handle) ?? -1) >= marker
-        && this.remove(handle) != null
-      ) {
-        removed += 1;
-      }
-    }
-    return removed;
-  }
-
-  private addHandleForSlot(
-    slot: ProductDetailSlot<unknown>,
-    productHandle: ProductHandle,
-  ): void {
-    let handles = this.handlesByDetailKind.get(slot.detailKind);
-    if (handles === undefined) {
-      handles = new Set();
-      this.handlesByDetailKind.set(slot.detailKind, handles);
-    }
-    handles.add(productHandle);
+    return this.catalog.removeUnretainedAtOrAfterLifetime(marker, retainedHandles);
   }
 }
 

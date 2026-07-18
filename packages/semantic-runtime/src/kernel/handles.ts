@@ -15,12 +15,14 @@ export const enum KernelHandleKind {
   OpenSeam = 'open-seam',
   /** Handle for a materialized product inside one analysis store. */
   Product = 'product',
+  /** Handle for a product-owned detail kept outside the normalized product graph. */
+  HotDetail = 'hot-detail',
   /** Handle for a materialization record inside one analysis store. */
   Materialization = 'materialization',
 }
 
 /**
- * Branded string handle for record links in the active analysis store.
+ * Branded string handle for store-local links in the active analysis store.
  *
  * Handles are serializable for tests, tooling continuations, and inspection, but they are not durable semantic
  * identities and do not promise cross-run snapshot recovery.
@@ -47,6 +49,9 @@ export type OpenSeamHandle = KernelHandle<KernelHandleKind.OpenSeam>;
 
 /** Store-local handle for a materialized product. */
 export type ProductHandle = KernelHandle<KernelHandleKind.Product>;
+
+/** Store-local handle for a product-owned hot detail. */
+export type HotDetailHandle = KernelHandle<KernelHandleKind.HotDetail>;
 
 /** Store-local handle for a materialization record. */
 export type MaterializationHandle = KernelHandle<KernelHandleKind.Materialization>;
@@ -162,6 +167,11 @@ export class KernelHandleFactory {
   /** Mint a product handle from an analysis-step-local key. */
   product(local: string): ProductHandle {
     return serializeKernelHandle(this.storeKey, KernelHandleKind.Product, local);
+  }
+
+  /** Mint a handle for a product-owned hot detail. */
+  hotDetail(local: string): HotDetailHandle {
+    return serializeKernelHandle(this.storeKey, KernelHandleKind.HotDetail, local);
   }
 
   /** Mint a materialization handle from an analysis-step-local key. */

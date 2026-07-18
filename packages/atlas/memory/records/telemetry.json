@@ -20,7 +20,7 @@
         "Do not make detail-density recursive by default. Recursing into TypeScript ASTs, checker objects, parent links, or full product graphs would turn a cheap representation x-ray into the memory problem being measured.",
         "When envelope-handle echoes dominate, first check ProductDetailCatalog normalization or detail ownership before dropping navigable fields.",
         "Use handle-kind rows before changing detail classes: address-heavy rows usually point at source precision, product-heavy rows at runtime topology, and identity-heavy hot rows at declaration or owner identity.",
-        "HotDetailCatalog hides exact entry-handle echoes such as productHandle; remaining hot-detail handles should be treated as semantic owner/declaration/source lanes unless a durable record can derive them.",
+        "HotDetailCatalog hides exact entry-handle echoes such as detailHandle and reports the explicit owner envelope separately; remaining hot-detail handles should be treated as semantic declaration/source/cross-product lanes unless a durable record can derive them.",
         "When non-envelope handle fields dominate, treat them as navigation topology pressure: move or compress them only after deciding which product, hot detail, or query claim should own that relation.",
         "Keep this telemetry lane opt-in through includeDetailDensity and phase/profile switches; ordinary public answers should not pay for high-cardinality sidecar scans.",
         "Use aggregate phase-memory and phase-kernel rows before deep memory refactors. They show peak construction pressure and phase-owned product volume even when routed answer disposal returns final kernel growth to zero.",

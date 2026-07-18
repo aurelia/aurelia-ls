@@ -848,14 +848,14 @@ export class TemplateControllerScopeMaterializer {
       return new BindingContextSlotDraft(
         declaration.name,
         declaration.targetIdentityHandle,
-        declaration.targetProductHandle,
+        declaration.targetTypeMemberHandle,
         inference.targetType ?? declaration.targetType,
         declaration.sourceAddressHandle,
         declaration.fieldProvenance,
         declaration.staticValue,
         declaration.memberTypes,
         declaration.assignmentAccessKind,
-        inference.targetTypeSourceProductHandle,
+        inference.targetTypeSourceMemberHandle,
       );
     });
     return [...merged, ...inferredByName.values()];
@@ -868,7 +868,6 @@ export class TemplateControllerScopeMaterializer {
     const contextType = definition.target.targetType;
     return definition.bindables.map((bindable) => {
       const declaration = bindingContextSlotDraftForContextTypeMember(
-        this.store,
         services.scopeNarrower.projector,
         contextType,
         bindable.name,
@@ -876,14 +875,14 @@ export class TemplateControllerScopeMaterializer {
       return new BindingContextSlotDraft(
         bindable.name,
         declaration?.targetIdentityHandle ?? null,
-        declaration?.targetProductHandle ?? null,
+        declaration?.targetTypeMemberHandle ?? null,
         declaration?.targetType ?? null,
         declaration?.sourceAddressHandle ?? bindable.nameSourceAddressHandle ?? bindable.sourceAddressHandle,
         declaration?.fieldProvenance ?? [],
         declaration?.staticValue ?? null,
         declaration?.memberTypes ?? [],
         contextType == null ? BindingContextSlotAssignmentAccessKind.Writable : declaration?.assignmentAccessKind ?? null,
-        declaration?.targetTypeSourceProductHandle ?? null,
+        declaration?.targetTypeSourceMemberHandle ?? null,
       );
     });
   }
@@ -942,7 +941,6 @@ export class TemplateControllerScopeMaterializer {
       const sourceSlot = sourceSite.projection == null
         ? null
         : bindingContextSlotDraftForExpressionAccess(
-          this.store,
           services.scopeNarrower.projector,
           sourceSite.projection.scope,
           sourceSite.projection.expression,
@@ -976,28 +974,27 @@ export class TemplateControllerScopeMaterializer {
       return [];
     }
     const declarationSlot = bindingContextSlotDraftForContextTypeMember(
-      this.store,
       services.scopeNarrower.projector,
       contextType,
       value.propertyName,
     );
     const sourceTypeMemberHandles = new Set(
-      projections.map((projection) => projection.sourceTypeMember?.productHandle ?? null),
+      projections.map((projection) => projection.sourceTypeMember?.detailHandle ?? null),
     );
-    const targetTypeSourceProductHandle = sourceTypeMemberHandles.size === 1
+    const targetTypeSourceMemberHandle = sourceTypeMemberHandles.size === 1
       ? [...sourceTypeMemberHandles][0] ?? null
       : null;
     return [new BindingContextSlotDraft(
       value.propertyName,
       declarationSlot?.targetIdentityHandle ?? null,
-      declarationSlot?.targetProductHandle ?? null,
+      declarationSlot?.targetTypeMemberHandle ?? null,
       targetType,
       declarationSlot?.sourceAddressHandle ?? this.boundControllerPropertySourceAddressHandle(input, value),
       declarationSlot?.fieldProvenance ?? [],
       null,
       declarationSlot?.memberTypes ?? [],
       declarationSlot?.assignmentAccessKind ?? null,
-      targetTypeSourceProductHandle,
+      targetTypeSourceMemberHandle,
     )];
   }
 
@@ -1319,7 +1316,7 @@ export class TemplateControllerScopeMaterializer {
       : assignedValueTypeOverride;
     const existingSlot = lookup.slot;
     const targetType = assignedValueType ?? existingSlot?.targetType ?? targetMemberValueType;
-    const targetProductHandle = existingSlot?.targetProductHandle ?? null;
+    const targetTypeMemberHandle = existingSlot?.targetTypeMemberHandle ?? null;
     const targetSource = existingSlot == null && parse != null
       ? sourceAddressForRuntimeExpressionSpan(
           frame.input.expressionWorld.projector.publication,
@@ -1331,7 +1328,7 @@ export class TemplateControllerScopeMaterializer {
     const slot = new BindingContextSlotDraft(
       target.name.name,
       existingSlot?.targetIdentityHandle ?? null,
-      targetProductHandle,
+      targetTypeMemberHandle,
       targetType,
       targetSource.handle ?? binding.sourceAddressHandle,
       existingSlot?.fieldProvenance ?? [],
@@ -1343,11 +1340,11 @@ export class TemplateControllerScopeMaterializer {
         && targetMemberValueType != null
         && targetType != null
         && sameCheckerTypeReference(targetMemberValueType, targetType)
-        ? targetMember.productHandle
+        ? targetMember.detailHandle
         : existingSlot?.targetType != null
           && targetType != null
           && sameCheckerTypeReference(existingSlot.targetType, targetType)
-          ? existingSlot.targetTypeSourceProductHandle
+          ? existingSlot.targetTypeSourceMemberHandle
           : null,
     );
     const assignmentEmission = frame.services.scopeMaterializer.prepare(BindingScope.fromNarrowedBindingScope({
@@ -1989,7 +1986,7 @@ export class TemplateControllerScopeMaterializer {
     return new BindingContextSlotDraft(
       effect.target,
       existingSlot?.targetIdentityHandle ?? null,
-      existingSlot?.targetProductHandle ?? null,
+      existingSlot?.targetTypeMemberHandle ?? null,
       targetType,
       effect.targetSourceAddressHandle ?? effect.sourceAddressHandle,
       existingSlot?.fieldProvenance ?? [],
@@ -2000,7 +1997,7 @@ export class TemplateControllerScopeMaterializer {
       existingSlot?.targetType != null
         && targetType != null
         && sameCheckerTypeReference(existingSlot.targetType, targetType)
-        ? existingSlot.targetTypeSourceProductHandle
+        ? existingSlot.targetTypeSourceMemberHandle
         : null,
     );
   }

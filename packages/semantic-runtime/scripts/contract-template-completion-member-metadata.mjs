@@ -13,7 +13,12 @@ const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-completion-member-metadata');
 const templatePath = path.join(fixtureRoot, 'src/app.html');
 const originalTemplateText = fs.readFileSync(templatePath, 'utf8');
-const templateText = originalTemplateText.replace('${}', '${title}');
+const templateText = originalTemplateText
+  .replace('${}', '${title}')
+  .replace(
+    '</template>',
+    '  <div repeat.for="item of [title]"><div repeat.for="other of [item]">${item}:${other}</div></div>\n</template>',
+  );
 
 const runtime = await createSemanticRuntime({
   workspaceRoot: fixtureRoot,
@@ -44,6 +49,21 @@ const thisMemberCompletion = app.ask({
 const titleCursorInfo = app.ask({
   kind: SemanticAppQueryKind.TemplateCursorInfo,
   cursor: cursorInside('${title}', 'title', 1),
+});
+const outerItemDeclaration = app.ask({
+  kind: SemanticAppQueryKind.TemplateCursorInfo,
+  detail: 'handles',
+  cursor: cursorInside('repeat.for="item of [title]"', 'item', 1),
+});
+const ancestorItemUsage = app.ask({
+  kind: SemanticAppQueryKind.TemplateCursorInfo,
+  detail: 'handles',
+  cursor: cursorInside('${item}', 'item', 1),
+});
+const innerOtherUsage = app.ask({
+  kind: SemanticAppQueryKind.TemplateCursorInfo,
+  detail: 'handles',
+  cursor: cursorInside('${other}', 'other', 1),
 });
 
 const byName = new Map(completion.value.candidates.map((candidate) => [candidate.name, candidate]));
@@ -116,6 +136,16 @@ assert.equal(
 );
 assert.equal(typeof titleCursorInfo.value.selectedMember?.source?.start, 'number');
 assert.equal(typeof titleCursorInfo.value.selectedMember?.source?.end, 'number');
+assert.equal(
+  ancestorItemUsage.value.selectedMember?.handles?.ownerProductHandle,
+  outerItemDeclaration.value.selectedMember?.handles?.ownerProductHandle,
+  'An ancestor runtime slot usage should retain the scope that owns its declaration.',
+);
+assert.notEqual(
+  ancestorItemUsage.value.selectedMember?.handles?.ownerProductHandle,
+  innerOtherUsage.value.selectedMember?.handles?.ownerProductHandle,
+  'An ancestor runtime slot should not masquerade as a child-scope slot.',
+);
 
 console.log(JSON.stringify({
   ok: true,

@@ -132,6 +132,7 @@ import type {
 import type {
   AddressHandle,
   ClaimHandle,
+  HotDetailHandle,
   IdentityHandle,
   OpenSeamHandle,
   ProductHandle,
@@ -3639,7 +3640,10 @@ export interface SemanticTemplateCursorMemberRow {
   /** TypeScript member declaration reached by the slot identity, when distinct from its scope source. */
   readonly declarationSource: SemanticSourceReference | null;
   readonly handles?: {
-    readonly productHandle: ProductHandle;
+    /** Durable type-shape or binding-scope product that owns this member surface. */
+    readonly ownerProductHandle: ProductHandle | null;
+    /** Lightweight member-detail handle used for exact in-process follow-up reads. */
+    readonly detailHandle: HotDetailHandle | null;
     readonly declarationIdentityHandle: IdentityHandle | null;
     readonly ownerTypeIdentityHandle: IdentityHandle | null;
     readonly reachableIdentityHandle: IdentityHandle | null;

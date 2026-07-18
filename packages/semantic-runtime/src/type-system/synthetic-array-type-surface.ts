@@ -21,16 +21,15 @@ export function checkerTypeShapeIsSyntheticRuntimeArray(shape: CheckerTypeShape)
 export function syntheticRuntimeArrayTypeMembers(
   handles: KernelHandleFactory,
   typeShape: CheckerTypeShape,
-  localKeySeed: string,
 ): readonly CheckerTypeMember[] {
   if (!checkerTypeShapeIsSyntheticRuntimeArray(typeShape)) {
     return [];
   }
   const ownerType = typeShape.toReference();
-  const localKey = `synthetic-array-member-surface:${localKeyPart(localKeySeed)}:${localKeyPart(typeShape.checkerKey)}`;
-  return aureliaArrayMethodTypeProjectionNames.map((name, index) =>
+  const localKey = `synthetic-array-member-surface:${localKeyPart(typeShape.productHandle)}`;
+  return aureliaArrayMethodTypeProjectionNames.map((name) =>
     new CheckerTypeMember(
-      handles.product(`type-member:${localKey}:${index}:${localKeyPart(name)}`),
+      handles.hotDetail(`type-member:${localKey}:${localKeyPart(name)}`),
       name,
       CheckerTypeMemberKind.Method,
       ownerType,

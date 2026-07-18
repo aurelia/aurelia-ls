@@ -1,4 +1,4 @@
-import type { KernelRecordHandle, ProductHandle } from './handles.js';
+import type { HotDetailHandle, KernelRecordHandle, ProductHandle } from './handles.js';
 import type { HotDetailSlot } from './hot-details.js';
 import type { MaterializationRecord } from './materialization.js';
 import type { ProductDetailSlot } from './product-details.js';
@@ -280,7 +280,7 @@ export class ComputationRun implements KernelPublicationContext {
     return this.publications.readProductDetail(slot, productHandle);
   }
 
-  readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: string): TDetail | null {
+  readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: HotDetailHandle): TDetail | null {
     this.requireCurrent();
     return this.publications.readHotDetail(slot, handle);
   }

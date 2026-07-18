@@ -4,7 +4,12 @@ import {
   AuthoredSourceTextCache,
   authoredSourceHostPathCandidates,
 } from '../kernel/authored-source-text.js';
-import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
+import type {
+  AddressHandle,
+  HotDetailHandle,
+  IdentityHandle,
+  ProductHandle,
+} from '../kernel/handles.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import type { BindingContextSlot } from '../configuration/scope.js';
 import {
@@ -750,7 +755,7 @@ export class SemanticAppTemplateQueries {
         ?? null,
       renameSurface: TemplateRenameSurface.Member,
       observedTargetSources: this.templateMemberObservedTargetSources(
-        selectedMember.handles?.productHandle ?? null,
+        selectedMember.handles?.detailHandle ?? null,
         targetSource,
       ),
       bindableAttributeTarget: {
@@ -765,12 +770,12 @@ export class SemanticAppTemplateQueries {
   }
 
   private templateMemberObservedTargetSources(
-    memberProductHandle: ProductHandle | null,
+    memberDetailHandle: HotDetailHandle | null,
     targetSource: SemanticSourceReference,
   ): readonly SemanticSourceReference[] {
-    const member = memberProductHandle == null
+    const member = memberDetailHandle == null
       ? null
-      : this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, memberProductHandle);
+      : this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, memberDetailHandle);
     const valueSource = semanticExactSourceReference(describeAddress(
       this.store,
       member == null ? null : checkerTypeMemberValueSourceAddressHandle(this.store, member),

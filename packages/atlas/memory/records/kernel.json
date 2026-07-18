@@ -253,12 +253,13 @@
         "product-details",
         "inquiry"
       ],
-      "summary": "ProductDetailCatalog is the hot in-memory sidecar for typed product details keyed by durable MaterializedProduct handles.",
-      "rationale": "Rich TypeScript checker objects, framework models, and current-run materializer details do not belong in durable kernel records, but inquiry and downstream materializers need typed access to them. ProductDetailCatalog is the explicit product-owned contract layer between durable handles and hot details.",
+      "summary": "ProductDetailCatalog is the product-envelope admission wrapper over the shared in-memory detail catalog.",
+      "rationale": "Rich TypeScript checker objects, framework models, and current-run materializer details do not belong in durable kernel records, but inquiry and downstream materializers need typed access to them. ProductDetailCatalog owns product-envelope validation and weak binding while DetailCatalog owns the storage, lifetime, mutation, and detail-kind mechanics shared with product-owned hot children.",
       "guidance": [
         "Start here when a materializer or inquiry needs to attach, read, or enumerate rich details for a materialized product.",
         "Define a ProductDetailSlot for a product-owned contract instead of using generic payload escape hatches.",
-        "Keep duplicate-detail and product-kind checks strict so hot details remain tied to committed durable products.",
+        "Keep duplicate-detail and product-kind checks strict so product details remain tied to committed durable products.",
+        "Keep storage and lifetime mechanics in DetailCatalog. ProductDetailCatalog should own only product-envelope admission and normalization semantics; do not fork another catalog implementation.",
         "ProductDetailEntry carries the owning MaterializedProduct envelope; derive envelope facts there before copying product, identity, address, or provenance handles into a detail shape.",
         "Use ProductDetailCatalog.addAll(...) and addAllIfAbsent(...) for homogeneous materializer emission row families whose details already carry product handles; keep nullable or conditional detail attachment explicit at the call site.",
         "ProductDetailCatalog participates in kernel mark/dispose so query-local product details can be reclaimed with their envelopes; durable app-world product invalidation still belongs to an app epoch policy.",
@@ -301,7 +302,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "frontier:hot-detail-catalog",
@@ -313,15 +314,17 @@
         "performance",
         "inquiry"
       ],
-      "summary": "HotDetailCatalog is the epoch-local sidecar for typed details that should not become durable MaterializedProduct envelopes.",
-      "rationale": "Memory telemetry showed that some rich child surfaces, especially TypeChecker member rows owned by projected type shapes, are useful to in-process analysis but too numerous or too low-level to justify product envelopes. HotDetailCatalog keeps those details typed, mark/disposable, and query-visible without promoting them into durable kernel products.",
+      "summary": "HotDetailCatalog is the product-owned child-detail admission wrapper over the shared in-memory detail catalog.",
+      "rationale": "Memory telemetry showed that some rich child surfaces, especially TypeChecker member rows owned by projected type shapes, are useful to in-process analysis but too numerous or too low-level to justify their own product envelopes. HotDetailCatalog keeps those children typed, explicitly owned, mark/disposable, and query-visible without promoting them into durable kernel products.",
       "guidance": [
         "Start here when a materializer needs typed in-memory detail access but the detail has no independent product-kind navigation, claims, provenance, or cross-inquiry durability requirement.",
-        "Prefer ProductDetailCatalog when the detail expands a committed MaterializedProduct; prefer HotDetailCatalog when the detail is owned by another product and should follow that product or query epoch's lifetime.",
-        "Keep hot detail slots explicit and documented; do not use hot details as generic payload storage for facts that should become kernel products or claims.",
+        "Prefer ProductDetailCatalog when the detail expands its own committed MaterializedProduct; prefer HotDetailCatalog when the detail is a lightweight child of another product and should follow that product or publication epoch's lifetime.",
+        "Keep hot detail slots explicit and documented with their owner product kind, and publish each child with its exact owner product handle. Do not use hot details as generic payload storage for facts that should become kernel products or claims.",
+        "Use HotDetailHandle for child lookup. Never put a hot-detail key in a ProductHandle field or expose it as a durable product in public contracts.",
+        "Product replacement must refresh retained child entries with the committed post-state owner envelope and reject replacement while a foreign publication owns a hot child.",
         "HotDetailCatalog participates in kernel mark/dispose so query-local hot rows can be reclaimed with answer-local products.",
         "Use detail-density telemetry to distinguish hot-detail object count from direct string/array field mass; TypeChecker member hot details often retain handle-shaped navigation strings even when they avoid durable product envelopes.",
-        "Hot details have no owning MaterializedProduct envelope, so their handle-shaped fields usually report as non-envelope handles and should be treated as current-epoch navigation rather than envelope echo."
+        "Hot details have an explicit owning MaterializedProduct but no product envelope of their own. Their exact handle/detailHandle echo is derivable; declaration, source, and cross-product handles remain current-epoch navigation."
       ],
       "anchors": [
         {
@@ -353,7 +356,7 @@
         }
       ],
       "createdAt": "2026-05-17",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "frontier:kernel-sidecar-indexes",
@@ -754,6 +757,70 @@
       ],
       "createdAt": "2026-07-17",
       "updatedAt": "2026-07-17"
+    },
+    {
+      "id": "decision:product-owned-hot-detail-boundary",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "type-system",
+        "product-details",
+        "hot-details",
+        "computation-lifecycle"
+      ],
+      "summary": "Lightweight child details have explicit product ownership and their own handle kind without becoming kernel products.",
+      "rationale": "The TypeMember memory compression moved high-volume members out of MaterializedProduct envelopes but left product-shaped handles, false ProductHandle fields, duplicated catalog machinery, and no enforceable owner edge. That incomplete migration let child ownership drift from product replacement and allowed synthetic members to escape without catalog admission. Product details and hot children now share storage mechanics while retaining strict, different admission contracts.",
+      "guidance": [
+        "Use ProductDetailSlot when one rich detail hydrates its own MaterializedProduct envelope; use HotDetailSlot only for a lightweight child whose exact owner product kind is known.",
+        "Every hot-detail publication must name the owner ProductHandle and a branded HotDetailHandle. Never cast or store a HotDetailHandle as ProductHandle.",
+        "Derive a synthetic hot child's handle from its exact owner product and semantic child key. Caller-local projection seeds must not duplicate children under one owner.",
+        "Public and scope contracts that need both lanes should carry ownerProductHandle and detailHandle separately; semantic identity still belongs in identity records.",
+        "Product replacement refreshes retained child entries with the actual committed post-state owner envelope and refuses replacement while a foreign publication owns a hot child.",
+        "A detail publication that attaches to a product from another publication inherits the owner's record lifetime. Selective disposal roots active detail-owner products and their transitive normalized-record closure; it must not retain a detail after reclaiming the owner's identity, address, or provenance.",
+        "Keep storage, detail-kind indexing, lifetime, and mutation mechanics in DetailCatalog. ProductDetailCatalog and HotDetailCatalog own only their distinct binding and admission rules.",
+        "Do not restore one MaterializedProduct per TypeMember unless a future product genuinely needs independent claims, provenance, navigation, or cross-inquiry durability."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/detail-catalog.ts",
+          "symbolName": "DetailCatalog",
+          "summary": "Shared storage and lifetime core for both detail catalog wrappers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/hot-details.ts",
+          "symbolName": "HotDetailSlot",
+          "summary": "Typed child-detail contract with an explicit owner product kind."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/store.ts",
+          "symbolName": "KernelStore",
+          "summary": "Atomic publication boundary that validates owner post-state and foreign-child lifetimes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/type-shape.ts",
+          "symbolName": "CheckerTypeMember",
+          "summary": "Product-owned TypeMember detail carrying HotDetailHandle rather than ProductHandle."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
+          "symbolName": "BindingContextSlot",
+          "summary": "Scope slot contract that names declaration and current-type member detail handles honestly."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/kernel/README.md",
+          "heading": "Record Families",
+          "summary": "Owning documentation for product details, product-owned hot children, and catalog lifetime."
+        }
+      ],
+      "createdAt": "2026-07-18",
+      "updatedAt": "2026-07-18"
     }
   ]
 }

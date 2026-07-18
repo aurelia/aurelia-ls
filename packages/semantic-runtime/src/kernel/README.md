@@ -236,9 +236,16 @@ also envelope-backed when they exactly equal the product address. Catalog admiss
 echo the envelope into non-enumerable shared getters. That keeps retained hot details from storing duplicate handle
 strings while preserving the public in-process shape. Cross-product handles such as instruction, syntax, declaration,
 or binding links remain explicit detail payload and should not be hidden as envelope facts.
-`HotDetailCatalog` performs the narrower equivalent for epoch-local hot details: an exact `handle` or `productHandle`
-echo of the hot-detail entry becomes a getter, but declaration/source/owner handles remain explicit unless another
+`ProductDetailCatalog` and `HotDetailCatalog` share one composed storage/lifetime core; their wrappers retain the
+different semantic admission contracts. `HotDetailCatalog` requires an explicit owning `MaterializedProduct` whose
+kind matches the slot, while the child keeps a branded `HotDetailHandle` rather than masquerading as a product. An
+exact `handle` or `detailHandle` echo becomes a getter. Declaration/source handles remain explicit unless another
 durable record owns that relation.
+
+Detail publication lifetime is closed over its product owner. A publication that attaches a product detail or hot
+child to a product from another publication inherits that product record's lifetime. Selective answer-local disposal
+roots every active manifest, its detail-owner products, and the transitive normalized-record references needed by
+those products. It must never retain a sidecar while reclaiming the owner's identity, address, or provenance records.
 
 `vocabulary.ts` is the public barrel for the controlled vocabulary mechanism used by claims, seams, binding
 kinds, instruction kinds, and product kinds. The implementation is split by dependency direction and slot:
@@ -354,9 +361,12 @@ lifetime.
 - Details support inquiry and tooling expansion, but they are not a shortcut around kernel vocabulary, claims, or
   provenance when a relationship needs to become semantic.
 
-`hot-details.ts` is the lower-cost sidecar for details that do not need a durable `MaterializedProduct` envelope, such
-as TypeChecker member surfaces owned by one projected type shape. Hot details also participate in mark/dispose so
-query-local member projections can be reclaimed when the owning query profile does not retain materialized products.
+`hot-details.ts` is the lower-cost sidecar for child details that do not need their own durable `MaterializedProduct`
+envelope, such as TypeChecker member surfaces owned by one projected type shape. Each hot slot names its owner product
+kind and each publication names the exact owner envelope. Replacement therefore refreshes retained children with a new
+owner witness and refuses to withdraw or replace a product while a foreign publication still owns one of its hot
+children. Hot details also participate in mark/dispose so query-local member projections can be reclaimed with their
+owning publication.
 
 Sidecar indexes, such as the TypeChecker type-shape projector index, are allowed when repeated lookup would otherwise
 re-materialize expensive current-epoch objects. Keep them named, registered on the `KernelStore`, and disposable. A

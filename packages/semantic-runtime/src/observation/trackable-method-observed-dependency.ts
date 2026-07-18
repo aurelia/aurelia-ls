@@ -257,10 +257,10 @@ function checkerTypeMemberForSlot(
   publication: KernelPublicationContext,
   slot: BindingContextSlot | null,
 ): CheckerTypeMember | null {
-  if (slot?.targetProductHandle == null) {
+  if (slot?.targetTypeMemberHandle == null) {
     return null;
   }
-  return publication.readHotDetail(TypeSystemHotDetails.TypeMember, slot.targetProductHandle) ?? null;
+  return publication.readHotDetail(TypeSystemHotDetails.TypeMember, slot.targetTypeMemberHandle) ?? null;
 }
 
 function trackableDependenciesForMember(
@@ -268,11 +268,7 @@ function trackableDependenciesForMember(
   publication: KernelPublicationContext,
   member: CheckerTypeMember,
 ): readonly RuntimeObservedDependencyDraft[] {
-  const carrier = member.carrier
-    ?? (member.productHandle == null
-      ? null
-      : publication.readHotDetail(TypeSystemHotDetails.TypeMember, member.productHandle)?.carrier)
-    ?? null;
+  const carrier = member.carrier;
   if (carrier == null) {
     return [];
   }

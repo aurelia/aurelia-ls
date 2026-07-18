@@ -1,4 +1,3 @@
-import type { KernelSourceFileReadView } from '../kernel/store.js';
 import type { HotDetailReadView } from '../kernel/hot-details.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import { TypeSystemHotDetails, TypeSystemProductDetails } from '../type-system/product-details.js';
@@ -26,7 +25,6 @@ import {
 /** Projects TypeChecker-backed context type surfaces into runtime binding-context slot drafts. */
 export class BindingScopeSlotProjector {
   constructor(
-    readonly store: KernelSourceFileReadView,
     readonly projector: CheckerTypeProjector,
   ) {}
 
@@ -37,7 +35,7 @@ export class BindingScopeSlotProjector {
     const slotsByName = explicitContextSlotsByName(explicitSlots);
     const typeShape = this.typeShapeForContext(contextType);
     if (typeShape != null) {
-      addTypeShapeSlots(this.store, this.projector, slotsByName, typeShape);
+      addTypeShapeSlots(this.projector, slotsByName, typeShape);
     }
     return [...slotsByName.values()];
   }
@@ -62,7 +60,6 @@ function explicitContextSlotsByName(
 }
 
 function addTypeShapeSlots(
-  store: KernelSourceFileReadView,
   projector: CheckerTypeProjector,
   slotsByName: Map<string, BindingContextSlotDraft>,
   typeShape: CheckerTypeShape,
@@ -72,12 +69,11 @@ function addTypeShapeSlots(
     if (slotsByName.has(member.name)) {
       continue;
     }
-    slotsByName.set(member.name, bindingContextSlotDraftForTypeMember(store, projector, member));
+    slotsByName.set(member.name, bindingContextSlotDraftForTypeMember(projector, member));
   }
 }
 
 export function bindingContextSlotDraftForTypeMember(
-  store: KernelSourceFileReadView,
   projector: CheckerTypeProjector,
   member: CheckerTypeMember,
 ): BindingContextSlotDraft {
@@ -85,7 +81,7 @@ export function bindingContextSlotDraftForTypeMember(
   return new BindingContextSlotDraft(
     member.name,
     checkerTypeMemberReachableIdentityHandle(member),
-    member.productHandle,
+    member.detailHandle,
     member.valueType == null
       ? null
       : checkerTypeReferenceWithSource(
@@ -98,7 +94,6 @@ export function bindingContextSlotDraftForTypeMember(
 }
 
 export function bindingContextSlotDraftForContextTypeMember(
-  store: KernelSourceFileReadView,
   projector: CheckerTypeProjector,
   contextType: BindingScopeConstructionRequest['bindingContextType'],
   memberName: string,
@@ -110,18 +105,18 @@ export function bindingContextSlotDraftForContextTypeMember(
     ? null
     : readOrProjectCheckerTypeMembersInProjection(projector, typeShape, typeShape.productHandle)
       .find((candidate) => candidate.name === memberName) ?? null;
-  return member == null ? null : bindingContextSlotDraftForTypeMember(store, projector, member);
+  return member == null ? null : bindingContextSlotDraftForTypeMember(projector, member);
 }
 
 export function bindingContextSlotTargetTypeSourceMember(
   details: HotDetailReadView,
   slot: BindingContextSlot | BindingContextSlotDraft,
 ): CheckerTypeMember | null {
-  const sourceProductHandle = slot.targetTypeSourceProductHandle ?? slot.targetProductHandle;
-  const member = sourceProductHandle == null
+  const sourceMemberHandle = slot.targetTypeSourceMemberHandle ?? slot.targetTypeMemberHandle;
+  const member = sourceMemberHandle == null
     ? null
-    : details.readHotDetail(TypeSystemHotDetails.TypeMember, sourceProductHandle);
-  if (member == null || slot.targetTypeSourceProductHandle != null) {
+    : details.readHotDetail(TypeSystemHotDetails.TypeMember, sourceMemberHandle);
+  if (member == null || slot.targetTypeSourceMemberHandle != null) {
     return member;
   }
   return slot.targetType == null
@@ -161,7 +156,6 @@ export function bindingContextSlotTargetTypeShape(
 
 /** Projects an Aurelia source expression to the exact slot-shaped value it preserves through transparent wrappers. */
 export function bindingContextSlotDraftForExpressionAccess(
-  store: KernelSourceFileReadView,
   projector: CheckerTypeProjector,
   sourceScope: BindingScope,
   expression: ExpressionAstNode,
@@ -175,7 +169,6 @@ export function bindingContextSlotDraftForExpressionAccess(
         return draftFromSlot(sourceScope.locateThis(expression.object.ancestor).context?.lookup(expression.name.name) ?? null);
       }
       const owner = bindingContextSlotDraftForExpressionAccess(
-        store,
         projector,
         sourceScope,
         expression.object,
@@ -183,19 +176,18 @@ export function bindingContextSlotDraftForExpressionAccess(
       );
       return owner == null
         ? null
-        : bindingContextSlotDraftForMemberAccess(store, projector, owner, expression.name.name, `${localKey}:member:${expression.name.name}`);
+        : bindingContextSlotDraftForMemberAccess(projector, owner, expression.name.name, `${localKey}:member:${expression.name.name}`);
     }
     case 'BindingBehavior':
-      return bindingContextSlotDraftForExpressionAccess(store, projector, sourceScope, expression.expression, `${localKey}:binding-behavior`);
+      return bindingContextSlotDraftForExpressionAccess(projector, sourceScope, expression.expression, `${localKey}:binding-behavior`);
     case 'Paren':
-      return bindingContextSlotDraftForExpressionAccess(store, projector, sourceScope, expression.expression, `${localKey}:paren`);
+      return bindingContextSlotDraftForExpressionAccess(projector, sourceScope, expression.expression, `${localKey}:paren`);
     default:
       return null;
   }
 }
 
 function bindingContextSlotDraftForMemberAccess(
-  store: KernelSourceFileReadView,
   projector: CheckerTypeProjector,
   owner: BindingContextSlotDraft,
   memberName: string,
@@ -208,7 +200,7 @@ function bindingContextSlotDraftForMemberAccess(
       .find((candidate) => candidate.name === memberName) ?? null;
   return member == null
     ? null
-    : bindingContextSlotDraftForTypeMember(store, projector, member);
+    : bindingContextSlotDraftForTypeMember(projector, member);
 }
 
 function draftFromSlot(slot: BindingContextSlot | null): BindingContextSlotDraft | null {

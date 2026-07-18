@@ -23,14 +23,6 @@ export const KernelProductKinds = {
       KernelVocabularySlot.ProductKind,
       'Type-system projection of a TypeScript, template, or expression type for inquiry.',
     ),
-
-    /** Product kind for one member visible on a type-system type projection. */
-    TypeMember: defineVocabulary(
-      KernelVocabularyNamespace.TypeSystem,
-      'type-member',
-      KernelVocabularySlot.ProductKind,
-      'Type-system projection of one property, method, accessor, call, construct, or index member.',
-    ),
   },
   Resource: {
 

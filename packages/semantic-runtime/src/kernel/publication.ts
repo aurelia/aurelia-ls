@@ -2,6 +2,7 @@ import type { HotDetailEntry, HotDetailReadView, HotDetailSlot } from './hot-det
 import type {
   KernelHandleFactory,
   KernelRecordHandle,
+  HotDetailHandle,
   ProductHandle,
 } from './handles.js';
 import type { ProductDetailEntry, ProductDetailReadView, ProductDetailSlot } from './product-details.js';
@@ -93,7 +94,8 @@ export class KernelProductDetailPublication<TDetail> {
 export class KernelHotDetailPublication<TDetail> {
   constructor(
     readonly slot: HotDetailSlot<TDetail>,
-    readonly handle: string,
+    readonly ownerProductHandle: ProductHandle,
+    readonly handle: HotDetailHandle,
     readonly detail: TDetail,
     readonly admission: KernelDetailAdmission = KernelDetailAdmission.Required,
     readonly compare: KernelDetailComparator<TDetail> | null = null,
@@ -128,13 +130,15 @@ export function publishProductDetail<TDetail>(
 
 export function publishHotDetail<TDetail>(
   slot: HotDetailSlot<TDetail>,
-  handle: string,
+  ownerProductHandle: ProductHandle,
+  handle: HotDetailHandle,
   detail: TDetail,
   admission: KernelDetailAdmission = KernelDetailAdmission.Required,
   compare: KernelDetailComparator<TDetail> | null = null,
 ): KernelHotDetailPublication<unknown> {
   return new KernelHotDetailPublication(
     slot,
+    ownerProductHandle,
     handle,
     detail,
     admission,
@@ -191,7 +195,7 @@ export class KernelProductDetailAdmissionSnapshot {
 /** Exact foreign hot-detail entry, or absence, used by one staged admission decision. */
 export class KernelHotDetailAdmissionSnapshot {
   constructor(
-    readonly handle: string,
+    readonly handle: HotDetailHandle,
     readonly detailKind: string,
     readonly expectedEntry: HotDetailEntry<unknown> | null,
   ) {}
@@ -203,14 +207,14 @@ export class KernelPublicationManifest {
 
   readonly recordHandles: readonly KernelRecordHandle[];
   readonly productDetailHandles: readonly ProductHandle[];
-  readonly hotDetailHandles: readonly string[];
+  readonly hotDetailHandles: readonly HotDetailHandle[];
   /** Monotone lifetime inherited from this lineage or advanced to its youngest positive dependency. */
   readonly lifetimeOrdinal: number | null;
 
   constructor(
     recordHandles: readonly KernelRecordHandle[] = [],
     productDetailHandles: readonly ProductHandle[] = [],
-    hotDetailHandles: readonly string[] = [],
+    hotDetailHandles: readonly HotDetailHandle[] = [],
     lifetimeOrdinal: number | null = null,
   ) {
     this.recordHandles = Object.freeze([...recordHandles]);
@@ -298,7 +302,7 @@ export class GenerationBoundKernelPublicationContext implements KernelPublicatio
     return this.delegate.readProductDetail(slot, productHandle);
   }
 
-  readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: string): TDetail | null {
+  readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: HotDetailHandle): TDetail | null {
     this.requireCurrent();
     return this.delegate.readHotDetail(slot, handle);
   }
@@ -333,15 +337,15 @@ export class GenerationBoundKernelPublicationContext implements KernelPublicatio
 export class StagedKernelPublicationContext implements KernelPublicationContext {
   private records = new Map<KernelRecordHandle, KernelStoreRecord>();
   private productDetails = new Map<ProductHandle, KernelProductDetailPublication<unknown>>();
-  private hotDetails = new Map<string, KernelHotDetailPublication<unknown>>();
+  private hotDetails = new Map<HotDetailHandle, KernelHotDetailPublication<unknown>>();
   private productDetailAdmissionSnapshots = new Map<ProductHandle, KernelProductDetailAdmissionSnapshot>();
-  private hotDetailAdmissionSnapshots = new Map<string, KernelHotDetailAdmissionSnapshot>();
+  private hotDetailAdmissionSnapshots = new Map<HotDetailHandle, KernelHotDetailAdmissionSnapshot>();
   private recordMutationOrdinals = new Map<KernelRecordHandle, number>();
   private productDetailMutationOrdinals = new Map<ProductHandle, number>();
-  private hotDetailMutationOrdinals = new Map<string, number>();
+  private hotDetailMutationOrdinals = new Map<HotDetailHandle, number>();
   private readonly previousRecordHandles: ReadonlySet<KernelRecordHandle>;
   private readonly previousProductDetailHandles: ReadonlySet<ProductHandle>;
-  private readonly previousHotDetailHandles: ReadonlySet<string>;
+  private readonly previousHotDetailHandles: ReadonlySet<HotDetailHandle>;
   private readonly baseKernelCounts: SemanticRuntimeKernelCountSnapshot;
   private nextMutationOrdinal = 0;
   private failedPublication: Error | null = null;
@@ -436,7 +440,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       : staged.detail as TDetail;
   }
 
-  readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: string): TDetail | null {
+  readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: HotDetailHandle): TDetail | null {
     this.requireCurrent();
     const staged = this.hotDetails.get(handle) ?? null;
     const admission = this.hotDetailAdmissionSnapshots.get(handle) ?? null;
@@ -539,7 +543,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       hotDetailDensity: readSemanticRuntimeDetailDensityRows(hotDetails.map((publication) => ({
         detailKind: publication.slot.detailKind,
         detail: publication.detail,
-        envelopeHandles: [publication.handle],
+        envelopeHandles: [publication.ownerProductHandle, publication.handle],
       }))),
     };
   }
@@ -650,8 +654,8 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
 
   private stageHotDetail(
     publication: KernelHotDetailPublication<unknown>,
-    hotDetails: Map<string, KernelHotDetailPublication<unknown>>,
-    admissionSnapshots: Map<string, KernelHotDetailAdmissionSnapshot>,
+    hotDetails: Map<HotDetailHandle, KernelHotDetailPublication<unknown>>,
+    admissionSnapshots: Map<HotDetailHandle, KernelHotDetailAdmissionSnapshot>,
   ): boolean {
     const existing = hotDetails.get(publication.handle) ?? null;
     if (existing == null) {
@@ -669,6 +673,12 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       throw new Error(
         `Staged publication emitted conflicting hot details for ${publication.handle}: `
         + `${existing.slot.detailKind} and ${publication.slot.detailKind}.`,
+      );
+    }
+    if (existing.ownerProductHandle !== publication.ownerProductHandle) {
+      throw new Error(
+        `Staged publication emitted conflicting owners for hot detail ${publication.handle}: `
+        + `${existing.ownerProductHandle} and ${publication.ownerProductHandle}.`,
       );
     }
     if (publication.admission === KernelDetailAdmission.IfAbsent) {
@@ -716,7 +726,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
 
   private hotDetailAdmissionSnapshot(
     publication: KernelHotDetailPublication<unknown>,
-    snapshots: Map<string, KernelHotDetailAdmissionSnapshot>,
+    snapshots: Map<HotDetailHandle, KernelHotDetailAdmissionSnapshot>,
   ): KernelHotDetailAdmissionSnapshot | null {
     if (this.previousHotDetailHandles.has(publication.handle)) {
       return null;
@@ -728,6 +738,12 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
         throw new Error(
           `Staged publication cannot attach ${publication.slot.detailKind}; ${publication.handle} already has `
           + `${expectedEntry.slot.detailKind}.`,
+        );
+      }
+      if (expectedEntry != null && expectedEntry.ownerProductHandle !== publication.ownerProductHandle) {
+        throw new Error(
+          `Staged publication cannot attach ${publication.slot.detailKind}; ${publication.handle} is owned by `
+          + `${expectedEntry.ownerProductHandle}, not ${publication.ownerProductHandle}.`,
         );
       }
       snapshot = new KernelHotDetailAdmissionSnapshot(

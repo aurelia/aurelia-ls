@@ -15,9 +15,13 @@ export const TypeSystemProductDetails = {
   ),
 } as const;
 
-/** Hot TypeChecker details whose lifetime is owned by a projected type shape or query claim. */
+/** Hot TypeChecker details whose lifetime is owned by a projected type shape. */
 export const TypeSystemHotDetails = {
-  TypeMember: defineHotDetailSlot<CheckerTypeMember>(
+  TypeMember: defineHotDetailSlot<
+    CheckerTypeMember,
+    typeof KernelVocabulary.TypeSystem.TypeShape.key
+  >(
+    KernelVocabulary.TypeSystem.TypeShape.key,
     'type-system.type-member',
     'Hot type-system member projection visible on a type shape; usually not a durable kernel product.',
   ),

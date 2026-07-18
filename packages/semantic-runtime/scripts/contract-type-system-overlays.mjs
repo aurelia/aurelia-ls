@@ -2103,15 +2103,15 @@ function readCustomElementBindingScopeSlotMember(store, resource, slotName) {
       ? (candidate.bindingContext?.slots ?? []).filter((slot) => slot.name === slotName)
       : []
   ) ?? [];
-  const slot = slots.find((candidate) => candidate.targetTypeSourceProductHandle != null)
+  const slot = slots.find((candidate) => candidate.targetTypeSourceMemberHandle != null)
     ?? slots[0]
     ?? null;
-  const member = slot?.targetProductHandle == null
+  const member = slot?.targetTypeMemberHandle == null
     ? null
-    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
-  const typeSourceMember = slot?.targetTypeSourceProductHandle == null
+    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetTypeMemberHandle);
+  const typeSourceMember = slot?.targetTypeSourceMemberHandle == null
     ? null
-    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetTypeSourceProductHandle);
+    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetTypeSourceMemberHandle);
   return {
     name: member?.name ?? null,
     file: member?.carrier?.declarations[0] == null

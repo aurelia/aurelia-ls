@@ -221,7 +221,7 @@ function bindingContextSlotsMatch(
 ): boolean {
   return left.name === right.name
     && left.targetIdentityHandle === right.targetIdentityHandle
-    && left.targetProductHandle === right.targetProductHandle
+    && left.targetTypeMemberHandle === right.targetTypeMemberHandle
     && left.sourceAddressHandle === right.sourceAddressHandle
     && slotTypeReferencesMatch(left, right)
     && slotMemberTypesInclude(left.memberTypes, right.memberTypes);
@@ -232,11 +232,11 @@ function slotTypeReferencesMatch(
   right: BindingContextSlot,
 ): boolean {
   if (
-    left.targetTypeSourceProductHandle == null
-    && right.targetTypeSourceProductHandle == null
+    left.targetTypeSourceMemberHandle == null
+    && right.targetTypeSourceMemberHandle == null
     && (
     left.targetIdentityHandle != null
-    || left.targetProductHandle != null
+    || left.targetTypeMemberHandle != null
     || left.sourceAddressHandle != null
     )
   ) {

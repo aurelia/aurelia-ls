@@ -1,12 +1,20 @@
 import ts from 'typescript';
 import { KernelStore } from '../out/kernel/store.js';
 import { CheckerTypeProjector } from '../out/type-system/checker-projector.js';
+import { readOrProjectCheckerTypeMembersInProjection } from '../out/type-system/checker-type-member-surface.js';
 import { registerIsolatedCheckerDeclarationSourceContext } from '../out/type-system/declaration-source.js';
+import { TypeSystemHotDetails } from '../out/type-system/product-details.js';
+import {
+  CheckerIndexedAccessKeyKind,
+  CheckerTypeProjectionOrigin,
+  CheckerTypeShapeKind,
+} from '../out/type-system/type-shape.js';
 
 const failures = [];
 
 verifyCanonicalProjectionFollowsKernelLifetime();
 verifyCheckerEpochsDoNotShareHotProjections();
+verifySyntheticArrayMembersAreOwnedHotDetails();
 
 if (failures.length > 0) {
   console.error(failures.join('\n'));
@@ -76,6 +84,53 @@ function verifyCheckerEpochsDoNotShareHotProjections() {
   expect(first.checkerKey !== second.checkerKey, 'Checker keys must carry the owning Program epoch.');
   expect(first.carrier?.checker === firstFixture.checker, 'First projection must retain the first checker carrier.');
   expect(second.carrier?.checker === secondFixture.checker, 'Second projection must retain the second checker carrier.');
+}
+
+function verifySyntheticArrayMembersAreOwnedHotDetails() {
+  const store = new KernelStore('contract-synthetic-array-member-ownership');
+  const projector = new CheckerTypeProjector(store, store);
+  const element = projector.ensureSyntheticProjection({
+    localKey: 'synthetic-array-element',
+    shapeKind: CheckerTypeShapeKind.Primitive,
+    display: 'string',
+    members: [],
+    origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
+  });
+  const array = projector.ensureSyntheticProjection({
+    localKey: 'synthetic-array',
+    shapeKind: CheckerTypeShapeKind.Object,
+    display: 'string[]',
+    members: [],
+    indexedValueType: element.toReference(),
+    indexedAccessKeyKind: CheckerIndexedAccessKeyKind.Number,
+    iteratedValueType: element.toReference(),
+    origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
+  });
+
+  const members = readOrProjectCheckerTypeMembersInProjection(projector, array, array.productHandle);
+  const repeatedMembers = readOrProjectCheckerTypeMembersInProjection(projector, array, 'another-caller-local-key');
+  expect(members.length > 0, 'Synthetic Array member enumeration should expose the runtime Array surface.');
+  expect(
+    repeatedMembers.map((member) => member.detailHandle).join('\n')
+      === members.map((member) => member.detailHandle).join('\n'),
+    'Synthetic Array member handles should derive from owner shape and member name, not caller-local seeds.',
+  );
+  expect(
+    store.hotDetails.readEntries().filter((entry) => entry.slot === TypeSystemHotDetails.TypeMember).length
+      === members.length,
+    'Repeated enumeration of one synthetic Array owner should not duplicate its member hot details.',
+  );
+  for (const member of members) {
+    const entry = store.hotDetails.readEntry(member.detailHandle);
+    expect(
+      store.hotDetails.read(TypeSystemHotDetails.TypeMember, member.detailHandle) === member,
+      `Synthetic Array member ${member.name} should be admitted to the TypeMember hot-detail slot.`,
+    );
+    expect(
+      entry?.ownerProductHandle === array.productHandle,
+      `Synthetic Array member ${member.name} should be owned by its Array type-shape product.`,
+    );
+  }
 }
 
 function createCheckerFixture(sourceText = 'export interface Foo { bar: string; baz: number; }') {

@@ -25,9 +25,11 @@ source, value, expression, or template-local slot.
   evaluation, source discovery, or semantic materialization rather than the Program AST.
 - Keep the checker epoch app-local: use the booted project root's `tsconfig.json` when present, otherwise fall back to
   Aurelia-app-shaped defaults instead of inheriting the semantic-runtime package's own build config.
-- Materialize type-shape product envelopes with identities, claims, provenance, and typed details.
+- Materialize type-shape product envelopes with identities, provenance, and typed details.
 - Keep checker type members as hot details owned by a type-shape/member-surface projection unless a future product
   needs durable member graph semantics.
+- Key product-owned synthetic members by the owning type-shape product and semantic member name. Caller-local projection
+  seeds may select or hydrate an owner shape, but must not mint duplicate child identities for that same owner.
 - Materialize declaration source spans for checker-backed members, including Program files that were not boot-admitted
   as app sources, so hover/definition targets can point at TypeScript declaration truth instead of only the owning type.
 - Allow hot product details to retain `ts.TypeChecker`, `ts.Type`, `ts.Symbol`, and declaration carriers when that
@@ -281,12 +283,13 @@ parameter or return types need import rewriting and unqualified checker-global d
 interfaces. This keeps bound-controller overlays from falling back to a child placeholder bindable type merely because
 the parent-bound value is a structural function returned by a converter, and keeps listener event overlays from owning
 their own display-string type printer for `currentTarget`/`target` refinements.
-Scope-slot type spelling spends `targetTypeSourceProductHandle` when value flow supplied a current type that differs
-from the slot declaration. The slot's `targetProductHandle` remains declaration/symbol identity for navigation and
-write policy. Overlay projection must not overwrite that identity merely to obtain an importable indexed-access type;
-the two handles encode different causal relationships. Transforming wrappers such as value converters leave the
-member carrier unset and spell the evaluated return type directly; matching display text does not make pre-converter
-member provenance truthful.
+Scope-slot type spelling spends `targetTypeSourceMemberHandle` when value flow supplied a current type that differs
+from the slot declaration. The slot's `targetTypeMemberHandle` reaches the declaration member detail used for
+navigation and write policy; durable identity remains in `targetIdentityHandle`. Overlay projection must not overwrite
+either merely to obtain an importable indexed-access type. The two member handles encode different causal
+relationships, while their owning type-shape products remain separately available from the member details.
+Transforming wrappers such as value converters leave the member carrier unset and spell the evaluated return type
+directly; matching display text does not make pre-converter member provenance truthful.
 `dom-node-type.ts` owns DOM tag-name and event-map vocabulary. `$event` scope construction, listener handler-reference
 value channels, and generated overlay event helpers should spend that vocabulary instead of spelling
 `GlobalEventHandlersEventMap`/`HTMLElementEventMap` fallback policy locally.
@@ -676,9 +679,13 @@ callback parameter typing, object-option typing, and nested literal context do n
   `BindingContextSlotDraft` by spending the runtime `BindingScope` first and only then asking the TypeChecker member
   surface for deeper members. That keeps child root slots, overlay aliases, and future reference/cursor consumers on one
   source-slot path instead of pairing a TypeChecker member chain with an unrelated Scope lookup.
-- Checker type members do not have standalone durable kernel identities by default. Their hot `productHandle` is an
-  in-process follow-up key; value-type projections and scope slots should use the member declaration identity when one
-  exists, otherwise the owning type-shape identity. Do not invent a `TypeSystemIdentity` only to parent a member value.
+- Checker type members do not have standalone durable kernel products or identities by default. Their branded
+  `detailHandle` is an in-process follow-up key owned by the type-shape product; value-type projections and scope slots
+  should use the member declaration identity when one exists, otherwise the owning type-shape identity. Do not invent
+  a `MaterializedProduct` or `TypeSystemIdentity` only to parent a member value.
+- Synthetic Array member surfaces use the same owner-aware hot-detail publication path as checker-backed members.
+  Returning an unadmitted synthetic member is invalid because a scope slot may retain its detail handle for follow-up
+  type and observation reads.
 - Checker-backed members derive their navigable source span from the `TypeScriptDeclarationIdentity` record. Keep a
   direct `sourceAddressHandle` on `CheckerTypeMember` only for synthetic or non-declaration-backed members.
 - `CheckerTypeProjectionRequest.memberProjection` is the explicit eager/lazy member-surface policy. Resource target

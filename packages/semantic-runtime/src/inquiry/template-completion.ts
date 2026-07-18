@@ -391,8 +391,8 @@ export class TemplateCompletionCursorContext {
     readonly selectedBindable: TemplateBindableReference | null,
     /** Public resource name matched at this cursor; differs from the canonical name for alias usages. */
     readonly selectedDefinitionMatchedName: string | null,
-    /** Binding-scope slot selected by a root scope access such as `message` or `save()`. */
-    readonly selectedScopeSlot: BindingContextSlot | null,
+    /** Binding-scope slot and exact owning scope selected by a root access such as `message` or `save()`. */
+    readonly selectedScopeSlot: TemplateCompletionScopeSlotSelection | null,
     /** Closed member token selected by the cursor, when the cursor is on an authored member name. */
     readonly selectedMemberName: string | null,
     /** Parser frontier under the cursor, when the cursor selected an expression parse. */
@@ -407,6 +407,14 @@ export class TemplateCompletionCursorContext {
     readonly activeExpressionSpan: SourceSpan | null,
     /** Extra context gaps found while turning a cursor into product handles. */
     readonly missingInputs: readonly string[] = [],
+  ) {}
+}
+
+/** Coupled lookup result retained when cursor dispatch selects a runtime scope slot. */
+export class TemplateCompletionScopeSlotSelection {
+  constructor(
+    readonly scope: BindingScope,
+    readonly slot: BindingContextSlot,
   ) {}
 }
 
@@ -560,7 +568,7 @@ class TemplateCompletionCursorContextBuilder {
       expressionResult,
       offset,
       bindingScope,
-      declarationSelection?.slot ?? null,
+      declarationSelection,
     );
     const missingInputs: string[] = [];
     const routeParameterEndpointProductHandles = this.routeParameterEndpointProductHandles(
@@ -579,7 +587,7 @@ class TemplateCompletionCursorContextBuilder {
       valueSite,
       selectedScopeSlot == null ? missingInputs : [],
     );
-    const selectedMemberName = selectedScopeSlot?.name
+    const selectedMemberName = selectedScopeSlot?.slot.name
       ?? selectedMemberNameForCursor(siteKind, expressionResult, offset);
     const activeExpressionSpan = expressionResult == null
       ? null
@@ -898,10 +906,13 @@ function selectedScopeSlotForCursor(
   expressionResult: ExpressionParseResult | null,
   offset: number,
   bindingScope: BindingScope | null,
-  declarationSlot: BindingContextSlot | null,
-): BindingContextSlot | null {
-  if (declarationSlot != null) {
-    return declarationSlot;
+  declarationSelection: SourceBackedScopeSlotDeclarationSelection | null,
+): TemplateCompletionScopeSlotSelection | null {
+  if (declarationSelection != null) {
+    return new TemplateCompletionScopeSlotSelection(
+      declarationSelection.scope,
+      declarationSelection.slot,
+    );
   }
   if (bindingScope == null) {
     return null;
@@ -916,12 +927,18 @@ function selectedScopeSlotForCursor(
   ) {
     const access = ExpressionParseResultInspector.scopeAccessAtOffset(expressionResult, offset);
     if (access != null) {
-      return bindingScope.locate(access.name.name, access.ancestor).slot;
+      const located = bindingScope.locate(access.name.name, access.ancestor);
+      return located.scope == null || located.slot == null
+        ? null
+        : new TemplateCompletionScopeSlotSelection(located.scope, located.slot);
     }
     const bindingIdentifier = ExpressionParseResultInspector.bindingIdentifierAtOffset(expressionResult, offset);
-    return bindingIdentifier == null
-      ? null
-      : bindingScope.locate(bindingIdentifier.name.name, 0).slot;
+    if (bindingIdentifier != null) {
+      const located = bindingScope.locate(bindingIdentifier.name.name, 0);
+      return located.scope == null || located.slot == null
+        ? null
+        : new TemplateCompletionScopeSlotSelection(located.scope, located.slot);
+    }
   }
 
   return null;
@@ -1004,7 +1021,7 @@ function scopeSlotDeclarationCandidatesConverge(
     && candidate.slot.name === first.slot.name
     && candidate.slot.sourceAddressHandle === first.slot.sourceAddressHandle
     && candidate.slot.targetIdentityHandle === first.slot.targetIdentityHandle
-    && candidate.slot.targetProductHandle === first.slot.targetProductHandle
+    && candidate.slot.targetTypeMemberHandle === first.slot.targetTypeMemberHandle
     && sameNullableCheckerTypeReference(candidate.slot.targetType, first.slot.targetType)
   );
 }
@@ -1762,7 +1779,7 @@ function bindableAttributeValueCandidates(
     TemplateCompletionCandidateKind.AttributeValue,
     value,
     TemplateCompletionCandidateSourceKind.TypeSystem,
-    member.productHandle,
+    member.ownerType.productHandle,
     checkerTypeMemberReachableIdentityHandle(member),
     checkerTypeMemberSourceAddressHandle(store, member),
     'Finite static value accepted by the checker-projected bindable type.',
@@ -2216,7 +2233,7 @@ function typeMemberCandidates(
     TemplateCompletionCandidateKind.TypeMember,
     member.name,
     TemplateCompletionCandidateSourceKind.TypeSystem,
-    member.productHandle,
+    member.ownerType.productHandle,
     checkerTypeMemberReachableIdentityHandle(member),
     checkerTypeMemberSourceAddressHandle(frame.store, member),
     `Member visible on checker-projected type.`,
@@ -2395,40 +2412,38 @@ function scopeSlotCandidate(
   depth: number,
   contextKind: BindingContextKind,
 ): TemplateCompletionCandidate {
-  const typeMemberFacts = typeMemberFactsForSlot(frame, slot, scope, contextKind);
-  return new TemplateCompletionCandidate(
-    contextKind === BindingContextKind.Override
-      ? TemplateCompletionCandidateKind.OverrideContextSlot
-      : TemplateCompletionCandidateKind.BindingContextSlot,
-    slot.name,
-    TemplateCompletionCandidateSourceKind.BindingScope,
-    slot.targetProductHandle ?? scope.productHandle,
-    slot.targetIdentityHandle ?? scope.identityHandle,
-    slot.sourceAddressHandle ?? scope.sourceAddressHandle,
-    depth === 0
-      ? `Name visible in current ${contextKind}.`
-      : `Name visible from ancestor ${depth} ${contextKind}.`,
-    slot.targetType,
-    typeMemberFacts,
-  );
-}
-
-function typeMemberFactsForSlot(
-  frame: TemplateCompletionAnswerFrame,
-  slot: BindingContextSlot,
-  scope: BindingScope,
-  contextKind: BindingContextKind,
-): TemplateCompletionTypeMemberFacts | null {
-  const member = slot.targetProductHandle == null
-    ? null
-    : frame.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
-  return member == null
+  const member = typeMemberForSlot(frame, slot);
+  const memberFacts = member == null
     ? null
     : typeMemberFacts(
       frame,
       member,
       contextKind === BindingContextKind.ViewModel && slot.name === member.name ? scope : null,
     );
+  return new TemplateCompletionCandidate(
+    contextKind === BindingContextKind.Override
+      ? TemplateCompletionCandidateKind.OverrideContextSlot
+      : TemplateCompletionCandidateKind.BindingContextSlot,
+    slot.name,
+    TemplateCompletionCandidateSourceKind.BindingScope,
+    member?.ownerType.productHandle ?? scope.productHandle,
+    slot.targetIdentityHandle ?? scope.identityHandle,
+    slot.sourceAddressHandle ?? scope.sourceAddressHandle,
+    depth === 0
+      ? `Name visible in current ${contextKind}.`
+      : `Name visible from ancestor ${depth} ${contextKind}.`,
+    slot.targetType,
+    memberFacts,
+  );
+}
+
+function typeMemberForSlot(
+  frame: TemplateCompletionAnswerFrame,
+  slot: BindingContextSlot,
+): CheckerTypeMember | null {
+  return slot.targetTypeMemberHandle == null
+    ? null
+    : frame.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetTypeMemberHandle);
 }
 
 function uniqueCandidatesByKey(

@@ -46,7 +46,6 @@ import {
 } from '../configuration/app-analysis.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from '../template/template-compilation-project-pass.js';
 import type { TemplateCompilerIssue } from '../template/compiler-issue.js';
-import type { BindingContextSlot } from '../configuration/scope.js';
 import type { RuntimeBindingScopeIssue } from '../template/runtime-binding-scope-issue.js';
 import type { RuntimeBindingIssue } from '../template/runtime-binding-issue.js';
 import type { RuntimeBindingBehaviorIssue } from '../template/runtime-binding-behavior.js';
@@ -2510,7 +2509,7 @@ function cursorSelectedMemberRow(
   includeHandles: boolean,
 ): SemanticTemplateCursorMemberRow | null {
   if (cursorContext.selectedScopeSlot != null) {
-    return cursorScopeSlotMemberRow(store, cursorContext, cursorContext.selectedScopeSlot, includeHandles);
+    return cursorScopeSlotMemberRow(store, cursorContext.selectedScopeSlot, includeHandles);
   }
 
   const memberName = cursorContext.selectedMemberName;
@@ -2554,7 +2553,8 @@ function cursorSelectedMemberRow(
     declarationSource: describeAddress(store, checkerTypeMemberSourceAddressHandle(store, member)),
     ...(includeHandles ? {
       handles: {
-        productHandle: member.productHandle,
+        ownerProductHandle: member.ownerType.productHandle,
+        detailHandle: member.detailHandle,
         declarationIdentityHandle: member.declarationIdentityHandle,
         ownerTypeIdentityHandle: member.ownerType.identityHandle,
         reachableIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
@@ -2567,19 +2567,19 @@ function cursorSelectedMemberRow(
 
 function cursorScopeSlotMemberRow(
   store: KernelStore,
-  cursorContext: TemplateCompletionCursorContext,
-  slot: BindingContextSlot,
+  selection: NonNullable<TemplateCompletionCursorContext['selectedScopeSlot']>,
   includeHandles: boolean,
 ): SemanticTemplateCursorMemberRow {
-  const member = slot.targetProductHandle == null
+  const { scope, slot } = selection;
+  const member = slot.targetTypeMemberHandle == null
     ? null
-    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetTypeMemberHandle);
   const sourceAddressHandle = slot.sourceAddressHandle
     ?? (member == null ? null : checkerTypeMemberSourceAddressHandle(store, member));
   const declarationSourceAddressHandle = member == null
     ? null
     : checkerTypeMemberSourceAddressHandle(store, member);
-  const productHandle = slot.targetProductHandle ?? cursorContext.query.bindingScopeProductHandle;
+  const ownerProductHandle = member?.ownerType.productHandle ?? scope.productHandle;
   return {
     name: slot.name,
     memberKind: member?.memberKind ?? CheckerTypeMemberKind.Property,
@@ -2588,9 +2588,10 @@ function cursorScopeSlotMemberRow(
     isReadonly: member?.isReadonly ?? false,
     source: describeAddress(store, sourceAddressHandle),
     declarationSource: describeAddress(store, declarationSourceAddressHandle),
-    ...(includeHandles && productHandle != null ? {
+    ...(includeHandles ? {
       handles: {
-        productHandle,
+        ownerProductHandle,
+        detailHandle: slot.targetTypeMemberHandle,
         declarationIdentityHandle: member?.declarationIdentityHandle ?? slot.targetIdentityHandle,
         ownerTypeIdentityHandle: member?.ownerType.identityHandle ?? null,
         reachableIdentityHandle: member == null

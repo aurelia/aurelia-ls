@@ -529,8 +529,8 @@
         "If multiple call sites bind the same definition property, keep the value open unless a future recursive rendering context can pick the exact call site.",
         "Treat remaining dynamic state/service boundaries after this handoff as evaluator or DI/state-store pressure, not as missing router semantics.",
         "Child resource template overlays should use parent-bound controller slots when the table gives a single source slot or evaluated type; do not suppress TS2554/TS2345 locally when root alias typing is missing.",
-        "When a direct parent-bound value flows through composed state such as state.actions, scope construction should use bindingContextSlotTargetTypeShape(...) to materialize the slot target type lazily, retain the child bindable as declaration identity, and record the reached parent member only in targetTypeSourceProductHandle for importable overlay aliases.",
-        "Value converters are not provenance-transparent. Their evaluated toView return type owns the child slot's current value type even when its display matches the pre-converter source member; do not carry that source member into targetTypeSourceProductHandle merely to obtain a convenient type spelling.",
+        "When a direct parent-bound value flows through composed state such as state.actions, scope construction should use bindingContextSlotTargetTypeShape(...) to materialize the slot target type lazily, retain the child bindable as declaration identity, and record the reached parent member only in targetTypeSourceMemberHandle for importable overlay aliases.",
+        "Value converters are not provenance-transparent. Their evaluated toView return type owns the child slot's current value type even when its display matches the pre-converter source member; do not carry that source member into targetTypeSourceMemberHandle merely to obtain a convenient type spelling.",
         "When a source expression itself names a slot, use bindingContextSlotDraftForExpressionAccess(...) after the binding-source lifecycle projection selects the correct source scope. That helper owns AccessScope/AccessThis/AccessMember slot walking for bound-controller root slots, overlays, and future cursor/reference consumers.",
         "When parent-bound values flow through source-scope-changing binding behaviors such as `& state`, child root slot source lookup must spend RuntimeBindingExpressionScopeProjector before chasing AccessScope/AccessMember identity. The source slot and evaluated type should agree instead of letting overlays compensate for a source-less child bindable type.",
         "RuntimeBoundControllerValueTable crosses from parent resource analysis into child resource analysis. Carry parent authored source address, strict mode, and binding-behavior lifecycle on the table entry; do not reread the parent RuntimeBinding from the child's RuntimeRenderingEmission.",
@@ -628,7 +628,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-07-09"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "frontier:proxy-observable-domain-modeling",

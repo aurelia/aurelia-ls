@@ -105,7 +105,7 @@ export class BindingScopeMaterializer {
     /** Generation-local checker projector and publication authority for all slot details. */
     readonly projector: CheckerTypeProjector,
   ) {
-    this.slotProjector = new BindingScopeSlotProjector(store, projector);
+    this.slotProjector = new BindingScopeSlotProjector(projector);
   }
 
   construct(input: BindingScopeConstructionRequest): BindingScopeConstructionEmission {

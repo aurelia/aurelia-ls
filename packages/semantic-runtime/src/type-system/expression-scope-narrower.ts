@@ -219,7 +219,7 @@ export class CheckerExpressionScopeNarrower {
     const narrowedSlot = bindingContextSlotWithTargetType(
       slot.name,
       slot.targetIdentityHandle,
-      slot.targetProductHandle,
+      slot.targetTypeMemberHandle,
       narrowedType,
       slot.sourceAddressHandle ?? sourceAddressHandle,
       slot,
@@ -250,7 +250,7 @@ export class CheckerExpressionScopeNarrower {
         narrowSlot: (targetType, sourceAddressHandle) => bindingContextSlotWithTargetType(
           slot.name,
           slot.targetIdentityHandle,
-          slot.targetProductHandle,
+          slot.targetTypeMemberHandle,
           targetType,
           slot.sourceAddressHandle ?? sourceAddressHandle,
           slot,
@@ -556,7 +556,7 @@ export class CheckerExpressionScopeNarrower {
     return new BindingContextSlotDraft(
       slot.name,
       slot.targetIdentityHandle,
-      slot.targetProductHandle,
+      slot.targetTypeMemberHandle,
       ownerType,
       slot.sourceAddressHandle,
       slot.fieldProvenance,
@@ -567,7 +567,7 @@ export class CheckerExpressionScopeNarrower {
       ],
       slot.assignmentAccessKind,
       ownerType != null && slot.targetType != null && sameCheckerTypeReference(ownerType, slot.targetType)
-        ? slot.targetTypeSourceProductHandle
+        ? slot.targetTypeSourceMemberHandle
         : null,
     );
   }
@@ -1085,7 +1085,7 @@ function booleanKind(
 function bindingContextSlotWithTargetType(
   name: string,
   targetIdentityHandle: BindingContextSlot['targetIdentityHandle'],
-  targetProductHandle: BindingContextSlot['targetProductHandle'],
+  targetTypeMemberHandle: BindingContextSlot['targetTypeMemberHandle'],
   targetType: CheckerTypeReference,
   sourceAddressHandle: AddressHandle | null,
   source: BindingContextSlot,
@@ -1093,7 +1093,7 @@ function bindingContextSlotWithTargetType(
   return new BindingContextSlotDraft(
     name,
     targetIdentityHandle,
-    targetProductHandle,
+    targetTypeMemberHandle,
     targetType,
     sourceAddressHandle,
     source.fieldProvenance,
@@ -1101,7 +1101,7 @@ function bindingContextSlotWithTargetType(
     source.memberTypes,
     source.assignmentAccessKind,
     source.targetType != null && sameCheckerTypeReference(targetType, source.targetType)
-      ? source.targetTypeSourceProductHandle
+      ? source.targetTypeSourceMemberHandle
       : null,
   );
 }

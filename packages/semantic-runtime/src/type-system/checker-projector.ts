@@ -1,6 +1,5 @@
 import ts from 'typescript';
 import { SourceSpanRole } from '../kernel/address.js';
-import { SemanticClaim, claimsForProduct } from '../kernel/claim.js';
 import {
   OpenSeam,
 } from '../kernel/open-seam.js';
@@ -38,6 +37,7 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
+  KernelDetailAdmission,
   KernelPublicationPlan,
   publishHotDetail,
   publishProductDetail,
@@ -293,10 +293,41 @@ export class CheckerTypeProjector {
         emission.typeShape,
       )],
       emission.typeShape.members.map((member) =>
-        publishHotDetail(TypeSystemHotDetails.TypeMember, member.productHandle, member)
+        publishHotDetail(
+          TypeSystemHotDetails.TypeMember,
+          emission.typeShape.productHandle,
+          member.detailHandle,
+          member,
+        )
       ),
     ));
     return emission;
+  }
+
+  /** Ensure lightweight member details are published under the type-shape product that owns them. */
+  ensureOwnedMembers(
+    owner: CheckerTypeShape,
+    members: readonly CheckerTypeMember[],
+  ): readonly CheckerTypeMember[] {
+    const missing = members.filter((member) =>
+      this.publication.readHotDetail(TypeSystemHotDetails.TypeMember, member.detailHandle) == null
+    );
+    if (missing.length > 0) {
+      this.publication.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], `type-system-members:${owner.productHandle}`),
+        [],
+        missing.map((member) => publishHotDetail(
+          TypeSystemHotDetails.TypeMember,
+          owner.productHandle,
+          member.detailHandle,
+          member,
+          KernelDetailAdmission.IfAbsent,
+        )),
+      ));
+    }
+    return members.map((member) =>
+      this.publication.readHotDetail(TypeSystemHotDetails.TypeMember, member.detailHandle) ?? member
+    );
   }
 
   private recordsForType(
@@ -422,9 +453,8 @@ export class CheckerTypeProjector {
   }
 
   private recordsForShapePublication(input: TypeShapePublicationFrame): CheckerTypeProjectionEmission {
-    const claims = this.claimsForShapeMembers(input);
     const typeShape = this.typeShapeForPublication(input);
-    input.records.push(...this.recordsForShapeAndMembers(input, typeShape, claims));
+    input.records.push(...this.recordsForShapeAndMembers(input, typeShape));
     return new CheckerTypeProjectionEmission(typeShape, input.records);
   }
 
@@ -449,14 +479,12 @@ export class CheckerTypeProjector {
   private recordsForShapeAndMembers(
     input: TypeShapePublicationFrame,
     typeShape: CheckerTypeShape,
-    claims: readonly SemanticClaim[],
   ): readonly KernelStoreRecord[] {
     return [
       this.typeShapeIdentity(input),
       ...input.openSeams,
-      ...claims,
       requireProductDetailEnvelope(typeShape, 'type-system.type-shape'),
-      this.typeShapeMaterialization(input, claims),
+      this.typeShapeMaterialization(input),
     ];
   }
 
@@ -483,19 +511,14 @@ export class CheckerTypeProjector {
 
   private typeShapeMaterialization(
     input: TypeShapePublicationFrame,
-    claims: readonly SemanticClaim[],
   ): MaterializationRecord {
     return new MaterializationRecord(
       this.store.handles.materialization(`type-shape:${input.localKey}`),
       input.shapeIdentityHandle,
       [input.shapeProductHandle],
-      claims.map((claim) => claim.handle),
+      [],
       input.openSeams.map((seam) => seam.handle),
     );
-  }
-
-  private claimsForShapeMembers(input: TypeShapePublicationFrame): readonly SemanticClaim[] {
-    return [];
   }
 
   private syntheticMembersForType(
@@ -505,7 +528,7 @@ export class CheckerTypeProjector {
     return input.members.map((member, index) => {
       const localKey = `${input.localKey}:member:${index}:${localKeyPart(member.name)}`;
       return new CheckerTypeMember(
-        this.store.handles.product(`type-member:${localKey}`),
+        this.store.handles.hotDetail(`type-member:${localKey}`),
         member.name,
         member.memberKind ?? CheckerTypeMemberKind.Property,
         ownerType,
@@ -553,7 +576,7 @@ export class CheckerTypeProjector {
     appendDeclarationSourceRecords(this.publication, records, declarationSource);
     const valueTypeReference = valueTypeReferenceForMember(input, valueType);
     return new CheckerTypeMember(
-      this.store.handles.product(`type-member:${localKey}`),
+      this.store.handles.hotDetail(`type-member:${localKey}`),
       name,
       checkerSymbolMemberKind(symbol, declarations),
       ownerType,

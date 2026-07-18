@@ -215,7 +215,7 @@ export class BindingDataFlowSourceWriteCapabilityProjector {
         slot.sourceAddressHandle,
       );
     }
-    if (slot.targetProductHandle == null) {
+    if (slot.targetTypeMemberHandle == null) {
       return sourceWriteCapabilityTypeScriptStrictness(
         'Scope slot is runtime-only and does not carry a TypeChecker member product; Aurelia astAssign can still write to the runtime context.',
         null,
@@ -224,7 +224,7 @@ export class BindingDataFlowSourceWriteCapabilityProjector {
         slot.sourceAddressHandle,
       );
     }
-    const member = this.publication.readHotDetail(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+    const member = this.publication.readHotDetail(TypeSystemHotDetails.TypeMember, slot.targetTypeMemberHandle);
     return member == null
       ? sourceWriteCapabilityOpen(
         'Scope slot member product was not available for runtime assignment policy.',

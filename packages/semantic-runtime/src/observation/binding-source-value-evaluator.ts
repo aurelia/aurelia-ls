@@ -1298,7 +1298,7 @@ export class RuntimeBindingSourceValueEvaluator {
     if (stateInitialValue != null) {
       return stateInitialValue;
     }
-    if (slot.targetProductHandle == null) {
+    if (slot.targetTypeMemberHandle == null) {
       if (slot.targetType != null) {
         return openBindingSourceSlotNoStaticValue(
           `Scope slot '${slot.name}' is runtime/local typed as '${slot.targetType.display ?? slot.targetType.shapeKind}', but it does not carry a static value carrier.`,
@@ -1306,7 +1306,7 @@ export class RuntimeBindingSourceValueEvaluator {
       }
       return openBindingSourceSlotNoStaticValue(`Scope slot '${slot.name}' did not carry a TypeChecker member product.`);
     }
-    const member = this.projector.publication.readHotDetail(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+    const member = this.projector.publication.readHotDetail(TypeSystemHotDetails.TypeMember, slot.targetTypeMemberHandle);
     if (!(member instanceof CheckerTypeMember)) {
       return openBindingSourceSlotNoStaticValue(`Scope slot '${slot.name}' target product is not a TypeChecker member.`);
     }
@@ -2005,10 +2005,10 @@ export class RuntimeBindingSourceValueEvaluator {
   }
 
   private checkerMemberForSlot(slot: BindingContextSlot): CheckerTypeMember | null {
-    if (slot.targetProductHandle == null) {
+    if (slot.targetTypeMemberHandle == null) {
       return null;
     }
-    const member = this.projector.publication.readHotDetail(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+    const member = this.projector.publication.readHotDetail(TypeSystemHotDetails.TypeMember, slot.targetTypeMemberHandle);
     return member instanceof CheckerTypeMember ? member : null;
   }
 

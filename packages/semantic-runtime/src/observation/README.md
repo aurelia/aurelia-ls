@@ -292,7 +292,7 @@ static type surfaces rather than hydrated runtime values.
   history, not `$parent` ancestry; only `runtimeParent` participates in Aurelia scope traversal. Other runtime-only
   scope slots can still report TypeScript strictness pressure when the product cannot prove a real
   TypeChecker member. A
-  runtime-created slot may still carry the target bindable's TypeMember product as a type carrier for expression
+  runtime-created slot may still carry the target bindable's product-owned TypeMember detail as a type carrier for expression
   analysis; assignment policy should not treat that carrier as proof that the scope name is an authored view-model
   member. Public binding-data-flow rows retain both the exact authored assignment-token occurrence and the declaration
   source reached by lookup; references and rename consume that pair rather than manufacturing observed reads for writes.

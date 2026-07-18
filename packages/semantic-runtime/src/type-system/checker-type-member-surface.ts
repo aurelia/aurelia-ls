@@ -1,4 +1,4 @@
-import type { KernelHandleFactory, ProductHandle } from '../kernel/handles.js';
+import type { ProductHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import {
@@ -33,15 +33,13 @@ export function readOrProjectCheckerTypeMembersInProjection(
   typeShape: CheckerTypeShape,
   localKeySeed: ProductHandle | string,
 ): readonly CheckerTypeMember[] {
-  const handles = projector.publication.handles;
-  const localKey = localKeyPart(localKeySeed);
   if (typeShape.members.length > 0) {
-    return withSyntheticRuntimeArrayMembers(handles, typeShape, typeShape.members, localKey);
+    return withSyntheticRuntimeArrayMembers(projector, typeShape, typeShape.members);
   }
   const projected = projectCheckerTypeMemberSurfaceInProjection(projector, typeShape, localKeySeed);
   return projected == null
-    ? withSyntheticRuntimeArrayMembers(handles, typeShape, [], localKey)
-    : withSyntheticRuntimeArrayMembers(handles, projected, projected.members, localKey);
+    ? withSyntheticRuntimeArrayMembers(projector, typeShape, [])
+    : withSyntheticRuntimeArrayMembers(projector, projected, projected.members);
 }
 
 /** Project an enumerable member surface through the active checker generation. */
@@ -70,20 +68,20 @@ export function projectCheckerTypeMemberSurfaceInProjection(
 }
 
 function withSyntheticRuntimeArrayMembers(
-  handles: KernelHandleFactory,
+  projector: CheckerTypeProjector,
   typeShape: CheckerTypeShape,
   members: readonly CheckerTypeMember[],
-  localKey: string,
 ): readonly CheckerTypeMember[] {
-  const syntheticMembers = syntheticRuntimeArrayTypeMembers(handles, typeShape, localKey);
+  const syntheticMembers = syntheticRuntimeArrayTypeMembers(projector.publication.handles, typeShape);
   if (syntheticMembers.length === 0) {
     return members;
   }
   const existingNames = new Set(members.map((member) => member.name));
   const missingSyntheticMembers = syntheticMembers.filter((member) => !existingNames.has(member.name));
-  return missingSyntheticMembers.length === 0
+  const combined = missingSyntheticMembers.length === 0
     ? members
     : [...members, ...missingSyntheticMembers];
+  return projector.ensureOwnedMembers(typeShape, combined);
 }
 
 /**
