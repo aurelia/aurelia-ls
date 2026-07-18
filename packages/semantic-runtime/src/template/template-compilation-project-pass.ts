@@ -39,6 +39,7 @@ import type { TypeSystemProject } from '../type-system/project.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
+import { DiProviderActivationView } from '../di/provider-activation.js';
 import {
   runtimeBoundControllerValueTableForTemplateResources,
   type RuntimeBoundControllerValueTable,
@@ -370,6 +371,15 @@ export class TemplateCompilationProjectPass {
   ): TemplateCompilationProjectEmission {
     const started = performance.now();
     const evaluation = options.evaluation?.forkSession() ?? null;
+    const sourceValueActivationView = evaluation == null || typeSystem == null
+      ? null
+      : new DiProviderActivationView(
+          this.publication,
+          evaluation,
+          typeSystem,
+          appWorld.configuration,
+          appWorld.diWorld,
+        );
     const phaseRecorder = new TemplateCompilationPhaseRecorder(
       this.publication,
       normalizeSemanticRuntimeTelemetryOptions(
@@ -415,6 +425,7 @@ export class TemplateCompilationProjectPass {
       options.projectKey ?? null,
       evaluation,
       typeSystem,
+      sourceValueActivationView,
       resourceDefinitions,
       runtimeAnalysisDepth,
       expressionWorld,
@@ -425,6 +436,7 @@ export class TemplateCompilationProjectPass {
       options.projectKey ?? null,
       evaluation,
       typeSystem,
+      sourceValueActivationView,
       resourceDefinitions,
       runtimeAnalysisDepth,
       expressionWorld,
@@ -485,6 +497,7 @@ export class TemplateCompilationProjectPass {
     projectKey: string | null,
     evaluation: StaticProjectEvaluationResult | null,
     typeSystem: TypeSystemProject | null,
+    sourceValueActivationView: DiProviderActivationView | null,
     resourceDefinitions: ResourceDefinitionIndex | null,
     runtimeAnalysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`,
     expressionWorld: CheckerExpressionTypeWorld,
@@ -510,6 +523,7 @@ export class TemplateCompilationProjectPass {
                 projectKey,
                 evaluation,
                 typeSystem,
+                sourceValueActivationView,
                 resourceDefinitions,
                 runtimeAnalysisDepth,
                 expressionWorld,
@@ -1011,6 +1025,7 @@ export class TemplateCompilationProjectPass {
     projectKey: string | null,
     evaluation: StaticProjectEvaluationResult | null,
     typeSystem: TypeSystemProject | null,
+    sourceValueActivationView: DiProviderActivationView | null,
     resourceDefinitions: ResourceDefinitionIndex | null,
     analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` = DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
     expressionWorld: CheckerExpressionTypeWorld | null = null,
@@ -1028,6 +1043,7 @@ export class TemplateCompilationProjectPass {
       projectContext,
       evaluation,
       typeSystem,
+      sourceValueActivationView,
       resourceDefinitions,
       analysisDepth,
       expressionWorld,

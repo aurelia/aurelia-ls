@@ -9,6 +9,7 @@ import type {
 import type { EvaluationModuleResolutionOpen } from '../evaluation/module-host.js';
 import {
   isEvaluatedProjectSource,
+  type StaticProjectEvaluationGeneration,
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
 import type { TypeSystemProject } from '../type-system/project.js';
@@ -37,6 +38,7 @@ import {
 import {
   ResourceConventionTransformAdmissionIndex,
   ResourceConventionTransformAdmissionMaterializer,
+  type ResourceConventionToolingEvaluationContext,
 } from './resource-convention-transform-admission.js';
 
 /** Resource-recognition result for one boot-admitted source file. */
@@ -202,6 +204,7 @@ export class ResourceRecognitionProjectPass {
     store: KernelStore,
     project: ProjectBootFrame,
     evaluation: StaticProjectEvaluationResult,
+    conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
     typeSystem: TypeSystemProject | null,
     publication: KernelPublicationContext,
   ): ResourceRecognitionProjectResult {
@@ -212,7 +215,7 @@ export class ResourceRecognitionProjectPass {
       resourceRecognitionSourceFiles(project, evaluation)
     );
     const conventionTransforms = new ResourceConventionTransformAdmissionMaterializer()
-      .materializeAndEmit(store, project, publication);
+      .materializeAndEmit(store, project, conventionToolingEvaluation, publication);
     const contexts = evaluatedResourceRecognitionContexts(
       project,
       evaluation,

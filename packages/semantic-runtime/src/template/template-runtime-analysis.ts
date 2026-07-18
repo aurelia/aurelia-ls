@@ -8,7 +8,6 @@ import {
 } from '../configuration/app-analysis.js';
 import {
   DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
-  type SemanticRuntimeInquiryProfile,
 } from '../telemetry/inquiry-profile.js';
 import {
   normalizeSemanticRuntimeTelemetryOptions,
@@ -36,7 +35,7 @@ import {
 import {
   RuntimeBindingSourceValueEvaluator,
 } from '../observation/binding-source-value-evaluator.js';
-import { RuntimeBindingSourceActivationContext } from '../observation/binding-source-activation-context.js';
+import type { DiProviderActivationView } from '../di/provider-activation.js';
 import {
   extendRuntimeBoundControllerValueTable,
   RuntimeBoundControllerValueTable,
@@ -90,7 +89,6 @@ import {
   type RuntimeRenderingMaterializationRequest,
 } from './runtime-rendering-materializer.js';
 import type { RuntimeBindingIssue } from './runtime-binding-issue.js';
-import { ContainerContextResolverRecordPolicy } from '../di/container-materializer.js';
 import type { TemplateRuntimeAnalysisProjectContext } from './template-runtime-analysis-context.js';
 import {
   TemplateControllerScopeMaterializer,
@@ -121,6 +119,8 @@ export class TemplateRuntimeAnalysisRequest {
     readonly evaluation: StaticProjectEvaluationResult | null,
     /** Current TypeChecker epoch, if resource recognition supplied one. */
     readonly typeSystem: TypeSystemProject | null,
+    /** App-world DI activation authority for source-value evaluation. */
+    readonly sourceValueActivationView: DiProviderActivationView | null,
     /** Project resource index for runtime resource lookup and component-valued binding resolution. */
     readonly resourceDefinitions: ResourceDefinitionIndex | null = null,
     /** Analysis depth requested by the app-world inquiry. */
@@ -214,6 +214,30 @@ export class TemplateRuntimeAnalysisEmission {
       ...this.i18nTranslationBinding.issues,
     ];
   }
+
+  /** Runtime controllers materialized by renderer hydration and closed AuCompose handoffs. */
+  readRuntimeControllers() {
+    return [
+      ...this.runtimeRendering.controllers,
+      ...this.runtimeComposition.composedControllers,
+    ];
+  }
+
+  /** Runtime child containers materialized by renderer hydration and closed AuCompose handoffs. */
+  readRuntimeChildContainers() {
+    return [
+      ...this.runtimeRendering.childContainers,
+      ...this.runtimeComposition.childContainers.map((emission) => emission.container),
+    ];
+  }
+
+  /** Contextual resolver slots installed on every renderer- or composition-owned child container. */
+  readRuntimeChildContextResolverSlots() {
+    return [
+      ...this.runtimeRendering.childContextResolverSlots,
+      ...this.runtimeComposition.childContainers.flatMap((emission) => emission.contextResolverSlots),
+    ];
+  }
 }
 
 /**
@@ -289,7 +313,7 @@ class TemplateRuntimeAnalysisFrame {
   private readonly expressionCacheMarker: CheckerExpressionTypeEvaluationCacheMarker;
   private readonly telemetry: NormalizedSemanticRuntimeTelemetryOptions;
   private readonly boundControllerValues: RuntimeBoundControllerValueTable;
-  private readonly sourceValueActivationContext: RuntimeBindingSourceActivationContext | null;
+  private readonly sourceValueActivationView: DiProviderActivationView | null;
 
   constructor(
     private readonly request: TemplateRuntimeAnalysisRequest,
@@ -306,9 +330,7 @@ class TemplateRuntimeAnalysisFrame {
       DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
     );
     this.boundControllerValues = request.boundControllerValues;
-    this.sourceValueActivationContext = request.evaluation == null || request.typeSystem == null
-      ? null
-      : new RuntimeBindingSourceActivationContext(publication, request.evaluation, request.typeSystem);
+    this.sourceValueActivationView = request.sourceValueActivationView;
   }
 
   materialize(): TemplateRuntimeAnalysisEmission {
@@ -495,7 +517,6 @@ class TemplateRuntimeAnalysisFrame {
       resourceDefinitions: this.request.resourceDefinitions,
       typeSystem: this.request.typeSystem,
       expressionWorld: this.expressionWorld,
-      contextResolverRecordPolicy: contextResolverRecordPolicyForProfile(this.telemetry.inquiryProfile),
       profiling: this.profilingSink(),
     } satisfies RuntimeRenderingMaterializationRequest);
   }
@@ -527,7 +548,7 @@ class TemplateRuntimeAnalysisFrame {
       resourceScope: this.request.compilerWorld.resourceScope,
       expressionWorld: this.expressionWorld,
       boundControllerValues: this.boundControllerValues,
-      sourceValueActivationContext: this.sourceValueActivationContext,
+      sourceValueActivationView: this.sourceValueActivationView,
       sourceValueDefaultContainer: this.request.compilerWorld.container,
       profiling: this.profilingSink(),
     } satisfies TemplateScopeConstructionRequest);
@@ -684,7 +705,7 @@ class TemplateRuntimeAnalysisFrame {
       this.expressionWorld.projector,
       this.request.evaluation,
       runtimeAnalysisBoundControllerValues,
-      this.sourceValueActivationContext,
+      this.sourceValueActivationView,
       this.request.compilerWorld.container,
     );
   }
@@ -740,23 +761,6 @@ function skippedBindingDataFlow(phases: TemplateRuntimeAnalysisPhaseTiming[]): R
 function skippedRuntimeComposition(phases: TemplateRuntimeAnalysisPhaseTiming[]): RuntimeCompositionEmission {
   recordSkippedTemplateRuntimeAnalysisPhase(phases, 'runtime-composition');
   return new RuntimeCompositionEmission([], [], [], [], [], []);
-}
-
-function contextResolverRecordPolicyForProfile(
-  profile: SemanticRuntimeInquiryProfile,
-): ContainerContextResolverRecordPolicy {
-  switch (profile) {
-    case 'fixture':
-    case 'mcp-authoring':
-    case 'exploration':
-      return ContainerContextResolverRecordPolicy.PublishAll;
-    case 'lsp-cursor':
-    case 'lsp-diagnostics':
-    case 'mcp-orientation':
-    case 'aot':
-    case 'ssr':
-      return ContainerContextResolverRecordPolicy.ModelOnly;
-  }
 }
 
 function recordSkippedTemplateRuntimeAnalysisPhase(

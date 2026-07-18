@@ -129,9 +129,11 @@ function verifySiteRows(label, sitesAnswer) {
     if (hasExactSource(row.source) && row.sourceRange == null) {
       failures.push(`${label}: site ${row.seamKindKey} has exact source without sourceRange at ${sourceLabel(row.source)}.`);
     }
-    const originKinds = row.staticEvaluationOrigins.map((origin) => origin.kind);
-    if (originKinds.length !== new Set(originKinds).size) {
-      failures.push(`${label}: site ${row.seamKindKey} has duplicate staticEvaluationOrigins kinds at ${sourceLabel(row.source)}.`);
+    const originKeys = row.staticEvaluationOrigins.map((origin) =>
+      `${origin.kind}\0${origin.entryModuleKey}\0${origin.entrySourcePath ?? ''}`
+    );
+    if (originKeys.length !== new Set(originKeys).size) {
+      failures.push(`${label}: site ${row.seamKindKey} has duplicate staticEvaluationOrigins at ${sourceLabel(row.source)}.`);
     }
   }
 }

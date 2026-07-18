@@ -3,7 +3,10 @@ import {
   EvaluationBindingKind,
   ModuleEnvironmentRecord,
 } from '../evaluation/environment.js';
-import type { StaticEvaluationRuntimeHost } from '../evaluation/evaluator.js';
+import type {
+  StaticEvaluationRuntimeHost,
+  StaticEvaluationValueMetadataTransfer,
+} from '../evaluation/evaluator.js';
 import type { StaticIntrinsicEvaluationHost } from '../evaluation/intrinsics.js';
 import {
   EvaluationImportKind,
@@ -18,7 +21,10 @@ import { EvaluationOpenSeamKind } from '../evaluation/seams.js';
 import {
   EvaluationBoundaryKind,
   EvaluationBoundaryObjectValue,
+  EvaluationBoundaryValue,
+  EvaluationBooleanValue,
   EvaluationFunctionValue,
+  EvaluationStringValue,
   EvaluationUndefined,
   EvaluationValueKind,
   EvaluationNumberValue,
@@ -32,11 +38,17 @@ import {
   isAureliaResolveExpression,
   isAureliaResolveWrapperExpression,
 } from '../di/resolve-expression.js';
+import { ContainerDefaultResolverPolicy } from '../di/container-configuration.js';
+import {
+  RegistrationStrategy,
+} from '../registration/registration-admission.js';
+import { REGISTRATION_FACTORY_SHAPES } from '../registration/registration-factory-shapes.js';
 import {
   FrameworkRegistrationKind,
   RegistryBodyInterpretationState,
   RegistryBodyKind,
   RegistryBodyReference,
+  type RegistrationValueKind,
 } from '../registration/registration-reference.js';
 import {
   frameworkRegistrationDescriptorForKind,
@@ -107,6 +119,51 @@ const syntheticEnvironment = new ModuleEnvironmentRecord('semantic-runtime:aurel
 const syntheticFunctions = new Map<string, EvaluationFunctionValue>();
 const frameworkRegistrationKindsByObject = new WeakMap<EvaluationObjectValue, FrameworkRegistrationKind>();
 const registryBodiesByObject = new WeakMap<EvaluationObjectValue, RegistryBodyReference>();
+const resolverBuilderObjects = new WeakSet<EvaluationObjectValue>();
+const consumedResolverBuilderObjects = new WeakSet<EvaluationObjectValue>();
+const invalidResolverBuilderObjects = new WeakSet<EvaluationObjectValue>();
+const resolverBuilderEffectsByObject = new WeakMap<EvaluationObjectValue, AureliaInterfaceDefaultRegistrationEffect>();
+const resolverBuilderEffectsByResult = new WeakMap<EvaluationObjectValue, AureliaInterfaceDefaultRegistrationEffect>();
+const interfaceEvaluationsByObject = new WeakMap<EvaluationObjectValue, AureliaInterfaceEvaluation>();
+const containerEvaluationsByObject = new WeakMap<EvaluationObjectValue, AureliaContainerEvaluation>();
+const containerEvaluationsByCall = new WeakMap<ts.CallExpression, AureliaContainerEvaluation>();
+const containerDefaultResolverPoliciesByValue = new WeakMap<object, ContainerDefaultResolverPolicy>();
+
+export const enum AureliaInterfaceDefaultRegistrationState {
+  /** Interface key has no configure callback and therefore no default registration. */
+  None = 'none',
+  /** A configure callback exists but its resolver-builder effect did not close. */
+  Open = 'open',
+  /** The configure callback selected one modeled resolver-builder strategy and value. */
+  Closed = 'closed',
+}
+
+export class AureliaInterfaceDefaultRegistrationEffect {
+  constructor(
+    readonly strategy: RegistrationStrategy,
+    readonly valueKind: RegistrationValueKind,
+    readonly value: EvaluationValue,
+    readonly valueExpression: ts.Expression | null,
+    readonly sourceNode: ts.CallExpression,
+  ) {}
+}
+
+export class AureliaInterfaceEvaluation {
+  constructor(
+    readonly friendlyName: string,
+    readonly defaultRegistrationState: AureliaInterfaceDefaultRegistrationState,
+    readonly defaultRegistration: AureliaInterfaceDefaultRegistrationEffect | null,
+    readonly sourceNode: ts.CallExpression,
+  ) {}
+}
+
+/** Candidate-local identity for one runtime `createContainer(...)` result. */
+export class AureliaContainerEvaluation {
+  constructor(
+    readonly sourceNode: ts.CallExpression,
+    readonly configurationExpression: ts.Expression | null,
+  ) {}
+}
 
 type AureliaResolveDirectKey =
   | {
@@ -128,7 +185,7 @@ for (const statement of syntheticSource.statements) {
 }
 
 export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
-  transferValueMetadata(source, target): void {
+  transferValueMetadata(source, target, transfer): void {
     if (source.kind !== EvaluationValueKind.Object || target.kind !== EvaluationValueKind.Object) {
       return;
     }
@@ -139,6 +196,31 @@ export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
     const registryBody = registryBodiesByObject.get(source);
     if (registryBody != null) {
       registryBodiesByObject.set(target, registryBody);
+    }
+    const interfaceEvaluation = interfaceEvaluationsByObject.get(source);
+    if (interfaceEvaluation != null) {
+      interfaceEvaluationsByObject.set(target, forkAureliaInterfaceEvaluation(interfaceEvaluation, transfer));
+    }
+    const containerEvaluation = containerEvaluationsByObject.get(source);
+    if (containerEvaluation != null) {
+      containerEvaluationsByObject.set(target, containerEvaluation);
+    }
+    if (resolverBuilderObjects.has(source)) {
+      resolverBuilderObjects.add(target);
+    }
+    if (consumedResolverBuilderObjects.has(source)) {
+      consumedResolverBuilderObjects.add(target);
+    }
+    if (invalidResolverBuilderObjects.has(source)) {
+      invalidResolverBuilderObjects.add(target);
+    }
+    const builderEffect = resolverBuilderEffectsByObject.get(source);
+    if (builderEffect != null) {
+      resolverBuilderEffectsByObject.set(target, forkAureliaDefaultRegistrationEffect(builderEffect, transfer));
+    }
+    const resultEffect = resolverBuilderEffectsByResult.get(source);
+    if (resultEffect != null) {
+      resolverBuilderEffectsByResult.set(target, forkAureliaDefaultRegistrationEffect(resultEffect, transfer));
     }
   },
 
@@ -171,15 +253,20 @@ export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
     depth: number,
     host: StaticIntrinsicEvaluationHost,
   ): EvaluationValue | null {
-    void environment;
-    void moduleKey;
-    void depth;
-    void host;
+    const resolverBuilder = evaluateResolverBuilderCall(call, environment, moduleKey, depth, host);
+    if (resolverBuilder != null) {
+      return resolverBuilder;
+    }
 
     const expression = unwrapExpression(call.expression);
     const resolveValue = evaluateAureliaResolveCall(call, expression, environment, moduleKey, depth, host);
     if (resolveValue != null) {
       return resolveValue;
+    }
+
+    const containerValue = evaluateAureliaContainerCall(call, expression, environment, moduleKey, depth, host);
+    if (containerValue != null) {
+      return containerValue;
     }
 
     if (ts.isPropertyAccessExpression(expression)) {
@@ -225,12 +312,263 @@ export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
       && ts.isIdentifier(expression.expression)
       && sourceFileImportsLocal(expression.expression.getSourceFile(), expression.expression.text, 'DI', DI_MODULES)
     ) {
-      return new EvaluationObjectValue(new Map(), false, call);
+      return evaluateCreateInterfaceCall(call, environment, moduleKey, depth, host);
     }
 
     return null;
   },
 };
+
+function forkAureliaInterfaceEvaluation(
+  source: AureliaInterfaceEvaluation,
+  transfer: StaticEvaluationValueMetadataTransfer,
+): AureliaInterfaceEvaluation {
+  return new AureliaInterfaceEvaluation(
+    source.friendlyName,
+    source.defaultRegistrationState,
+    source.defaultRegistration == null
+      ? null
+      : forkAureliaDefaultRegistrationEffect(source.defaultRegistration, transfer),
+    source.sourceNode,
+  );
+}
+
+function forkAureliaDefaultRegistrationEffect(
+  source: AureliaInterfaceDefaultRegistrationEffect,
+  transfer: StaticEvaluationValueMetadataTransfer,
+): AureliaInterfaceDefaultRegistrationEffect {
+  return new AureliaInterfaceDefaultRegistrationEffect(
+    source.strategy,
+    source.valueKind,
+    transfer.forkValue(source.value),
+    source.valueExpression,
+    source.sourceNode,
+  );
+}
+
+export function aureliaInterfaceEvaluationForValue(
+  value: EvaluationValue | null,
+): AureliaInterfaceEvaluation | null {
+  return value?.kind === EvaluationValueKind.Object
+    ? interfaceEvaluationsByObject.get(value) ?? null
+    : null;
+}
+
+export function aureliaContainerEvaluationForValue(
+  value: EvaluationValue | null,
+): AureliaContainerEvaluation | null {
+  return value?.kind === EvaluationValueKind.Object
+    ? containerEvaluationsByObject.get(value) ?? null
+    : null;
+}
+
+/** Read the framework-owned `DefaultResolver` function represented by an evaluator value. */
+export function aureliaContainerDefaultResolverPolicyForValue(
+  value: EvaluationValue | null,
+): ContainerDefaultResolverPolicy | null {
+  return value == null
+    ? null
+    : containerDefaultResolverPoliciesByValue.get(value) ?? null;
+}
+
+function evaluateAureliaContainerCall(
+  call: ts.CallExpression,
+  expression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationObjectValue | null {
+  if (isAureliaCreateContainerExpression(expression)) {
+    const evaluation = containerEvaluationsByCall.get(call)
+      ?? new AureliaContainerEvaluation(
+        call,
+        call.arguments[0] != null && !ts.isSpreadElement(call.arguments[0]) ? call.arguments[0] : null,
+      );
+    containerEvaluationsByCall.set(call, evaluation);
+    const value = new EvaluationObjectValue(new Map(), false, call);
+    containerEvaluationsByObject.set(value, evaluation);
+    return value;
+  }
+  if (!ts.isPropertyAccessExpression(expression) || expression.name.text !== 'register') {
+    return null;
+  }
+  const receiver = host.evaluateExpression(expression.expression, environment, moduleKey, depth + 1);
+  return aureliaContainerEvaluationForValue(receiver) == null || receiver.kind !== EvaluationValueKind.Object
+    ? null
+    : receiver;
+}
+
+function isAureliaCreateContainerExpression(
+  expression: ts.Expression,
+): boolean {
+  if (ts.isIdentifier(expression)) {
+    return sourceFileImportsLocal(
+      expression.getSourceFile(),
+      expression.text,
+      'createContainer',
+      DI_MODULES,
+    );
+  }
+  if (!ts.isPropertyAccessExpression(expression) || expression.name.text !== 'createContainer') {
+    return false;
+  }
+  const receiver = unwrapExpression(expression.expression);
+  if (ts.isIdentifier(receiver)) {
+    return sourceFileImportsLocal(receiver.getSourceFile(), receiver.text, 'DI', DI_MODULES)
+      || sourceFileImportsNamespace(receiver.getSourceFile(), receiver.text, DI_MODULES);
+  }
+  return ts.isPropertyAccessExpression(receiver)
+    && receiver.name.text === 'DI'
+    && ts.isIdentifier(unwrapExpression(receiver.expression))
+    && sourceFileImportsNamespace(
+      receiver.getSourceFile(),
+      (unwrapExpression(receiver.expression) as ts.Identifier).text,
+      DI_MODULES,
+    );
+}
+
+function evaluateCreateInterfaceCall(
+  call: ts.CallExpression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationObjectValue {
+  const first = call.arguments[0] == null
+    ? EvaluationUndefined
+    : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
+  const second = call.arguments[1] == null
+    ? EvaluationUndefined
+    : host.evaluateExpression(call.arguments[1], environment, moduleKey, depth + 1);
+  const friendlyName = first.kind === EvaluationValueKind.String ? first.value : '(anonymous)';
+  const configure = first.kind === EvaluationValueKind.Function
+    ? first
+    : second.kind === EvaluationValueKind.Function
+      ? second
+      : null;
+  const hasConfigureArgument = first.kind === EvaluationValueKind.Function
+    || call.arguments[1] != null
+    || (call.arguments[0] != null && first.kind !== EvaluationValueKind.String);
+  const interfaceValue = interfaceEvaluationObject(call, friendlyName, hasConfigureArgument);
+  if (!hasConfigureArgument) {
+    interfaceEvaluationsByObject.set(interfaceValue, new AureliaInterfaceEvaluation(
+      friendlyName,
+      AureliaInterfaceDefaultRegistrationState.None,
+      null,
+      call,
+    ));
+    return interfaceValue;
+  }
+  if (configure == null) {
+    interfaceEvaluationsByObject.set(interfaceValue, new AureliaInterfaceEvaluation(
+      friendlyName,
+      AureliaInterfaceDefaultRegistrationState.Open,
+      null,
+      call,
+    ));
+    return interfaceValue;
+  }
+
+  const builder = resolverBuilderObject(call);
+  const result = host.evaluateFunctionWithArguments(configure, call, [builder], moduleKey, depth + 1);
+  const effect = resolverBuilderEffectsByObject.get(builder)
+    ?? (result.kind === EvaluationValueKind.Object ? resolverBuilderEffectsByResult.get(result) ?? null : null);
+  const closed = effect != null && !invalidResolverBuilderObjects.has(builder);
+  interfaceEvaluationsByObject.set(interfaceValue, new AureliaInterfaceEvaluation(
+    friendlyName,
+    closed
+      ? AureliaInterfaceDefaultRegistrationState.Closed
+      : AureliaInterfaceDefaultRegistrationState.Open,
+    closed ? effect : null,
+    call,
+  ));
+  return interfaceValue;
+}
+
+function interfaceEvaluationObject(
+  call: ts.CallExpression,
+  friendlyName: string,
+  hasConfigureArgument: boolean,
+): EvaluationObjectValue {
+  const properties = new Map<string, EvaluationObjectProperty>([
+    ['$isInterface', new EvaluationObjectProperty(
+      '$isInterface',
+      new EvaluationBooleanValue(true, call),
+      call,
+      EvaluationObjectPropertyState.Closed,
+    )],
+    ['friendlyName', new EvaluationObjectProperty(
+      'friendlyName',
+      new EvaluationStringValue(friendlyName, call),
+      call,
+      EvaluationObjectPropertyState.Closed,
+    )],
+  ]);
+  if (hasConfigureArgument) {
+    properties.set('register', new EvaluationObjectProperty(
+      'register',
+      syntheticFunctions.get('register')!,
+      call,
+      EvaluationObjectPropertyState.Closed,
+    ));
+  }
+  return new EvaluationObjectValue(properties, false, call);
+}
+
+function resolverBuilderObject(node: ts.Node): EvaluationObjectValue {
+  const value = new EvaluationObjectValue(new Map(), false, node);
+  resolverBuilderObjects.add(value);
+  return value;
+}
+
+function evaluateResolverBuilderCall(
+  call: ts.CallExpression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue | null {
+  const expression = unwrapExpression(call.expression);
+  if (!ts.isPropertyAccessExpression(expression)) {
+    return null;
+  }
+  const shape = REGISTRATION_FACTORY_SHAPES.get(expression.name.text) ?? null;
+  if (shape?.value == null) {
+    return null;
+  }
+  const receiver = host.evaluateExpression(expression.expression, environment, moduleKey, depth + 1);
+  if (receiver.kind !== EvaluationValueKind.Object || !resolverBuilderObjects.has(receiver)) {
+    return null;
+  }
+  if (consumedResolverBuilderObjects.has(receiver)) {
+    invalidResolverBuilderObjects.add(receiver);
+    return host.unknown(
+      'DI interface default registration invoked one ResolverBuilder more than once.',
+      call,
+      moduleKey,
+      EvaluationOpenSeamKind.DynamicCall,
+    );
+  }
+  consumedResolverBuilderObjects.add(receiver);
+  const valueExpression = call.arguments[0] != null && !ts.isSpreadElement(call.arguments[0])
+    ? call.arguments[0]
+    : null;
+  const value = valueExpression == null
+    ? EvaluationUndefined
+    : host.evaluateExpression(valueExpression, environment, moduleKey, depth + 1);
+  const effect = new AureliaInterfaceDefaultRegistrationEffect(
+    shape.strategy,
+    shape.value.valueKind,
+    value,
+    valueExpression,
+    call,
+  );
+  const result = new EvaluationObjectValue(new Map(), false, call);
+  resolverBuilderEffectsByObject.set(receiver, effect);
+  resolverBuilderEffectsByResult.set(result, effect);
+  return result;
+}
 
 function evaluateAureliaResolveCall(
   call: ts.CallExpression,
@@ -334,6 +672,19 @@ export const aureliaExternalEvaluationValueResolver: StaticModuleExternalValueRe
     _fromModuleKey: string,
     entry: EvaluationImportEntry,
   ): EvaluationValue | null {
+    if (entry.importKind === EvaluationImportKind.Namespace) {
+      const namespace = aureliaExternalNamespaceValue(entry);
+      if (namespace != null) {
+        return namespace;
+      }
+    }
+    if (
+      entry.importKind === EvaluationImportKind.Named
+      && entry.exportName === 'DefaultResolver'
+      && DI_MODULES.has(entry.moduleSpecifier)
+    ) {
+      return defaultResolverObject(entry.node);
+    }
     const frameworkRegistration = frameworkRegistrationExternalImportValue(entry);
     if (frameworkRegistration != null) {
       return frameworkRegistration;
@@ -363,22 +714,6 @@ function frameworkRegistrationExternalImportValue(
   if (exportEntries == null) {
     return null;
   }
-  if (entry.importKind === EvaluationImportKind.Namespace) {
-    return new EvaluationBoundaryObjectValue(
-      EvaluationBoundaryKind.ExternalModule,
-      `namespace import '${entry.moduleSpecifier}'`,
-      new Map(exportEntries.map((exportEntry) => [
-        exportEntry.exportName,
-        new EvaluationObjectProperty(
-          exportEntry.exportName,
-          frameworkRegistrationObject(exportEntry.kind, entry.node),
-          entry.node,
-          EvaluationObjectPropertyState.Closed,
-        ),
-      ])),
-      entry.node,
-    );
-  }
   if (entry.importKind !== EvaluationImportKind.Named || entry.exportName == null) {
     return null;
   }
@@ -389,6 +724,59 @@ function frameworkRegistrationExternalImportValue(
   return frameworkKind == null
     ? null
     : frameworkRegistrationObject(frameworkKind, entry.node);
+}
+
+function aureliaExternalNamespaceValue(
+  entry: EvaluationImportEntry,
+): EvaluationBoundaryObjectValue | null {
+  const properties = new Map<string, EvaluationObjectProperty>();
+  for (const exportEntry of frameworkRegistrationExportEntriesForModule(entry.moduleSpecifier) ?? []) {
+    properties.set(exportEntry.exportName, new EvaluationObjectProperty(
+      exportEntry.exportName,
+      frameworkRegistrationObject(exportEntry.kind, entry.node),
+      entry.node,
+      EvaluationObjectPropertyState.Closed,
+    ));
+  }
+  if (DI_MODULES.has(entry.moduleSpecifier)) {
+    properties.set('DefaultResolver', new EvaluationObjectProperty(
+      'DefaultResolver',
+      defaultResolverObject(entry.node),
+      entry.node,
+      EvaluationObjectPropertyState.Closed,
+    ));
+  }
+  return properties.size === 0
+    ? null
+    : new EvaluationBoundaryObjectValue(
+        EvaluationBoundaryKind.ExternalModule,
+        `namespace import '${entry.moduleSpecifier}'`,
+        properties,
+        entry.node,
+      );
+}
+
+function defaultResolverObject(node: ts.Node): EvaluationObjectValue {
+  const properties = new Map<string, EvaluationObjectProperty>();
+  for (const policy of [
+    ContainerDefaultResolverPolicy.None,
+    ContainerDefaultResolverPolicy.Singleton,
+    ContainerDefaultResolverPolicy.Transient,
+  ] as const) {
+    const value = new EvaluationBoundaryValue(
+      EvaluationBoundaryKind.ExternalModule,
+      `DefaultResolver.${policy}`,
+      node,
+    );
+    containerDefaultResolverPoliciesByValue.set(value, policy);
+    properties.set(policy, new EvaluationObjectProperty(
+      policy,
+      value,
+      node,
+      EvaluationObjectPropertyState.Closed,
+    ));
+  }
+  return new EvaluationObjectValue(properties, false, node);
 }
 
 function frameworkRegistrationObject(kind: FrameworkRegistrationKind, node: ts.Node): EvaluationObjectValue {

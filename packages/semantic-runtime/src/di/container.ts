@@ -19,10 +19,13 @@ import {
 import {
   ContainerFactoryLookup,
   ContainerInvocation,
-  ContainerLookupFailureKind,
+  ContainerResolutionFailureKind,
   ContainerLookupState,
   ContainerResourceLookup,
   ContainerResolverLookup,
+  containerFactoryFailureKind,
+  containerInvocationFailureKind,
+  containerJitRegistrationFailureKind,
 } from './container-lookup.js';
 import {
   ContainerFactorySlot,
@@ -115,6 +118,11 @@ export class Container {
   /** Whether this emulator frame has been disposed. */
   get isDisposed(): boolean {
     return this.disposed;
+  }
+
+  /** Runtime-shaped configuration that governs JIT/default resolution and child construction. */
+  readConfiguration(): ContainerConfiguration {
+    return this.config;
   }
 
   /** Store-local reference for this modeled container. */
@@ -323,7 +331,7 @@ export class Container {
     if (resolverFactoryLookup != null) {
       return resolverFactoryLookup;
     }
-    const failureKind = factoryFailureKind(key);
+    const failureKind = containerFactoryFailureKind(key);
     if (failureKind != null) {
       return new ContainerFactoryLookup(
         ContainerLookupState.Failed,
@@ -357,7 +365,7 @@ export class Container {
         key,
         this.toReference(),
         null,
-        ContainerLookupFailureKind.UnableJitNonConstructor,
+        ContainerResolutionFailureKind.UnableJitNonConstructor,
       );
     }
     const [slot] = lookup.resolverSlots;
@@ -367,7 +375,7 @@ export class Container {
         key,
         this.toReference(),
         null,
-        ContainerLookupFailureKind.UnableJitNonConstructor,
+        ContainerResolutionFailureKind.UnableJitNonConstructor,
       );
     }
     return slot.resolver.getFactory(this)
@@ -376,7 +384,7 @@ export class Container {
         key,
         this.toReference(),
         null,
-        ContainerLookupFailureKind.UnableJitNonConstructor,
+        ContainerResolutionFailureKind.UnableJitNonConstructor,
       );
   }
 
@@ -394,7 +402,7 @@ export class Container {
         this.toReference(),
       );
     }
-    const failureKind = invokeFailureKind(type);
+    const failureKind = containerInvocationFailureKind(type);
     if (failureKind != null) {
       return new ContainerInvocation(
         ContainerLookupState.Failed,
@@ -529,7 +537,7 @@ export class Container {
       );
     }
 
-    const failureKind = jitRegistrationFailureKind(key);
+    const failureKind = containerJitRegistrationFailureKind(key);
     if (failureKind != null) {
       return new ContainerResolverLookup(
         ContainerLookupState.Failed,
@@ -543,7 +551,7 @@ export class Container {
       );
     }
 
-    if (handler.config.defaultResolverPolicy === ContainerDefaultResolverPolicy.None) {
+    if (this.config.defaultResolverPolicy === ContainerDefaultResolverPolicy.None) {
       return new ContainerResolverLookup(
         ContainerLookupState.Failed,
         key,
@@ -552,7 +560,7 @@ export class Container {
         [],
         searchPath,
         true,
-        ContainerLookupFailureKind.NoneResolverFound,
+        ContainerResolutionFailureKind.NoneResolverFound,
       );
     }
 
@@ -585,53 +593,6 @@ export class Container {
   }
 }
 
-function jitRegistrationFailureKind(
-  key: ContainerLookupKey,
-): ContainerLookupFailureKind | null {
-  switch (key.keyKind) {
-    case ContainerLookupKeyKind.IntrinsicConstructable:
-      return ContainerLookupFailureKind.NoJitIntrinsicType;
-    case ContainerLookupKeyKind.String:
-    case ContainerLookupKeyKind.Symbol:
-    case ContainerLookupKeyKind.Resource:
-    case ContainerLookupKeyKind.Object:
-    case ContainerLookupKeyKind.Primitive:
-    case ContainerLookupKeyKind.Nullish:
-      return ContainerLookupFailureKind.UnableJitNonConstructor;
-    case ContainerLookupKeyKind.Interface:
-      return ContainerLookupFailureKind.NoJitInterface;
-    case ContainerLookupKeyKind.Unknown:
-    case ContainerLookupKeyKind.Constructable:
-    case ContainerLookupKeyKind.NativeFunction:
-    case ContainerLookupKeyKind.Registry:
-    case ContainerLookupKeyKind.Resolver:
-      return null;
-  }
-}
-
-function factoryFailureKind(
-  key: ContainerLookupKey,
-): ContainerLookupFailureKind | null {
-  switch (key.keyKind) {
-    case ContainerLookupKeyKind.NativeFunction:
-    case ContainerLookupKeyKind.IntrinsicConstructable:
-      return ContainerLookupFailureKind.NoConstructNativeFunction;
-    case ContainerLookupKeyKind.String:
-    case ContainerLookupKeyKind.Symbol:
-    case ContainerLookupKeyKind.Resource:
-    case ContainerLookupKeyKind.Object:
-    case ContainerLookupKeyKind.Primitive:
-    case ContainerLookupKeyKind.Nullish:
-    case ContainerLookupKeyKind.Interface:
-    case ContainerLookupKeyKind.Registry:
-    case ContainerLookupKeyKind.Resolver:
-      return ContainerLookupFailureKind.UnableJitNonConstructor;
-    case ContainerLookupKeyKind.Unknown:
-    case ContainerLookupKeyKind.Constructable:
-      return null;
-  }
-}
-
 function containerFactoryLookupMayConsultResolver(
   key: ContainerLookupKey,
 ): boolean {
@@ -651,27 +612,5 @@ function containerFactoryLookupMayConsultResolver(
     case ContainerLookupKeyKind.NativeFunction:
     case ContainerLookupKeyKind.IntrinsicConstructable:
       return false;
-  }
-}
-
-function invokeFailureKind(
-  key: ContainerLookupKey,
-): ContainerLookupFailureKind | null {
-  switch (key.keyKind) {
-    case ContainerLookupKeyKind.NativeFunction:
-    case ContainerLookupKeyKind.IntrinsicConstructable:
-      return ContainerLookupFailureKind.NoConstructNativeFunction;
-    case ContainerLookupKeyKind.String:
-    case ContainerLookupKeyKind.Symbol:
-    case ContainerLookupKeyKind.Resource:
-    case ContainerLookupKeyKind.Object:
-    case ContainerLookupKeyKind.Primitive:
-    case ContainerLookupKeyKind.Nullish:
-    case ContainerLookupKeyKind.Unknown:
-    case ContainerLookupKeyKind.Constructable:
-    case ContainerLookupKeyKind.Registry:
-    case ContainerLookupKeyKind.Resolver:
-    case ContainerLookupKeyKind.Interface:
-      return null;
   }
 }

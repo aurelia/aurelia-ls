@@ -117,6 +117,7 @@ import type {
   EvaluationIssueSubjectKind,
 } from '../evaluation/evaluation-issue.js';
 import type {
+  StaticProjectEvaluationAcquisitionKind,
   StaticProjectEvaluationSourceOriginKind,
   StaticProjectEvaluationSourceFileStats,
 } from '../evaluation/project-evaluation.js';
@@ -916,6 +917,11 @@ export interface SemanticRuntimeAnswerProfile {
 }
 
 export interface SemanticRuntimeAppWorldFreeProfileSummary {
+  /** Whether this query constructed the project/profile evaluator generation or reused its incumbent. */
+  readonly acquisitionKind: StaticProjectEvaluationAcquisitionKind;
+  /** Time spent acquiring the reusable evaluation generation for this answer. */
+  readonly acquisitionMilliseconds: number;
+  /** Original construction cost of the admitted evaluation generation, not current query latency. */
   readonly totalMilliseconds: number;
   readonly staticEvaluationPhases: readonly SemanticRuntimePhaseTimingSummary[];
   readonly staticEvaluationHost: EvaluationModuleSourceHostProfile;
@@ -1087,6 +1093,7 @@ export interface SemanticRuntimeAnalysisCacheClearResult {
   readonly displayText: string;
   readonly typeSystemDependencyCacheClearPolicy: SemanticTypeSystemDependencyCacheClearPolicy;
   readonly disposedCachedApps: number;
+  readonly disposedStaticProjectEvaluations: number;
   readonly disposedQueryClaimRecords: number;
   readonly disposedKernelRecords: number;
   readonly disposedProductDetails: number;
@@ -1103,6 +1110,7 @@ export interface SemanticRuntimeAnalysisCacheClearResult {
   readonly clearedTypeSystemDependencyExternalDeclarationSourceFiles: number;
   readonly clearedTypeSystemDependencyExternalDeclarationSourceTextCharacters: number;
   readonly remainingCachedApps: number;
+  readonly remainingStaticProjectEvaluations: number;
   readonly workspaceKernel: SemanticRuntimeKernelCountSnapshot;
   readonly summary: string;
 }
@@ -1169,6 +1177,7 @@ export interface SemanticRuntimeCachedAppProfileSummary {
   readonly totalMilliseconds: number;
   readonly phaseCount: number;
   readonly topPhases: readonly SemanticRuntimePhaseTimingSummary[];
+  readonly staticEvaluationAcquisitions: readonly SemanticRuntimeStaticProjectEvaluationAcquisitionSummary[];
   readonly staticEvaluationPhases: readonly SemanticRuntimePhaseTimingSummary[];
   readonly staticEvaluationHost: EvaluationModuleSourceHostProfile;
   readonly staticEvaluationSources: StaticProjectEvaluationSourceFileStats;
@@ -1185,6 +1194,13 @@ export interface SemanticRuntimeCachedAppProfileSummary {
   readonly programRootFileGroups: readonly SemanticRuntimeTypeSystemProgramSourceFileGroupStats[];
   readonly programSourceFileGroups: readonly SemanticRuntimeTypeSystemProgramSourceFileGroupStats[];
   readonly programNodeRemaps: SemanticRuntimeTypeSystemProgramNodeRemapStats;
+}
+
+export interface SemanticRuntimeStaticProjectEvaluationAcquisitionSummary {
+  readonly profileKey: string;
+  readonly acquisitionKind: StaticProjectEvaluationAcquisitionKind;
+  readonly acquisitionMilliseconds: number;
+  readonly constructionMilliseconds: number;
 }
 
 export interface SemanticRuntimeCachedAppQueryClaimProfileSummary {
@@ -4260,6 +4276,10 @@ export interface SemanticRuntimeCompositionRow {
   readonly composedChildControllerCount: number;
   readonly composedChildControllerNames: readonly string[];
   readonly composedChildControllerCreationKinds: readonly (RuntimeControllerCreationKind | `${RuntimeControllerCreationKind}`)[];
+  /** Child DI containers created for the composed controllers in this row. */
+  readonly composedChildContainerCount: number;
+  /** Contextual providers installed while hydrating those composed child controllers. */
+  readonly composedChildContextResolverSlotCount: number;
   /** Activation handoffs for resolved custom-element candidates and object-view-model branches. */
   readonly activationHandoffs: readonly SemanticRuntimeCompositionActivationHandoffRow[];
   readonly activationHandoffKinds: readonly (CompositionActivationModelHandoffKind | `${CompositionActivationModelHandoffKind}`)[];

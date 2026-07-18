@@ -341,6 +341,7 @@ class SourceServiceApiAdmission {
 class SourceServiceApiAdmissionContext {
   private readonly chainFacts: DiContainerChainFacts;
   private readonly resolvedDiKeyClaimsByRoot: ReadonlyMap<ProductHandle, readonly IdentityHandle[]>;
+  private readonly diContainerProductsByRoot: ReadonlyMap<ProductHandle, ProductHandle>;
   private readonly registrationHidingOpenSeams: readonly OpenSeam[];
   private readonly registrationHidingOpenSeamContainerScopes: ReadonlyMap<OpenSeamHandle, readonly IdentityHandle[]>;
   private readonly serviceRootsByProduct: ReadonlyMap<ProductHandle, FrameworkServiceRoot>;
@@ -356,6 +357,7 @@ class SourceServiceApiAdmissionContext {
   ) {
     this.chainFacts = readDiContainerChainFacts(publication);
     this.resolvedDiKeyClaimsByRoot = rootResolvedDiKeyClaimsByRoot(publication);
+    this.diContainerProductsByRoot = diContainerProductsByFrameworkRoot(publication);
     this.registrationHidingOpenSeams = registrationHidingOpenSeams(publication);
     this.registrationHidingOpenSeamContainerScopes = registrationHidingOpenSeamContainerScopes(
       publication,
@@ -442,8 +444,11 @@ class SourceServiceApiAdmissionContext {
         return this.containerGetConsultingContainerIdentity(root);
       case FrameworkServiceRootBasis.DiActivationBacked:
         return this.resourceActivationConsultingContainerIdentity(root);
-      case FrameworkServiceRootBasis.FrameworkTypeAnnotation:
       case FrameworkServiceRootBasis.DirectConstructor:
+        return this.chainFacts.containerIdentityHandleForProduct(
+          this.diContainerProductsByRoot.get(root.productHandle) ?? null,
+        );
+      case FrameworkServiceRootBasis.FrameworkTypeAnnotation:
       case FrameworkServiceRootBasis.DeclarationSourceMatched:
       case FrameworkServiceRootBasis.CandidateOpen:
         return null;
@@ -1175,6 +1180,17 @@ function rootResolvedDiKeyClaimsByRoot(
     }
   }
   return result;
+}
+
+function diContainerProductsByFrameworkRoot(
+  publication: KernelPublicationContext,
+): ReadonlyMap<ProductHandle, ProductHandle> {
+  return new Map(publication.readAllRecords().flatMap((record) =>
+    record.kind === 'semantic-claim'
+      && record.predicateKey === KernelVocabulary.Framework.ContainerRootDenotesContainer.key
+      ? [[record.subjectHandle as ProductHandle, record.objectHandle as ProductHandle]]
+      : []
+  ));
 }
 
 function registrationHidingOpenSeams(

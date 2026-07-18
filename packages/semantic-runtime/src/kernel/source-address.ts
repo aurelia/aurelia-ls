@@ -352,7 +352,19 @@ function identityDirectSourceAddressHandles(identity: SemanticIdentity): readonl
     case 'aurelia-attribute-pattern-identity':
       return compactAddressHandles(identity.definitionAddressHandle);
     case 'di-key-identity':
-      return compactAddressHandles(identity.keyAddressHandle);
+      switch (identity.keyKind) {
+        case 'object':
+          return compactAddressHandles(identity.creationAddressHandle);
+        case 'unknown':
+        case 'constructable':
+        case 'interface':
+        case 'symbol':
+        case 'string':
+        case 'primitive':
+        case 'resource':
+        case 'resolver-key':
+          return compactAddressHandles(identity.keyAddressHandle);
+      }
     case 'container-identity':
     case 'di-product-identity':
     case 'registration-identity':
@@ -399,6 +411,8 @@ function identityOwnerAnchorHandles(identity: SemanticIdentity): readonly Source
           return compactAnchorHandles(identity.innerKeyHandle);
         case 'unknown':
         case 'string':
+        case 'object':
+        case 'primitive':
           return [];
       }
     case 'di-product-identity':

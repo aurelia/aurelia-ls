@@ -66,6 +66,10 @@ export class DiResolveCallSite {
     readonly keyImportModuleSpecifier: string | null,
     readonly keyImportName: string | null,
     readonly keyImportKind: DiResolveKeyImportKind,
+    /** Candidate-local source call used by DI-owned activation queries. */
+    readonly sourceNode: ts.CallExpression,
+    /** Candidate-local unwrapped key expression, when directly authored. */
+    readonly keyExpression: ts.Expression | null,
   ) {}
 }
 
@@ -262,6 +266,8 @@ function recordDiResolveCallSite(
     target.importModuleSpecifier,
     target.importName,
     target.importKind,
+    node,
+    keyExpression,
   ));
 }
 

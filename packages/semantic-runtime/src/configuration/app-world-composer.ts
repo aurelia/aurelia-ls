@@ -53,10 +53,6 @@ import {
   ResourceRegistrationAdmission,
   type RegistrationAdmissionProduct,
 } from '../registration/registration-admission.js';
-import {
-  FrameworkRegistrationCapability,
-  frameworkRegistrationAdmissionCarriesCapability,
-} from '../registration/framework-registration-manifest.js';
 import type { AppRoot } from './app-root.js';
 import type { ConfigurationKernelEmission } from './configuration-kernel-emitter.js';
 import type { ConfigurationRecognitionProjectResult } from './configuration-recognition-project-pass.js';
@@ -65,14 +61,18 @@ import {
   type FrameworkServiceCustomizationProjectResult,
 } from './framework-service-customization.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
+import { DiProviderActivationView } from '../di/provider-activation.js';
 import {
   AppWorldResourceVisibilityComposer,
 } from './app-world-resource-visibility.js';
-import {
-  buildRegistryBodyStepIndex,
-  type RegistryBodyStepIndex,
-} from './registry-body-index.js';
 import { RegisteredSyntaxResourceMaterializer } from '../template/registered-syntax-resource-materializer.js';
+import { readDiContainerChainFacts, type DiContainerChainFacts } from '../di/container-chain.js';
+import {
+  FrameworkIntrinsicDiKey,
+  frameworkIntrinsicDiKeyLocal,
+} from '../di/framework-intrinsic-di-key.js';
+import type { IdentityHandle } from '../kernel/handles.js';
 
 /**
  * Current app-world composition envelope.
@@ -129,9 +129,9 @@ export class AureliaAppWorldComposer {
 
   construct(
     configuration: ConfigurationRecognitionProjectResult,
-    resources: ResourceDefinitionIndex | null = null,
-    typeSystem: TypeSystemProject | null = null,
-    project: ProjectBootFrame | null = null,
+    resources: ResourceDefinitionIndex,
+    typeSystem: TypeSystemProject,
+    project: ProjectBootFrame,
   ): AureliaAppWorldEmission {
     const kernelConfiguration = configuration.readConfiguration();
     const frameworkServiceCustomizations = new FrameworkServiceCustomizationRecognitionPass(
@@ -147,6 +147,7 @@ export class AureliaAppWorldComposer {
       resources,
       project,
       typeSystem,
+      configuration.evaluation,
     );
     const compilerWorlds = this.constructCompilerWorlds(
       kernelConfiguration,
@@ -172,24 +173,39 @@ export class AureliaAppWorldComposer {
   private constructDiWorld(
     kernelConfiguration: ConfigurationKernelEmission,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
-    resources: ResourceDefinitionIndex | null,
-    project: ProjectBootFrame | null,
-    typeSystem: TypeSystemProject | null,
+    resources: ResourceDefinitionIndex,
+    project: ProjectBootFrame,
+    typeSystem: TypeSystemProject,
+    evaluation: StaticProjectEvaluationResult,
   ): DiWorldConstructionEmission {
     const diWorld = this.diWorldConstructor.construct(
       kernelConfiguration,
       configuredResources,
+      evaluation,
+      typeSystem,
       resources,
-      project?.projectKey ?? null,
+      project.projectKey,
     );
-    if (project == null || typeSystem == null) {
-      return diWorld;
-    }
+    const activation = new DiProviderActivationView(
+      this.publication,
+      evaluation.forkSession(),
+      typeSystem,
+      kernelConfiguration,
+      diWorld,
+    );
     const sourceIssues = [
       new DiResolveCallIssueMaterializer(this.store, this.publication).materialize(project, typeSystem),
       new DiInjectDecoratorIssueMaterializer(this.store, this.publication).materialize(project, typeSystem),
-      new DiContainerApiIssueMaterializer(this.store, this.publication).materialize(project, typeSystem),
-      new DiDependencyCycleIssueMaterializer(this.store, this.publication).materialize(project, typeSystem),
+      new DiContainerApiIssueMaterializer(this.store, this.publication).materialize(
+        project,
+        typeSystem,
+        activation,
+      ),
+      new DiDependencyCycleIssueMaterializer(this.store, this.publication).materialize(
+        project,
+        typeSystem,
+        activation,
+      ),
     ];
     return appendDiSourceIssues(diWorld, sourceIssues);
   }
@@ -253,8 +269,9 @@ type DiSourceIssueMaterialization =
 
 class AppRootCompilerWorldFrame {
   private readonly containersByProduct: ReadonlyMap<Container['productHandle'], Container>;
-  private readonly registryBodyIndex: RegistryBodyStepIndex;
   private readonly registeredSyntaxResourceMaterializer: RegisteredSyntaxResourceMaterializer;
+  private readonly containerChainFacts: DiContainerChainFacts;
+  private readonly templateCompilerKeyIdentityHandle: IdentityHandle;
 
   constructor(
     publication: KernelPublicationContext,
@@ -269,8 +286,11 @@ class AppRootCompilerWorldFrame {
     private readonly resourceDefinitions: ResourceDefinitionIndex | null,
   ) {
     this.containersByProduct = new Map(configuration.containers.map((container) => [container.productHandle, container]));
-    this.registryBodyIndex = buildRegistryBodyStepIndex(publication, configuration);
     this.registeredSyntaxResourceMaterializer = new RegisteredSyntaxResourceMaterializer(publication);
+    this.containerChainFacts = readDiContainerChainFacts(publication);
+    this.templateCompilerKeyIdentityHandle = publication.handles.identity(
+      frameworkIntrinsicDiKeyLocal(FrameworkIntrinsicDiKey.ITemplateCompiler),
+    );
   }
 
   construct(): readonly TemplateCompilerWorldEmission[] {
@@ -285,8 +305,11 @@ class AppRootCompilerWorldFrame {
     if (container == null) {
       return null;
     }
-    const admissions = registrationAdmissionsForAppRoot(appRoot, this.configuration, this.registryBodyIndex);
-    if (!admitsRuntimeCompilerServices(admissions)) {
+    const admissions = registrationAdmissionsSpentIntoContainer(container, this.configuration, this.diWorld);
+    if (!this.containerChainFacts.providerIsOnConsultingChain(
+      this.templateCompilerKeyIdentityHandle,
+      container.identityHandle,
+    )) {
       return null;
     }
     const syntax = syntaxForAdmissions(admissions, this.configuredSyntax);
@@ -360,48 +383,22 @@ function syntaxForAdmissions(
   };
 }
 
-function registrationAdmissionsForAppRoot(
-  appRoot: AppRoot,
+function registrationAdmissionsSpentIntoContainer(
+  container: Container,
   configuration: ConfigurationKernelEmission,
-  registryBodyIndex: RegistryBodyStepIndex,
+  diWorld: DiWorldConstructionEmission,
 ): readonly RegistrationAdmissionProduct[] {
-  const admissionByProduct = new Map(configuration.registrationAdmissions.map((admission) => [admission.productHandle, admission]));
-  const sequenceProductHandles = new Set<ProductHandle>();
-  for (const sequence of configuration.sequences) {
-    if (sequence.appRoot?.productHandle === appRoot.productHandle) {
-      sequenceProductHandles.add(sequence.productHandle);
+  const admissionByProduct = new Map(configuration.registrationAdmissions.map((admission) => [
+    admission.productHandle,
+    admission,
+  ]));
+  return diWorld.registrationOperations.flatMap((operation) => {
+    if (operation.container.productHandle !== container.productHandle || operation.admissionProductHandle == null) {
+      return [];
     }
-  }
-  if (sequenceProductHandles.size === 0) {
-    return [];
-  }
-
-  const admissions: RegistrationAdmissionProduct[] = [];
-  const seenAdmissionHandles = new Set<ProductHandle>();
-  for (const step of configuration.steps) {
-    if (step.sequence?.productHandle == null || !sequenceProductHandles.has(step.sequence.productHandle)) {
-      continue;
-    }
-    for (const admissionProductHandle of step.registrationAdmissionProductHandles) {
-      if (seenAdmissionHandles.has(admissionProductHandle)) {
-        continue;
-      }
-      seenAdmissionHandles.add(admissionProductHandle);
-      const admission = admissionByProduct.get(admissionProductHandle);
-      if (admission != null) {
-        admissions.push(admission);
-        for (const bodyAdmissionHandle of registryBodyIndex.admissionProductHandlesForAdmission(admission)) {
-          const bodyAdmission = admissionByProduct.get(bodyAdmissionHandle);
-          if (bodyAdmission == null || seenAdmissionHandles.has(bodyAdmission.productHandle)) {
-            continue;
-          }
-          seenAdmissionHandles.add(bodyAdmission.productHandle);
-          admissions.push(bodyAdmission);
-        }
-      }
-    }
-  }
-  return admissions;
+    const admission = admissionByProduct.get(operation.admissionProductHandle) ?? null;
+    return admission == null ? [] : [admission];
+  });
 }
 
 interface ConfiguredCatalogSelection {
@@ -431,13 +428,4 @@ function catalogProductHandlesForAdmissions(
     }
   }
   return catalogProductHandles;
-}
-
-function admitsRuntimeCompilerServices(admissions: readonly RegistrationAdmissionProduct[]): boolean {
-  return admissions.some((admission) =>
-    frameworkRegistrationAdmissionCarriesCapability(
-      admission,
-      FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
-    )
-  );
 }

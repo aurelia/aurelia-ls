@@ -48,6 +48,8 @@ export class FrameworkServiceRoot {
     readonly rootKind: FrameworkServiceRootKind,
     readonly serviceFamily: string | null,
     readonly serviceKeyName: string,
+    /** Canonical DI key identity when this root was proven through a DI-owned source expression. */
+    readonly serviceKeyIdentityHandle: IdentityHandle | null,
     readonly basis: FrameworkServiceRootBasis,
     readonly sourcePath: string,
     readonly start: number,

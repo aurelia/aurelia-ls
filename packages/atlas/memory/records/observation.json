@@ -31,7 +31,7 @@
         "Bound-controller source-value reads should use RuntimeBindingSourceValueEvaluationContext.projectBindingSourceValueContext(...) before evaluating the stored parent expression, so parent binding-behavior scope handoffs such as & state are spent when child properties are read through getters, composition, or static value reduction.",
         "StateBinding scope slots may reduce through the configured initial-state source address by way of RuntimeBindingSourceEvaluationFrame.evaluateSourceAddressExpression(...); keep that as initial-state static value support, not an action/lifecycle store emulator.",
         "Consumers such as router instruction materialization, dynamic composition, repeat static values, and template-controller let-value closure should pass a RuntimeBindingSourceValueEvaluationContext instead of mutating evaluator-level active container or recursion state. Router-resource reads now enter through `routerSourceExpressionEvaluationFrame(...)`, which is the explicit router-owned source-value context/open-row bridge guarded by `contract:expression-context-usage`.",
-        "Direct ambient resolve(ClassKey) calls can close during activation-like instance/member source reads because the reused Aurelia runtime host can instantiate evaluator-local class keys. Registered/interface DI keys can close through RuntimeBindingSourceActivationContext when the read also has an active modeled container; RuntimeBindingSourceActivationContext.resolveCallFrame(...) owns call/key admission before resolver lookup or open-row wording, while wrapper keys and unsupported resolver branches remain DI-world activation pressure.",
+        "Direct ambient resolve(ClassKey) calls can close during activation-like instance/member source reads because the reused Aurelia runtime host can instantiate evaluator-local class keys. Registered/interface DI keys close through the shared DiProviderActivationView when the read also has an active modeled container; RuntimeBindingSourceEvaluationFrame owns the candidate-local activation session, while wrapper keys and unsupported resolver branches remain DI-world activation pressure.",
         "AccessKeyed is part of binding-owned source-value evaluation: exact array/object reads may close to element/property values, exact object misses close as undefined, and unknown array membership/order should stay open rather than becoming a feature-local router/template shortcut.",
         "ArrayLiteral and ObjectLiteral are binding-source values too. Reduce their element/property values in RuntimeBindingSourceValueEvaluator, preserve binding-scope holes as boundary values when the shape is static, and keep router/composition consumers downstream of that value shape.",
         "Primitive binary value reduction should reuse evaluation/operators.ts after Scope reads close; keep only binding-specific boundary string-pattern handling in RuntimeBindingSourceValueEvaluator.",
@@ -168,27 +168,8 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
-          "symbolName": "RuntimeBindingSourceActivationContext",
-          "summary": "Binding-source DI activation join over active modeled containers and resolver slots."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
-          "symbolName": "RuntimeBindingSourceActivationContext.resolveCallFrame",
-          "summary": "Activation-scoped resolve(...) call/key admission frame before active-container resolver lookup."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
-          "symbolName": "RuntimeBindingSourceActivationContext.resolveCallWithoutActiveContainer",
-          "summary": "Open-row policy for registered/interface resolve(...) reads that lack active container ancestry."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
-          "symbolName": "RuntimeBindingSourceActivationContext.evaluationValueForResolvedKey",
-          "summary": "Resolved DI key result projection into closed source value or activation open seam."
+          "filePath": "packages/semantic-runtime/src/di/provider-activation.ts",
+          "summary": "Shared candidate-local DI key, provider, default-registration, lifetime, and activation corridor."
         },
         {
           "kind": "lens",
@@ -240,13 +221,6 @@
           "filePath": "packages/semantic-runtime/src/observation/binding-source-value-evaluation-context.ts",
           "minLineCount": 60,
           "minMethodCount": 5
-        },
-        {
-          "kind": "product-large-class",
-          "className": "RuntimeBindingSourceActivationContext",
-          "filePath": "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
-          "minLineCount": 120,
-          "minMethodCount": 8
         },
         {
           "kind": "source-declaration-exists",

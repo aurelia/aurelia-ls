@@ -4,9 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
-import { evaluateAndEmitAureliaProject } from '../src/configuration/aurelia-project-evaluation.js';
+import { aureliaAppProjectEvaluationProfile } from '../src/configuration/aurelia-project-evaluation.js';
 import { ComputationCommitState } from '../src/kernel/computation-lifecycle.js';
 import { ResourceProductDetails } from '../src/resources/product-details.js';
+import { resourceConventionToolingEvaluationProfile } from '../src/resources/resource-convention-transform-admission.js';
 import { ResourceRecognitionProjectPass } from '../src/resources/resource-recognition-project-pass.js';
 import { TypeSystemProjectBuilder } from '../src/type-system/project.js';
 
@@ -23,7 +24,11 @@ describe('resource recognition publication', () => {
       throw new Error('Expected the fixture to boot one project.');
     }
     const store = runtime.workspace.store;
-    const evaluation = evaluateAndEmitAureliaProject(store, project, store);
+    const evaluation = runtime.projectEvaluations.acquire(project, aureliaAppProjectEvaluationProfile).generation.readBaseline();
+    const conventionToolingEvaluation = runtime.projectEvaluations.acquire(
+      project,
+      resourceConventionToolingEvaluationProfile,
+    ).generation;
     const typeSystem = new TypeSystemProjectBuilder(runtime.frameworkSupport).build(project, evaluation);
     const locus = {
       kind: 'resource-recognition-project-test',
@@ -36,6 +41,7 @@ describe('resource recognition publication', () => {
       store,
       project,
       evaluation,
+      conventionToolingEvaluation,
       typeSystem,
       firstRun,
     );
@@ -56,6 +62,7 @@ describe('resource recognition publication', () => {
       store,
       project,
       evaluation,
+      conventionToolingEvaluation,
       typeSystem,
       secondRun,
     );

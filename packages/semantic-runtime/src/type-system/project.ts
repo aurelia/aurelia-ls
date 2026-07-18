@@ -15,7 +15,11 @@ import {
 import {
   SourceFileRole,
 } from '../kernel/address.js';
-import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
+import type {
+  SemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputRead,
+  SemanticRuntimeProjectInputReadScope,
+} from '../kernel/project-input.js';
 import { sourceTextContentRevision } from '../kernel/source-text-snapshot.js';
 import { typeSystemProjectOptions } from './project-options.js';
 import {
@@ -203,11 +207,16 @@ export class TypeSystemProject {
     private readonly overlaySourcesByPath: ReadonlyMap<string, TypeSystemOverlaySource>,
     private readonly overlaySourcePaths: ReadonlySet<string>,
     private readonly diagnosticSourcePaths: ReadonlySet<string> | null,
+    private readonly inputReadScope: SemanticRuntimeProjectInputReadScope,
   ) {
     registerCheckerDeclarationSourceContext(
       checker,
       new CheckerDeclarationSourceContext(project.projectKey, programSources, overlaySourcePaths),
     );
+  }
+
+  readRegisteredInputs(): readonly SemanticRuntimeProjectInputRead[] {
+    return this.inputReadScope.readRegisteredInputs();
   }
 
   /** Read an evaluator-owned source file by evaluator module key. */
@@ -442,7 +451,7 @@ export class TypeSystemProject {
     moduleSpecifier: string,
     exportName: string,
   ): ts.Type | null {
-    const symbol = this.readExportedSymbol(moduleSpecifier, exportName);
+    const symbol = this.readProgramExportedSymbol(moduleSpecifier, exportName);
     if (symbol == null) {
       return null;
     }
@@ -460,6 +469,16 @@ export class TypeSystemProject {
       ? null
       : this.checker.getTypeOfSymbolAtLocation(symbol, valueDeclaration);
     return valueType == null ? null : constructedReturnType(this.checker, valueType) ?? valueType;
+  }
+
+  /** Resolve an installed package export into this Program's canonical, alias-resolved symbol. */
+  readProgramExportedSymbol(
+    moduleSpecifier: string,
+    exportName: string,
+  ): ts.Symbol | null {
+    const exports = this.readModuleExports(moduleSpecifier);
+    const symbol = exports?.get(exportName) ?? null;
+    return symbol == null ? null : this.resolveAliasedSymbol(symbol);
   }
 
   /**
@@ -483,15 +502,6 @@ export class TypeSystemProject {
     return chain;
   }
 
-  private readExportedSymbol(
-    moduleSpecifier: string,
-    exportName: string,
-  ): ts.Symbol | null {
-    const exports = this.readModuleExports(moduleSpecifier);
-    const symbol = exports?.get(exportName) ?? null;
-    return symbol == null ? null : this.resolveAliasedSymbol(symbol);
-  }
-
   private readModuleExports(moduleSpecifier: string): ReadonlyMap<string, ts.Symbol> | null {
     if (this.moduleExportsBySpecifier.has(moduleSpecifier)) {
       return this.moduleExportsBySpecifier.get(moduleSpecifier)!;
@@ -512,7 +522,7 @@ export class TypeSystemProject {
       moduleSpecifier,
       containingFile,
       this.program.getCompilerOptions(),
-      ts.sys,
+      this.inputReadScope.host,
     ).resolvedModule?.resolvedFileName ?? null;
     return resolved == null ? null : this.program.getSourceFile(resolved) ?? null;
   }
@@ -587,10 +597,11 @@ export class TypeSystemProjectBuilder {
     );
 
     const options = projectOptions.compilerOptions;
+    const inputReadScope = project.inputGeneration.createReadScope('type-system-project');
     const host = measureTypeSystemProjectPhase(
       phases,
       'compiler-host',
-      () => createTypeSystemCompilerHost(options, sourceFiles.byPath, project.rootDir, project.inputGeneration.host),
+      () => createTypeSystemCompilerHost(options, sourceFiles.byPath, project.rootDir, inputReadScope.host),
       () => sourceFiles.byPath.size,
     );
 
@@ -665,6 +676,7 @@ export class TypeSystemProjectBuilder {
       overlaySourcesByPath,
       overlaySourcePaths,
       typeSystemDiagnosticSourcePaths(projectOptions.configRootFileNames),
+      inputReadScope,
     );
   }
 }

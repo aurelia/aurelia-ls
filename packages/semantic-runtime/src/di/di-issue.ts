@@ -45,6 +45,10 @@ export const enum DiIssueKind {
   NoConstructNativeFunction = 'no-construct-native-function',
   /** A container API JIT/factory path cannot derive a constructable runtime type. */
   UnableJitNonConstructor = 'unable-jit-non-constructor',
+  /** Container JIT registration rejects a native intrinsic type. */
+  NoJitIntrinsicType = 'no-jit-intrinsic-type',
+  /** Container JIT registration rejects an Aurelia interface without a default resolver. */
+  NoJitInterface = 'no-jit-interface',
   /** Singleton resolver activation would re-enter the same resolver before construction completes. */
   CyclicDependency = 'cyclic-dependency',
   /** Container.register recursion reached Aurelia's auto-registration depth guard. */

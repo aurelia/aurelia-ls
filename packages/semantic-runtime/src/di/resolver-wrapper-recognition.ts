@@ -7,6 +7,7 @@ import { symbolForExpression } from '../type-system/checker-node-helpers.js';
 
 export const AURELIA_RESOLVER_WRAPPER_KINDS = [
   'all',
+  'last',
   'lazy',
   'optional',
   'factory',
@@ -24,8 +25,11 @@ export type DiAureliaResolverWrapperKind =
 const AURELIA_RESOLVER_WRAPPER_KIND_SET = new Set<string>(AURELIA_RESOLVER_WRAPPER_KINDS);
 
 export interface DiAureliaResolverWrapperCall {
+  readonly call: ts.CallExpression;
   readonly wrapperKind: DiAureliaResolverWrapperKind;
   readonly innerExpression: ts.Expression | null;
+  readonly argumentExpressions: readonly ts.Expression[];
+  readonly hasSpreadArgument: boolean;
 }
 
 export function readAureliaResolverWrapperCall(
@@ -41,8 +45,11 @@ export function readAureliaResolverWrapperCall(
     return null;
   }
   return {
+    call: current,
     wrapperKind,
     innerExpression: current.arguments[0] ?? null,
+    argumentExpressions: current.arguments.filter((argument): argument is ts.Expression => !ts.isSpreadElement(argument)),
+    hasSpreadArgument: current.arguments.some(ts.isSpreadElement),
   };
 }
 
@@ -56,11 +63,29 @@ function aureliaResolverWrapperKindForCallee(
       ? expression
       : null;
   if (name == null || !isAureliaResolverWrapperKind(name.text)) {
-    return null;
+    const exportedName = symbolForExpression(checker, name ?? expression)?.getName() ?? null;
+    if (exportedName == null || !isAureliaResolverWrapperKind(exportedName)) {
+      return null;
+    }
+    return (symbolForExpression(checker, name ?? expression)?.declarations ?? [])
+      .some(isAureliaResolverWrapperDeclaration)
+      ? exportedName
+      : null;
   }
   return (symbolForExpression(checker, name)?.declarations ?? []).some(isAureliaResolverWrapperDeclaration)
     ? name.text
     : null;
+}
+
+/** Whether an expression is Aurelia's built-in resolver that intentionally injects `undefined`. */
+export function isAureliaIgnoreResolverExpression(
+  checker: ts.TypeChecker,
+  expression: ts.Expression,
+): boolean {
+  const current = unwrapExpression(expression);
+  const symbol = symbolForExpression(checker, current);
+  return symbol?.getName() === 'ignore'
+    && (symbol.declarations ?? []).some(isAureliaResolverWrapperDeclaration);
 }
 
 function isAureliaResolverWrapperKind(

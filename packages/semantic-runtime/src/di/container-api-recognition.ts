@@ -3,7 +3,6 @@ import ts from 'typescript';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import {
-  readPropertyName,
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
 import {
@@ -14,9 +13,6 @@ import {
   checkerPropertySymbol,
   symbolForExpression,
 } from '../type-system/checker-node-helpers.js';
-import {
-  ContainerDefaultResolverPolicy,
-} from './container-configuration.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import type {
   ContainerLookupKeyKind,
@@ -59,10 +55,15 @@ export class DiContainerApiCallSite {
     readonly keyKind: ContainerLookupKeyKind,
     readonly keyIdentityKind: DiContainerKeyExpressionIdentityKind,
     readonly autoRegister: boolean | null,
-    readonly receiverDefaultResolverPolicy: ContainerDefaultResolverPolicy | null,
     readonly receiverFreshCreateContainer: boolean,
     readonly nullishKeyArguments: readonly DiNullishKeyArgument[],
     readonly receiverText: string,
+    /** Candidate-local call node for DI-owned activation and source evaluation. */
+    readonly sourceNode: ts.CallExpression,
+    /** Candidate-local receiver expression proven to be an Aurelia container. */
+    readonly receiverExpression: ts.Expression,
+    /** Candidate-local key expression, when directly authored. */
+    readonly keyExpression: ts.Expression | null,
   ) {}
 }
 
@@ -134,13 +135,15 @@ function recordContainerApiCallSite(
     keyNameForContainerKeyExpression(keyExpression),
     keyWrapper?.wrapperKind ?? null,
     keyNameForContainerKeyExpression(keyWrapper?.innerExpression ?? null),
-    containerLookupKeyKindForExpression(checker, keyExpression),
+    containerLookupKeyKindForExpression(typeSystem, keyExpression),
     containerKeyExpressionIdentityKind(keyExpression),
     containerApiAutoRegister(methodKind, node),
-    containerDefaultResolverPolicyForReceiver(checker, access.expression),
     isFreshCreateContainerReceiver(checker, access.expression),
     readNullishKeyArguments(node, sourceFile),
     access.expression.getText(sourceFile),
+    node,
+    access.expression,
+    keyExpression,
   ));
 }
 
@@ -256,121 +259,6 @@ function isAureliaContainerDeclaration(
     || normalized.includes('/@aurelia+kernel/');
 }
 
-function containerDefaultResolverPolicyForReceiver(
-  checker: ts.TypeChecker,
-  receiver: ts.Expression,
-): ContainerDefaultResolverPolicy | null {
-  return containerDefaultResolverPolicyForExpression(checker, unwrapExpression(receiver), new Set());
-}
-
-function containerDefaultResolverPolicyForExpression(
-  checker: ts.TypeChecker,
-  expression: ts.Expression,
-  seenDeclarations: Set<ts.Declaration>,
-): ContainerDefaultResolverPolicy | null {
-  const current = unwrapExpression(expression);
-  if (ts.isCallExpression(current)) {
-    return containerDefaultResolverPolicyForCreateContainerCall(checker, current, seenDeclarations);
-  }
-  const declaration = declarationForReceiverExpression(checker, current);
-  if (declaration == null || seenDeclarations.has(declaration)) {
-    return null;
-  }
-  seenDeclarations.add(declaration);
-  if (ts.isVariableDeclaration(declaration) && declaration.initializer != null) {
-    return containerDefaultResolverPolicyForExpression(checker, declaration.initializer, seenDeclarations);
-  }
-  if (ts.isPropertyDeclaration(declaration) && declaration.initializer != null) {
-    return containerDefaultResolverPolicyForExpression(checker, declaration.initializer, seenDeclarations);
-  }
-  return null;
-}
-
-function containerDefaultResolverPolicyForCreateContainerCall(
-  checker: ts.TypeChecker,
-  call: ts.CallExpression,
-  seenDeclarations: Set<ts.Declaration>,
-): ContainerDefaultResolverPolicy | null {
-  if (!isAureliaCreateContainerCallee(checker, unwrapExpression(call.expression))) {
-    return null;
-  }
-  return containerDefaultResolverPolicyForConfigExpression(checker, call.arguments[0] ?? null, seenDeclarations)
-    ?? ContainerDefaultResolverPolicy.Singleton;
-}
-
-function containerDefaultResolverPolicyForConfigExpression(
-  checker: ts.TypeChecker,
-  expression: ts.Expression | null,
-  seenDeclarations: Set<ts.Declaration>,
-): ContainerDefaultResolverPolicy | null {
-  if (expression == null) {
-    return null;
-  }
-  const current = unwrapExpression(expression);
-  if (ts.isObjectLiteralExpression(current)) {
-    return containerDefaultResolverPolicyForObjectLiteral(checker, current, seenDeclarations);
-  }
-  const declaration = declarationForReceiverExpression(checker, current);
-  if (declaration == null || seenDeclarations.has(declaration)) {
-    return null;
-  }
-  seenDeclarations.add(declaration);
-  if (ts.isVariableDeclaration(declaration) && declaration.initializer != null) {
-    return containerDefaultResolverPolicyForConfigExpression(checker, declaration.initializer, seenDeclarations);
-  }
-  return null;
-}
-
-function containerDefaultResolverPolicyForObjectLiteral(
-  checker: ts.TypeChecker,
-  literal: ts.ObjectLiteralExpression,
-  seenDeclarations: Set<ts.Declaration>,
-): ContainerDefaultResolverPolicy | null {
-  let policy: ContainerDefaultResolverPolicy | null = null;
-  for (const property of literal.properties) {
-    if (ts.isSpreadAssignment(property)) {
-      if (policy != null) {
-        return null;
-      }
-      continue;
-    }
-    if (!ts.isPropertyAssignment(property) || readPropertyName(property.name) !== 'defaultResolver') {
-      continue;
-    }
-    policy = containerDefaultResolverPolicyForResolverExpression(checker, property.initializer, seenDeclarations);
-  }
-  return policy;
-}
-
-function containerDefaultResolverPolicyForResolverExpression(
-  checker: ts.TypeChecker,
-  expression: ts.Expression,
-  seenDeclarations: Set<ts.Declaration>,
-): ContainerDefaultResolverPolicy | null {
-  const current = unwrapExpression(expression);
-  if (ts.isPropertyAccessExpression(current)) {
-    switch (current.name.text) {
-      case 'none':
-        return ContainerDefaultResolverPolicy.None;
-      case 'singleton':
-        return ContainerDefaultResolverPolicy.Singleton;
-      case 'transient':
-        return ContainerDefaultResolverPolicy.Transient;
-      default:
-        return ContainerDefaultResolverPolicy.Custom;
-    }
-  }
-  const declaration = declarationForReceiverExpression(checker, current);
-  if (declaration == null || seenDeclarations.has(declaration)) {
-    return ContainerDefaultResolverPolicy.Custom;
-  }
-  seenDeclarations.add(declaration);
-  if (ts.isVariableDeclaration(declaration) && declaration.initializer != null) {
-    return containerDefaultResolverPolicyForResolverExpression(checker, declaration.initializer, seenDeclarations);
-  }
-  return ContainerDefaultResolverPolicy.Custom;
-}
-
 function isAureliaCreateContainerCallee(
   checker: ts.TypeChecker,
   expression: ts.Expression,
@@ -396,12 +284,4 @@ function isAureliaCreateContainerDeclaration(
     sourcePath.includes('/aurelia/packages/kernel/dist/types/di.container.d.ts') ||
     sourcePath.includes('/@aurelia/kernel/') ||
     sourcePath.includes('/@aurelia+kernel/');
-}
-
-function declarationForReceiverExpression(
-  checker: ts.TypeChecker,
-  expression: ts.Expression,
-): ts.Declaration | null {
-  const symbol = symbolForExpression(checker, expression);
-  return symbol?.valueDeclaration ?? symbol?.declarations?.[0] ?? null;
 }

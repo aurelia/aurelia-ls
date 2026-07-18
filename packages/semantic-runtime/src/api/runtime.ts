@@ -25,15 +25,17 @@ import {
   type AureliaAppWorldProjectGeneration,
 } from '../configuration/app-analysis-computation.js';
 import {
-  evaluateAureliaProject,
+  aureliaAppProjectEvaluationProfile,
 } from '../configuration/aurelia-project-evaluation.js';
 import {
   SemanticAppAnalysisDepth,
   normalizeSemanticAppAnalysisDepth,
   semanticAppAnalysisDepthSatisfies,
 } from '../configuration/app-analysis.js';
-import type {
-  StaticProjectEvaluationResult,
+import {
+  StaticProjectEvaluationComputationService,
+  type StaticProjectEvaluationAccess,
+  type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
 import {
   clearTypeSystemCompilerHostSourceFileCache,
@@ -446,6 +448,7 @@ export class SemanticRuntime {
   private readonly queryClaimsByProfile = new Map<SemanticRuntimeInquiryProfile, QueryClaimGraph>();
   readonly computationLifecycle: ComputationLifecycleRegistry;
   readonly frameworkSupport: FrameworkSupportAuthority;
+  readonly projectEvaluations: StaticProjectEvaluationComputationService;
   readonly appAnalysisComputations: AureliaAppWorldProjectComputationService;
 
   private constructor(
@@ -458,10 +461,15 @@ export class SemanticRuntime {
       workspace.workspaceKey,
     );
     this.frameworkSupport.initializeKnownSupport();
+    this.projectEvaluations = new StaticProjectEvaluationComputationService(
+      workspace.store,
+      this.computationLifecycle,
+    );
     this.appAnalysisComputations = new AureliaAppWorldProjectComputationService(
       workspace.store,
       this.computationLifecycle,
       this.frameworkSupport,
+      this.projectEvaluations,
     );
   }
 
@@ -645,63 +653,29 @@ export class SemanticRuntime {
       request.typeSystemDependencyCacheClearPolicy,
     );
     const clearedTypeSystemDependencyCache = clearTypeSystemCompilerHostSourceFileCache(typeSystemDependencyCacheClearPolicy);
-    if (this.appsByCacheKey.size === 0) {
-      const disposedRuntimeQueryClaimRecords = this.disposeRuntimeQueryClaims(QueryClaimDisposalReason.SessionEnded);
-      if (disposedRuntimeQueryClaimRecords > 0 || clearedTypeSystemDependencyCache.entries > 0) {
-      const workspaceKernel = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
-        const value = withAnalysisCacheClearDisplayText({
-          typeSystemDependencyCacheClearPolicy,
-          disposedCachedApps: 0,
-          disposedQueryClaimRecords: disposedRuntimeQueryClaimRecords,
-          disposedKernelRecords: 0,
-          disposedProductDetails: 0,
-          disposedHotDetails: 0,
-          disposedKernelHandleCharacters: 0,
-          ...typeSystemDependencyCacheClearResultFields(clearedTypeSystemDependencyCache),
-          remainingCachedApps: 0,
-          workspaceKernel,
-          summary:
-            `Cleared ${disposedRuntimeQueryClaimRecords} runtime query-claim record(s) and ` +
-            `${clearedTypeSystemDependencyCache.entries} TypeScript dependency source-file cache file(s) ` +
-            `using policy '${typeSystemDependencyCacheClearPolicy}'; ` +
-            `workspace kernel retains ${workspaceKernel.totalRecords} record(s).`,
-        });
-        return answer(SemanticRuntimeAnswerOutcome.Hit, value.summary, value);
-      }
-      const workspaceKernel = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
-      const value = withAnalysisCacheClearDisplayText({
-        typeSystemDependencyCacheClearPolicy,
-        disposedCachedApps: 0,
-        disposedQueryClaimRecords: 0,
-        disposedKernelRecords: 0,
-        disposedProductDetails: 0,
-        disposedHotDetails: 0,
-        disposedKernelHandleCharacters: 0,
-        ...typeSystemDependencyCacheClearResultFields(clearedTypeSystemDependencyCache),
-        remainingCachedApps: 0,
-        workspaceKernel,
-        summary: `No cached app epochs to clear; workspace kernel retains ${workspaceKernel.totalRecords} record(s).`,
-      });
-      return answer(SemanticRuntimeAnswerOutcome.Hit, value.summary, value);
-    }
-
+    const kernelBefore = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
     const disposed = this.disposeCachedAppEpochs(QueryClaimDisposalReason.AppEpochDisposed);
+    const disposedStaticProjectEvaluations = this.projectEvaluations.retireAll();
     const disposedRuntimeQueryClaimRecords = this.disposeRuntimeQueryClaims(QueryClaimDisposalReason.SessionEnded);
     const workspaceKernel = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
+    const kernel = kernelDisposalBetween(kernelBefore, workspaceKernel);
     const value = withAnalysisCacheClearDisplayText({
       typeSystemDependencyCacheClearPolicy,
       disposedCachedApps: disposed.apps,
+      disposedStaticProjectEvaluations,
       disposedQueryClaimRecords: disposed.queryClaimRecords + disposedRuntimeQueryClaimRecords,
-      disposedKernelRecords: disposed.kernel.records,
-      disposedProductDetails: disposed.kernel.productDetails,
-      disposedHotDetails: disposed.kernel.hotDetails,
-      disposedKernelHandleCharacters: disposed.kernel.handleCharacters,
+      disposedKernelRecords: kernel.records,
+      disposedProductDetails: kernel.productDetails,
+      disposedHotDetails: kernel.hotDetails,
+      disposedKernelHandleCharacters: kernel.handleCharacters,
       ...typeSystemDependencyCacheClearResultFields(clearedTypeSystemDependencyCache),
       remainingCachedApps: this.appsByCacheKey.size,
+      remainingStaticProjectEvaluations: this.projectEvaluations.readEntryCount(),
       workspaceKernel,
       summary:
-        `Cleared ${disposed.apps} cached app epoch(s), ${disposed.queryClaimRecords} query-claim record(s), ` +
-        `${describeKernelDisposal(disposed.kernel)}, and ${clearedTypeSystemDependencyCache.entries} ` +
+        `Cleared ${disposed.apps} cached app epoch(s), ${disposedStaticProjectEvaluations} static project evaluation(s), ` +
+        `${disposed.queryClaimRecords + disposedRuntimeQueryClaimRecords} query-claim record(s), ` +
+        `${describeKernelDisposal(kernel)}, and ${clearedTypeSystemDependencyCache.entries} ` +
         `TypeScript dependency source-file cache file(s) using policy '${typeSystemDependencyCacheClearPolicy}'; ` +
         `workspace kernel now retains ${workspaceKernel.totalRecords} record(s).`,
     });
@@ -876,10 +850,10 @@ export class SemanticRuntime {
       },
     });
     const canonicalRequest = canonicalizeRuntimeAppQueryRequest(plan.project, request);
-    let evaluation: StaticProjectEvaluationResult | null = null;
+    let evaluationAccess: StaticProjectEvaluationAccess<null> | null = null;
     const readEvaluation = (): StaticProjectEvaluationResult => {
-      evaluation ??= evaluateAureliaProject(plan.project);
-      return evaluation;
+      evaluationAccess ??= this.projectEvaluations.acquire(plan.project, aureliaAppProjectEvaluationProfile);
+      return evaluationAccess.generation.readBaseline();
     };
     const result = this.answerRuntimeQuery(
       {
@@ -906,7 +880,7 @@ export class SemanticRuntime {
         catalogRow,
       ),
     );
-    return withAppWorldFreeEvaluationProfile(result, evaluation, request.telemetry);
+    return withAppWorldFreeEvaluationProfile(result, evaluationAccess, request.telemetry);
   }
 
   private answerAppWorldQuery(
@@ -1116,7 +1090,7 @@ export class SemanticRuntime {
     canonicalQueries: readonly SemanticAppQuery[],
     inquiryProfile: SemanticRuntimeInquiryProfile,
   ): SemanticRuntimeAnswer<SemanticRuntimeAppQueryBatchResult> {
-    let evaluation: StaticProjectEvaluationResult | null = null;
+    let evaluationAccess: StaticProjectEvaluationAccess<null> | null = null;
     const result = this.answerRuntimeQuery(
       {
         inquiryProfile,
@@ -1134,8 +1108,8 @@ export class SemanticRuntime {
       },
       () => {
         const readEvaluation = (): StaticProjectEvaluationResult => {
-          evaluation ??= evaluateAureliaProject(plan.project);
-          return evaluation;
+          evaluationAccess ??= this.projectEvaluations.acquire(plan.project, aureliaAppProjectEvaluationProfile);
+          return evaluationAccess.generation.readBaseline();
         };
         const rows = canonicalQueries.map((query, index) =>
           this.appWorldFreeBatchRow(plan, query, index, inquiryProfile, readEvaluation)
@@ -1169,7 +1143,7 @@ export class SemanticRuntime {
         );
       },
     );
-    return withAppWorldFreeEvaluationProfile(result, evaluation, plan.telemetry);
+    return withAppWorldFreeEvaluationProfile(result, evaluationAccess, plan.telemetry);
   }
 
   private appWorldFreeBatchRow(
@@ -2052,8 +2026,8 @@ function semanticRuntimeAnalysisCacheClearDisplayText(
   value: Omit<SemanticRuntimeAnalysisCacheClearResult, 'displayText'>,
 ): string {
   const lines = [
-    `Analysis cache clear: disposed ${value.disposedCachedApps} cached app epoch(s), ${value.disposedQueryClaimRecords} query-claim record(s), and ${value.disposedKernelRecords} app-epoch kernel record(s); workspace kernel retains ${value.workspaceKernel.totalRecords} boot/source-discovery record(s); dependencyPolicy=${value.typeSystemDependencyCacheClearPolicy}.`,
-    `Kernel disposal: ${value.disposedProductDetails} product detail(s), ${value.disposedHotDetails} hot detail(s), ${value.disposedKernelHandleCharacters} handle character(s); remaining app epochs=${value.remainingCachedApps}, workspace kernel records=${value.workspaceKernel.totalRecords}.`,
+    `Analysis cache clear: disposed ${value.disposedCachedApps} cached app epoch(s), ${value.disposedStaticProjectEvaluations} static project evaluation(s), ${value.disposedQueryClaimRecords} query-claim record(s), and ${value.disposedKernelRecords} analysis-owned kernel record(s); workspace kernel retains ${value.workspaceKernel.totalRecords} boot/source-discovery record(s); dependencyPolicy=${value.typeSystemDependencyCacheClearPolicy}.`,
+    `Kernel disposal: ${value.disposedProductDetails} product detail(s), ${value.disposedHotDetails} hot detail(s), ${value.disposedKernelHandleCharacters} handle character(s); remaining app epochs=${value.remainingCachedApps}, remaining static evaluations=${value.remainingStaticProjectEvaluations}, workspace kernel records=${value.workspaceKernel.totalRecords}.`,
     `TypeScript dependency cache cleared: ${value.clearedTypeSystemDependencySourceFiles} file(s), ${value.clearedTypeSystemDependencySourceTextCharacters} source-text character(s), nodeModules=${value.clearedTypeSystemDependencyNodeModuleSourceFiles}, defaultLibraries=${value.clearedTypeSystemDependencyDefaultLibrarySourceFiles}, externalDeclarations=${value.clearedTypeSystemDependencyExternalDeclarationSourceFiles}.`,
   ];
   if (value.remainingCachedApps > 0) {
@@ -2283,18 +2257,6 @@ function staticEvaluationSourceLookupPaths(
   ].filter((value): value is string => value != null && value.length > 0))];
 }
 
-function compactStaticEvaluationOriginsByKind(
-  origins: SemanticOpenSeamSiteRow['staticEvaluationOrigins'],
-): SemanticOpenSeamSiteRow['staticEvaluationOrigins'] {
-  const byKind = new Map<string, SemanticOpenSeamSiteRow['staticEvaluationOrigins'][number]>();
-  for (const origin of origins) {
-    if (!byKind.has(origin.kind)) {
-      byKind.set(origin.kind, origin);
-    }
-  }
-  return [...byKind.values()].sort((left, right) => left.kind.localeCompare(right.kind));
-}
-
 function runtimeCountSemanticRoleRows(
   rows: readonly { readonly role: string; readonly count: number }[],
 ): ReadonlyMap<string, number> {
@@ -2484,15 +2446,15 @@ function runtimeListDisplay(values: readonly unknown[]): string {
 
 function withAppWorldFreeEvaluationProfile<TValue>(
   result: SemanticRuntimeAnswer<TValue>,
-  evaluation: StaticProjectEvaluationResult | null,
+  access: StaticProjectEvaluationAccess<null> | null,
   telemetry: OpenSemanticAppOptions['telemetry'],
 ): SemanticRuntimeAnswer<TValue> {
-  if (evaluation == null || telemetry == null) {
+  if (access == null || telemetry == null) {
     return result;
   }
   const profile: SemanticRuntimeAnswerProfile = {
     ...(result.profile ?? {}),
-    appWorldFreeProfile: semanticRuntimeAppWorldFreeProfileSummary(evaluation, normalizeCacheOverviewRowLimit(null)),
+    appWorldFreeProfile: semanticRuntimeAppWorldFreeProfileSummary(access, normalizeCacheOverviewRowLimit(null)),
   };
   return {
     ...result,
@@ -2501,10 +2463,13 @@ function withAppWorldFreeEvaluationProfile<TValue>(
 }
 
 function semanticRuntimeAppWorldFreeProfileSummary(
-  evaluation: StaticProjectEvaluationResult,
+  access: StaticProjectEvaluationAccess<null>,
   rowLimit: number,
 ): SemanticRuntimeAppWorldFreeProfileSummary {
+  const evaluation = access.generation.readBaseline();
   return {
+    acquisitionKind: access.kind,
+    acquisitionMilliseconds: roundMilliseconds(access.milliseconds),
     totalMilliseconds: roundMilliseconds(evaluation.profile.totalMilliseconds),
     staticEvaluationPhases: semanticRuntimeAggregatedPhaseTimingSummaries(evaluation.profile.phases, rowLimit),
     staticEvaluationHost: evaluation.profile.sourceHost,
@@ -2599,6 +2564,12 @@ export class SemanticApp {
         totalMilliseconds: roundMilliseconds(this.emission.profile.totalMilliseconds),
         phaseCount: this.emission.profile.phases.length,
         topPhases: semanticRuntimePhaseTimingSummaries(this.emission.profile.phases, rowLimit),
+        staticEvaluationAcquisitions: this.emission.profile.evaluationAcquisitions.map((acquisition) => ({
+          profileKey: acquisition.profileKey,
+          acquisitionKind: acquisition.kind,
+          acquisitionMilliseconds: roundMilliseconds(acquisition.milliseconds),
+          constructionMilliseconds: roundMilliseconds(acquisition.constructionMilliseconds),
+        })),
         staticEvaluationPhases: semanticRuntimeAggregatedPhaseTimingSummaries(this.emission.evaluation.profile.phases, rowLimit),
         staticEvaluationHost: this.emission.evaluation.profile.sourceHost,
         staticEvaluationSources: this.emission.evaluation.profile.sourceFiles,
@@ -3359,11 +3330,11 @@ export class SemanticApp {
     }
     const originsByPath = new Map<string, SemanticOpenSeamSiteRow['staticEvaluationOrigins']>();
     for (const source of this.emission.evaluation.sources) {
-      const origins = compactStaticEvaluationOriginsByKind(source.origins.map((origin) => ({
+      const origins = source.origins.map((origin) => ({
         kind: origin.kind,
         entryModuleKey: origin.entryModuleKey,
         entrySourcePath: origin.entrySourcePath,
-      })));
+      }));
       for (const path of staticEvaluationSourceLookupPaths(source)) {
         originsByPath.set(path, origins);
       }

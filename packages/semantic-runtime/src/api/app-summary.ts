@@ -232,15 +232,15 @@ function diSummaryCounts(
   return {
     containers: diWorld.containers.length,
     runtimeChildContainers: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.runtimeRendering.childContainers.length
+      resource.runtimeAnalysis.readRuntimeChildContainers().length
     ),
     resolverSlots: diWorld.resolverSlots.length,
     diResolveCallSites: readDiResolveCallSites(emission.project, emission.typeSystem).length,
     runtimeChildContextResolverSlots: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.runtimeRendering.childContextResolverSlots.length
+      resource.runtimeAnalysis.readRuntimeChildContextResolverSlots().length
     ),
     runtimeControllers: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.runtimeRendering.controllers.length
+      resource.runtimeAnalysis.readRuntimeControllers().length
     ) + emission.routeComponentAgents.readControllers().length,
     resourceSlots: diWorld.resourceSlots.length,
     diIssues: diWorld.issues.length,

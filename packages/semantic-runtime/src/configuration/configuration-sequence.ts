@@ -15,6 +15,8 @@ export const enum ConfigurationSequenceKind {
   Plugin = 'plugin',
   /** Sequence owned by an IRegistry-shaped value whose register body is being interpreted. */
   Registry = 'registry',
+  /** Sequence owned by a source-created root DI container. */
+  Container = 'container',
   /** Sequence owned by a builder-like configuration value before it is registered. */
   Builder = 'builder',
   /** Sequence exists but its owner or shape is not classified yet. */
@@ -30,6 +32,8 @@ export const enum ConfigurationStepKind {
   AureliaApp = 'aurelia-app',
   /** Registration arguments are admitted through `container.register(...)`. */
   ContainerRegister = 'container-register',
+  /** A root container is created through `DI.createContainer(...)` or an imported equivalent. */
+  CreateContainer = 'create-container',
   /** An IRegistry-compatible value's `register(container, ...)` method is interpreted. */
   RegistryRegister = 'registry-register',
   /** A `.customize(...)` call produces or forwards configuration option contributions. */

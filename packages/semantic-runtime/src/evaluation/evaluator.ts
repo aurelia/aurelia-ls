@@ -48,6 +48,7 @@ import { evaluateAureliaExpressionGlobalAccess } from './global-intrinsics.js';
 import { EvaluationOpenSeam, EvaluationOpenSeamKind, evaluationOpenSeamDefaultReasonKinds } from './seams.js';
 import {
   DefaultStaticEvaluationPolicy,
+  StaticEvaluationBranchMode,
   StaticEvaluationExpressionStatementDisposition,
   type StaticEvaluationPolicy,
 } from './policy.js';
@@ -155,6 +156,15 @@ export interface StaticEvaluationRuntimeHost {
   ): EvaluationValue | null;
 }
 
+/** One call reached by modeled execution together with its call-time lexical bindings. */
+export class StaticExecutedCall {
+  constructor(
+    readonly expression: ts.CallExpression,
+    readonly environment: ModuleEnvironmentRecord,
+    readonly moduleKey: string,
+  ) {}
+}
+
 /** Result of evaluating one source module. */
 export class StaticModuleEvaluationResult {
   constructor(
@@ -166,8 +176,8 @@ export class StaticModuleEvaluationResult {
     readonly completion: EvaluationCompletion,
     /** Explicit open seams produced while evaluating this module. */
     readonly openSeams: readonly EvaluationOpenSeam[],
-    /** Call expressions reached by the modeled module execution path, in evaluation order. */
-    readonly executedCallExpressions: readonly ts.CallExpression[],
+    /** Calls reached by the modeled module execution path, in evaluation order and with call-time bindings. */
+    readonly executedCalls: readonly StaticExecutedCall[],
     /** Policy used by follow-up expression reads against this module environment. */
     readonly policy: StaticEvaluationPolicy = DefaultStaticEvaluationPolicy,
     /** Runtime host used by follow-up expression reads against this module environment. */
@@ -244,7 +254,7 @@ export class StaticEvaluator {
     open: (seamKind, summary, node, moduleKey) =>
       this.open(seamKind, summary, node, moduleKey),
   };
-  private readonly executedCallExpressions: ts.CallExpression[] = [];
+  private readonly executedCalls: StaticExecutedCall[] = [];
   private statementCount = 0;
 
   constructor(
@@ -259,7 +269,7 @@ export class StaticEvaluator {
     imports: StaticEvaluationImportValues = new Map<string, EvaluationValue>(),
   ): StaticModuleEvaluationResult {
     this.openSeams.length = 0;
-    this.executedCallExpressions.length = 0;
+    this.executedCalls.length = 0;
     this.statementCount = 0;
     const environment = new ModuleEnvironmentRecord(moduleKey);
     instantiateStaticModuleDeclarations(sourceFile, environment, moduleKey, imports, this.declarationInstantiationHost);
@@ -277,7 +287,7 @@ export class StaticEvaluator {
       environment,
       completion,
       [...this.openSeams],
-      [...this.executedCallExpressions],
+      [...this.executedCalls],
       this.policy,
       this.runtimeHost,
     );
@@ -430,6 +440,12 @@ export class StaticEvaluator {
   ): EvaluationCompletion {
     const expressionValue = this.evaluateExpression(statement.expression, environment, moduleKey, depth + 1);
     if (expressionValue.kind === EvaluationValueKind.BoundaryValue) {
+      this.openPathBoundary(
+        'Switch statement depended on a boundary expression.',
+        statement.expression,
+        moduleKey,
+        expressionValue,
+      );
       return new NormalEvaluationCompletion();
     }
     if (expressionValue.kind === EvaluationValueKind.Unknown) {
@@ -752,6 +768,12 @@ export class StaticEvaluator {
   ): EvaluationCompletion {
     const condition = this.evaluateExpression(statement.expression, environment, moduleKey, depth + 1);
     if (condition.kind === EvaluationValueKind.BoundaryValue) {
+      this.openPathBoundary(
+        'If statement depended on a boundary condition.',
+        statement.expression,
+        moduleKey,
+        condition,
+      );
       return new NormalEvaluationCompletion();
     }
     if (condition.kind === EvaluationValueKind.Unknown) {
@@ -795,6 +817,12 @@ export class StaticEvaluator {
       if (statement.condition != null) {
         const condition = this.evaluateExpression(statement.condition, environment, moduleKey, depth + 1);
         if (condition.kind === EvaluationValueKind.BoundaryValue) {
+          this.openPathBoundary(
+            'For loop depended on a boundary condition.',
+            statement.condition,
+            moduleKey,
+            condition,
+          );
           return new NormalEvaluationCompletion();
         }
         if (condition.kind === EvaluationValueKind.Unknown) {
@@ -849,6 +877,12 @@ export class StaticEvaluator {
   ): EvaluationCompletion {
     const iterable = this.evaluateExpression(statement.expression, environment, moduleKey, depth + 1);
     if (iterable.kind === EvaluationValueKind.BoundaryValue) {
+      this.openPathBoundary(
+        'For-of statement depended on a boundary iterable.',
+        statement.expression,
+        moduleKey,
+        iterable,
+      );
       return new NormalEvaluationCompletion();
     }
     if (iterable.kind === EvaluationValueKind.Unknown) {
@@ -888,6 +922,21 @@ export class StaticEvaluator {
   ): EvaluationCompletion {
     const source = this.evaluateExpression(statement.expression, environment, moduleKey, depth + 1);
     if (source.kind === EvaluationValueKind.BoundaryValue || source.kind === EvaluationValueKind.BoundaryObject) {
+      if (source.kind === EvaluationValueKind.BoundaryValue) {
+        this.openPathBoundary(
+          'For-in statement depended on a boundary object.',
+          statement.expression,
+          moduleKey,
+          source,
+        );
+      } else if (this.policy.branchMode === StaticEvaluationBranchMode.PathProvenEffects) {
+        this.open(
+          EvaluationOpenSeamKind.DynamicLoop,
+          'For-in statement depended on a boundary object.',
+          statement.expression,
+          moduleKey,
+        );
+      }
       return new NormalEvaluationCompletion();
     }
     if (source.kind === EvaluationValueKind.Unknown) {
@@ -1043,11 +1092,11 @@ export class StaticEvaluator {
         return this.evaluateNewExpression(current as ts.NewExpression, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.ArrowFunction:
       case ts.SyntaxKind.FunctionExpression:
-        return new EvaluationFunctionValue(current as ts.FunctionLikeDeclaration, environment.clone(`${moduleKey}:closure`), current);
+        return new EvaluationFunctionValue(current as ts.FunctionLikeDeclaration, environment, current);
       case ts.SyntaxKind.ClassExpression:
         return new EvaluationClassValue(
           current as ts.ClassExpression,
-          environment.clone(`${moduleKey}:class`),
+          environment,
           current,
           readStaticClassProperties(current as ts.ClassExpression, environment, moduleKey, depth + 1, this.classHost),
         );
@@ -1180,7 +1229,7 @@ export class StaticEvaluator {
     moduleKey: string,
     depth: number,
   ): EvaluationValue {
-    this.executedCallExpressions.push(call);
+    this.executedCalls.push(new StaticExecutedCall(call, environment.clone(), moduleKey));
     const intrinsic = this.evaluateKnownIntrinsic(call, environment, moduleKey, depth + 1);
     if (intrinsic != null) {
       return intrinsic;
@@ -1453,12 +1502,12 @@ export class StaticEvaluator {
         this.unknown(reason, node, currentModuleKey, seamKind),
       checkpoint: () => ({
         openSeamCount: this.openSeams.length,
-        executedCallCount: this.executedCallExpressions.length,
+        executedCallCount: this.executedCalls.length,
         statementCount: this.statementCount,
       }),
       restore: (checkpoint) => {
         this.openSeams.splice(checkpoint.openSeamCount);
-        this.executedCallExpressions.splice(checkpoint.executedCallCount);
+        this.executedCalls.splice(checkpoint.executedCallCount);
         this.statementCount = checkpoint.statementCount;
       },
       resolveCommonJsRequire: (currentModuleKey, moduleSpecifier, node) =>
@@ -1571,6 +1620,12 @@ export class StaticEvaluator {
       return this.materializeUnknownUse(left, expression, moduleKey, 'Short-circuit expression depended on an open left operand.', EvaluationOpenSeamKind.DynamicBranch);
     }
     if (left.kind === EvaluationValueKind.BoundaryValue) {
+      this.openPathBoundary(
+        'Short-circuit expression depended on a boundary left operand.',
+        expression.left,
+        moduleKey,
+        left,
+      );
       return boundaryDependencyValue(expression, left);
     }
     if (expression.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) {
@@ -1699,15 +1754,50 @@ export class StaticEvaluator {
       return this.materializeUnknownUse(condition, expression.condition, moduleKey, 'Conditional expression depended on an open condition.', EvaluationOpenSeamKind.DynamicBranch);
     }
     if (condition.kind === EvaluationValueKind.BoundaryValue) {
+      if (this.policy.branchMode === StaticEvaluationBranchMode.PathProvenEffects) {
+        this.openPathBoundary(
+          'Conditional expression depended on a boundary condition.',
+          expression.condition,
+          moduleKey,
+          condition,
+        );
+        return boundaryDependencyValue(expression, condition);
+      }
       return this.evaluateConditionalBranchRepresentative(expression, condition, environment, moduleKey, depth + 1)
         ?? boundaryDependencyValue(expression, condition);
     }
     const truthy = readEvaluationTruthiness(condition);
     if (truthy == null) {
+      if (this.policy.branchMode === StaticEvaluationBranchMode.PathProvenEffects) {
+        return this.unknown(
+          'Conditional expression condition did not reduce to one effect-safe branch.',
+          expression.condition,
+          moduleKey,
+          EvaluationOpenSeamKind.DynamicBranch,
+        );
+      }
       return this.evaluateConditionalBranchRepresentative(expression, condition, environment, moduleKey, depth + 1)
         ?? this.unknown('Conditional expression condition did not reduce to known truthiness.', expression.condition, moduleKey, EvaluationOpenSeamKind.DynamicBranch);
     }
     return this.evaluateExpression(truthy ? expression.whenTrue : expression.whenFalse, environment, moduleKey, depth + 1);
+  }
+
+  private openPathBoundary(
+    summary: string,
+    node: ts.Node,
+    moduleKey: string,
+    boundary: EvaluationBoundaryValue,
+  ): void {
+    if (this.policy.branchMode !== StaticEvaluationBranchMode.PathProvenEffects) {
+      return;
+    }
+    this.open(
+      EvaluationOpenSeamKind.DynamicBranch,
+      summary,
+      node,
+      moduleKey,
+      [openSeamReasonKindForEvaluationBoundary(boundary.boundaryKind)],
+    );
   }
 
   private evaluateConditionalBranchRepresentative(
@@ -1718,7 +1808,7 @@ export class StaticEvaluator {
     depth: number,
   ): EvaluationValue | null {
     const openStart = this.openSeams.length;
-    const executedCallStart = this.executedCallExpressions.length;
+    const executedCallStart = this.executedCalls.length;
     const statementStart = this.statementCount;
     const whenTrue = this.evaluateExpression(expression.whenTrue, environment, moduleKey, depth + 1);
     const whenFalse = this.evaluateExpression(expression.whenFalse, environment, moduleKey, depth + 1);
@@ -1732,12 +1822,12 @@ export class StaticEvaluator {
         );
     if (representative == null) {
       this.openSeams.splice(openStart);
-      this.executedCallExpressions.splice(executedCallStart);
+      this.executedCalls.splice(executedCallStart);
       this.statementCount = statementStart;
       return null;
     }
     this.openSeams.splice(openStart);
-    this.executedCallExpressions.splice(executedCallStart);
+    this.executedCalls.splice(executedCallStart);
     return representative;
   }
 

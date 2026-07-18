@@ -1,12 +1,9 @@
-import type { ProjectBootFrame } from '../boot/frames.js';
 import { DefaultEvaluationModuleResolutionPolicy } from '../evaluation/module-host.js';
 import {
+  StaticProjectEvaluationComputationPreparation,
+  StaticProjectEvaluationComputationProfile,
   StaticProjectEvaluationOptions,
-  StaticProjectEvaluationPass,
-  type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
-import type { KernelStore } from '../kernel/store.js';
-import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   aureliaExternalEvaluationValueResolver,
   aureliaStaticEvaluationRuntimeHost,
@@ -25,24 +22,14 @@ export function aureliaProjectEvaluationOptions(): StaticProjectEvaluationOption
   );
 }
 
-export function evaluateAureliaProject(
-  project: ProjectBootFrame,
-): StaticProjectEvaluationResult {
-  return new StaticProjectEvaluationPass().evaluate(
-    project,
-    aureliaProjectEvaluationOptions(),
-  );
+export const enum AureliaProjectEvaluationProfileKind {
+  /** App-source evaluation with Aurelia configuration, registration, DI, and framework intrinsics. */
+  App = 'aurelia-app',
 }
 
-export function evaluateAndEmitAureliaProject(
-  store: KernelStore,
-  project: ProjectBootFrame,
-  publication: KernelPublicationContext,
-): StaticProjectEvaluationResult {
-  return new StaticProjectEvaluationPass().evaluateAndEmit(
-    store,
-    project,
-    aureliaProjectEvaluationOptions(),
-    publication,
-  );
-}
+export const aureliaAppProjectEvaluationProfile = new StaticProjectEvaluationComputationProfile(
+  AureliaProjectEvaluationProfileKind.App,
+  '1',
+  'Aurelia app-source static evaluation with configuration and DI intrinsics.',
+  () => new StaticProjectEvaluationComputationPreparation(aureliaProjectEvaluationOptions(), null),
+);

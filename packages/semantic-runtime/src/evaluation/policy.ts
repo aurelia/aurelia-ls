@@ -6,6 +6,13 @@ export const enum StaticEvaluationExpressionStatementDisposition {
   ExternallyOwned = 'externally-owned',
 }
 
+export const enum StaticEvaluationBranchMode {
+  /** Preserve representative values across unresolved branches without claiming branch-local effects. */
+  RepresentativeValues = 'representative-values',
+  /** Admit effects only along branches whose control flow reduced to one concrete path. */
+  PathProvenEffects = 'path-proven-effects',
+}
+
 export interface StaticEvaluationExpressionStatementPolicyInput {
   readonly expression: ts.Expression;
   readonly environment: ModuleEnvironmentRecord;
@@ -38,6 +45,7 @@ export class StaticEvaluationPolicy {
   constructor(
     readonly expressionStatementPolicies: readonly StaticEvaluationExpressionStatementPolicy[] = [],
     readonly guardrails: StaticEvaluationGuardrails = DefaultStaticEvaluationGuardrails,
+    readonly branchMode: StaticEvaluationBranchMode = StaticEvaluationBranchMode.RepresentativeValues,
   ) {}
 
   dispositionForExpressionStatement(

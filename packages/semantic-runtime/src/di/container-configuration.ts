@@ -11,6 +11,8 @@ export const enum ContainerDefaultResolverPolicy {
   Transient = 'transient',
   /** A custom default resolver function exists and must be interpreted by a later pass. */
   Custom = 'custom',
+  /** The authored configuration did not close far enough to prove which resolver policy applies. */
+  Open = 'open',
 }
 
 export type ContainerConfigurationField =

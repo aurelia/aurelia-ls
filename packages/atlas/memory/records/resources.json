@@ -779,8 +779,8 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-convention-transform-admission.ts",
-          "symbolName": "ConventionToolingEvaluationHost",
-          "summary": "Narrow evaluator host for Vite defineConfig and Aurelia plugin-call identity."
+          "symbolName": "ResourceConventionToolingEvaluationContext",
+          "summary": "Profile-owned Vite/Aurelia tooling interpretation context and runtime-host metadata authority."
         },
         {
           "kind": "source",
@@ -832,7 +832,7 @@
         {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/resources/resource-convention-transform-admission.ts",
-          "symbolName": "ConventionToolingEvaluationHost"
+          "symbolName": "ResourceConventionToolingEvaluationContext"
         },
         {
           "kind": "source-declaration-exists",

@@ -10,14 +10,6 @@ import {
 import type {
   ClaimHandle,
 } from '../kernel/handles.js';
-import {
-  DiKeyIdentityKind,
-  type InterfaceDiKeyIdentity,
-} from '../kernel/identity.js';
-import {
-  frameworkIntrinsicDiKeyForName,
-  frameworkIntrinsicDiKeyLocal,
-} from '../di/framework-intrinsic-di-key.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { MaterializationRecord } from '../kernel/materialization.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
@@ -34,8 +26,12 @@ import {
   KernelVocabulary,
   type ClaimPredicateKey,
 } from '../kernel/vocabulary.js';
+import { sourceSpanAddressForAddress } from '../kernel/source-address.js';
+import { readDiContainerChainFacts, type DiContainerChainFacts } from '../di/container-chain.js';
 import {
   FrameworkServiceRoot,
+  FrameworkServiceRootBasis,
+  FrameworkServiceRootKind,
   frameworkServiceRootBasisResolvesDiKey,
 } from './service-root.js';
 
@@ -57,11 +53,11 @@ export class FrameworkServiceRootEnrichmentMaterializer {
     projectKey: string,
     roots: readonly FrameworkServiceRoot[],
   ): FrameworkServiceRootEnrichmentProjectResult {
-    const keyIdentities = interfaceDiKeyIdentitiesByName(this.publication);
     const records: KernelStoreRecord[] = [];
     const claimHandles: ClaimHandle[] = [];
+    const containerFacts = readDiContainerChainFacts(this.publication);
     for (const root of roots) {
-      const enrichment = this.recordsForRoot(projectKey, root, keyIdentities);
+      const enrichment = this.recordsForRoot(projectKey, root, containerFacts);
       records.push(...enrichment.records);
       claimHandles.push(...enrichment.claimHandles);
     }
@@ -74,15 +70,29 @@ export class FrameworkServiceRootEnrichmentMaterializer {
   private recordsForRoot(
     projectKey: string,
     root: FrameworkServiceRoot,
-    keyIdentities: ReadonlyMap<string, readonly InterfaceDiKeyIdentity[]>,
+    containerFacts: DiContainerChainFacts,
   ): FrameworkServiceRootEnrichmentProjectResult {
     const claimSpecs: ClaimSpec[] = [];
-    if (frameworkServiceRootBasisResolvesDiKey(root.basis)) {
-      for (const keyIdentity of keyIdentities.get(root.serviceKeyName) ?? []) {
+    if (frameworkServiceRootBasisResolvesDiKey(root.basis) && root.serviceKeyIdentityHandle != null) {
+      claimSpecs.push({
+        localSuffix: `resolves-key:${localKeyPart(root.serviceKeyIdentityHandle)}`,
+        predicateKey: KernelVocabulary.Framework.RootResolvesDiKey.key,
+        objectHandle: root.serviceKeyIdentityHandle,
+      });
+    }
+    if (
+      root.rootKind === FrameworkServiceRootKind.Container
+      && root.basis === FrameworkServiceRootBasis.DirectConstructor
+    ) {
+      const source = sourceSpanAddressForAddress(this.publication, root.evidenceSourceAddressHandle);
+      const containerProductHandle = source == null
+        ? null
+        : containerFacts.containerProductHandleForSourceSpan(source.fileHandle, source.start, source.end);
+      if (containerProductHandle != null) {
         claimSpecs.push({
-          localSuffix: `resolves-key:${localKeyPart(keyIdentity.handle)}`,
-          predicateKey: KernelVocabulary.Framework.RootResolvesDiKey.key,
-          objectHandle: keyIdentity.handle,
+          localSuffix: `denotes-container:${localKeyPart(containerProductHandle)}`,
+          predicateKey: KernelVocabulary.Framework.ContainerRootDenotesContainer.key,
+          objectHandle: containerProductHandle,
         });
       }
     }
@@ -148,32 +158,4 @@ interface ClaimSpec {
   readonly localSuffix: string;
   readonly predicateKey: ClaimPredicateKey;
   readonly objectHandle: ClaimEndpointHandle;
-}
-
-function interfaceDiKeyIdentitiesByName(
-  publication: KernelPublicationContext,
-): ReadonlyMap<string, readonly InterfaceDiKeyIdentity[]> {
-  const result = new Map<string, InterfaceDiKeyIdentity[]>();
-  for (const identity of publication.readAllRecords()) {
-    if (
-      identity.kind !== 'di-key-identity'
-      || identity.keyKind !== DiKeyIdentityKind.Interface
-    ) {
-      continue;
-    }
-    const intrinsicKey = frameworkIntrinsicDiKeyForName(identity.interfaceName);
-    if (
-      intrinsicKey != null
-      && identity.handle !== publication.handles.identity(frameworkIntrinsicDiKeyLocal(intrinsicKey))
-    ) {
-      continue;
-    }
-    const existing = result.get(identity.interfaceName);
-    if (existing == null) {
-      result.set(identity.interfaceName, [identity]);
-    } else {
-      existing.push(identity);
-    }
-  }
-  return result;
 }

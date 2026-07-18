@@ -8,6 +8,9 @@ import type { FieldProvenance } from '../kernel/provenance.js';
 import {
   RegistrationStrategy,
 } from '../registration/registration-admission.js';
+import {
+  RegistrationValueKind,
+} from '../registration/registration-reference.js';
 import type {
   RegistrationKeyReference,
   RegistrationValueReference,
@@ -183,7 +186,9 @@ export class Resolver {
         );
       case ResolverStrategy.callback:
         return new ResolverResolution(
-          ResolverResolutionKind.Callback,
+          this._state?.valueKind === RegistrationValueKind.CachedCallback
+            ? ResolverResolutionKind.CachedCallback
+            : ResolverResolutionKind.Callback,
           this,
           handler,
           requestor,

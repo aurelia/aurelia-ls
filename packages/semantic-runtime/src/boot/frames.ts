@@ -1,4 +1,9 @@
 import type { AddressHandle, EvidenceHandle, ProvenanceHandle } from '../kernel/handles.js';
+import { stableKernelLocalHash } from '../kernel/handles.js';
+import type {
+  ComputationRead,
+  ComputationReadValidation,
+} from '../kernel/computation-lifecycle.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   type SemanticRuntimeProjectInputAuthority,
@@ -98,9 +103,12 @@ export class SourceFileAdmission {
 }
 
 /** Booted project frame before TypeScript or Aurelia semantics are interpreted. */
-export class ProjectBootFrame {
+export class ProjectBootFrame implements ComputationRead {
   /** One config/compiler-options product derived from this frame's captured input generation. */
   readonly compilerOptions: ProjectCompilerOptionsResult;
+  readonly domain = 'project-boot-frame';
+  readonly readKey: string;
+  readonly observedRevision: string;
 
   constructor(
     /** Workspace root that owns this project frame. */
@@ -117,10 +125,36 @@ export class ProjectBootFrame {
     readonly inputGeneration: SemanticRuntimeProjectInputGeneration,
   ) {
     this.compilerOptions = buildProjectCompilerOptionsResult(
-      inputGeneration.host,
+      inputGeneration,
       rootDir,
       [workspaceRootDir],
     );
+    this.readKey = `project-boot-frame:${projectKey}`;
+    this.observedRevision = projectBootFrameRevision(this);
+  }
+
+  validate(): ComputationReadValidation {
+    const invalidReads = this.readRegisteredInputs()
+      .map((read) => read.validate())
+      .filter((validation) => !validation.isCurrent);
+    return {
+      isCurrent: invalidReads.length === 0,
+      currentRevision: invalidReads.length === 0
+        ? this.observedRevision
+        : `${this.observedRevision}:inputs-changed`,
+      changedFacets: [...new Set(invalidReads.flatMap((validation) => validation.changedFacets))],
+    };
+  }
+
+  requireCurrent(): void {
+    this.inputGeneration.requireCurrent();
+  }
+
+  readRegisteredInputs(): readonly ComputationRead[] {
+    return [
+      this.inputGeneration.readIdentity(),
+      ...this.compilerOptions.readRegisteredInputs(),
+    ];
   }
 
   /** Rebind immutable boot admissions to a newly captured source/config generation. */
@@ -139,6 +173,24 @@ export class ProjectBootFrame {
           inputGeneration,
         );
   }
+}
+
+function projectBootFrameRevision(project: ProjectBootFrame): string {
+  return stableKernelLocalHash(JSON.stringify({
+    workspaceRootDir: project.workspaceRootDir,
+    rootDir: project.rootDir,
+    projectKey: project.projectKey,
+    inputGeneration: project.inputGeneration.revision,
+    compilerOptions: project.compilerOptions.revision,
+    sourceFiles: project.sourceFiles.map((source) => ({
+      path: source.path,
+      language: source.language,
+      role: source.role,
+      addressHandle: source.addressHandle,
+      evidenceHandle: source.evidenceHandle,
+      provenanceHandle: source.provenanceHandle,
+    })),
+  }));
 }
 
 /** Booted workspace frame and the hot kernel store it populated. */

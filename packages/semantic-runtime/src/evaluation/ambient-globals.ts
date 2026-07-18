@@ -25,6 +25,10 @@ export class StaticEvaluationAmbientGlobalDeclarations {
       ? new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, identifier.text, identifier)
       : null;
   }
+
+  readNameCount(): number {
+    return this.names.size;
+  }
 }
 
 /**
@@ -32,15 +36,19 @@ export class StaticEvaluationAmbientGlobalDeclarations {
  */
 export function readStaticEvaluationAmbientGlobalDeclarations(
   project: ProjectBootFrame,
-  readSourceFile: (moduleKey: string) => ts.SourceFile | null,
+  inputHost: SemanticRuntimeProjectInputHost,
 ): StaticEvaluationAmbientGlobalDeclarations {
   const names = new Set<string>();
-  collectCompilerOptionAmbientGlobalNames(project, names);
+  collectCompilerOptionAmbientGlobalNames(project, inputHost, names);
   for (const admission of project.sourceFiles) {
     if (!isAmbientDeclarationAdmission(admission)) {
       continue;
     }
-    const sourceFile = readSourceFile(admission.path);
+    const fileName = path.resolve(project.rootDir, admission.path);
+    const text = inputHost.readFile(fileName);
+    const sourceFile = text == null
+      ? null
+      : ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     if (sourceFile?.isDeclarationFile !== true) {
       continue;
     }
@@ -96,6 +104,7 @@ function isDeclareGlobalStatement(
 
 function collectCompilerOptionAmbientGlobalNames(
   project: ProjectBootFrame,
+  inputHost: SemanticRuntimeProjectInputHost,
   names: Set<string>,
 ): void {
   const options = project.compilerOptions.options;
@@ -109,7 +118,7 @@ function collectCompilerOptionAmbientGlobalNames(
     : options.lib.map((lib) => resolveCompilerLibFileName(libDirectory, lib));
   const visited = new Set<string>();
   for (const entry of entries) {
-    collectCompilerLibAmbientGlobalNames(project.inputGeneration.host, entry, names, visited);
+    collectCompilerLibAmbientGlobalNames(inputHost, entry, names, visited);
   }
 }
 

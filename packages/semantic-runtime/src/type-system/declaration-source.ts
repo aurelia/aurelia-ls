@@ -27,6 +27,28 @@ export interface CheckerNodeSourceSpanPublication {
   readonly records: readonly KernelStoreRecord[];
 }
 
+/** Append declaration source records that are not already published or staged in the current batch. */
+export function appendDeclarationSourceRecords(
+  publication: KernelPublicationContext,
+  records: KernelStoreRecord[],
+  declarationSource: DeclarationSourcePublication | null,
+  stagedRecordHandles: Set<string> | null = null,
+): void {
+  if (declarationSource == null) {
+    return;
+  }
+  for (const record of declarationSource.records) {
+    if (
+      publication.read(record.handle) == null
+      && !records.some((existing) => existing.handle === record.handle)
+      && !stagedRecordHandles?.has(record.handle)
+    ) {
+      records.push(record);
+      stagedRecordHandles?.add(record.handle);
+    }
+  }
+}
+
 interface DeclarationSourceSpan {
   readonly projectKey: string;
   readonly sourceFileAddress: SourceFileAddress;

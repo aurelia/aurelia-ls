@@ -58,6 +58,70 @@ export class ContainerContextResolverSlotRequest {
   ) {}
 }
 
+export class ContainerRootMaterializationRequest {
+  constructor(
+    /** Store-local key for the source-created root container. */
+    readonly localKey: string,
+    /** Source address for the app boundary or `createContainer(...)` expression. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Human-oriented source name for traces. */
+    readonly localName: string | null,
+    /** Runtime-shaped root-container configuration. */
+    readonly configuration: ContainerConfiguration | ContainerConfigurationRequest | null = null,
+  ) {}
+}
+
+/** Shared root-container construction and publication used by app facades and direct `createContainer(...)` calls. */
+export class ContainerRootMaterializer {
+  constructor(private readonly store: KernelStore) {}
+
+  create(input: ContainerRootMaterializationRequest): Container {
+    const local = `di-container:${input.localKey}`;
+    return new Container(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+      ContainerIdentityKind.Root,
+      null,
+      null,
+      input.sourceAddressHandle,
+      [],
+      ContainerConfiguration.from(input.configuration),
+    );
+  }
+
+  recordsFor(
+    input: ContainerRootMaterializationRequest,
+    container: Container,
+    provenanceHandle: ProvenanceHandle,
+    claimHandles: readonly ClaimHandle[] = [],
+  ): readonly KernelStoreRecord[] {
+    const local = `di-container:${input.localKey}`;
+    return [
+      new ContainerIdentity(
+        container.identityHandle,
+        ContainerIdentityKind.Root,
+        null,
+        null,
+        input.sourceAddressHandle,
+        input.localName,
+      ),
+      new MaterializedProduct(
+        container.productHandle,
+        KernelVocabulary.Di.Container.key,
+        container.identityHandle,
+        input.sourceAddressHandle,
+        provenanceHandle,
+      ),
+      new MaterializationRecord(
+        this.store.handles.materialization(local),
+        container.identityHandle,
+        [container.productHandle],
+        claimHandles,
+      ),
+    ];
+  }
+}
+
 export class ContainerChildMaterializationRequest {
   constructor(
     /** Store-local key for this child-container materialization. */
@@ -85,7 +149,7 @@ export class ContainerChildMaterializationRequest {
 export const enum ContainerContextResolverRecordPolicy {
   /** Publish each contextual resolver slot as DI key identity, resolver-slot product, claims, and materialization. */
   PublishAll = 'publish-all',
-  /** Keep contextual resolver slots in the live container model, but defer resolver-slot product rows. */
+  /** Keep slots candidate-local under the enclosing container computation and omit duplicate kernel graph rows. */
   ModelOnly = 'model-only',
 }
 
@@ -291,6 +355,7 @@ export class ContainerChildMaterializer {
       records,
       keyIdentityHandle,
       FrameworkIntrinsicDiKey.IContainer,
+      null,
       container.sourceAddressHandle,
     );
 
@@ -342,7 +407,7 @@ export class ContainerChildMaterializer {
         ),
       );
     }
-    this.keyIdentityEmitter.emitInterfaceKeyIdentity(records, keyIdentityHandle, input.interfaceName, input.sourceAddressHandle);
+    this.keyIdentityEmitter.emitInterfaceKeyIdentity(records, keyIdentityHandle, input.interfaceName, null, input.sourceAddressHandle);
 
     const handles = this.containerSlotProductHandles(local, keyIdentityHandle);
     const slot = this.contextResolverSlot(container, input, handles.productHandle, handles.keyIdentityHandle);

@@ -122,7 +122,7 @@ import { RuntimeBindingSourceValueEvaluationContext } from './binding-source-val
 import {
   runtimeBindingSourceValueExpressionSupportForKind,
 } from './binding-source-value-expression-support.js';
-import type { RuntimeBindingSourceActivationContext } from './binding-source-activation-context.js';
+import type { DiProviderActivationView } from '../di/provider-activation.js';
 import {
   RuntimeBoundControllerValueTable,
   type RuntimeBoundControllerPropertyValue,
@@ -187,7 +187,7 @@ export class RuntimeBindingSourceValueEvaluator {
     readonly evaluation: StaticProjectEvaluationResult,
     private readonly evaluationFrame: RuntimeBindingSourceEvaluationFrame,
     readonly boundControllerValues: RuntimeBoundControllerValueTable = RuntimeBoundControllerValueTable.empty,
-    readonly activationContext: RuntimeBindingSourceActivationContext | null = null,
+    readonly activationView: DiProviderActivationView | null = null,
     private readonly defaultActiveContainer: Container | null = null,
   ) {
     this.arrayMethods = new RuntimeBindingSourceArrayMethodEvaluator(
@@ -202,16 +202,16 @@ export class RuntimeBindingSourceValueEvaluator {
     projector: CheckerTypeProjector,
     evaluation: StaticProjectEvaluationResult,
     boundControllerValues: RuntimeBoundControllerValueTable = RuntimeBoundControllerValueTable.empty,
-    activationContext: RuntimeBindingSourceActivationContext | null = null,
+    activationView: DiProviderActivationView | null = null,
     defaultActiveContainer: Container | null = null,
   ): RuntimeBindingSourceValueEvaluator {
     return new RuntimeBindingSourceValueEvaluator(
       kernel,
       projector,
       evaluation,
-      new RuntimeBindingSourceEvaluationFrame(evaluation, activationContext),
+      new RuntimeBindingSourceEvaluationFrame(evaluation, activationView),
       boundControllerValues,
-      activationContext,
+      activationView,
       defaultActiveContainer,
     );
   }
@@ -224,7 +224,7 @@ export class RuntimeBindingSourceValueEvaluator {
       this.evaluation,
       this.evaluationFrame,
       this.boundControllerValues,
-      this.activationContext,
+      this.activationView,
       activeContainer,
     );
   }

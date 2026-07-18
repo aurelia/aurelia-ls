@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import type { StaticEvaluationExpressionReader } from '../evaluation/expression-reader.js';
+import type { StaticExpressionEvaluationReader } from '../evaluation/expression-reader.js';
 import { normalizeModuleKey } from '../evaluation/module-graph.js';
 import {
   readDeclarationLocalName,
@@ -259,7 +259,7 @@ export class ResourceDefinitionIndex {
 
   lookupExpression(
     expression: ts.Expression,
-    reader: StaticEvaluationExpressionReader,
+    reader: StaticExpressionEvaluationReader,
   ): FullResourceDefinition | null {
     const read = reader.evaluateExpression(expression);
     return this.lookupValue(read.value)

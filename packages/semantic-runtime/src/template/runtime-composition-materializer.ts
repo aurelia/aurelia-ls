@@ -522,7 +522,7 @@ export class RuntimeCompositionMaterializer {
       `au-compose:${frame.definition.name}:container`,
       composedCustomElementContextResolverSlots(frame.context.sourceAddressHandle),
       null,
-      ContainerContextResolverRecordPolicy.PublishAll,
+      ContainerContextResolverRecordPolicy.ModelOnly,
     ));
     return childContainer;
   }

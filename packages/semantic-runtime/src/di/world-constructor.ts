@@ -31,6 +31,8 @@ import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
+import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import {
   AppTaskDefinition,
 } from '../configuration/app-task.js';
@@ -137,6 +139,14 @@ interface DiRegistrationSpendingCascadeEmission {
   readonly openSeams: readonly OpenSeam[];
   readonly issues: readonly DiIssue[];
   readonly resourceIssues: readonly ResourceIssue[];
+  readonly completion: DiRegistrationCascadeCompletion;
+}
+
+const enum DiRegistrationCascadeCompletion {
+  /** Registration effects completed without a framework-fatal recursive registry branch. */
+  Completed = 'completed',
+  /** A recursive registry branch would throw and abort the owning configuration sequence at runtime. */
+  Fatal = 'fatal',
 }
 
 type DiRegistrationDirectSpender = (
@@ -304,6 +314,7 @@ class DiRegistrationSpendingCascadeFrame {
   private readonly openSeams: OpenSeam[] = [];
   private readonly issues: DiIssue[] = [];
   private readonly resourceIssues: ResourceIssue[] = [];
+  private completion = DiRegistrationCascadeCompletion.Completed;
 
   constructor(direct: DiRegistrationSpendingEmission) {
     this.recordDirect(direct);
@@ -337,6 +348,9 @@ class DiRegistrationSpendingCascadeFrame {
     this.openSeams.push(...spent.openSeams);
     this.issues.push(...spent.issues);
     this.resourceIssues.push(...spent.resourceIssues);
+    if (spent.completion === DiRegistrationCascadeCompletion.Fatal) {
+      this.completion = DiRegistrationCascadeCompletion.Fatal;
+    }
   }
 
   toEmission(): DiRegistrationSpendingCascadeEmission {
@@ -353,12 +367,13 @@ class DiRegistrationSpendingCascadeFrame {
       openSeams: this.openSeams,
       issues: this.issues,
       resourceIssues: this.resourceIssues,
+      completion: this.completion,
     };
   }
 }
 
 class DiRegistrationSpendingCascade {
-  private readonly spentAdmissionKeys = new Set<string>();
+  private readonly activeAdmissionKeys = new Set<string>();
 
   constructor(private readonly services: DiRegistrationSpendingCascadeServices) {}
 
@@ -372,33 +387,43 @@ class DiRegistrationSpendingCascade {
     admission: RegistrationAdmissionProduct,
   ): DiRegistrationSpendingCascadeEmission {
     const spentKey = `${container.productHandle}:${step.productHandle}:${admission.productHandle}`;
-    if (this.spentAdmissionKeys.has(spentKey)) {
+    if (this.activeAdmissionKeys.has(spentKey)) {
       return this.unableAutoRegisterCascade(spentKey, step, admission);
     }
-    this.spentAdmissionKeys.add(spentKey);
-
-    const bodySteps = this.services.registryBodyIndex.stepsForAdmission(admission);
-    const registryBodyInterpreted = this.services.registryBodyIndex.bodyInterpretedForAdmission(admission);
-    const frame = new DiRegistrationSpendingCascadeFrame(
-      this.services.spendDirect(container, step, admission, registryBodyInterpreted),
-    );
-    for (const bodyStep of bodySteps) {
-      this.recordBodyStep(frame, container, bodyStep);
+    this.activeAdmissionKeys.add(spentKey);
+    try {
+      const bodySteps = this.services.registryBodyIndex.stepsForAdmission(admission);
+      const registryBodyInterpreted = this.services.registryBodyIndex.bodyInterpretedForAdmission(admission);
+      const frame = new DiRegistrationSpendingCascadeFrame(
+        this.services.spendDirect(container, step, admission, registryBodyInterpreted),
+      );
+      for (const bodyStep of bodySteps) {
+        if (!this.recordBodyStep(frame, container, bodyStep)) {
+          break;
+        }
+      }
+      return frame.toEmission();
+    } finally {
+      this.activeAdmissionKeys.delete(spentKey);
     }
-    return frame.toEmission();
   }
 
   private recordBodyStep(
     frame: DiRegistrationSpendingCascadeFrame,
     container: Container,
     bodyStep: ConfigurationStep,
-  ): void {
+  ): boolean {
     for (const admissionHandle of bodyStep.registrationAdmissionProductHandles) {
       const admission = this.admissionForProduct(admissionHandle);
       if (admission != null) {
-        frame.recordCascade(this.spend(container, bodyStep, admission));
+        const spent = this.spend(container, bodyStep, admission);
+        frame.recordCascade(spent);
+        if (spent.completion === DiRegistrationCascadeCompletion.Fatal) {
+          return false;
+        }
       }
     }
+    return true;
   }
 
   private unableAutoRegisterCascade(
@@ -430,6 +455,7 @@ class DiRegistrationSpendingCascade {
       openSeams: [],
       issues: [publication.issue],
       resourceIssues: [],
+      completion: DiRegistrationCascadeCompletion.Fatal,
     };
   }
 }
@@ -448,10 +474,6 @@ function registrationAdmissionStrategyLabel(admission: RegistrationAdmissionProd
     return RegistrationStrategy.FrameworkGroup;
   }
   return admission.strategy;
-}
-
-interface DiConfigurationSequenceIndex {
-  readonly containerBySequenceProduct: ReadonlyMap<ProductHandle, Container>;
 }
 
 class DiWorldConstructionFrame {
@@ -549,16 +571,18 @@ export class DiWorldConstructor {
     readonly publication: KernelPublicationContext,
   ) {
     this.keyIdentityEmitter = new DiKeyIdentityEmitter(publication);
-    this.resolverPublication = new DiResolverPublicationMaterializer(store, this.keyIdentityEmitter);
+    this.resolverPublication = new DiResolverPublicationMaterializer(store, publication, this.keyIdentityEmitter);
     this.resourceSlotPublication = new DiResourceSlotPublicationMaterializer(store, this.keyIdentityEmitter);
     this.registryPublication = new DiRegistryPublicationMaterializer(store);
-    this.appTaskPublication = new DiFrameworkAppTaskPublicationMaterializer(store, this.keyIdentityEmitter);
+    this.appTaskPublication = new DiFrameworkAppTaskPublicationMaterializer(store, publication, this.keyIdentityEmitter);
     this.selfResolverPublication = new DiContainerSelfResolverPublicationMaterializer(store, this.keyIdentityEmitter);
   }
 
   construct(
     configuration: ConfigurationKernelEmission,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
+    evaluation: StaticProjectEvaluationResult,
+    typeSystem: TypeSystemProject,
     resourceDefinitions: ResourceDefinitionIndex | null = null,
     projectKey: string | null = null,
   ): DiWorldConstructionEmission {
@@ -567,11 +591,12 @@ export class DiWorldConstructor {
     const frame = new DiWorldConstructionFrame();
     const containersByProduct = this.installSelfResolvers(configuration, frame);
     const aureliaContainerByProduct = this.aureliaContainerIndex(configuration, containersByProduct);
-    const sequenceIndex = this.sequenceContainerIndex(configuration, aureliaContainerByProduct);
     const admissionsByProduct = registrationAdmissionIndex(configuration);
     const appTasksByProduct = appTaskIndex(configuration);
     const registrationCascade = this.registrationSpendingCascade(
       configuration,
+      evaluation,
+      typeSystem,
       configuredResources,
       resourceDefinitions,
       projectKey,
@@ -582,7 +607,8 @@ export class DiWorldConstructor {
     this.spendConfigurationSteps(
       frame,
       configuration,
-      sequenceIndex,
+      containersByProduct,
+      aureliaContainerByProduct,
       registrationCascade,
     );
 
@@ -599,6 +625,8 @@ export class DiWorldConstructor {
 
   private registrationSpendingCascade(
     configuration: ConfigurationKernelEmission,
+    evaluation: StaticProjectEvaluationResult,
+    typeSystem: TypeSystemProject,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     resourceDefinitions: ResourceDefinitionIndex | null,
     projectKey: string | null,
@@ -607,13 +635,14 @@ export class DiWorldConstructor {
   ): DiRegistrationSpendingCascade {
     return new DiRegistrationSpendingCascade({
       admissionsByProduct,
-      registryBodyIndex: buildRegistryBodyStepIndex(this.publication, configuration),
+      registryBodyIndex: buildRegistryBodyStepIndex(this.publication, configuration, evaluation),
       issuePublisher: new DiIssuePublisher(this.store),
       spendDirect: (container, step, admission, registryBodyInterpreted) =>
         this.recordsForRegistrationSpending(
           container,
           step,
           admission,
+          typeSystem,
           configuredResources,
           resourceDefinitions,
           projectKey,
@@ -652,35 +681,24 @@ export class DiWorldConstructor {
     return aureliaContainerByProduct;
   }
 
-  private sequenceContainerIndex(
-    configuration: ConfigurationKernelEmission,
-    aureliaContainerByProduct: ReadonlyMap<ProductHandle, Container>,
-  ): DiConfigurationSequenceIndex {
-    const containerBySequenceProduct = new Map<ProductHandle, Container>();
-    for (const sequence of configuration.sequences) {
-      if (sequence.aurelia?.productHandle == null) {
-        continue;
-      }
-      const container = aureliaContainerByProduct.get(sequence.aurelia.productHandle);
-      if (container != null) {
-        containerBySequenceProduct.set(sequence.productHandle, container);
-      }
-    }
-    return { containerBySequenceProduct };
-  }
-
   private spendConfigurationSteps(
     frame: DiWorldConstructionFrame,
     configuration: ConfigurationKernelEmission,
-    sequenceIndex: DiConfigurationSequenceIndex,
+    containersByProduct: ReadonlyMap<ProductHandle, Container>,
+    aureliaContainerByProduct: ReadonlyMap<ProductHandle, Container>,
     registrationCascade: DiRegistrationSpendingCascade,
   ): void {
+    const failedSequenceProducts = new Set<ProductHandle>();
     for (const step of configuration.steps) {
+      const sequenceProductHandle = step.sequence?.productHandle ?? null;
+      if (sequenceProductHandle != null && failedSequenceProducts.has(sequenceProductHandle)) {
+        continue;
+      }
       if (step.registrationAdmissionProductHandles.length === 0) {
         continue;
       }
 
-      const container = this.containerForStep(step, sequenceIndex.containerBySequenceProduct);
+      const container = this.containerForStep(configuration, step, containersByProduct, aureliaContainerByProduct);
       if (container == null) {
         frame.recordOpenSeam(recordsForDiOpenSeam(this.store,
           `di-open-container:${step.productHandle}`,
@@ -705,24 +723,40 @@ export class DiWorldConstructor {
           continue;
         }
 
-        frame.recordSpending(registrationCascade.spend(container, step, admission));
+        const spent = registrationCascade.spend(container, step, admission);
+        frame.recordSpending(spent);
+        if (spent.completion === DiRegistrationCascadeCompletion.Fatal) {
+          if (sequenceProductHandle != null) {
+            failedSequenceProducts.add(sequenceProductHandle);
+          }
+          break;
+        }
       }
     }
   }
 
   private containerForStep(
+    configuration: ConfigurationKernelEmission,
     step: ConfigurationStep,
-    containerBySequenceProduct: ReadonlyMap<ProductHandle, Container>,
+    containersByProduct: ReadonlyMap<ProductHandle, Container>,
+    aureliaContainerByProduct: ReadonlyMap<ProductHandle, Container>,
   ): Container | null {
-    return step.sequence?.productHandle == null
-      ? null
-      : containerBySequenceProduct.get(step.sequence.productHandle) ?? null;
+    if (step.receiverProductHandle != null) {
+      const direct = containersByProduct.get(step.receiverProductHandle)
+        ?? aureliaContainerByProduct.get(step.receiverProductHandle)
+        ?? null;
+      if (direct != null) {
+        return direct;
+      }
+    }
+    return configuration.evaluationBindings.containerForStep(step.productHandle);
   }
 
   private recordsForRegistrationSpending(
     container: Container,
     step: ConfigurationStep,
     admission: RegistrationAdmissionProduct,
+    typeSystem: TypeSystemProject,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     resourceDefinitions: ResourceDefinitionIndex | null,
     projectKey: string | null,
@@ -743,6 +777,7 @@ export class DiWorldConstructor {
       frame,
       container,
       admission,
+      typeSystem,
       configuredResources,
       resourceDefinitions,
       projectKey,
@@ -766,6 +801,7 @@ export class DiWorldConstructor {
     frame: DiRegistrationSpendingFrame,
     container: Container,
     admission: RegistrationAdmissionProduct,
+    typeSystem: TypeSystemProject,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     resourceDefinitions: ResourceDefinitionIndex | null,
     projectKey: string | null,
@@ -791,6 +827,7 @@ export class DiWorldConstructor {
         frame,
         container,
         admission,
+        typeSystem,
         configuredResources,
         projectKey,
         appTasksByProduct,
@@ -817,6 +854,7 @@ export class DiWorldConstructor {
         frame,
         container,
         admission,
+        typeSystem,
         configuredResources,
         projectKey,
         local,
@@ -882,6 +920,7 @@ export class DiWorldConstructor {
     frame: DiRegistrationSpendingFrame,
     container: Container,
     admission: RegistryRegistrationAdmission,
+    typeSystem: TypeSystemProject,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     projectKey: string | null,
     appTasksByProduct: ReadonlyMap<ProductHandle, AppTaskDefinition>,
@@ -903,6 +942,7 @@ export class DiWorldConstructor {
     const frameworkEffects = this.recordsForFrameworkRegistrationEffects(
       container,
       admission,
+      typeSystem,
       configuredResources,
       projectKey,
       `${local}:registry-framework-effects`,
@@ -958,6 +998,7 @@ export class DiWorldConstructor {
     frame: DiRegistrationSpendingFrame,
     container: Container,
     admission: FrameworkRegistrationAdmission,
+    typeSystem: TypeSystemProject,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     projectKey: string | null,
     local: string,
@@ -966,6 +1007,7 @@ export class DiWorldConstructor {
     const frameworkEffects = this.recordsForFrameworkRegistrationEffects(
       container,
       admission,
+      typeSystem,
       configuredResources,
       projectKey,
       `${local}:framework-effects`,
@@ -1330,6 +1372,7 @@ export class DiWorldConstructor {
   private recordsForFrameworkRegistrationEffects(
     container: Container,
     admission: RegistrationAdmissionProduct,
+    typeSystem: TypeSystemProject,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     projectKey: string | null,
     local: string,
@@ -1355,6 +1398,7 @@ export class DiWorldConstructor {
           container,
           admission,
           effect,
+          typeSystem,
           `${local}:resolver:${index}`,
           provenanceHandle,
         )
@@ -1365,6 +1409,7 @@ export class DiWorldConstructor {
           container,
           admission,
           effect,
+          typeSystem,
           `${local}:factory:${index}`,
           provenanceHandle,
         )
@@ -1374,6 +1419,7 @@ export class DiWorldConstructor {
         this.appTaskPublication.recordsForFrameworkAppTaskEffect(
           admission,
           effect,
+          typeSystem,
           `${local}:app-task:${index}`,
           provenanceHandle,
         )
@@ -1496,6 +1542,7 @@ function emptyRegistrationSpendingCascade(): DiRegistrationSpendingCascadeEmissi
     openSeams: [],
     issues: [],
     resourceIssues: [],
+    completion: DiRegistrationCascadeCompletion.Completed,
   };
 }
 

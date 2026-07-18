@@ -40,6 +40,10 @@ import {
 } from './di-issue.js';
 import { DiFrameworkErrorCode } from './framework-error-code.js';
 import type { DiContainerApiCallSite } from './container-api-recognition.js';
+import {
+  ContainerResolutionFailureKind,
+  frameworkErrorCodeForContainerResolutionFailureKind,
+} from './container-lookup.js';
 import type { DiInjectDecoratorSite } from './inject-decorator-recognition.js';
 import type { DiResolveCallSite } from './resolve-call-recognition.js';
 import { DiProductDetails } from './product-details.js';
@@ -316,105 +320,22 @@ export class DiIssuePublisher {
     ]);
   }
 
-  publishNoConstructNativeFunctionForContainerCall(
+  publishContainerResolutionFailureForContainerCall(
     local: string,
     site: DiContainerApiCallSite,
+    failureKind: ContainerResolutionFailureKind,
+    receiverDefaultResolverPolicy: string | null,
     sourceAddressHandle: AddressHandle | null,
   ): DiIssuePublication {
     const keyText = site.keyExpressionText ?? '(unknown key)';
-    const message = `Aurelia container.${site.methodKind}(${keyText}) cannot construct a native function.`;
+    const message = containerResolutionFailureMessage(site, failureKind, keyText);
     return this.publishContainerApiCallIssue(
       local,
       site,
       sourceAddressHandle,
-      DiIssueKind.NoConstructNativeFunction,
-      DiFrameworkErrorCode.NoConstructNativeFunction,
-      message,
-    );
-  }
-
-  publishNoneResolverFoundForContainerCall(
-    local: string,
-    site: DiContainerApiCallSite,
-    sourceAddressHandle: AddressHandle | null,
-  ): DiIssuePublication {
-    const keyText = site.keyExpressionText ?? '(unknown key)';
-    const message = `Aurelia container.${site.methodKind}(${keyText}) would enter DefaultResolver.none for a missing DI key.`;
-    return this.publishContainerApiCallIssue(
-      local,
-      site,
-      sourceAddressHandle,
-      DiIssueKind.NoneResolverFound,
-      DiFrameworkErrorCode.NoneResolverFound,
-      message,
-    );
-  }
-
-  publishNullResolverFromRegisterForContainerCall(
-    local: string,
-    site: DiContainerApiCallSite,
-    sourceAddressHandle: AddressHandle | null,
-  ): DiIssuePublication {
-    const keyText = site.keyExpressionText ?? '(unknown key)';
-    const message = `Aurelia container.${site.methodKind}(${keyText}) would call a registry register(...) method that returns no resolver.`;
-    return this.publishContainerApiCallIssue(
-      local,
-      site,
-      sourceAddressHandle,
-      DiIssueKind.NullResolverFromRegister,
-      DiFrameworkErrorCode.NullResolverFromRegister,
-      message,
-    );
-  }
-
-  publishInvalidNewInstanceOnInterfaceForContainerCall(
-    local: string,
-    site: DiContainerApiCallSite,
-    sourceAddressHandle: AddressHandle | null,
-  ): DiIssuePublication {
-    const keyText = site.keyExpressionText ?? '(unknown key)';
-    const message = `Aurelia container.${site.methodKind}(${keyText}) cannot create a new instance for an interface key with no default implementation.`;
-    return this.publishContainerApiCallIssue(
-      local,
-      site,
-      sourceAddressHandle,
-      DiIssueKind.InvalidNewInstanceOnInterface,
-      DiFrameworkErrorCode.InvalidNewInstanceOnInterface,
-      message,
-    );
-  }
-
-  publishNullUndefinedKeyForContainerCall(
-    local: string,
-    site: DiContainerApiCallSite,
-    sourceAddressHandle: AddressHandle | null,
-  ): DiIssuePublication {
-    const firstNullish = site.nullishKeyArguments[0];
-    const keyText = firstNullish?.text ?? site.keyExpressionText ?? '(unknown key)';
-    const message = `Aurelia container.${site.methodKind}(${keyText}) passes a null or undefined DI key.`;
-    return this.publishContainerApiCallIssue(
-      local,
-      site,
-      sourceAddressHandle,
-      DiIssueKind.NullUndefinedKey,
-      DiFrameworkErrorCode.NullUndefinedKey,
-      message,
-    );
-  }
-
-  publishUnableJitNonConstructorForContainerCall(
-    local: string,
-    site: DiContainerApiCallSite,
-    sourceAddressHandle: AddressHandle | null,
-  ): DiIssuePublication {
-    const keyText = site.keyExpressionText ?? '(unknown key)';
-    const message = `Aurelia container.${site.methodKind}(${keyText}) would enter JIT or factory lookup with a non-constructable key.`;
-    return this.publishContainerApiCallIssue(
-      local,
-      site,
-      sourceAddressHandle,
-      DiIssueKind.UnableJitNonConstructor,
-      DiFrameworkErrorCode.UnableJitNonConstructor,
+      receiverDefaultResolverPolicy,
+      diIssueKindForContainerResolutionFailureKind(failureKind),
+      frameworkErrorCodeForContainerResolutionFailureKind(failureKind)!,
       message,
     );
   }
@@ -532,6 +453,7 @@ export class DiIssuePublisher {
     local: string,
     site: DiContainerApiCallSite,
     sourceAddressHandle: AddressHandle | null,
+    receiverDefaultResolverPolicy: string | null,
     issueKind: DiIssueKind,
     frameworkErrorCode: DiFrameworkErrorCode,
     message: string,
@@ -564,7 +486,7 @@ export class DiIssuePublisher {
         keyKind: site.keyKind,
         keyIdentityKind: site.keyIdentityKind,
         autoRegister: site.autoRegister,
-        receiverDefaultResolverPolicy: site.receiverDefaultResolverPolicy,
+        receiverDefaultResolverPolicy,
         receiverFreshCreateContainer: site.receiverFreshCreateContainer,
         nullishKeyArguments: site.nullishKeyArguments,
         receiverText: site.receiverText,
@@ -588,6 +510,55 @@ export class DiIssuePublisher {
         source.provenanceHandle,
       ),
     ]);
+  }
+}
+
+function diIssueKindForContainerResolutionFailureKind(
+  failureKind: ContainerResolutionFailureKind,
+): DiIssueKind {
+  switch (failureKind) {
+    case ContainerResolutionFailureKind.NoneResolverFound:
+      return DiIssueKind.NoneResolverFound;
+    case ContainerResolutionFailureKind.UnableJitNonConstructor:
+      return DiIssueKind.UnableJitNonConstructor;
+    case ContainerResolutionFailureKind.NoJitIntrinsicType:
+      return DiIssueKind.NoJitIntrinsicType;
+    case ContainerResolutionFailureKind.NoJitInterface:
+      return DiIssueKind.NoJitInterface;
+    case ContainerResolutionFailureKind.NoConstructNativeFunction:
+      return DiIssueKind.NoConstructNativeFunction;
+    case ContainerResolutionFailureKind.NullUndefinedKey:
+      return DiIssueKind.NullUndefinedKey;
+    case ContainerResolutionFailureKind.NullResolverFromRegister:
+      return DiIssueKind.NullResolverFromRegister;
+    case ContainerResolutionFailureKind.InvalidNewInstanceOnInterface:
+      return DiIssueKind.InvalidNewInstanceOnInterface;
+  }
+}
+
+function containerResolutionFailureMessage(
+  site: DiContainerApiCallSite,
+  failureKind: ContainerResolutionFailureKind,
+  keyText: string,
+): string {
+  const call = `Aurelia container.${site.methodKind}(${keyText})`;
+  switch (failureKind) {
+    case ContainerResolutionFailureKind.NoneResolverFound:
+      return `${call} would enter DefaultResolver.none for a missing DI key.`;
+    case ContainerResolutionFailureKind.UnableJitNonConstructor:
+      return `${call} would enter JIT or factory lookup with a non-constructable key.`;
+    case ContainerResolutionFailureKind.NoJitIntrinsicType:
+      return `${call} cannot JIT-register an intrinsic type.`;
+    case ContainerResolutionFailureKind.NoJitInterface:
+      return `${call} cannot JIT-register an Aurelia interface without a default resolver.`;
+    case ContainerResolutionFailureKind.NoConstructNativeFunction:
+      return `${call} cannot construct a native function.`;
+    case ContainerResolutionFailureKind.NullUndefinedKey:
+      return `${call} passes a null or undefined DI key.`;
+    case ContainerResolutionFailureKind.NullResolverFromRegister:
+      return `${call} would call a registry register(...) method that produces neither a resolver nor a same-key registration.`;
+    case ContainerResolutionFailureKind.InvalidNewInstanceOnInterface:
+      return `${call} cannot create a new instance for an interface key without a constructable provider.`;
   }
 }
 

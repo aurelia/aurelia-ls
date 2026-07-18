@@ -9,6 +9,7 @@ const DI_MODULES = new Set([
 
 export const DI_RESOLVE_WRAPPER_EXPORTS = new Set([
   'all',
+  'last',
   'lazy',
   'optional',
   'factory',

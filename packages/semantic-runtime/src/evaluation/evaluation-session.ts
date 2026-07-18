@@ -13,6 +13,7 @@ import {
   ModuleEnvironmentRecord,
 } from './environment.js';
 import {
+  StaticExecutedCall,
   StaticModuleEvaluationResult,
   type StaticEvaluationRuntimeHost,
   type StaticEvaluationValueMetadataTransfer,
@@ -36,31 +37,48 @@ import {
   type EvaluationValue,
 } from './values.js';
 
+/** Canonical product host behind a session-bound wrapper, retained so forks remain compositional. */
+const sourceRuntimeHostsBySessionHost = new WeakMap<StaticEvaluationRuntimeHost, StaticEvaluationRuntimeHost>();
+
 /** Graph-preserving mutable analysis session forked from one admitted project-evaluation graph. */
 export class StaticEvaluationSessionFork {
   private readonly environments = new WeakMap<ModuleEnvironmentRecord, ModuleEnvironmentRecord>();
   private readonly populatedEnvironments = new WeakSet<ModuleEnvironmentRecord>();
   private readonly populatingEnvironments = new WeakSet<ModuleEnvironmentRecord>();
+  private readonly adoptedEnvironments = new WeakSet<ModuleEnvironmentRecord>();
+  private readonly adoptingEnvironments = new WeakSet<ModuleEnvironmentRecord>();
   private readonly values = new WeakMap<object, EvaluationValue>();
   private readonly sessionValues = new WeakSet<object>();
   private readonly populatedClasses = new WeakSet<EvaluationClassValue>();
   private readonly populatingClasses = new WeakSet<EvaluationClassValue>();
-  private activeRuntimeHost: StaticEvaluationRuntimeHost | null = null;
+  private readonly transferredMetadata = new WeakSet<object>();
+  private readonly transferringMetadata = new WeakSet<object>();
+  private sessionRuntimeHost: StaticEvaluationRuntimeHost | null = null;
   private readonly metadataTransfer: StaticEvaluationValueMetadataTransfer = {
     forkValue: <TValue extends EvaluationValue>(value: TValue): TValue => this.forkValue(value),
   };
 
+  private readonly sourceRuntimeHost: StaticEvaluationRuntimeHost;
+
+  constructor(runtimeHost: StaticEvaluationRuntimeHost) {
+    this.sourceRuntimeHost = sourceRuntimeHostsBySessionHost.get(runtimeHost) ?? runtimeHost;
+  }
+
   forkModuleEvaluation(source: StaticModuleEvaluationResult): StaticModuleEvaluationResult {
     const runtimeHost = this.forkRuntimeHost(source.runtimeHost);
-    return this.withRuntimeHost(source.runtimeHost, () => new StaticModuleEvaluationResult(
+    return new StaticModuleEvaluationResult(
       source.moduleKey,
       this.forkEnvironment(source.environment),
       this.forkCompletion(source.completion),
       source.openSeams,
-      source.executedCallExpressions,
+      source.executedCalls.map((call) => new StaticExecutedCall(
+        call.expression,
+        this.forkEnvironment(call.environment),
+        call.moduleKey,
+      )),
       source.policy,
       runtimeHost,
-    ));
+    );
   }
 
   forkEnvironment(source: ModuleEnvironmentRecord): ModuleEnvironmentRecord {
@@ -298,39 +316,46 @@ export class StaticEvaluationSessionFork {
   }
 
   forkRuntimeHost(host: StaticEvaluationRuntimeHost): StaticEvaluationRuntimeHost {
-    return {
+    const sourceHost = sourceRuntimeHostsBySessionHost.get(host) ?? host;
+    if (sourceHost !== this.sourceRuntimeHost) {
+      throw new Error('Static evaluation session cannot combine values from different runtime hosts.');
+    }
+    if (this.sessionRuntimeHost != null) {
+      return this.sessionRuntimeHost;
+    }
+    const sessionHost: StaticEvaluationRuntimeHost = {
       transferValueMetadata: (source, target, transfer) =>
-        host.transferValueMetadata?.(source, target, transfer),
+        sourceHost.transferValueMetadata?.(source, target, transfer),
       resolveIdentifier: (identifier, environment, moduleKey) =>
-        this.withRuntimeHost(host, () =>
-          this.forkNullableValue(host.resolveIdentifier?.(identifier, environment, moduleKey) ?? null)),
+        this.forkNullableValue(sourceHost.resolveIdentifier?.(identifier, environment, moduleKey) ?? null),
       resolveCommonJsRequire: (moduleKey, moduleSpecifier, node) =>
-        this.withRuntimeHost(host, () =>
-          this.forkNullableValue(host.resolveCommonJsRequire?.(moduleKey, moduleSpecifier, node) ?? null)),
+        this.forkNullableValue(sourceHost.resolveCommonJsRequire?.(moduleKey, moduleSpecifier, node) ?? null),
       resolveDynamicImport: (moduleKey, moduleSpecifier, node) =>
-        this.withRuntimeHost(host, () =>
-          this.forkNullableValue(host.resolveDynamicImport?.(moduleKey, moduleSpecifier, node) ?? null)),
+        this.forkNullableValue(sourceHost.resolveDynamicImport?.(moduleKey, moduleSpecifier, node) ?? null),
       evaluateCallExpression: (call, environment, moduleKey, depth, intrinsicHost) =>
-        this.withRuntimeHost(host, () => this.adoptNullableSessionValue(
-          host.evaluateCallExpression?.(
+        this.adoptNullableSessionValue(
+          sourceHost.evaluateCallExpression?.(
             call,
             environment,
             moduleKey,
             depth,
             this.sessionIntrinsicHost(intrinsicHost),
           ) ?? null,
-        )),
+        ),
       evaluateNewExpression: (expression, environment, moduleKey, depth, intrinsicHost) =>
-        this.withRuntimeHost(host, () => this.adoptNullableSessionValue(
-          host.evaluateNewExpression?.(
+        this.adoptNullableSessionValue(
+          sourceHost.evaluateNewExpression?.(
             expression,
             environment,
             moduleKey,
             depth,
             this.sessionIntrinsicHost(intrinsicHost),
           ) ?? null,
-        )),
+        ),
     };
+    sourceRuntimeHostsBySessionHost.set(sessionHost, sourceHost);
+    this.sessionRuntimeHost = sessionHost;
+    return sessionHost;
   }
 
   private sessionIntrinsicHost(host: StaticIntrinsicEvaluationHost): StaticIntrinsicEvaluationHost {
@@ -367,18 +392,17 @@ export class StaticEvaluationSessionFork {
     };
   }
 
-  private withRuntimeHost<TValue>(host: StaticEvaluationRuntimeHost, read: () => TValue): TValue {
-    const previous = this.activeRuntimeHost;
-    this.activeRuntimeHost = host;
-    try {
-      return read();
-    } finally {
-      this.activeRuntimeHost = previous;
-    }
-  }
-
   private transferRuntimeHostMetadata(source: EvaluationValue, target: EvaluationValue): void {
-    this.activeRuntimeHost?.transferValueMetadata?.(source, target, this.metadataTransfer);
+    if (this.transferredMetadata.has(source) || this.transferringMetadata.has(source)) {
+      return;
+    }
+    this.transferringMetadata.add(source);
+    try {
+      this.sourceRuntimeHost.transferValueMetadata?.(source, target, this.metadataTransfer);
+      this.transferredMetadata.add(source);
+    } finally {
+      this.transferringMetadata.delete(source);
+    }
   }
 
   private forkNullableValue(value: EvaluationValue | null): EvaluationValue | null {
@@ -406,6 +430,9 @@ export class StaticEvaluationSessionFork {
     }
     if (this.sessionValues.has(value)) {
       return value;
+    }
+    if (!this.isSessionValue(value)) {
+      return this.forkValue(value);
     }
     this.sessionValues.add(value);
     switch (value.kind) {
@@ -468,9 +495,24 @@ export class StaticEvaluationSessionFork {
   }
 
   private adoptEnvironment(environment: ModuleEnvironmentRecord): void {
-    environment.adoptGraphOwner(this);
-    for (const binding of environment.readBindings()) {
-      binding.value = this.adoptSessionValueGraph(binding.value);
+    if (this.adoptedEnvironments.has(environment) || this.adoptingEnvironments.has(environment)) {
+      return;
+    }
+    this.adoptingEnvironments.add(environment);
+    try {
+      environment.adoptGraphOwner(this);
+      const bindings = environment.readBindings();
+      for (const binding of bindings) {
+        if (evaluationValueHasMutableGraph(binding.value) && this.values.get(binding.value) == null) {
+          this.sessionValues.add(binding.value);
+        }
+      }
+      for (const binding of bindings) {
+        binding.value = this.adoptSessionValueGraph(binding.value);
+      }
+      this.adoptedEnvironments.add(environment);
+    } finally {
+      this.adoptingEnvironments.delete(environment);
     }
   }
 

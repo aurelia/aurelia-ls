@@ -37,7 +37,7 @@ import {
   projectRuntimeBindingSourceValueContextInScope,
   type RuntimeBindingSourceValueContextProjection,
 } from '../observation/binding-source-value-evaluation-context.js';
-import type { RuntimeBindingSourceActivationContext } from '../observation/binding-source-activation-context.js';
+import type { DiProviderActivationView } from '../di/provider-activation.js';
 import {
   expressionProductHandleForBinding,
   isRuntimeExpressionBinding,
@@ -269,7 +269,7 @@ export interface TemplateScopeConstructionRequest {
   /** Project-level parent-to-child bindable value table shared with binding-source value reduction. */
   readonly boundControllerValues?: RuntimeBoundControllerValueTable;
   /** App-world DI activation facts available to source-value evaluation. */
-  readonly sourceValueActivationContext?: RuntimeBindingSourceActivationContext | null;
+  readonly sourceValueActivationView?: DiProviderActivationView | null;
   /** Container that activates the root resource view model for source-value reads in this template. */
   readonly sourceValueDefaultContainer?: Container | null;
   /** Optional fine-grained telemetry sink owned by the surrounding inquiry profile. */
@@ -1732,7 +1732,7 @@ export class TemplateControllerScopeMaterializer {
           input.expressionWorld.projector,
           input.evaluation,
           input.boundControllerValues,
-          input.sourceValueActivationContext ?? null,
+          input.sourceValueActivationView ?? null,
           input.sourceValueDefaultContainer ?? null,
         );
     const binding = effect.binding.productHandle == null
@@ -2068,7 +2068,7 @@ export class TemplateControllerScopeMaterializer {
         input.expressionWorld.projector,
         input.evaluation,
         input.boundControllerValues,
-        input.sourceValueActivationContext ?? null,
+        input.sourceValueActivationView ?? null,
         input.sourceValueDefaultContainer ?? null,
       ),
       contextProjection,

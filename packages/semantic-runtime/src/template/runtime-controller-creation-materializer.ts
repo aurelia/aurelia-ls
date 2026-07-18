@@ -214,7 +214,6 @@ export class RuntimeControllerCreationMaterializer {
     openSeams: OpenSeam[],
     controllerIssues: RuntimeControllerIssue[],
     measure: RuntimeControllerCreationMeasure = unmeasuredRuntimeControllerCreation,
-    contextResolverRecordPolicy: ContainerContextResolverRecordPolicy = ContainerContextResolverRecordPolicy.PublishAll,
     projectKey: string | null = null,
     resourceDefinitions: ResourceDefinitionIndex | null = null,
   ): RuntimeControllerFrame | null {
@@ -234,7 +233,7 @@ export class RuntimeControllerCreationMaterializer {
     }
     const allocation = this.allocate(`${creation.local}:controller`);
     const childContainer = measure('child-container', () =>
-      this.materializeChildControllerContainer(creation, parentContainer, measure, contextResolverRecordPolicy)
+      this.materializeChildControllerContainer(creation, parentContainer, measure)
     );
     records.push(...childContainer.records);
     childContainerEmissions.push(childContainer);
@@ -335,7 +334,6 @@ export class RuntimeControllerCreationMaterializer {
     creation: ClosedRuntimeControllerCreationRequest,
     parentContainer: Container,
     measure: RuntimeControllerCreationMeasure,
-    contextResolverRecordPolicy: ContainerContextResolverRecordPolicy,
   ): ContainerChildMaterializationEmission {
     return this.childContainerMaterializer.materializeChild(
       new ContainerChildMaterializationRequest(
@@ -345,7 +343,7 @@ export class RuntimeControllerCreationMaterializer {
         `${creation.creationKind}:container`,
         contextResolverSlotsForController(creation),
         null,
-        contextResolverRecordPolicy,
+        ContainerContextResolverRecordPolicy.ModelOnly,
       ),
       (name, read) => measure(`child-container:${name}`, read),
     );

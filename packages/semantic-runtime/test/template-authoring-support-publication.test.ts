@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
-import { evaluateAndEmitAureliaProject } from '../src/configuration/aurelia-project-evaluation.js';
+import { aureliaAppProjectEvaluationProfile } from '../src/configuration/aurelia-project-evaluation.js';
 import { DiKeyIdentityEmitter } from '../src/di/di-key-identity-emitter.js';
 import {
   FrameworkIntrinsicDiKey,
@@ -101,7 +101,7 @@ describe('template authoring support publication', () => {
     }
     expect(canonicalResource.definition.target?.targetType).toBeNull();
 
-    const evaluation = evaluateAndEmitAureliaProject(store, project, store);
+    const evaluation = runtime.projectEvaluations.acquire(project, aureliaAppProjectEvaluationProfile).generation.readBaseline();
     const typeSystems = new TypeSystemProjectBuilder(runtime.frameworkSupport);
     const firstTypeSystem = typeSystems.build(project, evaluation);
     const secondTypeSystem = typeSystems.build(project, evaluation);

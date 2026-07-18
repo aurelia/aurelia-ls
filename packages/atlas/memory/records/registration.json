@@ -16,7 +16,7 @@
       "guidance": [
         "Start here when registration key/value/registry-parameter source records, DI key identities, field provenance, or recognition open seams change.",
         "Keep key provenance separate from provider-key provenance; registry lookup keys such as `Registration.defer(...)` are not ordinary admitted-key claims.",
-        "Use kernel DI key identity records instead of hiding key semantics in descriptions or local strings.",
+        "Use DiKeyIdentityEmitter and kernel DI key identity records instead of hiding key semantics in descriptions or local strings.",
         "Constructable DI key identities must come from evaluator- or checker-proven runtime value shape and should carry a TypeScript declaration identity when the declaration is source-backed."
       ],
       "anchors": [
@@ -29,9 +29,9 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/kernel/di-key-identity.ts",
-          "symbolName": "DiKeyIdentitySeed",
-          "summary": "Kernel DI key identity seed taxonomy, including evaluator-proven constructable keys."
+          "filePath": "packages/semantic-runtime/src/di/di-key-identity-emitter.ts",
+          "symbolName": "DiKeyIdentityEmitter",
+          "summary": "Canonical declaration/value identity authority shared by registration, framework effects, and activation."
         },
         {
           "kind": "source",

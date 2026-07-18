@@ -783,6 +783,14 @@ export function buildEvaluationModuleGraph(
   entryModuleKey: string,
   host: EvaluationModuleSourceHost,
 ): EvaluationModuleGraphBuildResult {
+  return buildEvaluationModuleGraphForEntries([entryModuleKey], host);
+}
+
+/** Build one local source module graph for every supplied entry using a shared module identity domain. */
+export function buildEvaluationModuleGraphForEntries(
+  entryModuleKeys: readonly string[],
+  host: EvaluationModuleSourceHost,
+): EvaluationModuleGraphBuildResult {
   const graph = new EvaluationModuleGraph();
   const unresolvedModules: EvaluationModuleResolutionOpen[] = [];
   const visited = new Set<string>();
@@ -820,7 +828,9 @@ export function buildEvaluationModuleGraph(
     }
   }
 
-  visit(entryModuleKey);
+  for (const entryModuleKey of entryModuleKeys) {
+    visit(entryModuleKey);
+  }
   return new EvaluationModuleGraphBuildResult(graph, unresolvedModules);
 }
 

@@ -27,7 +27,7 @@ export class SyntaxResourceRecognizer {
 function recognizeAttributePatterns(
   context: ResourceRecognitionContext,
 ): readonly ResourceRecognitionObservation[] {
-  const executedCalls = new Set(context.evaluation.executedCallExpressions);
+  const executedCalls = new Set(context.evaluation.executedCalls.map((call) => call.expression));
   const observations: ResourceRecognitionObservation[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {

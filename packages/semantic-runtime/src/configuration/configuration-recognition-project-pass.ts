@@ -24,11 +24,9 @@ import {
   ConfigurationRecognitionPass,
   type ConfigurationRecognitionResult,
 } from './configuration-recognition-pass.js';
-import {
-  evaluateAndEmitAureliaProject,
-} from './aurelia-project-evaluation.js';
 import type { ConfigurationSequenceObservation } from './configuration-observation.js';
 import { normalizeConfigurationSourceFileName } from './source-file-names.js';
+import { mergeConfigurationEvaluationBindings } from './configuration-evaluation-bindings.js';
 
 /** Configuration-recognition result for one boot-admitted source file. */
 export class ConfigurationRecognitionSourceResult {
@@ -78,17 +76,16 @@ export class ConfigurationRecognitionProjectPass {
     store: KernelStore,
     project: ProjectBootFrame,
     resources: ResourceDefinitionIndex | null,
-    evaluation: StaticProjectEvaluationResult | null,
+    evaluation: StaticProjectEvaluationResult,
     typeSystem: TypeSystemProject | null,
     publication: KernelPublicationContext,
   ): ConfigurationRecognitionProjectResult {
-    const projectEvaluation = evaluation ?? evaluateAndEmitAureliaProject(store, project, publication);
     const recognition = new ConfigurationRecognitionPass();
-    const sourceFileAddressHandlesByFileName = readSourceFileAddressHandlesByFileName(projectEvaluation);
+    const sourceFileAddressHandlesByFileName = readSourceFileAddressHandlesByFileName(evaluation);
     return new ConfigurationRecognitionProjectResult(
       project,
-      projectEvaluation,
-      projectEvaluation.sources.map((source) =>
+      evaluation,
+      evaluation.sources.map((source) =>
         this.recognizeSource(
           store,
           publication,
@@ -167,6 +164,7 @@ function aggregateConfigurationEmission(
     emissions.flatMap((emission) => emission.appTasks),
     emissions.flatMap((emission) => emission.optionContributions),
     emissions.flatMap((emission) => emission.registrationAdmissions),
+    mergeConfigurationEvaluationBindings(emissions.map((emission) => emission.evaluationBindings)),
     emissions.flatMap((emission) => emission.records),
   );
 }

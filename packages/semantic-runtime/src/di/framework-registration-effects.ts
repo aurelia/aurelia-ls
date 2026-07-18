@@ -12,6 +12,7 @@ import {
 import {
   ResolverStrategy,
 } from './resolver.js';
+import { FrameworkIntrinsicDiKey } from './framework-intrinsic-di-key.js';
 
 export interface FrameworkResolverEffect {
   readonly capability: FrameworkRegistrationCapability;
@@ -41,6 +42,13 @@ export interface FrameworkRegistrationEffects {
 }
 
 const frameworkResolverEffects: readonly FrameworkResolverEffect[] = [
+  {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
+    keyName: FrameworkIntrinsicDiKey.ITemplateCompiler,
+    strategy: ResolverStrategy.alias,
+    valueKind: RegistrationValueKind.AliasTarget,
+    valueName: 'TemplateCompiler',
+  },
   {
     capability: FrameworkRegistrationCapability.I18nServiceResolvers,
     keyName: 'I18nInitOptions',

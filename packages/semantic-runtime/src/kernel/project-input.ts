@@ -160,15 +160,53 @@ export class SemanticRuntimeProjectInputRead implements ComputationRead {
   }
 }
 
-/** Immutable, memoized host view for one candidate project generation. */
-class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectInputHost {
-  private readonly valuesByReadKey = new Map<string, ProjectInputReadValue>();
+/** Exact host reads made by one consumer while sharing its project generation's immutable values. */
+export class SemanticRuntimeProjectInputReadScope {
   private readonly readsByKey = new Map<string, SemanticRuntimeProjectInputRead>();
+  readonly host: SemanticRuntimeProjectInputHost;
 
   constructor(
     private readonly generation: SemanticRuntimeProjectInputGeneration,
+    readonly key: string,
+    createHost: (
+      observeRead: (read: SemanticRuntimeProjectInputRead) => void,
+    ) => SemanticRuntimeProjectInputHost,
+  ) {
+    this.host = createHost((read) => this.readsByKey.set(read.readKey, read));
+  }
+
+  readRegisteredInputs(): readonly SemanticRuntimeProjectInputRead[] {
+    return [...this.readsByKey.values()].sort((left, right) => left.readKey.localeCompare(right.readKey));
+  }
+
+  observe(read: SemanticRuntimeProjectInputRead): void {
+    this.readsByKey.set(read.readKey, read);
+  }
+
+  belongsTo(generation: SemanticRuntimeProjectInputGeneration): boolean {
+    return this.generation === generation;
+  }
+}
+
+/** Immutable, memoized host view for one candidate project generation. */
+class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectInputHost {
+  constructor(
+    private readonly generation: SemanticRuntimeProjectInputGeneration,
     private readonly authority: SemanticRuntimeProjectInputAuthority,
+    private readonly valuesByReadKey: Map<string, ProjectInputReadValue> = new Map(),
+    private readonly readsByKey: Map<string, SemanticRuntimeProjectInputRead> = new Map(),
+    private readonly observeRead: ((read: SemanticRuntimeProjectInputRead) => void) | null = null,
   ) {}
+
+  withObserver(observeRead: (read: SemanticRuntimeProjectInputRead) => void): CapturedSemanticRuntimeProjectInputHost {
+    return new CapturedSemanticRuntimeProjectInputHost(
+      this.generation,
+      this.authority,
+      this.valuesByReadKey,
+      this.readsByKey,
+      observeRead,
+    );
+  }
 
   readFile(fileName: string): string | undefined {
     const hostPath = resolveProjectInputPath(fileName);
@@ -246,16 +284,39 @@ class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectI
   ): ProjectInputReadValue {
     this.generation.requireCurrent();
     const readKey = `project-input:${kind}:${locus}`;
-    if (this.valuesByReadKey.has(readKey)) {
-      return this.valuesByReadKey.get(readKey);
+    let read = this.readsByKey.get(readKey);
+    if (read == null) {
+      const value = freezeProjectInputReadValue(readCurrent());
+      this.valuesByReadKey.set(readKey, value);
+      read = new SemanticRuntimeProjectInputRead(this.authority, kind, readKey, readCurrent, value);
+      this.readsByKey.set(readKey, read);
     }
-    const value = freezeProjectInputReadValue(readCurrent());
-    this.valuesByReadKey.set(readKey, value);
-    this.readsByKey.set(
-      readKey,
-      new SemanticRuntimeProjectInputRead(this.authority, kind, readKey, readCurrent, value),
-    );
-    return value;
+    this.generation.observeScopedRead(read);
+    this.observeRead?.(read);
+    return this.valuesByReadKey.get(readKey);
+  }
+}
+
+/** Coarse event-sequence identity without the generation's cumulative exact-read validation. */
+class SemanticRuntimeProjectInputGenerationIdentityRead implements ComputationRead {
+  readonly domain = 'project-input-generation-identity';
+  readonly readKey: string;
+  readonly observedRevision: string;
+
+  constructor(private readonly generation: SemanticRuntimeProjectInputGeneration) {
+    this.readKey = `project-input-generation-identity:${generation.projectKey}`;
+    this.observedRevision = generation.revision;
+  }
+
+  validate(): ComputationReadValidation {
+    const isCurrent = this.generation.isCurrent();
+    return {
+      isCurrent,
+      currentRevision: isCurrent
+        ? this.observedRevision
+        : this.generation.currentAuthorityRevision(),
+      changedFacets: isCurrent ? [] : ['generation'],
+    };
   }
 }
 
@@ -266,6 +327,8 @@ export class SemanticRuntimeProjectInputGeneration implements ComputationRead, G
   readonly observedRevision: string;
   readonly host: SemanticRuntimeProjectInputHost;
   private readonly capturedHost: CapturedSemanticRuntimeProjectInputHost;
+  private readonly identityRead: ComputationRead;
+  private readonly activeReadScopes: SemanticRuntimeProjectInputReadScope[] = [];
 
   constructor(
     private readonly authority: SemanticRuntimeProjectInputAuthority,
@@ -278,6 +341,7 @@ export class SemanticRuntimeProjectInputGeneration implements ComputationRead, G
     this.observedRevision = `${projectKey}@${eventSequence}.${ordinal}`;
     this.capturedHost = new CapturedSemanticRuntimeProjectInputHost(this, authority);
     this.host = this.capturedHost;
+    this.identityRead = new SemanticRuntimeProjectInputGenerationIdentityRead(this);
   }
 
   get revision(): string {
@@ -312,6 +376,54 @@ export class SemanticRuntimeProjectInputGeneration implements ComputationRead, G
 
   readRegisteredInputs(): readonly SemanticRuntimeProjectInputRead[] {
     return this.capturedHost.readAll();
+  }
+
+  /** Create a consumer-local exact-read manifest over the generation's shared immutable host values. */
+  createReadScope(key: string): SemanticRuntimeProjectInputReadScope {
+    this.requireCurrent();
+    return new SemanticRuntimeProjectInputReadScope(
+      this,
+      key,
+      (observeRead) => this.capturedHost.withObserver(observeRead),
+    );
+  }
+
+  /** Capture every host read made synchronously by one enclosing analysis owner. */
+  withReadScope<TValue>(scope: SemanticRuntimeProjectInputReadScope, read: () => TValue): TValue {
+    this.requireCurrent();
+    if (!scope.belongsTo(this)) {
+      throw new Error(`Project-input read scope ${scope.key} belongs to another generation.`);
+    }
+    this.activeReadScopes.push(scope);
+    try {
+      const value = read();
+      if (value != null && typeof (value as { readonly then?: unknown }).then === 'function') {
+        throw new Error(`Project-input read scope ${scope.key} cannot cross an asynchronous boundary.`);
+      }
+      return value;
+    } finally {
+      const active = this.activeReadScopes.pop();
+      if (active !== scope) {
+        throw new Error(`Project-input read scope ${scope.key} closed out of order.`);
+      }
+    }
+  }
+
+  /** Internal host callback that fans one memoized read into every active owner scope. */
+  observeScopedRead(read: SemanticRuntimeProjectInputRead): void {
+    for (const scope of this.activeReadScopes) {
+      scope.observe(read);
+    }
+  }
+
+  /** Read only explicit event/generation identity, excluding the cumulative host-read ledger. */
+  readIdentity(): ComputationRead {
+    return this.identityRead;
+  }
+
+  /** Current authority revision used by the identity read without exposing the authority itself. */
+  currentAuthorityRevision(): string {
+    return this.authority.currentRevision(this.projectKey);
   }
 
   /** Read the live effective file value when validating an exact source snapshot. */

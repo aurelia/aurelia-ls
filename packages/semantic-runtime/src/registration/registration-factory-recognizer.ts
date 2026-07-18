@@ -25,6 +25,7 @@ import {
   RegistrationRecognitionOpen,
   RegistrationValueObservation,
 } from './registration-observation.js';
+import { RegistrationValueKind } from './registration-reference.js';
 
 const AURELIA_REGISTRATION_MODULES = new Set([
   'aurelia',
@@ -153,14 +154,24 @@ function registrationValueObservation(
   argument: ts.Expression | null,
   shape: RegistrationFactoryShape,
 ): RegistrationValueObservation | null {
-  return argument == null || shape.value == null
-    ? null
-    : new RegistrationValueObservation(
-      shape.value.valueKind,
-      readReferenceName(argument),
-      argument,
-      isClassDeclarationExpression(argument),
-    );
+  if (argument == null || shape.value == null) {
+    return null;
+  }
+  const keyObservation = shape.value.valueKind === RegistrationValueKind.AliasTarget
+    ? new RegistrationKeyObservation(readReferenceName(argument), argument)
+    : null;
+  return new RegistrationValueObservation(
+    shape.value.valueKind,
+    readReferenceName(argument),
+    argument,
+    isClassDeclarationExpression(argument),
+    null,
+    null,
+    null,
+    null,
+    null,
+    keyObservation,
+  );
 }
 
 function readRegistrationFactoryBindings(

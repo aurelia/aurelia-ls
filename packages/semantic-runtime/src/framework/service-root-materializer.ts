@@ -14,6 +14,10 @@ import {
   DiContainerApiMethodKind,
 } from '../di/container-api-recognition.js';
 import {
+  DiKeyExpressionIdentityRequest,
+  DiKeyIdentityEmitter,
+} from '../di/di-key-identity-emitter.js';
+import {
   readAureliaResolverWrapperCall,
 } from '../di/resolver-wrapper-recognition.js';
 import {
@@ -53,6 +57,10 @@ import {
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
+  sourceSpanForCheckerNode,
+} from '../type-system/declaration-source.js';
+import { SourceSpanRole } from '../kernel/address.js';
+import {
   symbolForExpression,
 } from '../type-system/checker-node-helpers.js';
 import {
@@ -81,6 +89,12 @@ interface FrameworkServiceDescriptor {
   readonly directConstructors: ReadonlySet<string>;
 }
 
+interface FrameworkServiceKeyReference {
+  readonly exportName: string;
+  /** Runtime registration key consulted by the service root, excluding resolver wrappers around that key. */
+  readonly identityExpression: ts.Expression;
+}
+
 interface FrameworkServiceRootSite {
   readonly sourcePath: string;
   readonly sourceFileAddressHandle: ProjectBootFrame['sourceFiles'][number]['addressHandle'];
@@ -91,6 +105,7 @@ interface FrameworkServiceRootSite {
   readonly rootKind: FrameworkServiceRootKind;
   readonly serviceFamily: string | null;
   readonly serviceKeyName: string;
+  readonly serviceKeyExpression: ts.Expression | null;
   readonly basis: FrameworkServiceRootBasis;
   readonly symbol: ts.Symbol | null;
   readonly ownerIdentityHandle: IdentityHandle | null;
@@ -116,10 +131,14 @@ export class FrameworkServiceRootMaterializationResult extends FrameworkServiceR
 }
 
 export class FrameworkServiceRootMaterializer {
+  private readonly keyIdentities: DiKeyIdentityEmitter;
+
   constructor(
     readonly store: KernelStore,
     readonly publication: KernelPublicationContext,
-  ) {}
+  ) {
+    this.keyIdentities = new DiKeyIdentityEmitter(publication);
+  }
 
   materializeAndEmit(
     project: ProjectBootFrame,
@@ -127,11 +146,11 @@ export class FrameworkServiceRootMaterializer {
     sourceApiRoots: AureliaSourceApiRootFacts,
   ): FrameworkServiceRootMaterializationResult {
     const containerPublications = uniqueRootSites(readFrameworkContainerRootSites(project, typeSystem, sourceApiRoots))
-      .map((site) => this.publishRoot(project, site));
+      .map((site) => this.publishRoot(project, typeSystem, site));
     const containerFacts = rootFactsForPublications(containerPublications);
     const rootsWithContainers = sourceApiRoots.withFrameworkServiceRootProducts(containerFacts);
     const servicePublications = uniqueRootSites(readFrameworkServiceRootSites(project, typeSystem, rootsWithContainers))
-      .map((site) => this.publishRoot(project, site));
+      .map((site) => this.publishRoot(project, typeSystem, site));
     const candidateSeams = recordsForSourceOpenSeams(
       this.store,
       cappedCandidateSeamsBySource(readFrameworkServiceRootCandidateSeams(project, typeSystem, rootsWithContainers)),
@@ -158,6 +177,7 @@ export class FrameworkServiceRootMaterializer {
 
   private publishRoot(
     project: ProjectBootFrame,
+    typeSystem: TypeSystemProject,
     site: FrameworkServiceRootSite,
   ): FrameworkServiceRootPublication {
     const local = serviceRootLocalKey(project.projectKey, site);
@@ -173,6 +193,36 @@ export class FrameworkServiceRootMaterializer {
     const provenanceHandle = this.store.handles.provenance(local);
     const productHandle = this.store.handles.product(local);
     const identityHandle = this.store.handles.identity(local);
+    const keySource = site.serviceKeyExpression == null
+      ? null
+      : sourceSpanForCheckerNode(
+          this.publication,
+          typeSystem.checker,
+          `${local}:service-key`,
+          typeSystem.readProgramExpression(site.serviceKeyExpression) ?? site.serviceKeyExpression,
+          SourceSpanRole.Value,
+        );
+    const records: KernelStoreRecord[] = [
+      ...source.records,
+      ...(evidenceSource === source ? [] : evidenceSource.records),
+      ...(keySource?.records ?? []),
+    ];
+    const keyIdentity = site.serviceKeyExpression == null || keySource == null
+      ? null
+      : this.keyIdentities.emitExpressionKeyIdentity(
+          records,
+          this.publication,
+          new DiKeyExpressionIdentityRequest(
+            project.projectKey,
+            site.serviceKeyExpression,
+            site.serviceKeyName,
+            null,
+            null,
+            typeSystem,
+            this.store.handles.identity(`${local}:service-key:fallback`),
+            keySource.address.handle,
+          ),
+        );
     const root = new FrameworkServiceRoot(
       productHandle,
       identityHandle,
@@ -180,6 +230,7 @@ export class FrameworkServiceRootMaterializer {
       site.rootKind,
       site.serviceFamily,
       site.serviceKeyName,
+      keyIdentity?.identityHandle ?? null,
       site.basis,
       site.sourcePath,
       site.start,
@@ -191,9 +242,7 @@ export class FrameworkServiceRootMaterializer {
       site.ownerIdentityHandle,
       site.ownerProductHandle,
     );
-    const records = [
-      ...source.records,
-      ...(evidenceSource === source ? [] : evidenceSource.records),
+    records.push(
       new EvidenceRecord(
         evidenceHandle,
         evidenceKindForBasis(site.basis),
@@ -221,7 +270,7 @@ export class FrameworkServiceRootMaterializer {
         identityHandle,
         [productHandle],
       ),
-    ];
+    );
     return new FrameworkServiceRootPublication(root, records, site.symbol);
   }
 }
@@ -278,6 +327,7 @@ function readFrameworkContainerRootSites(
           rootKind: FrameworkServiceRootKind.Container,
           serviceFamily: null,
           serviceKeyName: 'IContainer',
+          serviceKeyExpression: callbackRoot.keyExpression,
           basis: FrameworkServiceRootBasis.AppTaskDeclaredKey,
           symbol: callbackRoot.symbol,
           ownerIdentityHandle: null,
@@ -681,6 +731,7 @@ function readFrameworkServiceRootSites(
           rootKind: FrameworkServiceRootKind.Service,
           serviceFamily: descriptor.serviceFamily,
           serviceKeyName: keyName,
+          serviceKeyExpression: callbackRoot.keyExpression,
           basis: FrameworkServiceRootBasis.AppTaskDeclaredKey,
           symbol: callbackRoot.symbol,
           ownerIdentityHandle: null,
@@ -727,16 +778,20 @@ function containerDeclarationRootSite(
   if (basis == null) {
     return null;
   }
+  const evidence = node.initializer == null ? name : unwrapExpression(node.initializer);
   return {
     sourcePath: source.path,
     sourceFileAddressHandle: source.addressHandle,
     start: name.getStart(sourceFile),
     end: name.end,
-    evidenceStart: name.getStart(sourceFile),
-    evidenceEnd: name.end,
+    evidenceStart: evidence.getStart(sourceFile),
+    evidenceEnd: evidence.end,
     rootKind: FrameworkServiceRootKind.Container,
     serviceFamily: null,
     serviceKeyName: 'IContainer',
+    serviceKeyExpression: basis === FrameworkServiceRootBasis.DiActivationBacked
+      ? directDiKeyExpression(node.initializer ?? null)
+      : null,
     basis,
     symbol: sourceRootSymbolForPropertyName(typeSystem, name),
     ownerIdentityHandle: null,
@@ -806,6 +861,7 @@ function serviceDeclarationRootSite(
         rootKind: FrameworkServiceRootKind.Service,
         serviceFamily: descriptor.serviceFamily,
         serviceKeyName: typeName,
+        serviceKeyExpression: null,
         basis: FrameworkServiceRootBasis.FrameworkTypeAnnotation,
         symbol: sourceRootSymbolForPropertyName(typeSystem, name),
         ownerIdentityHandle: null,
@@ -857,10 +913,10 @@ function serviceCallRootSite(
     }
     if (callIsProvidedByAureliaResolveActivation(sourceApiRoots, source.path, sourceFile, call)) {
       const first = call.arguments[0] ?? null;
-      const keyName = first == null || ts.isSpreadElement(first)
+      const key = first == null || ts.isSpreadElement(first)
         ? null
-        : readServiceKeyNameFromExpression(first, bindings, descriptor.exports);
-      if (keyName != null) {
+        : readServiceKeyReferenceFromExpression(first, bindings, descriptor.exports);
+      if (key != null) {
         return {
           sourcePath: source.path,
           sourceFileAddressHandle: source.addressHandle,
@@ -870,7 +926,8 @@ function serviceCallRootSite(
           evidenceEnd: call.end,
           rootKind: FrameworkServiceRootKind.Service,
           serviceFamily: descriptor.serviceFamily,
-          serviceKeyName: keyName,
+          serviceKeyName: key.exportName,
+          serviceKeyExpression: key.identityExpression,
           basis: FrameworkServiceRootBasis.DiActivationBacked,
           symbol,
           ownerIdentityHandle: null,
@@ -883,10 +940,10 @@ function serviceCallRootSite(
       || callIsAureliaContainerGetCall(sourceApiRoots, source.path, sourceFile, call)
     ) {
       const first = call.arguments[0] ?? null;
-      const keyName = first == null || ts.isSpreadElement(first)
+      const key = first == null || ts.isSpreadElement(first)
         ? null
-        : readServiceKeyNameFromExpression(first, bindings, descriptor.exports);
-      if (keyName != null) {
+        : readServiceKeyReferenceFromExpression(first, bindings, descriptor.exports);
+      if (key != null) {
         const callee = unwrapExpression(call.expression);
         const receiver = ts.isPropertyAccessExpression(callee)
           ? callee.expression
@@ -903,7 +960,8 @@ function serviceCallRootSite(
           evidenceEnd: call.end,
           rootKind: FrameworkServiceRootKind.Service,
           serviceFamily: descriptor.serviceFamily,
-          serviceKeyName: keyName,
+          serviceKeyName: key.exportName,
+          serviceKeyExpression: key.identityExpression,
           basis: FrameworkServiceRootBasis.ContainerGetBacked,
           symbol,
           ownerIdentityHandle: containerRoot?.identityHandle ?? null,
@@ -942,6 +1000,7 @@ function serviceConstructorRootSite(
       rootKind: FrameworkServiceRootKind.Service,
       serviceFamily: descriptor.serviceFamily,
       serviceKeyName: keyName,
+      serviceKeyExpression: null,
       basis: FrameworkServiceRootBasis.DirectConstructor,
       symbol,
       ownerIdentityHandle: null,
@@ -951,15 +1010,15 @@ function serviceConstructorRootSite(
   return null;
 }
 
-function readServiceKeyNameFromExpression(
+function readServiceKeyReferenceFromExpression(
   expression: ts.Expression,
   bindings: SourceImportBindings,
   allowedExports: ReadonlySet<string>,
-): string | null {
+): FrameworkServiceKeyReference | null {
   const current = unwrapExpression(expression);
   const direct = readImportedExportName(current, bindings, allowedExports);
   if (direct != null) {
-    return direct;
+    return { exportName: direct, identityExpression: current };
   }
   if (ts.isCallExpression(current)) {
     const callee = unwrapExpression(current.expression);
@@ -967,10 +1026,27 @@ function readServiceKeyNameFromExpression(
       return null;
     }
     if (callee.name.text === 'child') {
-      return readImportedExportName(callee.expression, bindings, allowedExports);
+      const exportName = readImportedExportName(callee.expression, bindings, allowedExports);
+      return exportName == null
+        ? null
+        : { exportName, identityExpression: callee.expression };
     }
   }
   return null;
+}
+
+function readServiceKeyNameFromExpression(
+  expression: ts.Expression,
+  bindings: SourceImportBindings,
+  allowedExports: ReadonlySet<string>,
+): string | null {
+  return readServiceKeyReferenceFromExpression(expression, bindings, allowedExports)?.exportName ?? null;
+}
+
+function directDiKeyExpression(expression: ts.Expression | null): ts.Expression | null {
+  const current = expression == null ? null : unwrapExpression(expression);
+  const first = current != null && ts.isCallExpression(current) ? current.arguments[0] ?? null : null;
+  return first == null || ts.isSpreadElement(first) ? null : first;
 }
 
 function readImportedTypeExportName(

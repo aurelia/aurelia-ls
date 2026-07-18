@@ -56,7 +56,7 @@ function recognizeNamedResources(
   context: ResourceRecognitionContext,
   resourceKind: NamedResourceDefinitionKind | null,
 ): readonly ResourceRecognitionObservation[] {
-  const executedCalls = new Set(context.evaluation.executedCallExpressions);
+  const executedCalls = new Set(context.evaluation.executedCalls.map((call) => call.expression));
   const defineCallTargets = collectDefineCallTargets(context, resourceKind, executedCalls);
   const observations: ResourceRecognitionObservation[] = [];
   const visit = (node: ts.Node): void => {

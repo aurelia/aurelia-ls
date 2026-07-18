@@ -1,4 +1,5 @@
 import type ts from 'typescript';
+import type { AureliaContainerEvaluation } from './aurelia-evaluation-runtime.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
 import type { RegistrationAdmissionObservation } from '../registration/registration-observation.js';
@@ -26,6 +27,8 @@ export const enum ConfigurationCarrierKind {
   AureliaRegisterCall = 'aurelia-register-call',
   /** Direct container registration call such as `container.register(...)`. */
   ContainerRegisterCall = 'container-register-call',
+  /** Direct root-container factory call such as `DI.createContainer(...)`. */
+  ContainerFactoryCall = 'container-factory-call',
   /** Registration call inside an `IRegistry.register(container, ...)` body. */
   RegistryRegisterMethod = 'registry-register-method',
   /** Configuration customization call such as `StandardConfiguration.customize(...)`. */
@@ -165,6 +168,8 @@ export class ConfigurationStepObservation {
     readonly registrationAdmissions: readonly RegistrationAdmissionObservation[] = [],
     /** Unresolved points that must stay visible to later consumers. */
     readonly openSeams: readonly ConfigurationRecognitionOpen[] = [],
+    /** Candidate-local static-evaluation identity for a source-created container receiver. */
+    readonly containerEvaluation: AureliaContainerEvaluation | null = null,
   ) {}
 }
 

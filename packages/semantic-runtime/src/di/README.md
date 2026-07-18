@@ -14,8 +14,9 @@ registration admission to a modeled container.
 - Model abstract Aurelia containers, parent/root relationships, and source/app boundaries.
 - Model the operation of applying registration admissions to a container.
 - Model container-owned resolver, resource, and factory slots before lookup answers consume them.
-- Emulate the runtime container's public methods over typed products without executing user constructors, callbacks,
-  transformers, or registry bodies.
+- Emulate the runtime container's public methods over typed products and execute evaluator-known registry functions only
+  when the configuration path proves the call. Do not execute user constructors, callbacks, getters, lifecycle hooks,
+  transformers, or unresolved registry bodies.
 - Preserve provenance for which source/configuration fact created a container, applied a registration, or produced a
   slot.
 - Leave open seams for dynamic registration, unresolved keys, registry bodies that cannot be interpreted, custom default
@@ -137,6 +138,23 @@ through handles, provenance, materialized products, claims, and open seams. The 
 `Container` let DI world construction behave like the runtime while materializers decide which effects become stored
 kernel records.
 
+## DI Key Identity
+
+`DiKeyIdentityEmitter` is the sole publication authority for durable DI key identity. Authored key occurrences retain
+their own source addresses and provenance, but aliases and re-exports of the same runtime key converge on one semantic
+identity. Interface friendly names are presentation only and must never be used as equality keys.
+
+Identity family and container behavior are separate axes. `DiKeyIdentityKind` records JavaScript/runtime equality
+identity such as interface object, constructable declaration, string, primitive, symbol, resource, resolver wrapper, or
+unknown object. `ContainerLookupKeyKind` records the branch Aurelia's container would take for lookup/JIT behavior. A
+constructable with a static `register(...)` method therefore remains a constructable identity even though lookup treats
+it as a registry.
+
+Framework and plugin effects resolve public package exports through `TypeSystemProject` and then use the same
+declaration identity authority as authored keys. A support-owned key that is private to a package, or whose declaration
+cannot be proven, remains an explicit `UnknownDiKeyIdentity`; do not recover it by friendly name. Framework intrinsics
+such as `IContainer` and `ITemplateCompiler` retain their canonical cross-package identities.
+
 ## Watchpoints
 
 - Do not put container ownership back onto registration products. Ownership belongs to DI operations and slots.
@@ -146,10 +164,10 @@ kernel records.
   explicit; do not flatten it into the generic container model.
 - `ParameterizedRegistry` and generic `IRegistry` products should stay container-free until their `register(...)`
   behavior is spent against a specific container.
-- Auto-registration, constructor invocation, transformers, custom default resolvers, and registry bodies are surfaced
-  as lookup/activation pressure for now. The stock `DefaultResolver.none`/`singleton`/`transient` policies are modeled
-  as `ContainerConfiguration` policy, while arbitrary default resolver functions remain open until a call-body
-  evaluator needs them.
+- Auto-registration, constructor invocation, transformers, and custom default resolvers remain lookup/activation
+  pressure. Evaluator-known registry functions may be spent only from path-proven calls; unresolved or arbitrary
+  registry/default-resolver bodies remain open. The stock `DefaultResolver.none`/`singleton`/`transient` policies are
+  modeled as `ContainerConfiguration` policy.
 - Do not cite `unable_jit_non_constructor` from syntax alone. `Container.register(...)` legitimately accepts object maps,
   and stable key expressions remain container-state dependent. Direct fresh object keys are the current exception because
   the source expression proves the runtime identity cannot already be in a resolver/factory map.
@@ -171,17 +189,20 @@ container emulator frames, and decides which configuration-owned registration ad
 container.
 
 `world-publication.ts` owns the shared DI publication primitives used during that spending: source/provenance/open-seam
-records, DI key identities, resolver products and resolver slots, resource slots, source-backed DI issue products,
+records, resolver products and resolver slots, resource slots, source-backed DI issue products,
 registry/parameterized-registry products, framework-created AppTask products, and `IContainer` self-resolver slots.
-Keep these product/source/claim envelopes there instead of rebuilding them inside the world-construction traversal.
+`DiKeyIdentityEmitter` owns key identity emission used by that layer and by authored registration paths. Keep these
+product/source/claim envelopes and the key authority shared instead of rebuilding them inside the world-construction
+traversal.
 
-Plugin, builder, registry-body, and standalone container-registration sequences can exist in a project without being
-attached to an app root. DI world construction preserves their unspent registration pressure as
-`di.open-registration-spending` seams with `di-registration-container-open` when the receiving container cannot be
-identified, rather than silently spending them into a nearby app root or publishing a world-global provider.
+Plugin, builder, registry-body, and standalone container-registration sequences can exist without being attached to an
+app root. A registration is spent only when its exact receiving container is known. Source-created standalone containers
+therefore own their own operations and providers, while an unmapped receiver preserves
+`di.open-registration-spending` / `di-registration-container-open` pressure. Neither case is silently reassigned to a
+nearby app root or promoted into a world-global provider.
 
 Recursive registry-body spending is owned by `DiRegistrationSpendingCascade`. The cascade is a construction-time
-traversal object that owns the visited-admission set and admission lookup while each per-admission
+traversal object that owns the active-admission stack and admission lookup while each per-admission
 `DiRegistrationSpendingCascadeFrame` gathers the direct registration operation, any recursively spent registry-body
 operations, their emitted resolvers/registries/slots/tasks, and open seams before handing the aggregate back to the
 world construction frame. This keeps recursive spending as one DI-owned traversal instead of scattering local
@@ -235,8 +256,8 @@ The current spending path is intentionally narrow but end-to-end:
   state dependent until controller activation can join the active container with interface registration state.
 - `@inject`-family decorators on methods, getters, setters, and accessors produce `AUR0022`; class and field
   decorators remain valid injection metadata carriers, and legacy parameter decorators are not claimed by this lane;
-- `Registration.defer(...)` and generic `IRegistry` admissions become runtime-shaped registry products plus open seams
-  until registry-body interpretation and recursive parameter spending are modeled.
+- `Registration.defer(...)` and generic `IRegistry` admissions become runtime-shaped registry products. Path-proven
+  evaluator-known bodies spend recursively against the receiving container; unresolved bodies retain open seams.
 - open registration admissions produce only the container operation and an open DI seam. They are preserved as
   registration pressure rather than being treated as resolver rows.
 

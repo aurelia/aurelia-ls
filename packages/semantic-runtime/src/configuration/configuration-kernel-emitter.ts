@@ -61,6 +61,10 @@ import {
   ConfigurationStepMaterializer,
   ConfigurationStepReferenceSeed,
 } from './configuration-step-materializer.js';
+import {
+  ConfigurationEvaluationBindings,
+  mergeConfigurationEvaluationBindings,
+} from './configuration-evaluation-bindings.js';
 
 /** Result of emitting configuration observations into the kernel. */
 export class ConfigurationKernelEmission {
@@ -81,6 +85,8 @@ export class ConfigurationKernelEmission {
     readonly optionContributions: readonly ConfigurationOptionContribution[],
     /** Registration admissions emitted while materializing configuration steps. */
     readonly registrationAdmissions: readonly RegistrationAdmissionProduct[],
+    /** Candidate-local links from evaluator container identity to emitted container and receiver products. */
+    readonly evaluationBindings: ConfigurationEvaluationBindings,
     /** Kernel records published for configuration products and registration admissions by this emission. */
     readonly records: readonly KernelStoreRecord[],
   ) {}
@@ -96,6 +102,7 @@ interface ConfigurationSequenceEmission {
   readonly appTasks: readonly AppTaskDefinition[];
   readonly optionContributions: readonly ConfigurationOptionContribution[];
   readonly registrationAdmissions: readonly RegistrationAdmissionProduct[];
+  readonly evaluationBindings: ConfigurationEvaluationBindings;
 }
 
 class ConfigurationKernelEmissionFrame {
@@ -108,6 +115,7 @@ class ConfigurationKernelEmissionFrame {
   readonly appTasks: AppTaskDefinition[] = [];
   readonly optionContributions: ConfigurationOptionContribution[] = [];
   readonly registrationAdmissions: RegistrationAdmissionProduct[] = [];
+  readonly evaluationBindings: ConfigurationEvaluationBindings[] = [];
 
   recordSequence(emission: ConfigurationSequenceEmission): void {
     this.records.push(...emission.records);
@@ -119,6 +127,7 @@ class ConfigurationKernelEmissionFrame {
     this.appTasks.push(...emission.appTasks);
     this.optionContributions.push(...emission.optionContributions);
     this.registrationAdmissions.push(...emission.registrationAdmissions);
+    this.evaluationBindings.push(emission.evaluationBindings);
   }
 
   toEmission(): ConfigurationKernelEmission {
@@ -131,6 +140,7 @@ class ConfigurationKernelEmissionFrame {
       this.appTasks,
       this.optionContributions,
       this.registrationAdmissions,
+      mergeConfigurationEvaluationBindings(this.evaluationBindings),
       this.records,
     );
   }
@@ -157,7 +167,7 @@ export class ConfigurationKernelEmitter {
   ) {
     this.publication = new ConfigurationKernelPublication(store);
     this.appFrames = new AureliaAppFrameMaterializer(store, this.publication);
-    this.steps = new ConfigurationStepMaterializer(store, this.publication);
+    this.steps = new ConfigurationStepMaterializer(store, this.publication, kernelPublication);
   }
 
   emit(
@@ -224,10 +234,14 @@ export class ConfigurationKernelEmitter {
       steps: stepSet.steps,
       aurelias: appFrame == null ? [] : [appFrame.aurelia],
       appRoots: appFrame?.appRoot == null ? [] : [appFrame.appRoot],
-      containers: appFrame == null ? [] : [appFrame.container],
+      containers: [
+        ...(appFrame == null ? [] : [appFrame.container]),
+        ...stepSet.containers,
+      ],
       appTasks: stepSet.appTasks,
       optionContributions: stepSet.optionContributions,
       registrationAdmissions: stepSet.registrationAdmissions,
+      evaluationBindings: stepSet.evaluationBindings,
     };
   }
 

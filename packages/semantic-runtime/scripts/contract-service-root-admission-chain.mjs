@@ -48,21 +48,23 @@ if (unknownDiagnostics.some((row) => row.missingInput === 'dialog.service-resolv
 const standaloneDialogDemands = sourceServiceDemands(standalone, 'dialog.service-resolvers');
 const standaloneDiagnostics = sourceServiceDiagnostics(standalone);
 const standaloneBlockingSeams = standaloneDialogDemands.flatMap((demand) => demand.blockingOpenSeamHandles ?? []);
-const standaloneSeamRows = standaloneBlockingSeams
-  .map((handle) => standalone.store.readOpenSeam(handle))
-  .filter(Boolean);
 const standaloneOwnerRoots = standaloneDialogDemands.map((demand) => ownerRootForDemand(standalone, demand)).filter(Boolean);
 const standaloneContainerOwnerRoots = standaloneOwnerRoots
   .map((root) => root.ownerProductHandle == null
     ? null
     : standalone.serviceRoots.find((candidate) => candidate.productHandle === root.ownerProductHandle) ?? null)
   .filter(Boolean);
+const standaloneContainerProof = directContainerProviderProof(
+  standalone,
+  standaloneContainerOwnerRoots[0] ?? null,
+  'IDialogService',
+);
 
 if (standaloneDialogDemands.length !== 1) {
   failures.push(`Expected one standalone-container dialog source-service demand, observed ${standaloneDialogDemands.length}.`);
 }
-if (standaloneDialogDemands.some((demand) => demand.admissionState !== 'admission-unknown')) {
-  failures.push(`Standalone container registration should degrade to admission-unknown while its receiving container is unmodeled, observed ${stateSummary(standaloneDialogDemands)}.`);
+if (standaloneDialogDemands.some((demand) => demand.admissionState !== 'admitted')) {
+  failures.push(`Standalone container registration should admit the service through its modeled receiving container, observed ${stateSummary(standaloneDialogDemands)}.`);
 }
 if (!standaloneOwnerRoots.some((root) => root.basis === 'container-get-backed')) {
   failures.push('Expected the standalone fixture demand owner to be a container-get-backed service root.');
@@ -70,23 +72,28 @@ if (!standaloneOwnerRoots.some((root) => root.basis === 'container-get-backed'))
 if (!standaloneContainerOwnerRoots.some((root) => root.rootKind === 'container' && root.basis === 'direct-constructor')) {
   failures.push('Expected the standalone fixture service root to point at a direct-constructor container root.');
 }
-if (!standaloneSeamRows.some((seam) =>
-  seam.seamKindKey === KernelVocabulary.Di.OpenRegistrationSpending.key
-  && seam.reasonKinds?.includes('di-registration-container-open')
-)) {
-  failures.push('Standalone container registration should link a DI open-registration-spending container seam.');
+if (standaloneBlockingSeams.length !== 0) {
+  failures.push(`Modeled standalone container admission should not retain blocking open seams, observed ${standaloneBlockingSeams.length}.`);
 }
 if (standaloneDiagnostics.some((row) => row.missingInput === 'dialog.service-resolvers')) {
-  failures.push('Standalone container registration uncertainty must not emit framework-capability-not-registered.');
+  failures.push('Admitted standalone container registration must not emit framework-capability-not-registered.');
 }
-if (providedDiKeyInterfaceNames(standalone.store).has('IDialogService')) {
-  failures.push('Standalone unspent container registration must not publish a world-global IDialogService provider.');
+if (!standaloneContainerProof.rootDenotesContainer) {
+  failures.push('Standalone source container root should denote the exact modeled DI container product.');
+}
+if (!standaloneContainerProof.denotedContainerProvidesKey) {
+  failures.push('Standalone IDialogService provider should belong to the exact container denoted by the source root.');
 }
 
 const strayDialogDemands = sourceServiceDemands(stray, 'dialog.service-resolvers');
 const strayDiagnostics = sourceServiceDiagnostics(stray);
 const strayOpenSeams = stray.store.readOpenSeams();
 const strayBlockingSeams = strayDialogDemands.flatMap((demand) => demand.blockingOpenSeamHandles ?? []);
+const strayContainerRoot = stray.serviceRoots.find((root) =>
+  root.rootKind === 'container'
+  && root.basis === 'direct-constructor'
+) ?? null;
+const strayContainerProof = directContainerProviderProof(stray, strayContainerRoot, 'IDialogService');
 
 if (strayDialogDemands.length !== 1) {
   failures.push(`Expected one stray-container dialog source-service demand, observed ${strayDialogDemands.length}.`);
@@ -100,14 +107,14 @@ if (strayBlockingSeams.length !== 0) {
 if (!strayDiagnostics.some((row) => row.missingInput === 'dialog.service-resolvers')) {
   failures.push('Stray app-root missing dialog registration should emit framework-capability-not-registered.');
 }
-if (!strayOpenSeams.some((seam) =>
+if (strayOpenSeams.some((seam) =>
   seam.seamKindKey === KernelVocabulary.Di.OpenRegistrationSpending.key
   && seam.reasonKinds?.includes('di-registration-container-open')
 )) {
-  failures.push('Stray standalone container registration should still preserve a DI open-registration-spending container seam.');
+  failures.push('Modeled stray standalone container registration should not retain a DI container-open seam.');
 }
-if (providedDiKeyInterfaceNames(stray.store).has('IDialogService')) {
-  failures.push('Stray standalone registration must not publish a world-global IDialogService provider.');
+if (!strayContainerProof.rootDenotesContainer || !strayContainerProof.denotedContainerProvidesKey) {
+  failures.push('Stray standalone IDialogService registration should remain represented on its own denoted container.');
 }
 
 const openSpreadLocalDialogDemands = sourceServiceDemands(openSpreadLocal, 'dialog.service-resolvers');
@@ -317,6 +324,26 @@ function sourceServiceDiagnostics(fixture) {
 
 function ownerRootForDemand(fixture, demand) {
   return fixture.serviceRoots.find((root) => root.identityHandle === demand.ownerIdentityHandle) ?? null;
+}
+
+function directContainerProviderProof(fixture, containerRoot, interfaceName) {
+  const chainFacts = readDiContainerChainFacts(fixture.store);
+  const denotation = containerRoot == null
+    ? null
+    : fixture.store.readClaims().find((claim) =>
+      claim.subjectHandle === containerRoot.productHandle
+      && claim.predicateKey === KernelVocabulary.Framework.ContainerRootDenotesContainer.key
+    ) ?? null;
+  const denotedContainerIdentity = denotation == null
+    ? null
+    : chainFacts.containerIdentityHandleForProduct(denotation.objectHandle);
+  const keyIdentity = interfaceKeyIdentityHandle(fixture.store, interfaceName);
+  return {
+    rootDenotesContainer: denotedContainerIdentity != null,
+    denotedContainerProvidesKey: denotedContainerIdentity != null
+      && keyIdentity != null
+      && chainFacts.providerContainerIdentityHandlesForKey(keyIdentity).includes(denotedContainerIdentity),
+  };
 }
 
 function providedDiKeyInterfaceNames(store) {

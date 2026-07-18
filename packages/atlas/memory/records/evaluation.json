@@ -41,7 +41,7 @@
         "The evaluator module graph is runtime-shaped. Type-only imports and type-only re-exports should be erased before graph evaluation so TypeScript-only cycles do not become artificial runtime import cycles during DI/source-value activation.",
         "CommonJS carrier semantics belong in evaluation/commonjs.ts. StaticEvaluator materializes authored exports/module carriers there and StaticModuleGraphEvaluator reads export/require values through the same substrate.",
         "Class and function value execution belong in evaluation/class-values.ts and evaluation/function-values.ts. Keep class lifecycle and call-frame construction there while preserving StaticEvaluator as the owner of recursion, guardrails, and open seams.",
-        "Aurelia runtime-host intrinsics may ask StaticIntrinsicEvaluationHost for generic class instantiation, but product-specific calls such as ambient resolve(ClassKey) should stay at the host boundary and only close in activation-like frames with `this`; `evaluateAureliaResolveCall(...)` owns that narrow path through `aureliaResolveDirectKey(...)` and `evaluateAureliaResolveDirectClassKey(...)`. Registered/interface DI keys join through RuntimeBindingSourceActivationContext.resolveCallFrame(...) and active-container resolver lookup when a modeled container is available, not through the generic evaluator.",
+        "Aurelia runtime-host intrinsics may ask StaticIntrinsicEvaluationHost for generic class instantiation, but product-specific calls such as ambient resolve(ClassKey) should stay at the host boundary and only close in activation-like frames with `this`; `evaluateAureliaResolveCall(...)` owns direct class-key closure. Registered/interface keys join through the shared DiProviderActivationView, and RuntimeBindingSourceEvaluationFrame binds one activation session to the active modeled container rather than maintaining a second binding-source DI resolver.",
         "Browser ambient globals such as document, window, self, customElements, and console are Aurelia host-runtime boundary values during app admission. Keep them in aureliaStaticEvaluationRuntimeHost so app setup expressions remain host-dependent boundaries instead of unresolved-identifier seams, and keep ordinary host-boundary method calls/property writes such as animation-frame, storage, keyboard event, WebGL, and AudioContext usage as boundary propagation rather than generic dynamic-call/dynamic-mutation seam sites.",
         "Effective TypeScript lib ambient value declarations and project-local `.d.ts` ambient `declare const/let/var` globals, including `declare global` module declarations, are host-environment boundary values for static evaluation. Keep this in StaticProjectEvaluationPass via ambient-globals.ts so browser/stdlib names and Vite/build-time injected variables stop producing unresolved-identifier seams without pretending their literal values are statically known.",
         "`import.meta` is a host-environment boundary object. `import.meta.env.*` should be legal evaluator syntax that carries host/bundler dependency forward to consumers such as resource convergence without becoming an evaluator unsupported-expression seam.",
@@ -197,15 +197,13 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
-          "symbolName": "RuntimeBindingSourceActivationContext",
-          "summary": "Binding-source DI activation context for registered/interface resolve(...) keys when a modeled active container is available."
+          "filePath": "packages/semantic-runtime/src/di/provider-activation.ts",
+          "summary": "Shared DI provider/default/lifetime/activation authority used by binding-source reads and diagnostics."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
-          "symbolName": "RuntimeBindingSourceActivationContext.resolveCallFrame",
-          "summary": "Binding-source activation resolve(...) frame for registered/interface key admission before active-container resolver lookup."
+          "filePath": "packages/semantic-runtime/src/observation/binding-source-evaluation-frame.ts",
+          "summary": "Binding-source evaluator frame that binds a candidate-local DI activation session to the active container."
         },
         {
           "kind": "source",
@@ -446,75 +444,106 @@
         "semantic-runtime",
         "evaluation",
         "boot",
-        "world-construction"
+        "world-construction",
+        "incrementality"
       ],
-      "summary": "StaticProjectEvaluationFrame owns the per-run project evaluation lifetime behind the shared StaticProjectEvaluationPass facade.",
-      "rationale": "Resource, configuration, DI, template, and type-system work need one shared evaluation envelope over app sources and linked source dependencies. StaticProjectEvaluationPass should stay a small public entry point; StaticProjectEvaluationFrame owns the per-run admission index, module source host, graph evaluation, result publication, and profile assembly. Project-level evaluation should remain evaluator substrate and kernel open-seam emission, not an Aurelia recognizer.",
+      "summary": "Static project evaluation is one typed reusable computation per project/profile, with a shared compiler-world ambient input and explicit candidate session forks.",
+      "rationale": "Resource, configuration, DI, template, and type-system work need one admitted evaluation envelope over app sources and linked dependencies. StaticProjectEvaluationComputationService owns one graph/value/runtime-host identity domain per project/profile and StaticProjectEvaluationFrame remains its per-run worker. The admitted result is a read-only-by-ownership baseline; mutating consumers fork a graph-preserving session. TypeScript-lib and project .d.ts ambient declarations are profile-independent compiler facts and therefore have one upstream typed generation with exact source reads. Project-level evaluation remains evaluator substrate and kernel open-seam emission, not an Aurelia recognizer or a hidden source-discovery authority.",
       "guidance": [
-        "Start at StaticProjectEvaluationFrame when app-source admission, linked source admission, unresolved module capture, phase timing, module-source-host profiling, or evaluator open-seam emission changes.",
-        "Keep StaticProjectEvaluationPass as a small facade over the per-run frame unless a new public evaluation mode needs a distinct entry point.",
+        "Start at StaticProjectEvaluationComputationService and StaticProjectEvaluationFrame when app-source admission, linked source admission, exact evaluator reads, phase timing, module-source-host profiling, or evaluator open-seam emission changes.",
+        "Keep StaticProjectEvaluationPass as the standalone facade. Production and app-world-free consumers acquire the typed project/profile generation instead of constructing alternate evaluator graphs.",
+        "One evaluation generation owns one module graph, value identity domain, and canonical runtime host across all admitted roots. Do not recreate graph or host wrappers per source root or module.",
+        "Treat the admitted result as the baseline. Inspection-only consumers may read it; every replaceable or speculative analysis owner takes one forkSession() and shares that session across its evaluator-backed readers.",
+        "Runtime-host metadata transfer must preserve aliases and cycles. Fork foreign or canonical host-returned values; adopt only values proven to belong to the candidate session graph.",
+        "Keep ambient TypeScript-lib and admitted project-declaration globals in the shared project/compiler computation. App and Vite profiles observe the same generation rather than rescanning the same compiler world.",
         "Keep source roles authoritative: tests, declarations, templates, styles, manifests, tooling scripts, and tooling configs should not enter app-world static evaluation by accident.",
-        "Keep checker/project inclusion separate from Aurelia app-world evaluation eligibility. Top-level TS/JS tooling scripts, including `.mjs`, are `tooling-script` sources: they remain visible to ordinary TypeScript diagnostics without producing app-world static evaluation seams. Do not force them through `app-source` merely to keep checker visibility.",
-        "Use the source composition profile to separate app-authored sources from linked source-shipped packages before deciding whether a broad evaluated-source count is an admission bug or legitimate framework/plugin pressure.",
-        "Static project evaluation source results carry compact source-origin contributions. Preserve both `static-evaluation-root` and `module-graph-dependency` when a source is directly discovered as app-source and also reached through startup/import graph evaluation.",
-        "Public open-seam context should consume those source origins query-time instead of adding durable kernel records or MCP-local source-origin guesses.",
-        "If a downstream materializer needs another evaluation loop, inspect whether it should consume StaticProjectEvaluationResult instead."
+        "Keep checker/project inclusion separate from Aurelia app-world evaluation eligibility. Top-level tooling scripts remain visible to TypeScript diagnostics without producing app-world evaluation seams.",
+        "Preserve every unique static-evaluation origin, including several module-graph-dependency roots for one source. Never compact origin rows by kind because entryModuleKey and entrySourcePath are causal provenance.",
+        "Public open-seam context should consume source origins query-time instead of adding durable kernel records or MCP-local source-origin guesses.",
+        "Boot source admission remains upstream. A new unimported template or resource requires source-admission producer work; do not hide that gap with evaluator-local filesystem rescans.",
+        "Do not add module/SCC caches until exact manifests, repeated-edit measurements, semantic equality, and deterministic activation prove the split is useful."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
-          "symbolName": "StaticProjectEvaluationPass",
-          "summary": "Public project-level static evaluation facade."
+          "symbolName": "StaticProjectEvaluationComputationService",
+          "summary": "Typed reusable evaluation-generation owner by project and semantic profile."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
-          "symbolName": "StaticProjectEvaluationSourceOrigin",
-          "summary": "Compact in-memory source-origin contribution row for direct static-evaluation roots and module graph dependencies."
+          "symbolName": "StaticProjectEvaluationGeneration",
+          "summary": "Admitted baseline, profile context, exact transitive read, and candidate session-fork boundary."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
           "symbolName": "StaticProjectEvaluationFrame",
-          "summary": "Per-run project evaluation work frame and profile assembly owner."
+          "summary": "Per-run graph construction, evaluation, provenance, publication, and profile assembly owner."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/kernel/source-classification.ts",
-          "symbolName": "inferSourceFileRole",
-          "summary": "Boot source-role classifier that separates top-level tooling scripts from app-world sources."
+          "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+          "symbolName": "StaticProjectEvaluationSourceOrigin",
+          "summary": "Causal root/dependency origin row; several rows of one kind may be valid when entry roots differ."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/kernel/source-classification.ts",
-          "symbolName": "isToolingScriptPath",
-          "summary": "Top-level scripts/tools/tooling TS/JS/.mjs classifier for diagnostics-visible tooling scripts that should not enter app-world evaluation."
+          "filePath": "packages/semantic-runtime/src/evaluation/ambient-globals.ts",
+          "symbolName": "StaticEvaluationAmbientGlobalDeclarations",
+          "summary": "Shared compiler-lib and project-declaration ambient value-name product."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/kernel/address.ts",
-          "symbolName": "SourceFileRole",
-          "summary": "Source-role enum containing ToolingScript for build or maintenance scripts that need checker diagnostics but not app-world evaluation."
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluation-session.ts",
+          "symbolName": "StaticEvaluationSessionFork",
+          "summary": "Graph-preserving candidate fork with canonical host ownership and cycle-aware metadata transfer."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
-          "symbolName": "TypeSystemProject.readProgramSourceFileRole",
-          "summary": "Checker-owned source role bridge that should remain compatible with future project-inclusion versus app-world-evaluation split."
+          "filePath": "packages/semantic-runtime/src/evaluation/module-evaluator.ts",
+          "symbolName": "StaticModuleGraphEvaluator",
+          "summary": "One shared module/value/runtime-host identity domain for all graph entries."
         },
         {
-          "kind": "script",
-          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-tooling-script-source-role",
-          "summary": "Contract proving top-level tooling scripts, including `.mjs`, keep TypeScript diagnostics while staying out of app-world open-seam sites."
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/project-input.ts",
+          "symbolName": "SemanticRuntimeProjectInputReadScope",
+          "summary": "Consumer-local exact positive and negative host-read manifest."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/boot/source-discovery.ts",
+          "symbolName": "discoverSourceFiles",
+          "summary": "Boot-owned source admission boundary that is not yet rediscovered across input generations."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/README.md",
-          "summary": "Project-level evaluation envelope notes."
+          "summary": "Project evaluation, session ownership, ambient computation, and exact-read doctrine."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/semantic-runtime/scripts/contract-project-evaluation-publication.mjs",
+          "summary": "Contract proving one published source result retains every causal dependency/root origin."
         }
       ],
       "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "StaticProjectEvaluationComputationService",
+          "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+          "minLineCount": 180,
+          "minMethodCount": 8
+        },
+        {
+          "kind": "product-large-class",
+          "className": "StaticProjectEvaluationGeneration",
+          "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+          "minLineCount": 60,
+          "minMethodCount": 2
+        },
         {
           "kind": "product-large-class",
           "className": "StaticProjectEvaluationFrame",
@@ -524,7 +553,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-06-10"
+      "updatedAt": "2026-07-19"
     },
     {
       "id": "frontier:evaluation-module-loader",

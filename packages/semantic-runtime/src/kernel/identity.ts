@@ -31,6 +31,10 @@ export const enum DiKeyIdentityKind {
   Symbol = 'symbol',
   /** A string key used through resolver or registration APIs. */
   String = 'string',
+  /** An object value whose JavaScript reference identity is the DI key. */
+  Object = 'object',
+  /** A non-string primitive key compared by JavaScript value semantics. */
+  Primitive = 'primitive',
   /** A resource identity used as a registration or lookup key. */
   Resource = 'resource',
   /** A resolver object used as a key expression that computes or redirects lookup. */
@@ -42,6 +46,8 @@ export const enum DiResolverKeyKind {
   Lazy = 'lazy',
   /** Resolver helper that returns all registrations for a key. */
   All = 'all',
+  /** Resolver helper that returns the last registration for a key. */
+  Last = 'last',
   /** Resolver helper that marks a key lookup as optional. */
   Optional = 'optional',
   /** Resolver helper that creates a factory function for a key. */
@@ -50,12 +56,36 @@ export const enum DiResolverKeyKind {
   Own = 'own',
   /** Resolver helper that reads from the hydration context. */
   FromHydrationContext = 'from-hydration-context',
+  /** Resolver helper that uses current-container-then-root resource visibility. */
+  Resource = 'resource',
+  /** Optional resolver helper that uses current-container-then-root resource visibility. */
+  OptionalResource = 'optional-resource',
+  /** Collection resolver helper that combines current-container and root resource visibility. */
+  AllResources = 'all-resources',
   /** Resolver helper that creates a new instance for the request. */
   NewInstanceOf = 'new-instance-of',
   /** Resolver helper that creates a new instance for the current scope. */
   NewInstanceForScope = 'new-instance-for-scope',
+  /** Built-in resolver that intentionally supplies undefined. */
+  Ignore = 'ignore',
   /** Resolver object supplied by user code or framework code outside the known helper set. */
   Custom = 'custom',
+}
+
+export const enum SymbolDiKeyIdentityKind {
+  /** Symbol identity is canonical for a `Symbol.for(...)` key within the analyzed runtime realm. */
+  GlobalRegistry = 'global-registry',
+  /** Symbol identity belongs to one source-backed `Symbol(...)` creation. */
+  LocalCreation = 'local-creation',
+}
+
+export const enum PrimitiveDiKeyValueKind {
+  /** JavaScript number value, including NaN and infinities when statically known. */
+  Number = 'number',
+  /** JavaScript boolean value accepted by the runtime despite lying outside the public Key type. */
+  Boolean = 'boolean',
+  /** JavaScript bigint value accepted by the runtime despite lying outside the public Key type. */
+  BigInt = 'bigint',
 }
 
 export const enum ContainerIdentityKind {
@@ -251,11 +281,47 @@ export class SymbolDiKeyIdentity {
   constructor(
     /** Store-local handle for this identity record. */
     readonly handle: IdentityHandle,
+    /** Whether equality comes from the global symbol registry or one local creation site. */
+    readonly symbolKind: SymbolDiKeyIdentityKind,
     /** Declaration identity for a named symbol, when the symbol is source-backed. */
     readonly declarationHandle: IdentityHandle | null,
     /** Symbol description or Symbol.for key when statically known. */
     readonly symbolName: string | null,
     /** Address handle for the expression or declaration that supplied the key. */
+    readonly keyAddressHandle: AddressHandle | null = null,
+  ) {}
+}
+
+/** DI key identity for an object value compared by JavaScript reference identity. */
+export class ObjectDiKeyIdentity {
+  /** String discriminator for serialized DI key identity records. */
+  readonly kind = 'di-key-identity' as const;
+  /** Runtime-relevant key shape discriminator. */
+  readonly keyKind = DiKeyIdentityKind.Object;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Source address for the object/function creation that establishes its semantic identity. */
+    readonly creationAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** DI key identity for a non-string primitive value. */
+export class PrimitiveDiKeyIdentity {
+  /** String discriminator for serialized DI key identity records. */
+  readonly kind = 'di-key-identity' as const;
+  /** Runtime-relevant key shape discriminator. */
+  readonly keyKind = DiKeyIdentityKind.Primitive;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Primitive family needed to avoid collisions between equal textual renderings. */
+    readonly valueKind: PrimitiveDiKeyValueKind,
+    /** Canonical value text used for deterministic kernel identity and comparison. */
+    readonly value: string,
+    /** Best source for the canonical value when one exists. */
     readonly keyAddressHandle: AddressHandle | null = null,
   ) {}
 }
@@ -305,6 +371,8 @@ export type DiKeyIdentity =
   | InterfaceDiKeyIdentity
   | StringDiKeyIdentity
   | SymbolDiKeyIdentity
+  | ObjectDiKeyIdentity
+  | PrimitiveDiKeyIdentity
   | ResourceDiKeyIdentity
   | ResolverDiKeyIdentity;
 

@@ -3,6 +3,7 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
+import type { DiKeyIdentityKind } from '../kernel/identity.js';
 
 export const enum RegistrationValueKind {
   /** Use when a registration value expression was observed but not classified. */
@@ -102,6 +103,8 @@ export class RegistrationKeyReference {
     readonly addressHandle: AddressHandle | null,
     /** Local name or literal preview for traces when the identity is still open. */
     readonly localName: string | null,
+    /** Proven runtime key shape retained for later container branching without reclassification. */
+    readonly keyKind: DiKeyIdentityKind | null,
   ) {}
 }
 
@@ -122,5 +125,7 @@ export class RegistrationValueReference {
     readonly frameworkKind: FrameworkRegistrationKind | null = null,
     /** Known registry-body semantics, when an IRegistry value was produced by a framework registry factory. */
     readonly registryBody: RegistryBodyReference | null = null,
+    /** Runtime key shape when this value itself denotes a DI key, notably an alias target. */
+    readonly keyKind: DiKeyIdentityKind | null = null,
   ) {}
 }

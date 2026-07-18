@@ -96,6 +96,17 @@ export interface ConfigurationOpenSeamEmission {
   readonly handle: OpenSeamHandle;
 }
 
+/** Read claims that directly explain one produced configuration product. */
+export function claimHandlesForConfigurationProduct(
+  records: readonly KernelStoreRecord[],
+  productHandle: ProductHandle,
+): readonly ClaimHandle[] {
+  return records
+    .filter((record): record is SemanticClaim => record.kind === 'semantic-claim')
+    .filter((claim) => claim.subjectHandle === productHandle || claim.objectHandle === productHandle)
+    .map((claim) => claim.handle);
+}
+
 /** Shared record-publication primitives for configuration products and source evidence. */
 export class ConfigurationKernelPublication {
   constructor(

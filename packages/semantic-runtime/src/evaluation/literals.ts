@@ -181,7 +181,7 @@ export function evaluateStaticObjectLiteral(
       }
       properties.set(name, new EvaluationObjectProperty(
         name,
-        new EvaluationFunctionValue(property, environment.clone(`${moduleKey}:method:${name}`), property),
+        new EvaluationFunctionValue(property, environment, property),
         property,
         EvaluationObjectPropertyState.Closed,
       ));

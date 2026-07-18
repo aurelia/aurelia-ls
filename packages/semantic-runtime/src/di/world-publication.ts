@@ -31,6 +31,7 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   KernelVocabulary,
   type OpenSeamKindKey,
@@ -70,6 +71,8 @@ import {
   RegistrationKeyReference,
   RegistrationValueReference,
 } from '../registration/registration-reference.js';
+import { frameworkRegistrationModuleNamesForCapability } from '../registration/framework-registration-manifest.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import type {
   FrameworkAppTaskEffect,
   FrameworkFactoryEffect,
@@ -92,6 +95,7 @@ import {
 import type { DiIssue } from './di-issue.js';
 import {
   DiKeyIdentityEmitter,
+  type DiKeyIdentityEmission,
   resourceDiKeyIdentityLocal,
 } from './di-key-identity-emitter.js';
 import {
@@ -460,23 +464,30 @@ export class DiRegistryPublicationMaterializer {
 export class DiFrameworkAppTaskPublicationMaterializer {
   constructor(
     private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
     private readonly keyIdentityEmitter: DiKeyIdentityEmitter,
   ) {}
 
   recordsForFrameworkAppTaskEffect(
     admission: RegistrationAdmissionProduct,
     effect: FrameworkAppTaskEffect,
+    typeSystem: TypeSystemProject,
     local: string,
     provenanceHandle: ProvenanceHandle,
   ): DiFrameworkAppTaskPublicationEmission {
     const records: KernelStoreRecord[] = [];
-    const keyIdentityHandle = this.keyIdentityEmitter.frameworkOrLocalInterfaceKeyIdentityHandle(
-      effect.keyName,
-      this.store.handles.identity(`${local}:key:${effect.keyName}`),
+    const keyIdentity = emitFrameworkEffectKeyIdentity(
+      records,
+      this.store,
+      this.publication,
+      this.keyIdentityEmitter,
+      typeSystem,
+      effect,
+      local,
+      admission.sourceAddressHandle,
     );
-    this.keyIdentityEmitter.emitInterfaceKeyIdentity(records, keyIdentityHandle, effect.keyName, admission.sourceAddressHandle);
 
-    const task = this.frameworkAppTaskDefinition(admission, effect, local, keyIdentityHandle);
+    const task = this.frameworkAppTaskDefinition(admission, effect, local, keyIdentity);
     records.push(...this.recordsForFrameworkAppTaskProduct(admission, effect, local, task, provenanceHandle));
 
     return new DiFrameworkAppTaskPublicationEmission(records, task);
@@ -486,7 +497,7 @@ export class DiFrameworkAppTaskPublicationMaterializer {
     admission: RegistrationAdmissionProduct,
     effect: FrameworkAppTaskEffect,
     local: string,
-    keyIdentityHandle: IdentityHandle,
+    keyIdentity: DiKeyIdentityEmission,
   ): AppTaskDefinition {
     return new AppTaskDefinition(
       this.store.handles.product(local),
@@ -494,9 +505,10 @@ export class DiFrameworkAppTaskPublicationMaterializer {
       effect.slot,
       AppTaskCallbackKind.ResolvedKey,
       new RegistrationKeyReference(
-        keyIdentityHandle,
+        keyIdentity.identityHandle,
         admission.sourceAddressHandle,
         effect.keyName,
+        keyIdentity.keyKind,
       ),
       new ConfigurationCallbackReference(
         null,
@@ -693,6 +705,7 @@ class DiContainerSelfResolverHandles {
 export class DiResolverPublicationMaterializer {
   constructor(
     private readonly store: KernelStore,
+    private readonly publication: KernelPublicationContext,
     private readonly keyIdentityEmitter: DiKeyIdentityEmitter,
   ) {}
 
@@ -744,6 +757,7 @@ export class DiResolverPublicationMaterializer {
     container: Container,
     admission: RegistrationAdmissionProduct,
     effect: FrameworkResolverEffect,
+    typeSystem: TypeSystemProject,
     local: string,
     provenanceHandle: ProvenanceHandle,
   ): {
@@ -752,16 +766,21 @@ export class DiResolverPublicationMaterializer {
     readonly resolverSlot: ContainerResolverSlot;
   } {
     const records: KernelStoreRecord[] = [];
-    const keyIdentityHandle = this.keyIdentityEmitter.frameworkOrLocalInterfaceKeyIdentityHandle(
-      effect.keyName,
-      this.store.handles.identity(`${local}:key:${effect.keyName}`),
+    const keyIdentity = emitFrameworkEffectKeyIdentity(
+      records,
+      this.store,
+      this.publication,
+      this.keyIdentityEmitter,
+      typeSystem,
+      effect,
+      local,
+      admission.sourceAddressHandle,
     );
-    this.keyIdentityEmitter.emitInterfaceKeyIdentity(records, keyIdentityHandle, effect.keyName, admission.sourceAddressHandle);
 
     const publication = this.frameworkResolverPublication(
       admission,
       effect,
-      keyIdentityHandle,
+      keyIdentity,
     );
     const emission = this.recordsForResolverPublication(container, publication, local, provenanceHandle);
     records.push(...emission.records);
@@ -776,21 +795,27 @@ export class DiResolverPublicationMaterializer {
     container: Container,
     admission: RegistrationAdmissionProduct,
     effect: FrameworkFactoryEffect,
+    typeSystem: TypeSystemProject,
     local: string,
     provenanceHandle: ProvenanceHandle,
   ): DiFactoryPublicationEmission {
     const records: KernelStoreRecord[] = [];
-    const keyIdentityHandle = this.keyIdentityEmitter.frameworkOrLocalInterfaceKeyIdentityHandle(
-      effect.keyName,
-      this.store.handles.identity(`${local}:key:${effect.keyName}`),
+    const keyIdentity = emitFrameworkEffectKeyIdentity(
+      records,
+      this.store,
+      this.publication,
+      this.keyIdentityEmitter,
+      typeSystem,
+      effect,
+      local,
+      admission.sourceAddressHandle,
     );
-    this.keyIdentityEmitter.emitInterfaceKeyIdentity(records, keyIdentityHandle, effect.keyName, admission.sourceAddressHandle);
 
     const identityHandle = this.store.handles.identity(`${local}:factory-slot`);
     const slot = new ContainerFactorySlot(
       this.store.handles.product(`${local}:factory-slot`),
       container.toReference(),
-      keyIdentityHandle,
+      keyIdentity.identityHandle,
       null,
       admission.sourceAddressHandle,
       [],
@@ -803,7 +828,7 @@ export class DiResolverPublicationMaterializer {
       ownerIdentityHandle: admission.identityHandle,
       sourceAddressHandle: admission.sourceAddressHandle,
       providesKeyClaimHandle: this.store.handles.claim(`${local}:factory-slot-provides-key`),
-      keyIdentityHandle,
+      keyIdentityHandle: keyIdentity.identityHandle,
       provenanceHandle,
       materializationLocal: `${local}:factory-slot`,
     }));
@@ -917,16 +942,17 @@ export class DiResolverPublicationMaterializer {
   private frameworkResolverPublication(
     admission: RegistrationAdmissionProduct,
     effect: FrameworkResolverEffect,
-    keyIdentityHandle: IdentityHandle,
+    keyIdentity: DiKeyIdentityEmission,
   ): DiResolverPublication {
     return {
       ownerIdentityHandle: admission.identityHandle,
       key: new RegistrationKeyReference(
-        keyIdentityHandle,
+        keyIdentity.identityHandle,
         admission.sourceAddressHandle,
         effect.keyName,
+        keyIdentity.keyKind,
       ),
-      keyIdentityHandle,
+      keyIdentityHandle: keyIdentity.identityHandle,
       strategy: effect.strategy,
       state: effect.valueKind == null
         ? null
@@ -940,6 +966,27 @@ export class DiResolverPublicationMaterializer {
       sourceAddressHandle: admission.sourceAddressHandle,
     };
   }
+}
+
+function emitFrameworkEffectKeyIdentity(
+  records: KernelStoreRecord[],
+  store: KernelStore,
+  publication: KernelPublicationContext,
+  emitter: DiKeyIdentityEmitter,
+  typeSystem: TypeSystemProject,
+  effect: FrameworkResolverEffect | FrameworkFactoryEffect | FrameworkAppTaskEffect,
+  local: string,
+  sourceAddressHandle: AddressHandle | null,
+): DiKeyIdentityEmission {
+  return emitter.emitExportedKeyIdentity(
+    records,
+    publication,
+    typeSystem,
+    frameworkRegistrationModuleNamesForCapability(effect.capability),
+    effect.keyName,
+    store.handles.identity(`${local}:key:${effect.keyName}`),
+    sourceAddressHandle,
+  );
 }
 
 export class DiResourceSlotPublicationMaterializer {
@@ -1354,6 +1401,7 @@ export class DiContainerSelfResolverPublicationMaterializer {
       records,
       handles.keyIdentityHandle,
       FrameworkIntrinsicDiKey.IContainer,
+      null,
       container.sourceAddressHandle,
     );
 

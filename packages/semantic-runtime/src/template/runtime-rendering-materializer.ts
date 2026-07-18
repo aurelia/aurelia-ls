@@ -1,7 +1,6 @@
 import { SemanticClaim } from '../kernel/claim.js';
 import type { Container } from '../di/container.js';
 import {
-  ContainerContextResolverRecordPolicy,
   type ContainerChildMaterializationEmission,
 } from '../di/container-materializer.js';
 import type {
@@ -171,8 +170,6 @@ export interface RuntimeRenderingMaterializationRequest {
   readonly typeSystem: TypeSystemProject | null;
   /** Shared checker projection/cache world for this complete app-analysis generation. */
   readonly expressionWorld: CheckerExpressionTypeWorld;
-  /** Whether framework contextual resolver slots should be published as kernel records during rendering. */
-  readonly contextResolverRecordPolicy: ContainerContextResolverRecordPolicy;
   /** Optional fine-grained telemetry sink owned by the surrounding inquiry profile. */
   readonly profiling?: SemanticRuntimePhaseSink | null;
 }
@@ -932,7 +929,6 @@ export class RuntimeRenderingMaterializer {
         state.openSeams,
         state.controllerIssues,
         (name, read) => this.measure(state.input, `controller-creation:${name}`, read),
-        state.input.contextResolverRecordPolicy,
         state.input.projectKey,
         state.input.resourceDefinitions,
       ),

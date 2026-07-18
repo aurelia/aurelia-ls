@@ -51,6 +51,17 @@ const failures = [
         openReason: row.openReason,
       })}`
   ),
+  ...compositions.filter((row) => row.composedChildControllerCount > 0).map((row) =>
+    row.composedChildContainerCount === row.composedChildControllerCount
+    && row.composedChildContextResolverSlotCount > 0
+      ? null
+      : `Closed composed-child controller handoff lost its DI container or contextual providers: ${JSON.stringify({
+        source: row.source?.label ?? null,
+        composedChildControllerCount: row.composedChildControllerCount,
+        composedChildContainerCount: row.composedChildContainerCount,
+        composedChildContextResolverSlotCount: row.composedChildContextResolverSlotCount,
+      })}`
+  ),
   overloadedChartRows.length > 0
     ? null
     : 'Expected at least one ChartWidget composition row to prove overloaded activate(model) signature selection.',
@@ -78,6 +89,8 @@ const summary = {
     modelResolutionKind: row.modelResolutionKind,
     resolvedComponentNames: row.resolvedComponentNames,
     resolvedComponentClassNames: row.resolvedComponentClassNames,
+    composedChildContainerCount: row.composedChildContainerCount,
+    composedChildContextResolverSlotCount: row.composedChildContextResolverSlotCount,
     openReason: row.openReason,
   })),
   overloadedChartRows: overloadedChartRows.map((row) => ({

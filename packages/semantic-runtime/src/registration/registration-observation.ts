@@ -1,4 +1,6 @@
 import type ts from 'typescript';
+import type { EvaluatedDiKeyDeclarationSource } from '../di/di-key-identity-emitter.js';
+import type { EvaluationValue } from '../evaluation/values.js';
 import type {
   AddressHandle,
   ProductHandle,
@@ -44,26 +46,19 @@ export const enum RegistrationKeyObservationKind {
   Constructable = 'constructable',
 }
 
-export interface RegistrationConstructableKeySource {
-  /** Declaration node that produced the constructable value used as a DI key. */
-  readonly declaration: ts.ClassLikeDeclaration | ts.FunctionLikeDeclaration;
-  /** Evaluator module key that owns the constructable declaration. */
-  readonly moduleKey: string;
-  /** Source-file address admitted for the declaration file when known. */
-  readonly sourceFileAddressHandle: AddressHandle | null;
-}
-
 /** Source-level key expression observed before kernel identity materialization. */
 export class RegistrationKeyObservation {
   constructor(
     /** Best local name, literal preview, or property name for the key. */
     readonly localName: string | null,
     /** Source node that produced the key expression. */
-    readonly node: ts.Node,
+    readonly node: ts.Expression,
     /** Runtime key-shape evidence available before kernel identity materialization. */
     readonly observationKind: RegistrationKeyObservationKind = RegistrationKeyObservationKind.Expression,
     /** Declaration source for evaluator-proven constructable keys. */
-    readonly constructableSource: RegistrationConstructableKeySource | null = null,
+    readonly constructableSource: EvaluatedDiKeyDeclarationSource | null = null,
+    /** Evaluator value used to recover primitive-value and object identity across import aliases. */
+    readonly evaluatedValue: EvaluationValue | null = null,
   ) {}
 }
 
@@ -88,6 +83,10 @@ export class RegistrationValueObservation {
     readonly moduleKey: string | null = null,
     /** Known registry-body semantics, when an IRegistry value was produced by a framework registry factory. */
     readonly registryBody: RegistryBodyReference | null = null,
+    /** Key semantics when this value is itself a DI key, such as an alias target. */
+    readonly keyObservation: RegistrationKeyObservation | null = null,
+    /** Candidate-local evaluator value retained for later execution without entering kernel records. */
+    readonly evaluatedValue: EvaluationValue | null = null,
   ) {}
 }
 

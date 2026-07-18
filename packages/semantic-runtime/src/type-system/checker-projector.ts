@@ -12,7 +12,6 @@ import type {
   AddressHandle,
   EvidenceHandle,
   IdentityHandle,
-  KernelRecordHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -68,6 +67,7 @@ import {
   declarationsForCheckerSymbol,
 } from './checker-member-surface.js';
 import {
+  appendDeclarationSourceRecords,
   sourceSpanForCheckerDeclaration,
   type DeclarationSourcePublication,
 } from './declaration-source.js';
@@ -945,30 +945,4 @@ function valueTypeReferenceForMember(
     CheckerTypeProjectionOrigin.TypeChecker,
     null,
   );
-}
-
-function appendDeclarationSourceRecords(
-  publication: KernelPublicationContext,
-  records: KernelStoreRecord[],
-  declarationSource: DeclarationSourcePublication | null,
-): void {
-  if (declarationSource == null) {
-    return;
-  }
-  for (const record of declarationSource.records) {
-    appendKernelRecordIfAbsent(publication, records, record);
-  }
-}
-
-function appendKernelRecordIfAbsent(
-  publication: KernelPublicationContext,
-  records: KernelStoreRecord[],
-  record: KernelStoreRecord,
-): void {
-  if (
-    publication.read(record.handle as KernelRecordHandle) == null
-    && !records.some((existing) => existing.handle === record.handle)
-  ) {
-    records.push(record);
-  }
 }

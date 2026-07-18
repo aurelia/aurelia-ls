@@ -3,6 +3,7 @@ import type { ProductHandle } from '../kernel/handles.js';
 import { uniqueStrings } from '../kernel/collections.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { RuntimeControllerFrame } from '../template/runtime-controller.js';
+import type { ContainerChildMaterializationEmission } from '../di/container-materializer.js';
 import type {
   CompositionContext,
   CompositionController,
@@ -49,6 +50,9 @@ function runtimeCompositionRowsForResource(
       [controller.productHandle, controller] as const
     ),
   ]);
+  const childContainersByProduct = new Map(resource.runtimeAnalysis.runtimeComposition.childContainers.map((emission) =>
+    [emission.container.productHandle, emission] as const
+  ));
   return resource.runtimeAnalysis.runtimeComposition.controllers.map((composition) =>
     runtimeCompositionRow(
       resource.compilation.definition.name,
@@ -56,6 +60,7 @@ function runtimeCompositionRowsForResource(
       composition,
       contextsByProduct.get(composition.context.productHandle) ?? null,
       controllersByProduct,
+      childContainersByProduct,
       resourcesByDefinition,
       store,
       handles,
@@ -69,6 +74,7 @@ function runtimeCompositionRow(
   composition: CompositionController,
   context: CompositionContext | null,
   controllersByProduct: ReadonlyMap<ProductHandle, RuntimeControllerFrame>,
+  childContainersByProduct: ReadonlyMap<ProductHandle, ContainerChildMaterializationEmission>,
   resourcesByDefinition: ReadonlyMap<ProductHandle, RuntimeTemplateResourceEmission>,
   store: KernelStore,
   handles: boolean,
@@ -101,6 +107,11 @@ function runtimeCompositionRow(
         (controller): controller is RuntimeControllerFrame => controller != null,
       )
   );
+  const composedChildContainers = composedChildControllers.flatMap((controller) => {
+    const containerHandle = controller.containerFrame?.productHandle ?? null;
+    const child = containerHandle == null ? null : childContainersByProduct.get(containerHandle) ?? null;
+    return child == null ? [] : [child];
+  });
   return {
     renderingDefinitionName,
     renderingContextKind: composition.parentControllerProductHandle === rootControllerProductHandle
@@ -147,6 +158,11 @@ function runtimeCompositionRow(
     composedChildControllerCreationKinds: uniqueStrings(composedChildControllers.map((controller) =>
       controller.creationKind
     ), 'sorted'),
+    composedChildContainerCount: composedChildContainers.length,
+    composedChildContextResolverSlotCount: composedChildContainers.reduce(
+      (count, child) => count + child.contextResolverSlots.length,
+      0,
+    ),
     activationHandoffs,
     activationHandoffKinds: activationHandoffs.map((handoff) => handoff.handoffKind),
     activationParameterTypes: activationHandoffs.flatMap((handoff) =>

@@ -20,6 +20,8 @@ export const enum FrameworkIntrinsicDiKey {
   IRouteContext = 'IRouteContext',
   /** Context-local router facade installed in a routed component container. */
   IContextRouter = 'IContextRouter',
+  /** Template compiler service installed by runtime-html's default component registrations. */
+  ITemplateCompiler = 'ITemplateCompiler',
 }
 
 export const frameworkIntrinsicDiKeys: readonly FrameworkIntrinsicDiKey[] = [
@@ -33,6 +35,7 @@ export const frameworkIntrinsicDiKeys: readonly FrameworkIntrinsicDiKey[] = [
   FrameworkIntrinsicDiKey.IHydrationContext,
   FrameworkIntrinsicDiKey.IRouteContext,
   FrameworkIntrinsicDiKey.IContextRouter,
+  FrameworkIntrinsicDiKey.ITemplateCompiler,
 ];
 
 export function frameworkIntrinsicDiKeyLocal(key: FrameworkIntrinsicDiKey): string {

@@ -1,6 +1,12 @@
 import path from 'node:path';
 import ts from 'typescript';
-import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
+import type { ComputationRead } from '../kernel/computation-lifecycle.js';
+import { stableKernelLocalHash } from '../kernel/handles.js';
+import type {
+  SemanticRuntimeProjectInputGeneration,
+  SemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputReadScope,
+} from '../kernel/project-input.js';
 import {
   hasPackageManifest,
   normalizePosixPath,
@@ -11,7 +17,51 @@ import {
   safeReadDirectory,
 } from './host-files.js';
 
-export interface ProjectCompilerOptionsResult {
+/** Process/toolchain facts that participate in semantic-runtime's effective compiler options. */
+export class ProjectCompilerOptionsEnvironment implements ComputationRead {
+  readonly domain = 'project-compiler-options-environment';
+  readonly readKey = 'project-compiler-options-environment';
+  readonly observedRevision: string;
+
+  constructor(
+    readonly typeScriptVersion: string,
+    readonly useCaseSensitiveFileNames: boolean,
+    readonly platform: NodeJS.Platform,
+    readonly externalSourceRoots: readonly string[],
+  ) {
+    this.observedRevision = compilerOptionsEnvironmentRevision(this);
+  }
+
+  validate() {
+    const currentRevision = readProjectCompilerOptionsEnvironment().observedRevision;
+    return {
+      isCurrent: currentRevision === this.observedRevision,
+      currentRevision,
+      changedFacets: currentRevision === this.observedRevision ? [] : ['toolchain-environment'],
+    };
+  }
+}
+
+export class ProjectCompilerOptionsResult {
+  readonly revision: string;
+
+  constructor(
+    readonly options: ts.CompilerOptions,
+    readonly configFilePath: string | null,
+    readonly diagnostics: readonly ts.Diagnostic[],
+    readonly rootFileNames: readonly string[] | null,
+    private readonly inputReadScope: SemanticRuntimeProjectInputReadScope,
+    readonly environment: ProjectCompilerOptionsEnvironment,
+  ) {
+    this.revision = projectCompilerOptionsRevision(this);
+  }
+
+  readRegisteredInputs(): readonly ComputationRead[] {
+    return [this.environment, ...this.inputReadScope.readRegisteredInputs()];
+  }
+}
+
+interface ProjectCompilerOptionsValues {
   readonly options: ts.CompilerOptions;
   readonly configFilePath: string | null;
   readonly diagnostics: readonly ts.Diagnostic[];
@@ -20,11 +70,35 @@ export interface ProjectCompilerOptionsResult {
 
 /** Read compiler options for one boot project, with semantic-runtime defaults and local tsconfig overrides. */
 export function buildProjectCompilerOptionsResult(
-  host: SemanticRuntimeProjectInputHost,
+  inputGeneration: SemanticRuntimeProjectInputGeneration,
   rootDir: string,
   discoveryRootDirs: readonly string[] = [],
 ): ProjectCompilerOptionsResult {
-  const defaults = defaultProjectCompilerOptions(host, rootDir, discoveryRootDirs);
+  const inputReadScope = inputGeneration.createReadScope('project-compiler-options');
+  const environment = readProjectCompilerOptionsEnvironment();
+  const values = readProjectCompilerOptions(
+    inputReadScope.host,
+    rootDir,
+    discoveryRootDirs,
+    environment,
+  );
+  return new ProjectCompilerOptionsResult(
+    values.options,
+    values.configFilePath,
+    values.diagnostics,
+    values.rootFileNames,
+    inputReadScope,
+    environment,
+  );
+}
+
+function readProjectCompilerOptions(
+  host: SemanticRuntimeProjectInputHost,
+  rootDir: string,
+  discoveryRootDirs: readonly string[],
+  environment: ProjectCompilerOptionsEnvironment,
+): ProjectCompilerOptionsValues {
+  const defaults = defaultProjectCompilerOptions(host, rootDir, discoveryRootDirs, environment);
   const configFile = path.join(rootDir, 'tsconfig.json');
   if (!host.fileExists(configFile)) {
     return {
@@ -48,7 +122,7 @@ export function buildProjectCompilerOptionsResult(
   const parsed = ts.parseJsonConfigFileContent(
     read.config,
     {
-      useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames,
+      useCaseSensitiveFileNames: environment.useCaseSensitiveFileNames,
       readDirectory: (directoryName, extensions, excludes, includes, depth) =>
         [...host.matchFiles(directoryName, extensions, excludes, includes, depth)],
       fileExists: (fileName) => host.fileExists(fileName),
@@ -82,19 +156,20 @@ function defaultProjectCompilerOptions(
   host: SemanticRuntimeProjectInputHost,
   rootDir: string,
   discoveryRootDirs: readonly string[],
+  environment: ProjectCompilerOptionsEnvironment,
 ): ts.CompilerOptions {
   const roots = uniqueDiscoveryRoots(rootDir, discoveryRootDirs);
   const paths = {
     ...discoverAureliaTypePaths(host, rootDir, roots),
     ...discoverWorkspacePackageSourcePaths(host, rootDir, roots),
-    ...discoverExternalPackageSourcePaths(host, rootDir),
+    ...discoverExternalPackageSourcePaths(host, rootDir, environment.externalSourceRoots),
   };
   return {
     allowJs: true,
     allowArbitraryExtensions: true,
     checkJs: false,
     experimentalDecorators: false,
-    ...defaultIgnoreDeprecationsOption(),
+    ...defaultIgnoreDeprecationsOption(environment.typeScriptVersion),
     jsx: ts.JsxEmit.Preserve,
     lib: [
       'lib.es2024.d.ts',
@@ -115,8 +190,8 @@ function defaultProjectCompilerOptions(
   };
 }
 
-function defaultIgnoreDeprecationsOption(): Pick<ts.CompilerOptions, 'ignoreDeprecations'> {
-  const major = Number(ts.versionMajorMinor.split('.')[0] ?? '0');
+function defaultIgnoreDeprecationsOption(typeScriptVersion: string): Pick<ts.CompilerOptions, 'ignoreDeprecations'> {
+  const major = Number(typeScriptVersion.split('.')[0] ?? '0');
   return major >= 6
     ? { ignoreDeprecations: '6.0' }
     : {};
@@ -172,9 +247,13 @@ function discoverWorkspacePackageSourcePaths(host: SemanticRuntimeProjectInputHo
   return mappings;
 }
 
-function discoverExternalPackageSourcePaths(host: SemanticRuntimeProjectInputHost, rootDir: string): Record<string, string[]> {
+function discoverExternalPackageSourcePaths(
+  host: SemanticRuntimeProjectInputHost,
+  rootDir: string,
+  externalSourceRoots: readonly string[],
+): Record<string, string[]> {
   const mappings: Record<string, string[]> = {};
-  for (const sourceRoot of externalSourceRoots()) {
+  for (const sourceRoot of externalSourceRoots) {
     Object.assign(mappings, packageSourcePathsForRoot(host, rootDir, sourceRoot));
   }
   return mappings;
@@ -272,19 +351,6 @@ function discoverPackageSourceEntry(host: SemanticRuntimeProjectInputHost, packa
   return null;
 }
 
-function externalSourceRoots(): readonly string[] {
-  return [
-    process.env.SEMANTIC_RUNTIME_EXTERNAL_SOURCE_ROOTS,
-    process.env.ATLAS_EXTERNAL_SOURCE_ROOTS,
-  ].flatMap((value) =>
-    value == null || value.trim().length === 0
-      ? []
-      : value.split(path.delimiter)
-        .map((entry) => entry.trim())
-        .filter((entry) => entry.length > 0)
-  );
-}
-
 function uniqueDiscoveryRoots(rootDir: string, discoveryRootDirs: readonly string[]): readonly string[] {
   const roots: string[] = [];
   const seen = new Set<string>();
@@ -363,4 +429,78 @@ function rebasePathMappings(
     );
   }
   return rebased;
+}
+
+function readProjectCompilerOptionsEnvironment(): ProjectCompilerOptionsEnvironment {
+  const externalSourceRoots = [
+    process.env.SEMANTIC_RUNTIME_EXTERNAL_SOURCE_ROOTS,
+    process.env.ATLAS_EXTERNAL_SOURCE_ROOTS,
+  ].flatMap((value) =>
+    value == null || value.trim().length === 0
+      ? []
+      : value.split(path.delimiter)
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+  );
+  return new ProjectCompilerOptionsEnvironment(
+    ts.version,
+    ts.sys.useCaseSensitiveFileNames,
+    process.platform,
+    externalSourceRoots,
+  );
+}
+
+function compilerOptionsEnvironmentRevision(environment: ProjectCompilerOptionsEnvironment): string {
+  return stableKernelLocalHash(JSON.stringify([
+    environment.typeScriptVersion,
+    environment.useCaseSensitiveFileNames,
+    environment.platform,
+    environment.externalSourceRoots,
+  ]));
+}
+
+function projectCompilerOptionsRevision(result: ProjectCompilerOptionsResult): string {
+  return stableKernelLocalHash(JSON.stringify({
+    options: stableCompilerOptionsValue(result.options),
+    configFilePath: result.configFilePath,
+    diagnostics: result.diagnostics.map((diagnostic) => ({
+      code: diagnostic.code,
+      category: diagnostic.category,
+      fileName: diagnostic.file?.fileName ?? null,
+      start: diagnostic.start ?? null,
+      length: diagnostic.length ?? null,
+      message: ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'),
+    })),
+    rootFileNames: result.rootFileNames,
+    inputs: result.readRegisteredInputs().map((read) => [read.readKey, read.observedRevision]),
+  }));
+}
+
+function stableCompilerOptionsValue(value: unknown, seen: Set<object> = new Set()): unknown {
+  if (value == null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'undefined') {
+    return '[undefined]';
+  }
+  if (typeof value !== 'object') {
+    return `[${typeof value}]`;
+  }
+  if (seen.has(value)) {
+    return '[circular]';
+  }
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value.map((entry) => stableCompilerOptionsValue(entry, seen));
+    }
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== 'configFile')
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, stableCompilerOptionsValue(entry, seen)]),
+    );
+  } finally {
+    seen.delete(value);
+  }
 }

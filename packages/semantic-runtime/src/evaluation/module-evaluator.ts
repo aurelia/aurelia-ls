@@ -56,6 +56,7 @@ export class StaticModuleGraphEvaluator {
   private readonly openValues: EvaluationUnknownValue[] = [];
   private readonly evaluatingModules = new Set<string>();
   private readonly resolvingExports = new Set<string>();
+  private readonly evaluatorRuntimeHost: StaticEvaluationRuntimeHost;
 
   constructor(
     /** Directed module graph built from source syntax and host resolution. */
@@ -66,11 +67,28 @@ export class StaticModuleGraphEvaluator {
     readonly runtimeHost: StaticEvaluationRuntimeHost = {},
     /** Product-specific values for declaration/external imports that remain outside the local graph. */
     readonly externalValueResolver: StaticModuleExternalValueResolver | null = null,
-  ) {}
+  ) {
+    this.evaluatorRuntimeHost = {
+      ...runtimeHost,
+      resolveCommonJsRequire: (currentModuleKey, moduleSpecifier, node) =>
+        runtimeHost.resolveCommonJsRequire?.(currentModuleKey, moduleSpecifier, node)
+        ?? this.resolveCommonJsRequireValue(currentModuleKey, moduleSpecifier, node),
+      resolveDynamicImport: (currentModuleKey, moduleSpecifier, node) =>
+        runtimeHost.resolveDynamicImport?.(currentModuleKey, moduleSpecifier, node)
+        ?? this.resolveDynamicImportValue(currentModuleKey, moduleSpecifier, node),
+    };
+  }
 
   /** Evaluate one entry module and any modules needed by its imports or re-exports. */
   evaluate(entryModuleKey: string): StaticModuleGraphEvaluationResult {
-    this.evaluateModule(entryModuleKey);
+    return this.evaluateEntries([entryModuleKey]);
+  }
+
+  /** Evaluate several entry modules while preserving one shared module/value identity domain. */
+  evaluateEntries(entryModuleKeys: readonly string[]): StaticModuleGraphEvaluationResult {
+    for (const entryModuleKey of entryModuleKeys) {
+      this.evaluateModule(entryModuleKey);
+    }
     return new StaticModuleGraphEvaluationResult(new Map(this.moduleResults), [...this.openValues]);
   }
 
@@ -91,15 +109,8 @@ export class StaticModuleGraphEvaluator {
 
     this.evaluatingModules.add(moduleKey);
     const imports = this.resolveImportValues(record);
-    const result = new StaticEvaluator(this.policy, {
-      ...this.runtimeHost,
-      resolveCommonJsRequire: (currentModuleKey, moduleSpecifier, node) =>
-        this.runtimeHost.resolveCommonJsRequire?.(currentModuleKey, moduleSpecifier, node)
-        ?? this.resolveCommonJsRequireValue(currentModuleKey, moduleSpecifier, node),
-      resolveDynamicImport: (currentModuleKey, moduleSpecifier, node) =>
-        this.runtimeHost.resolveDynamicImport?.(currentModuleKey, moduleSpecifier, node)
-        ?? this.resolveDynamicImportValue(currentModuleKey, moduleSpecifier, node),
-    }).evaluateSourceFile(record.sourceFile, moduleKey, imports);
+    const result = new StaticEvaluator(this.policy, this.evaluatorRuntimeHost)
+      .evaluateSourceFile(record.sourceFile, moduleKey, imports);
     this.moduleResults.set(moduleKey, result);
     this.evaluatingModules.delete(moduleKey);
     return result;

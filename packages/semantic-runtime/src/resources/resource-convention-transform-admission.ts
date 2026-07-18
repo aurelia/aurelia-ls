@@ -25,8 +25,10 @@ import { openSeamReasonKindsForEvaluationValue } from '../evaluation/boundary-op
 import { unwrapExpression } from '../evaluation/ts-syntax.js';
 import {
   isEvaluatedProjectSource,
+  StaticProjectEvaluationComputationPreparation,
+  StaticProjectEvaluationComputationProfile,
+  type StaticProjectEvaluationGeneration,
   StaticProjectEvaluationOptions,
-  StaticProjectEvaluationPass,
 } from '../evaluation/project-evaluation.js';
 import {
   EvaluationBoundaryKind,
@@ -160,7 +162,8 @@ function isConventionToolingFactoryValue(value: EvaluationValue): value is Conve
     || value.kind === EvaluationValueKind.Object;
 }
 
-class ConventionToolingEvaluationHost {
+/** Profile-owned interpretation state for one Vite convention-tooling evaluation generation. */
+export class ResourceConventionToolingEvaluationContext {
   private readonly plugins = new WeakMap<EvaluationObjectValue, ConventionPluginEvaluation>();
   private readonly aureliaPluginFactories = new WeakSet<ConventionToolingFactoryValue>();
   private readonly defineConfigFactories = new WeakSet<ConventionToolingFactoryValue>();
@@ -357,6 +360,31 @@ class ConventionToolingEvaluationHost {
   }
 }
 
+export const enum ResourceConventionToolingEvaluationProfileKind {
+  /** Vite configuration evaluation with Aurelia convention-plugin intrinsics. */
+  Vite = 'aurelia-vite-convention-tooling',
+}
+
+/** Static-evaluation profile for Vite configuration that controls convention-derived resource admission. */
+export const resourceConventionToolingEvaluationProfile = new StaticProjectEvaluationComputationProfile(
+  ResourceConventionToolingEvaluationProfileKind.Vite,
+  '1',
+  'Vite configuration evaluation with Aurelia convention-plugin intrinsics.',
+  () => {
+    const context = new ResourceConventionToolingEvaluationContext();
+    return new StaticProjectEvaluationComputationPreparation(
+      new StaticProjectEvaluationOptions(
+        DefaultStaticEvaluationPolicy,
+        context.runtimeHost,
+        context.externalValueResolver,
+        DefaultEvaluationModuleResolutionPolicy,
+        [SourceFileRole.ToolingConfig],
+      ),
+      context,
+    );
+  },
+);
+
 class ResourceConventionTransformEmission {
   constructor(
     readonly records: readonly KernelStoreRecord[],
@@ -369,19 +397,15 @@ export class ResourceConventionTransformAdmissionMaterializer {
   materializeAndEmit(
     store: KernelStore,
     project: ProjectBootFrame,
+    evaluationGeneration: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
     publication: KernelPublicationContext,
   ): ResourceConventionTransformAdmissionIndex {
-    const toolingHost = new ConventionToolingEvaluationHost();
-    const evaluation = new StaticProjectEvaluationPass().evaluate(
-      project,
-      new StaticProjectEvaluationOptions(
-        DefaultStaticEvaluationPolicy,
-        toolingHost.runtimeHost,
-        toolingHost.externalValueResolver,
-        DefaultEvaluationModuleResolutionPolicy,
-        [SourceFileRole.ToolingConfig],
-      ),
-    );
+    evaluationGeneration.requireCurrent();
+    if (evaluationGeneration.project !== project) {
+      throw new Error(`Convention-tooling evaluation belongs to another project generation.`);
+    }
+    const evaluation = evaluationGeneration.readBaseline();
+    const toolingHost = evaluationGeneration.readBaselineContext();
     const emissions: ResourceConventionTransformEmission[] = [];
     const openRecords: KernelStoreRecord[] = [];
     for (const source of evaluation.sources) {
@@ -394,7 +418,9 @@ export class ResourceConventionTransformAdmissionMaterializer {
       }
       const environment = source.evaluation.environment;
       const result = readConventionTransforms(
-        source.evaluation.executedCallExpressions.filter((call) => toolingHost.isAureliaPluginCall(call)),
+        source.evaluation.executedCalls
+          .map((call) => call.expression)
+          .filter((call) => toolingHost.isAureliaPluginCall(call)),
         environment.readValue('default') ?? readStaticCommonJsExportValue(environment, 'default'),
         toolingHost,
       );
@@ -470,7 +496,7 @@ function conventionTransformEmission(
 function readConventionTransforms(
   calls: readonly ts.CallExpression[],
   config: EvaluationValue | null,
-  toolingHost: ConventionToolingEvaluationHost,
+  toolingHost: ResourceConventionToolingEvaluationContext,
 ): ResourceConventionTransformReadResult {
   if (calls.length === 0) {
     return new ResourceConventionTransformReadResult([], []);
@@ -552,7 +578,7 @@ function conventionTransformOpenReasonKinds(
 
 function readConventionPluginList(
   value: EvaluationValue,
-  toolingHost: ConventionToolingEvaluationHost,
+  toolingHost: ResourceConventionToolingEvaluationContext,
 ): ConventionPluginListRead {
   const plugin = toolingHost.readPlugin(value);
   if (plugin != null) {

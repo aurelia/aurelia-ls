@@ -46,8 +46,8 @@ describe('static evaluation sessions', () => {
       ts.ScriptKind.TS,
     );
     const original = new StaticEvaluator().evaluateSourceFile(source);
-    const session = new StaticEvaluationSessionFork().forkModuleEvaluation(original);
-    const competingSession = new StaticEvaluationSessionFork().forkModuleEvaluation(original);
+    const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
+    const competingSession = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
     const originalState = original.environment.readValue('state');
     const sessionState = session.environment.readValue('state');
     const sessionBump = session.environment.readValue('bump');
@@ -110,7 +110,7 @@ describe('static evaluation sessions', () => {
     }
     metadata.set(originalMarker, originalOptions);
 
-    const session = new StaticEvaluationSessionFork().forkModuleEvaluation(original);
+    const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
     const sessionMarker = session.environment.readValue('marker');
     const sessionOptions = sessionMarker == null ? null : metadata.get(sessionMarker) ?? null;
     const sessionOptionsObject = requireValueKind(sessionOptions, EvaluationValueKind.Object);
@@ -128,6 +128,100 @@ describe('static evaluation sessions', () => {
     expect(sessionInclude).not.toBe(originalInclude);
     sessionInclude.elements.pop();
     expect(originalInclude.elements).toHaveLength(1);
+
+    const nestedSession = new StaticEvaluationSessionFork(session.runtimeHost).forkModuleEvaluation(session);
+    const nestedMarker = nestedSession.environment.readValue('marker');
+    const nestedOptions = nestedMarker == null ? null : metadata.get(nestedMarker) ?? null;
+    const nestedOptionsObject = requireValueKind(nestedOptions, EvaluationValueKind.Object);
+    const nestedInclude = requireValueKind(
+      nestedOptionsObject.properties.get('include')?.value ?? null,
+      EvaluationValueKind.Array,
+    );
+    expect(nestedOptionsObject).not.toBe(sessionOptionsObject);
+    expect(nestedInclude).not.toBe(sessionInclude);
+    nestedInclude.elements.push(new EvaluationArrayElement(originalInclude.elements[0]!.value, null));
+    expect(nestedInclude.elements).toHaveLength(1);
+    expect(sessionInclude.elements).toHaveLength(0);
+    expect(originalInclude.elements).toHaveLength(1);
+  });
+
+  test('transfers detached and cyclic runtime-host metadata exactly once', () => {
+    const source = ts.createSourceFile(
+      'src/host-metadata-cycle.ts',
+      'const root = {};',
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const metadata = new WeakMap<EvaluationValue, EvaluationValue>();
+    let transfers = 0;
+    const runtimeHost: StaticEvaluationRuntimeHost = {
+      transferValueMetadata: (sourceValue, targetValue, transfer) => {
+        const child = metadata.get(sourceValue);
+        if (child == null) {
+          return;
+        }
+        transfers += 1;
+        metadata.set(targetValue, transfer.forkValue(child));
+      },
+    };
+    const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
+    const detached = new EvaluationObjectValue(new Map(), false, source);
+    metadata.set(detached, detached);
+
+    const sessionFork = new StaticEvaluationSessionFork(original.runtimeHost);
+    sessionFork.forkModuleEvaluation(original);
+    const forked = sessionFork.forkValue(detached);
+
+    expect(forked).not.toBe(detached);
+    expect(metadata.get(forked)).toBe(forked);
+    expect(transfers).toBe(1);
+  });
+
+  test('forks canonical runtime-host values instead of adopting them into competing sessions', () => {
+    const source = ts.createSourceFile(
+      'src/host-singleton.ts',
+      ['function singleton() { return 1; }', 'function probe() { return host(); }'].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const singletonDeclaration = source.statements.find((statement): statement is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(statement) && statement.name?.text === 'singleton');
+    if (singletonDeclaration == null) {
+      throw new Error('Expected a canonical host function declaration.');
+    }
+    const canonicalEnvironment = new ModuleEnvironmentRecord('host:canonical');
+    const canonical = new EvaluationFunctionValue(
+      singletonDeclaration,
+      canonicalEnvironment,
+      singletonDeclaration,
+    );
+    const runtimeHost: StaticEvaluationRuntimeHost = {
+      evaluateCallExpression: (call) =>
+        ts.isIdentifier(call.expression) && call.expression.text === 'host' ? canonical : null,
+    };
+    const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
+    const first = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
+    const second = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
+    const firstProbe = requireValueKind(first.environment.readValue('probe'), EvaluationValueKind.Function);
+    const secondProbe = requireValueKind(second.environment.readValue('probe'), EvaluationValueKind.Function);
+    const firstResult = requireValueKind(
+      new StaticEvaluator(first.policy, first.runtimeHost)
+        .evaluateFunctionValue(firstProbe, firstProbe.declaration, first.moduleKey, []).value,
+      EvaluationValueKind.Function,
+    );
+    const secondResult = requireValueKind(
+      new StaticEvaluator(second.policy, second.runtimeHost)
+        .evaluateFunctionValue(secondProbe, secondProbe.declaration, second.moduleKey, []).value,
+      EvaluationValueKind.Function,
+    );
+
+    expect(firstResult).not.toBe(canonical);
+    expect(secondResult).not.toBe(canonical);
+    expect(secondResult).not.toBe(firstResult);
+    expect(firstResult.environment).not.toBe(canonicalEnvironment);
+    expect(secondResult.environment).not.toBe(firstResult.environment);
   });
 
   test('forks every mutable value carrier once across class, collection, and module cycles', () => {
@@ -183,7 +277,7 @@ describe('static evaluation sessions', () => {
     environment.initializeBinding('shared', shared, EvaluationBindingKind.Const, false, declaration);
     environment.initializeBinding('Example', classValue, EvaluationBindingKind.Class, false, declaration);
 
-    const session = new StaticEvaluationSessionFork().forkEnvironment(environment);
+    const session = new StaticEvaluationSessionFork({}).forkEnvironment(environment);
     const sessionRoot = requireValueKind(session.readValue('root'), EvaluationValueKind.Object);
     const sessionShared = requireValueKind(session.readValue('shared'), EvaluationValueKind.Object);
     const sessionClass = requireValueKind(session.readValue('Example'), EvaluationValueKind.Class);
@@ -272,7 +366,7 @@ describe('static evaluation sessions', () => {
       source.fileName,
       new Map([['StandardConfiguration', standardValue]]),
     );
-    const session = new StaticEvaluationSessionFork().forkModuleEvaluation(original);
+    const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
     const configured = session.environment.readValue('configured');
     const registry = session.environment.readValue('registry');
 
@@ -299,7 +393,7 @@ describe('static evaluation sessions', () => {
         new EvaluationFunctionValue(declaration, environment, declaration),
     };
     const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
-    const session = new StaticEvaluationSessionFork().forkModuleEvaluation(original);
+    const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
     const result = new StaticEvaluator(session.policy, session.runtimeHost)
       .evaluateExpressionInEnvironment(call, session.environment, session.moduleKey);
     const returned = requireValueKind(result.value, EvaluationValueKind.Function);
@@ -335,7 +429,7 @@ describe('static evaluation sessions', () => {
       },
     };
     const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
-    const session = new StaticEvaluationSessionFork().forkModuleEvaluation(original);
+    const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
     const create = requireValueKind(session.environment.readValue('create'), EvaluationValueKind.Function);
     const retained = requireValueKind(session.environment.readValue('retained'), EvaluationValueKind.Object);
     const result = new StaticEvaluator(session.policy, session.runtimeHost)
@@ -380,7 +474,7 @@ describe('static evaluation sessions', () => {
       },
     };
     const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
-    const session = new StaticEvaluationSessionFork().forkModuleEvaluation(original);
+    const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
     const probe = requireValueKind(session.environment.readValue('probe'), EvaluationValueKind.Function);
     const result = new StaticEvaluator(session.policy, session.runtimeHost)
       .evaluateFunctionValue(probe, probe.declaration, session.moduleKey, []);

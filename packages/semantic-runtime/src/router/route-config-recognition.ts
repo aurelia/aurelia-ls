@@ -745,7 +745,7 @@ function recognizeRouteConfigs(
 ): readonly RouteConfigObservation[] {
   const bindings = readRouterImportedBindings(context.sourceFile);
   const executedCalls = new Map(
-    context.evaluation.evaluation.executedCallExpressions.map((call, index) => [call, index] as const),
+    context.evaluation.evaluation.executedCalls.map((call, index) => [call.expression, index] as const),
   );
   const observations: RouteConfigObservation[] = [];
   const visit = (node: ts.Node): void => {

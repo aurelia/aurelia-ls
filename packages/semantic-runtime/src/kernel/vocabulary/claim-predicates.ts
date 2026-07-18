@@ -157,6 +157,17 @@ export const KernelClaimPredicates = {
         productEndpoint(KernelProductKinds.Framework.ServiceRoot),
       ),
     ),
+
+    /** A source-backed container root denotes one modeled DI container. */
+    ContainerRootDenotesContainer: defineClaimPredicate(
+      KernelVocabularyNamespace.Framework,
+      'container-root-denotes-container',
+      'A source-backed framework container root denotes one modeled DI container.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Framework.ServiceRoot),
+        productEndpoint(KernelProductKinds.Di.Container),
+      ),
+    ),
   },
   Router: {
     /** A source-backed route-config contribution converges into an effective definition or per-use applied config. */

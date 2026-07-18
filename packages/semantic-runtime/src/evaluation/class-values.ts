@@ -78,7 +78,7 @@ export function readStaticClassProperties(
     if (ts.isMethodDeclaration(member) || ts.isGetAccessorDeclaration(member)) {
       properties.set(name, new EvaluationObjectProperty(
         name,
-        new EvaluationFunctionValue(member, environment.clone(`${moduleKey}:static:${name}`), member),
+        new EvaluationFunctionValue(member, environment, member),
         member,
         EvaluationObjectPropertyState.Closed,
       ));
@@ -113,7 +113,15 @@ export function evaluateStaticClassInstantiation(
     initializeStaticFunctionParameters(constructor, argumentValues, instanceEnvironment, moduleKey, expression, depth + 1, host.bindingHost);
   }
 
-  readInstanceClassProperties(callee.declaration, instanceEnvironment, moduleKey, depth + 1, instance.properties, host);
+  readInstanceClassProperties(
+    callee.declaration,
+    instanceEnvironment,
+    callee.environment,
+    moduleKey,
+    depth + 1,
+    instance.properties,
+    host,
+  );
 
   if (constructor != null) {
     applyConstructorParameterProperties(constructor, argumentValues, instance, expression);
@@ -136,7 +144,8 @@ export function evaluateStaticClassInstantiation(
 
 function readInstanceClassProperties(
   declaration: ts.ClassLikeDeclaration,
-  environment: ModuleEnvironmentRecord,
+  initializerEnvironment: ModuleEnvironmentRecord,
+  methodEnvironment: ModuleEnvironmentRecord,
   moduleKey: string,
   depth: number,
   properties: Map<string, EvaluationObjectProperty>,
@@ -149,14 +158,14 @@ function readInstanceClassProperties(
     if (!isStaticClassPropertyCarrier(member)) {
       continue;
     }
-    const name = host.readPropertyName(member.name, environment, moduleKey, depth + 1);
+    const name = host.readPropertyName(member.name, initializerEnvironment, moduleKey, depth + 1);
     if (name == null) {
       continue;
     }
     if (ts.isMethodDeclaration(member) || ts.isGetAccessorDeclaration(member)) {
       properties.set(name, new EvaluationObjectProperty(
         name,
-        new EvaluationFunctionValue(member, environment.clone(`${moduleKey}:instance:${name}`), member),
+        new EvaluationFunctionValue(member, methodEnvironment, member),
         member,
         EvaluationObjectPropertyState.Closed,
       ));
@@ -166,7 +175,7 @@ function readInstanceClassProperties(
       name,
       member.initializer == null
         ? EvaluationUndefined
-        : host.evaluateExpression(member.initializer, environment, moduleKey, depth + 1),
+        : host.evaluateExpression(member.initializer, initializerEnvironment, moduleKey, depth + 1),
       member,
       EvaluationObjectPropertyState.Closed,
     ));

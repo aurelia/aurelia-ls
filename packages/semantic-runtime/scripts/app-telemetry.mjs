@@ -140,6 +140,7 @@ async function profileRoot({ root, rootIndex, depth, profile, iteration, repeatC
     appQueryClaimGraphs: [],
     queryRepeatCount,
     typeShapeDuplicates: [],
+    staticEvaluationAcquisitions: [],
     staticEvaluationPhases: [],
     staticEvaluationSources: null,
     resourceRecognitionPhases: [],
@@ -444,6 +445,13 @@ function recordAppProfile(run, profile) {
     return;
   }
   run.timings.push({ label: 'app.profile.total', milliseconds: profile.totalMilliseconds });
+  run.staticEvaluationAcquisitions = [...(profile.evaluationAcquisitions ?? [])];
+  for (const acquisition of run.staticEvaluationAcquisitions) {
+    run.timings.push({
+      label: `static-evaluation.acquire.${acquisition.profileKey}.${acquisition.kind}`,
+      milliseconds: acquisition.milliseconds,
+    });
+  }
   run.topPhases = [...(profile.phases ?? [])]
     .sort((left, right) => phaseSortMilliseconds(right) - phaseSortMilliseconds(left) || left.name.localeCompare(right.name))
     .slice(0, 8)
@@ -486,6 +494,12 @@ function recordRoutedAppProfileSummary(run, profile) {
     return;
   }
   run.timings.push({ label: 'app.profile.total', milliseconds: profile.totalMilliseconds });
+  run.staticEvaluationAcquisitions = [...(profile.staticEvaluationAcquisitions ?? [])].map((acquisition) => ({
+    profileKey: acquisition.profileKey,
+    kind: acquisition.acquisitionKind,
+    milliseconds: acquisition.acquisitionMilliseconds,
+    constructionMilliseconds: acquisition.constructionMilliseconds,
+  }));
   run.topPhases = routedPhaseSummaryRows(profile.topPhases);
   run.topPhaseMemory = routedPhaseMemoryRows(profile.topPhases);
   run.topPhaseKernel = routedPhaseKernelRows(profile.topPhases);
@@ -517,6 +531,12 @@ function recordRoutedAppWorldFreeProfileSummary(run, profile) {
     return;
   }
   run.timings.push({ label: 'app-world-free.profile.total', milliseconds: profile.totalMilliseconds });
+  run.staticEvaluationAcquisitions = [{
+    profileKey: 'aurelia-app',
+    kind: profile.acquisitionKind,
+    milliseconds: profile.acquisitionMilliseconds,
+    constructionMilliseconds: profile.totalMilliseconds,
+  }];
   run.staticEvaluationPhases = routedPhaseSummaryRows(profile.staticEvaluationPhases);
   run.staticEvaluationHost = profile.staticEvaluationHost ?? null;
   run.staticEvaluationSources = profile.staticEvaluationSources ?? null;
@@ -2115,6 +2135,7 @@ function printRun(run) {
   printTimingRows('- phases', run.topPhases, 8);
   printPhaseMemoryRows('- phase heap', run.topPhaseMemory);
   printPhaseKernelRows('- phase kernel', run.topPhaseKernel);
+  printStaticEvaluationAcquisitions('- static-evaluation acquisitions', run.staticEvaluationAcquisitions);
   printTimingRows('- static-evaluation phases', run.staticEvaluationPhases, 8);
   printStaticEvaluationSources('- static-evaluation sources', run.staticEvaluationSources);
   printStaticEvaluationHost('- static-evaluation host', run.staticEvaluationHost);
@@ -2484,6 +2505,17 @@ function printTimingRows(label, rows, limit) {
       return `${row.label}=${row.milliseconds.toFixed(1)}ms${count}${exclusive}`;
     });
   console.log(`${label}: ${parts.join(', ')}`);
+}
+
+function printStaticEvaluationAcquisitions(label, rows) {
+  if (rows.length === 0) {
+    console.log(`${label}: none`);
+    return;
+  }
+  console.log(`${label}: ${rows.map((row) =>
+    `${row.profileKey}=${row.kind} ${row.milliseconds.toFixed(1)}ms `
+    + `(generation ${row.constructionMilliseconds.toFixed(1)}ms)`
+  ).join(', ')}`);
 }
 
 function phaseSortMilliseconds(row) {

@@ -123,6 +123,34 @@ describe('SemanticRuntimeProjectInputAuthority', () => {
     expect(second.isCurrent()).toBe(true);
   });
 
+  test('retains narrow product reads inside one synchronous owner scope', () => {
+    const rootDir = normalize('C:/workspace/app');
+    const sourceFile = normalize(`${rootDir}/src/app.ts`);
+    const missingFile = normalize(`${rootDir}/src/missing.ts`);
+    const host = new MutableProjectInputHost();
+    host.write(sourceFile, 'export const value = 1;');
+    const generation = new SemanticRuntimeProjectInputAuthority(host)
+      .capture({ projectKey: 'app', rootDir });
+    const ownerScope = generation.createReadScope('app-owner');
+    const productScope = generation.createReadScope('narrow-product');
+
+    generation.withReadScope(ownerScope, () => {
+      generation.host.readFile(sourceFile);
+      productScope.host.fileExists(missingFile);
+    });
+    generation.host.directoryExists(rootDir);
+
+    expect(ownerScope.readRegisteredInputs().map((read) => read.kind)).toEqual([
+      SemanticRuntimeProjectInputReadKind.FileContent,
+      SemanticRuntimeProjectInputReadKind.FileExistence,
+    ]);
+    expect(productScope.readRegisteredInputs().map((read) => read.kind)).toEqual([
+      SemanticRuntimeProjectInputReadKind.FileExistence,
+    ]);
+    expect(() => generation.withReadScope(ownerScope, () => Promise.resolve()))
+      .toThrow(/cannot cross an asynchronous boundary/);
+  });
+
   test('invalidates retained runtime summaries by every captured project revision', async () => {
     const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
     const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/aliased-bindable-surfaces');

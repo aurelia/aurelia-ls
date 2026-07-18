@@ -5,6 +5,8 @@ import type {
 
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type {
+  StaticProjectEvaluationAcquisitionProfile,
+  StaticProjectEvaluationGeneration,
   StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
 import {
@@ -23,6 +25,9 @@ import type { KernelStore, KernelTelemetryReadView } from '../kernel/store.js';
 import {
   ResourceDefinitionIndex,
 } from '../resources/resource-definition-index.js';
+import type {
+  ResourceConventionToolingEvaluationContext,
+} from '../resources/resource-convention-transform-admission.js';
 import {
   ResourceDefinitionApiIssueMaterializer,
 } from '../resources/resource-definition-api-issues.js';
@@ -66,7 +71,7 @@ import {
 } from '../template/template-compilation-project-pass.js';
 import type { TemplateCompilationCohortProjectAuthority } from '../template/template-compilation-cohort.js';
 import { RuntimeBindingSourceValueEvaluator } from '../observation/binding-source-value-evaluator.js';
-import { RuntimeBindingSourceActivationContext } from '../observation/binding-source-activation-context.js';
+import { DiProviderActivationView } from '../di/provider-activation.js';
 import { runtimeBoundControllerValueTableForTemplateResources } from '../observation/runtime-bound-controller-value.js';
 import {
   ConfigurationRecognitionProjectPass,
@@ -202,9 +207,6 @@ import {
   type ObservationSourceIssueProjectResult,
 } from '../observation/observation-source-issues.js';
 import {
-  evaluateAndEmitAureliaProject,
-} from './aurelia-project-evaluation.js';
-import {
   FrameworkCapabilityDemandMaterializer,
 } from '../framework/capability-demand-materializer.js';
 import {
@@ -226,7 +228,6 @@ import {
 } from './app-task-source-api-roots.js';
 
 export type AureliaAppWorldProjectPhaseName =
-  | 'static-evaluation'
   | 'type-system'
   | 'module-loader-issues'
   | 'framework-api-issues'
@@ -279,6 +280,7 @@ export interface AureliaAppWorldProjectProfile {
   readonly inquiryProfile: SemanticRuntimeInquiryProfile;
   readonly totalMilliseconds: number;
   readonly phases: readonly AureliaAppWorldProjectPhaseTiming[];
+  readonly evaluationAcquisitions: readonly StaticProjectEvaluationAcquisitionProfile[];
 }
 
 export interface AureliaAppWorldProjectOptions {
@@ -430,6 +432,9 @@ export class AureliaAppWorldProjectPass {
     store: KernelStore,
     publication: KernelPublicationContext,
     project: ProjectBootFrame,
+    evaluation: StaticProjectEvaluationResult,
+    conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
+    evaluationAcquisitions: readonly StaticProjectEvaluationAcquisitionProfile[],
     options: AureliaAppWorldProjectOptions = {},
   ): AureliaAppWorldProjectEmission {
     return new AureliaAppWorldProjectConstructionFrame(
@@ -437,6 +442,9 @@ export class AureliaAppWorldProjectPass {
       publication,
       project,
       this.support,
+      evaluation,
+      conventionToolingEvaluation,
+      evaluationAcquisitions,
       options,
     ).constructAndEmit();
   }
@@ -456,6 +464,9 @@ class AureliaAppWorldProjectConstructionFrame {
     readonly publication: KernelPublicationContext,
     readonly project: ProjectBootFrame,
     private readonly support: SemanticRuntimeSupport,
+    private readonly evaluation: StaticProjectEvaluationResult,
+    private readonly conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
+    private readonly evaluationAcquisitions: readonly StaticProjectEvaluationAcquisitionProfile[],
     options: AureliaAppWorldProjectOptions,
   ) {
     this.analysisDepth = normalizeSemanticAppAnalysisDepth(
@@ -471,7 +482,7 @@ class AureliaAppWorldProjectConstructionFrame {
   }
 
   constructAndEmit(): AureliaAppWorldProjectEmission {
-    const evaluation = this.evaluateProject();
+    const evaluation = this.evaluation;
     const typeSystem = this.buildTypeSystem(evaluation);
     const evaluationIssues = this.materializeEvaluationIssues(evaluation, typeSystem);
     const sourceObservation = this.materializeObservationSourceIssues(typeSystem);
@@ -524,7 +535,13 @@ class AureliaAppWorldProjectConstructionFrame {
       templates.expressionWorld.projector,
       bindingSourceEvaluation,
       runtimeBoundControllerValueTableForTemplateResources(this.publication, templates.resources),
-      new RuntimeBindingSourceActivationContext(this.publication, bindingSourceEvaluation, typeSystem),
+      new DiProviderActivationView(
+        this.publication,
+        bindingSourceEvaluation,
+        typeSystem,
+        appWorld.configuration,
+        appWorld.diWorld,
+      ),
     );
     const routeRuntimeTopology = this.materializeRouteRuntimeTopology(routeContexts, templates, bindingSourceValues);
     const routeInstructions = this.materializeRouteInstructions(
@@ -591,12 +608,6 @@ class AureliaAppWorldProjectConstructionFrame {
       routeTree,
       routeComponentAgents,
       this.profile(),
-    );
-  }
-
-  private evaluateProject(): StaticProjectEvaluationResult {
-    return this.measure('static-evaluation', () =>
-      evaluateAndEmitAureliaProject(this.store, this.project, this.publication)
     );
   }
 
@@ -699,6 +710,7 @@ class AureliaAppWorldProjectConstructionFrame {
         this.store,
         this.project,
         evaluation,
+        this.conventionToolingEvaluation,
         typeSystem,
         this.publication,
       )
@@ -1163,6 +1175,7 @@ class AureliaAppWorldProjectConstructionFrame {
       inquiryProfile: this.telemetry.inquiryProfile,
       totalMilliseconds: performance.now() - this.started,
       phases: this.phases,
+      evaluationAcquisitions: this.evaluationAcquisitions,
     };
   }
 

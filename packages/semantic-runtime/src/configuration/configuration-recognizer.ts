@@ -34,8 +34,6 @@ import {
 import {
   RegistrationAdmissionObservation,
   RegistrationCarrierKind,
-  RegistrationKeyObservation,
-  RegistrationKeyObservationKind,
   RegistrationRecognitionOpen,
   RegistrationValueObservation,
 } from '../registration/registration-observation.js';
@@ -52,8 +50,13 @@ import {
   traceNameForFrameworkRegistrationKind,
 } from '../registration/framework-registration-manifest.js';
 import {
+  AureliaInterfaceDefaultRegistrationState,
+  aureliaContainerEvaluationForValue,
   aureliaFrameworkRegistrationKindForEvaluationValue,
+  aureliaInterfaceEvaluationForValue,
   aureliaRegistryBodyForEvaluationValue,
+  type AureliaContainerEvaluation,
+  type AureliaInterfaceDefaultRegistrationEffect,
 } from './aurelia-evaluation-runtime.js';
 import {
   AppTaskCallbackKind,
@@ -182,7 +185,7 @@ function readConfigurationSequences(
       const registrySteps = readRegistryRegisterMethodSteps(context, bindings, node);
       registrySequences.push(new ConfigurationSequenceObservation(
         ConfigurationSequenceKind.Registry,
-        node,
+        node.parent,
         registryRegisterMethodLocalName(node),
         registrySteps,
       ));
@@ -222,7 +225,7 @@ function globalSequenceForSteps(
   if (sorted.length === 0) {
     return [];
   }
-  const receiverGroups = splitGlobalStepsByAureliaReceiver(context.sourceFile, sorted);
+  const receiverGroups = splitGlobalStepsByReceiver(context.sourceFile, sorted);
   if (receiverGroups == null) {
     return [
       new ConfigurationSequenceObservation(
@@ -248,17 +251,22 @@ interface GlobalConfigurationStepGroup {
   readonly steps: readonly ConfigurationStepObservation[];
 }
 
-function splitGlobalStepsByAureliaReceiver(
+type GlobalConfigurationStepGroupKey = string | AureliaContainerEvaluation;
+
+function splitGlobalStepsByReceiver(
   sourceFile: ts.SourceFile,
   steps: readonly ConfigurationStepObservation[],
 ): readonly GlobalConfigurationStepGroup[] | null {
-  if (!steps.some((step) => aureliaStepReceiverName(step) != null)) {
+  if (!steps.some((step) =>
+    aureliaStepReceiverName(step) != null
+    || containerStepReceiverName(step) != null
+  )) {
     return null;
   }
 
-  const groups = new Map<string, ConfigurationStepObservation[]>();
-  const groupOrder: string[] = [];
-  const append = (key: string, step: ConfigurationStepObservation): void => {
+  const groups = new Map<GlobalConfigurationStepGroupKey, ConfigurationStepObservation[]>();
+  const groupOrder: GlobalConfigurationStepGroupKey[] = [];
+  const append = (key: GlobalConfigurationStepGroupKey, step: ConfigurationStepObservation): void => {
     const existing = groups.get(key);
     if (existing == null) {
       groups.set(key, [step]);
@@ -269,17 +277,45 @@ function splitGlobalStepsByAureliaReceiver(
   };
 
   steps.forEach((step, index) => {
-    const key = aureliaStepGroupKey(sourceFile, step, steps)
+    const key = configurationStepGroupKey(sourceFile, step, steps)
       ?? `global:${index}`;
     append(key, step);
   });
 
   return groupOrder.map((key) => ({
-    localName: key.startsWith('global:') || key.startsWith('aurelia-constructor:')
-      ? null
-      : key,
+    localName: typeof key === 'string'
+      ? configurationStepGroupLocalName(key)
+      : groups.get(key)?.find((step) => step.receiverLocalName != null)?.receiverLocalName ?? null,
     steps: groups.get(key) ?? [],
   }));
+}
+
+function configurationStepGroupKey(
+  sourceFile: ts.SourceFile,
+  step: ConfigurationStepObservation,
+  steps: readonly ConfigurationStepObservation[],
+): GlobalConfigurationStepGroupKey | null {
+  if (step.containerEvaluation != null) {
+    return step.containerEvaluation;
+  }
+  const containerReceiver = containerStepReceiverName(step);
+  if (containerReceiver != null) {
+    return `container:${containerReceiver}`;
+  }
+  const aureliaKey = aureliaStepGroupKey(sourceFile, step, steps);
+  return aureliaKey == null ? null : `aurelia:${aureliaKey}`;
+}
+
+function configurationStepGroupLocalName(key: string): string | null {
+  if (key.startsWith('container:')) {
+    const localName = key.slice('container:'.length);
+    return localName.startsWith('container-factory:') ? null : localName;
+  }
+  if (key.startsWith('aurelia:')) {
+    const localName = key.slice('aurelia:'.length);
+    return localName.startsWith('aurelia-constructor:') ? null : localName;
+  }
+  return null;
 }
 
 function aureliaStepGroupKey(
@@ -301,6 +337,18 @@ function aureliaStepReceiverName(
     case ConfigurationStepKind.CreateAurelia:
     case ConfigurationStepKind.AureliaRegister:
     case ConfigurationStepKind.AureliaApp:
+      return step.receiverLocalName;
+    default:
+      return null;
+  }
+}
+
+function containerStepReceiverName(
+  step: ConfigurationStepObservation,
+): string | null {
+  switch (step.stepKind) {
+    case ConfigurationStepKind.CreateContainer:
+    case ConfigurationStepKind.ContainerRegister:
       return step.receiverLocalName;
     default:
       return null;
@@ -364,7 +412,7 @@ function readRegistryBodySteps(
   context: ConfigurationRecognitionContext,
   bindings: ImportedBindings,
   body: ts.Node,
-  inlinedFunctionStarts: Set<number>,
+  activeFunctionStarts: Set<number>,
 ): ConfigurationStepObservation[] {
   const steps: ConfigurationStepObservation[] = [];
 
@@ -374,7 +422,7 @@ function readRegistryBodySteps(
       if (step != null) {
         steps.push(step);
       } else {
-        steps.push(...readRegistryHelperCallSteps(context, bindings, node, inlinedFunctionStarts));
+        steps.push(...readRegistryHelperCallSteps(context, bindings, node, activeFunctionStarts));
       }
     }
     ts.forEachChild(node, visit);
@@ -387,7 +435,7 @@ function readRegistryHelperCallSteps(
   context: ConfigurationRecognitionContext,
   bindings: ImportedBindings,
   call: ts.CallExpression,
-  inlinedFunctionStarts: Set<number>,
+  activeFunctionStarts: Set<number>,
 ): readonly ConfigurationStepObservation[] {
   const expression = unwrapExpression(call.expression);
   if (!ts.isIdentifier(expression)) {
@@ -398,11 +446,15 @@ function readRegistryHelperCallSteps(
     return [];
   }
   const helperStart = helper.getStart(context.sourceFile);
-  if (inlinedFunctionStarts.has(helperStart)) {
+  if (activeFunctionStarts.has(helperStart)) {
     return [];
   }
-  inlinedFunctionStarts.add(helperStart);
-  return readRegistryBodySteps(context, bindings, helper.body, inlinedFunctionStarts);
+  activeFunctionStarts.add(helperStart);
+  try {
+    return readRegistryBodySteps(context, bindings, helper.body, activeFunctionStarts);
+  } finally {
+    activeFunctionStarts.delete(helperStart);
+  }
 }
 
 function findSourceFunctionDeclaration(
@@ -456,8 +508,38 @@ function recognizeCall(
   bindings: ImportedBindings,
   insideRegistryRegisterMethod: boolean,
 ): ConfigurationStepObservation | null {
-  return recognizeStaticAureliaCall(context, call, bindings)
+  return recognizeContainerFactoryCall(context, call, bindings)
+    ?? recognizeStaticAureliaCall(context, call, bindings)
     ?? recognizeMemberCall(context, call, bindings, insideRegistryRegisterMethod);
+}
+
+function recognizeContainerFactoryCall(
+  context: ConfigurationRecognitionContext,
+  call: ts.CallExpression,
+  bindings: ImportedBindings,
+): ConfigurationStepObservation | null {
+  if (!isContainerFactoryCall(call, bindings)) {
+    return null;
+  }
+  return new ConfigurationStepObservation(
+    ConfigurationCarrierKind.ContainerFactoryCall,
+    ConfigurationStepKind.CreateContainer,
+    call,
+    containerFactoryLocalName(call),
+    null,
+    [],
+    [],
+    [],
+    [],
+    aureliaContainerEvaluationForValue(context.expressionReader.evaluateExpression(call).value),
+  );
+}
+
+function containerFactoryLocalName(call: ts.CallExpression): string | null {
+  const parent = call.parent;
+  return ts.isVariableDeclaration(parent) && parent.initializer === call && ts.isIdentifier(parent.name)
+    ? parent.name.text
+    : null;
 }
 
 function recognizeStaticAureliaCall(
@@ -571,7 +653,8 @@ function recognizeRegisterCall(
   insideRegistryRegisterMethod: boolean,
 ): ConfigurationStepObservation | null {
   const aureliaReceiver = isAureliaReceiver(call, bindings);
-  const containerReceiver = isContainerReceiver(call, bindings);
+  const containerEvaluation = containerEvaluationForCallReceiver(context, call);
+  const containerReceiver = containerEvaluation != null || isContainerReceiver(call, bindings);
   if (insideRegistryRegisterMethod && containerReceiver) {
     return recognizeRegisterCallForCarrier(
       context,
@@ -613,6 +696,9 @@ function recognizeRegisterCallForCarrier(
     registrationCarrierKind,
     admissionKind,
   );
+  const containerEvaluation = stepKind === ConfigurationStepKind.ContainerRegister
+    ? containerEvaluationForCallReceiver(context, call)
+    : null;
   return new ConfigurationStepObservation(
     carrierKind,
     stepKind,
@@ -623,6 +709,20 @@ function recognizeRegisterCallForCarrier(
     [],
     registrationArguments.admissions,
     readSpreadOpens(context, call, bindings),
+    containerEvaluation,
+  );
+}
+
+function containerEvaluationForCallReceiver(
+  context: ConfigurationRecognitionContext,
+  call: ts.CallExpression,
+): AureliaContainerEvaluation | null {
+  const expression = unwrapExpression(call.expression);
+  if (!ts.isPropertyAccessExpression(expression)) {
+    return null;
+  }
+  return aureliaContainerEvaluationForValue(
+    context.expressionReader.evaluateExpression(expression.expression).value,
   );
 }
 
@@ -986,6 +1086,28 @@ function recognizeEvaluatedRegisterArgument(
   carrierKind: RegistrationCarrierKind,
 ): readonly RegisterArgumentObservation[] | null {
   const read = context.expressionReader.evaluateExpression(argument);
+  const interfaceEvaluation = aureliaInterfaceEvaluationForValue(read.value);
+  if (interfaceEvaluation != null) {
+    switch (interfaceEvaluation.defaultRegistrationState) {
+      case AureliaInterfaceDefaultRegistrationState.None:
+        return [];
+      case AureliaInterfaceDefaultRegistrationState.Open:
+        return [registerArgumentObservation(openInterfaceDefaultRegistrationArgument(
+          context,
+          argument,
+          carrierKind,
+          admissionKind,
+        ))];
+      case AureliaInterfaceDefaultRegistrationState.Closed:
+        return [registerArgumentObservation(interfaceDefaultRegistrationArgument(
+          context,
+          argument,
+          interfaceEvaluation.defaultRegistration!,
+          carrierKind,
+          admissionKind,
+        ))];
+    }
+  }
   if (hasEvaluationRegisterFunction(read.value)) {
     return [evaluatedRegistryArgumentObservation(
       context,
@@ -1004,6 +1126,61 @@ function recognizeEvaluatedRegisterArgument(
     return recognizeEvaluatedObjectMapArgument(context, argument, read.value, read.openSeams, bindings, admissionKind, carrierKind);
   }
   return null;
+}
+
+function interfaceDefaultRegistrationArgument(
+  context: ConfigurationRecognitionContext,
+  argument: ts.Expression,
+  effect: AureliaInterfaceDefaultRegistrationEffect,
+  carrierKind: RegistrationCarrierKind,
+  admissionKind: RegistrationAdmissionKind,
+): RegistrationAdmissionObservation {
+  return new RegistrationAdmissionObservation(
+    carrierKind,
+    admissionKind,
+    effect.strategy,
+    RegistrationKeyRole.AdmittedKey,
+    argument,
+    context.registrationKeyObservation(argument),
+    interfaceDefaultRegistrationValueObservation(context, effect),
+  );
+}
+
+function interfaceDefaultRegistrationValueObservation(
+  context: ConfigurationRecognitionContext,
+  effect: AureliaInterfaceDefaultRegistrationEffect,
+): RegistrationValueObservation {
+  return effect.valueExpression == null
+    ? new RegistrationValueObservation(
+        effect.valueKind,
+        null,
+        effect.sourceNode,
+        false,
+      )
+    : registrationValueObservation(context, effect.valueKind, effect.valueExpression);
+}
+
+function openInterfaceDefaultRegistrationArgument(
+  context: ConfigurationRecognitionContext,
+  argument: ts.Expression,
+  carrierKind: RegistrationCarrierKind,
+  admissionKind: RegistrationAdmissionKind,
+): RegistrationAdmissionObservation {
+  return new RegistrationAdmissionObservation(
+    carrierKind,
+    admissionKind,
+    RegistrationStrategy.Unknown,
+    RegistrationKeyRole.AdmittedKey,
+    argument,
+    context.registrationKeyObservation(argument),
+    null,
+    [],
+    [new RegistrationRecognitionOpen(
+      KernelVocabulary.Registration.OpenStrategy.key,
+      'DI interface default registration callback did not close to one ResolverBuilder strategy and value.',
+      argument,
+    )],
+  );
 }
 
 function evaluatedRegistryArgumentObservation(
@@ -1075,6 +1252,8 @@ function evaluatedRegistryValueObservation(
     valueSource.sourceFileAddressHandle,
     valueSource.moduleKey,
     registryBody,
+    null,
+    value,
   );
 }
 
@@ -1106,16 +1285,7 @@ function plainClassSelfRegistrationArgument(
     RegistrationStrategy.Singleton,
     RegistrationKeyRole.AdmittedKey,
     argument,
-    new RegistrationKeyObservation(
-      localName,
-      argument,
-      RegistrationKeyObservationKind.Constructable,
-      {
-        declaration: value.declaration,
-        moduleKey: value.environment.moduleKey,
-        sourceFileAddressHandle: context.sourceFileAddressHandleForNode(value.declaration),
-      },
-    ),
+    context.registrationKeyObservation(argument),
     new RegistrationValueObservation(
       RegistrationValueKind.PlainClass,
       localName,
@@ -1497,21 +1667,34 @@ function registrationAdmissionForFactoryCall(
     match.shape.strategy,
     match.shape.keyRole,
     match.call,
-    keyArgument == null ? null : new RegistrationKeyObservation(readReferenceName(keyArgument), keyArgument),
+    keyArgument == null ? null : context.registrationKeyObservation(keyArgument),
     valueArgument == null || match.shape.value == null
       ? null
-      : registrationFactoryValueObservation(context, match, valueArgument),
+      : registrationValueObservation(context, match.shape.value.valueKind, valueArgument),
     match.factoryName === 'defer' ? readDeferredRegistryParameters(match.call, isDeclarationExpression) : [],
     openSeams,
   );
 }
 
-function registrationFactoryValueObservation(
+function registrationValueObservation(
   context: ConfigurationRecognitionContext,
-  match: RegistrationFactoryCallMatch,
+  valueKind: RegistrationValueKind,
   valueArgument: ts.Expression,
 ): RegistrationValueObservation {
-  const valueKind = match.shape.value!.valueKind;
+  if (valueKind === RegistrationValueKind.AliasTarget) {
+    return new RegistrationValueObservation(
+      valueKind,
+      readReferenceName(valueArgument),
+      valueArgument,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      context.registrationKeyObservation(valueArgument),
+    );
+  }
   if (valueKind === RegistrationValueKind.Constructable) {
     const read = context.expressionReader.evaluateExpression(valueArgument);
     const value = read.value;
@@ -2598,9 +2781,11 @@ function sequenceKindForSteps(
     )
       ? ConfigurationSequenceKind.Builder
     : steps.some((step) =>
-      step.stepKind === ConfigurationStepKind.ContainerRegister
-      || step.stepKind === ConfigurationStepKind.Customize
+      step.stepKind === ConfigurationStepKind.CreateContainer
+      || step.stepKind === ConfigurationStepKind.ContainerRegister
     )
+      ? ConfigurationSequenceKind.Container
+    : steps.some((step) => step.stepKind === ConfigurationStepKind.Customize)
       ? ConfigurationSequenceKind.Plugin
       : ConfigurationSequenceKind.Unknown;
 }

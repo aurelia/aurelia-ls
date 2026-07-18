@@ -21,13 +21,23 @@ import type {
   KernelStoreSidecarIndex,
 } from '../kernel/store.js';
 import type { ProjectBootFrame } from '../boot/frames.js';
+import {
+  type StaticProjectEvaluationAccess,
+  type StaticProjectEvaluationComputationService,
+  type StaticProjectEvaluationGeneration,
+} from '../evaluation/project-evaluation.js';
 import type { SemanticRuntimeSupport } from '../framework/framework-support-authority.js';
+import {
+  resourceConventionToolingEvaluationProfile,
+  type ResourceConventionToolingEvaluationContext,
+} from '../resources/resource-convention-transform-admission.js';
 import { TemplateCompilationCohortProjectAuthority } from '../template/template-compilation-cohort.js';
 import {
   AureliaAppWorldProjectEmission,
   AureliaAppWorldProjectPass,
   type AureliaAppWorldProjectOptions,
 } from './app-world-project-pass.js';
+import { aureliaAppProjectEvaluationProfile } from './aurelia-project-evaluation.js';
 
 /** Stable replacement locus for one complete project semantic generation. */
 export class AureliaAppAnalysisLocus implements ComputationLocus {
@@ -48,6 +58,8 @@ export class AureliaAppWorldProjectGeneration {
   constructor(
     private readonly authority: ComputationGenerationAuthority,
     private readonly currentEmission: AureliaAppWorldProjectEmission,
+    private readonly appEvaluation: StaticProjectEvaluationGeneration<null>,
+    private readonly conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
   ) {
     this.key = authority.key;
   }
@@ -62,12 +74,16 @@ export class AureliaAppWorldProjectGeneration {
 
   isCurrent(): boolean {
     return this.authority.isCurrent()
-      && this.currentEmission.project.inputGeneration.isCurrent();
+      && this.currentEmission.project.inputGeneration.isCurrent()
+      && this.appEvaluation.isCurrent()
+      && this.conventionToolingEvaluation.isCurrent();
   }
 
   requireCurrent(): void {
     this.authority.requireCurrent();
     this.currentEmission.project.inputGeneration.requireCurrent();
+    this.appEvaluation.requireCurrent();
+    this.conventionToolingEvaluation.requireCurrent();
   }
 
   get emission(): AureliaAppWorldProjectEmission {
@@ -100,6 +116,8 @@ export class AureliaAppWorldProjectAuthority {
     computationId: ComputationId,
     runSequence: number,
     candidate: AureliaAppWorldProjectEmission,
+    appEvaluation: StaticProjectEvaluationGeneration<null>,
+    conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
   ): AureliaAppWorldProjectGeneration {
     const state = this.lifecycle.readState(computationId);
     if (state?.committedRunSequence !== runSequence) {
@@ -121,6 +139,8 @@ export class AureliaAppWorldProjectAuthority {
     const generation = new AureliaAppWorldProjectGeneration(
       generationAuthority,
       candidate.forCommittedGeneration(generationAuthority, this.cohortAuthority),
+      appEvaluation,
+      conventionToolingEvaluation,
     );
     this.generation = generation;
     return generation;
@@ -134,6 +154,8 @@ export class AureliaAppWorldProjectComputationAttempt {
     private readonly authority: AureliaAppWorldProjectAuthority,
     readonly locus: AureliaAppAnalysisLocus,
     readonly sourceSnapshots: readonly SourceTextSnapshot[],
+    readonly appEvaluationAccess: StaticProjectEvaluationAccess<null>,
+    readonly conventionToolingEvaluationAccess: StaticProjectEvaluationAccess<ResourceConventionToolingEvaluationContext>,
     readonly candidateEmission: AureliaAppWorldProjectEmission,
   ) {}
 
@@ -148,7 +170,13 @@ export class AureliaAppWorldProjectComputationAttempt {
   commit(): AureliaAppWorldProjectComputationResult {
     const commit = this.run.commit();
     const committedGeneration = commit.state === ComputationCommitState.Committed
-      ? this.authority.accept(this.run.computationId, this.run.runSequence, this.candidateEmission)
+      ? this.authority.accept(
+          this.run.computationId,
+          this.run.runSequence,
+          this.candidateEmission,
+          this.appEvaluationAccess.generation,
+          this.conventionToolingEvaluationAccess.generation,
+        )
       : null;
     return new AureliaAppWorldProjectComputationResult(
       this.locus,
@@ -181,6 +209,7 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
     private readonly store: KernelStore,
     private readonly lifecycle: ComputationLifecycleRegistry,
     private readonly support: SemanticRuntimeSupport,
+    private readonly projectEvaluations: StaticProjectEvaluationComputationService,
   ) {
     store.registerSidecarIndex(this);
   }
@@ -220,37 +249,61 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
     project: ProjectBootFrame,
     options: AureliaAppWorldProjectOptions = {},
   ): AureliaAppWorldProjectComputationAttempt {
-    project.inputGeneration.requireCurrent();
-    const locus = new AureliaAppAnalysisLocus(project.projectKey);
-    const run = this.lifecycle.begin(locus);
-    try {
-      const candidate = new AureliaAppWorldProjectPass(this.support).constructAndEmit(
-        this.store,
-        run,
+    project.requireCurrent();
+    const inputReadScope = project.inputGeneration.createReadScope('aurelia-app-analysis');
+    return project.inputGeneration.withReadScope(inputReadScope, () => {
+      const appEvaluationAccess = this.projectEvaluations.acquire(project, aureliaAppProjectEvaluationProfile);
+      const conventionToolingEvaluationAccess = this.projectEvaluations.acquire(
         project,
-        options,
+        resourceConventionToolingEvaluationProfile,
       );
-      for (const resource of [...candidate.templates.resources, ...candidate.templates.authoringResources]) {
-        for (const read of resource.compilation.registeredReads) {
+      const locus = new AureliaAppAnalysisLocus(project.projectKey);
+      const run = this.lifecycle.begin(locus);
+      try {
+        run.observe(appEvaluationAccess.generation);
+        run.observe(conventionToolingEvaluationAccess.generation);
+        const candidate = new AureliaAppWorldProjectPass(this.support).constructAndEmit(
+          this.store,
+          run,
+          project,
+          appEvaluationAccess.generation.forkSession(),
+          conventionToolingEvaluationAccess.generation,
+          [
+            appEvaluationAccess.readProfile(),
+            conventionToolingEvaluationAccess.readProfile(),
+          ],
+          options,
+        );
+        for (const resource of [...candidate.templates.resources, ...candidate.templates.authoringResources]) {
+          for (const read of resource.compilation.registeredReads) {
+            run.observe(read);
+          }
+        }
+        for (const read of candidate.typeSystem.readRegisteredInputs()) {
           run.observe(read);
         }
+        const sourceSnapshots = this.captureTemplateSources(project, candidate, run);
+        run.observe(project);
+        for (const read of project.readRegisteredInputs()) {
+          run.observe(read);
+        }
+        for (const read of inputReadScope.readRegisteredInputs()) {
+          run.observe(read);
+        }
+        return new AureliaAppWorldProjectComputationAttempt(
+          run,
+          this.authorityFor(project.projectKey),
+          locus,
+          sourceSnapshots,
+          appEvaluationAccess,
+          conventionToolingEvaluationAccess,
+          candidate,
+        );
+      } catch (error) {
+        run.abort();
+        throw error;
       }
-      const sourceSnapshots = this.captureTemplateSources(project, candidate, run);
-      run.observe(project.inputGeneration);
-      for (const read of project.inputGeneration.readRegisteredInputs()) {
-        run.observe(read);
-      }
-      return new AureliaAppWorldProjectComputationAttempt(
-        run,
-        this.authorityFor(project.projectKey),
-        locus,
-        sourceSnapshots,
-        candidate,
-      );
-    } catch (error) {
-      run.abort();
-      throw error;
-    }
+    });
   }
 
   private captureTemplateSources(

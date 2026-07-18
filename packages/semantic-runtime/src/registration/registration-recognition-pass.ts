@@ -30,7 +30,7 @@ export class RegistrationRecognitionPass {
     context: RegistrationEmissionContext,
   ): RegistrationRecognitionResult {
     const observations = this.recognize(context);
-    const emission = new RegistrationKernelEmitter(store).emit(context, observations);
+    const emission = new RegistrationKernelEmitter(store, store).emit(context, observations);
     return new RegistrationRecognitionResult(observations, emission);
   }
 }

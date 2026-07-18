@@ -7,6 +7,7 @@ import type { ModuleEnvironmentRecord } from './environment.js';
 import {
   StaticEvaluator,
   type StaticEvaluationRuntimeHost,
+  type StaticModuleEvaluationResult,
 } from './evaluator.js';
 import {
   DefaultStaticEvaluationPolicy,
@@ -42,8 +43,13 @@ export class EvaluationTargetRead {
   ) {}
 }
 
+/** Minimal evaluator-backed expression read surface accepted by semantic indexes. */
+export interface StaticExpressionEvaluationReader {
+  evaluateExpression(expression: ts.Expression): EvaluationRead<EvaluationValue>;
+}
+
 /** Generic expression reader over an already-built module environment. */
-export class StaticEvaluationExpressionReader {
+export class StaticEvaluationExpressionReader implements StaticExpressionEvaluationReader {
   private evaluator: StaticEvaluator | null = null;
 
   constructor(
@@ -103,6 +109,59 @@ export class StaticEvaluationExpressionReader {
   private evaluatorForReader(): StaticEvaluator {
     this.evaluator ??= new StaticEvaluator(this.policy, this.runtimeHost);
     return this.evaluator;
+  }
+}
+
+/**
+ * Expression reader that spends the call-time environment of an executed call when one owns the queried expression.
+ *
+ * A module's final environment is still the honest fallback for declaration-oriented source inspection. Replaying an
+ * executed call against that final environment is not: a later assignment can change the receiver, key, or option
+ * value. Static module evaluation retains those lexical snapshots, and this reader keeps the selection in one place.
+ */
+export class StaticModuleEvaluationExpressionReader implements StaticExpressionEvaluationReader {
+  private readonly environmentsByCall = new Map<ts.CallExpression, ModuleEnvironmentRecord>();
+  private readonly readersByEnvironment = new WeakMap<ModuleEnvironmentRecord, StaticEvaluationExpressionReader>();
+
+  constructor(
+    private readonly evaluation: StaticModuleEvaluationResult,
+  ) {
+    for (const call of evaluation.executedCalls) {
+      this.environmentsByCall.set(call.expression, call.environment);
+    }
+  }
+
+  evaluateExpression(expression: ts.Expression): EvaluationRead<EvaluationValue> {
+    return this.readerFor(expression).evaluateExpression(expression);
+  }
+
+  private readerFor(node: ts.Node): StaticEvaluationExpressionReader {
+    const environment = this.callEnvironmentFor(node) ?? this.evaluation.environment;
+    let reader = this.readersByEnvironment.get(environment);
+    if (reader == null) {
+      reader = new StaticEvaluationExpressionReader(
+        environment,
+        this.evaluation.moduleKey,
+        this.evaluation.policy,
+        this.evaluation.runtimeHost,
+      );
+      this.readersByEnvironment.set(environment, reader);
+    }
+    return reader;
+  }
+
+  private callEnvironmentFor(node: ts.Node): ModuleEnvironmentRecord | null {
+    let current: ts.Node | undefined = node;
+    while (current != null && !ts.isSourceFile(current)) {
+      if (ts.isCallExpression(current)) {
+        const environment = this.environmentsByCall.get(current);
+        if (environment != null) {
+          return environment;
+        }
+      }
+      current = current.parent;
+    }
+    return null;
   }
 }
 

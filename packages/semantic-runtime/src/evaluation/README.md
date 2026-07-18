@@ -132,20 +132,36 @@ configuration values to degrade when a recognizer asks a second question about t
 `StaticEvaluationExpressionReader` keeps one evaluator per reader for those follow-up reads, matching the
 binding-source evaluation frame's per-source evaluator lifetime so guardrails and seam checkpoints do not reset for
 every property or target probe.
-The reader does not create an isolation boundary. A replaceable or speculative analysis owner calls
-`StaticProjectEvaluationResult.forkSession()` once, then shares that graph-preserving session across all of its readers
-and evaluator-backed consumers. The fork copies mutable environments, objects, collections, functions, classes,
+The reader does not create an isolation boundary. Production consumers acquire one
+`StaticProjectEvaluationGeneration` per project/profile locus. Its admitted evaluator graph is a reusable baseline:
+`readBaseline()` is restricted to consumers that only inspect completed facts, while every replaceable or speculative
+analysis owner calls generation `forkSession()` once and shares that graph-preserving session across its readers and
+evaluator-backed consumers. The fork copies mutable environments, objects, collections, functions, classes,
 instances, namespaces, promise fulfillment values, completions, and runtime-host returns while preserving aliases and
 cycles, including Promise back-edges and class/instance knots. Runtime hosts transfer any semantic identity they own
 outside the generic value graph (for example Aurelia registration and registry-body metadata), and the transfer context
-forks mutable child values retained by that metadata. Call-frame environments inherit the session realm; values created
-through the wrapped intrinsic host and returned by runtime-host call/new hooks are adopted into that realm rather than
-cloned a second time, so host-installed aliases and captured closures stay exact. Forking per reader is incorrect: one authored
+forks mutable child values retained by that metadata. Metadata transfer is cycle-aware because framework metadata can
+legitimately point back to its carrier, as with an interface resolver builder used as its own instance value.
+Call-frame environments inherit the session realm. Values already proven to belong to that realm are adopted so
+host-installed aliases and captured closures stay exact; canonical or foreign values returned by a runtime host are
+forked instead of being claimed by the first session that sees them. Session-bound runtime hosts retain their canonical
+product host, and one module graph uses one host identity, so a candidate-owned session can itself be forked for an
+isolated downstream phase without routing returned values back through the parent session. Forking per reader is incorrect: one authored
 configuration/resource value would acquire several unrelated
 identities, breaking joins such as two app roots that intentionally share one router configuration. Template compilation
 inside a complete app-analysis candidate and its post-template binding/router evaluation each own an explicit forked
 session, separate from the admitted project-evaluation graph and from one another, so rejected work cannot mutate the
 incumbent or leak mutable evaluator state across lifecycle phases.
+The reusable computation records the profile, structural project boot frame, compiler/toolchain environment, and exact
+positive and negative host reads. Consumer-local read scopes share one immutable memoized project-input value view but
+retain separate manifests for app and tooling profiles. Exact reads validate candidate commits; admitted generation
+currentness remains owned by project-input events and computation replacement, so an unannounced mid-transaction host
+write rejects the candidate without revoking its still-admitted incumbent.
+Ambient value declarations are a separate project/compiler computation shared by all evaluator profiles. It reads the
+configured TypeScript libraries and admitted project declaration files once, retains their exact positive and negative
+input reads, and is observed transitively by the app and Vite evaluation generations. This is intentionally upstream of
+profile-specific module evaluation: app and tooling policies may differ, but `window`, `process`, and project ambient
+declarations do not acquire a second meaning merely because another evaluation profile asks the question.
 Product runtime hosts may expose framework-shaped intrinsics only at the host boundary. Aurelia's host handles browser
 ambient globals such as `document`, `window`, `self`, `customElements`, and `console` as host-environment boundaries so
 app admission can preserve host-dependent setup expressions without reporting them as missing identifiers. It also

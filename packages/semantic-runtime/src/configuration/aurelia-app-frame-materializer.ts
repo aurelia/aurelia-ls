@@ -14,14 +14,8 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
-  ContainerIdentity,
-  ContainerIdentityKind,
   TypeScriptDeclarationIdentity,
 } from '../kernel/identity.js';
-import {
-  MaterializationRecord,
-  MaterializedProduct,
-} from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   fieldProvenanceWhenDistinct,
@@ -33,8 +27,11 @@ import type {
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
-import { ContainerConfiguration } from '../di/container-configuration.js';
 import { Container } from '../di/container.js';
+import {
+  ContainerRootMaterializationRequest,
+  ContainerRootMaterializer,
+} from '../di/container-materializer.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import { ResourceTargetReference } from '../resources/resource-reference.js';
@@ -55,6 +52,7 @@ import {
   ConfigurationStepKind,
 } from './configuration-sequence.js';
 import {
+  claimHandlesForConfigurationProduct,
   ConfigurationKernelPublication,
   ConfigurationProductHandles,
   ConfigurationSourceRecordSet,
@@ -106,10 +104,14 @@ class ConfigurationTargetEmission {
 
 /** Materializes the Aurelia facade/root-container/AppRoot admission frame for a configuration sequence. */
 export class AureliaAppFrameMaterializer {
+  private readonly rootContainers: ContainerRootMaterializer;
+
   constructor(
     readonly store: KernelStore,
     readonly publication: ConfigurationKernelPublication,
-  ) {}
+  ) {
+    this.rootContainers = new ContainerRootMaterializer(store);
+  }
 
   materialize(
     context: ConfigurationRecognitionContext,
@@ -136,7 +138,12 @@ export class AureliaAppFrameMaterializer {
     );
     records.push(...source.records);
 
-    const container = this.containerForAppFrame(appLocal, source);
+    const containerRequest = new ContainerRootMaterializationRequest(
+      appLocal,
+      source.addressHandle,
+      appStep.receiverLocalName,
+    );
+    const container = this.rootContainers.create(containerRequest);
 
     const appRootConfig = this.recordsForAppFrameRootConfig(context, observation, appLocal, resources);
     records.push(...appRootConfig.records);
@@ -156,11 +163,16 @@ export class AureliaAppFrameMaterializer {
       provenanceHandle,
     );
     records.push(...appClaims.records);
+    records.push(...this.rootContainers.recordsFor(
+      containerRequest,
+      container,
+      source.provenanceHandle,
+      claimHandlesForConfigurationProduct(appClaims.records, container.productHandle),
+    ));
     records.push(
       ...this.recordsForAppFrameProducts(
         appLocal,
         appStep,
-        container,
         appRoot,
         aurelia,
         source,
@@ -239,22 +251,6 @@ export class AureliaAppFrameMaterializer {
     );
   }
 
-  private containerForAppFrame(
-    appLocal: string,
-    source: ConfigurationSourceRecordSet,
-  ): Container {
-    return new Container(
-      this.store.handles.product(`di-container:${appLocal}`),
-      this.store.handles.identity(`di-container:${appLocal}`),
-      ContainerIdentityKind.Root,
-      null,
-      null,
-      source.addressHandle,
-      [],
-      ContainerConfiguration.DEFAULT,
-    );
-  }
-
   private appRootForAppFrame(
     appLocal: string,
     container: Container,
@@ -295,7 +291,6 @@ export class AureliaAppFrameMaterializer {
   private recordsForAppFrameProducts(
     appLocal: string,
     appStep: ConfigurationStepObservation,
-    container: Container,
     appRoot: AppRoot | null,
     aurelia: Aurelia,
     source: ConfigurationSourceRecordSet,
@@ -303,19 +298,12 @@ export class AureliaAppFrameMaterializer {
     appClaims: AppFrameClaimEmission,
   ): readonly KernelStoreRecord[] {
     return [
-      ...this.containerRecordsForAppFrame(
-        appLocal,
-        appStep,
-        container,
-        source,
-        claimHandlesForProduct(appClaims.records, container.productHandle),
-      ),
       ...(appRoot == null ? [] : this.appRootRecordsForAppFrame(
         appLocal,
         appStep,
         appRoot,
         provenanceHandle,
-        claimHandlesForProduct(appClaims.records, appRoot.productHandle),
+        claimHandlesForConfigurationProduct(appClaims.records, appRoot.productHandle),
       )),
       ...this.aureliaRecordsForAppFrame(
         appLocal,
@@ -323,38 +311,6 @@ export class AureliaAppFrameMaterializer {
         aurelia,
         source,
         appClaims.aureliaClaimHandles,
-      ),
-    ];
-  }
-
-  private containerRecordsForAppFrame(
-    appLocal: string,
-    appStep: ConfigurationStepObservation,
-    container: Container,
-    source: ConfigurationSourceRecordSet,
-    claimHandles: readonly ClaimHandle[],
-  ): readonly KernelStoreRecord[] {
-    return [
-      new ContainerIdentity(
-        container.identityHandle,
-        ContainerIdentityKind.Root,
-        null,
-        null,
-        source.addressHandle,
-        appStep.receiverLocalName,
-      ),
-      new MaterializedProduct(
-        container.productHandle,
-        KernelVocabulary.Di.Container.key,
-        container.identityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializationRecord(
-        this.store.handles.materialization(`di-container:${appLocal}`),
-        container.identityHandle,
-        [container.productHandle],
-        claimHandles,
       ),
     ];
   }
@@ -588,14 +544,4 @@ function appAdmissionStep(
     || step.stepKind === ConfigurationStepKind.AureliaRegister
     || step.stepKind === ConfigurationStepKind.AureliaApp
   ) ?? null;
-}
-
-function claimHandlesForProduct(
-  records: readonly KernelStoreRecord[],
-  productHandle: ProductHandle,
-): readonly ClaimHandle[] {
-  return records
-    .filter((record): record is SemanticClaim => record.kind === 'semantic-claim')
-    .filter((claim) => claim.subjectHandle === productHandle || claim.objectHandle === productHandle)
-    .map((claim) => claim.handle);
 }

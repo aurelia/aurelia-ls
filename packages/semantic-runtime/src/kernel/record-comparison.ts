@@ -379,9 +379,23 @@ function compareDiKeyIdentities(
       const candidate = next as typeof previous;
       return semanticThenWitness(
         sameValues(
-          [previous.declarationHandle, previous.symbolName],
-          [candidate.declarationHandle, candidate.symbolName],
+          [previous.symbolKind, previous.declarationHandle, previous.symbolName],
+          [candidate.symbolKind, candidate.declarationHandle, candidate.symbolName],
         ),
+        sameValues([previous.keyAddressHandle], [candidate.keyAddressHandle]),
+      );
+    }
+    case DiKeyIdentityKind.Object: {
+      const candidate = next as typeof previous;
+      return sameValues(
+        [previous.creationAddressHandle],
+        [candidate.creationAddressHandle],
+      );
+    }
+    case DiKeyIdentityKind.Primitive: {
+      const candidate = next as typeof previous;
+      return semanticThenWitness(
+        sameValues([previous.valueKind, previous.value], [candidate.valueKind, candidate.value]),
         sameValues([previous.keyAddressHandle], [candidate.keyAddressHandle]),
       );
     }
@@ -412,6 +426,10 @@ function diKeyIdentityReferences(identity: DiKeyIdentity): readonly KernelRecord
   switch (identity.keyKind) {
     case DiKeyIdentityKind.Unknown:
     case DiKeyIdentityKind.String:
+      return compactHandles(identity.keyAddressHandle);
+    case DiKeyIdentityKind.Object:
+      return compactHandles(identity.creationAddressHandle);
+    case DiKeyIdentityKind.Primitive:
       return compactHandles(identity.keyAddressHandle);
     case DiKeyIdentityKind.Constructable:
       return compactHandles(identity.declarationHandle, identity.keyAddressHandle);

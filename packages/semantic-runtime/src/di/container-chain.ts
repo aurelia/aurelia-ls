@@ -1,4 +1,5 @@
 import type {
+  AddressHandle,
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
@@ -16,6 +17,7 @@ export class DiContainerChainFacts {
     private readonly containerIdentitiesByProduct: ReadonlyMap<ProductHandle, IdentityHandle>,
     private readonly owningContainerIdentitiesByProduct: ReadonlyMap<ProductHandle, IdentityHandle>,
     private readonly providerContainerIdentitiesByKey: ReadonlyMap<IdentityHandle, readonly IdentityHandle[]>,
+    private readonly containerProductHandlesBySourceSpan: ReadonlyMap<string, ProductHandle | null>,
   ) {}
 
   containerIdentity(handle: IdentityHandle): ContainerIdentity | null {
@@ -52,6 +54,16 @@ export class DiContainerChainFacts {
     );
   }
 
+  containerProductHandleForSourceSpan(
+    sourceFileAddressHandle: AddressHandle,
+    start: number,
+    end: number,
+  ): ProductHandle | null {
+    return this.containerProductHandlesBySourceSpan.get(
+      containerSourceSpanKey(sourceFileAddressHandle, start, end),
+    ) ?? null;
+  }
+
   containerChainIdentityHandles(containerIdentityHandle: IdentityHandle): readonly IdentityHandle[] {
     const chain: IdentityHandle[] = [];
     const seen = new Set<IdentityHandle>();
@@ -79,6 +91,7 @@ export class DiContainerChainFacts {
 export function readDiContainerChainFacts(store: KernelRecordCollectionReadView): DiContainerChainFacts {
   const containersByIdentity = new Map<IdentityHandle, ContainerIdentity>();
   const containerIdentitiesByProduct = new Map<ProductHandle, IdentityHandle>();
+  const containerProductsByIdentity = new Map<IdentityHandle, ProductHandle>();
   const diProductIdentitiesByIdentity = new Map<IdentityHandle, DiProductIdentity>();
   const diProductIdentitiesByProduct = new Map<ProductHandle, DiProductIdentity>();
   const providerContainerIdentitiesByKey = new Map<IdentityHandle, Set<IdentityHandle>>();
@@ -99,6 +112,7 @@ export function readDiContainerChainFacts(store: KernelRecordCollectionReadView)
         && containersByIdentity.has(record.identityHandle)
       ) {
         containerIdentitiesByProduct.set(record.handle, record.identityHandle);
+        containerProductsByIdentity.set(record.identityHandle, record.handle);
       }
       const productIdentity = diProductIdentitiesByIdentity.get(record.identityHandle) ?? null;
       if (productIdentity != null) {
@@ -121,6 +135,23 @@ export function readDiContainerChainFacts(store: KernelRecordCollectionReadView)
     }
   }
 
+  const containerProductHandlesBySourceSpan = new Map<string, ProductHandle | null>();
+  for (const container of containersByIdentity.values()) {
+    const source = container.sourceAddressHandle == null
+      ? null
+      : store.read(container.sourceAddressHandle);
+    const productHandle = containerProductsByIdentity.get(container.handle) ?? null;
+    if (source?.kind !== 'source-span-address' || productHandle == null) {
+      continue;
+    }
+    const key = containerSourceSpanKey(source.fileHandle, source.start, source.end);
+    const existing = containerProductHandlesBySourceSpan.get(key);
+    containerProductHandlesBySourceSpan.set(
+      key,
+      existing === undefined || existing === productHandle ? productHandle : null,
+    );
+  }
+
   return new DiContainerChainFacts(
     containersByIdentity,
     containerIdentitiesByProduct,
@@ -128,7 +159,16 @@ export function readDiContainerChainFacts(store: KernelRecordCollectionReadView)
       identity.containerHandle == null ? [] : [[productHandle, identity.containerHandle]]
     )),
     freezeSetMap(providerContainerIdentitiesByKey),
+    containerProductHandlesBySourceSpan,
   );
+}
+
+function containerSourceSpanKey(
+  sourceFileAddressHandle: AddressHandle,
+  start: number,
+  end: number,
+): string {
+  return `${sourceFileAddressHandle}\0${start}\0${end}`;
 }
 
 function addToSet<TKey, TValue>(
