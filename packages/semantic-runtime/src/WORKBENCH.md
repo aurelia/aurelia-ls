@@ -1114,11 +1114,13 @@ and detail registration. If scope pressure returns, decide whether the next boun
 scope-owner/link claims; do not move TypeChecker member reads back into the runtime scope materializer.
 
 Configuration emission now has the same split. `configuration-publication.ts` owns source/evidence/provenance records,
-configuration product envelopes, open seams, and configuration-owned claims. `aurelia-app-frame-materializer.ts` owns
-the runtime-shaped app admission frame: root container, `Aurelia` facade, app-root config, AppRoot, and component target
-convergence. `configuration-step-materializer.ts` owns per-step AppTask, option contribution, callback/key source, and
-registration handoff products. Keep `configuration-kernel-emitter.ts` focused on source-order sequence orchestration;
-if configuration pressure returns, first check whether sequence order, app admission, step materialization, and
+configuration product envelopes, open seams, and configuration-owned claims. `aurelia-application-materializer.ts` owns
+exact facade-construction and `.app(...)` products: implicit root containers, constructor-installed contextual providers,
+the `Aurelia` facade, per-operation app-root configs, AppRoots, and component targets. `configuration-step-materializer.ts`
+owns per-step AppTask, option contribution, callback/key source, and registration handoff products. Operation target
+claims are distinct from exact output claims, and DI spends only the target product; evaluator receiver reconstruction is
+not an alternate authority. Keep `configuration-kernel-emitter.ts` focused on source-order sequence orchestration. If
+configuration pressure returns, first check whether sequence order, app construction, step materialization, and
 registration handoff have started bleeding into each other again.
 Configuration issues now have a sibling publication path for known framework failures discovered while recognizing
 configuration/AppTask service customization. `configuration-issue-publication.ts` builds the source/evidence/product

@@ -110,11 +110,11 @@ export const KernelClaimPredicates = {
       ),
     ),
 
-    /** A DI operation produced a container-owned product while spending registration or lookup pressure. */
+    /** A DI container or operation produced one container-owned product. */
     ProducesProduct: defineClaimPredicate(
       KernelVocabularyNamespace.Di,
       'produces-product',
-      'A DI operation produced a container-owned product while spending registration or lookup pressure.',
+      'A DI container or operation produced one container-owned product.',
       claimSignature(
         productEndpoint(
           KernelProductKinds.Di.Container,
@@ -212,11 +212,25 @@ export const KernelClaimPredicates = {
       ),
     ),
 
-    /** A configuration step produced or selected a product that later passes can consume. */
+    /** A configuration step acts on one already-selected or newly-created runtime product. */
+    TargetsProduct: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'targets-product',
+      'A configuration step acts on one exact runtime product.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.Step),
+        productEndpoint(
+          KernelProductKinds.Configuration.Aurelia,
+          KernelProductKinds.Di.Container,
+        ),
+      ),
+    ),
+
+    /** A configuration step created a product at this exact operation. */
     ProducesProduct: defineClaimPredicate(
       KernelVocabularyNamespace.Configuration,
       'produces-product',
-      'A configuration step produced or selected a product that later passes can consume.',
+      'A configuration step created a product at this exact operation.',
       claimSignature(
         productEndpoint(KernelProductKinds.Configuration.Step),
         productEndpoint(
@@ -232,6 +246,8 @@ export const KernelClaimPredicates = {
           KernelProductKinds.Configuration.OptionContribution,
           KernelProductKinds.Configuration.AppTask,
           KernelProductKinds.Di.Container,
+          KernelProductKinds.Di.Resolver,
+          KernelProductKinds.Di.ResolverSlot,
         ),
       ),
     ),

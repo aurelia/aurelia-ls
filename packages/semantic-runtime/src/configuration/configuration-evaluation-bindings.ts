@@ -2,7 +2,6 @@ import type { Container } from '../di/container.js';
 import type { EvaluationValue } from '../evaluation/values.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import type { Aurelia } from './aurelia.js';
-import type { AureliaAppFrame } from './aurelia-app-frame-materializer.js';
 import type {
   AureliaContainerEvaluation,
   AureliaFacadeEvaluation,
@@ -13,16 +12,8 @@ export class ConfigurationEvaluationBindings {
   constructor(
     readonly containersByEvaluation: ReadonlyMap<AureliaContainerEvaluation, Container>,
     readonly aureliasByEvaluation: ReadonlyMap<AureliaFacadeEvaluation, Aurelia>,
-    readonly receiverEvaluationsByStep: ReadonlyMap<ProductHandle, AureliaContainerEvaluation>,
     readonly registrationValuesByAdmissionProduct: ReadonlyMap<ProductHandle, EvaluationValue>,
   ) {}
-
-  containerForStep(stepProductHandle: ProductHandle): Container | null {
-    const evaluation = this.receiverEvaluationsByStep.get(stepProductHandle) ?? null;
-    return evaluation == null
-      ? null
-      : this.containersByEvaluation.get(evaluation) ?? null;
-  }
 
   registrationValueForAdmission(admissionProductHandle: ProductHandle): EvaluationValue | null {
     return this.registrationValuesByAdmissionProduct.get(admissionProductHandle) ?? null;
@@ -34,7 +25,6 @@ export class ConfigurationEvaluationBindingMark {
   constructor(
     readonly containerCount: number,
     readonly aureliaCount: number,
-    readonly receiverCount: number,
     readonly registrationValueCount: number,
   ) {}
 }
@@ -42,19 +32,16 @@ export class ConfigurationEvaluationBindingMark {
 /** Mutable project-run bridge from static-evaluation identity to emitted runtime products. */
 export class ConfigurationEvaluationBindingFrame {
   private readonly containersByEvaluation = new Map<AureliaContainerEvaluation, Container>();
-  private readonly appFramesByEvaluation = new Map<AureliaFacadeEvaluation, AureliaAppFrame>();
-  private readonly receiverEvaluationsByStep = new Map<ProductHandle, AureliaContainerEvaluation>();
+  private readonly aureliasByEvaluation = new Map<AureliaFacadeEvaluation, Aurelia>();
   private readonly registrationValuesByAdmissionProduct = new Map<ProductHandle, EvaluationValue>();
   private readonly containerEntries: [AureliaContainerEvaluation, Container][] = [];
   private readonly aureliaEntries: [AureliaFacadeEvaluation, Aurelia][] = [];
-  private readonly receiverEntries: [ProductHandle, AureliaContainerEvaluation][] = [];
   private readonly registrationValueEntries: [ProductHandle, EvaluationValue][] = [];
 
   mark(): ConfigurationEvaluationBindingMark {
     return new ConfigurationEvaluationBindingMark(
       this.containerEntries.length,
       this.aureliaEntries.length,
-      this.receiverEntries.length,
       this.registrationValueEntries.length,
     );
   }
@@ -75,28 +62,20 @@ export class ConfigurationEvaluationBindingFrame {
     this.containerEntries.push([evaluation, container]);
   }
 
-  appFrameForEvaluation(evaluation: AureliaFacadeEvaluation): AureliaAppFrame | null {
-    return this.appFramesByEvaluation.get(evaluation) ?? null;
+  aureliaForEvaluation(evaluation: AureliaFacadeEvaluation): Aurelia | null {
+    return this.aureliasByEvaluation.get(evaluation) ?? null;
   }
 
-  bindAppFrame(evaluation: AureliaFacadeEvaluation, frame: AureliaAppFrame): void {
-    const existing = this.appFramesByEvaluation.get(evaluation) ?? null;
-    if (existing === frame) {
+  bindAurelia(evaluation: AureliaFacadeEvaluation, aurelia: Aurelia): void {
+    const existing = this.aureliasByEvaluation.get(evaluation) ?? null;
+    if (existing === aurelia) {
       return;
     }
     if (existing != null) {
       throw new Error('One evaluator facade identity cannot materialize as two Aurelia products.');
     }
-    this.appFramesByEvaluation.set(evaluation, frame);
-    this.aureliaEntries.push([evaluation, frame.aurelia]);
-  }
-
-  bindReceiver(stepProductHandle: ProductHandle, evaluation: AureliaContainerEvaluation): void {
-    if (this.receiverEvaluationsByStep.has(stepProductHandle)) {
-      return;
-    }
-    this.receiverEvaluationsByStep.set(stepProductHandle, evaluation);
-    this.receiverEntries.push([stepProductHandle, evaluation]);
+    this.aureliasByEvaluation.set(evaluation, aurelia);
+    this.aureliaEntries.push([evaluation, aurelia]);
   }
 
   bindRegistrationValue(admissionProductHandle: ProductHandle, value: EvaluationValue): void {
@@ -111,7 +90,6 @@ export class ConfigurationEvaluationBindingFrame {
     return new ConfigurationEvaluationBindings(
       new Map(this.containerEntries.slice(mark.containerCount)),
       new Map(this.aureliaEntries.slice(mark.aureliaCount)),
-      new Map(this.receiverEntries.slice(mark.receiverCount)),
       new Map(this.registrationValueEntries.slice(mark.registrationValueCount)),
     );
   }
@@ -119,8 +97,7 @@ export class ConfigurationEvaluationBindingFrame {
   readAll(): ConfigurationEvaluationBindings {
     return new ConfigurationEvaluationBindings(
       new Map(this.containersByEvaluation),
-      new Map(this.aureliaEntries),
-      new Map(this.receiverEvaluationsByStep),
+      new Map(this.aureliasByEvaluation),
       new Map(this.registrationValuesByAdmissionProduct),
     );
   }
@@ -132,7 +109,6 @@ export function mergeConfigurationEvaluationBindings(
   return new ConfigurationEvaluationBindings(
     new Map(bindings.flatMap((binding) => [...binding.containersByEvaluation])),
     new Map(bindings.flatMap((binding) => [...binding.aureliasByEvaluation])),
-    new Map(bindings.flatMap((binding) => [...binding.receiverEvaluationsByStep])),
     new Map(bindings.flatMap((binding) => [...binding.registrationValuesByAdmissionProduct])),
   );
 }

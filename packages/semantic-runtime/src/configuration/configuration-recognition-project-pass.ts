@@ -235,12 +235,12 @@ const enum ConfigurationMaterializationRank {
   ContainerCreation = 0,
   /** Direct container registration follows construction while preserving evaluator module order. */
   ContainerRegistration = 100,
+  /** Facade construction follows its selected container and precedes every cross-module facade use. */
+  FacadeCreation = 200,
   /** Non-container sequences have no evaluator-identity prerequisite. */
   Independent = 300,
-  /** App admission owns the facade product when a facade spans more than one source sequence. */
-  AppAdmission = 500,
-  /** Constructor/register-only facade sequences reference an app-owned facade when one exists. */
-  FacadeReference = 600,
+  /** Register/app operations against an existing facade follow its exact creation operation. */
+  FacadeUse = 500,
 }
 
 function configurationObservationEmissionRank(
@@ -261,16 +261,20 @@ function configurationObservationEmissionRank(
     return ConfigurationMaterializationRank.ContainerRegistration;
   }
 
+  if (observation.steps.some((step) =>
+    step.aureliaEvaluation != null
+    && step.aureliaEvaluation.sourceNode === step.sourceNode
+  )) {
+    return ConfigurationMaterializationRank.FacadeCreation;
+  }
+
   const facadeContainers = observation.steps.flatMap((step) =>
     step.aureliaEvaluation?.containerEvaluation == null
       ? []
       : [step.aureliaEvaluation.containerEvaluation]
   );
-  if (observation.steps.some((step) => step.stepKind === ConfigurationStepKind.AureliaApp)) {
-    return ConfigurationMaterializationRank.AppAdmission;
-  }
   if (facadeContainers.length > 0) {
-    return ConfigurationMaterializationRank.FacadeReference;
+    return ConfigurationMaterializationRank.FacadeUse;
   }
   return ConfigurationMaterializationRank.Independent;
 }

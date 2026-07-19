@@ -60,7 +60,7 @@ export type ConfigurationStepField =
   | 'stepKind'
   | 'sequence'
   | 'ordinal'
-  | 'receiver'
+  | 'target'
   | 'producedProducts'
   | 'registrationAdmissions'
   | 'appTasks'
@@ -149,11 +149,11 @@ export class ConfigurationStep {
     readonly sequence: ConfigurationSequenceReference | null,
     /** Order inside the owning sequence when known. */
     readonly ordinal: number | null,
-    /** Receiver identity for method-call steps, when closed. */
-    readonly receiverIdentityHandle: IdentityHandle | null,
-    /** Receiver product for method-call steps, when materialized. */
-    readonly receiverProductHandle: ProductHandle | null,
-    /** Products produced or selected by this step. */
+    /** Exact runtime product identity acted upon by this operation, when closed. */
+    readonly targetIdentityHandle: IdentityHandle | null,
+    /** Exact runtime product acted upon by this operation, when materialized. */
+    readonly targetProductHandle: ProductHandle | null,
+    /** Products created by this exact step. */
     readonly producedProductHandles: readonly ProductHandle[],
     /** Registration admissions offered by this step before DI spending. */
     readonly registrationAdmissionProductHandles: readonly ProductHandle[],

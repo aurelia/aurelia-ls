@@ -131,6 +131,8 @@ export class ConfigurationOptionShapeIssueMaterializer {
         sourceAddressHandle: issue.sourceAddressHandle,
         provenanceHandle,
         localName: issue.issueKind,
+        claimHandles: [],
+        openSeamHandles: [],
       }),
     ]);
   }

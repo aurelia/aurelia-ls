@@ -2,7 +2,7 @@
   "schemaVersion": "atlas-memory.v1",
   "records": [
     {
-      "id": "frontier:aurelia-app-frame-materializer",
+      "id": "frontier:aurelia-application-materializer",
       "kind": "pressure-frontier",
       "domains": [
         "semantic-runtime",
@@ -11,33 +11,33 @@
         "application",
         "world-construction"
       ],
-      "summary": "AureliaAppFrameMaterializer is the configuration frontier that materializes Aurelia facade, root container, AppRootConfig, and AppRoot products for a sequence.",
-      "rationale": "The app frame is the bridge between recognized configuration flow and the spendable app/container/root products used by DI, controller, lifecycle, and rendering work. Keeping it explicit avoids pushing root-admission behavior into configuration recognition or app-world composition.",
+      "summary": "AureliaApplicationMaterializer publishes exact Aurelia facade-construction and app-root operations.",
+      "rationale": "One cached app frame cannot represent a facade created in one module and reused by several ordered app operations. The materializer publishes the implicit container, facade, and constructor-installed contextual providers only at the exact creation step; each app operation publishes its own config and AppRoot and prepares the shared IAppRoot provider. Keeping this operation boundary explicit prevents configuration and DI from reconstructing targets or conflating existing values with outputs.",
       "guidance": [
-        "Start here when work touches Aurelia facade admission, root container products, app-root config, AppRoot identity, or AppRootUsesConfig claims.",
-        "Keep app-frame products distinct from per-step configuration products and app-world project phase orchestration.",
-        "Use configuration README and DI world-construction guidance before changing root container or app-root semantics."
+        "Start here when work touches exact Aurelia facade creation, root container products, constructor InstanceProviders, app-root config, AppRoot identity, or AppRootUsesConfig claims.",
+        "Keep operation target products distinct from products created by the operation; one facade may own several ordered AppRoots.",
+        "Use the configuration and DI READMEs before changing root-container, contextual-provider, or app-root semantics; active start/stop lifecycle remains outside this boundary."
       ],
       "anchors": [
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/configuration/aurelia-app-frame-materializer.ts",
-          "symbolName": "AureliaAppFrameMaterializer",
-          "line": 108,
-          "summary": "Aurelia facade/root-container/AppRoot admission frame materializer."
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-application-materializer.ts",
+          "symbolName": "AureliaApplicationMaterializer",
+          "line": 120,
+          "summary": "Exact Aurelia facade-construction and app-root operation materializer."
         }
       ],
       "liveChecks": [
         {
           "kind": "product-large-class",
-          "className": "AureliaAppFrameMaterializer",
-          "filePath": "packages/semantic-runtime/src/configuration/aurelia-app-frame-materializer.ts",
+          "className": "AureliaApplicationMaterializer",
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-application-materializer.ts",
           "minLineCount": 300,
           "minMethodCount": 10
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-19"
     },
     {
       "id": "frontier:container-child-materializer",

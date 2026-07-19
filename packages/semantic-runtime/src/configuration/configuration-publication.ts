@@ -73,8 +73,8 @@ interface ConfigurationProductRecordSpec {
   readonly sourceAddressHandle: AddressHandle | null;
   readonly provenanceHandle: ProvenanceHandle;
   readonly localName: string | null;
-  readonly claimHandles?: readonly ClaimHandle[];
-  readonly openSeamHandles?: readonly OpenSeamHandle[];
+  readonly claimHandles: readonly ClaimHandle[];
+  readonly openSeamHandles: readonly OpenSeamHandle[];
 }
 
 export class ConfigurationClaimSet {
@@ -82,6 +82,25 @@ export class ConfigurationClaimSet {
     readonly records: readonly KernelStoreRecord[],
     readonly handles: readonly ClaimHandle[],
   ) {}
+}
+
+export class ConfigurationStepClaimSet extends ConfigurationClaimSet {
+  constructor(
+    records: readonly KernelStoreRecord[],
+    handles: readonly ClaimHandle[],
+    readonly targetClaimHandle: ClaimHandle | null,
+    readonly producerClaimHandlesByProduct: ReadonlyMap<ProductHandle, ClaimHandle>,
+  ) {
+    super(records, handles);
+  }
+
+  producerClaimHandleFor(productHandle: ProductHandle): ClaimHandle {
+    const handle = this.producerClaimHandlesByProduct.get(productHandle);
+    if (handle == null) {
+      throw new Error(`Configuration output ${productHandle} has no exact producer claim.`);
+    }
+    return handle;
+  }
 }
 
 export class ConfigurationProductHandles {
@@ -160,8 +179,8 @@ export class ConfigurationKernelPublication {
         this.store.handles.materialization(spec.local),
         spec.identityHandle,
         [spec.productHandle],
-        spec.claimHandles ?? [],
-        spec.openSeamHandles ?? [],
+        spec.claimHandles,
+        spec.openSeamHandles,
       ),
     ];
   }
@@ -183,36 +202,42 @@ export class ConfigurationKernelPublication {
     };
   }
 
-  recordsForAureliaClaims(
+  recordsForAureliaOwnsContainerClaim(
     local: string,
     aureliaProductHandle: ProductHandle,
     containerProductHandle: ProductHandle,
-    appRootProductHandle: ProductHandle | null,
     provenanceHandle: ProvenanceHandle,
   ): ConfigurationClaimSet {
-    const records: KernelStoreRecord[] = [];
-    const handles: ClaimHandle[] = [];
     const ownsContainerHandle = this.store.handles.claim(`configuration-aurelia-owns-container:${local}`);
-    handles.push(ownsContainerHandle);
-    records.push(new SemanticClaim(
-      ownsContainerHandle,
-      aureliaProductHandle,
-      KernelVocabulary.Configuration.OwnsContainer.key,
-      containerProductHandle,
-      provenanceHandle,
-    ));
-    if (appRootProductHandle != null) {
-      const hasAppRootHandle = this.store.handles.claim(`configuration-aurelia-has-app-root:${local}`);
-      handles.push(hasAppRootHandle);
-      records.push(new SemanticClaim(
+    return new ConfigurationClaimSet(
+      [new SemanticClaim(
+        ownsContainerHandle,
+        aureliaProductHandle,
+        KernelVocabulary.Configuration.OwnsContainer.key,
+        containerProductHandle,
+        provenanceHandle,
+      )],
+      [ownsContainerHandle],
+    );
+  }
+
+  recordsForAureliaHasAppRootClaim(
+    local: string,
+    aureliaProductHandle: ProductHandle,
+    appRootProductHandle: ProductHandle,
+    provenanceHandle: ProvenanceHandle,
+  ): ConfigurationClaimSet {
+    const hasAppRootHandle = this.store.handles.claim(`configuration-aurelia-has-app-root:${local}`);
+    return new ConfigurationClaimSet(
+      [new SemanticClaim(
         hasAppRootHandle,
         aureliaProductHandle,
         KernelVocabulary.Configuration.HasAppRoot.key,
         appRootProductHandle,
         provenanceHandle,
-      ));
-    }
-    return new ConfigurationClaimSet(records, handles);
+      )],
+      [hasAppRootHandle],
+    );
   }
 
   recordsForSequenceClaims(
@@ -240,15 +265,25 @@ export class ConfigurationKernelPublication {
   recordsForStepClaims(
     local: string,
     stepProductHandle: ProductHandle,
+    targetProductHandle: ProductHandle | null,
     producedProductHandles: readonly ProductHandle[],
-    registrationProductHandles: readonly ProductHandle[],
     provenanceHandle: ProvenanceHandle,
-  ): ConfigurationClaimSet {
+  ): ConfigurationStepClaimSet {
+    const targetClaim = targetProductHandle == null
+      ? new ConfigurationClaimSet([], [])
+      : this.recordsForStepOutputClaims(
+          [targetProductHandle],
+          () => this.store.handles.claim(`configuration-step-targets-product:${local}`),
+          stepProductHandle,
+          KernelVocabulary.Configuration.TargetsProduct.key,
+          provenanceHandle,
+        );
     const productClaims = this.recordsForStepProductClaims(local, stepProductHandle, producedProductHandles, provenanceHandle);
-    const registrationClaims = this.recordsForStepRegistrationClaims(local, stepProductHandle, registrationProductHandles, provenanceHandle);
-    return new ConfigurationClaimSet(
-      [...productClaims.records, ...registrationClaims.records],
-      [...productClaims.handles, ...registrationClaims.handles],
+    return new ConfigurationStepClaimSet(
+      [...targetClaim.records, ...productClaims.records],
+      [...targetClaim.handles, ...productClaims.handles],
+      targetClaim.handles[0] ?? null,
+      new Map(producedProductHandles.map((productHandle, index) => [productHandle, productClaims.handles[index]!])),
     );
   }
 
@@ -339,7 +374,7 @@ export class ConfigurationKernelPublication {
     );
   }
 
-  private recordsForStepRegistrationClaims(
+  recordsForStepRegistrationClaims(
     local: string,
     stepProductHandle: ProductHandle,
     registrationProductHandles: readonly ProductHandle[],

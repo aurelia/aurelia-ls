@@ -2,6 +2,10 @@
 export const enum FrameworkIntrinsicDiKey {
   /** Current/requesting Aurelia container installed by every modeled container. */
   IContainer = 'IContainer',
+  /** Current Aurelia application facade installed by the facade constructor. */
+  IAurelia = 'IAurelia',
+  /** Current app root exposed through the facade constructor's shared InstanceProvider. */
+  IAppRoot = 'IAppRoot',
   /** Host DOM node made available while hydrating a controller. */
   INode = 'INode',
   /** Current runtime controller made available during hydration. */
@@ -26,6 +30,8 @@ export const enum FrameworkIntrinsicDiKey {
 
 export const frameworkIntrinsicDiKeys: readonly FrameworkIntrinsicDiKey[] = [
   FrameworkIntrinsicDiKey.IContainer,
+  FrameworkIntrinsicDiKey.IAurelia,
+  FrameworkIntrinsicDiKey.IAppRoot,
   FrameworkIntrinsicDiKey.INode,
   FrameworkIntrinsicDiKey.IController,
   FrameworkIntrinsicDiKey.IInstruction,

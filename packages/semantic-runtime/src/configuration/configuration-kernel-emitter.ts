@@ -54,10 +54,7 @@ import {
   ConfigurationSourceRecordSet,
 } from './configuration-publication.js';
 import {
-  AureliaAppFrame,
-  AureliaAppFrameMaterializer,
-} from './aurelia-app-frame-materializer.js';
-import {
+  ConfigurationStepEmissionSet,
   ConfigurationStepMaterializer,
   ConfigurationStepReferenceSeed,
 } from './configuration-step-materializer.js';
@@ -153,7 +150,6 @@ class ConfigurationSequenceProductEmission {
 /** Emits configuration observations into the caller-owned kernel publication. */
 export class ConfigurationKernelEmitter {
   private readonly publication: ConfigurationKernelPublication;
-  private readonly appFrames: AureliaAppFrameMaterializer;
   private readonly steps: ConfigurationStepMaterializer;
 
   constructor(
@@ -164,12 +160,6 @@ export class ConfigurationKernelEmitter {
     readonly evaluationBindings: ConfigurationEvaluationBindingFrame,
   ) {
     this.publication = new ConfigurationKernelPublication(store);
-    this.appFrames = new AureliaAppFrameMaterializer(
-      store,
-      this.publication,
-      kernelPublication,
-      evaluationBindings,
-    );
     this.steps = new ConfigurationStepMaterializer(store, this.publication, kernelPublication, evaluationBindings);
   }
 
@@ -239,28 +229,20 @@ export class ConfigurationKernelEmitter {
     );
     records.push(...source.records);
 
-    const appFrame = this.appFrames.materialize(context, observation, local, source.provenanceHandle, resources);
-    if (appFrame != null) {
-      records.push(...appFrame.records);
-    }
-
     const stepReferences = this.stepReferenceSeedsForSequence(local, observation);
-    const stepSet = this.steps.recordsForSequenceSteps(context, observation, local, stepReferences, appFrame, resources);
+    const stepSet = this.steps.recordsForSequenceSteps(context, observation, local, stepReferences, resources);
     records.push(...stepSet.records);
 
-    const sequenceEmission = this.recordsForSequenceProduct(observation, local, appFrame, stepReferences, source);
+    const sequenceEmission = this.recordsForSequenceProduct(observation, local, stepSet, stepReferences, source);
     records.push(...sequenceEmission.records);
 
     return {
       records,
       sequence: sequenceEmission.sequence,
       steps: stepSet.steps,
-      aurelias: appFrame?.publishesProducts === true ? [appFrame.aurelia] : [],
-      appRoots: appFrame?.publishesProducts === true && appFrame.appRoot != null ? [appFrame.appRoot] : [],
-      containers: [
-        ...(appFrame?.createdContainer == null ? [] : [appFrame.createdContainer]),
-        ...stepSet.containers,
-      ],
+      aurelias: stepSet.aurelias,
+      appRoots: stepSet.appRoots,
+      containers: stepSet.containers,
       appTasks: stepSet.appTasks,
       optionContributions: stepSet.optionContributions,
       registrationAdmissions: stepSet.registrationAdmissions,
@@ -270,7 +252,7 @@ export class ConfigurationKernelEmitter {
   private recordsForSequenceProduct(
     observation: ConfigurationSequenceObservation,
     local: string,
-    appFrame: AureliaAppFrame | null,
+    stepSet: ConfigurationStepEmissionSet,
     stepReferences: readonly ConfigurationStepReferenceSeed[],
     source: ConfigurationSourceRecordSet,
   ): ConfigurationSequenceProductEmission {
@@ -285,17 +267,17 @@ export class ConfigurationKernelEmitter {
       observation,
       handles.productHandle,
       handles.identityHandle,
-      appFrame,
+      stepSet,
       stepReferences,
       source,
     );
-    return this.sequenceProductEmission(local, observation, appFrame, source, handles, sequenceClaims, sequence);
+    return this.sequenceProductEmission(local, observation, stepSet, source, handles, sequenceClaims, sequence);
   }
 
   private sequenceProductEmission(
     local: string,
     observation: ConfigurationSequenceObservation,
-    appFrame: AureliaAppFrame | null,
+    stepSet: ConfigurationStepEmissionSet,
     source: ConfigurationSourceRecordSet,
     handles: ConfigurationProductHandles,
     sequenceClaims: ConfigurationClaimSet,
@@ -307,7 +289,7 @@ export class ConfigurationKernelEmitter {
         ...this.recordsForConfigurationSequenceProduct(
           local,
           observation,
-          appFrame,
+          stepSet,
           source,
           handles.productHandle,
           handles.identityHandle,
@@ -334,7 +316,7 @@ export class ConfigurationKernelEmitter {
     observation: ConfigurationSequenceObservation,
     productHandle: ProductHandle,
     identityHandle: IdentityHandle,
-    appFrame: AureliaAppFrame | null,
+    stepSet: ConfigurationStepEmissionSet,
     stepReferences: readonly ConfigurationStepReferenceSeed[],
     source: ConfigurationSourceRecordSet,
   ): ConfigurationSequence {
@@ -342,8 +324,8 @@ export class ConfigurationKernelEmitter {
       productHandle,
       identityHandle,
       observation.sequenceKind,
-      appFrame?.aurelia.toReference() ?? null,
-      appFrame?.appRoot?.toReference() ?? null,
+      stepSet.sequenceAurelia?.toReference() ?? null,
+      stepSet.sequenceAppRoot?.toReference() ?? null,
       stepReferences.map((step) => step.toReference()),
       source.addressHandle,
       [],
@@ -353,7 +335,7 @@ export class ConfigurationKernelEmitter {
   private recordsForConfigurationSequenceProduct(
     local: string,
     observation: ConfigurationSequenceObservation,
-    appFrame: AureliaAppFrame | null,
+    stepSet: ConfigurationStepEmissionSet,
     source: ConfigurationSourceRecordSet,
     productHandle: ProductHandle,
     identityHandle: IdentityHandle,
@@ -364,11 +346,12 @@ export class ConfigurationKernelEmitter {
       productHandle,
       identityHandle,
       productKindKey: KernelVocabulary.Configuration.Sequence.key,
-      ownerHandle: appFrame?.aurelia.identityHandle ?? null,
+      ownerHandle: stepSet.sequenceAurelia?.identityHandle ?? null,
       sourceAddressHandle: source.addressHandle,
       provenanceHandle: source.provenanceHandle,
       localName: observation.localName,
       claimHandles,
+      openSeamHandles: [],
     });
   }
 

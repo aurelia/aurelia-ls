@@ -79,6 +79,7 @@ import {
   type FrameworkResolverEffect,
 } from './framework-registration-effects.js';
 import type { Container } from './container.js';
+import type { ContainerLookupKey } from './container-key.js';
 import { ContainerRegistrationOperation } from './container-registration.js';
 import {
   ParameterizedRegistry,
@@ -103,9 +104,10 @@ import {
   frameworkIntrinsicDiKeyLocal,
 } from './framework-intrinsic-di-key.js';
 import { DiIssuePublisher } from './di-issue-publication.js';
+import { InstanceProvider } from './instance-provider.js';
 import {
   Resolver,
-  type ResolverStrategy,
+  ResolverStrategy,
   resolverStrategyForRegistrationStrategy,
 } from './resolver.js';
 
@@ -126,6 +128,25 @@ export class DiProductEmission<TProduct> {
   ) {}
 }
 
+/** One framework-created InstanceProvider and the container resolver-map row that exposes it. */
+export class DiInstanceProviderPublication {
+  constructor(
+    readonly local: string,
+    readonly container: Container,
+    readonly ownerIdentityHandle: IdentityHandle,
+    readonly keyIdentityHandle: IdentityHandle,
+    readonly provider: InstanceProvider,
+    readonly providerIdentityHandle: IdentityHandle,
+    readonly resolverSlot: ContainerResolverSlot,
+    readonly resolverSlotIdentityHandle: IdentityHandle,
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+
+  get productHandles(): readonly ProductHandle[] {
+    return [this.provider.productHandle, this.resolverSlot.productHandle];
+  }
+}
+
 interface PublishedDiProductRecordSpec {
   readonly productKindKey: ProductKindKey;
   readonly productHandle: ProductHandle;
@@ -137,6 +158,7 @@ interface PublishedDiProductRecordSpec {
   readonly keyIdentityHandle: IdentityHandle;
   readonly provenanceHandle: ProvenanceHandle;
   readonly materializationLocal: string;
+  readonly additionalClaimHandles: readonly ClaimHandle[];
 }
 
 export class DiFrameworkRegistrationEffectEmission {
@@ -231,9 +253,127 @@ function recordsForPublishedDiProduct(
       store.handles.materialization(spec.materializationLocal),
       spec.identityHandle,
       [spec.productHandle],
-      [spec.providesKeyClaimHandle],
+      [spec.providesKeyClaimHandle, ...spec.additionalClaimHandles],
     ),
   ];
+}
+
+/** Publishes runtime-html's constructor/context InstanceProvider objects without routing them through app registrations. */
+export class DiInstanceProviderPublicationMaterializer {
+  constructor(
+    private readonly store: KernelStore,
+  ) {}
+
+  prepare(
+    local: string,
+    container: Container,
+    ownerIdentityHandle: IdentityHandle,
+    keyIdentityHandle: IdentityHandle,
+    friendlyName: string,
+    instance: RegistrationValueReference | null,
+    type: ContainerLookupKey | null,
+    sourceAddressHandle: AddressHandle | null,
+  ): DiInstanceProviderPublication {
+    const provider = new InstanceProvider(
+      this.store.handles.product(`${local}:provider`),
+      this.store.handles.identity(`${local}:provider`),
+      friendlyName,
+      instance,
+      type,
+      sourceAddressHandle,
+      [],
+    );
+    const resolverSlot = new ContainerResolverSlot(
+      this.store.handles.product(`${local}:resolver-slot`),
+      container.toReference(),
+      keyIdentityHandle,
+      provider,
+      provider.productHandle,
+      ResolverStrategy.instance,
+      false,
+      sourceAddressHandle,
+      [],
+    );
+    return new DiInstanceProviderPublication(
+      local,
+      container,
+      ownerIdentityHandle,
+      keyIdentityHandle,
+      provider,
+      provider.identityHandle,
+      resolverSlot,
+      this.store.handles.identity(`${local}:resolver-slot`),
+      sourceAddressHandle,
+    );
+  }
+
+  recordsFor(
+    publication: DiInstanceProviderPublication,
+    provenanceHandle: ProvenanceHandle,
+    producerClaimHandlesByProduct: ReadonlyMap<ProductHandle, ClaimHandle>,
+  ): readonly KernelStoreRecord[] {
+    const providerProducedClaimHandle = this.store.handles.claim(`${publication.local}:container-produces-provider`);
+    const slotProducedClaimHandle = this.store.handles.claim(`${publication.local}:container-produces-resolver-slot`);
+    return [
+      new SemanticClaim(
+        providerProducedClaimHandle,
+        publication.container.productHandle,
+        KernelVocabulary.Di.ProducesProduct.key,
+        publication.provider.productHandle,
+        provenanceHandle,
+      ),
+      ...recordsForPublishedDiProduct(this.store, {
+        productKindKey: KernelVocabulary.Di.Resolver.key,
+        productHandle: publication.provider.productHandle,
+        identityHandle: publication.providerIdentityHandle,
+        parentIdentityHandle: publication.container.identityHandle,
+        ownerIdentityHandle: publication.ownerIdentityHandle,
+        sourceAddressHandle: publication.sourceAddressHandle,
+        providesKeyClaimHandle: this.store.handles.claim(`${publication.local}:provider-provides-key`),
+        keyIdentityHandle: publication.keyIdentityHandle,
+        provenanceHandle,
+        materializationLocal: `${publication.local}:provider`,
+        additionalClaimHandles: [
+          providerProducedClaimHandle,
+          producerClaimHandleFor(publication.provider.productHandle, producerClaimHandlesByProduct),
+        ],
+      }),
+      new SemanticClaim(
+        slotProducedClaimHandle,
+        publication.container.productHandle,
+        KernelVocabulary.Di.ProducesProduct.key,
+        publication.resolverSlot.productHandle,
+        provenanceHandle,
+      ),
+      ...recordsForPublishedDiProduct(this.store, {
+        productKindKey: KernelVocabulary.Di.ResolverSlot.key,
+        productHandle: publication.resolverSlot.productHandle,
+        identityHandle: publication.resolverSlotIdentityHandle,
+        parentIdentityHandle: publication.container.identityHandle,
+        ownerIdentityHandle: publication.ownerIdentityHandle,
+        sourceAddressHandle: publication.sourceAddressHandle,
+        providesKeyClaimHandle: this.store.handles.claim(`${publication.local}:resolver-slot-provides-key`),
+        keyIdentityHandle: publication.keyIdentityHandle,
+        provenanceHandle,
+        materializationLocal: `${publication.local}:resolver-slot`,
+        additionalClaimHandles: [
+          slotProducedClaimHandle,
+          producerClaimHandleFor(publication.resolverSlot.productHandle, producerClaimHandlesByProduct),
+        ],
+      }),
+    ];
+  }
+}
+
+function producerClaimHandleFor(
+  productHandle: ProductHandle,
+  producerClaimHandlesByProduct: ReadonlyMap<ProductHandle, ClaimHandle>,
+): ClaimHandle {
+  const handle = producerClaimHandlesByProduct.get(productHandle);
+  if (handle == null) {
+    throw new Error(`DI product ${productHandle} has no exact configuration producer claim.`);
+  }
+  return handle;
 }
 
 export function recordsForDiSource(
@@ -799,6 +939,7 @@ export class DiResolverPublicationMaterializer {
       keyIdentityHandle: keyIdentity.identityHandle,
       provenanceHandle,
       materializationLocal: `${local}:factory-slot`,
+      additionalClaimHandles: [],
     }));
     return { records, factorySlot: slot };
   }
@@ -882,6 +1023,7 @@ export class DiResolverPublicationMaterializer {
       keyIdentityHandle: publication.keyIdentityHandle,
       provenanceHandle,
       materializationLocal: `${local}:resolver`,
+      additionalClaimHandles: [],
     });
   }
 
@@ -904,6 +1046,7 @@ export class DiResolverPublicationMaterializer {
       keyIdentityHandle: publication.keyIdentityHandle,
       provenanceHandle,
       materializationLocal: `${local}:resolver-slot`,
+      additionalClaimHandles: [],
     });
   }
 

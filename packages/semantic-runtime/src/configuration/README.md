@@ -97,23 +97,27 @@ The tooling model should keep that split:
 - `configuration-step-materializer.ts` owns per-step products: configuration step records, AppTask products, option
   contribution products, callback/key source records, and the registration handoff for a step. Keep that work out of
   sequence orchestration so the emitter stays focused on source-order configuration sequences.
-- `aurelia-app-frame-materializer.ts` owns the runtime-shaped app admission boundary: root container, `Aurelia` facade,
-  app-root config, AppRoot, and root component target convergence. Keep that separate from sequence/step emission so
-  lifecycle and controller work can later spend the app frame without making the configuration sequence emitter grow
-  back into an AppRoot emulator.
-- `configuration-evaluation-bindings.ts` is the project-run identity bridge from evaluator-owned facade/container
-  values to emitted `Aurelia` and `Container` products. Recognition groups steps by those identities; receiver spelling
-  remains a trace label only. The project pass recognizes all modules first, then emits container parents, container
-  registrations, and app-owned facade products in dependency order while retaining evaluator module order within each
-  phase. That ordering is a materialization prerequisite, not a claim that semantic-runtime models full app lifecycle
-  execution.
+- `aurelia-application-materializer.ts` owns exact runtime-html construction operations. A facade-creation step publishes
+  its implicit root container when needed, the `Aurelia` facade, and the constructor-installed `IAurelia`, `Aurelia`, and
+  shared `IAppRoot` providers. Every `.app(...)` step publishes a distinct app-root config and `AppRoot`, then prepares
+  that shared root provider with the newly constructed root. Active-root/start/stop lifecycle remains outside this
+  boundary. Keep these operation-owned products separate from sequence orchestration and generic DI spending.
+- `configuration-evaluation-bindings.ts` is the project-run identity bridge from evaluator-owned facade/container values
+  to emitted `Aurelia` and `Container` products. Recognition groups steps by those identities; receiver spelling remains
+  a trace label only. `ConfigurationStep.target*` identifies the exact existing or newly-created runtime value acted on,
+  while `producedProductHandles` contains only products created by that operation. The project pass recognizes all
+  modules first, then emits container parents, container registrations, exact facade creations, and later facade uses in
+  dependency order while retaining evaluator module order within each phase. DI consumes the exact target product and
+  must not reconstruct it from evaluator receiver maps. This is a materialization prerequisite, not full lifecycle replay.
 - Configuration source publication anchors a node against its own admitted source file, including evaluator values
   returned across module boundaries. Never attach a foreign declaration or constructor node to the importing module's
   source-file address merely because that module owns the current recognition context.
 - `IRegistry.register(container, ...)` bodies are recognized as registry-owned configuration sequences. Their
   `container.register(...)` calls keep `RegistryMethod` admission provenance instead of being flattened into ordinary
   container-register calls, and static array spreads such as `...DefaultComponents` are expanded through the shared
-  evaluator before registration admission materialization.
+  evaluator before registration admission materialization. Registry-body sequences are definitions: DI spends their
+  steps only when a concrete registry admission supplies the receiving container; it must not replay them as top-level
+  application configuration.
 - Configuration option contributions currently describe object-literal customize options, user customization callbacks,
   and builder method mutations before convergence decides final precedence.
 - Direct object-literal options passed to `.customize(...)` and direct assignments inside simple customization

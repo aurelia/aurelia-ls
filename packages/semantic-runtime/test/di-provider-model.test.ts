@@ -19,6 +19,7 @@ import {
   ContainerChildMaterializer,
 } from '../src/di/container-materializer.js';
 import type { Container } from '../src/di/container.js';
+import type { ContainerResolverSlot } from '../src/di/container-slot.js';
 import {
   readDiContainerApiCallSites,
   type DiContainerApiCallSite,
@@ -33,7 +34,12 @@ import {
   type DiProviderActivationResult,
   type DiProviderActivationSession,
 } from '../src/di/provider-activation.js';
-import { ResolverResolutionKind } from '../src/di/resolver.js';
+import {
+  Resolver,
+  ResolverResolutionKind,
+} from '../src/di/resolver.js';
+import { InstanceProvider } from '../src/di/instance-provider.js';
+import type { DiWorldConstructionEmission } from '../src/di/world-construction.js';
 import { DiIssueKind, DiIssueSubjectKind } from '../src/di/di-issue.js';
 import {
   isEvaluatedProjectSource,
@@ -44,10 +50,15 @@ import {
   type EvaluationValue,
 } from '../src/evaluation/values.js';
 import {
+  SourceFileAddress,
+  SourceSpanAddress,
+} from '../src/kernel/address.js';
+import {
   DiKeyIdentityKind,
   TypeScriptDeclarationIdentity,
 } from '../src/kernel/identity.js';
 import { OpenSeamReasonKind } from '../src/kernel/open-seam.js';
+import { KernelVocabulary } from '../src/kernel/vocabulary.js';
 import {
   frameworkRegistrationKindForAdmission,
   OpenRegistrationAdmission,
@@ -86,7 +97,7 @@ describe('DI provider model', () => {
     const standaloneContainer = configuration.containers.find((container) =>
       configuration.aurelias.every((aurelia) => aurelia.container.productHandle !== container.productHandle)
     ) ?? null;
-    const interfaceSlot = world.resolverSlots.find((slot) => slot.resolver?._key.localName === 'IFoo') ?? null;
+    const interfaceSlot = world.resolverSlots.find((slot) => resolverKeyName(slot) === 'IFoo') ?? null;
     expect(standaloneContainer).not.toBeNull();
     expect(interfaceSlot?.container.productHandle).toBe(standaloneContainer?.productHandle);
     expect(world.selfResolverSlots).toHaveLength(2);
@@ -111,8 +122,8 @@ describe('DI provider model', () => {
     });
     const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
     const world = app.emission.appWorld.diWorld;
-    const callbackSlot = world.resolverSlots.find((slot) => slot.resolver?._key.localName === 'callback-service');
-    const cachedCallbackSlot = world.resolverSlots.find((slot) => slot.resolver?._key.localName === 'cached-callback-service');
+    const callbackSlot = world.resolverSlots.find((slot) => resolverKeyName(slot) === 'callback-service');
+    const cachedCallbackSlot = world.resolverSlots.find((slot) => resolverKeyName(slot) === 'cached-callback-service');
     const admissions = app.emission.configuration.readConfiguration().registrationAdmissions;
     const callbackProvider = admissions.find((admission) => admission.targetKey?.localName === 'callback-service')
       ?.registeredValue?.identityHandle ?? null;
@@ -283,6 +294,8 @@ describe('DI provider model', () => {
       state: DiProviderActivationState.Open,
       failureKind: null,
     });
+    expect(fixture.diWorld.openSeams.flatMap((seam) => seam.reasonKinds))
+      .not.toContain(OpenSeamReasonKind.DiRegistrationContainerOpen);
   });
 
   test('spends evaluated source-container configuration without receiver spelling heuristics', async () => {
@@ -363,7 +376,7 @@ describe('DI provider model', () => {
     });
     const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
     const world = app.emission.appWorld;
-    const resolverNames = world.diWorld.resolverSlots.map((slot) => slot.resolver?._key.localName ?? null);
+    const resolverNames = world.diWorld.resolverSlots.map(resolverKeyName);
     const frameworkKinds = world.configuration.registrationAdmissions.flatMap((admission) => {
       const frameworkKind = frameworkRegistrationKindForAdmission(admission);
       return frameworkKind == null ? [] : [frameworkKind];
@@ -383,8 +396,8 @@ describe('DI provider model', () => {
     ]));
     expect(resolverNames).not.toContain('before-unknown-spread');
     const moduleClassSlots = world.diWorld.resolverSlots.filter((slot) =>
-      slot.resolver?._key.localName === 'ModulePlainClass'
-      || slot.resolver?._key.localName === 'SecondModulePlainClass'
+      resolverKeyName(slot) === 'ModulePlainClass'
+      || resolverKeyName(slot) === 'SecondModulePlainClass'
     );
     expect(moduleClassSlots).toHaveLength(2);
     expect(new Set(moduleClassSlots.map((slot) => slot.keyIdentityHandle)).size).toBe(2);
@@ -410,7 +423,7 @@ describe('DI provider model', () => {
       'I18nKeyConfiguration',
     ]));
     expect(world.diWorld.resolverSlots.find((slot) =>
-      slot.resolver?._key.localName === 'IValidationMessageProvider'
+      resolverKeyName(slot) === 'IValidationMessageProvider'
     )?.resolver?._state?.localName).toBe('LocalizedValidationMessageProvider');
     expect(world.diWorld.factorySlots).toHaveLength(1);
     expect(world.diWorld.appTasks).toEqual([
@@ -518,11 +531,43 @@ describe('DI provider model', () => {
     expect(implicitAurelia?.container.productHandle).not.toBe(primaryContainer?.productHandle);
     expect(implicitAurelia?.container.productHandle).not.toBe(secondaryContainer?.productHandle);
     expect(undefinedDefaultAurelia?.container.productHandle).not.toBe(implicitAurelia?.container.productHandle);
+    expect(sourcePathForAddress(runtime, primaryAurelia?.sourceAddressHandle ?? null))
+      .toBe('src/primary-facade.ts');
+
+    const primaryAppRoots = configuration.appRoots.filter((root) =>
+      root.container.productHandle === primaryContainer?.productHandle
+    );
+    expect(primaryAppRoots).toHaveLength(2);
+    expect(primaryAppRoots.map((root) => sourcePathForAddress(runtime, root.sourceAddressHandle)).sort())
+      .toEqual(['src/primary-app.ts', 'src/primary-replacement-app.ts']);
+    expect(new Set(primaryAppRoots.map((root) => root.productHandle)).size).toBe(2);
+    const replacementRoot = primaryAppRoots.find((root) =>
+      sourcePathForAddress(runtime, root.sourceAddressHandle) === 'src/primary-replacement-app.ts'
+    ) ?? null;
+    const primaryConstructorProviderSlots = app.emission.appWorld.diWorld.resolverSlots.filter(
+      (slot): slot is ContainerResolverSlot & { readonly resolver: InstanceProvider } =>
+      slot.container.productHandle === primaryContainer?.productHandle
+      && slot.resolver instanceof InstanceProvider
+    );
+    expect(primaryConstructorProviderSlots.map((slot) => slot.resolver.friendlyName).sort())
+      .toEqual(['Aurelia', 'IAppRoot', 'IAurelia']);
+    expect(primaryConstructorProviderSlots.map((slot) => slot.resolver)).toContain(primaryAurelia?.rootProvider);
+    expect(primaryAurelia?.rootProvider.resolve().value?.productHandle).toBe(replacementRoot?.productHandle);
+    expect(primaryConstructorProviderSlots.filter((slot) =>
+      slot.resolver.friendlyName !== 'IAppRoot'
+    ).every((slot) =>
+      slot.resolver.resolve().value?.productHandle === primaryAurelia?.productHandle
+    )).toBe(true);
+    expect(app.emission.appWorld.diWorld.resolvers).toEqual(expect.arrayContaining(
+      primaryConstructorProviderSlots.map((slot) => slot.resolver),
+    ));
+
+    assertExactConfigurationCausality(runtime, configuration);
 
     const resolverOwners = new Map(app.emission.appWorld.diWorld.resolverSlots.flatMap((slot) =>
-      slot.resolver?._key.localName == null
+      resolverKeyName(slot) == null
         ? []
-        : [[slot.resolver._key.localName, slot.container.productHandle] as const]
+        : [[resolverKeyName(slot)!, slot.container.productHandle] as const]
     ));
     expect(resolverOwners.get('primary-root')).toBe(primaryContainer?.productHandle);
     expect(resolverOwners.get('primary-app')).toBe(primaryContainer?.productHandle);
@@ -663,7 +708,7 @@ describe('DI provider model', () => {
     const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
     const world = app.emission.appWorld;
     const compilerSlot = world.diWorld.resolverSlots.find((slot) =>
-      slot.resolver?._key.localName === 'ITemplateCompiler'
+      resolverKeyName(slot) === 'ITemplateCompiler'
     ) ?? null;
 
     expect(compilerSlot).not.toBeNull();
@@ -770,6 +815,7 @@ interface ProviderActivationFixture {
   readonly container: Container;
   readonly sites: ReadonlyMap<string, DiContainerApiCallSite>;
   readonly evaluation: StaticProjectEvaluationResult;
+  readonly diWorld: DiWorldConstructionEmission;
 }
 
 async function openProviderActivationFixture(
@@ -804,6 +850,7 @@ async function openProviderActivationFixture(
     container,
     sites,
     evaluation: app.emission.evaluation,
+    diWorld: app.emission.appWorld.diWorld,
   };
 }
 
@@ -831,6 +878,61 @@ function evaluatedSourceValue(
     candidate.admission.path.replace(/\\/g, '/').endsWith(normalized)
   ) ?? null;
   return source?.evaluation.environment.readValue(localName) ?? null;
+}
+
+function assertExactConfigurationCausality(
+  runtime: SemanticRuntime,
+  configuration: ConfigurationKernelEmission,
+): void {
+  const store = runtime.workspace.store;
+  const targetClaims = store.readClaims().filter((claim) =>
+    claim.predicateKey === KernelVocabulary.Configuration.TargetsProduct.key
+  );
+  const producerClaims = store.readClaims().filter((claim) =>
+    claim.predicateKey === KernelVocabulary.Configuration.ProducesProduct.key
+  );
+  const producedProductHandles = configuration.steps.flatMap((step) => step.producedProductHandles);
+
+  expect(new Set(producedProductHandles).size).toBe(producedProductHandles.length);
+  for (const step of configuration.steps) {
+    expect(targetClaims.filter((claim) => claim.subjectHandle === step.productHandle)
+      .map((claim) => claim.objectHandle))
+      .toEqual(step.targetProductHandle == null ? [] : [step.targetProductHandle]);
+    const stepProducerClaims = producerClaims.filter((claim) => claim.subjectHandle === step.productHandle);
+    expect(stepProducerClaims.map((claim) => claim.objectHandle)).toEqual(step.producedProductHandles);
+
+    for (const outputHandle of step.producedProductHandles) {
+      const producerClaim = stepProducerClaims.find((claim) => claim.objectHandle === outputHandle) ?? null;
+      const materializations = store.readMaterializations().filter((materialization) =>
+        materialization.productHandles.includes(outputHandle)
+      );
+      expect(producerClaim).not.toBeNull();
+      expect(materializations).toHaveLength(1);
+      expect(materializations[0]?.claimHandles).toContain(producerClaim?.handle);
+    }
+  }
+
+  expect(producerClaims.filter((claim) => producedProductHandles.includes(claim.objectHandle)))
+    .toHaveLength(producedProductHandles.length);
+}
+
+function sourcePathForAddress(
+  runtime: SemanticRuntime,
+  addressHandle: Parameters<SemanticRuntime['workspace']['store']['readAddress']>[0] | null,
+): string | null {
+  if (addressHandle == null) {
+    return null;
+  }
+  const address = runtime.workspace.store.readAddress(addressHandle);
+  if (!(address instanceof SourceSpanAddress)) {
+    return null;
+  }
+  const file = runtime.workspace.store.readAddress(address.fileHandle);
+  return file instanceof SourceFileAddress ? file.path.replace(/\\/g, '/') : null;
+}
+
+function resolverKeyName(slot: ContainerResolverSlot): string | null {
+  return slot.resolver instanceof Resolver ? slot.resolver._key.localName : null;
 }
 
 function activateNamedSite(

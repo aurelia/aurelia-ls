@@ -1,4 +1,5 @@
 import './primary-app';
+import './primary-replacement-app';
 import './secondary-app';
 import './child-app';
 import './implicit-app';

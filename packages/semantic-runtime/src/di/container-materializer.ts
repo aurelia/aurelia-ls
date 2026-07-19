@@ -251,13 +251,29 @@ export class ContainerChildMaterializer {
     input: ContainerChildMaterializationRequest,
     measure: ContainerChildMaterializationMeasure = unmeasuredContainerChildMaterialization,
   ): ContainerChildMaterializationEmission {
+    const child = measure('container', () => this.create(input));
+    return this.recordsFor(input, child, [], measure);
+  }
+
+  /** Create a child frame before its causal claims are published. */
+  create(input: ContainerChildMaterializationRequest): Container {
+    const local = `di-child-container:${input.localKey}`;
+    return this.createChildContainer(input, local);
+  }
+
+  /** Publish one already-created child after its causal claims are known. */
+  recordsFor(
+    input: ContainerChildMaterializationRequest,
+    child: Container,
+    claimHandles: readonly ClaimHandle[],
+    measure: ContainerChildMaterializationMeasure = unmeasuredContainerChildMaterialization,
+  ): ContainerChildMaterializationEmission {
     const local = `di-child-container:${input.localKey}`;
     const source = measure('source', () => this.recordsForSource(
       local,
       'Runtime child container created from a parent controller/container boundary.',
       input.sourceAddressHandle,
     ));
-    const child = measure('container', () => this.createChildContainer(input, local));
     const selfResolver = measure('self-resolver', () =>
       this.selfResolvers.recordsForContainerSelfResolver(child)
     );
@@ -269,7 +285,7 @@ export class ContainerChildMaterializer {
 
     const records: KernelStoreRecord[] = measure('records', () => [
       ...source.records,
-      ...this.recordsForChildContainer(input, local, source, child),
+      ...this.recordsForChildContainer(input, local, source, child, claimHandles),
       ...selfResolver.records,
       ...contextResolvers.records,
     ]);
@@ -311,6 +327,7 @@ export class ContainerChildMaterializer {
     local: string,
     source: ContainerMaterializationSourceSet,
     child: Container,
+    claimHandles: readonly ClaimHandle[],
   ): readonly KernelStoreRecord[] {
     return [
       new ContainerIdentity(
@@ -332,7 +349,7 @@ export class ContainerChildMaterializer {
         this.store.handles.materialization(local),
         child.identityHandle,
         [child.productHandle],
-        [],
+        claimHandles,
       ),
     ];
   }

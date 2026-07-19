@@ -11,6 +11,7 @@ import type {
   ContainerSelfResolverSlot,
 } from './container-slot.js';
 import type { Resolver } from './resolver.js';
+import type { InstanceProvider } from './instance-provider.js';
 import type {
   ParameterizedRegistry,
   RegistryValue,
@@ -18,6 +19,9 @@ import type {
 import type { AppTaskDefinition } from '../configuration/app-task.js';
 import type { DiIssue } from './di-issue.js';
 import type { ResourceIssue } from '../resources/resource-issue.js';
+
+/** Runtime resolver objects that can occupy a container resolver slot. */
+export type DiResolverProduct = Resolver | InstanceProvider;
 
 /** Result of spending configuration-owned registrations into abstract DI container state. */
 export class DiWorldConstructionEmission {
@@ -27,7 +31,7 @@ export class DiWorldConstructionEmission {
     /** Container registration operations produced by spending configuration admissions. */
     readonly registrationOperations: readonly ContainerRegistrationOperation[],
     /** Runtime-shaped resolver products produced from resolver admissions. */
-    readonly resolvers: readonly Resolver[],
+    readonly resolvers: readonly DiResolverProduct[],
     /** Runtime-shaped generic registry values encountered during spending. */
     readonly registries: readonly RegistryValue[],
     /** Runtime-shaped ParameterizedRegistry products produced by deferred registrations. */

@@ -41,7 +41,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-19"
     },
     {
       "id": "frontier:configuration-option-shape-issues",
@@ -202,12 +202,12 @@
         "world-construction",
         "kernel-publication"
       ],
-      "summary": "ConfigurationKernelEmitter is the source-order configuration sequence emitter that coordinates app-frame and per-step materialization.",
-      "rationale": "The emitter owns the configuration sequence boundary and batch commit, but should remain thin over publication, app-frame admission, and per-step products. Its size is a watchpoint for sequence orchestration growing back into app-root or registration emulation.",
+      "summary": "ConfigurationKernelEmitter is the source-order configuration sequence emitter that coordinates application-operation and per-step materialization.",
+      "rationale": "The emitter owns the configuration sequence boundary and batch commit, but should remain thin over publication, exact application construction, and per-step products. Its size is a watchpoint for sequence orchestration growing back into app-root or registration emulation.",
       "guidance": [
-        "Start here when sequence ordering, sequence products, app-frame coordination, or configuration batch emission changes.",
+        "Start here when sequence ordering, sequence products, application-operation coordination, or configuration batch emission changes.",
         "Keep per-step product creation in ConfigurationStepMaterializer and record envelopes in ConfigurationKernelPublication.",
-        "If new app admission facts appear, check AureliaAppFrameMaterializer before adding logic directly to the emitter."
+        "If new app construction or root-operation facts appear, check AureliaApplicationMaterializer before adding logic directly to the emitter."
       ],
       "anchors": [
         {
@@ -220,7 +220,7 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/README.md",
-          "summary": "Configuration sequence, app-frame, and step materialization split."
+          "summary": "Configuration sequence, application-operation, and step materialization split."
         }
       ],
       "liveChecks": [
@@ -233,7 +233,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-19"
     },
     {
       "id": "frontier:binding-scope-semantic-model",
@@ -646,9 +646,9 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/configuration/aurelia-app-frame-materializer.ts",
-          "symbolName": "AureliaAppFrameMaterializer",
-          "summary": "Consumes exact facade/container identity at the app-frame producer boundary."
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-application-materializer.ts",
+          "symbolName": "AureliaApplicationMaterializer",
+          "summary": "Consumes exact facade/container identity at the creating operation and publishes per-app root products."
         },
         {
           "kind": "source",
@@ -664,7 +664,7 @@
         {
           "kind": "doc",
           "path": "packages/semantic-runtime/src/configuration/README.md",
-          "summary": "Configuration evaluator-identity and app-frame ownership doctrine."
+          "summary": "Configuration evaluator identity, operation target, and exact product-ownership doctrine."
         }
       ],
       "liveChecks": [

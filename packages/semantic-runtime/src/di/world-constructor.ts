@@ -37,6 +37,7 @@ import {
   AppTaskDefinition,
 } from '../configuration/app-task.js';
 import {
+  ConfigurationSequenceKind,
   type ConfigurationStep,
 } from '../configuration/configuration-sequence.js';
 import {
@@ -94,7 +95,10 @@ import {
   ParameterizedRegistry,
   RegistryValue,
 } from './registry.js';
-import { DiWorldConstructionEmission } from './world-construction.js';
+import {
+  DiWorldConstructionEmission,
+  type DiResolverProduct,
+} from './world-construction.js';
 import {
   DiClaimEmission,
   DiFrameworkAppTaskPublicationMaterializer,
@@ -491,7 +495,7 @@ function registrationAdmissionStrategyLabel(admission: RegistrationAdmissionProd
 class DiWorldConstructionFrame {
   readonly records: KernelStoreRecord[] = [];
   readonly registrationOperations: ContainerRegistrationOperation[] = [];
-  readonly resolvers: Resolver[] = [];
+  readonly resolvers: DiResolverProduct[] = [];
   readonly registries: RegistryValue[] = [];
   readonly parameterizedRegistries: ParameterizedRegistry[] = [];
   readonly resolverSlots: ContainerResolverSlot[] = [];
@@ -502,9 +506,20 @@ class DiWorldConstructionFrame {
   readonly openSeams: OpenSeam[] = [];
   readonly issues: DiIssue[] = [];
   readonly resourceIssues: ResourceIssue[] = [];
+  private readonly resolverProductHandles = new Set<ProductHandle>();
 
   recordSelfResolver(selfResolver: ContainerSelfResolverSlot): void {
     this.selfResolverSlots.push(selfResolver);
+  }
+
+  recordConstructorResolverSlot(slot: ContainerResolverSlot): void {
+    this.resolverSlots.push(slot);
+    const resolver = slot.resolver;
+    if (resolver == null || this.resolverProductHandles.has(resolver.productHandle)) {
+      return;
+    }
+    this.resolverProductHandles.add(resolver.productHandle);
+    this.resolvers.push(resolver);
   }
 
   recordOpenSeam(
@@ -597,7 +612,7 @@ export class DiWorldConstructor {
     this.keyIdentityEmitter.reset();
 
     const frame = new DiWorldConstructionFrame();
-    const containersByProduct = this.installSelfResolvers(configuration, frame);
+    const containersByProduct = this.installConstructorResolvers(configuration, frame);
     const aureliaContainerByProduct = this.aureliaContainerIndex(configuration, containersByProduct);
     const admissionsByProduct = registrationAdmissionIndex(configuration);
     const appTasksByProduct = appTaskIndex(configuration);
@@ -662,7 +677,7 @@ export class DiWorldConstructor {
     });
   }
 
-  private installSelfResolvers(
+  private installConstructorResolvers(
     configuration: ConfigurationKernelEmission,
     frame: DiWorldConstructionFrame,
   ): ReadonlyMap<ProductHandle, Container> {
@@ -676,6 +691,9 @@ export class DiWorldConstructor {
         throw new Error('Every materialized DI container must own exactly one constructor self resolver.');
       }
       frame.recordSelfResolver(selfResolvers[0]!);
+      container.readResolverSlots().filter((slot): slot is ContainerResolverSlot =>
+        slot instanceof ContainerResolverSlot
+      ).forEach((slot) => frame.recordConstructorResolverSlot(slot));
     }
     return containersByProduct;
   }
@@ -705,8 +723,18 @@ export class DiWorldConstructor {
     registrationCascade: DiRegistrationSpendingCascade,
   ): void {
     const failedSequenceProducts = new Set<ProductHandle>();
+    const sequenceKindsByProduct = new Map(configuration.sequences.map((sequence) => [
+      sequence.productHandle,
+      sequence.sequenceKind,
+    ] as const));
     for (const step of configuration.steps) {
       const sequenceProductHandle = step.sequence?.productHandle ?? null;
+      if (
+        sequenceProductHandle != null
+        && sequenceKindsByProduct.get(sequenceProductHandle) === ConfigurationSequenceKind.Registry
+      ) {
+        continue;
+      }
       if (sequenceProductHandle != null && failedSequenceProducts.has(sequenceProductHandle)) {
         continue;
       }
@@ -714,7 +742,7 @@ export class DiWorldConstructor {
         continue;
       }
 
-      const container = this.containerForStep(configuration, step, containersByProduct, aureliaContainerByProduct);
+      const container = this.containerForStep(step, containersByProduct, aureliaContainerByProduct);
       if (container == null) {
         frame.recordOpenSeam(recordsForDiOpenSeam(this.store,
           `di-open-container:${step.productHandle}`,
@@ -752,20 +780,19 @@ export class DiWorldConstructor {
   }
 
   private containerForStep(
-    configuration: ConfigurationKernelEmission,
     step: ConfigurationStep,
     containersByProduct: ReadonlyMap<ProductHandle, Container>,
     aureliaContainerByProduct: ReadonlyMap<ProductHandle, Container>,
   ): Container | null {
-    if (step.receiverProductHandle != null) {
-      const direct = containersByProduct.get(step.receiverProductHandle)
-        ?? aureliaContainerByProduct.get(step.receiverProductHandle)
+    if (step.targetProductHandle != null) {
+      const direct = containersByProduct.get(step.targetProductHandle)
+        ?? aureliaContainerByProduct.get(step.targetProductHandle)
         ?? null;
       if (direct != null) {
         return direct;
       }
     }
-    return configuration.evaluationBindings.containerForStep(step.productHandle);
+    return null;
   }
 
   private recordsForRegistrationSpending(

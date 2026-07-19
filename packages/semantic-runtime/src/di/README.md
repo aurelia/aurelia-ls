@@ -54,7 +54,10 @@ The tooling model keeps those consequences distinct:
   (`AUR0005`) authority.
 - `InstanceProvider` names the contextual resolver Aurelia uses for already-created controller, host, hydration, and
   app-root values. Its `resolve(...)` answer carries `no_instance_provided` authority when the provider is read before
-  `prepare(...)` or after `dispose(...)`.
+  `prepare(...)` or after `dispose(...)`. Exact `Aurelia` facade construction is its first application-owned producer:
+  it publishes the prepared `IAurelia`/`Aurelia` providers and the shared initially-empty `IAppRoot` provider through
+  ordinary resolver slots, then each `AppRoot` construction prepares that shared root provider. These products belong
+  to the constructor operation and must not be reconstructed during DI world spending.
 - `RegistryValue` and `ParameterizedRegistry` name runtime-shaped registry values. Their `register(...)` methods expose
   whether registration would delegate, admit parameters directly, or remain open for evaluator-driven body analysis.
 - `ContainerResolverSlot`, `ContainerSelfResolverSlot`, `ContainerResourceSlot`, and `ContainerFactorySlot` name the

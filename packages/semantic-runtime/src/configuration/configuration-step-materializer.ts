@@ -93,9 +93,12 @@ import {
   ConfigurationCallbackReference,
   type AppTaskField,
 } from './app-task.js';
-import type {
-  AureliaAppFrame,
-} from './aurelia-app-frame-materializer.js';
+import {
+  AureliaApplicationDraft,
+  AureliaApplicationMaterializer,
+} from './aurelia-application-materializer.js';
+import type { AppRoot } from './app-root.js';
+import type { Aurelia } from './aurelia.js';
 import {
   ArrayConfigurationOptionValue,
   BooleanConfigurationOptionValue,
@@ -126,7 +129,6 @@ import {
 import { ConfigurationEvaluationBindingFrame } from './configuration-evaluation-bindings.js';
 import type { ConfigurationRecognitionContext } from './configuration-recognition-context.js';
 import {
-  claimHandlesForConfigurationProduct,
   ConfigurationKernelPublication,
   ConfigurationProductHandles,
   ConfigurationSourceRecordSet,
@@ -192,6 +194,13 @@ class ContainerConfigurationEmission {
   ) {}
 }
 
+class ConfigurationStepTarget {
+  constructor(
+    readonly identityHandle: IdentityHandle,
+    readonly productHandle: ProductHandle,
+  ) {}
+}
+
 interface ConfigurationCallbackEmission {
   readonly records: readonly KernelStoreRecord[];
   readonly reference: ConfigurationCallbackReference;
@@ -206,6 +215,10 @@ export class ConfigurationStepEmissionSet {
     readonly optionContributions: readonly ConfigurationOptionContribution[],
     readonly registrationAdmissions: readonly RegistrationAdmissionProduct[],
     readonly containers: readonly Container[],
+    readonly aurelias: readonly Aurelia[],
+    readonly appRoots: readonly AppRoot[],
+    readonly sequenceAurelia: Aurelia | null,
+    readonly sequenceAppRoot: AppRoot | null,
   ) {}
 }
 
@@ -231,6 +244,7 @@ export class ConfigurationStepMaterializer {
   private readonly registrationEmitter: RegistrationKernelEmitter;
   private readonly rootContainers: ContainerRootMaterializer;
   private readonly childContainers: ContainerChildMaterializer;
+  private readonly applications: AureliaApplicationMaterializer;
 
   constructor(
     private readonly store: KernelStore,
@@ -241,6 +255,12 @@ export class ConfigurationStepMaterializer {
     this.registrationEmitter = new RegistrationKernelEmitter(store, kernelPublication);
     this.rootContainers = new ContainerRootMaterializer(store, kernelPublication);
     this.childContainers = new ContainerChildMaterializer(store, kernelPublication);
+    this.applications = new AureliaApplicationMaterializer(
+      store,
+      this.publication,
+      kernelPublication,
+      evaluationBindings,
+    );
   }
 
   recordsForSequenceSteps(
@@ -248,7 +268,6 @@ export class ConfigurationStepMaterializer {
     observation: ConfigurationSequenceObservation,
     sequenceLocal: string,
     stepReferences: readonly ConfigurationStepReferenceSeed[],
-    appFrame: AureliaAppFrame | null,
     resources: ResourceDefinitionIndex | null,
   ): ConfigurationStepEmissionSet {
     const records: KernelStoreRecord[] = [];
@@ -257,10 +276,13 @@ export class ConfigurationStepMaterializer {
     const optionContributions: ConfigurationOptionContribution[] = [];
     const registrationAdmissions: RegistrationAdmissionProduct[] = [];
     const containers: Container[] = [];
-    let receiverContainer: Container | null = null;
+    const aurelias: Aurelia[] = [];
+    const appRoots: AppRoot[] = [];
+    let sequenceAurelia: Aurelia | null = null;
+    let sequenceAppRoot: AppRoot | null = null;
     observation.steps.forEach((stepObservation, stepIndex) => {
       const evaluatedReceiver = stepObservation.containerEvaluation == null
-        ? receiverContainer
+        ? null
         : this.evaluationBindings.containerForEvaluation(stepObservation.containerEvaluation);
       const stepEmission = this.recordsForStep(
         context,
@@ -269,7 +291,6 @@ export class ConfigurationStepMaterializer {
         sequenceLocal,
         stepIndex,
         stepReferences[stepIndex]!,
-        appFrame,
         evaluatedReceiver,
         resources,
       );
@@ -281,15 +302,21 @@ export class ConfigurationStepMaterializer {
       for (const [productHandle, value] of stepEmission.registrationValuesByAdmissionProduct) {
         this.evaluationBindings.bindRegistrationValue(productHandle, value);
       }
-      if (stepEmission.createdContainer != null) {
-        receiverContainer = stepEmission.createdContainer;
-        containers.push(stepEmission.createdContainer);
+      containers.push(...stepEmission.createdContainers);
+      if (stepEmission.authoredContainer != null) {
         if (stepObservation.containerEvaluation != null) {
-          this.evaluationBindings.bindContainer(stepObservation.containerEvaluation, stepEmission.createdContainer);
+          this.evaluationBindings.bindContainer(stepObservation.containerEvaluation, stepEmission.authoredContainer);
         }
       }
-      if (stepObservation.containerEvaluation != null) {
-        this.evaluationBindings.bindReceiver(stepEmission.step.productHandle, stepObservation.containerEvaluation);
+      if (stepEmission.application != null) {
+        sequenceAurelia = stepEmission.application.aurelia;
+        sequenceAppRoot = stepEmission.application.appRoot ?? sequenceAppRoot;
+        if (stepEmission.application.createdAurelia) {
+          aurelias.push(stepEmission.application.aurelia);
+        }
+        if (stepEmission.application.appRoot != null) {
+          appRoots.push(stepEmission.application.appRoot);
+        }
       }
     });
     return new ConfigurationStepEmissionSet(
@@ -299,6 +326,10 @@ export class ConfigurationStepMaterializer {
       optionContributions,
       registrationAdmissions,
       containers,
+      aurelias,
+      appRoots,
+      sequenceAurelia,
+      sequenceAppRoot,
     );
   }
 
@@ -309,7 +340,6 @@ export class ConfigurationStepMaterializer {
     sequenceLocal: string,
     index: number,
     referenceSeed: ConfigurationStepReferenceSeed,
-    appFrame: AureliaAppFrame | null,
     receiverContainer: Container | null,
     resources: ResourceDefinitionIndex | null,
   ): {
@@ -319,7 +349,9 @@ export class ConfigurationStepMaterializer {
     readonly optionContributions: readonly ConfigurationOptionContribution[];
     readonly registrationAdmissions: readonly RegistrationAdmissionProduct[];
     readonly registrationValuesByAdmissionProduct: ReadonlyMap<ProductHandle, EvaluationValue>;
-    readonly createdContainer: Container | null;
+    readonly authoredContainer: Container | null;
+    readonly createdContainers: readonly Container[];
+    readonly application: AureliaApplicationDraft | null;
   } {
     const records: KernelStoreRecord[] = [];
     const local = `${sequenceLocal}:${index}`;
@@ -354,6 +386,8 @@ export class ConfigurationStepMaterializer {
     let createdContainer = containerRequest == null
       ? null
       : this.rootContainers.create(containerRequest);
+    let childContainerRequest: ContainerChildMaterializationRequest | null = null;
+    let childParentContainer: Container | null = null;
     if (createsChildContainer) {
       const parentEvaluation = observation.containerEvaluation?.parent ?? null;
       const parent = parentEvaluation == null
@@ -362,23 +396,73 @@ export class ConfigurationStepMaterializer {
       if (parent == null) {
         throw new Error('A closed authored child-container evaluation must be emitted after its parent container.');
       }
-      const child = this.childContainers.materializeChild(new ContainerChildMaterializationRequest(
+      childContainerRequest = new ContainerChildMaterializationRequest(
         `configuration-step:${local}`,
         parent,
         source.addressHandle,
         observation.receiverLocalName,
         [],
         containerConfiguration.configuration,
-      ));
-      records.push(...child.records);
-      createdContainer = child.container;
+      );
+      childParentContainer = parent;
+      createdContainer = this.childContainers.create(childContainerRequest);
     }
-    const effectiveReceiverContainer = createdContainer ?? receiverContainer;
-    const appProducedProductHandles = productHandlesForStep(observation, appFrame, createdContainer);
-    const appTasks = this.recordsForStepAppTasks(context, observation, local);
-    records.push(...appTasks.records);
+    const application = this.applications.prepareStep(context, observation, local, source, resources);
+    const appTaskProductHandles = this.appTaskProductHandles(observation, local);
+    const optionProductHandles = this.optionProductHandles(observation, local);
+    const producedProductHandles = [
+      ...(createdContainer == null ? [] : [createdContainer.productHandle]),
+      ...(application?.producedProductHandles ?? []),
+      ...appTaskProductHandles,
+      ...optionProductHandles,
+    ];
+    const target = configurationStepTarget(
+      observation,
+      application,
+      receiverContainer,
+      childParentContainer,
+    );
 
-    const options = this.recordsForStepOptions(context, observation, local, source);
+    const stepClaims = this.publication.recordsForStepClaims(
+      local,
+      referenceSeed.productHandle,
+      target?.productHandle ?? null,
+      producedProductHandles,
+      source.provenanceHandle,
+    );
+    records.push(...stepClaims.records);
+
+    if (containerRequest != null && createdContainer != null) {
+      records.push(...this.rootContainers.recordsFor(
+        containerRequest,
+        createdContainer,
+        source.provenanceHandle,
+        [stepClaims.producerClaimHandleFor(createdContainer.productHandle)],
+      ));
+    }
+    if (childContainerRequest != null && createdContainer != null) {
+      records.push(...this.childContainers.recordsFor(
+        childContainerRequest,
+        createdContainer,
+        [stepClaims.producerClaimHandleFor(createdContainer.productHandle)],
+      ).records);
+    }
+    if (application != null) {
+      records.push(
+        ...application.records,
+        ...this.applications.recordsForProducts(application, stepClaims.producerClaimHandlesByProduct),
+      );
+    }
+
+    const appTasks = this.recordsForStepAppTasks(context, observation, local, stepClaims.producerClaimHandlesByProduct);
+    records.push(...appTasks.records);
+    const options = this.recordsForStepOptions(
+      context,
+      observation,
+      local,
+      source,
+      stepClaims.producerClaimHandlesByProduct,
+    );
     records.push(...options.records);
 
     const registrationEmission = this.emitStepRegistrations(
@@ -389,29 +473,14 @@ export class ConfigurationStepMaterializer {
       resources,
     );
     records.push(...registrationEmission.records);
-
-    const producedProductHandles = [
-      ...appProducedProductHandles,
-      ...appTasks.emissions.map((emission) => emission.task.productHandle),
-      ...options.emissions.map((emission) => emission.contribution.productHandle),
-    ];
     const registrationProductHandles = registrationEmission.admissions.map((admission) => admission.productHandle);
-    const stepClaims = this.publication.recordsForStepClaims(
+    const registrationClaims = this.publication.recordsForStepRegistrationClaims(
       local,
       referenceSeed.productHandle,
-      producedProductHandles,
       registrationProductHandles,
       source.provenanceHandle,
     );
-    records.push(...stepClaims.records);
-    if (containerRequest != null && createdContainer != null) {
-      records.push(...this.rootContainers.recordsFor(
-        containerRequest,
-        createdContainer,
-        source.provenanceHandle,
-        claimHandlesForConfigurationProduct(stepClaims.records, createdContainer.productHandle),
-      ));
-    }
+    records.push(...registrationClaims.records);
 
     const sequenceReference = configurationSequenceReferenceFor(
       this.store,
@@ -423,8 +492,7 @@ export class ConfigurationStepMaterializer {
       referenceSeed,
       sequenceReference,
       index,
-      appFrame,
-      effectiveReceiverContainer,
+      target,
       appTasks.emissions,
       producedProductHandles,
       registrationProductHandles,
@@ -436,7 +504,7 @@ export class ConfigurationStepMaterializer {
       sequenceReference,
       referenceSeed,
       source,
-      stepClaims.handles,
+      [...stepClaims.handles, ...registrationClaims.handles],
       openSeams.handles,
     ));
 
@@ -447,7 +515,12 @@ export class ConfigurationStepMaterializer {
       optionContributions: options.emissions.map((emission) => emission.contribution),
       registrationAdmissions: registrationEmission.admissions,
       registrationValuesByAdmissionProduct: registrationEmission.evaluatedValuesByAdmissionProduct,
-      createdContainer,
+      authoredContainer: createdContainer,
+      createdContainers: [
+        ...(createdContainer == null ? [] : [createdContainer]),
+        ...(application?.createdContainer == null ? [] : [application.createdContainer]),
+      ],
+      application,
     };
   }
 
@@ -531,16 +604,40 @@ export class ConfigurationStepMaterializer {
         );
   }
 
+  private appTaskProductHandles(
+    observation: ConfigurationStepObservation,
+    local: string,
+  ): readonly ProductHandle[] {
+    return observation.appTasks.map((_, appTaskIndex) =>
+      this.publication.configurationProductHandles(
+        `configuration-app-task:${local}:app-task:${appTaskIndex}`,
+      ).productHandle
+    );
+  }
+
+  private optionProductHandles(
+    observation: ConfigurationStepObservation,
+    local: string,
+  ): readonly ProductHandle[] {
+    return observation.optionContributions.map((_, optionIndex) =>
+      this.publication.configurationProductHandles(
+        `configuration-option:${local}:option:${optionIndex}`,
+      ).productHandle
+    );
+  }
+
   private recordsForStepAppTasks(
     context: ConfigurationRecognitionContext,
     observation: ConfigurationStepObservation,
     local: string,
+    producerClaimHandlesByProduct: ReadonlyMap<ProductHandle, ClaimHandle>,
   ): AppTaskEmissionSet {
     const emissions = observation.appTasks.map((appTask, appTaskIndex) =>
       this.recordsForAppTask(
         context,
         appTask,
         `${local}:app-task:${appTaskIndex}`,
+        producerClaimHandlesByProduct,
       )
     );
     return new AppTaskEmissionSet(
@@ -554,6 +651,7 @@ export class ConfigurationStepMaterializer {
     observation: ConfigurationStepObservation,
     local: string,
     configurationValueSource: ConfigurationSourceRecordSet,
+    producerClaimHandlesByProduct: ReadonlyMap<ProductHandle, ClaimHandle>,
   ): OptionContributionEmissionSet {
     const emissions = observation.optionContributions.map((contribution, optionIndex) =>
       this.recordsForOptionContribution(
@@ -561,6 +659,7 @@ export class ConfigurationStepMaterializer {
         contribution,
         `${local}:option:${optionIndex}`,
         configurationValueSource,
+        producerClaimHandlesByProduct,
       )
     );
     return new OptionContributionEmissionSet(
@@ -574,8 +673,7 @@ export class ConfigurationStepMaterializer {
     referenceSeed: ConfigurationStepReferenceSeed,
     sequenceReference: ConfigurationSequenceReference,
     index: number,
-    appFrame: AureliaAppFrame | null,
-    receiverContainer: Container | null,
+    target: ConfigurationStepTarget | null,
     appTaskEmissions: readonly AppTaskEmission[],
     producedProductHandles: readonly ProductHandle[],
     registrationProductHandles: readonly ProductHandle[],
@@ -587,8 +685,8 @@ export class ConfigurationStepMaterializer {
       observation.stepKind,
       sequenceReference,
       index,
-      receiverIdentityHandleForStep(observation, appFrame, receiverContainer),
-      receiverProductHandleForStep(observation, appFrame, receiverContainer),
+      target?.identityHandle ?? null,
+      target?.productHandle ?? null,
       producedProductHandles,
       registrationProductHandles,
       appTaskEmissions.map((emission) => emission.task.toReference()),
@@ -624,6 +722,7 @@ export class ConfigurationStepMaterializer {
     context: ConfigurationRecognitionContext,
     observation: AppTaskObservation,
     local: string,
+    producerClaimHandlesByProduct: ReadonlyMap<ProductHandle, ClaimHandle>,
   ): AppTaskEmission {
     const source = this.publication.recordsForSource(
       context,
@@ -650,7 +749,14 @@ export class ConfigurationStepMaterializer {
         ...(key == null ? [] : key.records),
         ...(callback == null ? [] : callback.records),
         ...openSeams.records,
-        ...this.recordsForAppTaskProduct(local, observation, source, handles, openSeams.handles),
+        ...this.recordsForAppTaskProduct(
+          local,
+          observation,
+          source,
+          handles,
+          producerClaimHandlesByProduct,
+          openSeams.handles,
+        ),
       ],
       task,
       observation.sourceNode,
@@ -685,6 +791,7 @@ export class ConfigurationStepMaterializer {
     observation: AppTaskObservation,
     source: ConfigurationSourceRecordSet,
     handles: ConfigurationProductHandles,
+    producerClaimHandlesByProduct: ReadonlyMap<ProductHandle, ClaimHandle>,
     openSeamHandles: readonly OpenSeamHandle[],
   ): readonly KernelStoreRecord[] {
     return this.publication.configurationProductRecords({
@@ -696,6 +803,7 @@ export class ConfigurationStepMaterializer {
       sourceAddressHandle: source.addressHandle,
       provenanceHandle: source.provenanceHandle,
       localName: `AppTask.${observation.slot}`,
+      claimHandles: [producerClaimHandle(producerClaimHandlesByProduct, handles.productHandle)],
       openSeamHandles,
     });
   }
@@ -705,6 +813,7 @@ export class ConfigurationStepMaterializer {
     observation: ConfigurationOptionContributionObservation,
     local: string,
     configurationValueSource: ConfigurationSourceRecordSet,
+    producerClaimHandlesByProduct: ReadonlyMap<ProductHandle, ClaimHandle>,
   ): OptionContributionEmission {
     const source = this.optionContributionSource(context, observation, local);
     const value = this.recordsForOptionValue(context, observation.value, local);
@@ -722,7 +831,14 @@ export class ConfigurationStepMaterializer {
         ...source.records,
         ...value.records,
         ...openSeams.records,
-        ...this.recordsForOptionContributionProduct(local, observation, source, handles, openSeams.handles),
+        ...this.recordsForOptionContributionProduct(
+          local,
+          observation,
+          source,
+          handles,
+          producerClaimHandlesByProduct,
+          openSeams.handles,
+        ),
       ],
       contribution,
       openSeams.handles,
@@ -777,6 +893,7 @@ export class ConfigurationStepMaterializer {
     observation: ConfigurationOptionContributionObservation,
     source: ConfigurationSourceRecordSet,
     handles: ConfigurationProductHandles,
+    producerClaimHandlesByProduct: ReadonlyMap<ProductHandle, ClaimHandle>,
     openSeamHandles: readonly OpenSeamHandle[],
   ): readonly KernelStoreRecord[] {
     return this.publication.configurationProductRecords({
@@ -788,6 +905,7 @@ export class ConfigurationStepMaterializer {
       sourceAddressHandle: source.addressHandle,
       provenanceHandle: source.provenanceHandle,
       localName: observation.optionPath.join('.'),
+      claimHandles: [producerClaimHandle(producerClaimHandlesByProduct, handles.productHandle)],
       openSeamHandles,
     });
   }
@@ -1016,60 +1134,50 @@ function configurationSequenceReferenceFor(
   );
 }
 
-function productHandlesForStep(
+function configurationStepTarget(
   observation: ConfigurationStepObservation,
-  appFrame: AureliaAppFrame | null,
-  createdContainer: Container | null,
-): readonly ProductHandle[] {
+  application: AureliaApplicationDraft | null,
+  receiverContainer: Container | null,
+  childParentContainer: Container | null,
+): ConfigurationStepTarget | null {
+  if (application != null) {
+    return new ConfigurationStepTarget(
+      application.targetIdentityHandle,
+      application.targetProductHandle,
+    );
+  }
   switch (observation.stepKind) {
-    case ConfigurationStepKind.CreateContainer:
-    case ConfigurationStepKind.CreateChildContainer:
-      return createdContainer == null ? [] : [createdContainer.productHandle];
-    case ConfigurationStepKind.CreateAurelia:
-      return appFrame == null ? [] : [appFrame.container.productHandle, appFrame.aurelia.productHandle];
-    case ConfigurationStepKind.AureliaApp:
-      return appFrame?.productHandles ?? [];
-    case ConfigurationStepKind.AureliaRegister:
-      return appFrame == null ? [] : [appFrame.aurelia.productHandle];
     case ConfigurationStepKind.ContainerRegister:
+      return receiverContainer == null
+        ? null
+        : new ConfigurationStepTarget(receiverContainer.identityHandle, receiverContainer.productHandle);
+    case ConfigurationStepKind.CreateChildContainer:
+      return childParentContainer == null
+        ? null
+        : new ConfigurationStepTarget(childParentContainer.identityHandle, childParentContainer.productHandle);
+    case ConfigurationStepKind.CreateContainer:
+    case ConfigurationStepKind.CreateAurelia:
+    case ConfigurationStepKind.AureliaApp:
+    case ConfigurationStepKind.AureliaRegister:
     case ConfigurationStepKind.RegistryRegister:
     case ConfigurationStepKind.Customize:
     case ConfigurationStepKind.BuilderMutation:
     case ConfigurationStepKind.OptionContribution:
     case ConfigurationStepKind.PluginConfigure:
     case ConfigurationStepKind.Unknown:
-      return [];
+      return null;
   }
 }
 
-function receiverIdentityHandleForStep(
-  observation: ConfigurationStepObservation,
-  appFrame: AureliaAppFrame | null,
-  receiverContainer: Container | null,
-): IdentityHandle | null {
-  switch (observation.stepKind) {
-    case ConfigurationStepKind.CreateContainer:
-    case ConfigurationStepKind.CreateChildContainer:
-    case ConfigurationStepKind.ContainerRegister:
-      return receiverContainer?.identityHandle ?? null;
-    default:
-      return appFrame?.aurelia.identityHandle ?? null;
+function producerClaimHandle(
+  handles: ReadonlyMap<ProductHandle, ClaimHandle>,
+  productHandle: ProductHandle,
+): ClaimHandle {
+  const handle = handles.get(productHandle);
+  if (handle == null) {
+    throw new Error(`Configuration product ${productHandle} has no exact producer claim.`);
   }
-}
-
-function receiverProductHandleForStep(
-  observation: ConfigurationStepObservation,
-  appFrame: AureliaAppFrame | null,
-  receiverContainer: Container | null,
-): ProductHandle | null {
-  switch (observation.stepKind) {
-    case ConfigurationStepKind.CreateContainer:
-    case ConfigurationStepKind.CreateChildContainer:
-    case ConfigurationStepKind.ContainerRegister:
-      return receiverContainer?.productHandle ?? null;
-    default:
-      return appFrame?.aurelia.productHandle ?? null;
-  }
+  return handle;
 }
 
 function containerConfigurationBooleanValue(
