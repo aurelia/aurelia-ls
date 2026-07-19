@@ -744,26 +744,26 @@ export class DiWorldConstructor {
 
       const container = this.containerForStep(step, containersByProduct, aureliaContainerByProduct);
       if (container == null) {
-        frame.recordOpenSeam(recordsForDiOpenSeam(this.store,
+        this.recordOpenRegistrationSpendingStep(
+          frame,
+          step,
           `di-open-container:${step.productHandle}`,
-          KernelVocabulary.Di.OpenRegistrationSpending.key,
           'Configuration step admitted registrations, but DI world construction could not identify or model the receiving container.',
-          step.sourceAddressHandle,
           [OpenSeamReasonKind.DiRegistrationContainerOpen],
-        ));
+        );
         continue;
       }
 
       for (const admissionProductHandle of step.registrationAdmissionProductHandles) {
         const admission = registrationCascade.admissionForProduct(admissionProductHandle);
         if (admission == null) {
-          frame.recordOpenSeam(recordsForDiOpenSeam(this.store,
+          this.recordOpenRegistrationSpendingStep(
+            frame,
+            step,
             `di-open-admission:${step.productHandle}:${admissionProductHandle}`,
-            KernelVocabulary.Di.OpenRegistrationSpending.key,
             'Configuration step referenced a registration admission product that was not present in the configuration emission.',
-            step.sourceAddressHandle,
             [OpenSeamReasonKind.DiRegistrationAdmissionOpen],
-          ));
+          );
           continue;
         }
 
@@ -793,6 +793,31 @@ export class DiWorldConstructor {
       }
     }
     return null;
+  }
+
+  private recordOpenRegistrationSpendingStep(
+    frame: DiWorldConstructionFrame,
+    step: ConfigurationStep,
+    local: string,
+    summary: string,
+    reasonKinds: readonly OpenSeamReasonKind[],
+  ): void {
+    const emission = recordsForDiOpenSeam(
+      this.store,
+      local,
+      KernelVocabulary.Di.OpenRegistrationSpending.key,
+      summary,
+      step.sourceAddressHandle,
+      reasonKinds,
+    );
+    frame.recordOpenSeam(emission);
+    frame.records.push(new MaterializationRecord(
+      this.store.handles.materialization(local),
+      step.identityHandle,
+      [],
+      [],
+      [emission.seam.handle],
+    ));
   }
 
   private recordsForRegistrationSpending(

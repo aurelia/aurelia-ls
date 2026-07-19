@@ -8,6 +8,7 @@ import type {
   AddressHandle,
   EvidenceHandle,
   IdentityHandle,
+  OpenSeamHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -138,7 +139,7 @@ export class RuntimeControllerBindPublisher {
     records: KernelStoreRecord[],
     openSeams: OpenSeam[],
     seamKindKey: OpenSeamKindKey = KernelVocabulary.Binding.OpenTargetAccess.key,
-  ): void {
+  ): OpenSeam {
     const seam = new OpenSeam(
       this.store.handles.openSeam(local),
       seamKindKey,
@@ -148,6 +149,7 @@ export class RuntimeControllerBindPublisher {
     );
     openSeams.push(seam);
     records.push(seam);
+    return seam;
   }
 
   targetAccessPublication(
@@ -156,6 +158,7 @@ export class RuntimeControllerBindPublisher {
     target: RuntimeBindingTarget,
     lookup: ObserverLocatorLookupResult,
     source: RuntimeControllerBindSourceSet,
+    openSeamHandles: readonly OpenSeamHandle[],
   ): RuntimeControllerBindProductPublication<RuntimeBindingTargetAccess> {
     const handles = this.productHandles(local);
     const access = this.targetAccessProduct(handles, request, target, lookup);
@@ -175,6 +178,7 @@ export class RuntimeControllerBindPublisher {
       `${request.lookup}:${target.targetKind}:${request.targetProperty}`,
       'target-access',
       claim,
+      openSeamHandles,
     );
     return new RuntimeControllerBindProductPublication(handles.local, access, claim, records);
   }
@@ -186,6 +190,7 @@ export class RuntimeControllerBindPublisher {
     operationKind: RuntimeBindingTargetOperationKind,
     openReason: string | null,
     source: RuntimeControllerBindSourceSet,
+    openSeamHandles: readonly OpenSeamHandle[],
   ): RuntimeControllerBindProductPublication<RuntimeBindingTargetOperation> {
     const handles = this.productHandles(local);
     const operation = this.targetOperationProduct(handles, request, target, operationKind, openReason);
@@ -205,6 +210,7 @@ export class RuntimeControllerBindPublisher {
       `${operationKind}:${target.targetKind}:${request.targetAttribute}:${request.targetProperty}`,
       'target-operation',
       claim,
+      openSeamHandles,
     );
     return new RuntimeControllerBindProductPublication(handles.local, operation, claim, records);
   }
@@ -216,6 +222,7 @@ export class RuntimeControllerBindPublisher {
     operationKind: RuntimeBindingSourceOperation['operationKind'],
     openReason: string | null,
     source: RuntimeControllerBindSourceSet,
+    openSeamHandles: readonly OpenSeamHandle[],
   ): RuntimeControllerBindProductPublication<RuntimeBindingSourceOperation> {
     const handles = this.productHandles(local);
     const operation = this.sourceOperationProduct(handles, request, target, operationKind, openReason);
@@ -235,6 +242,7 @@ export class RuntimeControllerBindPublisher {
       `${operationKind}:${target.targetKind}:${request.targetName}`,
       'source-operation',
       claim,
+      openSeamHandles,
     );
     return new RuntimeControllerBindProductPublication(handles.local, operation, claim, records);
   }
@@ -355,6 +363,7 @@ export class RuntimeControllerBindPublisher {
     identityValue: string,
     materializationSlot: string,
     claim: SemanticClaim,
+    openSeamHandles: readonly OpenSeamHandle[],
   ): readonly KernelStoreRecord[] {
     return [
       new CompilerIdentity(
@@ -376,6 +385,7 @@ export class RuntimeControllerBindPublisher {
         handles.identityHandle,
         [handles.productHandle],
         [claim.handle],
+        openSeamHandles,
       ),
     ];
   }

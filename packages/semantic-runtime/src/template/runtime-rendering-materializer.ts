@@ -23,6 +23,10 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
+  MaterializationRecord,
+  type MaterializationOwnerHandle,
+} from '../kernel/materialization.js';
+import {
   ConfigurationProductDetails,
 } from '../configuration/product-details.js';
 import {
@@ -588,6 +592,7 @@ export class RuntimeRenderingMaterializer {
     for (const open of openInstructions) {
       this.recordOpenSeam(
         open.local,
+        open.ownerHandle,
         open.summary,
         open.addressHandle,
         state.source,
@@ -676,6 +681,7 @@ export class RuntimeRenderingMaterializer {
       if (sequence == null) {
         this.recordOpenSeam(
           `${localKey}:target:${index}:missing-instruction-sequence`,
+          target.identityHandle,
           `Compiled render target '${target.productHandle}' points at an instruction sequence that is not available to runtime Rendering.`,
           target.sourceAddressHandle,
           source,
@@ -693,6 +699,7 @@ export class RuntimeRenderingMaterializer {
       if (instructions.length !== sequence.instructions.length) {
         this.recordOpenSeam(
           `${localKey}:target:${index}:missing-instructions`,
+          sequence.identityHandle,
           `Compiled instruction sequence '${sequence.productHandle}' contains instruction references that could not be hydrated for runtime Rendering.`,
           sequence.sourceAddressHandle,
           source,
@@ -978,6 +985,7 @@ export class RuntimeRenderingMaterializer {
 
     this.recordOpenSeam(
       `${local}:missing-child-sequence`,
+      controller.identityHandle,
       `Template-controller '${controller.name ?? '(anonymous)'} has a child-view instruction sequence handle, but the sequence detail is not available for synthetic Rendering.render emulation.`,
       controller.sourceAddressHandle,
       state.source,
@@ -1032,6 +1040,7 @@ export class RuntimeRenderingMaterializer {
     if (instructions.length !== sequence.instructions.length) {
       this.recordOpenSeam(
         `${local}:missing-instructions`,
+        sequence.identityHandle,
         `Compiled instruction sequence '${sequence.productHandle}' contains instruction references that could not be hydrated for runtime Rendering.`,
         sequence.sourceAddressHandle,
         source,
@@ -1051,6 +1060,7 @@ export class RuntimeRenderingMaterializer {
 
   private recordOpenSeam(
     local: string,
+    ownerHandle: MaterializationOwnerHandle,
     summary: string,
     addressHandle: AddressHandle | null,
     source: RuntimeRenderingSourceSet,
@@ -1068,7 +1078,16 @@ export class RuntimeRenderingMaterializer {
       reasonKinds,
     );
     openSeams.push(seam);
-    records.push(seam);
+    records.push(
+      seam,
+      new MaterializationRecord(
+        this.store.handles.materialization(local),
+        ownerHandle,
+        [],
+        [],
+        [seam.handle],
+      ),
+    );
   }
 
   private recordsForSource(local: string): RuntimeRenderingSourceSet {

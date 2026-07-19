@@ -429,10 +429,11 @@ export class RuntimeControllerBindMaterializer {
         targetObserver.eventNames,
         RuntimeBindingTargetAccessAuthority.BindingBehavior,
       );
-    const publication = this.publisher.targetAccessPublication(`${request.localKey}:target-access`, request, target, lookup, source);
-    if (lookup.openReason != null) {
-      this.publisher.recordOpenSeam(
-        `${publication.local}:open`,
+    const local = `${request.localKey}:target-access`;
+    const openSeam = lookup.openReason == null
+      ? null
+      : this.publisher.recordOpenSeam(
+        `${local}:open`,
         lookup.openReason,
         request.binding.sourceAddressHandle,
         source,
@@ -440,7 +441,14 @@ export class RuntimeControllerBindMaterializer {
         openSeams,
         KernelVocabulary.Binding.OpenTargetAccess.key,
       );
-    }
+    const publication = this.publisher.targetAccessPublication(
+      local,
+      request,
+      target,
+      lookup,
+      source,
+      openSeam == null ? [] : [openSeam.handle],
+    );
     publication.appendTo(records, claims, targetAccesses);
     return publication.product;
   }
@@ -464,10 +472,11 @@ export class RuntimeControllerBindMaterializer {
     const operationKind = openReason == null
       ? request.operationKind
       : RuntimeBindingTargetOperationKind.Open;
-    const publication = this.publisher.targetOperationPublication(`${request.localKey}:target-operation`, request, target, operationKind, openReason, source);
-    if (openReason != null) {
-      this.publisher.recordOpenSeam(
-        `${publication.local}:open`,
+    const local = `${request.localKey}:target-operation`;
+    const openSeam = openReason == null
+      ? null
+      : this.publisher.recordOpenSeam(
+        `${local}:open`,
         openReason,
         request.binding.sourceAddressHandle,
         source,
@@ -475,7 +484,15 @@ export class RuntimeControllerBindMaterializer {
         openSeams,
         KernelVocabulary.Binding.OpenTargetOperation.key,
       );
-    }
+    const publication = this.publisher.targetOperationPublication(
+      local,
+      request,
+      target,
+      operationKind,
+      openReason,
+      source,
+      openSeam == null ? [] : [openSeam.handle],
+    );
     publication.appendTo(records, claims, targetOperations);
     return publication.product;
   }
@@ -502,10 +519,11 @@ export class RuntimeControllerBindMaterializer {
     const operationKind = openReason == null
       ? request.operationKind
       : RuntimeBindingSourceOperationKind.Open;
-    const publication = this.publisher.sourceOperationPublication(`${request.localKey}:source-operation`, request, target, operationKind, openReason, source);
-    if (openReason != null) {
-      this.publisher.recordOpenSeam(
-        `${publication.local}:open`,
+    const local = `${request.localKey}:source-operation`;
+    const openSeam = openReason == null
+      ? null
+      : this.publisher.recordOpenSeam(
+        `${local}:open`,
         openReason,
         request.binding.sourceAddressHandle,
         source,
@@ -513,7 +531,15 @@ export class RuntimeControllerBindMaterializer {
         openSeams,
         KernelVocabulary.Binding.OpenSourceOperation.key,
       );
-    }
+    const publication = this.publisher.sourceOperationPublication(
+      local,
+      request,
+      target,
+      operationKind,
+      openReason,
+      source,
+      openSeam == null ? [] : [openSeam.handle],
+    );
     publication.appendTo(records, claims, sourceOperations);
     return publication.product;
   }

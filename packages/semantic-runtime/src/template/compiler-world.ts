@@ -6,6 +6,7 @@ import type {
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
+import type { MaterializationOwnerHandle } from '../kernel/materialization.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { AppRootReference } from '../configuration/app-root.js';
 import type { ContainerReference } from '../di/container-reference.js';
@@ -291,6 +292,7 @@ export class TemplateRenderedInstruction {
 export class TemplateRenderingOpenInstruction {
   constructor(
     readonly local: string,
+    readonly ownerHandle: MaterializationOwnerHandle,
     readonly summary: string,
     readonly addressHandle: AddressHandle | null,
     readonly reasonKinds: readonly OpenSeamReasonKind[] = [],
@@ -751,6 +753,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
         if (instruction == null) {
           this.openInstructions.push(new TemplateRenderingOpenInstruction(
             `${this.input.localKey}:surrogate:instruction:${instructionIndex}:missing-instruction`,
+            reference.identityHandle ?? surrogateSequence.identityHandle,
             `Surrogate instruction reference '${reference.productHandle ?? '(null)'}' could not be hydrated for runtime Rendering.`,
             reference.addressHandle,
           ));
@@ -827,11 +830,12 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
 
   recordOpenInstruction(
     local: string,
+    ownerHandle: IdentityHandle,
     summary: string,
     addressHandle: AddressHandle | null,
     reasonKinds: readonly OpenSeamReasonKind[] = [],
   ): void {
-    this.openInstructions.push(new TemplateRenderingOpenInstruction(local, summary, addressHandle, reasonKinds));
+    this.openInstructions.push(new TemplateRenderingOpenInstruction(local, ownerHandle, summary, addressHandle, reasonKinds));
   }
 
   recordRendererIssue(
@@ -880,6 +884,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
       if (wrappedInstruction == null || wrappedInstruction === instruction) {
         this.openInstructions.push(new TemplateRenderingOpenInstruction(
           `${local}:missing-spread-element-prop-instruction`,
+          instruction.identityHandle,
           `Spread element prop instruction '${instruction.productHandle}' references an inner instruction that is not present in the lowering emission.`,
           instruction.sourceAddressHandle,
         ));
@@ -904,6 +909,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
     if (renderer == null || renderer.productHandle == null) {
       this.openInstructions.push(new TemplateRenderingOpenInstruction(
         `${local}:missing-renderer`,
+        instruction.identityHandle,
         `No configured runtime renderer was available for instruction kind '${instruction.instructionKind}'.`,
         instruction.sourceAddressHandle,
       ));

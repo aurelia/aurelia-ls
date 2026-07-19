@@ -324,6 +324,10 @@ locally minting parallel address/evidence/provenance/open-seam envelopes. When t
 machine-readable reason, pass it through the shared primitive as `reasonKinds`; source precision and repair intent
 should travel together. If only one reason inside a multi-reason seam has a distinct source site, such as router href
 target-open pressure from a neighboring `target` attribute, attach a `reasonSources` row instead of splitting the seam.
+Use `recordsForSourceOpenMaterialization(s)` only when the source span represents an attempted semantic product that
+failed before producing a product. It adds an empty-product materialization owned by that exact span. Raw evaluator
+boundaries remain source-backed evidence until a domain materializer spends them; wrapping every evaluator seam in a
+materialization would erase the distinction between analysis coverage and product pressure.
 Kernel reason sources carry address/evidence handles, not authored line tables. API projections should derive
 `sourceRange` query-time from those handles when a public answer needs line/column locations.
 
@@ -337,6 +341,8 @@ lifetime.
 
 - Products such as resource definitions, DI associations, binding records, or instructions.
 - Product handles, claim handles, and open seam handles produced alongside those products.
+- A failed attempt may produce no product and retain only its seam handles; a partial product attaches its seams to the
+  existing product materialization instead of publishing an unrelated failure row.
 - Completeness and outcome policy are derived by consumers from products, claims, provenance, and open seams.
 - Materialized product envelopes should stay boring. If a consumer needs to expand a product into resource metadata,
   instruction details, parser publication state, or DI slot shape, use typed product detail slots or domain-specific

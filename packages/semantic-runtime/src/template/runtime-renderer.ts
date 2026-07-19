@@ -283,6 +283,7 @@ export interface RuntimeRenderingRun {
 
   recordOpenInstruction(
     local: string,
+    ownerHandle: IdentityHandle,
     summary: string,
     addressHandle: AddressHandle | null,
     reasonKinds?: readonly OpenSeamReasonKind[],
@@ -376,7 +377,13 @@ export class RuntimeRendererInvocation {
     addressHandle: AddressHandle | null,
     reasonKinds: readonly OpenSeamReasonKind[] = [],
   ): void {
-    this.run.recordOpenInstruction(`${this.local}:${localSuffix}`, summary, addressHandle, reasonKinds);
+    this.run.recordOpenInstruction(
+      `${this.local}:${localSuffix}`,
+      this.instruction.identityHandle,
+      summary,
+      addressHandle,
+      reasonKinds,
+    );
   }
 
   recordRendererIssue(

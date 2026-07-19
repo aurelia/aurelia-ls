@@ -43,7 +43,7 @@ import {
   type KernelPublicationContext,
 } from '../kernel/publication.js';
 import {
-  recordsForSourceOpenSeams,
+  recordsForSourceOpenMaterializations,
   type SourceOpenSeamInput,
 } from '../kernel/source-open-seam.js';
 import {
@@ -151,7 +151,7 @@ export class FrameworkServiceRootMaterializer {
     const rootsWithContainers = sourceApiRoots.withFrameworkServiceRootProducts(containerFacts);
     const servicePublications = uniqueRootSites(readFrameworkServiceRootSites(project, typeSystem, rootsWithContainers))
       .map((site) => this.publishRoot(project, typeSystem, site));
-    const candidateSeams = recordsForSourceOpenSeams(
+    const candidateSeams = recordsForSourceOpenMaterializations(
       this.store,
       cappedCandidateSeamsBySource(readFrameworkServiceRootCandidateSeams(project, typeSystem, rootsWithContainers)),
     );

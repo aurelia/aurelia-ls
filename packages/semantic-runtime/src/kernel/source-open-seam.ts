@@ -11,6 +11,7 @@ import type {
   AddressHandle,
   OpenSeamHandle,
 } from './handles.js';
+import { MaterializationRecord } from './materialization.js';
 import { OpenSeam, type OpenSeamReasonKind, type OpenSeamReasonSource } from './open-seam.js';
 import { ProvenanceRecord } from './provenance.js';
 import type {
@@ -36,6 +37,7 @@ export class SourceOpenSeamEmission {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly handle: OpenSeamHandle,
+    readonly addressHandle: AddressHandle,
   ) {}
 }
 
@@ -50,14 +52,15 @@ export function recordsForSourceOpenSeams(
   store: KernelStore,
   inputs: readonly SourceOpenSeamInput[],
 ): SourceOpenSeamBatchEmission {
-  const records: KernelStoreRecord[] = [];
-  const handles: OpenSeamHandle[] = [];
-  for (const input of inputs) {
-    const emission = recordsForSourceOpenSeam(store, input);
-    records.push(...emission.records);
-    handles.push(emission.handle);
-  }
-  return new SourceOpenSeamBatchEmission(records, handles);
+  return sourceOpenSeamBatch(inputs.map((input) => recordsForSourceOpenSeam(store, input)));
+}
+
+/** Publish source-backed seams as failed materializations rather than free-standing analysis evidence. */
+export function recordsForSourceOpenMaterializations(
+  store: KernelStore,
+  inputs: readonly SourceOpenSeamInput[],
+): SourceOpenSeamBatchEmission {
+  return sourceOpenSeamBatch(inputs.map((input) => recordsForSourceOpenMaterialization(store, input)));
 }
 
 export function recordsForSourceOpenSeam(
@@ -102,5 +105,36 @@ export function recordsForSourceOpenSeam(
     input.reasonSources ?? [],
   ));
 
-  return new SourceOpenSeamEmission(records, openSeamHandle);
+  return new SourceOpenSeamEmission(records, openSeamHandle, addressHandle);
+}
+
+/** Publish one source-backed attempt which produced only unresolved pressure. */
+export function recordsForSourceOpenMaterialization(
+  store: KernelStore,
+  input: SourceOpenSeamInput,
+): SourceOpenSeamEmission {
+  const emission = recordsForSourceOpenSeam(store, input);
+  return new SourceOpenSeamEmission(
+    [
+      ...emission.records,
+      new MaterializationRecord(
+        store.handles.materialization(input.localKey),
+        emission.addressHandle,
+        [],
+        [],
+        [emission.handle],
+      ),
+    ],
+    emission.handle,
+    emission.addressHandle,
+  );
+}
+
+function sourceOpenSeamBatch(
+  emissions: readonly SourceOpenSeamEmission[],
+): SourceOpenSeamBatchEmission {
+  return new SourceOpenSeamBatchEmission(
+    emissions.flatMap((emission) => emission.records),
+    emissions.map((emission) => emission.handle),
+  );
 }

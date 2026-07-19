@@ -821,6 +821,95 @@
       ],
       "createdAt": "2026-07-18",
       "updatedAt": "2026-07-18"
+    },
+    {
+      "id": "decision:causal-open-seam-ownership",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "open-seam",
+        "materialization",
+        "evaluation",
+        "inquiry",
+        "diagnostics",
+        "aot"
+      ],
+      "summary": "Materialization-to-seam edges distinguish product pressure from raw analysis evidence.",
+      "rationale": "A 189-fixture audit found 444 open seams after configuration and DI causality repair. All 369 domain product-attempt seams are now retained by MaterializationRecord.openSeamHandles; the remaining 75 unowned seams are exactly raw evaluator evidence (dynamic calls, unresolved identifiers, unsupported statements, and dynamic mutation). Source containment locates an unresolved observation but does not prove that a semantic product spent it. Product-bearing partial attempts retain the seam on their existing materialization, while attempts that fail before producing a product publish an empty-product materialization owned by the exact semantic identity or source span.",
+      "guidance": [
+        "Do not add an owner field to OpenSeam. One seam may affect several products, and product relevance is the inbound MaterializationRecord.openSeamHandles relation.",
+        "When a partial semantic product exists, attach its seam handles to that product's existing materialization instead of publishing a parallel failure materialization.",
+        "When a genuine semantic product attempt fails before producing a product, publish an empty-product materialization owned by the exact operation identity or source span.",
+        "Keep raw evaluator seams unowned until a domain materializer spends them. Evaluator coverage boundaries are analysis evidence, not automatically diagnostics, IDE pressure, or AOT blockers.",
+        "Do not derive product pressure from source-file or span containment. Public inquiry should project ownership-derived product pressure separately from queryable analysis evidence, without deleting either family.",
+        "Consumer consequence remains policy: IDE, MCP, diagnostics, and AOT may interpret the same product-owned seam differently. Do not put severity, actionability, or blocksAot flags in the kernel seam.",
+        "Use recordsForSourceOpenMaterialization only for source-backed failed product attempts; continue using recordsForSourceOpenSeam for raw evidence or when an enclosing product materialization will retain the returned handle.",
+        "Run the focused open-seam materialization test and the broad ownership audit when adding a new domain seam family. An unowned domain attempt or an automatically owned evaluator seam is a causal-model regression."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/materialization.ts",
+          "symbolName": "MaterializationRecord",
+          "summary": "Canonical product/claim/open-seam ownership relation for one materialization attempt."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/source-open-seam.ts",
+          "symbolName": "recordsForSourceOpenMaterialization",
+          "summary": "Source-backed empty-product materialization primitive for genuine failed attempts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-controller-bind-publication.ts",
+          "symbolName": "RuntimeControllerBindPublisher",
+          "summary": "Product-bearing binding attempts retain their open seams on the existing target/source materialization."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/world-constructor.ts",
+          "symbolName": "DiWorldConstructor.recordOpenRegistrationSpendingStep",
+          "summary": "Targetless DI registration spending publishes a configuration-step-owned empty-product materialization."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-rendering-materializer.ts",
+          "symbolName": "RuntimeRenderingMaterializer.recordOpenSeam",
+          "summary": "Renderer failures retain exact instruction, sequence, target, or controller ownership."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm exec vitest run packages/semantic-runtime/test/open-seam-materialization.test.ts",
+          "summary": "Focused cross-domain proof that product attempts are owned while raw evaluator evidence remains unowned."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/kernel/README.md",
+          "heading": "Record Families",
+          "summary": "Kernel rules for raw seams, empty-product failures, and product-bearing partial materializations."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/source-open-seam.ts",
+          "symbolName": "recordsForSourceOpenMaterialization"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-controller-bind-publication.ts",
+          "symbolName": "RuntimeControllerBindPublisher"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/world-constructor.ts",
+          "symbolName": "DiWorldConstructor"
+        }
+      ],
+      "createdAt": "2026-07-19",
+      "updatedAt": "2026-07-19"
     }
   ]
 }

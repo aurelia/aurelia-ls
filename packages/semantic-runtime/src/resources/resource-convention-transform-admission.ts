@@ -56,7 +56,7 @@ import type {
   EvidenceHandle,
 } from '../kernel/handles.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
-import { recordsForSourceOpenSeam } from '../kernel/source-open-seam.js';
+import { recordsForSourceOpenMaterialization } from '../kernel/source-open-seam.js';
 import {
   KernelStoreBatch,
   type KernelStore,
@@ -428,7 +428,7 @@ export class ResourceConventionTransformAdmissionMaterializer {
         conventionTransformEmission(store, project, source.admission, source.sourceFile, read, index)
       ));
       openRecords.push(...result.opens.flatMap((open, index) =>
-        recordsForSourceOpenSeam(store, {
+        recordsForSourceOpenMaterialization(store, {
           localKey: `resource-convention-transform-open:${project.projectKey}:${source.admission.path}:${index}`,
           openKind: KernelVocabulary.Resource.OpenConventionTransformAdmission.key,
           summary: open.summary,
