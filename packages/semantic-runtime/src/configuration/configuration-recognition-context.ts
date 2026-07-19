@@ -2,7 +2,10 @@ import ts from 'typescript';
 import { EvaluatedDiKeyDeclarationSource } from '../di/di-key-identity-emitter.js';
 import { StaticModuleEvaluationExpressionReader } from '../evaluation/expression-reader.js';
 import { readReferenceName } from '../evaluation/ts-syntax.js';
-import { EvaluationValueKind } from '../evaluation/values.js';
+import {
+  EvaluationValueKind,
+  type EvaluationValue,
+} from '../evaluation/values.js';
 import type { StaticModuleEvaluationResult } from '../evaluation/evaluator.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import {
@@ -47,6 +50,14 @@ export class ConfigurationRecognitionContext {
   /** Observe a DI key once through the evaluator so every configuration carrier spends the same value evidence. */
   registrationKeyObservation(expression: ts.Expression): RegistrationKeyObservation {
     const value = this.expressionReader.evaluateExpression(expression).value;
+    return this.registrationKeyObservationForValue(expression, value);
+  }
+
+  /** Observe a key from an already-linked evaluator value without re-reading it through the carrier module. */
+  registrationKeyObservationForValue(
+    expression: ts.Expression,
+    value: EvaluationValue | null,
+  ): RegistrationKeyObservation {
     const constructable = value?.kind === EvaluationValueKind.Class || value?.kind === EvaluationValueKind.Function
       ? new EvaluatedDiKeyDeclarationSource(
           value.declaration,
@@ -58,11 +69,12 @@ export class ConfigurationRecognitionContext {
       ? null
       : ts.getNameOfDeclaration(constructable.declaration)?.getText(constructable.declaration.getSourceFile()) ?? null;
     return new RegistrationKeyObservation(
-      readReferenceName(expression) ?? declarationName,
+      declarationName ?? readReferenceName(expression),
       expression,
       constructable == null ? RegistrationKeyObservationKind.Expression : RegistrationKeyObservationKind.Constructable,
       constructable,
       value,
+      this.sourceFileAddressHandleForNode(expression),
     );
   }
 }

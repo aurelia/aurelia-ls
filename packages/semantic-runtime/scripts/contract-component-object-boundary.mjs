@@ -5,6 +5,9 @@ import {
   createSemanticRuntime,
   ExpectedSemanticEffect,
   ExpectedSemanticEffectFilter,
+  ExpectedSemanticEffectKind,
+  ExpectedSemanticEffectScope,
+  SemanticOpenSeamAttemptKind,
   readFixtureVerificationSnapshot,
   verifyFixtureEffects,
 } from '../out/index.js';
@@ -87,10 +90,18 @@ const expectedEffects = [
       effectFilter('dependencyMode', 'proxy-auto-track'),
     ],
   ),
-  ExpectedSemanticEffect.absent(
-    'Object boundary fixture should not require open semantic seams.',
-    'open-seam-closure',
-  ),
+  ...[
+    SemanticOpenSeamAttemptKind.ResourceRecognition,
+    SemanticOpenSeamAttemptKind.TemplateCompilationRendering,
+    SemanticOpenSeamAttemptKind.BindingRuntimeAnalysis,
+    SemanticOpenSeamAttemptKind.TypeCheckerProjection,
+  ].map((attemptKind) => ExpectedSemanticEffect.absent(
+    `Object boundary fixture should close without ${attemptKind} seams.`,
+    ExpectedSemanticEffectKind.OpenSeamClosure,
+    ExpectedSemanticEffectScope.Template,
+    null,
+    [effectFilter('attempt.kind', attemptKind)],
+  )),
 ];
 
 const snapshot = readFixtureVerificationSnapshot(app);

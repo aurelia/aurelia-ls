@@ -1080,6 +1080,12 @@ function resourceCatalogSummaryForFrameworkKind(frameworkKind: FrameworkRegistra
       return 'ValidationConfiguration admitted validation services but no resource headers.';
     case FrameworkRegistrationKind.ValidationHtmlConfiguration:
       return 'ValidationHtmlConfiguration admitted validation binding-behavior, subscriber custom-attribute, and container custom-element resource headers.';
+    case FrameworkRegistrationKind.ValidationI18nConfiguration:
+      return 'ValidationI18nConfiguration admitted the ValidationHtml resource headers used by localized validation.';
+    case FrameworkRegistrationKind.LoggerConfiguration:
+      return 'LoggerConfiguration admitted logging services but no resource headers.';
+    case FrameworkRegistrationKind.StyleConfiguration:
+      return 'StyleConfiguration admitted a shadow-DOM style lifecycle task but no resource headers.';
     case FrameworkRegistrationKind.RouterConfiguration:
       return 'RouterConfiguration admitted router custom-attribute and viewport resource headers.';
     case FrameworkRegistrationKind.RouterDefaultComponents:

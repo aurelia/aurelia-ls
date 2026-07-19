@@ -248,13 +248,13 @@ export function readStaticValueProperty(
     );
   }
   if (receiver.kind === EvaluationValueKind.ModuleNamespace) {
-    const value = receiver.exports.get(propertyName) ?? null;
-    return value == null
+    const entry = receiver.exportEntries.get(propertyName) ?? null;
+    return entry == null
       ? staticValueMemberOpen(
           `Module namespace export '${propertyName}' was not known.`,
           EvaluationOpenSeamKind.UnresolvedIdentifier,
         )
-      : staticValueMemberValue(value);
+      : staticValueMemberValue(entry.value);
   }
   if (receiver.kind === EvaluationValueKind.Array && isKnownArrayPrototypeFunction(propertyName)) {
     return staticValueMemberValue(new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `Array.prototype.${propertyName}`, node));

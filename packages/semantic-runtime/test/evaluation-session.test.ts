@@ -13,6 +13,7 @@ import {
   EvaluationInstanceValue,
   EvaluationMapEntry,
   EvaluationMapValue,
+  EvaluationModuleNamespaceExport,
   EvaluationModuleNamespaceValue,
   EvaluationObjectProperty,
   EvaluationObjectPropertyState,
@@ -24,13 +25,43 @@ import {
 } from '../src/evaluation/values.js';
 import {
   aureliaExternalEvaluationValueResolver,
+  aureliaFrameworkRegistrationFactoryEvaluationForValue,
   aureliaFrameworkRegistrationKindForEvaluationValue,
   aureliaRegistryBodyForEvaluationValue,
   aureliaStaticEvaluationRuntimeHost,
 } from '../src/configuration/aurelia-evaluation-runtime.js';
+import {
+  ModuleLoader,
+  ModuleLoaderTransformStatus,
+} from '../src/evaluation/module-loader.js';
 import { FrameworkRegistrationKind } from '../src/registration/registration-reference.js';
 
 describe('static evaluation sessions', () => {
+  test('preserves partial module membership through ModuleLoader analysis', () => {
+    const source = ts.createSourceFile(
+      'src/open-module.ts',
+      'export const known = {};',
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const known = new EvaluationObjectValue(new Map(), false, source.statements[0] ?? source);
+    const namespace = new EvaluationModuleNamespaceValue(
+      'src/open-module.ts',
+      new Map([
+        ['known', new EvaluationModuleNamespaceExport('known', known, source.statements[0] ?? source)],
+      ]),
+      true,
+      source,
+    );
+
+    const result = new ModuleLoader().load(namespace);
+
+    expect(result.status).toBe(ModuleLoaderTransformStatus.Analyzed);
+    expect(result.analyzedModule?.items.map((item) => item.key)).toEqual(['known']);
+    expect(result.analyzedModule?.mayHaveUnknownItems).toBe(true);
+  });
+
   test('preserves aliases and cycles while isolating follow-up mutation from the project snapshot', () => {
     const source = ts.createSourceFile(
       'src/session.ts',
@@ -257,9 +288,10 @@ describe('static evaluation sessions', () => {
     const namespace = new EvaluationModuleNamespaceValue(
       'src/dependency.ts',
       new Map([
-        ['shared', shared],
-        ['instance', instance],
+        ['shared', new EvaluationModuleNamespaceExport('shared', shared, declaration)],
+        ['instance', new EvaluationModuleNamespaceExport('instance', instance, declaration)],
       ]),
+      false,
       declaration,
     );
     const promise = new EvaluationPromiseValue(shared, declaration);
@@ -314,8 +346,8 @@ describe('static evaluation sessions', () => {
     expect(sessionSet.elements[0]?.value).toBe(sessionShared);
     expect(sessionMap.entries[0]?.key).toBe(sessionShared);
     expect(sessionMap.entries[0]?.value).toBe(sessionInstance);
-    expect(sessionNamespace.exports.get('shared')).toBe(sessionShared);
-    expect(sessionNamespace.exports.get('instance')).toBe(sessionInstance);
+    expect(sessionNamespace.exportEntries.get('shared')?.value).toBe(sessionShared);
+    expect(sessionNamespace.exportEntries.get('instance')?.value).toBe(sessionInstance);
     expect(sessionPromise.fulfilledValue).toBe(sessionShared);
     expect(sessionShared.properties.get('promise')?.value).toBe(sessionPromise);
     expect(sessionClass.properties.get('instance')?.value).toBe(sessionInstance);
@@ -373,6 +405,113 @@ describe('static evaluation sessions', () => {
     expect(aureliaFrameworkRegistrationKindForEvaluationValue(configured))
       .toBe(FrameworkRegistrationKind.StandardConfiguration);
     expect(aureliaRegistryBodyForEvaluationValue(registry)).not.toBeNull();
+  });
+
+  test('models framework registration exports through their exact runtime stages', () => {
+    const source = ts.createSourceFile(
+      'src/framework-registration-shapes.ts',
+      [
+        "import { StateDefaultConfiguration } from '@aurelia/state';",
+        "import { RouterConfiguration } from '@aurelia/router';",
+        "import { AppTask, StyleConfiguration } from '@aurelia/runtime-html';",
+        "import { LoggerConfiguration } from '@aurelia/kernel';",
+        "import { ValidationI18nConfiguration } from '@aurelia/validation-i18n';",
+        "import { DialogConfigurationStandard, createDialogConfiguration } from '@aurelia/dialog';",
+        'const state = StateDefaultConfiguration.init({ count: 0 });',
+        "const sameState = state.withStore('secondary', { count: 1 });",
+        'const router = RouterConfiguration.customize({ useUrlFragmentHash: true });',
+        'const invalidRouterChain = router.customize({});',
+        'const task = AppTask.creating(() => undefined);',
+        "const sameDialog = DialogConfigurationStandard.withChild('child', () => ({}));",
+        'const customDialog = createDialogConfiguration(() => undefined, class {});',
+        'const logger = LoggerConfiguration.create({ sinks: [] });',
+        'const style = StyleConfiguration.shadowDOM({ sharedStyles: [] });',
+        'const localizedValidation = ValidationI18nConfiguration.customize(() => undefined);',
+      ].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const external = (
+      moduleSpecifier: string,
+      exportName: string,
+    ): EvaluationValue => {
+      const value = aureliaExternalEvaluationValueResolver.resolveImportValue(
+        source.fileName,
+        new EvaluationImportEntry(
+          EvaluationImportKind.Named,
+          moduleSpecifier,
+          exportName,
+          exportName,
+          source,
+        ),
+      );
+      if (value == null) {
+        throw new Error(`Expected ${moduleSpecifier}#${exportName} to resolve.`);
+      }
+      return value;
+    };
+    const stateFactory = external('@aurelia/state', 'StateDefaultConfiguration');
+    const appTaskFactory = external('@aurelia/runtime-html', 'AppTask');
+    const dialog = external('@aurelia/dialog', 'DialogConfigurationStandard');
+    const defaultResources = external('@aurelia/runtime-html', 'DefaultResources');
+    const loggerFactory = external('@aurelia/kernel', 'LoggerConfiguration');
+    const styleFactory = external('@aurelia/runtime-html', 'StyleConfiguration');
+    const localizedValidation = external('@aurelia/validation-i18n', 'ValidationI18nConfiguration');
+    const evaluation = new StaticEvaluator(undefined, aureliaStaticEvaluationRuntimeHost).evaluateSourceFile(
+      source,
+      source.fileName,
+      new Map([
+        ['StateDefaultConfiguration', stateFactory],
+        ['RouterConfiguration', external('@aurelia/router', 'RouterConfiguration')],
+        ['AppTask', appTaskFactory],
+        ['DialogConfigurationStandard', dialog],
+        ['createDialogConfiguration', external('@aurelia/dialog', 'createDialogConfiguration')],
+        ['LoggerConfiguration', loggerFactory],
+        ['StyleConfiguration', styleFactory],
+        ['ValidationI18nConfiguration', localizedValidation],
+      ]),
+    );
+    const state = requireValueKind(evaluation.environment.readValue('state'), EvaluationValueKind.Object);
+    const sameState = requireValueKind(evaluation.environment.readValue('sameState'), EvaluationValueKind.Object);
+    const router = requireValueKind(evaluation.environment.readValue('router'), EvaluationValueKind.Object);
+
+    expect(aureliaFrameworkRegistrationKindForEvaluationValue(stateFactory)).toBeNull();
+    expect(aureliaFrameworkRegistrationKindForEvaluationValue(appTaskFactory)).toBeNull();
+    expect(aureliaFrameworkRegistrationKindForEvaluationValue(loggerFactory)).toBeNull();
+    expect(aureliaFrameworkRegistrationKindForEvaluationValue(styleFactory)).toBeNull();
+    expect(aureliaFrameworkRegistrationFactoryEvaluationForValue(stateFactory)?.resultKind)
+      .toBe(FrameworkRegistrationKind.StateDefaultConfiguration);
+    expect(aureliaFrameworkRegistrationFactoryEvaluationForValue(appTaskFactory)?.resultKind)
+      .toBe(FrameworkRegistrationKind.AppTask);
+    expect(aureliaFrameworkRegistrationFactoryEvaluationForValue(loggerFactory)?.resultKind)
+      .toBe(FrameworkRegistrationKind.LoggerConfiguration);
+    expect(aureliaFrameworkRegistrationFactoryEvaluationForValue(styleFactory)?.resultKind)
+      .toBe(FrameworkRegistrationKind.StyleConfiguration);
+    expect(aureliaFrameworkRegistrationKindForEvaluationValue(localizedValidation))
+      .toBe(FrameworkRegistrationKind.ValidationI18nConfiguration);
+    expect(aureliaFrameworkRegistrationKindForEvaluationValue(state))
+      .toBe(FrameworkRegistrationKind.StateDefaultConfiguration);
+    expect(sameState).toBe(state);
+    expect(aureliaFrameworkRegistrationKindForEvaluationValue(router))
+      .toBe(FrameworkRegistrationKind.RouterConfiguration);
+    expect(router.properties.has('customize')).toBe(false);
+    expect(evaluation.environment.readValue('invalidRouterChain')?.kind).toBe(EvaluationValueKind.Unknown);
+    expect(aureliaFrameworkRegistrationKindForEvaluationValue(evaluation.environment.readValue('task')))
+      .toBe(FrameworkRegistrationKind.AppTask);
+    expect(evaluation.environment.readValue('sameDialog')).toBe(dialog);
+    expect(aureliaFrameworkRegistrationKindForEvaluationValue(evaluation.environment.readValue('customDialog')))
+      .toBe(FrameworkRegistrationKind.DialogConfiguration);
+    expect(aureliaFrameworkRegistrationKindForEvaluationValue(evaluation.environment.readValue('logger')))
+      .toBe(FrameworkRegistrationKind.LoggerConfiguration);
+    expect(aureliaFrameworkRegistrationKindForEvaluationValue(evaluation.environment.readValue('style')))
+      .toBe(FrameworkRegistrationKind.StyleConfiguration);
+    expect(aureliaFrameworkRegistrationKindForEvaluationValue(evaluation.environment.readValue('localizedValidation')))
+      .toBe(FrameworkRegistrationKind.ValidationI18nConfiguration);
+    expect(defaultResources.kind).toBe(EvaluationValueKind.Array);
+    expect(aureliaFrameworkRegistrationKindForEvaluationValue(defaultResources))
+      .toBe(FrameworkRegistrationKind.RuntimeHtmlDefaultResources);
+    expect((defaultResources as EvaluationArrayValue).mayHaveUnknownElements).toBe(true);
   });
 
   test('adopts session environments captured by values returned from a wrapped runtime host', () => {

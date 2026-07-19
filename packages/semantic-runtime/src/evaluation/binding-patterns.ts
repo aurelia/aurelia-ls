@@ -326,7 +326,16 @@ function readObjectBindingValue(
     return new EvaluationBoundaryValue(source.boundaryKind, `${source.path}.${propertyName}`, node);
   }
   if (source.kind === EvaluationValueKind.ModuleNamespace) {
-    return source.exports.get(propertyName) ?? new EvaluationUndefinedValue(node);
+    const entry = source.exportEntries.get(propertyName);
+    return entry?.value
+      ?? (source.mayHaveUnknownExports
+        ? host.unknown(
+          `Module namespace export '${propertyName}' was not closed.`,
+          node,
+          moduleKey,
+          EvaluationOpenSeamKind.UnsupportedBindingPattern,
+        )
+        : new EvaluationUndefinedValue(node));
   }
   const ownProperty = host.readOwnProperty(source, propertyName);
   if (ownProperty != null) {

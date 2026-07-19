@@ -28,8 +28,8 @@ export const enum RegistrationValueKind {
   StaticResourceType = 'static-resource-type',
   /** IRegistry-compatible object or class with a register method. */
   Registry = 'registry',
-  /** Object-map value whose own object/function properties are recursively admitted. */
-  ObjectMap = 'object-map',
+  /** Array, object, or module-map value whose object/function members are recursively admitted. */
+  RecursiveCarrier = 'recursive-carrier',
   /** Plain class admitted by the container's fallback self-registration branch. */
   PlainClass = 'plain-class',
   /** Framework-owned registration group admitted through a recognized spread. */
@@ -37,7 +37,7 @@ export const enum RegistrationValueKind {
 }
 
 export const enum FrameworkRegistrationKind {
-  /** Runtime registry shape is known to be an AppTask admission. */
+  /** Registry returned by one `AppTask.<slot>(...)` factory call. */
   AppTask = 'app-task',
   /** RuntimeHtml StandardConfiguration registry. */
   StandardConfiguration = 'standard-configuration',
@@ -47,15 +47,21 @@ export const enum FrameworkRegistrationKind {
   ValidationConfiguration = 'validation-configuration',
   /** Validation HTML configuration registry. */
   ValidationHtmlConfiguration = 'validation-html-configuration',
+  /** Validation i18n configuration registry, including localized provider defaults. */
+  ValidationI18nConfiguration = 'validation-i18n-configuration',
+  /** Registry returned by `LoggerConfiguration.create(...)`. */
+  LoggerConfiguration = 'logger-configuration',
+  /** AppTask registry returned by `StyleConfiguration.shadowDOM(...)`. */
+  StyleConfiguration = 'style-configuration',
   /** Router plugin configuration registry. */
   RouterConfiguration = 'router-configuration',
   /** Router DefaultComponents registration group. */
   RouterDefaultComponents = 'router.default-components',
   /** Router DefaultResources registration group. */
   RouterDefaultResources = 'router.default-resources',
-  /** State plugin default configuration registry. */
+  /** Registry returned by `StateDefaultConfiguration.init(...)`, including later `withStore(...)` mutations. */
   StateDefaultConfiguration = 'state-default-configuration',
-  /** Dialog plugin configuration registry. */
+  /** Dialog plugin configuration registry, including empty, standard, classic, and custom factory forms. */
   DialogConfiguration = 'dialog-configuration',
   /** UI virtualization plugin configuration registry. */
   UiVirtualizationDefaultConfiguration = 'ui-virtualization.default-configuration',

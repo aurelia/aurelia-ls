@@ -300,11 +300,16 @@ export class ConfigurationKernelPublication {
     evidenceSummary: string,
     spanRole: SourceSpanRole,
   ): readonly KernelStoreRecord[] {
+    const sourceFile = node.getSourceFile();
+    const sourceFileAddressHandle = context.sourceFileAddressHandleForNode(node);
+    if (sourceFileAddressHandle == null) {
+      throw new Error(`Configuration evidence references a source outside the admitted project: ${sourceFile.fileName}`);
+    }
     return [
       new SourceSpanAddress(
         handles.addressHandle,
-        context.sourceFileAddressHandle,
-        node.getStart(context.sourceFile),
+        sourceFileAddressHandle,
+        node.getStart(sourceFile),
         node.end,
         spanRole,
       ),

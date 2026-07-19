@@ -8,7 +8,11 @@ import {
   createSemanticRuntime,
   type SemanticRuntime,
 } from '../src/api/runtime.js';
-import { aureliaContainerEvaluationForValue } from '../src/configuration/aurelia-evaluation-runtime.js';
+import { AppTaskSlot } from '../src/configuration/app-task.js';
+import {
+  aureliaContainerEvaluationForValue,
+  aureliaFacadeEvaluationForValue,
+} from '../src/configuration/aurelia-evaluation-runtime.js';
 import type { ConfigurationKernelEmission } from '../src/configuration/configuration-kernel-emitter.js';
 import {
   ContainerChildMaterializationRequest,
@@ -43,11 +47,15 @@ import {
   DiKeyIdentityKind,
   TypeScriptDeclarationIdentity,
 } from '../src/kernel/identity.js';
+import { OpenSeamReasonKind } from '../src/kernel/open-seam.js';
 import {
+  frameworkRegistrationKindForAdmission,
+  OpenRegistrationAdmission,
   RegistryRegistrationAdmission,
   ResolverRegistrationAdmission,
   RegistrationStrategy,
 } from '../src/registration/registration-admission.js';
+import { FrameworkRegistrationKind } from '../src/registration/registration-reference.js';
 
 const pressureFixtures = fileURLToPath(new URL('../fixtures/pressure', import.meta.url));
 
@@ -337,12 +345,210 @@ describe('DI provider model', () => {
       appOperations.some((operation) => materialization.productHandles.includes(operation.productHandle))
     );
     expect(operationMaterializations).toHaveLength(3);
-    expect(operationMaterializations.flatMap((materialization) => materialization.openSeamHandles).length)
-      .toBe(0);
+    const operationOpenSeams = operationMaterializations
+      .flatMap((materialization) => materialization.openSeamHandles)
+      .map((handle) => runtime.workspace.store.readOpenSeam(handle));
+    expect(operationOpenSeams).toHaveLength(1);
+    expect(operationOpenSeams[0]?.reasonKinds).toContain(OpenSeamReasonKind.DiRegistryBodyOpen);
     expect(world.compilerWorlds).toHaveLength(1);
     expect(world.compilerWorlds[0]?.attributePatterns.length).toBeGreaterThan(0);
     expect(world.compilerWorlds[0]?.bindingCommands.length).toBeGreaterThan(0);
     expect(world.compilerWorlds[0]?.runtimeRenderers.length).toBeGreaterThan(0);
+  });
+
+  test('spends arrays, module maps, and function-valued registry bodies without registering factory namespaces', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'di-registration-carriers'),
+      storeKey: 'test:di-provider-model:registration-carriers',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const world = app.emission.appWorld;
+    const resolverNames = world.diWorld.resolverSlots.map((slot) => slot.resolver?._key.localName ?? null);
+    const frameworkKinds = world.configuration.registrationAdmissions.flatMap((admission) => {
+      const frameworkKind = frameworkRegistrationKindForAdmission(admission);
+      return frameworkKind == null ? [] : [frameworkKind];
+    });
+
+    expect(resolverNames).toEqual(expect.arrayContaining([
+      'nested-method',
+      'nested-arrow',
+      'nested-instance',
+      'nested-singleton',
+      'module-method',
+      'module-arrow',
+      'module-instance',
+      'ModulePlainClass',
+      'SecondModulePlainClass',
+      'after-unknown-spread',
+    ]));
+    expect(resolverNames).not.toContain('before-unknown-spread');
+    const moduleClassSlots = world.diWorld.resolverSlots.filter((slot) =>
+      slot.resolver?._key.localName === 'ModulePlainClass'
+      || slot.resolver?._key.localName === 'SecondModulePlainClass'
+    );
+    expect(moduleClassSlots).toHaveLength(2);
+    expect(new Set(moduleClassSlots.map((slot) => slot.keyIdentityHandle)).size).toBe(2);
+    expect(frameworkKinds).toContain(FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax);
+    expect(frameworkKinds).toContain(FrameworkRegistrationKind.LoggerConfiguration);
+    expect(frameworkKinds).toContain(FrameworkRegistrationKind.StyleConfiguration);
+    expect(frameworkKinds).toContain(FrameworkRegistrationKind.ValidationI18nConfiguration);
+    expect(frameworkKinds).not.toContain(FrameworkRegistrationKind.StateDefaultConfiguration);
+    expect(frameworkKinds).not.toContain(FrameworkRegistrationKind.AppTask);
+    expect(resolverNames).not.toEqual(expect.arrayContaining([
+      'init',
+      'creating',
+      'hydrating',
+      'hydrated',
+      'activating',
+      'activated',
+      'deactivating',
+      'deactivated',
+    ]));
+    expect(resolverNames).toEqual(expect.arrayContaining([
+      'ILogConfig',
+      'IValidationMessageProvider',
+      'I18nKeyConfiguration',
+    ]));
+    expect(world.diWorld.resolverSlots.find((slot) =>
+      slot.resolver?._key.localName === 'IValidationMessageProvider'
+    )?.resolver?._state?.localName).toBe('LocalizedValidationMessageProvider');
+    expect(world.diWorld.factorySlots).toHaveLength(1);
+    expect(world.diWorld.appTasks).toEqual([
+      expect.objectContaining({
+        slot: AppTaskSlot.Creating,
+        callback: expect.objectContaining({
+          localName: 'StyleConfiguration install shared shadow-DOM styles',
+        }),
+      }),
+    ]);
+    const registrationOpenSummaries = app.emission.configuration.readObservations().flatMap((observation) =>
+      observation.steps.flatMap((step) =>
+        step.registrationAdmissions.flatMap((admission) => admission.openSeams.map((seam) => seam.summary))
+      )
+    );
+    expect(registrationOpenSummaries).toEqual(expect.arrayContaining([
+      expect.stringContaining('StateDefaultConfiguration is a factory namespace'),
+      expect.stringContaining('AppTask is a factory namespace'),
+    ]));
+    expect(world.diWorld.openSeams.map((seam) => seam.summary)).toEqual(expect.arrayContaining([
+      expect.stringContaining('option-selected sink registrations remain open'),
+      expect.stringContaining('customization callback may replace provider types'),
+    ]));
+    expect(world.compilerWorlds).toHaveLength(0);
+  });
+
+  test('preserves authored container and facade identity across module and child boundaries', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'di-authored-app-containers'),
+      storeKey: 'test:di-provider-model:authored-app-containers',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const evaluation = app.emission.evaluation;
+    const configuration = app.emission.appWorld.configuration;
+    const primaryEvaluation = aureliaContainerEvaluationForValue(
+      evaluatedSourceValue(evaluation, 'src/containers.ts', 'primaryContainer'),
+    );
+    const secondaryEvaluation = aureliaContainerEvaluationForValue(
+      evaluatedSourceValue(evaluation, 'src/containers.ts', 'secondaryContainer'),
+    );
+    const childParentEvaluation = aureliaContainerEvaluationForValue(
+      evaluatedSourceValue(evaluation, 'src/containers.ts', 'childParentContainer'),
+    );
+    const childEvaluation = aureliaContainerEvaluationForValue(
+      evaluatedSourceValue(evaluation, 'src/containers.ts', 'childContainer'),
+    );
+    const primaryFacadeEvaluation = aureliaFacadeEvaluationForValue(
+      evaluatedSourceValue(evaluation, 'src/primary-facade.ts', 'primaryFacade'),
+    );
+    const implicitFacadeEvaluation = aureliaFacadeEvaluationForValue(
+      evaluatedSourceValue(evaluation, 'src/implicit-facade.ts', 'implicitFacade'),
+    );
+    const undefinedDefaultFacadeEvaluation = aureliaFacadeEvaluationForValue(
+      evaluatedSourceValue(evaluation, 'src/undefined-default-app.ts', 'undefinedDefaultFacade'),
+    );
+    const chainedStaticFacadeEvaluation = aureliaFacadeEvaluationForValue(
+      evaluatedSourceValue(evaluation, 'src/static-apps.ts', 'chainedStaticFacade'),
+    );
+    const registrationOnlyFacadeEvaluation = aureliaFacadeEvaluationForValue(
+      evaluatedSourceValue(evaluation, 'src/static-apps.ts', 'registrationOnlyFacade'),
+    );
+    const independentStaticFacadeEvaluation = aureliaFacadeEvaluationForValue(
+      evaluatedSourceValue(evaluation, 'src/static-apps.ts', 'independentStaticFacade'),
+    );
+
+    expect(primaryEvaluation).not.toBeNull();
+    expect(secondaryEvaluation).not.toBeNull();
+    expect(childParentEvaluation).not.toBeNull();
+    expect(childEvaluation).not.toBeNull();
+    expect(primaryFacadeEvaluation).not.toBeNull();
+    expect(implicitFacadeEvaluation).not.toBeNull();
+    expect(undefinedDefaultFacadeEvaluation).not.toBeNull();
+    expect(chainedStaticFacadeEvaluation).not.toBeNull();
+    expect(registrationOnlyFacadeEvaluation).not.toBeNull();
+    expect(independentStaticFacadeEvaluation).not.toBeNull();
+    expect(chainedStaticFacadeEvaluation).not.toBe(registrationOnlyFacadeEvaluation);
+    expect(registrationOnlyFacadeEvaluation).not.toBe(independentStaticFacadeEvaluation);
+
+    const primaryContainer = configuration.evaluationBindings.containersByEvaluation.get(primaryEvaluation!) ?? null;
+    const secondaryContainer = configuration.evaluationBindings.containersByEvaluation.get(secondaryEvaluation!) ?? null;
+    const childParentContainer = configuration.evaluationBindings.containersByEvaluation.get(childParentEvaluation!) ?? null;
+    const childContainer = configuration.evaluationBindings.containersByEvaluation.get(childEvaluation!) ?? null;
+    const primaryAurelia = configuration.evaluationBindings.aureliasByEvaluation.get(primaryFacadeEvaluation!) ?? null;
+    const implicitAurelia = configuration.evaluationBindings.aureliasByEvaluation.get(implicitFacadeEvaluation!) ?? null;
+    const undefinedDefaultAurelia = configuration.evaluationBindings.aureliasByEvaluation.get(
+      undefinedDefaultFacadeEvaluation!,
+    ) ?? null;
+
+    expect(configuration.containers).toHaveLength(9);
+    expect(configuration.aurelias).toHaveLength(8);
+    expect(app.emission.configuration.readObservations().flatMap((observation) =>
+      observation.steps.flatMap((step) => step.openSeams)
+    ).some((seam) => seam.summary.includes('explicit container whose runtime identity did not close'))).toBe(true);
+    expect(primaryContainer).not.toBeNull();
+    expect(secondaryContainer).not.toBeNull();
+    expect(childParentContainer).not.toBeNull();
+    expect(childContainer?.parent).toBe(childParentContainer);
+    expect(new Set([
+      primaryContainer?.productHandle,
+      secondaryContainer?.productHandle,
+      childParentContainer?.productHandle,
+      childContainer?.productHandle,
+    ]).size).toBe(4);
+    expect(primaryAurelia?.container.productHandle).toBe(primaryContainer?.productHandle);
+    expect(implicitAurelia?.container.productHandle).not.toBe(primaryContainer?.productHandle);
+    expect(implicitAurelia?.container.productHandle).not.toBe(secondaryContainer?.productHandle);
+    expect(undefinedDefaultAurelia?.container.productHandle).not.toBe(implicitAurelia?.container.productHandle);
+
+    const resolverOwners = new Map(app.emission.appWorld.diWorld.resolverSlots.flatMap((slot) =>
+      slot.resolver?._key.localName == null
+        ? []
+        : [[slot.resolver._key.localName, slot.container.productHandle] as const]
+    ));
+    expect(resolverOwners.get('primary-root')).toBe(primaryContainer?.productHandle);
+    expect(resolverOwners.get('primary-app')).toBe(primaryContainer?.productHandle);
+    expect(resolverOwners.get('secondary-root')).toBe(secondaryContainer?.productHandle);
+    expect(resolverOwners.get('secondary-app')).toBe(secondaryContainer?.productHandle);
+    expect(resolverOwners.get('parent-only')).toBe(childParentContainer?.productHandle);
+    expect(resolverOwners.get('child-only')).toBe(childContainer?.productHandle);
+    expect(resolverOwners.get('child-app')).toBe(childContainer?.productHandle);
+    expect(resolverOwners.get('implicit-app')).toBe(implicitAurelia?.container.productHandle);
+    expect(resolverOwners.get('static-chain')).not.toBe(resolverOwners.get('static-registration-only'));
+
+    const admissionsByProduct = new Map(configuration.registrationAdmissions.map((admission) => [
+      admission.productHandle,
+      admission,
+    ]));
+    expect(app.emission.appWorld.diWorld.registrationOperations.flatMap((operation) => {
+      const admission = operation.admissionProductHandle == null
+        ? null
+        : admissionsByProduct.get(operation.admissionProductHandle) ?? null;
+      const localName = admission instanceof ResolverRegistrationAdmission
+        ? admission.registeredValue?.localName ?? null
+        : null;
+      return localName === 'ChildContainerRegistrationValue' || localName === 'ChildAppRegistrationValue'
+        ? [localName]
+        : [];
+    })).toEqual(['ChildContainerRegistrationValue', 'ChildAppRegistrationValue']);
   });
 
   test('spends only registry calls reached on the concrete execution path', async () => {
@@ -377,8 +583,40 @@ describe('DI provider model', () => {
         materialization.productHandles.includes(operation.productHandle)
       )
     );
-    expect(operationMaterializations.flatMap((materialization) => materialization.openSeamHandles)).toHaveLength(0);
+    const operationOpenSeams = operationMaterializations
+      .flatMap((materialization) => materialization.openSeamHandles)
+      .map((handle) => runtime.workspace.store.readOpenSeam(handle));
+    expect(operationOpenSeams).toHaveLength(1);
+    expect(operationOpenSeams[0]?.reasonKinds).toContain(OpenSeamReasonKind.DiRegistryBodyOpen);
     expect(world.compilerWorlds).toHaveLength(1);
+  });
+
+  test('retains registration-owned seam identity when DI spends an open admission', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'di-registration-open-reasons'),
+      storeKey: 'test:di-provider-model:open-registration-causality',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const world = app.emission.appWorld;
+    const admission = world.configuration.registrationAdmissions.find((candidate) =>
+      candidate instanceof OpenRegistrationAdmission
+    );
+    const operation = world.diWorld.registrationOperations.find((candidate) =>
+      candidate.admissionProductHandle === admission?.productHandle
+    );
+    const admissionMaterialization = runtime.workspace.store.readMaterializations().find((materialization) =>
+      admission != null && materialization.productHandles.includes(admission.productHandle)
+    );
+    const operationMaterialization = runtime.workspace.store.readMaterializations().find((materialization) =>
+      operation != null && materialization.productHandles.includes(operation.productHandle)
+    );
+
+    expect(admission).toBeInstanceOf(OpenRegistrationAdmission);
+    expect(operation).toBeDefined();
+    expect(admissionMaterialization?.openSeamHandles).toHaveLength(1);
+    expect(operationMaterialization?.openSeamHandles).toEqual(admissionMaterialization?.openSeamHandles);
+    expect(runtime.workspace.store.readOpenSeam(operationMaterialization!.openSeamHandles[0]!)?.reasonKinds)
+      .toEqual([OpenSeamReasonKind.RegistrationStrategyOpen]);
   });
 
   test('stops a recursive registry cascade before later compiler effects', async () => {
@@ -581,6 +819,18 @@ function activationContainerForFixture(
   return containerEvaluation == null
     ? null
     : configuration.evaluationBindings.containersByEvaluation.get(containerEvaluation) ?? null;
+}
+
+function evaluatedSourceValue(
+  evaluation: StaticProjectEvaluationResult,
+  sourcePath: string,
+  localName: string,
+): EvaluationValue | null {
+  const normalized = sourcePath.replace(/\\/g, '/');
+  const source = evaluation.readEvaluatedSources().find((candidate) =>
+    candidate.admission.path.replace(/\\/g, '/').endsWith(normalized)
+  ) ?? null;
+  return source?.evaluation.environment.readValue(localName) ?? null;
 }
 
 function activateNamedSite(

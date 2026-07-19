@@ -28,6 +28,7 @@ import {
   EvaluationInstanceValue,
   EvaluationMapEntry,
   EvaluationMapValue,
+  EvaluationModuleNamespaceExport,
   EvaluationModuleNamespaceValue,
   EvaluationObjectProperty,
   EvaluationObjectValue,
@@ -186,11 +187,20 @@ export class StaticEvaluationSessionFork {
         return target;
       }
       case EvaluationValueKind.ModuleNamespace: {
-        const exports = new Map<string, EvaluationValue>();
-        const target = new EvaluationModuleNamespaceValue(source.moduleKey, exports, source.node);
+        const exportEntries = new Map<string, EvaluationModuleNamespaceExport>();
+        const target = new EvaluationModuleNamespaceValue(
+          source.moduleKey,
+          exportEntries,
+          source.mayHaveUnknownExports,
+          source.node,
+        );
         this.bindValue(source, target);
-        for (const [name, value] of source.exports) {
-          exports.set(name, this.forkValue(value));
+        for (const [name, entry] of source.exportEntries) {
+          exportEntries.set(name, new EvaluationModuleNamespaceExport(
+            entry.name,
+            this.forkValue(entry.value),
+            entry.sourceNode,
+          ));
         }
         return target;
       }
@@ -477,8 +487,8 @@ export class StaticEvaluationSessionFork {
         break;
       }
       case EvaluationValueKind.ModuleNamespace:
-        for (const [name, exported] of value.exports) {
-          if (this.adoptSessionValueGraph(exported) !== exported) {
+        for (const [name, exported] of value.exportEntries) {
+          if (this.adoptSessionValueGraph(exported.value) !== exported.value) {
             throw new Error(`Session-local module namespace export ${name} retained another evaluation graph.`);
           }
         }

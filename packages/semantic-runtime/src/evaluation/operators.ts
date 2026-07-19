@@ -181,7 +181,9 @@ function evaluateStaticInOperation(
         ? null
         : new EvaluationBooleanValue(Number(key) >= 0 && Number(key) < right.elements.length, node);
     case EvaluationValueKind.ModuleNamespace:
-      return new EvaluationBooleanValue(right.exports.has(key), node);
+      return right.exportEntries.has(key)
+        ? new EvaluationBooleanValue(true, node)
+        : right.mayHaveUnknownExports ? null : new EvaluationBooleanValue(false, node);
     case EvaluationValueKind.BoundaryObject:
     case EvaluationValueKind.BoundaryValue:
     case EvaluationValueKind.Instance:

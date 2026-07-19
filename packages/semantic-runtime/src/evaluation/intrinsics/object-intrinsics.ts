@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import type { ModuleEnvironmentRecord } from '../environment.js';
+import { readEvaluationEnumerableOwnEntries } from '../enumerable-own-properties.js';
 import { EvaluationOpenSeamKind } from '../seams.js';
 import {
   EvaluationArrayElement,
@@ -61,7 +62,7 @@ export function evaluateObjectValues(
   if (isBoundaryEvaluationValue(source)) {
     return boundaryIntrinsicCallValue(source, 'Object.values', call);
   }
-  const entries = objectEnumerableEntries(source);
+  const entries = readEvaluationEnumerableOwnEntries(source);
   if (entries == null) {
     return host.unknown('Object.values source did not reduce to a known object.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
@@ -88,7 +89,7 @@ export function evaluateObjectKeys(
   if (isBoundaryEvaluationValue(source)) {
     return boundaryIntrinsicCallValue(source, 'Object.keys', call);
   }
-  const entries = objectEnumerableEntries(source);
+  const entries = readEvaluationEnumerableOwnEntries(source);
   if (entries == null) {
     return host.unknown('Object.keys source did not reduce to a known object.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
@@ -115,7 +116,7 @@ export function evaluateObjectEntries(
   if (isBoundaryEvaluationValue(source)) {
     return boundaryIntrinsicCallValue(source, 'Object.entries', call);
   }
-  const entries = objectEnumerableEntries(source);
+  const entries = readEvaluationEnumerableOwnEntries(source);
   if (entries == null) {
     return host.unknown('Object.entries source did not reduce to a known object.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
@@ -167,51 +168,6 @@ export function evaluateObjectFromEntries(
     openEvaluationObjectProperties(properties);
   }
   return new EvaluationObjectValue(properties, mayHaveUnknownProperties, call);
-}
-
-export interface ObjectEnumerableEntry {
-  readonly name: string;
-  readonly value: EvaluationValue;
-  readonly expression: ts.Expression | null;
-}
-
-export function objectEnumerableEntries(
-  source: EvaluationValue,
-): { readonly entries: readonly ObjectEnumerableEntry[]; readonly mayHaveUnknownEntries: boolean } | null {
-  switch (source.kind) {
-    case EvaluationValueKind.Object:
-      return entriesFromObjectProperties(source.properties, source.mayHaveUnknownProperties);
-    case EvaluationValueKind.Function:
-    case EvaluationValueKind.Class:
-      return entriesFromObjectProperties(source.properties, false);
-    case EvaluationValueKind.Instance:
-      return entriesFromObjectProperties(source.properties, source.mayHaveUnknownProperties);
-    case EvaluationValueKind.Array:
-      return {
-        entries: source.elements.map((element, index) => ({
-          name: String(index),
-          value: element.value,
-          expression: element.expression,
-        })),
-        mayHaveUnknownEntries: source.mayHaveUnknownElements,
-      };
-    default:
-      return null;
-  }
-}
-
-export function entriesFromObjectProperties(
-  properties: ReadonlyMap<string, EvaluationObjectProperty>,
-  mayHaveUnknownProperties: boolean,
-): { readonly entries: readonly ObjectEnumerableEntry[]; readonly mayHaveUnknownEntries: boolean } {
-  return {
-    entries: [...properties.values()].map((property) => ({
-      name: property.name,
-      value: property.value,
-      expression: property.node != null && ts.isExpression(property.node) ? property.node : null,
-    })),
-    mayHaveUnknownEntries: mayHaveUnknownProperties,
-  };
 }
 
 export interface ObjectFromEntriesEntry {

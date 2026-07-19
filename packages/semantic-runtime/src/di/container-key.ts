@@ -152,7 +152,7 @@ function keyKindForRegistrationValue(
     case RegistrationValueKind.Callback:
     case RegistrationValueKind.CachedCallback:
     case RegistrationValueKind.Factory:
-    case RegistrationValueKind.ObjectMap:
+    case RegistrationValueKind.RecursiveCarrier:
     case RegistrationValueKind.Unknown:
       return ContainerLookupKeyKind.Unknown;
   }

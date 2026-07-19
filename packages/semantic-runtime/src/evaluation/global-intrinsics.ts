@@ -29,6 +29,7 @@ import {
   readEvaluationTruthiness,
   type EvaluationValue,
 } from './values.js';
+import { readEvaluationEnumerableOwnEntries } from './enumerable-own-properties.js';
 import {
   regularExpressionFlagsText,
   regularExpressionPatternText,
@@ -436,33 +437,31 @@ function objectGlobalMemberCall(
   node: ts.Node | null,
 ): AureliaGlobalIntrinsicEvaluation {
   const source = argumentValues[0];
+  const enumerable = readEvaluationEnumerableOwnEntries(source);
   switch (memberName) {
     case 'keys': {
-      const keys = enumerableOwnPropertyNames(source);
-      return keys == null
+      return enumerable == null
         ? runtimeOpen('Object.keys(...) argument depends on runtime object shape.')
-        : value(new EvaluationArrayValue(keys.map((key) =>
-          new EvaluationArrayElement(new EvaluationStringValue(key, node), null)
-        ), false, node));
+        : value(new EvaluationArrayValue(enumerable.entries.map((entry) =>
+          new EvaluationArrayElement(new EvaluationStringValue(entry.name, node), entry.expression)
+        ), enumerable.mayHaveUnknownEntries, node, enumerable.mayHaveUnknownOrder));
     }
     case 'values': {
-      const values = enumerableOwnPropertyValues(source);
-      return values == null
+      return enumerable == null
         ? runtimeOpen('Object.values(...) argument depends on runtime object shape.')
-        : value(new EvaluationArrayValue(values.map((entry) =>
-          new EvaluationArrayElement(entry, null)
-        ), false, node));
+        : value(new EvaluationArrayValue(enumerable.entries.map((entry) =>
+          new EvaluationArrayElement(entry.value, entry.expression)
+        ), enumerable.mayHaveUnknownEntries, node, enumerable.mayHaveUnknownOrder));
     }
     case 'entries': {
-      const entries = enumerableOwnPropertyEntries(source);
-      return entries == null
+      return enumerable == null
         ? runtimeOpen('Object.entries(...) argument depends on runtime object shape.')
-        : value(new EvaluationArrayValue(entries.map(([key, entry]) =>
+        : value(new EvaluationArrayValue(enumerable.entries.map((entry) =>
           new EvaluationArrayElement(new EvaluationArrayValue([
-            new EvaluationArrayElement(new EvaluationStringValue(key, node), null),
-            new EvaluationArrayElement(entry, null),
-          ], false, node), null)
-        ), false, node));
+            new EvaluationArrayElement(new EvaluationStringValue(entry.name, node), entry.expression),
+            new EvaluationArrayElement(entry.value, entry.expression),
+          ], false, node), entry.expression)
+        ), enumerable.mayHaveUnknownEntries, node, enumerable.mayHaveUnknownOrder));
     }
     default:
       return unsupported(`Object.${memberName} is not modeled as a host global intrinsic.`);
@@ -722,49 +721,6 @@ function mathNumberOperation(
       return (value) => Math.trunc(value);
     default:
       return null;
-  }
-}
-
-function enumerableOwnPropertyNames(
-  source: EvaluationValue | undefined,
-): readonly string[] | null {
-  const properties = enumerableOwnProperties(source);
-  return properties == null ? null : properties.map(([name]) => name);
-}
-
-function enumerableOwnPropertyValues(
-  source: EvaluationValue | undefined,
-): readonly EvaluationValue[] | null {
-  const properties = enumerableOwnProperties(source);
-  return properties == null ? null : properties.map(([, value]) => value);
-}
-
-function enumerableOwnPropertyEntries(
-  source: EvaluationValue | undefined,
-): readonly (readonly [string, EvaluationValue])[] | null {
-  return enumerableOwnProperties(source);
-}
-
-/** Enumerates source-modeled Object.keys/values/entries properties through one host-intrinsic policy. */
-function enumerableOwnProperties(
-  source: EvaluationValue | undefined,
-): readonly (readonly [string, EvaluationValue])[] | null {
-  if (source == null) {
-    return null;
-  }
-  switch (source.kind) {
-    case EvaluationValueKind.Object:
-      return source.mayHaveUnknownProperties
-        ? null
-        : [...source.properties.values()].map((property) => [property.name, property.value] as const);
-    case EvaluationValueKind.Array:
-      return source.mayHaveUnknownElements
-        ? null
-        : source.elements.map((element, index) => [String(index), element.value] as const);
-    case EvaluationValueKind.String:
-      return [...source.value].map((part, index) => [String(index), new EvaluationStringValue(part, source.node)] as const);
-    default:
-      return isEvaluationPrimitiveValue(source) ? [] : null;
   }
 }
 

@@ -24,6 +24,7 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
@@ -41,6 +42,11 @@ import {
   type AppRootConfigField,
 } from './app-root.js';
 import { Aurelia } from './aurelia.js';
+import {
+  AureliaContainerEvaluationKind,
+  AureliaFacadeContainerState,
+} from './aurelia-evaluation-runtime.js';
+import { ConfigurationEvaluationBindingFrame } from './configuration-evaluation-bindings.js';
 import {
   AppRootConfigObservation,
   ConfigurationSequenceObservation,
@@ -62,12 +68,28 @@ export class AureliaAppFrame {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly container: Container,
+    readonly createdContainer: Container | null,
     readonly aurelia: Aurelia,
     readonly appRootConfig: AppRootConfig | null,
     readonly appRoot: AppRoot | null,
     readonly productHandles: readonly ProductHandle[],
     readonly claims: readonly ClaimHandle[],
+    readonly publishesProducts: boolean,
   ) {}
+
+  asReference(): AureliaAppFrame {
+    return new AureliaAppFrame(
+      [],
+      this.container,
+      null,
+      this.aurelia,
+      this.appRootConfig,
+      this.appRoot,
+      this.productHandles,
+      this.claims,
+      false,
+    );
+  }
 }
 
 class AppRootConfigEmission {
@@ -109,8 +131,10 @@ export class AureliaAppFrameMaterializer {
   constructor(
     readonly store: KernelStore,
     readonly publication: ConfigurationKernelPublication,
+    kernelPublication: KernelPublicationContext,
+    readonly evaluationBindings: ConfigurationEvaluationBindingFrame,
   ) {
-    this.rootContainers = new ContainerRootMaterializer(store);
+    this.rootContainers = new ContainerRootMaterializer(store, kernelPublication);
   }
 
   materialize(
@@ -121,8 +145,18 @@ export class AureliaAppFrameMaterializer {
     resources: ResourceDefinitionIndex | null,
   ): AureliaAppFrame | null {
     const appStep = appAdmissionStep(observation);
-    if (appStep == null) {
+    const aureliaEvaluation = appStep?.aureliaEvaluation ?? null;
+    if (
+      appStep == null
+      || aureliaEvaluation == null
+      || aureliaEvaluation.containerState !== AureliaFacadeContainerState.Closed
+      || aureliaEvaluation.containerEvaluation == null
+    ) {
       return null;
+    }
+    const existingFrame = this.evaluationBindings.appFrameForEvaluation(aureliaEvaluation);
+    if (existingFrame != null) {
+      return existingFrame.asReference();
     }
 
     const records: KernelStoreRecord[] = [];
@@ -138,12 +172,38 @@ export class AureliaAppFrameMaterializer {
     );
     records.push(...source.records);
 
-    const containerRequest = new ContainerRootMaterializationRequest(
-      appLocal,
-      source.addressHandle,
-      appStep.receiverLocalName,
-    );
-    const container = this.rootContainers.create(containerRequest);
+    const containerEvaluation = aureliaEvaluation.containerEvaluation;
+    let container = this.evaluationBindings.containerForEvaluation(containerEvaluation);
+    let createdContainer: Container | null = null;
+    let containerRequest: ContainerRootMaterializationRequest | null = null;
+    let containerProvenanceHandle = source.provenanceHandle;
+    if (container == null) {
+      if (
+        containerEvaluation.kind === AureliaContainerEvaluationKind.AuthoredRoot
+        || containerEvaluation.kind === AureliaContainerEvaluationKind.AuthoredChild
+      ) {
+        throw new Error('An Aurelia facade using an authored container must be emitted after that container.');
+      }
+      const containerSource = this.publication.recordsForSource(
+        context,
+        containerEvaluation.sourceNode,
+        `configuration-container:${appLocal}`,
+        EvidenceKind.ConfigurationFlow,
+        [EvidenceRole.Configuration],
+        'Implicit Aurelia facade root container.',
+        SourceSpanRole.Range,
+      );
+      records.push(...containerSource.records);
+      containerRequest = new ContainerRootMaterializationRequest(
+        appLocal,
+        containerSource.addressHandle,
+        appStep.receiverLocalName,
+      );
+      container = this.rootContainers.create(containerRequest);
+      createdContainer = container;
+      containerProvenanceHandle = containerSource.provenanceHandle;
+      this.evaluationBindings.bindContainer(containerEvaluation, container);
+    }
 
     const appRootConfig = this.recordsForAppFrameRootConfig(context, observation, appLocal, resources);
     records.push(...appRootConfig.records);
@@ -163,12 +223,14 @@ export class AureliaAppFrameMaterializer {
       provenanceHandle,
     );
     records.push(...appClaims.records);
-    records.push(...this.rootContainers.recordsFor(
-      containerRequest,
-      container,
-      source.provenanceHandle,
-      claimHandlesForConfigurationProduct(appClaims.records, container.productHandle),
-    ));
+    if (containerRequest != null) {
+      records.push(...this.rootContainers.recordsFor(
+        containerRequest,
+        container,
+        containerProvenanceHandle,
+        claimHandlesForConfigurationProduct(appClaims.records, container.productHandle),
+      ));
+    }
     records.push(
       ...this.recordsForAppFrameProducts(
         appLocal,
@@ -181,9 +243,10 @@ export class AureliaAppFrameMaterializer {
       ),
     );
 
-    return new AureliaAppFrame(
+    const frame = new AureliaAppFrame(
       records,
       container,
+      createdContainer,
       aurelia,
       appRootConfig.appRootConfig?.config ?? null,
       appRoot,
@@ -194,7 +257,10 @@ export class AureliaAppFrameMaterializer {
         ...(appRoot == null ? [] : [appRoot.productHandle]),
       ],
       appClaims.aureliaClaimHandles,
+      true,
     );
+    this.evaluationBindings.bindAppFrame(aureliaEvaluation, frame);
+    return frame;
   }
 
   private recordsForAppFrameRootConfig(

@@ -34,6 +34,12 @@ The runtime `Aurelia` facade owns the root container and registers resolvers for
 and `AppRoot` connects the host, root component, container, platform, and root custom-element controller. App tasks
 are ordinary `IRegistry` values registered under `IAppTask`, then consumed by `AppRoot` in lifecycle slots.
 
+Facade and container identity come from shared project evaluation. A no-argument facade constructor (including an
+explicit `undefined` argument) owns a fresh implicit root container; an explicit closed container preserves the exact
+authored `createContainer(...)` / `createChild(...)` identity. Each browser static quick-start call creates a fresh
+facade unless later calls are chained from its returned value. An explicit container that does not close remains an
+open configuration target and must not be replaced by a synthetic root.
+
 The tooling model should keep that split:
 
 - `Aurelia` records describe the facade/container/root-provider handoff before start/stop lifecycle execution.
@@ -95,6 +101,15 @@ The tooling model should keep that split:
   app-root config, AppRoot, and root component target convergence. Keep that separate from sequence/step emission so
   lifecycle and controller work can later spend the app frame without making the configuration sequence emitter grow
   back into an AppRoot emulator.
+- `configuration-evaluation-bindings.ts` is the project-run identity bridge from evaluator-owned facade/container
+  values to emitted `Aurelia` and `Container` products. Recognition groups steps by those identities; receiver spelling
+  remains a trace label only. The project pass recognizes all modules first, then emits container parents, container
+  registrations, and app-owned facade products in dependency order while retaining evaluator module order within each
+  phase. That ordering is a materialization prerequisite, not a claim that semantic-runtime models full app lifecycle
+  execution.
+- Configuration source publication anchors a node against its own admitted source file, including evaluator values
+  returned across module boundaries. Never attach a foreign declaration or constructor node to the importing module's
+  source-file address merely because that module owns the current recognition context.
 - `IRegistry.register(container, ...)` bodies are recognized as registry-owned configuration sequences. Their
   `container.register(...)` calls keep `RegistryMethod` admission provenance instead of being flattened into ordinary
   container-register calls, and static array spreads such as `...DefaultComponents` are expanded through the shared
@@ -148,8 +163,12 @@ admission; direct `container.register(...)`-shaped calls are treated as containe
 would pollute the app map and later DI world.
 
 Known framework configuration registries such as `StandardConfiguration`, `I18nConfiguration`,
-`RouterConfiguration.customize(...)`, and `StateDefaultConfiguration.init(...).withStore(...)` are classified as
-registry admissions when they appear as register arguments. Decomposed runtime-html groups such as
+`ValidationI18nConfiguration`, `RouterConfiguration.customize(...)`,
+`StateDefaultConfiguration.init(...).withStore(...)`, `LoggerConfiguration.create(...)`, and
+`StyleConfiguration.shadowDOM(...)` are classified as registry admissions when they appear as register arguments.
+The evaluator keeps factory namespaces separate from their result packages: bare `StateDefaultConfiguration`,
+`LoggerConfiguration`, `StyleConfiguration`, and `AppTask` values do not acquire synthetic registry identity or fall
+through recursive object-map registration as if their factory methods were app services. Decomposed runtime-html groups such as
 `...DefaultComponents`, `...DefaultBindingSyntax`,
 `...DefaultBindingLanguage`, `...DefaultResources`, and `...DefaultRenderers` are classified as framework group
 admissions. The configuration layer records an explicit `FrameworkRegistrationKind`; it does not hide those semantics
@@ -170,7 +189,9 @@ container for `new Aurelia()` and static quick-start calls such as `Aurelia.app(
 helper that registers `StandardConfiguration`; semantic-runtime records that as an `AureliaFacadeDefault` registration
 admission. This is intentionally tied to imports from the umbrella `aurelia` package. `@aurelia/runtime-html` imports
 and `new Aurelia(customContainer)` do not get the implicit admission, because those paths either name the lower-level
-class or supply the container explicitly.
+class or supply the container explicitly. An explicit container is nevertheless the exact app container: evaluator
+container identity, child ancestry, registrations, and the facade that receives `.app(...)` are linked before kernel
+emission. Separate constructor/static facades remain separate app identities, including across module aliases.
 
 Static evaluation treats facade setup chains as configuration-owned expression statements for both `new Aurelia()...`
 and static browser-facade chains such as `Aurelia.register(...).app(...).start()`. That keeps evaluator seams focused

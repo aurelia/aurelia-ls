@@ -275,7 +275,7 @@ export function resolverStrategyForRegistrationStrategy(
     case RegistrationStrategy.Registry:
     case RegistrationStrategy.Resource:
     case RegistrationStrategy.PlainClassSelf:
-    case RegistrationStrategy.ObjectMap:
+    case RegistrationStrategy.RecursiveCarrier:
     case RegistrationStrategy.Resolver:
     case RegistrationStrategy.Factory:
     case RegistrationStrategy.FrameworkGroup:

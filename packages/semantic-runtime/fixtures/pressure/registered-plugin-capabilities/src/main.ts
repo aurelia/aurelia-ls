@@ -11,7 +11,7 @@ new Aurelia()
     StandardConfiguration,
     I18nConfiguration,
     RouterConfiguration,
-    StateDefaultConfiguration,
+    StateDefaultConfiguration.init({}),
     DefaultVirtualizationConfiguration,
     ValidationHtmlConfiguration,
   )

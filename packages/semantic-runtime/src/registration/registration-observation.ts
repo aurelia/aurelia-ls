@@ -35,8 +35,8 @@ export const enum RegistrationCarrierKind {
   StaticResourceAdmission = 'static-resource-admission',
   /** Plain class fallback admitted by container registration. */
   PlainClassAdmission = 'plain-class-admission',
-  /** Object-map value admitted by container registration. */
-  ObjectMapEntry = 'object-map-entry',
+  /** One member admitted from an array, object, or module-map registration carrier. */
+  RecursiveCarrierEntry = 'recursive-carrier-entry',
 }
 
 export const enum RegistrationKeyObservationKind {
@@ -59,6 +59,8 @@ export class RegistrationKeyObservation {
     readonly constructableSource: EvaluatedDiKeyDeclarationSource | null = null,
     /** Evaluator value used to recover primitive-value and object identity across import aliases. */
     readonly evaluatedValue: EvaluationValue | null = null,
+    /** Source-file address when the key expression belongs to another admitted module. */
+    readonly sourceFileAddressHandle: AddressHandle | null = null,
   ) {}
 }
 

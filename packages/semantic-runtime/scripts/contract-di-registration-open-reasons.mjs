@@ -33,21 +33,9 @@ const failures = [];
 
 expectReason(
   sites.rows,
-  'di.open-registration-spending',
-  'di-registration-admission-open',
-  'unique DI registration seam site',
-);
-expectReason(
-  sites.rows,
   'registration.open-strategy',
   'registration-strategy-open',
   'unique registration strategy seam site',
-);
-expectReason(
-  raw.rows,
-  'di.open-registration-spending',
-  'di-registration-admission-open',
-  'raw DI registration seam row',
 );
 expectReason(
   raw.rows,
@@ -57,16 +45,17 @@ expectReason(
 );
 expectReason(
   summary.rows,
-  'di.open-registration-spending',
-  'di-registration-admission-open',
-  'DI registration summary cluster',
-);
-expectReason(
-  summary.rows,
   'registration.open-strategy',
   'registration-strategy-open',
   'registration strategy summary cluster',
 );
+expectReason(
+  sites.rows,
+  'di.open-registry-body',
+  'di-registry-body-open',
+  'StandardConfiguration DI coverage site',
+);
+expectAbsentReason(sites.rows, 'di-registration-admission-open', 'translated DI admission reason');
 
 for (const row of sites.rows) {
   if (row.source?.path?.endsWith('src/main.ts') !== true) {
@@ -90,6 +79,12 @@ function expectReason(rows, seamKindKey, reasonKind, label) {
       sampleSummary: candidate.sampleSummary,
       summary: candidate.summary,
     })))}.`);
+  }
+}
+
+function expectAbsentReason(rows, reasonKind, label) {
+  if (rows.some((candidate) => candidate.reasonKinds.includes(reasonKind))) {
+    failures.push(`Expected ${label} to be absent, observed ${JSON.stringify(rows)}.`);
   }
 }
 

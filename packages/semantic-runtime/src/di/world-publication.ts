@@ -66,17 +66,17 @@ import {
   type RegistrationAdmissionProduct,
 } from '../registration/registration-admission.js';
 import {
-  FrameworkRegistrationKind,
   RegistryBodyKind,
   RegistrationKeyReference,
   RegistrationValueReference,
 } from '../registration/registration-reference.js';
 import { frameworkRegistrationModuleNamesForCapability } from '../registration/framework-registration-manifest.js';
 import type { TypeSystemProject } from '../type-system/project.js';
-import type {
-  FrameworkAppTaskEffect,
-  FrameworkFactoryEffect,
-  FrameworkResolverEffect,
+import {
+  frameworkDiRegistrationEffectsForKind,
+  type FrameworkAppTaskEffect,
+  type FrameworkFactoryEffect,
+  type FrameworkResolverEffect,
 } from './framework-registration-effects.js';
 import type { Container } from './container.js';
 import { ContainerRegistrationOperation } from './container-registration.js';
@@ -570,43 +570,11 @@ function summaryForRegistryAdmissionOpen(admission: RegistryRegistrationAdmissio
     case undefined:
       break;
   }
-  switch (admission.registryValue?.frameworkKind) {
-    case FrameworkRegistrationKind.StandardConfiguration:
-      return null;
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultComponents:
-      return null;
-    case FrameworkRegistrationKind.I18nConfiguration:
-      return null;
-    case FrameworkRegistrationKind.ValidationConfiguration:
-      return null;
-    case FrameworkRegistrationKind.ValidationHtmlConfiguration:
-      return null;
-    case FrameworkRegistrationKind.RouterConfiguration:
-      return null;
-    case FrameworkRegistrationKind.RouterDefaultComponents:
-      return null;
-    case FrameworkRegistrationKind.RouterDefaultResources:
-      return null;
-    case FrameworkRegistrationKind.StateDefaultConfiguration:
-      return null;
-    case FrameworkRegistrationKind.DialogConfiguration:
-      return null;
-    case FrameworkRegistrationKind.UiVirtualizationDefaultConfiguration:
-      return null;
-    case FrameworkRegistrationKind.AppTask:
-      return null;
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
-    case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
-      return 'Framework syntax group effects can be selected by template compilation, but DI has not spent remaining expanded registrations yet.';
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
-      return 'DefaultResources resource headers can feed DI resource slots; non-resource spread effects are still open.';
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultRenderers:
-      return 'DefaultRenderers runtime renderer effects can feed template compilation, but DI has not spent remaining expanded registrations yet.';
-    case null:
-    case undefined:
-      return 'IRegistry registration body has not been interpreted by DI world construction yet.';
+  const frameworkKind = admission.registryValue?.frameworkKind;
+  if (frameworkKind != null) {
+    return frameworkDiRegistrationEffectsForKind(frameworkKind).openSummary;
   }
+  return 'IRegistry registration body has not been interpreted by DI world construction yet.';
 }
 
 interface DiResolverPublication {

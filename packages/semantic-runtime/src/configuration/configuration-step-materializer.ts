@@ -64,6 +64,8 @@ import {
   type ContainerConfigurationRequest,
 } from '../di/container-configuration.js';
 import {
+  ContainerChildMaterializationRequest,
+  ContainerChildMaterializer,
   ContainerRootMaterializationRequest,
   ContainerRootMaterializer,
 } from '../di/container-materializer.js';
@@ -121,7 +123,7 @@ import {
   aureliaContainerDefaultResolverPolicyForValue,
   type AureliaContainerEvaluation,
 } from './aurelia-evaluation-runtime.js';
-import { ConfigurationEvaluationBindings } from './configuration-evaluation-bindings.js';
+import { ConfigurationEvaluationBindingFrame } from './configuration-evaluation-bindings.js';
 import type { ConfigurationRecognitionContext } from './configuration-recognition-context.js';
 import {
   claimHandlesForConfigurationProduct,
@@ -204,7 +206,6 @@ export class ConfigurationStepEmissionSet {
     readonly optionContributions: readonly ConfigurationOptionContribution[],
     readonly registrationAdmissions: readonly RegistrationAdmissionProduct[],
     readonly containers: readonly Container[],
-    readonly evaluationBindings: ConfigurationEvaluationBindings,
   ) {}
 }
 
@@ -229,14 +230,17 @@ export class ConfigurationStepReferenceSeed {
 export class ConfigurationStepMaterializer {
   private readonly registrationEmitter: RegistrationKernelEmitter;
   private readonly rootContainers: ContainerRootMaterializer;
+  private readonly childContainers: ContainerChildMaterializer;
 
   constructor(
     private readonly store: KernelStore,
     private readonly publication: ConfigurationKernelPublication,
     kernelPublication: KernelPublicationContext,
+    private readonly evaluationBindings: ConfigurationEvaluationBindingFrame,
   ) {
     this.registrationEmitter = new RegistrationKernelEmitter(store, kernelPublication);
-    this.rootContainers = new ContainerRootMaterializer(store);
+    this.rootContainers = new ContainerRootMaterializer(store, kernelPublication);
+    this.childContainers = new ContainerChildMaterializer(store, kernelPublication);
   }
 
   recordsForSequenceSteps(
@@ -253,14 +257,11 @@ export class ConfigurationStepMaterializer {
     const optionContributions: ConfigurationOptionContribution[] = [];
     const registrationAdmissions: RegistrationAdmissionProduct[] = [];
     const containers: Container[] = [];
-    const containersByEvaluation = new Map<AureliaContainerEvaluation, Container>();
-    const receiverEvaluationsByStep = new Map<ProductHandle, AureliaContainerEvaluation>();
-    const registrationValuesByAdmissionProduct = new Map<ProductHandle, EvaluationValue>();
     let receiverContainer: Container | null = null;
     observation.steps.forEach((stepObservation, stepIndex) => {
       const evaluatedReceiver = stepObservation.containerEvaluation == null
         ? receiverContainer
-        : containersByEvaluation.get(stepObservation.containerEvaluation) ?? null;
+        : this.evaluationBindings.containerForEvaluation(stepObservation.containerEvaluation);
       const stepEmission = this.recordsForStep(
         context,
         observation,
@@ -278,17 +279,17 @@ export class ConfigurationStepMaterializer {
       optionContributions.push(...stepEmission.optionContributions);
       registrationAdmissions.push(...stepEmission.registrationAdmissions);
       for (const [productHandle, value] of stepEmission.registrationValuesByAdmissionProduct) {
-        registrationValuesByAdmissionProduct.set(productHandle, value);
+        this.evaluationBindings.bindRegistrationValue(productHandle, value);
       }
       if (stepEmission.createdContainer != null) {
         receiverContainer = stepEmission.createdContainer;
         containers.push(stepEmission.createdContainer);
         if (stepObservation.containerEvaluation != null) {
-          containersByEvaluation.set(stepObservation.containerEvaluation, stepEmission.createdContainer);
+          this.evaluationBindings.bindContainer(stepObservation.containerEvaluation, stepEmission.createdContainer);
         }
       }
       if (stepObservation.containerEvaluation != null) {
-        receiverEvaluationsByStep.set(stepEmission.step.productHandle, stepObservation.containerEvaluation);
+        this.evaluationBindings.bindReceiver(stepEmission.step.productHandle, stepObservation.containerEvaluation);
       }
     });
     return new ConfigurationStepEmissionSet(
@@ -298,11 +299,6 @@ export class ConfigurationStepMaterializer {
       optionContributions,
       registrationAdmissions,
       containers,
-      new ConfigurationEvaluationBindings(
-        containersByEvaluation,
-        receiverEvaluationsByStep,
-        registrationValuesByAdmissionProduct,
-      ),
     );
   }
 
@@ -341,11 +337,13 @@ export class ConfigurationStepMaterializer {
     const openSeams = this.publication.recordsForOpenSeams(context, observation.openSeams, `configuration-step:${local}`);
     records.push(...openSeams.records);
 
-    const containerConfiguration = observation.stepKind === ConfigurationStepKind.CreateContainer
+    const createsRootContainer = observation.stepKind === ConfigurationStepKind.CreateContainer;
+    const createsChildContainer = observation.stepKind === ConfigurationStepKind.CreateChildContainer;
+    const containerConfiguration = createsRootContainer || createsChildContainer
       ? this.recordsForContainerConfiguration(context, observation.containerEvaluation, local, source)
       : new ContainerConfigurationEmission([], null);
     records.push(...containerConfiguration.records);
-    const containerRequest = observation.stepKind === ConfigurationStepKind.CreateContainer
+    const containerRequest = createsRootContainer
       ? new ContainerRootMaterializationRequest(
         `configuration-step:${local}`,
         source.addressHandle,
@@ -353,9 +351,28 @@ export class ConfigurationStepMaterializer {
         containerConfiguration.configuration,
       )
       : null;
-    const createdContainer = containerRequest == null
+    let createdContainer = containerRequest == null
       ? null
       : this.rootContainers.create(containerRequest);
+    if (createsChildContainer) {
+      const parentEvaluation = observation.containerEvaluation?.parent ?? null;
+      const parent = parentEvaluation == null
+        ? null
+        : this.evaluationBindings.containerForEvaluation(parentEvaluation);
+      if (parent == null) {
+        throw new Error('A closed authored child-container evaluation must be emitted after its parent container.');
+      }
+      const child = this.childContainers.materializeChild(new ContainerChildMaterializationRequest(
+        `configuration-step:${local}`,
+        parent,
+        source.addressHandle,
+        observation.receiverLocalName,
+        [],
+        containerConfiguration.configuration,
+      ));
+      records.push(...child.records);
+      createdContainer = child.container;
+    }
     const effectiveReceiverContainer = createdContainer ?? receiverContainer;
     const appProducedProductHandles = productHandlesForStep(observation, appFrame, createdContainer);
     const appTasks = this.recordsForStepAppTasks(context, observation, local);
@@ -1006,6 +1023,7 @@ function productHandlesForStep(
 ): readonly ProductHandle[] {
   switch (observation.stepKind) {
     case ConfigurationStepKind.CreateContainer:
+    case ConfigurationStepKind.CreateChildContainer:
       return createdContainer == null ? [] : [createdContainer.productHandle];
     case ConfigurationStepKind.CreateAurelia:
       return appFrame == null ? [] : [appFrame.container.productHandle, appFrame.aurelia.productHandle];
@@ -1031,6 +1049,7 @@ function receiverIdentityHandleForStep(
 ): IdentityHandle | null {
   switch (observation.stepKind) {
     case ConfigurationStepKind.CreateContainer:
+    case ConfigurationStepKind.CreateChildContainer:
     case ConfigurationStepKind.ContainerRegister:
       return receiverContainer?.identityHandle ?? null;
     default:
@@ -1045,6 +1064,7 @@ function receiverProductHandleForStep(
 ): ProductHandle | null {
   switch (observation.stepKind) {
     case ConfigurationStepKind.CreateContainer:
+    case ConfigurationStepKind.CreateChildContainer:
     case ConfigurationStepKind.ContainerRegister:
       return receiverContainer?.productHandle ?? null;
     default:

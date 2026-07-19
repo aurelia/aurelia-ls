@@ -1890,11 +1890,11 @@ function promiseFulfillmentIsKnownInvalidLazyImport(
 function moduleNamespaceIsKnownInvalidLazyImport(
   value: Extract<EvaluationValue, { readonly kind: EvaluationValueKind.ModuleNamespace }>,
 ): boolean {
-  if (hasOwnNameProperty(value)) {
+  if (value.mayHaveUnknownExports || hasOwnNameProperty(value)) {
     return false;
   }
-  for (const exportValue of value.exports.values()) {
-    if (!exportValueIsDefinitelyNotLazyRouteable(exportValue)) {
+  for (const exportEntry of value.exportEntries.values()) {
+    if (!exportValueIsDefinitelyNotLazyRouteable(exportEntry.value)) {
       return false;
     }
   }
@@ -1937,12 +1937,12 @@ function routeableResourceDefinitionForFulfillment(
   if (moduleDefinitions.length === 1) {
     return moduleDefinitions[0]!;
   }
-  const defaultDefinition = context.resourceIndex.lookupValue(value.exports.get('default') ?? null);
-  for (const [exportName, exportValue] of value.exports) {
+  const defaultDefinition = context.resourceIndex.lookupValue(value.exportEntries.get('default')?.value ?? null);
+  for (const [exportName, exportEntry] of value.exportEntries) {
     if (exportName === 'default') {
       continue;
     }
-    const definition = context.resourceIndex.lookupValue(exportValue);
+    const definition = context.resourceIndex.lookupValue(exportEntry.value);
     if (definition != null) {
       return definition;
     }
@@ -1961,7 +1961,7 @@ function hasOwnNameProperty(
     case EvaluationValueKind.BoundaryObject:
       return value.properties.has('name');
     case EvaluationValueKind.ModuleNamespace:
-      return value.exports.has('name');
+      return value.exportEntries.has('name');
   }
 }
 

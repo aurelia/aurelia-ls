@@ -16,17 +16,25 @@ import type { ResourceDefinitionIndex } from '../resources/resource-definition-i
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   ConfigurationKernelEmission,
+  ConfigurationKernelEmitter,
 } from './configuration-kernel-emitter.js';
 import {
   ConfigurationRecognitionContext,
 } from './configuration-recognition-context.js';
 import {
   ConfigurationRecognitionPass,
-  type ConfigurationRecognitionResult,
 } from './configuration-recognition-pass.js';
 import type { ConfigurationSequenceObservation } from './configuration-observation.js';
 import { normalizeConfigurationSourceFileName } from './source-file-names.js';
-import { mergeConfigurationEvaluationBindings } from './configuration-evaluation-bindings.js';
+import {
+  ConfigurationEvaluationBindingFrame,
+  mergeConfigurationEvaluationBindings,
+} from './configuration-evaluation-bindings.js';
+import {
+  AureliaContainerEvaluationKind,
+  type AureliaContainerEvaluation,
+} from './aurelia-evaluation-runtime.js';
+import { ConfigurationStepKind } from './configuration-sequence.js';
 
 /** Configuration-recognition result for one boot-admitted source file. */
 export class ConfigurationRecognitionSourceResult {
@@ -42,6 +50,25 @@ export class ConfigurationRecognitionSourceResult {
   ) {}
 }
 
+class ConfigurationRecognitionSourceDraft {
+  constructor(
+    readonly admission: SourceFileAdmission,
+    readonly context: ConfigurationRecognitionContext | null,
+    readonly observations: readonly ConfigurationSequenceObservation[],
+    readonly unresolvedModules: readonly EvaluationModuleResolutionOpen[],
+  ) {}
+}
+
+class ConfigurationObservationEmissionRequest {
+  constructor(
+    readonly moduleOrder: number,
+    readonly sourceIndex: number,
+    readonly observationIndex: number,
+    readonly context: ConfigurationRecognitionContext,
+    readonly observation: ConfigurationSequenceObservation,
+  ) {}
+}
+
 /** Configuration-recognition result for one booted project frame. */
 export class ConfigurationRecognitionProjectResult {
   constructor(
@@ -51,6 +78,8 @@ export class ConfigurationRecognitionProjectResult {
     readonly evaluation: StaticProjectEvaluationResult,
     /** Per-source recognition results. */
     readonly sources: readonly ConfigurationRecognitionSourceResult[],
+    /** Project configuration in modeled ECMAScript execution order, independent from materialization scheduling. */
+    private readonly executionConfiguration: ConfigurationKernelEmission,
   ) {}
 
   readObservations(): readonly ConfigurationSequenceObservation[] {
@@ -62,7 +91,7 @@ export class ConfigurationRecognitionProjectResult {
   }
 
   readConfiguration(): ConfigurationKernelEmission {
-    return aggregateConfigurationEmission(this.readEmissions());
+    return this.executionConfiguration;
   }
 
   readUnresolvedModules(): readonly EvaluationModuleResolutionOpen[] {
@@ -82,61 +111,185 @@ export class ConfigurationRecognitionProjectPass {
   ): ConfigurationRecognitionProjectResult {
     const recognition = new ConfigurationRecognitionPass();
     const sourceFileAddressHandlesByFileName = readSourceFileAddressHandlesByFileName(evaluation);
+    const drafts = evaluation.sources.map((source) => this.recognizeSource(
+      recognition,
+      source,
+      typeSystem,
+      sourceFileAddressHandlesByFileName,
+    ));
+    const evaluationBindings = new ConfigurationEvaluationBindingFrame();
+    const emitter = new ConfigurationKernelEmitter(store, publication, evaluationBindings);
+    const moduleOrderByKey = new Map(evaluation.evaluationOrderModuleKeys.map((moduleKey, index) => [moduleKey, index]));
+    const emissionsBySource = drafts.map((draft) =>
+      new Array<ConfigurationKernelEmission | null>(draft.observations.length).fill(null)
+    );
+    const requests = drafts.flatMap((draft, sourceIndex) => {
+      const context = draft.context;
+      return context == null
+        ? []
+        : draft.observations.map((observation, observationIndex) =>
+          new ConfigurationObservationEmissionRequest(
+            moduleOrderByKey.get(context.moduleKey) ?? Number.MAX_SAFE_INTEGER,
+            sourceIndex,
+            observationIndex,
+            context,
+            observation,
+          )
+        );
+    });
+    requests.sort(compareConfigurationEmissionRequests);
+    for (const request of requests) {
+      emissionsBySource[request.sourceIndex]![request.observationIndex] = emitter.emitSequence(
+        request.context,
+        request.observation,
+        request.observationIndex,
+        resources,
+      );
+    }
+    const executionEmissions = [...requests]
+      .sort(compareConfigurationExecutionRequests)
+      .map((request) => emissionsBySource[request.sourceIndex]![request.observationIndex])
+      .filter(isConfigurationEmission);
     return new ConfigurationRecognitionProjectResult(
       project,
       evaluation,
-      evaluation.sources.map((source) =>
-        this.recognizeSource(
-          store,
-          publication,
-          recognition,
-          source,
-          resources,
-          typeSystem,
-          sourceFileAddressHandlesByFileName,
-        )
-      ),
+      drafts.map((draft, sourceIndex) => new ConfigurationRecognitionSourceResult(
+        draft.admission,
+        draft.observations,
+        aggregateConfigurationEmission(emissionsBySource[sourceIndex]!.filter(isConfigurationEmission)),
+        draft.unresolvedModules,
+      )),
+      aggregateConfigurationEmission(executionEmissions),
     );
   }
 
   private recognizeSource(
-    store: KernelStore,
-    publication: KernelPublicationContext,
     recognition: ConfigurationRecognitionPass,
     source: StaticProjectEvaluationResult['sources'][number],
-    resources: ResourceDefinitionIndex | null,
     typeSystem: TypeSystemProject | null,
     sourceFileAddressHandlesByFileName: ReadonlyMap<string, AddressHandle>,
-  ): ConfigurationRecognitionSourceResult {
+  ): ConfigurationRecognitionSourceDraft {
     if (!isEvaluatedProjectSource(source)) {
-      return new ConfigurationRecognitionSourceResult(
+      return new ConfigurationRecognitionSourceDraft(
         source.admission,
+        null,
         [],
-        emptyConfigurationEmission(),
         source.unresolvedModules,
       );
     }
-    const result: ConfigurationRecognitionResult = recognition.recognizeAndEmit(
-      store,
-      publication,
-      new ConfigurationRecognitionContext(
-        source.sourceFile,
-        source.moduleKey,
-        source.admission.projectKey,
-        source.admission.addressHandle,
-        source.evaluation,
-        typeSystem,
-        sourceFileAddressHandlesByFileName,
-      ),
-      resources,
+    const context = new ConfigurationRecognitionContext(
+      source.sourceFile,
+      source.moduleKey,
+      source.admission.projectKey,
+      source.admission.addressHandle,
+      source.evaluation,
+      typeSystem,
+      sourceFileAddressHandlesByFileName,
     );
-    return new ConfigurationRecognitionSourceResult(
+    return new ConfigurationRecognitionSourceDraft(
       source.admission,
-      result.observations,
-      result.emission,
+      context,
+      recognition.recognize(context),
       source.unresolvedModules,
     );
   }
+}
+
+function compareConfigurationExecutionRequests(
+  left: ConfigurationObservationEmissionRequest,
+  right: ConfigurationObservationEmissionRequest,
+): number {
+  const moduleOrder = left.moduleOrder - right.moduleOrder;
+  if (moduleOrder !== 0) {
+    return moduleOrder;
+  }
+  const source = left.sourceIndex - right.sourceIndex;
+  return source === 0 ? left.observationIndex - right.observationIndex : source;
+}
+
+function isConfigurationEmission(
+  emission: ConfigurationKernelEmission | null | undefined,
+): emission is ConfigurationKernelEmission {
+  return emission != null;
+}
+
+function compareConfigurationEmissionRequests(
+  left: ConfigurationObservationEmissionRequest,
+  right: ConfigurationObservationEmissionRequest,
+): number {
+  const rank = configurationObservationEmissionRank(left.observation)
+    - configurationObservationEmissionRank(right.observation);
+  if (rank !== 0) {
+    return rank;
+  }
+  const source = left.sourceIndex - right.sourceIndex;
+  const moduleOrder = left.moduleOrder - right.moduleOrder;
+  if (moduleOrder !== 0) {
+    return moduleOrder;
+  }
+  return source === 0 ? left.observationIndex - right.observationIndex : source;
+}
+
+const enum ConfigurationMaterializationRank {
+  /** Source-created containers must exist before their registrations and app facades spend them. */
+  ContainerCreation = 0,
+  /** Direct container registration follows construction while preserving evaluator module order. */
+  ContainerRegistration = 100,
+  /** Non-container sequences have no evaluator-identity prerequisite. */
+  Independent = 300,
+  /** App admission owns the facade product when a facade spans more than one source sequence. */
+  AppAdmission = 500,
+  /** Constructor/register-only facade sequences reference an app-owned facade when one exists. */
+  FacadeReference = 600,
+}
+
+function configurationObservationEmissionRank(
+  observation: ConfigurationSequenceObservation,
+): number {
+  const createdContainers = observation.steps
+    .filter((step) =>
+      step.stepKind === ConfigurationStepKind.CreateContainer
+      || step.stepKind === ConfigurationStepKind.CreateChildContainer
+    )
+    .flatMap((step) => step.containerEvaluation == null ? [] : [step.containerEvaluation]);
+  if (createdContainers.length > 0) {
+    return ConfigurationMaterializationRank.ContainerCreation
+      + Math.min(...createdContainers.map(containerEvaluationDepth));
+  }
+
+  if (observation.steps.some((step) => step.stepKind === ConfigurationStepKind.ContainerRegister)) {
+    return ConfigurationMaterializationRank.ContainerRegistration;
+  }
+
+  const facadeContainers = observation.steps.flatMap((step) =>
+    step.aureliaEvaluation?.containerEvaluation == null
+      ? []
+      : [step.aureliaEvaluation.containerEvaluation]
+  );
+  if (observation.steps.some((step) => step.stepKind === ConfigurationStepKind.AureliaApp)) {
+    return ConfigurationMaterializationRank.AppAdmission;
+  }
+  if (facadeContainers.length > 0) {
+    return ConfigurationMaterializationRank.FacadeReference;
+  }
+  return ConfigurationMaterializationRank.Independent;
+}
+
+function containerEvaluationDepth(
+  evaluation: AureliaContainerEvaluation,
+): number {
+  let depth = 0;
+  let current: AureliaContainerEvaluation | null = evaluation;
+  const visited = new Set<AureliaContainerEvaluation>();
+  while (current?.kind === AureliaContainerEvaluationKind.AuthoredChild && current.parent != null) {
+    if (visited.has(current)) {
+      return Number.MAX_SAFE_INTEGER;
+    }
+    visited.add(current);
+    depth += 1;
+    current = current.parent;
+  }
+  return depth;
 }
 
 export function readSourceFileAddressHandlesByFileName(
@@ -167,8 +320,4 @@ function aggregateConfigurationEmission(
     mergeConfigurationEvaluationBindings(emissions.map((emission) => emission.evaluationBindings)),
     emissions.flatMap((emission) => emission.records),
   );
-}
-
-function emptyConfigurationEmission(): ConfigurationKernelEmission {
-  return aggregateConfigurationEmission([]);
 }

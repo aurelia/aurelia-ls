@@ -15,6 +15,7 @@ import './side-effect';
 export type { Foo } from './types';
 export type * from './type-barrel';
 export { RuntimeThing, type RuntimeThingShape } from './runtime';
+export { RuntimeThing as RuntimeAlias } from './runtime';
 export interface ExportedInterface { value: string; }
 export type ExportedAlias = { value: string };
 export enum ExportedEnum { One = 1 }
@@ -42,7 +43,7 @@ const imports = record.imports.map((entry) => ({
 const exports = record.exports.map((entry) => ({
   exportKind: entry.exportKind,
   exportName: entry.exportName,
-  localName: entry.localName,
+  valueName: entry.valueName,
   moduleSpecifier: entry.moduleSpecifier,
 }));
 
@@ -87,9 +88,18 @@ const failures = [
     entry.exportKind === EvaluationExportKind.ReExport
     && entry.moduleSpecifier === './runtime'
     && entry.exportName === 'RuntimeThing'
+    && entry.valueName === 'RuntimeThing'
   )
     ? null
     : 'Expected value re-export RuntimeThing from ./runtime.',
+  exports.some((entry) =>
+    entry.exportKind === EvaluationExportKind.ReExport
+    && entry.moduleSpecifier === './runtime'
+    && entry.exportName === 'RuntimeAlias'
+    && entry.valueName === 'RuntimeThing'
+  )
+    ? null
+    : 'Expected aliased re-export RuntimeAlias to retain its supplying RuntimeThing export name.',
   exports.some((entry) => entry.moduleSpecifier === './types' || entry.moduleSpecifier === './type-barrel')
     ? 'Type-only export declarations should not create runtime export entries.'
     : null,
@@ -99,21 +109,21 @@ const failures = [
   exports.some((entry) =>
     entry.exportKind === EvaluationExportKind.Local
     && entry.exportName === 'ExportedEnum'
-    && entry.localName === 'ExportedEnum'
+    && entry.valueName === 'ExportedEnum'
   )
     ? null
     : 'Expected exported enum to remain a runtime local export.',
   exports.some((entry) =>
     entry.exportKind === EvaluationExportKind.Local
     && entry.exportName === 'ExportedClass'
-    && entry.localName === 'ExportedClass'
+    && entry.valueName === 'ExportedClass'
   )
     ? null
     : 'Expected exported class to remain a runtime local export.',
   exports.some((entry) =>
     entry.exportKind === EvaluationExportKind.Local
     && entry.exportName === 'localValue'
-    && entry.localName === 'localValue'
+    && entry.valueName === 'localValue'
   )
     ? null
     : 'Expected value-only local export list entry localValue.',

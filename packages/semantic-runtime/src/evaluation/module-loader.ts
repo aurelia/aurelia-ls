@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import { auLink } from '../kernel/au-link.js';
+import { readEvaluationEnumerableOwnEntries } from './enumerable-own-properties.js';
 import type {
   EvaluationObjectProperty,
   EvaluationValue,
@@ -39,6 +40,10 @@ export class AnalyzedModule {
   constructor(
     readonly raw: EvaluationValue,
     readonly items: readonly ModuleItem[],
+    /** Additional enumerable module entries may exist beyond `items`. */
+    readonly mayHaveUnknownItems: boolean,
+    /** Known entries may not occupy their retained relative positions at runtime. */
+    readonly mayHaveUnknownOrder: boolean,
   ) {}
 }
 
@@ -106,9 +111,15 @@ export class ModuleLoader {
     if (!isAnalyzableObject(value)) {
       return isOpenModuleLoaderInput(value)
         ? ModuleLoaderTransformResult.open()
-        : ModuleLoaderTransformResult.analyzed(new AnalyzedModule(value, []));
+        : ModuleLoaderTransformResult.analyzed(new AnalyzedModule(value, [], false, false));
     }
-    return ModuleLoaderTransformResult.analyzed(new AnalyzedModule(value, moduleItemsForObjectLikeValue(value)));
+    const enumerable = readEvaluationEnumerableOwnEntries(value);
+    return ModuleLoaderTransformResult.analyzed(new AnalyzedModule(
+      value,
+      moduleItemsForEntries(enumerable?.entries ?? []),
+      enumerable?.mayHaveUnknownEntries ?? true,
+      enumerable?.mayHaveUnknownOrder ?? true,
+    ));
   }
 }
 
@@ -146,33 +157,12 @@ function isOpenModuleLoaderInput(value: EvaluationValue): boolean {
     || value.kind === EvaluationValueKind.BoundaryValue;
 }
 
-function moduleItemsForObjectLikeValue(value: EvaluationValue): readonly ModuleItem[] {
-  switch (value.kind) {
-    case EvaluationValueKind.Object:
-    case EvaluationValueKind.BoundaryObject:
-    case EvaluationValueKind.Instance:
-      return moduleItemsForProperties(value.properties);
-    case EvaluationValueKind.ModuleNamespace:
-      return [...value.exports.entries()].flatMap(([key, exportValue]) =>
-        moduleItemForProperty(key, exportValue, null)
-      );
-    case EvaluationValueKind.Array:
-      return value.elements.flatMap((element, index) =>
-        moduleItemForProperty(String(index), element.value, null)
-      );
-    default:
-      return [];
-  }
-}
-
-function moduleItemsForProperties(
-  properties: ReadonlyMap<string, EvaluationObjectProperty>,
+function moduleItemsForEntries(
+  entries: NonNullable<ReturnType<typeof readEvaluationEnumerableOwnEntries>>['entries'],
 ): readonly ModuleItem[] {
-  const items: ModuleItem[] = [];
-  for (const [key, property] of properties) {
-    items.push(...moduleItemForProperty(key, property.value, property));
-  }
-  return items;
+  return entries.flatMap((entry) =>
+    moduleItemForProperty(entry.name, entry.value, entry.property)
+  );
 }
 
 function moduleItemForProperty(

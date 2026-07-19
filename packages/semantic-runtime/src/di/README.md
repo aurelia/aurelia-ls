@@ -35,7 +35,7 @@ registration admission to a modeled container.
 
 The runtime `Container` owns three important stores: `_resolvers`, `res`, and `_factories`. It also tracks disposable
 resolvers, parent/root relationships, and `ContainerConfiguration`. `register(...)` admits registries, resource
-definitions, static `$au` classes, object maps, and plain classes. `registerResolver(...)` mutates `_resolvers` and
+definitions, static `$au` classes, enumerable recursive carriers, and plain classes. `registerResolver(...)` mutates `_resolvers` and
 mirrors resource keys into `res`. Factory lookup is shared across the root container tree. Every container constructor
 also installs an `IContainer` self resolver that resolves to the requestor.
 
@@ -176,6 +176,12 @@ such as `IContainer` and `ITemplateCompiler` retain their canonical cross-packag
   compiler-world purposes. Runtime stores them through different mechanisms for performance, but the product model
   treats framework syntax as effectively app-global and frozen after configuration. Framework resource headers are
   still spent into `ContainerResourceSlot` products for ordinary resource lookup.
+- Framework DI effect packages own their modeled resolver/factory/task rows and residual **DI** coverage only. Resource,
+  syntax, renderer, compiler-world, and app-task materializers own closure for their own product families. In particular,
+  closed StandardConfiguration catalogs do not imply complete DI provider or coercion-configuration replay. Logger sink
+  selection and Validation-I18n customization remain explicitly open because those authored options can change DI rows;
+  Style's known creating task is closed. Publication consumes the shared DI effect result rather than maintaining a
+  second per-kind openness switch.
 - Resource inheritance should not reuse parent slot products as child-owned facts. The DI constructor that applies
   inheritance must create child slot products with their own provenance.
 - Runtime `deregister(...)` is intentionally not mirrored in the container emulator yet. It primarily serves HMR plugin
@@ -183,10 +189,11 @@ such as `IContainer` and `ITemplateCompiler` retain their canonical cross-packag
 
 ## Implementation Shape
 
-`world-constructor.ts` is the app-world spending pass. It consumes the typed products emitted by
-configuration recognition, installs each modeled container's built-in `IContainer` self resolver, mutates the live
-container emulator frames, and decides which configuration-owned registration admissions are spent against which
-container.
+`world-constructor.ts` is the app-world spending pass. It consumes the typed products emitted by configuration
+recognition, reads each modeled container's constructor-owned `IContainer` self resolver, mutates the live container
+emulator frames, and decides which configuration-owned registration admissions are spent against which container.
+Root and child container materializers both publish that self resolver when they create the container; world
+construction must not recreate it as a backup path.
 
 `world-publication.ts` owns the shared DI publication primitives used during that spending: source/provenance/open-seam
 records, resolver products and resolver slots, resource slots, source-backed DI issue products,
@@ -194,6 +201,16 @@ registry/parameterized-registry products, framework-created AppTask products, an
 `DiKeyIdentityEmitter` owns key identity emission used by that layer and by authored registration paths. Keep these
 product/source/claim envelopes and the key authority shared instead of rebuilding them inside the world-construction
 traversal.
+
+When DI spends a registration admission that is already open, the operation materialization retains the admission's
+exact open-seam handle. DI publishes another seam only when it discovers a new DI-owned blocker such as an unknown
+receiving container or an otherwise closed admission that cannot produce a slot. Do not translate registration reasons
+into parallel generic DI reasons.
+
+Capability admission spends that same materialization path before treating a seam as a blocker. A residual tied only
+to known framework admissions can block the capabilities those admissions carry; it cannot make unrelated plugin
+capabilities unknown merely because they share a container. Open or user-authored admissions remain conservatively
+unconstrained because they may still publish any DI key.
 
 Plugin, builder, registry-body, and standalone container-registration sequences can exist without being attached to an
 app root. A registration is spent only when its exact receiving container is known. Source-created standalone containers

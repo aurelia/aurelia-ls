@@ -1,8 +1,8 @@
 import {
   FrameworkRegistrationCapability,
-  FrameworkRegistrationRole,
   frameworkRegistrationDescriptorForKind,
   frameworkRegistrationKindsForCapability,
+  frameworkRegistrationSourceExportNameForKind,
 } from '../registration/framework-registration-manifest.js';
 import {
   FrameworkRegistrationKind,
@@ -48,13 +48,17 @@ export function aureliaFrameworkRegistrationAdmissionSource(
   if (moduleSpecifier == null) {
     return null;
   }
+  const sourceExportName = frameworkRegistrationSourceExportNameForKind(registrationKind);
+  if (sourceExportName == null) {
+    return null;
+  }
 
   const origin = sourcePlanAureliaFrameworkRegistrationAdmissionOrigin(registrationKind, model.capability);
   const importRequirement = {
     moduleSpecifier,
-    namedImports: [descriptor.exportName],
+    namedImports: [sourceExportName],
   };
-  const registrationExpression = descriptor.exportName;
+  const registrationExpression = sourceExportName;
   return {
     capability: model.capability,
     registrationKind,
@@ -90,15 +94,7 @@ function selectRegistrationKindForCapability(
 function registrationKindSupportsSourceOperation(
   kind: FrameworkRegistrationKind,
 ): boolean {
-  if (
-    kind === FrameworkRegistrationKind.AppTask
-    || kind === FrameworkRegistrationKind.StateDefaultConfiguration
-  ) {
-    return false;
-  }
-  const role = frameworkRegistrationDescriptorForKind(kind).role;
-  return role === FrameworkRegistrationRole.Configuration
-    || role === FrameworkRegistrationRole.RegistrationGroup;
+  return frameworkRegistrationSourceExportNameForKind(kind) != null;
 }
 
 function dependencySpecifiersForRegistrationKind(

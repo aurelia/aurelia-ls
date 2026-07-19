@@ -94,7 +94,7 @@ export function executeDiRegistryFunction(
     registerFunction,
     invocationNode,
     registerFunction.environment.moduleKey,
-    [containerValue, registryValue],
+    [containerValue],
     registryValue,
   );
   return new DiRegistryExecutionResult(result.value, result.openSeams, handledCalls);

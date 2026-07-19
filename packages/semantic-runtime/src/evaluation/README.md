@@ -237,6 +237,12 @@ separate from statement execution so module linkage and hoisting do not drift be
 `module` through it, and `StaticModuleGraphEvaluator` reads local CommonJS exports through the same helpers. Do not add
 separate `exports` / `module.exports` readers in graph or recognizer code.
 
+`enumerable-own-properties.ts` owns the evaluator's ECMAScript-shaped enumerable-own-property projection. Object
+intrinsics and recursive Aurelia registration carriers consume the same ordered entries for arrays, objects,
+instances, functions, boundary objects, and module namespaces. Module namespace projection retains live re-export
+identity, excludes ambiguous star exports, and stays open when export membership or order cannot close; recognizers
+must not rebuild a syntax-only object-map walker beside it.
+
 `literals.ts` owns array and object literal construction through a small host delegation boundary, similar to
 `intrinsics.ts`. Keep literal element/property traversal there, but keep recursion, property-name reading, seam policy,
 and unknown/boundary construction on `StaticEvaluator` so the extracted code does not become a second evaluator. Object
@@ -393,8 +399,10 @@ TypeScript-authored.
   and the old post-TypeScript path-probe retry should stay out unless a profile shows it resolves real modules.
 - `ModuleLoader` mirrors the framework's direct-input and promise-fulfillment distinction: direct values must be
   promises or non-null object-like values; promise fulfillments reject only nullish modules and otherwise produce an
-  analyzed module, with non-object fulfillments yielding an empty item list. `ModuleItem.definition` is deliberately
-  empty until resource-definition convergence owns the handoff from analyzed exports to resource definitions.
+  analyzed module, with non-object fulfillments yielding an empty item list. An analyzed module retains known items and
+  separate unknown-membership/order flags; consumers must not infer closure merely because known exports survived the
+  handoff. `ModuleItem.definition` is deliberately empty until resource-definition convergence owns the handoff from
+  analyzed exports to resource definitions.
 - `EvaluationKernelEmitter` currently maps evaluator seam kinds onto general `KernelVocabulary.Evaluation` keys.
   Keep this emitter narrow: it translates evaluator-local seams to product-owned seam vocabulary, but it must not
   learn Aurelia resource, configuration, registration, template, or DI semantics.

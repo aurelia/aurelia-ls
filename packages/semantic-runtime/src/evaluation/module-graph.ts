@@ -24,6 +24,8 @@ export const enum EvaluationExportKind {
   ReExport = 're-export',
   /** Export star from another module. */
   ExportAll = 'export-all',
+  /** Namespace object forwarded as one named export through `export * as name from`. */
+  NamespaceReExport = 'namespace-re-export',
   /** Default export assignment or declaration. */
   Default = 'default',
   /** TypeScript/CommonJS-shaped export assignment. */
@@ -53,8 +55,8 @@ export class EvaluationExportEntry {
     readonly exportKind: EvaluationExportKind,
     /** Exported name visible to importers. */
     readonly exportName: string,
-    /** Local binding name when the export comes from this module. */
-    readonly localName: string | null,
+    /** Local binding name or forwarded target-export name that supplies this export. */
+    readonly valueName: string | null,
     /** Target module specifier for re-exports. */
     readonly moduleSpecifier: string | null,
     /** Source node that declared the export. */
@@ -290,6 +292,17 @@ function readExportDeclarationEntries(statement: ts.ExportDeclaration): readonly
         ),
       ];
   }
+  if (ts.isNamespaceExport(statement.exportClause)) {
+    return moduleSpecifier == null
+      ? []
+      : [new EvaluationExportEntry(
+        EvaluationExportKind.NamespaceReExport,
+        statement.exportClause.name.text,
+        '*',
+        moduleSpecifier,
+        statement.exportClause,
+      )];
+  }
   if (!ts.isNamedExports(statement.exportClause)) {
     return [];
   }
@@ -300,7 +313,7 @@ function readExportDeclarationEntries(statement: ts.ExportDeclaration): readonly
       new EvaluationExportEntry(
         moduleSpecifier == null ? EvaluationExportKind.Local : EvaluationExportKind.ReExport,
         element.name.text,
-        moduleSpecifier == null ? element.propertyName?.text ?? element.name.text : null,
+        element.propertyName?.text ?? element.name.text,
         moduleSpecifier,
         element,
       )

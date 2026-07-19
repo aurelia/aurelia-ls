@@ -25,6 +25,7 @@ import {
   EvaluationBoundaryKind,
   EvaluationBoundaryObjectValue,
   EvaluationBoundaryValue,
+  EvaluationModuleNamespaceExport,
   EvaluationModuleNamespaceValue,
   EvaluationPromiseValue,
   EvaluationUnknownValue,
@@ -157,30 +158,45 @@ export class StaticModuleGraphEvaluator {
     }
 
     for (const entry of record.exports) {
-      if (entry.exportKind === EvaluationExportKind.Local && entry.exportName === exportName && entry.localName != null) {
-        return result.environment.readValue(entry.localName)
+      if (entry.exportKind === EvaluationExportKind.Local && entry.exportName === exportName && entry.valueName != null) {
+        return result.environment.readValue(entry.valueName)
           ?? this.openValue(`Local export '${exportName}' did not resolve to an environment binding.`, entry.node);
       }
       if (entry.exportKind === EvaluationExportKind.Default && exportName === 'default') {
-        return entry.localName == null
+        return entry.valueName == null
           ? this.openValue('Default export did not expose a local environment binding.', entry.node)
-          : result.environment.readValue(entry.localName)
+          : result.environment.readValue(entry.valueName)
             ?? this.openValue('Default export did not resolve to a static value.', entry.node);
       }
-      if (entry.exportKind === EvaluationExportKind.ReExport && entry.exportName === exportName && entry.moduleSpecifier != null) {
-        return this.readReExportValue(moduleKey, entry.moduleSpecifier, entry.exportName, entry.node, true);
+      if (
+        entry.exportKind === EvaluationExportKind.ReExport
+        && entry.exportName === exportName
+        && entry.moduleSpecifier != null
+        && entry.valueName != null
+      ) {
+        return this.readReExportValue(moduleKey, entry.moduleSpecifier, entry.valueName, entry.node, true);
+      }
+      if (
+        entry.exportKind === EvaluationExportKind.NamespaceReExport
+        && entry.exportName === exportName
+        && entry.moduleSpecifier != null
+      ) {
+        return this.readNamespaceReExportValue(moduleKey, entry.moduleSpecifier, entry.node);
       }
     }
 
     const exportAllCandidates = this.readExportAllCandidates(record, exportName);
-    if (exportAllCandidates.length === 1) {
-      const candidate = exportAllCandidates[0];
+    const uniqueExportAllCandidates = uniqueExportCandidates(exportAllCandidates);
+    if (uniqueExportAllCandidates.length === 1) {
+      const candidate = uniqueExportAllCandidates[0];
       if (candidate != null) {
-        return candidate;
+        return candidate.value;
       }
     }
-    if (exportAllCandidates.length > 1) {
-      return this.openValue(`Export '${exportName}' is ambiguous across export-star entries in ${moduleKey}.`, record.sourceFile);
+    if (uniqueExportAllCandidates.length > 1) {
+      return reportMissing
+        ? this.openValue(`Export '${exportName}' is ambiguous across export-star entries in ${moduleKey}.`, record.sourceFile)
+        : null;
     }
 
     const commonJsExport = readStaticCommonJsExportValue(result.environment, exportName);
@@ -236,8 +252,7 @@ export class StaticModuleGraphEvaluator {
           : externalImportBoundaryValue(entry));
     }
     if (entry.importKind === EvaluationImportKind.Namespace) {
-      this.evaluateModule(targetModuleKey);
-      return new EvaluationModuleNamespaceValue(targetModuleKey, this.readModuleExportMap(targetModuleKey), entry.node);
+      return this.readModuleNamespaceValue(targetModuleKey, entry.node);
     }
     const exportName = entry.exportName ?? 'default';
     return this.readExportValue(targetModuleKey, exportName)
@@ -268,7 +283,7 @@ export class StaticModuleGraphEvaluator {
     if (commonJsExport != null) {
       return commonJsExport;
     }
-    return new EvaluationModuleNamespaceValue(targetModuleKey, this.readModuleExportMap(targetModuleKey), node);
+    return this.readModuleNamespaceValue(targetModuleKey, node);
   }
 
   private resolveDynamicImportValue(
@@ -292,7 +307,7 @@ export class StaticModuleGraphEvaluator {
     }
     this.evaluateModule(targetModuleKey);
     return new EvaluationPromiseValue(
-      new EvaluationModuleNamespaceValue(targetModuleKey, this.readModuleExportMap(targetModuleKey), node),
+      this.readModuleNamespaceValue(targetModuleKey, node),
       node,
     );
   }
@@ -316,47 +331,281 @@ export class StaticModuleGraphEvaluator {
       : this.readExportValueCore(targetModuleKey, exportName, reportMissing);
   }
 
+  private readNamespaceReExportValue(
+    fromModuleKey: string,
+    moduleSpecifier: string,
+    node: ts.Node,
+  ): EvaluationValue {
+    const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, moduleSpecifier);
+    return targetModuleKey == null
+      ? isRelativeModuleSpecifier(moduleSpecifier)
+        ? this.openValue(`Namespace re-export '${moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`, node)
+        : new EvaluationBoundaryObjectValue(
+          EvaluationBoundaryKind.ExternalModule,
+          `namespace re-export '${moduleSpecifier}'`,
+          new Map(),
+          node,
+        )
+      : this.readModuleNamespaceValue(targetModuleKey, node);
+  }
+
   private readExportAllCandidates(
     record: EvaluationModuleRecord,
     exportName: string,
-  ): readonly EvaluationValue[] {
-    const candidates: EvaluationValue[] = [];
-    for (const entry of record.exports) {
+  ): readonly EvaluationExportCandidate[] {
+    const candidates: EvaluationExportCandidate[] = [];
+    for (const [index, entry] of record.exports.entries()) {
       if (entry.exportKind !== EvaluationExportKind.ExportAll || entry.moduleSpecifier == null) {
         continue;
       }
       const value = this.readReExportValue(record.moduleKey, entry.moduleSpecifier, exportName, entry.node, false);
       if (value != null && value.kind !== EvaluationValueKind.Unknown) {
-        candidates.push(value);
+        candidates.push(new EvaluationExportCandidate(
+          value,
+          this.readReExportBindingIdentity(record.moduleKey, entry.moduleSpecifier, exportName, new Set())
+            ?? `open:${record.moduleKey}:${index}:${exportName}`,
+        ));
       }
     }
     return candidates;
   }
 
-  private readModuleExportMap(moduleKey: string): ReadonlyMap<string, EvaluationValue> {
-    const exports = new Map<string, EvaluationValue>();
+  private readReExportBindingIdentity(
+    fromModuleKey: string,
+    moduleSpecifier: string,
+    exportName: string,
+    activeExports: Set<string>,
+  ): string | null {
+    const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, moduleSpecifier);
+    return targetModuleKey == null
+      ? isRelativeModuleSpecifier(moduleSpecifier)
+        ? null
+        : `external:${moduleSpecifier}:${exportName}`
+      : this.readExportBindingIdentity(targetModuleKey, exportName, activeExports);
+  }
+
+  /** Resolve ECMAScript export binding origin independently from the binding's current evaluator value. */
+  private readExportBindingIdentity(
+    moduleKey: string,
+    exportName: string,
+    activeExports: Set<string>,
+  ): string | null {
+    const activeKey = `${moduleKey}\0${exportName}`;
+    if (activeExports.has(activeKey)) {
+      return null;
+    }
     const record = this.graph.readModule(moduleKey);
     if (record == null) {
-      return exports;
+      return null;
     }
-    for (const entry of record.exports) {
-      if (entry.exportKind === EvaluationExportKind.ExportAll || entry.exportName === '*') {
+    activeExports.add(activeKey);
+    try {
+      for (const entry of record.exports) {
+        if (
+          entry.exportKind === EvaluationExportKind.Local
+          && entry.exportName === exportName
+          && entry.valueName != null
+        ) {
+          return this.readLocalBindingIdentity(record, entry.valueName, activeExports);
+        }
+        if (entry.exportKind === EvaluationExportKind.Default && exportName === 'default') {
+          return entry.valueName == null
+            ? null
+            : this.readLocalBindingIdentity(record, entry.valueName, activeExports);
+        }
+        if (
+          entry.exportKind === EvaluationExportKind.ReExport
+          && entry.exportName === exportName
+          && entry.moduleSpecifier != null
+          && entry.valueName != null
+        ) {
+          return this.readReExportBindingIdentity(
+            moduleKey,
+            entry.moduleSpecifier,
+            entry.valueName,
+            activeExports,
+          );
+        }
+        if (
+          entry.exportKind === EvaluationExportKind.NamespaceReExport
+          && entry.exportName === exportName
+          && entry.moduleSpecifier != null
+        ) {
+          const targetModuleKey = this.graph.readLinkedModule(moduleKey, entry.moduleSpecifier);
+          return targetModuleKey == null
+            ? isRelativeModuleSpecifier(entry.moduleSpecifier)
+              ? null
+              : `external-namespace:${entry.moduleSpecifier}`
+            : `module-namespace:${targetModuleKey}`;
+        }
+      }
+
+      const starIdentities = record.exports.flatMap((entry) => {
+        if (entry.exportKind !== EvaluationExportKind.ExportAll || entry.moduleSpecifier == null) {
+          return [];
+        }
+        const identity = this.readReExportBindingIdentity(
+          moduleKey,
+          entry.moduleSpecifier,
+          exportName,
+          activeExports,
+        );
+        return identity == null ? [] : [identity];
+      });
+      const uniqueStarIdentities = [...new Set(starIdentities)];
+      if (uniqueStarIdentities.length === 1) {
+        return uniqueStarIdentities[0] ?? null;
+      }
+      if (uniqueStarIdentities.length > 1) {
+        return null;
+      }
+
+      const result = this.evaluateModule(moduleKey);
+      return result != null && readStaticCommonJsExportValue(result.environment, exportName) != null
+        ? `commonjs:${moduleKey}:${exportName}`
+        : null;
+    } finally {
+      activeExports.delete(activeKey);
+    }
+  }
+
+  private readLocalBindingIdentity(
+    record: EvaluationModuleRecord,
+    localName: string,
+    activeExports: Set<string>,
+  ): string | null {
+    const imported = record.imports.find((entry) =>
+      entry.localName === localName
+      && entry.importKind !== EvaluationImportKind.SideEffect
+      && entry.importKind !== EvaluationImportKind.CommonJsRequire
+      && entry.importKind !== EvaluationImportKind.DynamicImport
+    );
+    if (imported == null) {
+      return `local:${record.moduleKey}:${localName}`;
+    }
+    const targetModuleKey = this.graph.readLinkedModule(record.moduleKey, imported.moduleSpecifier);
+    if (imported.importKind === EvaluationImportKind.Namespace) {
+      return targetModuleKey == null
+        ? isRelativeModuleSpecifier(imported.moduleSpecifier)
+          ? null
+          : `external-namespace:${imported.moduleSpecifier}`
+        : `module-namespace:${targetModuleKey}`;
+    }
+    const targetExportName = imported.exportName ?? 'default';
+    return targetModuleKey == null
+      ? isRelativeModuleSpecifier(imported.moduleSpecifier)
+        ? null
+        : `external:${imported.moduleSpecifier}:${targetExportName}`
+      : this.readExportBindingIdentity(targetModuleKey, targetExportName, activeExports);
+  }
+
+  private readModuleNamespaceValue(
+    moduleKey: string,
+    node: ts.Node,
+  ): EvaluationModuleNamespaceValue {
+    this.evaluateModule(moduleKey);
+    const names = this.readModuleNamespaceExportNames(moduleKey, new Set());
+    const exportEntries = new Map<string, EvaluationModuleNamespaceExport>();
+    let mayHaveUnknownExports = names.open;
+    for (const name of [...names.names].sort()) {
+      const value = this.readExportValueCore(moduleKey, name, false);
+      if (value == null) {
+        mayHaveUnknownExports = true;
         continue;
       }
-      const value = this.readExportValue(moduleKey, entry.exportName);
-      if (value != null) {
-        exports.set(entry.exportName, value);
+      mayHaveUnknownExports ||= value.kind === EvaluationValueKind.Unknown;
+      exportEntries.set(name, new EvaluationModuleNamespaceExport(
+        name,
+        value,
+        this.readModuleExportSourceNode(moduleKey, name, new Set()) ?? value.node,
+      ));
+    }
+    return new EvaluationModuleNamespaceValue(moduleKey, exportEntries, mayHaveUnknownExports, node);
+  }
+
+  private readModuleNamespaceExportNames(
+    moduleKey: string,
+    activeModules: Set<string>,
+  ): ModuleNamespaceExportNameSet {
+    if (activeModules.has(moduleKey)) {
+      return new ModuleNamespaceExportNameSet(new Set(), false);
+    }
+    const record = this.graph.readModule(moduleKey);
+    if (record == null) {
+      return new ModuleNamespaceExportNameSet(new Set(), true);
+    }
+    activeModules.add(moduleKey);
+    const names = new Set<string>();
+    let open = false;
+    for (const entry of record.exports) {
+      if (entry.exportKind === EvaluationExportKind.ExportAll || entry.exportName === '*' || entry.exportKind === EvaluationExportKind.ExportEquals) {
+        continue;
+      }
+      names.add(entry.exportName);
+    }
+    for (const entry of record.exports) {
+      if (entry.exportKind !== EvaluationExportKind.ExportAll || entry.moduleSpecifier == null) {
+        continue;
+      }
+      const targetModuleKey = this.graph.readLinkedModule(moduleKey, entry.moduleSpecifier);
+      if (targetModuleKey == null) {
+        open = true;
+        continue;
+      }
+      const nested = this.readModuleNamespaceExportNames(targetModuleKey, activeModules);
+      open ||= nested.open;
+      for (const name of nested.names) {
+        if (name !== 'default') {
+          names.add(name);
+        }
       }
     }
     const result = this.evaluateModule(moduleKey);
     if (result != null) {
       for (const [name, value] of readStaticCommonJsExportMap(result.environment)) {
-        if (!exports.has(name)) {
-          exports.set(name, value);
-        }
+        void value;
+        names.add(name);
+      }
+    } else {
+      open = true;
+    }
+    activeModules.delete(moduleKey);
+    return new ModuleNamespaceExportNameSet(names, open);
+  }
+
+  private readModuleExportSourceNode(
+    moduleKey: string,
+    exportName: string,
+    activeModules: Set<string>,
+  ): ts.Node | null {
+    if (activeModules.has(moduleKey)) {
+      return null;
+    }
+    activeModules.add(moduleKey);
+    const record = this.graph.readModule(moduleKey);
+    if (record == null) {
+      return null;
+    }
+    const explicit = record.exports.find((entry) =>
+      entry.exportKind !== EvaluationExportKind.ExportAll && entry.exportName === exportName
+    );
+    if (explicit != null) {
+      return explicit.node;
+    }
+    for (const entry of record.exports) {
+      if (entry.exportKind !== EvaluationExportKind.ExportAll || entry.moduleSpecifier == null) {
+        continue;
+      }
+      const targetModuleKey = this.graph.readLinkedModule(moduleKey, entry.moduleSpecifier);
+      if (targetModuleKey == null) {
+        continue;
+      }
+      const nested = this.readModuleExportSourceNode(targetModuleKey, exportName, activeModules);
+      if (nested != null) {
+        return nested;
       }
     }
-    return exports;
+    return null;
   }
 
   private openValue(reason: string, node: ts.Node | null): EvaluationUnknownValue {
@@ -364,6 +613,30 @@ export class StaticModuleGraphEvaluator {
     this.openValues.push(value);
     return value;
   }
+}
+
+class ModuleNamespaceExportNameSet {
+  constructor(
+    readonly names: ReadonlySet<string>,
+    readonly open: boolean,
+  ) {}
+}
+
+class EvaluationExportCandidate {
+  constructor(
+    readonly value: EvaluationValue,
+    readonly bindingIdentity: string,
+  ) {}
+}
+
+function uniqueExportCandidates(
+  candidates: readonly EvaluationExportCandidate[],
+): readonly EvaluationExportCandidate[] {
+  const byBindingIdentity = new Map<string, EvaluationExportCandidate>();
+  for (const candidate of candidates) {
+    byBindingIdentity.set(candidate.bindingIdentity, candidate);
+  }
+  return [...byBindingIdentity.values()];
 }
 
 function externalImportBoundaryValue(entry: EvaluationImportEntry): EvaluationValue {

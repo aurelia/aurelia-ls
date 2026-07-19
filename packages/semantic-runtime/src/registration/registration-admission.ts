@@ -27,8 +27,8 @@ export const enum RegistrationAdmissionKind {
   StaticResource = 'static-resource',
   /** Admission produced by an ordinary class fallback self-registration. */
   PlainClassFallback = 'plain-class-fallback',
-  /** Admission produced by one value inside an object-map registration. */
-  ObjectMapEntry = 'object-map-entry',
+  /** Admission produced by one value inside an array, object, or module-map registration carrier. */
+  RecursiveCarrierEntry = 'recursive-carrier-entry',
 }
 
 export const enum RegistrationStrategy {
@@ -54,8 +54,8 @@ export const enum RegistrationStrategy {
   Resource = 'resource',
   /** Register a plain class as itself. */
   PlainClassSelf = 'plain-class-self',
-  /** Recursively admit object/function values from an object map. */
-  ObjectMap = 'object-map',
+  /** Recursively admit object/function values from an array, object, or module-map carrier. */
+  RecursiveCarrier = 'recursive-carrier',
   /** Register an explicit resolver object. */
   Resolver = 'resolver',
   /** Runtime array resolver that preserves multiple resolver rows for the same key. */
@@ -174,7 +174,7 @@ export function isResolverRegistrationStrategy(strategy: RegistrationStrategy): 
     case RegistrationStrategy.Registry:
     case RegistrationStrategy.Resource:
     case RegistrationStrategy.PlainClassSelf:
-    case RegistrationStrategy.ObjectMap:
+    case RegistrationStrategy.RecursiveCarrier:
     case RegistrationStrategy.Factory:
     case RegistrationStrategy.FrameworkGroup:
       return false;

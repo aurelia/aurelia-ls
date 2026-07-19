@@ -241,25 +241,25 @@
       "domains": [
         "semantic-runtime",
         "configuration",
-      "binding",
-      "scope",
-      "type-system",
-      "provenance",
-      "runtime-assignment"
+        "binding",
+        "scope",
+        "type-system",
+        "provenance",
+        "runtime-assignment"
       ],
       "summary": "BindingScope, BindingContext, and OverrideContext are framework-shaped semantic models for runtime Scope lookup and template-visible names.",
-    "rationale": "Binding scope sits between controller activation, template locals, expression lookup, runtime assignment, and TypeChecker projection. It is intentionally modeled as a runtime concept with auLink anchors rather than as a TypeScript lexical scope or answer-local completion helper. Runtime ancestry, immutable state history, declaration identity, current value type, and author assignment authority are distinct axes on this model.",
+      "rationale": "Binding scope sits between controller activation, template locals, expression lookup, runtime assignment, and TypeChecker projection. It is intentionally modeled as a runtime concept with auLink anchors rather than as a TypeScript lexical scope or answer-local completion helper. Runtime ancestry, immutable state history, declaration identity, current value type, and author assignment authority are distinct axes on this model.",
       "guidance": [
         "Start here when expression lookup, `$parent`, `$this`, template locals, repeat locals, or branch-local scope overlays change.",
         "Keep runtime binding scope distinct from compiler resource scope and template-controller flow scope.",
-      "Use Scope product details for inquiry instead of peeking into controller construction or compiler-world internals.",
-      "Use BindingScope.lookup/locate/locateThis/locateBoundary for runtime name, `$this`, and boundary lookup; TypeChecker and source-value consumers should not carry their own parent-scope traversal loops.",
-      "Consumers that project ownership must retain BindingScope.locate(...).scope together with the selected slot. Do not collapse a located lookup to the slot and later substitute the active child scope as its owner.",
-      "Keep BindingScope.runtimeParent for Aurelia `$parent`/fallback traversal and BindingScope.predecessor for prior immutable states of the same runtime Scope identity. A state transition must not become a synthetic runtime ancestor.",
-      "Promise settlement and target-to-source binding writes use the generic runtime-assignment transition: lookup the assignment input state, update the selected context lane, then publish the post-write state for later reads. Do not create controller-specific result-local scope models.",
-      "BindingContextSlot.targetIdentityHandle/sourceAddressHandle own declaration identity and source; targetTypeMemberHandle reaches the declaration member detail; targetType is the current runtime value type; targetTypeSourceMemberHandle is an optional direct member carrier for spelling that type. Do not overwrite declaration identity with a value-flow member.",
-      "BindingContextSlot.assignmentAccessKind is template-author authority, not JavaScript descriptor shape. Repeat contextuals are framework-managed read-only for authors, including internally mutable `$index` and `$length`.",
-      "Direct authored Scope.create/fromParent/getContext nullish-argument failures are configuration-owned source/API issues; do not model them as rendered binding lookup fallbacks.",
+        "Use Scope product details for inquiry instead of peeking into controller construction or compiler-world internals.",
+        "Use BindingScope.lookup/locate/locateThis/locateBoundary for runtime name, `$this`, and boundary lookup; TypeChecker and source-value consumers should not carry their own parent-scope traversal loops.",
+        "Consumers that project ownership must retain BindingScope.locate(...).scope together with the selected slot. Do not collapse a located lookup to the slot and later substitute the active child scope as its owner.",
+        "Keep BindingScope.runtimeParent for Aurelia `$parent`/fallback traversal and BindingScope.predecessor for prior immutable states of the same runtime Scope identity. A state transition must not become a synthetic runtime ancestor.",
+        "Promise settlement and target-to-source binding writes use the generic runtime-assignment transition: lookup the assignment input state, update the selected context lane, then publish the post-write state for later reads. Do not create controller-specific result-local scope models.",
+        "BindingContextSlot.targetIdentityHandle/sourceAddressHandle own declaration identity and source; targetTypeMemberHandle reaches the declaration member detail; targetType is the current runtime value type; targetTypeSourceMemberHandle is an optional direct member carrier for spelling that type. Do not overwrite declaration identity with a value-flow member.",
+        "BindingContextSlot.assignmentAccessKind is template-author authority, not JavaScript descriptor shape. Repeat contextuals are framework-managed read-only for authors, including internally mutable `$index` and `$length`.",
+        "Direct authored Scope.create/fromParent/getContext nullish-argument failures are configuration-owned source/API issues; do not model them as rendered binding lookup fallbacks.",
         "Scope API issue spans should carry the boot-admitted source-file handle through sourceSiteForNode/sourceSpanAddressForSite. Do not fall back to filename re-resolution for this scanner-owned path.",
         "Scope API issue products should publish through ConfigurationIssuePublisher after the scanner-owned source span is created."
       ],
@@ -271,22 +271,22 @@
           "line": 280,
           "summary": "Runtime Scope semantic model."
         },
-      {
-        "kind": "source",
-        "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
-        "symbolName": "BindingContextSlot",
-        "summary": "Runtime scope slot with separate declaration identity, current type source, and author assignment authority."
-      },
-      {
-        "kind": "source",
-        "filePath": "packages/semantic-runtime/src/observation/binding-source-write-capability.ts",
-        "symbolName": "runtimeAssignmentInputScopeForAccessScope",
-        "summary": "Selects assignment input state without confusing immutable predecessor history with runtime ancestry."
-      },
-      {
-        "kind": "source",
-        "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
-        "symbolName": "BindingContext",
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
+          "symbolName": "BindingContextSlot",
+          "summary": "Runtime scope slot with separate declaration identity, current type source, and author assignment authority."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-source-write-capability.ts",
+          "symbolName": "runtimeAssignmentInputScopeForAccessScope",
+          "summary": "Selects assignment input state without confusing immutable predecessor history with runtime ancestry."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
+          "symbolName": "BindingContext",
           "line": 191,
           "summary": "Runtime BindingContext semantic model."
         },
@@ -348,7 +348,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-    "updatedAt": "2026-07-18"
+      "updatedAt": "2026-07-18"
     },
     {
       "id": "frontier:app-world-resource-visibility",
@@ -598,6 +598,94 @@
       ],
       "createdAt": "2026-05-14",
       "updatedAt": "2026-05-14"
+    },
+    {
+      "id": "decision:aurelia-facade-container-evaluation-identity",
+      "kind": "decision",
+      "domains": [
+        "configuration",
+        "semantic-runtime",
+        "evaluation",
+        "di",
+        "application"
+      ],
+      "summary": "Aurelia facades and authored containers retain exact evaluator identity through app-world materialization.",
+      "rationale": "Aurelia adopts the exact container passed to its constructor, child containers preserve parent lookup semantics, and separate quick-start static calls create separate app instances. Receiver spelling and source containment cannot prove those runtime identities. Static evaluation now carries immutable facade/container identities across aliases and modules; one project binding frame maps them to kernel products, and configuration materialization orders identity prerequisites without changing the published source sequence order.",
+      "guidance": [
+        "Use AureliaFacadeEvaluation and AureliaContainerEvaluation as candidate-local identity evidence; do not regroup app/container flows by receiver name or containing source file.",
+        "Use ConfigurationEvaluationBindingFrame as the sole project-run evaluator-to-product bridge. Do not retain evaluator objects in durable kernel records or rebuild a parallel name map downstream.",
+        "Materialize authored root and parent containers before child containers, registrations, and app admissions, while preserving authored/evaluator order in the published configuration products.",
+        "Implicit runtime-html and browser quick-start facades own distinct default containers; separate static Aurelia.register/app calls remain separate unless one evaluated facade chain proves shared identity.",
+        "Container construction owns exactly one IContainer self resolver. DI world construction consumes it and must not republish a backup self-resolver path.",
+        "AUR0768 same/ancestor-container facade reuse is execution-order-sensitive. Publish it only when ordered lifecycle evidence proves the offending construction, not from parent depth or final world state alone."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+          "symbolName": "AureliaFacadeEvaluation",
+          "summary": "Evaluator identity for one Aurelia facade and its exact selected container."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+          "symbolName": "AureliaContainerEvaluation",
+          "summary": "Evaluator identity for authored root/child and implicit facade containers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-evaluation-bindings.ts",
+          "symbolName": "ConfigurationEvaluationBindingFrame",
+          "summary": "Project-run evaluator identity to emitted product bridge."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-recognition-project-pass.ts",
+          "symbolName": "ConfigurationRecognitionProjectPass",
+          "summary": "Project-wide recognition and dependency-ranked materialization coordinator."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-app-frame-materializer.ts",
+          "symbolName": "AureliaAppFrameMaterializer",
+          "summary": "Consumes exact facade/container identity at the app-frame producer boundary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-materializer.ts",
+          "symbolName": "ContainerRootMaterializer",
+          "summary": "Constructor-owned root-container and self-resolver publication."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/di-authored-app-containers",
+          "summary": "Root, child, imported, function-returned, implicit, open, and static app identity pressure."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/configuration/README.md",
+          "summary": "Configuration evaluator-identity and app-frame ownership doctrine."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+          "symbolName": "AureliaFacadeEvaluation"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-evaluation-bindings.ts",
+          "symbolName": "ConfigurationEvaluationBindingFrame"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-recognition-project-pass.ts",
+          "symbolName": "ConfigurationRecognitionProjectPass"
+        }
+      ],
+      "createdAt": "2026-07-19",
+      "updatedAt": "2026-07-19"
     }
   ]
 }

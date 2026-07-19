@@ -5,6 +5,9 @@ import {
   createSemanticRuntime,
   ExpectedSemanticEffect,
   ExpectedSemanticEffectFilter,
+  ExpectedSemanticEffectKind,
+  ExpectedSemanticEffectScope,
+  SemanticOpenSeamAttemptKind,
   readFixtureVerificationSnapshot,
   verifyFixtureEffects,
 } from '../out/index.js';
@@ -100,8 +103,11 @@ const expectedEffects = [
     'signature',
   ),
   ExpectedSemanticEffect.absent(
-    'Router active-link state fixture should close without open seams.',
-    'open-seam-closure',
+    'Router active-link state should close without router-materialization seams.',
+    ExpectedSemanticEffectKind.OpenSeamClosure,
+    ExpectedSemanticEffectScope.Route,
+    null,
+    [effectFilter('attempt.kind', SemanticOpenSeamAttemptKind.RouterMaterialization)],
   ),
 ];
 

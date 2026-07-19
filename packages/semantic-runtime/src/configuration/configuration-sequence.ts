@@ -15,7 +15,7 @@ export const enum ConfigurationSequenceKind {
   Plugin = 'plugin',
   /** Sequence owned by an IRegistry-shaped value whose register body is being interpreted. */
   Registry = 'registry',
-  /** Sequence owned by a source-created root DI container. */
+  /** Sequence owned by a source-created DI container. */
   Container = 'container',
   /** Sequence owned by a builder-like configuration value before it is registered. */
   Builder = 'builder',
@@ -34,6 +34,8 @@ export const enum ConfigurationStepKind {
   ContainerRegister = 'container-register',
   /** A root container is created through `DI.createContainer(...)` or an imported equivalent. */
   CreateContainer = 'create-container',
+  /** A child container is created through `container.createChild(...)`. */
+  CreateChildContainer = 'create-child-container',
   /** An IRegistry-compatible value's `register(container, ...)` method is interpreted. */
   RegistryRegister = 'registry-register',
   /** A `.customize(...)` call produces or forwards configuration option contributions. */

@@ -699,6 +699,12 @@ function runtimeRendererCatalogSummaryForFrameworkKind(frameworkKind: FrameworkR
       return 'ValidationConfiguration admitted validation services but no runtime renderers.';
     case FrameworkRegistrationKind.ValidationHtmlConfiguration:
       return 'ValidationHtmlConfiguration admitted validation resources and services but no runtime renderers.';
+    case FrameworkRegistrationKind.ValidationI18nConfiguration:
+      return 'ValidationI18nConfiguration admitted localized validation services and resources but no runtime renderers.';
+    case FrameworkRegistrationKind.LoggerConfiguration:
+      return 'LoggerConfiguration admitted logging services but no runtime renderers.';
+    case FrameworkRegistrationKind.StyleConfiguration:
+      return 'StyleConfiguration admitted a shadow-DOM style lifecycle task but no runtime renderers.';
     case FrameworkRegistrationKind.RouterConfiguration:
       return 'RouterConfiguration admitted no runtime renderers in the current catalog.';
     case FrameworkRegistrationKind.RouterDefaultComponents:

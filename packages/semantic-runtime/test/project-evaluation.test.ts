@@ -156,6 +156,139 @@ describe('project static evaluation', () => {
       : []).toEqual(['after', 'after', 'after']);
     expect(self).toBe(registry);
   });
+
+  test('assembles module namespaces with re-export identity, ambiguity, closure, and namespace ordering', () => {
+    const root = temporaryProject({
+      'entry.ts': [
+        "import * as duplicate from './duplicate';",
+        "import * as ambiguous from './ambiguous';",
+        "import * as sameValueConflict from './same-value-conflict';",
+        "import * as cycle from './cycle-a';",
+        'export const duplicateNamespace = duplicate;',
+        'export const ambiguousNamespace = ambiguous;',
+        'export const sameValueConflictNamespace = sameValueConflict;',
+        'export const cycleNamespace = cycle;',
+      ].join('\n'),
+      'source.ts': [
+        "export const shared = { marker: 'shared' };",
+        "export default { marker: 'default' };",
+      ].join('\n'),
+      'same.ts': "export { shared } from './source';",
+      'star-a.ts': "export * from './source';",
+      'star-b.ts': "export * from './same';",
+      'duplicate.ts': [
+        "export * from './star-a';",
+        "export * from './star-b';",
+      ].join('\n'),
+      'conflict.ts': "export const shared = { marker: 'conflict' };",
+      'shared-value.ts': "export const sharedValue = { marker: 'same-value' };",
+      'same-value-a.ts': [
+        "import { sharedValue } from './shared-value';",
+        'export const collision = sharedValue;',
+      ].join('\n'),
+      'same-value-b.ts': [
+        "import { sharedValue } from './shared-value';",
+        'export const collision = sharedValue;',
+      ].join('\n'),
+      'same-value-conflict.ts': [
+        "export * from './same-value-a';",
+        "export * from './same-value-b';",
+      ].join('\n'),
+      'ambiguous.ts': [
+        "export { shared as renamed } from './source';",
+        "export * as sourceNamespace from './source';",
+        "export * from './star-a';",
+        "export * from './conflict';",
+      ].join('\n'),
+      'cycle-a.ts': [
+        "export const a = 'a';",
+        "export * from './cycle-b';",
+      ].join('\n'),
+      'cycle-b.ts': [
+        "export const b = 'b';",
+        "export * from './cycle-a';",
+      ].join('\n'),
+    });
+    const project = bootWorkspace({
+      rootDir: root,
+      storeKey: 'test:project-evaluation-module-namespace',
+      projects: [{
+        projectKey: 'module-namespace',
+        rootDir: root,
+        sourceFiles: [
+          { path: 'entry.ts' },
+          { path: 'source.ts' },
+          { path: 'same.ts' },
+          { path: 'star-a.ts' },
+          { path: 'star-b.ts' },
+          { path: 'duplicate.ts' },
+          { path: 'conflict.ts' },
+          { path: 'shared-value.ts' },
+          { path: 'same-value-a.ts' },
+          { path: 'same-value-b.ts' },
+          { path: 'same-value-conflict.ts' },
+          { path: 'ambiguous.ts' },
+          { path: 'cycle-a.ts' },
+          { path: 'cycle-b.ts' },
+        ],
+      }],
+    }).projects[0];
+    if (project == null) {
+      throw new Error('Expected one booted project.');
+    }
+
+    const evaluation = new StaticProjectEvaluationPass().evaluate(project);
+    const duplicate = evaluatedBinding(evaluation, 'entry.ts', 'duplicateNamespace');
+    const ambiguous = evaluatedBinding(evaluation, 'entry.ts', 'ambiguousNamespace');
+    const sameValueConflict = evaluatedBinding(evaluation, 'entry.ts', 'sameValueConflictNamespace');
+    const cycle = evaluatedBinding(evaluation, 'entry.ts', 'cycleNamespace');
+    const shared = evaluatedBinding(evaluation, 'source.ts', 'shared');
+
+    expect(duplicate.kind).toBe(EvaluationValueKind.ModuleNamespace);
+    expect(duplicate.kind === EvaluationValueKind.ModuleNamespace
+      ? [...duplicate.exportEntries.keys()]
+      : []).toEqual(['shared']);
+    expect(duplicate.kind === EvaluationValueKind.ModuleNamespace
+      ? duplicate.exportEntries.get('shared')?.value
+      : null).toBe(shared);
+    expect(duplicate.kind === EvaluationValueKind.ModuleNamespace
+      ? duplicate.mayHaveUnknownExports
+      : true).toBe(false);
+
+    expect(ambiguous.kind).toBe(EvaluationValueKind.ModuleNamespace);
+    expect(ambiguous.kind === EvaluationValueKind.ModuleNamespace
+      ? [...ambiguous.exportEntries.keys()]
+      : []).toEqual(['renamed', 'sourceNamespace']);
+    expect(ambiguous.kind === EvaluationValueKind.ModuleNamespace
+      ? ambiguous.exportEntries.get('renamed')?.value
+      : null).toBe(shared);
+    expect(ambiguous.kind === EvaluationValueKind.ModuleNamespace
+      ? ambiguous.mayHaveUnknownExports
+      : false).toBe(true);
+
+    expect(sameValueConflict.kind).toBe(EvaluationValueKind.ModuleNamespace);
+    expect(sameValueConflict.kind === EvaluationValueKind.ModuleNamespace
+      ? [...sameValueConflict.exportEntries.keys()]
+      : []).toEqual([]);
+    expect(sameValueConflict.kind === EvaluationValueKind.ModuleNamespace
+      ? sameValueConflict.mayHaveUnknownExports
+      : false).toBe(true);
+    const nestedNamespace = ambiguous.kind === EvaluationValueKind.ModuleNamespace
+      ? ambiguous.exportEntries.get('sourceNamespace')?.value ?? null
+      : null;
+    expect(nestedNamespace?.kind).toBe(EvaluationValueKind.ModuleNamespace);
+    expect(nestedNamespace?.kind === EvaluationValueKind.ModuleNamespace
+      ? [...nestedNamespace.exportEntries.keys()]
+      : []).toEqual(['default', 'shared']);
+
+    expect(cycle.kind).toBe(EvaluationValueKind.ModuleNamespace);
+    expect(cycle.kind === EvaluationValueKind.ModuleNamespace
+      ? [...cycle.exportEntries.keys()]
+      : []).toEqual(['a', 'b']);
+    expect(cycle.kind === EvaluationValueKind.ModuleNamespace
+      ? cycle.mayHaveUnknownExports
+      : true).toBe(false);
+  });
 });
 
 function temporaryProject(files: Readonly<Record<string, string>>): string {

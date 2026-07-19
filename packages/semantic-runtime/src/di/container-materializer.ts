@@ -48,6 +48,7 @@ import {
 } from './resolver.js';
 import { DiKeyIdentityEmitter } from './di-key-identity-emitter.js';
 import { FrameworkIntrinsicDiKey } from './framework-intrinsic-di-key.js';
+import { DiContainerSelfResolverPublicationMaterializer } from './world-publication.js';
 
 export class ContainerContextResolverSlotRequest {
   constructor(
@@ -73,7 +74,17 @@ export class ContainerRootMaterializationRequest {
 
 /** Shared root-container construction and publication used by app facades and direct `createContainer(...)` calls. */
 export class ContainerRootMaterializer {
-  constructor(private readonly store: KernelStore) {}
+  private readonly selfResolvers: DiContainerSelfResolverPublicationMaterializer;
+
+  constructor(
+    private readonly store: KernelStore,
+    records: KernelStoreReadView,
+  ) {
+    this.selfResolvers = new DiContainerSelfResolverPublicationMaterializer(
+      store,
+      new DiKeyIdentityEmitter(records),
+    );
+  }
 
   create(input: ContainerRootMaterializationRequest): Container {
     const local = `di-container:${input.localKey}`;
@@ -96,6 +107,8 @@ export class ContainerRootMaterializer {
     claimHandles: readonly ClaimHandle[] = [],
   ): readonly KernelStoreRecord[] {
     const local = `di-container:${input.localKey}`;
+    const selfResolver = this.selfResolvers.recordsForContainerSelfResolver(container);
+    container.registerSelfResolver(selfResolver.product);
     return [
       new ContainerIdentity(
         container.identityHandle,
@@ -118,6 +131,7 @@ export class ContainerRootMaterializer {
         [container.productHandle],
         claimHandles,
       ),
+      ...selfResolver.records,
     ];
   }
 }
@@ -221,6 +235,7 @@ const unmeasuredContainerChildMaterialization: ContainerChildMaterializationMeas
 /** Shared materializer for runtime-created child containers and their constructor/context slots. */
 export class ContainerChildMaterializer {
   private readonly keyIdentityEmitter: DiKeyIdentityEmitter;
+  private readonly selfResolvers: DiContainerSelfResolverPublicationMaterializer;
 
   constructor(
     /** Hot analysis store used for handle allocation and duplicate identity checks. */
@@ -229,6 +244,7 @@ export class ContainerChildMaterializer {
     records: KernelStoreReadView,
   ) {
     this.keyIdentityEmitter = new DiKeyIdentityEmitter(records);
+    this.selfResolvers = new DiContainerSelfResolverPublicationMaterializer(store, this.keyIdentityEmitter);
   }
 
   materializeChild(
@@ -243,9 +259,9 @@ export class ContainerChildMaterializer {
     ));
     const child = measure('container', () => this.createChildContainer(input, local));
     const selfResolver = measure('self-resolver', () =>
-      this.recordsForContainerSelfResolver(child, source.provenanceHandle)
+      this.selfResolvers.recordsForContainerSelfResolver(child)
     );
-    child.registerSelfResolver(selfResolver.slot);
+    child.registerSelfResolver(selfResolver.product);
     const contextResolvers = measure('context-resolvers', () =>
       this.recordsForContextResolverSlots(child, input, local, source.provenanceHandle)
     );
@@ -260,7 +276,7 @@ export class ContainerChildMaterializer {
 
     return new ContainerChildMaterializationEmission(
       child,
-      selfResolver.slot,
+      selfResolver.product,
       contextResolvers.slots,
       records,
     );
@@ -342,49 +358,6 @@ export class ContainerChildMaterializer {
       contextResolverSlots.push(slot.slot);
     });
     return new ContainerSlotEmissionSet(records, contextResolverSlots);
-  }
-
-  private recordsForContainerSelfResolver(
-    container: Container,
-    provenanceHandle: ProvenanceHandle,
-  ): ContainerSlotEmission<ContainerSelfResolverSlot> {
-    const local = `di-self-resolver:${container.productHandle}`;
-    const records: KernelStoreRecord[] = [];
-    const keyIdentityHandle = this.keyIdentityEmitter.interfaceKeyIdentityHandle(FrameworkIntrinsicDiKey.IContainer);
-    this.keyIdentityEmitter.emitInterfaceKeyIdentity(
-      records,
-      keyIdentityHandle,
-      FrameworkIntrinsicDiKey.IContainer,
-      null,
-      container.sourceAddressHandle,
-    );
-
-    const handles = this.containerSlotProductHandles(local, keyIdentityHandle);
-    const slot = this.containerSelfResolverSlot(container, handles);
-    records.push(
-      ...this.recordsForContainerSlotProduct(
-        local,
-        container,
-        handles,
-        KernelVocabulary.Di.SelfResolverSlot.key,
-        container.sourceAddressHandle,
-        provenanceHandle,
-      ),
-    );
-    return new ContainerSlotEmission(records, slot);
-  }
-
-  private containerSelfResolverSlot(
-    container: Container,
-    handles: ContainerSlotProductHandles,
-  ): ContainerSelfResolverSlot {
-    return new ContainerSelfResolverSlot(
-      handles.productHandle,
-      container.toReference(),
-      handles.keyIdentityHandle,
-      container.sourceAddressHandle,
-      [],
-    );
   }
 
   private recordsForContextResolverSlot(

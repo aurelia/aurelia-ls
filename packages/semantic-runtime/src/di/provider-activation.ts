@@ -1151,7 +1151,7 @@ export class DiProviderActivationSession {
       case RegistrationStrategy.Registry:
       case RegistrationStrategy.Resource:
       case RegistrationStrategy.PlainClassSelf:
-      case RegistrationStrategy.ObjectMap:
+      case RegistrationStrategy.RecursiveCarrier:
       case RegistrationStrategy.Resolver:
       case RegistrationStrategy.Array:
       case RegistrationStrategy.Factory:
@@ -1566,7 +1566,7 @@ export class DiProviderActivationSession {
       case RegistrationStrategy.Registry:
       case RegistrationStrategy.Resource:
       case RegistrationStrategy.PlainClassSelf:
-      case RegistrationStrategy.ObjectMap:
+      case RegistrationStrategy.RecursiveCarrier:
       case RegistrationStrategy.Resolver:
       case RegistrationStrategy.Array:
       case RegistrationStrategy.Factory:
@@ -2055,7 +2055,7 @@ function registrationValueKindCanConstruct(valueKind: RegistrationValueKind): bo
     case RegistrationValueKind.Factory:
     case RegistrationValueKind.ResourceDefinition:
     case RegistrationValueKind.Registry:
-    case RegistrationValueKind.ObjectMap:
+    case RegistrationValueKind.RecursiveCarrier:
     case RegistrationValueKind.FrameworkRegistration:
       return false;
   }

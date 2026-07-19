@@ -19,7 +19,7 @@ resource lookup tables, resolver slots, and dependency availability.
   self-registration.
 - Preserve key, registered value, resolver strategy, admission source, and field provenance as kernel-backed facts or
   products.
-- Emit open seams for dynamic keys, dynamic registered values, object maps, spreads, and unsupported
+- Emit open seams for dynamic keys, dynamic registered values, recursive carriers, spreads, and unsupported
   registry shapes.
 
 ## Non-Responsibilities
@@ -37,7 +37,7 @@ The kernel `Container.register(...)` accepts a wide admission surface:
 - metadata-backed resource definitions delegate to `ResourceDefinition.register`.
 - static `$au` resource classes produce resource keys and aliases, plus a singleton self-registration if needed.
 - ordinary classes fall back to singleton self-registration.
-- object maps are recursively registered by value.
+- enumerable recursive carriers are registered by value, including arrays, plain objects, and module namespaces.
 
 The tooling model should represent those as registration products and seams, not as immediate container mutations.
 That keeps registration analyzable before DI world construction exists.
@@ -68,7 +68,7 @@ That keeps registration analyzable before DI world construction exists.
 ## Implementation Shape
 
 `registration-observation.ts` is the AST-bearing layer. It records source carriers such as `Registration.*` calls,
-`container.register(...)`, static resource admission, object-map entries, and `IRegistry.register(...)` methods.
+`container.register(...)`, static resource admission, recursive-carrier entries, and `IRegistry.register(...)` methods.
 
 `registration-reference.ts` is the source-level reference layer. It names target keys and registered values without
 retaining TypeScript nodes in durable records. Container receivers belong to `di` operations, not registration
@@ -82,14 +82,22 @@ resolver, registry, or framework group. These products carry the same product ha
 `MaterializedProduct` envelope so callers can keep typed product indexes without smuggling product fields into the
 generic kernel product record.
 
-`framework-registration-manifest.ts` is the framework registration descriptor table. It maps known configuration
-exports, decomposed registration groups, chain methods, roles, and semantic capabilities such as runtime-html compiler
-services, default syntax, default resources, default renderers, i18n resource/syntax/renderer/service/task effects,
-validation service resolvers, validation-html resources and service/factory effects, router default
+`framework-registration-manifest.ts` is the framework registration descriptor table. It maps known export identities
+to semantic capabilities and evaluator construction recipes. Runtime register/customize/builder shape comes from the
+evaluated value itself; the manifest must not grow a second chain-method or carrier-shape state machine. Capabilities
+cover runtime-html compiler services, default syntax, default resources, default renderers, i18n
+resource/syntax/renderer/service/task effects, validation service resolvers, validation-html resources and
+service/factory effects, validation-i18n provider overrides, logger configuration, style lifecycle tasks, router default
 components/resources, router option resolvers, router lifecycle tasks, and state resource/syntax/renderer/service/task
 effects, plus dialog service resolvers and the dialog settings-provider task.
 `StandardConfiguration` is one broad capability bundle and discovery canary, not the only way those capabilities can
 enter an app world.
+
+Framework factory namespaces carry evaluator-only factory identity distinct from the `FrameworkRegistrationKind` of
+their results. Registration recognition spends a selected factory result, but preserves a precise open admission when
+a bare namespace is passed to `register(...)`; generic recursive-carrier traversal must not reinterpret its helper
+methods as plain-class providers. This distinction is structural and survives aliases through evaluator metadata, so
+no package/local-name exception is needed.
 
 Runtime-shaped `Resolver`, `IRegistry`, and `ParameterizedRegistry` values live in `../di/`. Registration admissions
 may point at those products, but they are not themselves the runtime values.
@@ -109,15 +117,11 @@ envelopes, materialization records, and open seams. Keep product admission frami
 materialization: the emitter owns admission/product classification and batch framing, while
 `RegistrationAdmissionSupportMaterializer` owns key, value, registry-parameter, and recognition-open-seam records.
 
-Registration emission is scope-owned. Standalone source-module recognition is useful for inquiry and low-level
-registration analysis. Configuration emission owns the registration products admitted by a concrete configuration
-step, and later DI world construction should spend those configuration-owned products when constructing an app
-container world.
-
-`registration-factory-recognizer.ts` recognizes the source carrier family for imported `Registration.*(...)`
-factory calls from `aurelia` or `@aurelia/kernel`, including namespace imports such as
-`Aurelia.Registration.singleton(...)`. This is source-shape recognition, not container reachability. Configuration and
-later DI world construction still decide whether a registration product participates in an app/container world.
+Registration emission is scope-owned. Configuration recognition owns the registration products admitted by a concrete
+configuration step, and later DI world construction spends those configuration-owned products when constructing an app
+container world. `Registration.*(...)` source calls are recognized in that corridor, while evaluator metadata preserves
+the same operation through aliases, recursive carriers, and module namespace exports. There is deliberately no separate
+source-wide registration pass: syntax occurrence alone does not establish container reachability.
 
 DI key identities are split in the kernel by runtime key shape: constructable, interface symbol, string, symbol,
 resource, resolver, or unknown. Constructable key identity must come from evaluator- or checker-proven runtime value

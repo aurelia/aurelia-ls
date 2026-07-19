@@ -1022,6 +1022,12 @@ function syntaxCatalogSummaryForFrameworkKind(frameworkKind: FrameworkRegistrati
       return 'ValidationConfiguration admitted validation services but no template syntax catalogs.';
     case FrameworkRegistrationKind.ValidationHtmlConfiguration:
       return 'ValidationHtmlConfiguration admitted validation resources and services but no additional template syntax catalogs.';
+    case FrameworkRegistrationKind.ValidationI18nConfiguration:
+      return 'ValidationI18nConfiguration admitted localized validation services and resources but no additional template syntax catalogs.';
+    case FrameworkRegistrationKind.LoggerConfiguration:
+      return 'LoggerConfiguration admitted logging services but no template syntax catalogs.';
+    case FrameworkRegistrationKind.StyleConfiguration:
+      return 'StyleConfiguration admitted a shadow-DOM style lifecycle task but no template syntax catalogs.';
     case FrameworkRegistrationKind.RouterConfiguration:
       return 'RouterConfiguration admitted no template syntax catalogs in the current materializer.';
     case FrameworkRegistrationKind.RouterDefaultComponents:

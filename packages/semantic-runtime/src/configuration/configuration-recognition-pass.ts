@@ -8,6 +8,7 @@ import type { ConfigurationSequenceObservation } from './configuration-observati
 import type { ConfigurationRecognitionContext } from './configuration-recognition-context.js';
 import { ConfigurationRecognizer } from './configuration-recognizer.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
+import { ConfigurationEvaluationBindingFrame } from './configuration-evaluation-bindings.js';
 
 /** Result of configuration recognition over one source module. */
 export class ConfigurationRecognitionResult {
@@ -34,7 +35,11 @@ export class ConfigurationRecognitionPass {
     resources: ResourceDefinitionIndex | null,
   ): ConfigurationRecognitionResult {
     const observations = this.recognize(context);
-    const emission = new ConfigurationKernelEmitter(store, publication).emit(context, observations, resources);
+    const emission = new ConfigurationKernelEmitter(
+      store,
+      publication,
+      new ConfigurationEvaluationBindingFrame(),
+    ).emit(context, observations, resources);
     return new ConfigurationRecognitionResult(observations, emission);
   }
 }

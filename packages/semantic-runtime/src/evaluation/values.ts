@@ -736,6 +736,16 @@ export class EvaluationInstanceValue {
   }
 }
 
+/** One named export retained by a statically assembled module namespace. */
+export class EvaluationModuleNamespaceExport {
+  constructor(
+    readonly name: string,
+    readonly value: EvaluationValue,
+    /** Export specifier or ultimate declaration that exposes this name, when known. */
+    readonly sourceNode: ts.Node | null,
+  ) {}
+}
+
 /** Module namespace assembled from linked exports. */
 export class EvaluationModuleNamespaceValue {
   readonly kind = EvaluationValueKind.ModuleNamespace;
@@ -743,8 +753,10 @@ export class EvaluationModuleNamespaceValue {
   constructor(
     /** Module key whose exports are represented by this namespace. */
     readonly moduleKey: string,
-    /** Export values by exported name. */
-    readonly exports: ReadonlyMap<string, EvaluationValue>,
+    /** Export rows by exported name in ECMAScript module-namespace key order. */
+    readonly exportEntries: ReadonlyMap<string, EvaluationModuleNamespaceExport>,
+    /** Whether unresolved star edges or ambiguous exports prevented exact namespace membership. */
+    readonly mayHaveUnknownExports: boolean,
     /** Syntax node that produced the namespace, when one exists. */
     readonly node: ts.Node | null = null,
   ) {}

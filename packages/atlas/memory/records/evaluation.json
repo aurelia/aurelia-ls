@@ -320,7 +320,8 @@
         "Local side-effect imports are module execution edges. If resource/configuration/router pressure sees an admitted source file but no evaluated products from it, check `evaluateSideEffectImport` before adding feature-local discovery.",
         "Keep Aurelia-specific ownership in evaluation policy, runtimeHost, or downstream recognizers; the module graph evaluator should stay ECMAScript-shaped.",
         "If external app analysis loses product-specific intrinsics during follow-up expression reads, check that callers reuse this graph result and runtime host.",
-        "Import entries retain the exact local binding node and canonical exported name. Aliased named imports and shorthand object properties should consume that evaluator identity instead of adding consumer-local spelling or alias resolution."
+        "Import entries retain the exact local binding node and canonical exported name. Aliased named imports and shorthand object properties should consume that evaluator identity instead of adding consumer-local spelling or alias resolution.",
+        "Module namespaces retain export identity, ECMAScript key order, ambiguity, cycles, and mayHaveUnknownExports. Structural consumers must preserve known exports plus that residual closure fact instead of rebuilding a flat export map."
       ],
       "anchors": [
         {
@@ -367,7 +368,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-13"
+      "updatedAt": "2026-07-19"
     },
     {
       "id": "frontier:evaluation-module-source-host",
@@ -572,7 +573,7 @@
         "ModuleLoaderIssueMaterializer scans evaluated project sources, so issue source spans must use the EvaluatedProjectSource admission handle rather than re-resolving the source file by name.",
         "Use EvaluationIssuePublisher for evaluation diagnostics so issue evidence, provenance, identity, and materialized-product records stay behind the shared kernel issue-publication primitive.",
         "Do not suppress `di.open-registry-body` for aliased registries with a shim; the honest next layer is resource-export and registry-body materialization from analyzed module items.",
-        "RegistryBodyReference now distinguishes framework-owned IRegistry body shape from framework-registration bundles; `aliasedResourcesRegistry(...)` closes only when module input and alias parameters are statically interpreted.",
+        "RegistryBodyReference distinguishes framework-owned IRegistry body shape from framework-registration bundles; `aliasedResourcesRegistry(...)` closes only when module membership/order and alias parameters are statically interpreted. Preserve known module items plus residual openness through AnalyzedModule rather than dropping either side.",
         "Generated body admissions currently materialize resource-definition module items with ResourceDefinition.register(container, alias) lookup-name overrides; non-resource module items remain explicit registration strategy pressure."
       ],
       "anchors": [
@@ -644,7 +645,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-07-19"
     },
     {
       "id": "frontier:evaluation-framework-api-issues",

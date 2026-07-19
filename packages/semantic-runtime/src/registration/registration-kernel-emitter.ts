@@ -74,9 +74,6 @@ import {
   RegistrationValueReference,
 } from './registration-reference.js';
 import {
-  isFrameworkRegistrationGroupKind,
-} from './framework-registration-manifest.js';
-import {
   DiKeyExpressionIdentityRequest,
   type DiKeyIdentityEmission,
   DiKeyIdentityEmitter,
@@ -314,12 +311,13 @@ class RegistrationAdmissionSupportMaterializer {
     const addressHandle = this.store.handles.address(`registration-key:${local}`);
     const evidenceHandle = this.store.handles.evidence(`registration-key:${local}`);
     const provenanceHandle = this.store.handles.provenance(`registration-key:${local}`);
+    const sourceFile = observation.node.getSourceFile();
     return new RegistrationObservationSourceSet(
       [
         new SourceSpanAddress(
           addressHandle,
-          context.sourceFileAddressHandle,
-          observation.node.getStart(context.sourceFile),
+          observation.sourceFileAddressHandle ?? context.sourceFileAddressHandle,
+          observation.node.getStart(sourceFile),
           observation.node.end,
           SourceSpanRole.Value,
         ),
@@ -778,7 +776,7 @@ export class RegistrationKernelEmitter {
     registryParameters: readonly RegistrationValueReference[],
   ): RegistrationAdmissionProductEmission {
     const frameworkKind = value?.frameworkKind ?? null;
-    if (frameworkKind != null && isFrameworkRegistrationGroupKind(frameworkKind)) {
+    if (frameworkKind != null && observation.strategy === RegistrationStrategy.FrameworkGroup) {
       return new RegistrationAdmissionProductEmission(
         new FrameworkRegistrationAdmission(
           productHandle,

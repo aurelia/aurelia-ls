@@ -11556,9 +11556,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "DialogConfigurationClassic factory wrapper",
       "DialogConfigurationClassic namespace import",
       "framework registration external import wrapper",
-      "frameworkRegistrationExternalImportValue",
+      "aureliaFrameworkExternalImportValue",
       "frameworkRegistrationExportEntriesForModule",
-      "frameworkRegistrationKindSupportsChainMethod",
+      "dialogConfigurationValue",
       "DialogConfiguration withChild",
       "child dialog configuration",
       "dialog child resolver",
@@ -11834,7 +11834,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
-        symbolName: "frameworkRegistrationExternalImportValue",
+        symbolName: "aureliaFrameworkExternalImportValue",
         role: "supporting",
         summary:
           "Maps named and namespace framework imports to evaluator-local framework-registration objects without generic DI seam suppression.",
@@ -13691,7 +13691,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "dialog_child_settings_not_found",
       "di.open-registry-body dialog",
       "framework registration external import wrapper",
-      "frameworkRegistrationExternalImportValue",
+      "aureliaFrameworkExternalImportValue",
       "frameworkRegistrationExportEntriesForModule",
     ],
     queryCanaries: [
@@ -13712,7 +13712,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         query:
-          "DialogConfigurationClassic const wrapper factory wrapper namespace import frameworkRegistrationExternalImportValue",
+          "DialogConfigurationClassic const wrapper factory wrapper namespace import aureliaFrameworkExternalImportValue",
         summary:
           "Dialog configuration wrappers should route through evaluator external-import framework registration synthesis before dialog diagnostics or DI seam policy changes.",
       },
@@ -13736,11 +13736,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/registration/framework-registration-manifest.ts",
-        symbolName: "frameworkRegistrationKindSupportsChainMethod",
+        filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+        symbolName: "dialogConfigurationValue",
         role: "supporting",
         summary:
-          "Framework registration chain-method predicate that admits DialogConfiguration.withChild.",
+          "Evaluator-owned DialogConfiguration value transition that preserves customize and withChild runtime identity.",
       },
       {
         kind: "source",
@@ -13753,7 +13753,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
-        symbolName: "frameworkRegistrationExternalImportValue",
+        symbolName: "aureliaFrameworkExternalImportValue",
         role: "supporting",
         summary:
           "Evaluator import synthesis for framework-registration values used by const/factory wrapper dialog configuration forms.",

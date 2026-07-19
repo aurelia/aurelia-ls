@@ -198,13 +198,13 @@ if (!overview.displayText.includes('open seam site(s)') || !overview.displayText
 if (!overview.displayText.includes('src/app.ts:4:48') || !overview.displayText.includes('src/app.ts:5:48')) {
   failures.push(`Expected app overview display text to include line/column seam samples, observed: ${overview.displayText}`);
 }
-if (!overview.displayText.includes('Open seam sample source roles: app-source x6') || !overview.displayText.includes('sourceRole=app-source')) {
+if (!overview.displayText.includes('Open seam sample source roles: app-source x7') || !overview.displayText.includes('sourceRole=app-source')) {
   failures.push(`Expected app overview display text to include seam source-role evidence, observed: ${overview.displayText}`);
 }
 if (!overview.displayText.includes('Open seam sample application roles: component-source x6') || !overview.displayText.includes('appRoles=component-source')) {
   failures.push(`Expected app overview display text to include seam application-role evidence, observed: ${overview.displayText}`);
 }
-if (!overview.displayText.includes('Open seam sample static evaluation origins: module-graph-dependency x6, static-evaluation-root x6') || !overview.displayText.includes('evalOrigins=module-graph-dependency+static-evaluation-root')) {
+if (!overview.displayText.includes('Open seam sample static evaluation origins: static-evaluation-root x7, module-graph-dependency x6') || !overview.displayText.includes('evalOrigins=module-graph-dependency+static-evaluation-root')) {
   failures.push(`Expected app overview display text to include static evaluation origin evidence, observed: ${overview.displayText}`);
 }
 const aliasQueryKinds = new Set(openSeamCatalogAlias.rows.map((row) => row.queryKind));

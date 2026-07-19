@@ -1,7 +1,7 @@
 import { SemanticClaim } from '../kernel/claim.js';
 import {
   OpenSeamReasonKind,
-  type OpenSeam,
+  OpenSeam,
 } from '../kernel/open-seam.js';
 import type {
   ClaimHandle,
@@ -72,7 +72,8 @@ import {
   RegistryBodyInterpretationState,
 } from '../registration/registration-reference.js';
 import {
-  frameworkRegistrationEffectsForKind,
+  FrameworkDiEffectCoverageState,
+  frameworkDiRegistrationEffectsForKind,
 } from './framework-registration-effects.js';
 import type { Container } from './container.js';
 import { ContainerRegistrationOperation } from './container-registration.js';
@@ -96,10 +97,8 @@ import {
 import { DiWorldConstructionEmission } from './world-construction.js';
 import {
   DiClaimEmission,
-  DiContainerSelfResolverPublicationMaterializer,
   DiFrameworkAppTaskPublicationMaterializer,
   DiFrameworkRegistrationEffectEmission,
-  DiProductEmission,
   DiRegistrationOperationEmission,
   DiRegistrationOperationHandles,
   DiRegistryPublicationMaterializer,
@@ -154,10 +153,12 @@ type DiRegistrationDirectSpender = (
   step: ConfigurationStep,
   admission: RegistrationAdmissionProduct,
   registryBodyInterpreted: boolean,
+  inheritedOpenSeams: readonly OpenSeam[],
 ) => DiRegistrationSpendingEmission;
 
 interface DiRegistrationSpendingCascadeServices {
   readonly admissionsByProduct: ReadonlyMap<ProductHandle, RegistrationAdmissionProduct>;
+  readonly openSeamsByAdmissionProduct: ReadonlyMap<ProductHandle, readonly OpenSeam[]>;
   readonly registryBodyIndex: RegistryBodyStepIndex;
   readonly issuePublisher: DiIssuePublisher;
   readonly spendDirect: DiRegistrationDirectSpender;
@@ -196,6 +197,16 @@ class DiRegistrationSpendingFrame {
   ): void {
     this.records.push(...seam.records);
     this.openSeams.push(seam.seam);
+  }
+
+  retainOpenSeams(seams: readonly OpenSeam[]): void {
+    const retained = new Set(this.openSeams.map((seam) => seam.handle));
+    for (const seam of seams) {
+      if (!retained.has(seam.handle)) {
+        this.openSeams.push(seam);
+        retained.add(seam.handle);
+      }
+    }
   }
 
   recordProductClaims(claims: DiClaimEmission): void {
@@ -394,8 +405,9 @@ class DiRegistrationSpendingCascade {
     try {
       const bodySteps = this.services.registryBodyIndex.stepsForAdmission(admission);
       const registryBodyInterpreted = this.services.registryBodyIndex.bodyInterpretedForAdmission(admission);
+      const inheritedOpenSeams = this.services.openSeamsByAdmissionProduct.get(admission.productHandle) ?? [];
       const frame = new DiRegistrationSpendingCascadeFrame(
-        this.services.spendDirect(container, step, admission, registryBodyInterpreted),
+        this.services.spendDirect(container, step, admission, registryBodyInterpreted, inheritedOpenSeams),
       );
       for (const bodyStep of bodySteps) {
         if (!this.recordBodyStep(frame, container, bodyStep)) {
@@ -491,10 +503,8 @@ class DiWorldConstructionFrame {
   readonly issues: DiIssue[] = [];
   readonly resourceIssues: ResourceIssue[] = [];
 
-  recordSelfResolver(container: Container, selfResolver: DiProductEmission<ContainerSelfResolverSlot>): void {
-    this.records.push(...selfResolver.records);
-    this.selfResolverSlots.push(selfResolver.product);
-    container.registerSelfResolver(selfResolver.product);
+  recordSelfResolver(selfResolver: ContainerSelfResolverSlot): void {
+    this.selfResolverSlots.push(selfResolver);
   }
 
   recordOpenSeam(
@@ -562,7 +572,6 @@ export class DiWorldConstructor {
   private readonly resourceSlotPublication: DiResourceSlotPublicationMaterializer;
   private readonly registryPublication: DiRegistryPublicationMaterializer;
   private readonly appTaskPublication: DiFrameworkAppTaskPublicationMaterializer;
-  private readonly selfResolverPublication: DiContainerSelfResolverPublicationMaterializer;
 
   constructor(
     /** Hot analysis store used only for deterministic handle allocation. */
@@ -575,7 +584,6 @@ export class DiWorldConstructor {
     this.resourceSlotPublication = new DiResourceSlotPublicationMaterializer(store, this.keyIdentityEmitter);
     this.registryPublication = new DiRegistryPublicationMaterializer(store);
     this.appTaskPublication = new DiFrameworkAppTaskPublicationMaterializer(store, publication, this.keyIdentityEmitter);
-    this.selfResolverPublication = new DiContainerSelfResolverPublicationMaterializer(store, this.keyIdentityEmitter);
   }
 
   construct(
@@ -635,9 +643,10 @@ export class DiWorldConstructor {
   ): DiRegistrationSpendingCascade {
     return new DiRegistrationSpendingCascade({
       admissionsByProduct,
+      openSeamsByAdmissionProduct: registrationAdmissionOpenSeamIndex(configuration),
       registryBodyIndex: buildRegistryBodyStepIndex(this.publication, configuration, evaluation),
       issuePublisher: new DiIssuePublisher(this.store),
-      spendDirect: (container, step, admission, registryBodyInterpreted) =>
+      spendDirect: (container, step, admission, registryBodyInterpreted, inheritedOpenSeams) =>
         this.recordsForRegistrationSpending(
           container,
           step,
@@ -648,6 +657,7 @@ export class DiWorldConstructor {
           projectKey,
           appTasksByProduct,
           registryBodyInterpreted,
+          inheritedOpenSeams,
         ),
     });
   }
@@ -659,7 +669,13 @@ export class DiWorldConstructor {
     const containersByProduct = new Map<ProductHandle, Container>();
     for (const container of configuration.containers) {
       containersByProduct.set(container.productHandle, container);
-      frame.recordSelfResolver(container, this.selfResolverPublication.recordsForContainerSelfResolver(container));
+      const selfResolvers = container.readResolverSlots().filter((slot): slot is ContainerSelfResolverSlot =>
+        slot instanceof ContainerSelfResolverSlot
+      );
+      if (selfResolvers.length !== 1) {
+        throw new Error('Every materialized DI container must own exactly one constructor self resolver.');
+      }
+      frame.recordSelfResolver(selfResolvers[0]!);
     }
     return containersByProduct;
   }
@@ -761,7 +777,8 @@ export class DiWorldConstructor {
     resourceDefinitions: ResourceDefinitionIndex | null,
     projectKey: string | null,
     appTasksByProduct: ReadonlyMap<ProductHandle, AppTaskDefinition>,
-    registryBodyInterpreted = false,
+    registryBodyInterpreted: boolean,
+    inheritedOpenSeams: readonly OpenSeam[],
   ): DiRegistrationSpendingEmission {
     const local = `di-registration:${container.productHandle}:${step.productHandle}:${admission.productHandle}`;
     const source = recordsForDiSource(this.store,
@@ -772,6 +789,7 @@ export class DiWorldConstructor {
     const operation = this.operationForAdmission(container, admission, local, source.provenanceHandle);
     container.register(operation.product);
     const frame = new DiRegistrationSpendingFrame(source, operation);
+    frame.retainOpenSeams(inheritedOpenSeams);
 
     this.spendRegistrationAdmission(
       frame,
@@ -868,6 +886,9 @@ export class DiWorldConstructor {
     admission: OpenRegistrationAdmission,
     local: string,
   ): void {
+    if (frame.openSeams.length > 0) {
+      return;
+    }
     frame.recordOpenSeam(recordsForDiOpenSeam(this.store,
       `${local}:open-admission`,
       KernelVocabulary.Di.OpenRegistrationSpending.key,
@@ -933,7 +954,7 @@ export class DiWorldConstructor {
       admission,
       local,
       provenanceHandle,
-      registryBodyInterpreted || frameworkRegistrationEffectsCloseRegistryBody(admission),
+      registryBodyInterpreted || frameworkDiEffectsCloseRegistryBody(admission),
     );
     frame.recordRegistry(emission);
     const registeredAppTask = appTaskForRegistryAdmission(admission, appTasksByProduct);
@@ -1027,7 +1048,7 @@ export class DiWorldConstructor {
       provenanceHandle,
     ));
 
-    const openSummary = summaryForFrameworkRegistrationOpen(admission.frameworkKind);
+    const openSummary = frameworkDiRegistrationEffectsForKind(admission.frameworkKind).openSummary;
     if (openSummary != null) {
       frame.recordOpenSeam(recordsForDiOpenSeam(this.store,
         `${local}:framework-registration-open`,
@@ -1383,7 +1404,7 @@ export class DiWorldConstructor {
       return new DiFrameworkRegistrationEffectEmission([], [], [], [], [], []);
     }
 
-    const frameworkEffects = frameworkRegistrationEffectsForKind(frameworkKind);
+    const frameworkEffects = frameworkDiRegistrationEffectsForKind(frameworkKind);
     const resourceEmission = this.recordsForConfiguredResourceSlots(
       container,
       admission,
@@ -1463,7 +1484,7 @@ function summaryForOpenRegistrationAdmission(admission: OpenRegistrationAdmissio
       return 'Resource registration admission was preserved for later resource-to-container spending.';
     case RegistrationStrategy.PlainClassSelf:
       return 'Plain-class fallback admission was preserved for later default resolver and auto-registration modeling.';
-    case RegistrationStrategy.ObjectMap:
+    case RegistrationStrategy.RecursiveCarrier:
       return 'Object-map registration admission was preserved for later recursive entry spending.';
     case RegistrationStrategy.Factory:
       return 'Factory registration admission was preserved for later factory-map modeling.';
@@ -1484,42 +1505,50 @@ function summaryForOpenRegistrationAdmission(admission: OpenRegistrationAdmissio
   }
 }
 
-function frameworkRegistrationEffectsCloseRegistryBody(admission: RegistrationAdmissionProduct): boolean {
+function frameworkDiEffectsCloseRegistryBody(admission: RegistrationAdmissionProduct): boolean {
   if (
     admission instanceof RegistryRegistrationAdmission
     && admission.registryValue?.registryBody?.state === RegistryBodyInterpretationState.Interpreted
   ) {
     return true;
   }
-  switch (frameworkRegistrationKindForAdmission(admission)) {
-    case FrameworkRegistrationKind.ValidationConfiguration:
-    case FrameworkRegistrationKind.ValidationHtmlConfiguration:
-    case FrameworkRegistrationKind.I18nConfiguration:
-    case FrameworkRegistrationKind.RouterConfiguration:
-    case FrameworkRegistrationKind.RouterDefaultComponents:
-    case FrameworkRegistrationKind.RouterDefaultResources:
-    case FrameworkRegistrationKind.StateDefaultConfiguration:
-    case FrameworkRegistrationKind.DialogConfiguration:
-    case FrameworkRegistrationKind.UiVirtualizationDefaultConfiguration:
-      return true;
-    case FrameworkRegistrationKind.StandardConfiguration:
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultComponents:
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
-    case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultRenderers:
-    case null:
-      return false;
-    case FrameworkRegistrationKind.AppTask:
-      return true;
-  }
+  const frameworkKind = frameworkRegistrationKindForAdmission(admission);
+  return frameworkKind != null
+    && frameworkDiRegistrationEffectsForKind(frameworkKind).coverageState === FrameworkDiEffectCoverageState.Closed;
 }
 
 function registrationAdmissionIndex(
   configuration: ConfigurationKernelEmission,
 ): ReadonlyMap<ProductHandle, RegistrationAdmissionProduct> {
   return new Map(configuration.registrationAdmissions.map((admission) => [admission.productHandle, admission] as const));
+}
+
+function registrationAdmissionOpenSeamIndex(
+  configuration: ConfigurationKernelEmission,
+): ReadonlyMap<ProductHandle, readonly OpenSeam[]> {
+  const admissionProducts = new Set(configuration.registrationAdmissions.map((admission) => admission.productHandle));
+  const seamsByHandle = new Map(configuration.records.flatMap((record) =>
+    record instanceof OpenSeam ? [[record.handle, record] as const] : []
+  ));
+  const result = new Map<ProductHandle, OpenSeam[]>();
+  for (const record of configuration.records) {
+    if (!(record instanceof MaterializationRecord) || record.openSeamHandles.length === 0) {
+      continue;
+    }
+    for (const productHandle of record.productHandles) {
+      if (!admissionProducts.has(productHandle)) {
+        continue;
+      }
+      const seams = record.openSeamHandles.flatMap((handle) => {
+        const seam = seamsByHandle.get(handle);
+        return seam == null ? [] : [seam];
+      });
+      if (seams.length > 0) {
+        result.set(productHandle, seams);
+      }
+    }
+  }
+  return result;
 }
 
 function appTaskIndex(
@@ -1544,45 +1573,6 @@ function emptyRegistrationSpendingCascade(): DiRegistrationSpendingCascadeEmissi
     resourceIssues: [],
     completion: DiRegistrationCascadeCompletion.Completed,
   };
-}
-
-function summaryForFrameworkRegistrationOpen(frameworkKind: FrameworkRegistrationKind): string | null {
-  switch (frameworkKind) {
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
-      return 'DefaultBindingSyntax spread syntax effects can be selected by template compilation; EventModifierRegistration and remaining DI effects are not spent yet.';
-    case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
-      return 'ShortHandBindingSyntax spread syntax effects can be selected by template compilation.';
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
-      return 'DefaultBindingLanguage spread syntax effects can be selected by template compilation.';
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
-      return 'DefaultResources spread resource headers can feed DI resource slots; non-resource spread effects are still open.';
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultComponents:
-      return 'DefaultComponents compiler service effects can feed compiler-world formation; remaining expanded registrations are not spent yet.';
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultRenderers:
-      return 'DefaultRenderers runtime renderer effects can feed template compilation; remaining expanded registrations are not spent yet.';
-    case FrameworkRegistrationKind.StandardConfiguration:
-      return 'StandardConfiguration syntax and default resource effects can feed template compilation, but DI has not spent the remaining resolver and renderer effects yet.';
-    case FrameworkRegistrationKind.I18nConfiguration:
-      return null;
-    case FrameworkRegistrationKind.ValidationConfiguration:
-      return null;
-    case FrameworkRegistrationKind.ValidationHtmlConfiguration:
-      return null;
-    case FrameworkRegistrationKind.RouterConfiguration:
-      return null;
-    case FrameworkRegistrationKind.RouterDefaultComponents:
-      return null;
-    case FrameworkRegistrationKind.RouterDefaultResources:
-      return null;
-    case FrameworkRegistrationKind.UiVirtualizationDefaultConfiguration:
-      return null;
-    case FrameworkRegistrationKind.StateDefaultConfiguration:
-      return null;
-    case FrameworkRegistrationKind.DialogConfiguration:
-      return null;
-    case FrameworkRegistrationKind.AppTask:
-      return null;
-  }
 }
 
 function appTaskForRegistryAdmission(

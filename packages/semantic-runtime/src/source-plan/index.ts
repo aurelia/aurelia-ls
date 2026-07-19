@@ -16,7 +16,6 @@ export * from './typescript-source-text.js';
 
 export {
   FrameworkRegistrationCapability,
-  FrameworkRegistrationRole,
 } from '../registration/framework-registration-manifest.js';
 export {
   FrameworkRegistrationKind,

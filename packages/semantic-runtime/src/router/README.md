@@ -367,11 +367,11 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 
 ## Watchpoints
 
-- App admission currently synthesizes one root container per recognized Aurelia app. It does not yet retain the
-  explicit container argument of `new Aurelia(container)` or connect authored `createContainer()` / `createChild()`
-  topology to `AppRoot`. Root-owned RouterOptions and duplicate registration are exact for modeled app roots, but
-  common-parent versus correctly forked multi-root registration requires that upstream configuration/DI ownership
-  work; do not add a router-local source scanner or infer ancestry from sequence order.
+- App admission retains evaluator identity for implicit roots, explicit `createContainer()` roots, and authored
+  `createChild()` topology. RouterOptions and registration spending therefore follow the exact container attached to
+  each `AppRoot`; do not add a router-local source scanner or infer ancestry from receiver names. Runtime rejection of
+  multiple Aurelia facades on the same or ancestor container remains execution-order-sensitive and belongs to the
+  configuration lifecycle lane, not router topology.
 - Router route configs can name components by strings, imported resource definitions, view-model classes, promises,
   navigation strategies, and nested viewport instructions. Keep those forms referential until a materializer has enough
   evaluated source facts to converge them.

@@ -1,6 +1,8 @@
 import ts from 'typescript';
+import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own-properties.js';
 import { readStaticStringArrayValue } from '../evaluation/expression-reader.js';
 import {
+  EvaluationObjectPropertyState,
   EvaluationValueKind,
   type EvaluationClassValue,
   type EvaluationFunctionValue,
@@ -9,7 +11,6 @@ import {
   type EvaluationValue,
 } from '../evaluation/values.js';
 import {
-  isImportedAureliaExpression,
   readDeclarationLocalName,
   readObjectPropertyExpression,
   readPropertyName,
@@ -42,21 +43,24 @@ import {
   RegistrationValueKind,
 } from '../registration/registration-reference.js';
 import {
-  frameworkRegistrationKindForExportName,
-  frameworkRegistrationKindSupportsChainMethod,
-  frameworkRegistrationKindsForModule,
-  isFrameworkRegistrationGroupKind,
-  isKnownConfigurationKind,
   traceNameForFrameworkRegistrationKind,
 } from '../registration/framework-registration-manifest.js';
 import {
   AureliaInterfaceDefaultRegistrationState,
   aureliaContainerEvaluationForValue,
+  aureliaFacadeEvaluationForValue,
+  aureliaFrameworkRegistrationFactoryEvaluationForValue,
+  aureliaFrameworkRegistrationEvaluationForValue,
   aureliaFrameworkRegistrationKindForEvaluationValue,
   aureliaInterfaceEvaluationForValue,
+  aureliaRegistrationFactoryEvaluationForValue,
   aureliaRegistryBodyForEvaluationValue,
+  AureliaContainerEvaluationKind,
+  AureliaFacadeContainerState,
   type AureliaContainerEvaluation,
+  type AureliaFacadeEvaluation,
   type AureliaInterfaceDefaultRegistrationEffect,
+  type AureliaRegistrationFactoryEvaluation,
 } from './aurelia-evaluation-runtime.js';
 import {
   AppTaskCallbackKind,
@@ -90,13 +94,6 @@ import {
   ConfigurationTargetObservation,
 } from './configuration-observation.js';
 
-const AURELIA_MODULES = new Set([
-  'aurelia',
-  '@aurelia/runtime-html',
-]);
-
-const AURELIA_BROWSER_FACADE_MODULE = 'aurelia';
-
 const REGISTRATION_MODULES = new Set([
   'aurelia',
   '@aurelia/kernel',
@@ -128,11 +125,6 @@ const APP_TASK_SLOT_NAMES = new Set<string>([
 ]);
 
 class ImportedBindings {
-  readonly aureliaIdentifiers = new Set<string>();
-  readonly aureliaNamespaces = new Set<string>();
-  readonly aureliaBrowserFacadeIdentifiers = new Set<string>();
-  readonly aureliaBrowserFacadeNamespaces = new Set<string>();
-  readonly aureliaInstanceIdentifiers = new Set<string>();
   readonly appTaskIdentifiers = new Set<string>();
   readonly appTaskNamespaces = new Set<string>();
   readonly registrationIdentifiers = new Set<string>();
@@ -143,8 +135,6 @@ class ImportedBindings {
   readonly containerDiIdentifiers = new Set<string>();
   readonly containerTypeIdentifiers = new Set<string>();
   readonly registryTypeIdentifiers = new Set<string>();
-  readonly knownFrameworkRegistrationIdentifiers = new Map<string, FrameworkRegistrationKind>();
-  readonly knownFrameworkRegistrationNamespaces = new Map<string, ReadonlySet<FrameworkRegistrationKind>>();
 }
 
 interface RegisterArgumentObservationSet {
@@ -181,19 +171,20 @@ function readConfigurationSequences(
   const registrySequences: ConfigurationSequenceObservation[] = [];
 
   const visit = (node: ts.Node): void => {
-    if (ts.isMethodDeclaration(node) && isRegistryRegisterMethod(node, bindings)) {
-      const registrySteps = readRegistryRegisterMethodSteps(context, bindings, node);
+    const registryFunction = readRegistryFunctionSource(node, bindings);
+    if (registryFunction != null) {
+      const registrySteps = readRegistryFunctionSteps(context, bindings, registryFunction.functionLike);
       registrySequences.push(new ConfigurationSequenceObservation(
         ConfigurationSequenceKind.Registry,
-        node.parent,
-        registryRegisterMethodLocalName(node),
+        registryFunction.owner,
+        registryFunction.localName,
         registrySteps,
       ));
       return;
     }
 
     if (ts.isNewExpression(node)) {
-      const step = recognizeAureliaConstructor(node, bindings);
+      const step = recognizeAureliaConstructor(context, node);
       if (step != null) {
         globalSteps.push(step);
       }
@@ -225,7 +216,7 @@ function globalSequenceForSteps(
   if (sorted.length === 0) {
     return [];
   }
-  const receiverGroups = splitGlobalStepsByReceiver(context.sourceFile, sorted);
+  const receiverGroups = splitGlobalStepsByReceiver(sorted);
   if (receiverGroups == null) {
     return [
       new ConfigurationSequenceObservation(
@@ -251,14 +242,15 @@ interface GlobalConfigurationStepGroup {
   readonly steps: readonly ConfigurationStepObservation[];
 }
 
-type GlobalConfigurationStepGroupKey = string | AureliaContainerEvaluation;
+type GlobalConfigurationStepGroupKey = string | AureliaContainerEvaluation | AureliaFacadeEvaluation;
 
 function splitGlobalStepsByReceiver(
-  sourceFile: ts.SourceFile,
   steps: readonly ConfigurationStepObservation[],
 ): readonly GlobalConfigurationStepGroup[] | null {
   if (!steps.some((step) =>
-    aureliaStepReceiverName(step) != null
+    step.aureliaEvaluation != null
+    || step.containerEvaluation != null
+    || aureliaStepReceiverName(step) != null
     || containerStepReceiverName(step) != null
   )) {
     return null;
@@ -277,7 +269,7 @@ function splitGlobalStepsByReceiver(
   };
 
   steps.forEach((step, index) => {
-    const key = configurationStepGroupKey(sourceFile, step, steps)
+    const key = configurationStepGroupKey(step)
       ?? `global:${index}`;
     append(key, step);
   });
@@ -291,10 +283,11 @@ function splitGlobalStepsByReceiver(
 }
 
 function configurationStepGroupKey(
-  sourceFile: ts.SourceFile,
   step: ConfigurationStepObservation,
-  steps: readonly ConfigurationStepObservation[],
 ): GlobalConfigurationStepGroupKey | null {
+  if (step.aureliaEvaluation != null) {
+    return step.aureliaEvaluation;
+  }
   if (step.containerEvaluation != null) {
     return step.containerEvaluation;
   }
@@ -302,8 +295,8 @@ function configurationStepGroupKey(
   if (containerReceiver != null) {
     return `container:${containerReceiver}`;
   }
-  const aureliaKey = aureliaStepGroupKey(sourceFile, step, steps);
-  return aureliaKey == null ? null : `aurelia:${aureliaKey}`;
+  const aureliaReceiver = aureliaStepReceiverName(step);
+  return aureliaReceiver == null ? null : `aurelia:${aureliaReceiver}`;
 }
 
 function configurationStepGroupLocalName(key: string): string | null {
@@ -316,18 +309,6 @@ function configurationStepGroupLocalName(key: string): string | null {
     return localName.startsWith('aurelia-constructor:') ? null : localName;
   }
   return null;
-}
-
-function aureliaStepGroupKey(
-  sourceFile: ts.SourceFile,
-  step: ConfigurationStepObservation,
-  steps: readonly ConfigurationStepObservation[],
-): string | null {
-  const receiver = aureliaStepReceiverName(step);
-  const constructorKey = relatedAureliaConstructorStepKey(sourceFile, step, steps);
-  return receiver == null || receiver === 'Aurelia'
-    ? constructorKey ?? receiver
-    : receiver;
 }
 
 function aureliaStepReceiverName(
@@ -348,6 +329,7 @@ function containerStepReceiverName(
 ): string | null {
   switch (step.stepKind) {
     case ConfigurationStepKind.CreateContainer:
+    case ConfigurationStepKind.CreateChildContainer:
     case ConfigurationStepKind.ContainerRegister:
       return step.receiverLocalName;
     default:
@@ -355,52 +337,12 @@ function containerStepReceiverName(
   }
 }
 
-function relatedAureliaConstructorStepKey(
-  sourceFile: ts.SourceFile,
-  step: ConfigurationStepObservation,
-  steps: readonly ConfigurationStepObservation[],
-): string | null {
-  const related = steps
-    .filter((candidate) =>
-      candidate.stepKind === ConfigurationStepKind.CreateAurelia
-      && (
-        candidate === step
-        || sourceContainsNode(sourceFile, candidate.sourceNode, step.sourceNode)
-        || sourceContainsNode(sourceFile, step.sourceNode, candidate.sourceNode)
-      )
-    )
-    .sort((left, right) => sourceSpanLength(left.sourceNode) - sourceSpanLength(right.sourceNode));
-  const owner = related[0] ?? null;
-  return owner == null
-    ? null
-    : [
-      'aurelia-constructor',
-      owner.sourceNode.getStart(sourceFile).toString(),
-      owner.sourceNode.end.toString(),
-    ].join(':');
-}
-
-function sourceContainsNode(
-  sourceFile: ts.SourceFile,
-  outer: ts.Node,
-  inner: ts.Node,
-): boolean {
-  return outer.getStart(sourceFile) <= inner.getStart(sourceFile)
-    && inner.end <= outer.end;
-}
-
-function sourceSpanLength(
-  node: ts.Node,
-): number {
-  return node.end - node.getStart();
-}
-
-function readRegistryRegisterMethodSteps(
+function readRegistryFunctionSteps(
   context: ConfigurationRecognitionContext,
   bindings: ImportedBindings,
-  method: ts.MethodDeclaration,
+  functionLike: ts.FunctionLikeDeclaration,
 ): readonly ConfigurationStepObservation[] {
-  const body = method.body;
+  const body = functionLike.body;
   if (body == null) {
     return [];
   }
@@ -470,15 +412,17 @@ function findSourceFunctionDeclaration(
 }
 
 function recognizeAureliaConstructor(
+  context: ConfigurationRecognitionContext,
   node: ts.NewExpression,
-  bindings: ImportedBindings,
 ): ConfigurationStepObservation | null {
-  const expression = unwrapExpression(node.expression);
-  if (!isImportedAureliaExpression(expression, bindings)) {
+  const evaluation = aureliaFacadeEvaluationForValue(
+    context.expressionReader.evaluateExpression(node).value,
+  );
+  if (evaluation == null) {
     return null;
   }
 
-  const defaultAdmissions = isImportedAureliaBrowserFacadeExpression(expression, bindings) && (node.arguments?.length ?? 0) === 0
+  const defaultAdmissions = evaluation.includesBrowserDefaults
     ? [aureliaBrowserFacadeDefaultRegistration(node)]
     : [];
   return new ConfigurationStepObservation(
@@ -490,6 +434,9 @@ function recognizeAureliaConstructor(
     [],
     [],
     defaultAdmissions,
+    aureliaFacadeOpenSeams(evaluation, node),
+    null,
+    evaluation,
   );
 }
 
@@ -516,14 +463,29 @@ function recognizeCall(
 function recognizeContainerFactoryCall(
   context: ConfigurationRecognitionContext,
   call: ts.CallExpression,
-  bindings: ImportedBindings,
+  _bindings: ImportedBindings,
 ): ConfigurationStepObservation | null {
-  if (!isContainerFactoryCall(call, bindings)) {
+  const containerEvaluation = aureliaContainerEvaluationForValue(
+    context.expressionReader.evaluateExpression(call).value,
+  );
+  if (
+    containerEvaluation == null
+    || containerEvaluation.sourceNode !== call
+    || (
+      containerEvaluation.kind !== AureliaContainerEvaluationKind.AuthoredRoot
+      && containerEvaluation.kind !== AureliaContainerEvaluationKind.AuthoredChild
+    )
+  ) {
     return null;
   }
+  const isChild = containerEvaluation.kind === AureliaContainerEvaluationKind.AuthoredChild;
   return new ConfigurationStepObservation(
-    ConfigurationCarrierKind.ContainerFactoryCall,
-    ConfigurationStepKind.CreateContainer,
+    isChild
+      ? ConfigurationCarrierKind.ContainerChildFactoryCall
+      : ConfigurationCarrierKind.ContainerFactoryCall,
+    isChild
+      ? ConfigurationStepKind.CreateChildContainer
+      : ConfigurationStepKind.CreateContainer,
     call,
     containerFactoryLocalName(call),
     null,
@@ -531,7 +493,7 @@ function recognizeContainerFactoryCall(
     [],
     [],
     [],
-    aureliaContainerEvaluationForValue(context.expressionReader.evaluateExpression(call).value),
+    containerEvaluation,
   );
 }
 
@@ -547,11 +509,17 @@ function recognizeStaticAureliaCall(
   call: ts.CallExpression,
   bindings: ImportedBindings,
 ): ConfigurationStepObservation | null {
-  switch (readAureliaStaticMethod(call, bindings)) {
+  const evaluation = aureliaFacadeEvaluationForValue(
+    context.expressionReader.evaluateExpression(call).value,
+  );
+  if (evaluation == null || evaluation.sourceNode !== call) {
+    return null;
+  }
+  switch (readCallMemberName(call)) {
     case 'app':
-      return recognizeStaticAureliaAppCall(context, call, bindings);
+      return recognizeStaticAureliaAppCall(context, call, evaluation);
     case 'register':
-      return recognizeStaticAureliaRegisterCall(context, call, bindings);
+      return recognizeStaticAureliaRegisterCall(context, call, bindings, evaluation);
     default:
       return null;
   }
@@ -560,7 +528,7 @@ function recognizeStaticAureliaCall(
 function recognizeStaticAureliaAppCall(
   context: ConfigurationRecognitionContext,
   call: ts.CallExpression,
-  bindings: ImportedBindings,
+  evaluation: AureliaFacadeEvaluation,
 ): ConfigurationStepObservation {
   return new ConfigurationStepObservation(
     ConfigurationCarrierKind.AureliaStaticApp,
@@ -570,10 +538,15 @@ function recognizeStaticAureliaAppCall(
     readAppRootConfig(context, call.arguments[0] ?? null),
     [],
     [],
-    isAureliaStaticBrowserFacadeCall(call, bindings)
+    evaluation.includesBrowserDefaults
       ? [aureliaBrowserFacadeDefaultRegistration(call)]
       : [],
-    missingArgumentOpen(call, call.arguments[0] ?? null, 'Aurelia.app(...) did not expose an app-root config argument.'),
+    [
+      ...missingArgumentOpen(call, call.arguments[0] ?? null, 'Aurelia.app(...) did not expose an app-root config argument.'),
+      ...aureliaFacadeOpenSeams(evaluation, call),
+    ],
+    null,
+    evaluation,
   );
 }
 
@@ -581,6 +554,7 @@ function recognizeStaticAureliaRegisterCall(
   context: ConfigurationRecognitionContext,
   call: ts.CallExpression,
   bindings: ImportedBindings,
+  evaluation: AureliaFacadeEvaluation,
 ): ConfigurationStepObservation {
   const registrationArguments = readRegisterArgumentObservations(
     context,
@@ -598,12 +572,17 @@ function recognizeStaticAureliaRegisterCall(
     registrationArguments.appTasks,
     [],
     [
-      ...(isAureliaStaticBrowserFacadeCall(call, bindings)
+      ...(evaluation.includesBrowserDefaults
         ? [aureliaBrowserFacadeDefaultRegistration(call)]
         : []),
       ...registrationArguments.admissions,
     ],
-    readSpreadOpens(context, call, bindings),
+    [
+      ...readSpreadOpens(context, call),
+      ...aureliaFacadeOpenSeams(evaluation, call),
+    ],
+    null,
+    evaluation,
   );
 }
 
@@ -620,18 +599,21 @@ function recognizeMemberCall(
     case 'register':
       return recognizeRegisterCall(context, call, bindings, insideRegistryRegisterMethod);
     case 'customize':
-      return recognizeCustomizeCall(context, call, bindings);
+      return recognizeCustomizeCall(context, call);
     default:
-      return recognizeBuilderMutationCall(context, call, bindings, memberName);
+      return recognizeBuilderMutationCall(context, call, memberName);
   }
 }
 
 function recognizeAureliaAppCall(
   context: ConfigurationRecognitionContext,
   call: ts.CallExpression,
-  bindings: ImportedBindings,
+  _bindings: ImportedBindings,
 ): ConfigurationStepObservation | null {
-  return !isAureliaReceiver(call, bindings)
+  const evaluation = aureliaFacadeEvaluationForValue(
+    context.expressionReader.evaluateExpression(call).value,
+  );
+  return evaluation == null
     ? null
     : new ConfigurationStepObservation(
       ConfigurationCarrierKind.AureliaAppCall,
@@ -642,7 +624,12 @@ function recognizeAureliaAppCall(
       [],
       [],
       [],
-      missingArgumentOpen(call, call.arguments[0] ?? null, 'Aurelia app call did not expose an app-root config argument.'),
+      [
+        ...missingArgumentOpen(call, call.arguments[0] ?? null, 'Aurelia app call did not expose an app-root config argument.'),
+        ...aureliaFacadeOpenSeams(evaluation, call),
+      ],
+      null,
+      evaluation,
     );
 }
 
@@ -652,7 +639,10 @@ function recognizeRegisterCall(
   bindings: ImportedBindings,
   insideRegistryRegisterMethod: boolean,
 ): ConfigurationStepObservation | null {
-  const aureliaReceiver = isAureliaReceiver(call, bindings);
+  const aureliaEvaluation = aureliaFacadeEvaluationForValue(
+    context.expressionReader.evaluateExpression(call).value,
+  );
+  const aureliaReceiver = aureliaEvaluation != null;
   const containerEvaluation = containerEvaluationForCallReceiver(context, call);
   const containerReceiver = containerEvaluation != null || isContainerReceiver(call, bindings);
   if (insideRegistryRegisterMethod && containerReceiver) {
@@ -664,6 +654,7 @@ function recognizeRegisterCall(
       ConfigurationStepKind.RegistryRegister,
       RegistrationCarrierKind.RegistryRegisterMethod,
       RegistrationAdmissionKind.RegistryMethod,
+      null,
     );
   }
   if (!aureliaReceiver && !containerReceiver) {
@@ -677,6 +668,7 @@ function recognizeRegisterCall(
     aureliaReceiver ? ConfigurationStepKind.AureliaRegister : ConfigurationStepKind.ContainerRegister,
     aureliaReceiver ? RegistrationCarrierKind.AureliaRegisterCall : RegistrationCarrierKind.ContainerRegisterCall,
     aureliaReceiver ? RegistrationAdmissionKind.AureliaRegisterArgument : RegistrationAdmissionKind.ContainerRegisterArgument,
+    aureliaEvaluation,
   );
 }
 
@@ -688,6 +680,7 @@ function recognizeRegisterCallForCarrier(
   stepKind: ConfigurationStepKind,
   registrationCarrierKind: RegistrationCarrierKind,
   admissionKind: RegistrationAdmissionKind,
+  aureliaEvaluation: AureliaFacadeEvaluation | null,
 ): ConfigurationStepObservation {
   const registrationArguments = readRegisterArgumentObservations(
     context,
@@ -708,9 +701,23 @@ function recognizeRegisterCallForCarrier(
     registrationArguments.appTasks,
     [],
     registrationArguments.admissions,
-    readSpreadOpens(context, call, bindings),
+    readSpreadOpens(context, call),
     containerEvaluation,
+    aureliaEvaluation,
   );
+}
+
+function aureliaFacadeOpenSeams(
+  evaluation: AureliaFacadeEvaluation,
+  node: ts.Expression,
+): readonly ConfigurationRecognitionOpen[] {
+  return evaluation.containerState === AureliaFacadeContainerState.Closed
+    ? []
+    : [new ConfigurationRecognitionOpen(
+      KernelVocabulary.Configuration.OpenConfigurationTarget.key,
+      'Aurelia facade received an explicit container whose runtime identity did not close during static evaluation.',
+      node,
+    )];
 }
 
 function containerEvaluationForCallReceiver(
@@ -729,10 +736,9 @@ function containerEvaluationForCallReceiver(
 function recognizeCustomizeCall(
   context: ConfigurationRecognitionContext,
   call: ts.CallExpression,
-  bindings: ImportedBindings,
 ): ConfigurationStepObservation | null {
-  const frameworkKind = readKnownConfigurationRegistryKind(call, bindings);
-  return frameworkKind == null || !frameworkRegistrationKindSupportsChainMethod(frameworkKind, 'customize')
+  const frameworkKind = readEvaluatedFrameworkRegistryKind(context, call);
+  return frameworkKind == null
     ? null
     : new ConfigurationStepObservation(
       ConfigurationCarrierKind.CustomizeCall,
@@ -750,13 +756,11 @@ function recognizeCustomizeCall(
 function recognizeBuilderMutationCall(
   context: ConfigurationRecognitionContext,
   call: ts.CallExpression,
-  bindings: ImportedBindings,
   memberName: string | null,
 ): ConfigurationStepObservation | null {
-  const frameworkKind = readKnownConfigurationRegistryKind(call, bindings);
+  const frameworkKind = readEvaluatedFrameworkRegistryKind(context, call);
   return memberName == null
     || frameworkKind == null
-    || !frameworkRegistrationKindSupportsChainMethod(frameworkKind, memberName)
     ? null
     : new ConfigurationStepObservation(
       ConfigurationCarrierKind.BuilderMethodCall,
@@ -778,24 +782,10 @@ function readImportedBindings(sourceFile: ts.SourceFile): ImportedBindings {
 
     const moduleName = statement.moduleSpecifier.text;
     const namedBindings = statement.importClause?.namedBindings;
-    const defaultImport = statement.importClause?.name ?? null;
-    if (defaultImport != null && AURELIA_MODULES.has(moduleName)) {
-      bindings.aureliaIdentifiers.add(defaultImport.text);
-      if (moduleName === AURELIA_BROWSER_FACADE_MODULE) {
-        bindings.aureliaBrowserFacadeIdentifiers.add(defaultImport.text);
-      }
-    }
-
     if (namedBindings == null) {
       continue;
     }
     if (ts.isNamespaceImport(namedBindings)) {
-      if (AURELIA_MODULES.has(moduleName)) {
-        bindings.aureliaNamespaces.add(namedBindings.name.text);
-      }
-      if (moduleName === AURELIA_BROWSER_FACADE_MODULE) {
-        bindings.aureliaBrowserFacadeNamespaces.add(namedBindings.name.text);
-      }
       if (APP_TASK_MODULES.has(moduleName)) {
         bindings.appTaskNamespaces.add(namedBindings.name.text);
       }
@@ -805,21 +795,11 @@ function readImportedBindings(sourceFile: ts.SourceFile): ImportedBindings {
       if (CONTAINER_MODULES.has(moduleName)) {
         bindings.containerNamespaces.add(namedBindings.name.text);
       }
-      const knownFrameworkRegistrationExports = frameworkRegistrationKindsForModule(moduleName);
-      if (knownFrameworkRegistrationExports != null) {
-        bindings.knownFrameworkRegistrationNamespaces.set(namedBindings.name.text, new Set(knownFrameworkRegistrationExports));
-      }
       continue;
     }
 
     for (const element of namedBindings.elements) {
       const importedName = (element.propertyName ?? element.name).text;
-      if (AURELIA_MODULES.has(moduleName) && importedName === 'Aurelia') {
-        bindings.aureliaIdentifiers.add(element.name.text);
-        if (moduleName === AURELIA_BROWSER_FACADE_MODULE) {
-          bindings.aureliaBrowserFacadeIdentifiers.add(element.name.text);
-        }
-      }
       if (APP_TASK_MODULES.has(moduleName) && importedName === 'AppTask') {
         bindings.appTaskIdentifiers.add(element.name.text);
       }
@@ -838,13 +818,8 @@ function readImportedBindings(sourceFile: ts.SourceFile): ImportedBindings {
       if (CONTAINER_MODULES.has(moduleName) && importedName === 'IContainer') {
         bindings.containerTypeIdentifiers.add(element.name.text);
       }
-      const knownFrameworkRegistration = readKnownFrameworkRegistrationExport(moduleName, importedName);
-      if (knownFrameworkRegistration != null) {
-        bindings.knownFrameworkRegistrationIdentifiers.set(element.name.text, knownFrameworkRegistration);
-      }
     }
   }
-  collectAureliaInstanceIdentifiers(sourceFile, bindings);
   collectContainerIdentifiers(sourceFile, bindings);
   return bindings;
 }
@@ -1010,7 +985,12 @@ function recognizeRegisterArgument(
   carrierKind: RegistrationCarrierKind,
 ): readonly RegisterArgumentObservation[] {
   if (ts.isSpreadElement(argument)) {
-    const knownFrameworkGroup = recognizeKnownFrameworkRegistrationGroupSpread(argument, bindings, admissionKind, carrierKind);
+    const knownFrameworkGroup = recognizeEvaluatedFrameworkRegistrationGroup(
+      context,
+      argument.expression,
+      admissionKind,
+      carrierKind,
+    );
     if (knownFrameworkGroup != null) {
       return [registerArgumentObservation(knownFrameworkGroup)];
     }
@@ -1033,11 +1013,6 @@ function recognizeRegisterArgumentExpression(
     return [registerArgumentObservation(factory)];
   }
 
-  const knownConfiguration = recognizeKnownConfigurationRegistryArgument(argument, bindings, admissionKind, carrierKind);
-  if (knownConfiguration != null) {
-    return [registerArgumentObservation(knownConfiguration)];
-  }
-
   const evaluated = recognizeEvaluatedRegisterArgument(context, argument, bindings, admissionKind, carrierKind);
   if (evaluated != null) {
     return evaluated;
@@ -1052,6 +1027,24 @@ function recognizeRegisterArgumentExpression(
   return appTask == null
     ? [registerArgumentObservation(unknownRegistrationArgument(argument, carrierKind, admissionKind))]
     : [registerArgumentObservation(registrationObservationForAppTask(appTask, carrierKind, admissionKind), appTask)];
+}
+
+function recognizeEvaluatedFrameworkRegistrationGroup(
+  context: ConfigurationRecognitionContext,
+  expression: ts.Expression,
+  admissionKind: RegistrationAdmissionKind,
+  carrierKind: RegistrationCarrierKind,
+): RegistrationAdmissionObservation | null {
+  const value = context.expressionReader.evaluateExpression(expression).value;
+  const frameworkRegistration = aureliaFrameworkRegistrationEvaluationForValue(value);
+  return value?.kind !== EvaluationValueKind.Array || frameworkRegistration == null
+    ? null
+    : frameworkRegistrationGroupArgument(
+        expression,
+        frameworkRegistration.kind,
+        carrierKind,
+        admissionKind,
+      );
 }
 
 function recognizeStaticRegisterSpread(
@@ -1086,7 +1079,34 @@ function recognizeEvaluatedRegisterArgument(
   carrierKind: RegistrationCarrierKind,
 ): readonly RegisterArgumentObservation[] | null {
   const read = context.expressionReader.evaluateExpression(argument);
-  const interfaceEvaluation = aureliaInterfaceEvaluationForValue(read.value);
+  return recognizeEvaluatedRegistrationValue(
+    context,
+    argument,
+    read.value,
+    read.openSeams,
+    bindings,
+    admissionKind,
+    carrierKind,
+    null,
+    new Set(),
+  );
+}
+
+function recognizeEvaluatedRegistrationValue(
+  context: ConfigurationRecognitionContext,
+  argument: ts.Expression,
+  value: EvaluationValue | null,
+  openSeams: ReturnType<ConfigurationRecognitionContext['expressionReader']['evaluateExpression']>['openSeams'],
+  bindings: ImportedBindings,
+  admissionKind: RegistrationAdmissionKind,
+  carrierKind: RegistrationCarrierKind,
+  localNameHint: string | null,
+  activeCarriers: Set<EvaluationValue>,
+): readonly RegisterArgumentObservation[] | null {
+  if (value == null) {
+    return null;
+  }
+  const interfaceEvaluation = aureliaInterfaceEvaluationForValue(value);
   if (interfaceEvaluation != null) {
     switch (interfaceEvaluation.defaultRegistrationState) {
       case AureliaInterfaceDefaultRegistrationState.None:
@@ -1108,24 +1128,241 @@ function recognizeEvaluatedRegisterArgument(
         ))];
     }
   }
-  if (hasEvaluationRegisterFunction(read.value)) {
+  const frameworkRegistration = aureliaFrameworkRegistrationEvaluationForValue(value);
+  if (frameworkRegistration != null && value.kind === EvaluationValueKind.Array) {
+    return [registerArgumentObservation(frameworkRegistrationGroupArgument(
+      argument,
+      frameworkRegistration.kind,
+      carrierKind,
+      admissionKind,
+    ))];
+  }
+  const frameworkRegistrationFactory = aureliaFrameworkRegistrationFactoryEvaluationForValue(value);
+  if (frameworkRegistrationFactory != null) {
+    return [registerArgumentObservation(openFrameworkRegistrationFactoryArgument(
+      argument,
+      frameworkRegistrationFactory.resultKind,
+      carrierKind,
+      admissionKind,
+    ))];
+  }
+  const registrationFactory = aureliaRegistrationFactoryEvaluationForValue(value);
+  if (registrationFactory != null) {
+    return [registerArgumentObservation(registrationAdmissionForEvaluatedFactory(
+      context,
+      argument,
+      registrationFactory,
+      carrierKind,
+      admissionKind,
+    ))];
+  }
+  if (hasEvaluationRegisterFunction(value)) {
     return [evaluatedRegistryArgumentObservation(
       context,
       argument,
-      read.value as EvaluationRegistryValue,
-      read.openSeams,
+      value as EvaluationRegistryValue,
+      openSeams,
       admissionKind,
       carrierKind,
       bindings,
+      localNameHint,
     )];
   }
-  if (isPlainClassFallbackValue(read.value)) {
-    return [registerArgumentObservation(plainClassSelfRegistrationArgument(context, argument, read.value, read.openSeams, admissionKind, carrierKind))];
+  if (isPlainClassFallbackValue(value)) {
+    return [registerArgumentObservation(plainClassSelfRegistrationArgument(
+      context,
+      argument,
+      value,
+      openSeams,
+      admissionKind,
+      carrierKind,
+      localNameHint,
+    ))];
   }
-  if (read.value?.kind === EvaluationValueKind.Object) {
-    return recognizeEvaluatedObjectMapArgument(context, argument, read.value, read.openSeams, bindings, admissionKind, carrierKind);
+  if (!isRecursiveRegistrationCarrier(value)) {
+    return null;
   }
-  return null;
+  if (activeCarriers.has(value)) {
+    return [registerArgumentObservation(openRecursiveCarrierRegistrationArgument(
+      argument,
+      [],
+      carrierKind,
+      admissionKind,
+      'Recursive registration carrier contains a cycle that reaches Aurelia\'s registration-depth boundary.',
+    ))];
+  }
+
+  activeCarriers.add(value);
+  try {
+    const observations: RegisterArgumentObservation[] = [];
+    const enumerable = readEvaluationEnumerableOwnEntries(value);
+    if (enumerable == null) {
+      return null;
+    }
+    for (const entry of enumerable.entries) {
+      if (entry.property?.state === EvaluationObjectPropertyState.Open) {
+        continue;
+      }
+      const entryArgument = entry.expression ?? argument;
+      const factory = entry.expression == null
+        ? null
+        : recognizeRegistrationFactoryArgument(
+            context,
+            entry.expression,
+            bindings,
+            RegistrationAdmissionKind.RecursiveCarrierEntry,
+            RegistrationCarrierKind.RecursiveCarrierEntry,
+          );
+      const nested = factory == null
+        ? recognizeEvaluatedRegistrationValue(
+            context,
+            entryArgument,
+            entry.value,
+            [],
+            bindings,
+            RegistrationAdmissionKind.RecursiveCarrierEntry,
+            RegistrationCarrierKind.RecursiveCarrierEntry,
+            entry.name,
+            activeCarriers,
+          )
+        : [registerArgumentObservation(factory)];
+      if (nested != null) {
+        observations.push(...nested);
+      }
+    }
+    if (
+      enumerable.mayHaveUnknownEntries
+      || enumerable.mayHaveUnknownOrder
+      || enumerable.entries.some((entry) =>
+        entry.value.kind === EvaluationValueKind.Unknown
+        || entry.value.kind === EvaluationValueKind.BoundaryValue
+      )
+      || openSeams.length > 0
+    ) {
+      observations.push(registerArgumentObservation(openRecursiveCarrierRegistrationArgument(
+        argument,
+        openSeams,
+        carrierKind,
+        admissionKind,
+      )));
+    }
+    return observations;
+  } finally {
+    activeCarriers.delete(value);
+  }
+}
+
+function registrationAdmissionForEvaluatedFactory(
+  context: ConfigurationRecognitionContext,
+  carrier: ts.Expression,
+  evaluation: AureliaRegistrationFactoryEvaluation,
+  carrierKind: RegistrationCarrierKind,
+  admissionKind: RegistrationAdmissionKind,
+): RegistrationAdmissionObservation {
+  const match = new RegistrationFactoryCallMatch(evaluation.factoryName, evaluation.shape, evaluation.sourceNode);
+  const openSeams: RegistrationRecognitionOpen[] = [];
+  const keyArgument = readRegistrationFactoryKeyArgument(match, openSeams);
+  const valueArgument = readRegistrationFactoryValueArgument(match, openSeams);
+  return new RegistrationAdmissionObservation(
+    carrierKind,
+    admissionKind,
+    evaluation.shape.strategy,
+    evaluation.shape.keyRole,
+    carrier,
+    keyArgument == null
+      ? null
+      : context.registrationKeyObservationForValue(
+          keyArgument,
+          evaluation.argumentValues[evaluation.shape.keyArgumentIndex] ?? null,
+        ),
+    valueArgument == null || evaluation.shape.value == null
+      ? null
+      : evaluatedRegistrationValueObservation(
+          context,
+          evaluation.shape.value.valueKind,
+          valueArgument,
+          evaluation.argumentValues[evaluation.shape.value.argumentIndex] ?? null,
+        ),
+    evaluation.factoryName === 'defer'
+      ? evaluatedDeferredRegistryParameters(context, evaluation)
+      : [],
+    openSeams,
+  );
+}
+
+function evaluatedRegistrationValueObservation(
+  context: ConfigurationRecognitionContext,
+  valueKind: RegistrationValueKind,
+  expression: ts.Expression,
+  value: EvaluationValue | null,
+): RegistrationValueObservation {
+  if (valueKind === RegistrationValueKind.AliasTarget) {
+    return new RegistrationValueObservation(
+      valueKind,
+      readReferenceName(expression),
+      expression,
+      false,
+      null,
+      null,
+      context.sourceFileAddressHandleForNode(expression),
+      null,
+      null,
+      context.registrationKeyObservationForValue(expression, value),
+      value,
+    );
+  }
+  if (
+    valueKind === RegistrationValueKind.Constructable
+    && value != null
+    && (value.kind === EvaluationValueKind.Class || value.kind === EvaluationValueKind.Function)
+  ) {
+    const valueSource = constructableValueSource(context, expression, value);
+    return new RegistrationValueObservation(
+      valueKind,
+      evaluatedValueLocalName(value) ?? readReferenceName(expression),
+      valueSource.node,
+      true,
+      null,
+      null,
+      valueSource.sourceFileAddressHandle,
+      valueSource.moduleKey,
+      null,
+      null,
+      value,
+    );
+  }
+  return new RegistrationValueObservation(
+    valueKind,
+    readReferenceName(expression),
+    expression,
+    isDeclarationExpression(expression),
+    null,
+    null,
+    context.sourceFileAddressHandleForNode(expression),
+    null,
+    null,
+    null,
+    value,
+  );
+}
+
+function evaluatedDeferredRegistryParameters(
+  context: ConfigurationRecognitionContext,
+  evaluation: AureliaRegistrationFactoryEvaluation,
+): readonly RegistrationValueObservation[] {
+  return evaluation.sourceNode.arguments.slice(1).map((argument, index) => new RegistrationValueObservation(
+    RegistrationValueKind.Unknown,
+    readReferenceName(argument),
+    argument,
+    isDeclarationExpression(argument),
+    null,
+    null,
+    context.sourceFileAddressHandleForNode(argument),
+    null,
+    null,
+    null,
+    evaluation.argumentValues[index + 1] ?? null,
+  ));
 }
 
 function interfaceDefaultRegistrationArgument(
@@ -1191,6 +1428,7 @@ function evaluatedRegistryArgumentObservation(
   admissionKind: RegistrationAdmissionKind,
   carrierKind: RegistrationCarrierKind,
   bindings: ImportedBindings,
+  localNameHint: string | null = null,
 ): RegisterArgumentObservation {
   const valueSource = registryValueSource(context, argument, value);
   const appTask = ts.isCallExpression(valueSource.node)
@@ -1205,6 +1443,7 @@ function evaluatedRegistryArgumentObservation(
       openSeams,
       admissionKind,
       carrierKind,
+      localNameHint,
     ),
     appTask,
   );
@@ -1218,6 +1457,7 @@ function registryAdmissionForEvaluatedValue(
   openSeams: ReturnType<ConfigurationRecognitionContext['expressionReader']['evaluateExpression']>['openSeams'],
   admissionKind: RegistrationAdmissionKind,
   carrierKind: RegistrationCarrierKind,
+  localNameHint: string | null,
 ): RegistrationAdmissionObservation {
   const frameworkKind = appTask == null
     ? aureliaFrameworkRegistrationKindForEvaluationValue(value)
@@ -1229,7 +1469,7 @@ function registryAdmissionForEvaluatedValue(
     RegistrationKeyRole.Unknown,
     argument,
     null,
-    evaluatedRegistryValueObservation(argument, value, valueSource, frameworkKind),
+    evaluatedRegistryValueObservation(argument, value, valueSource, frameworkKind, localNameHint),
     [],
     evaluationRegistryOpenSeams(argument, openSeams),
   );
@@ -1240,11 +1480,12 @@ function evaluatedRegistryValueObservation(
   value: EvaluationRegistryValue,
   valueSource: RegistryValueSource,
   frameworkKind: FrameworkRegistrationKind | null,
+  localNameHint: string | null,
 ): RegistrationValueObservation {
   const registryBody = aureliaRegistryBodyForEvaluationValue(value);
   return new RegistrationValueObservation(
     RegistrationValueKind.Registry,
-    readReferenceName(argument) ?? evaluatedValueLocalName(value) ?? 'IRegistry',
+    localNameHint ?? readReferenceName(argument) ?? evaluatedValueLocalName(value) ?? 'IRegistry',
     valueSource.node,
     isDeclarationValueNode(valueSource.node),
     null,
@@ -1276,8 +1517,9 @@ function plainClassSelfRegistrationArgument(
   openSeams: ReturnType<ConfigurationRecognitionContext['expressionReader']['evaluateExpression']>['openSeams'],
   admissionKind: RegistrationAdmissionKind,
   carrierKind: RegistrationCarrierKind,
+  localNameHint: string | null = null,
 ): RegistrationAdmissionObservation {
-  const localName = readReferenceName(argument) ?? evaluatedValueLocalName(value);
+  const localName = localNameHint ?? readReferenceName(argument) ?? evaluatedValueLocalName(value);
   const valueSource = constructableValueSource(context, argument, value);
   return new RegistrationAdmissionObservation(
     carrierKind,
@@ -1285,7 +1527,7 @@ function plainClassSelfRegistrationArgument(
     RegistrationStrategy.Singleton,
     RegistrationKeyRole.AdmittedKey,
     argument,
-    context.registrationKeyObservation(argument),
+    context.registrationKeyObservationForValue(argument, value),
     new RegistrationValueObservation(
       RegistrationValueKind.PlainClass,
       localName,
@@ -1317,44 +1559,19 @@ function constructableValueSource(
     : { node: value.declaration, sourceFileAddressHandle, moduleKey: value.environment.moduleKey };
 }
 
-function recognizeEvaluatedObjectMapArgument(
-  context: ConfigurationRecognitionContext,
-  argument: ts.Expression,
-  value: EvaluationObjectValue,
-  openSeams: ReturnType<ConfigurationRecognitionContext['expressionReader']['evaluateExpression']>['openSeams'],
-  bindings: ImportedBindings,
-  admissionKind: RegistrationAdmissionKind,
-  carrierKind: RegistrationCarrierKind,
-): readonly RegisterArgumentObservation[] {
-  const observations: RegisterArgumentObservation[] = [];
-  for (const property of value.properties.values()) {
-    if (!isRegisterObjectMapValue(property.value)) {
-      continue;
-    }
-    if (property.node == null) {
-      continue;
-    }
-    const propertyExpression = objectMapPropertyExpression(property.node);
-    if (propertyExpression == null) {
-      continue;
-    }
-    observations.push(...recognizeRegisterArgument(
-      context,
-      propertyExpression,
-      bindings,
-      RegistrationAdmissionKind.ObjectMapEntry,
-      RegistrationCarrierKind.ObjectMapEntry,
-    ));
+function isRecursiveRegistrationCarrier(value: EvaluationValue): boolean {
+  switch (value.kind) {
+    case EvaluationValueKind.Array:
+    case EvaluationValueKind.Object:
+    case EvaluationValueKind.BoundaryObject:
+    case EvaluationValueKind.Instance:
+    case EvaluationValueKind.ModuleNamespace:
+      return true;
+    case EvaluationValueKind.Function:
+      return !isConstructableFunctionValue(value);
+    default:
+      return false;
   }
-  if (value.mayHaveUnknownProperties || openSeams.length > 0) {
-    observations.push(registerArgumentObservation(openObjectMapRegistrationArgument(
-      argument,
-      openSeams,
-      carrierKind,
-      admissionKind,
-    )));
-  }
-  return observations;
 }
 
 function registryValueSource(
@@ -1420,35 +1637,6 @@ function isPlainClassFallbackValue(value: EvaluationValue | null): value is Eval
     && isConstructableFunctionValue(value);
 }
 
-function isRegisterObjectMapValue(value: EvaluationValue): boolean {
-  switch (value.kind) {
-    case EvaluationValueKind.Object:
-    case EvaluationValueKind.BoundaryObject:
-    case EvaluationValueKind.Class:
-    case EvaluationValueKind.Instance:
-      return true;
-    case EvaluationValueKind.Function:
-      return hasEvaluationRegisterFunction(value) || isConstructableFunctionValue(value);
-    case EvaluationValueKind.Unknown:
-    case EvaluationValueKind.BoundaryValue:
-    case EvaluationValueKind.Undefined:
-    case EvaluationValueKind.Null:
-    case EvaluationValueKind.Boolean:
-    case EvaluationValueKind.Number:
-    case EvaluationValueKind.BigInt:
-    case EvaluationValueKind.String:
-    case EvaluationValueKind.StringPattern:
-    case EvaluationValueKind.RegularExpression:
-    case EvaluationValueKind.Date:
-    case EvaluationValueKind.Array:
-    case EvaluationValueKind.Set:
-    case EvaluationValueKind.Map:
-    case EvaluationValueKind.ModuleNamespace:
-    case EvaluationValueKind.Promise:
-      return false;
-  }
-}
-
 function isConstructableFunctionValue(value: EvaluationFunctionValue): boolean {
   return ts.isFunctionDeclaration(value.declaration) || ts.isFunctionExpression(value.declaration);
 }
@@ -1480,31 +1668,22 @@ function declarationNameText(name: ts.PropertyName | ts.BindingName | undefined)
   return null;
 }
 
-function objectMapPropertyExpression(node: ts.Node): ts.Expression | null {
-  if (ts.isPropertyAssignment(node)) {
-    return node.initializer;
-  }
-  if (ts.isShorthandPropertyAssignment(node)) {
-    return node.name;
-  }
-  return ts.isExpression(node) ? node : null;
-}
-
-function openObjectMapRegistrationArgument(
+function openRecursiveCarrierRegistrationArgument(
   argument: ts.Expression,
   openSeams: ReturnType<ConfigurationRecognitionContext['expressionReader']['evaluateExpression']>['openSeams'],
   carrierKind: RegistrationCarrierKind,
   admissionKind: RegistrationAdmissionKind,
+  fallbackSummary = 'Recursive registration carrier may contain entries that static evaluation could not enumerate.',
 ): RegistrationAdmissionObservation {
   return new RegistrationAdmissionObservation(
     carrierKind,
     admissionKind,
-    RegistrationStrategy.ObjectMap,
+    RegistrationStrategy.RecursiveCarrier,
     RegistrationKeyRole.Unknown,
     argument,
     null,
     new RegistrationValueObservation(
-      RegistrationValueKind.ObjectMap,
+      RegistrationValueKind.RecursiveCarrier,
       readReferenceName(argument),
       argument,
       isDeclarationValueNode(argument),
@@ -1513,7 +1692,7 @@ function openObjectMapRegistrationArgument(
     openSeams.length === 0
       ? [new RegistrationRecognitionOpen(
         KernelVocabulary.Registration.OpenValueExpression.key,
-        'Object-map registration may contain entries that static evaluation could not enumerate.',
+        fallbackSummary,
         argument,
       )]
       : openSeams.map((seam) => new RegistrationRecognitionOpen(
@@ -1522,6 +1701,35 @@ function openObjectMapRegistrationArgument(
         seam.node ?? argument,
         seam.reasonKinds,
       )),
+  );
+}
+
+function openFrameworkRegistrationFactoryArgument(
+  argument: ts.Expression,
+  resultKind: FrameworkRegistrationKind,
+  carrierKind: RegistrationCarrierKind,
+  admissionKind: RegistrationAdmissionKind,
+): RegistrationAdmissionObservation {
+  const factoryName = traceNameForFrameworkRegistrationKind(resultKind);
+  return new RegistrationAdmissionObservation(
+    carrierKind,
+    admissionKind,
+    RegistrationStrategy.Unknown,
+    RegistrationKeyRole.Unknown,
+    argument,
+    null,
+    new RegistrationValueObservation(
+      RegistrationValueKind.Unknown,
+      factoryName,
+      argument,
+      isDeclarationExpression(argument),
+    ),
+    [],
+    [new RegistrationRecognitionOpen(
+      KernelVocabulary.Registration.OpenStrategy.key,
+      `${factoryName} is a factory namespace; one of its factory results must be selected before registration effects can be modeled.`,
+      argument,
+    )],
   );
 }
 
@@ -1720,34 +1928,14 @@ function registrationValueObservation(
   );
 }
 
-function recognizeKnownConfigurationRegistryArgument(
+function readEvaluatedFrameworkRegistryKind(
+  context: ConfigurationRecognitionContext,
   expression: ts.Expression,
-  bindings: ImportedBindings,
-  admissionKind: RegistrationAdmissionKind,
-  carrierKind: RegistrationCarrierKind,
-): RegistrationAdmissionObservation | null {
-  const frameworkKind = readKnownConfigurationRegistryKind(expression, bindings);
-  if (frameworkKind == null) {
-    return null;
-  }
-  return new RegistrationAdmissionObservation(
-    carrierKind,
-    admissionKind,
-    RegistrationStrategy.Registry,
-    RegistrationKeyRole.Unknown,
-    expression,
-    null,
-    new RegistrationValueObservation(
-      RegistrationValueKind.Registry,
-      readReferenceName(expression) ?? traceNameForFrameworkRegistrationKind(frameworkKind),
-      expression,
-      false,
-      null,
-      frameworkKind,
-    ),
-    [],
-    [],
-  );
+): FrameworkRegistrationKind | null {
+  const value = context.expressionReader.evaluateExpression(expression).value;
+  return !hasEvaluationRegisterFunction(value)
+    ? null
+    : aureliaFrameworkRegistrationKindForEvaluationValue(value);
 }
 
 function recognizeCheckerRegistryArgument(
@@ -1848,28 +2036,25 @@ function checkerTypeHasCallableRegister(
   return (registerType?.getCallSignatures().length ?? 0) > 0;
 }
 
-function recognizeKnownFrameworkRegistrationGroupSpread(
-  spread: ts.SpreadElement,
-  bindings: ImportedBindings,
-  admissionKind: RegistrationAdmissionKind,
+function frameworkRegistrationGroupArgument(
+  expression: ts.Expression,
+  frameworkKind: FrameworkRegistrationKind,
   carrierKind: RegistrationCarrierKind,
-): RegistrationAdmissionObservation | null {
-  const frameworkKind = readKnownFrameworkRegistrationReference(spread.expression, bindings);
-  if (frameworkKind == null || !isFrameworkRegistrationGroupKind(frameworkKind)) {
-    return null;
-  }
+  admissionKind: RegistrationAdmissionKind,
+  sourceNode: ts.Node = expression,
+): RegistrationAdmissionObservation {
 
   return new RegistrationAdmissionObservation(
     carrierKind,
     admissionKind,
     RegistrationStrategy.FrameworkGroup,
     RegistrationKeyRole.Unknown,
-    spread,
+    sourceNode,
     null,
     new RegistrationValueObservation(
       RegistrationValueKind.FrameworkRegistration,
-      readReferenceName(spread.expression) ?? traceNameForFrameworkRegistrationKind(frameworkKind),
-      spread.expression,
+      readReferenceName(expression) ?? traceNameForFrameworkRegistrationKind(frameworkKind),
+      expression,
       false,
       null,
       frameworkKind,
@@ -1877,81 +2062,6 @@ function recognizeKnownFrameworkRegistrationGroupSpread(
     [],
     [],
   );
-}
-
-function isKnownFrameworkRegistrationGroupSpread(
-  spread: ts.SpreadElement,
-  bindings: ImportedBindings,
-): boolean {
-  const frameworkKind = readKnownFrameworkRegistrationReference(spread.expression, bindings);
-  return frameworkKind != null && isFrameworkRegistrationGroupKind(frameworkKind);
-}
-
-function readKnownConfigurationRegistryKind(
-  expression: ts.Expression,
-  bindings: ImportedBindings,
-): FrameworkRegistrationKind | null {
-  const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current) || ts.isPropertyAccessExpression(current)) {
-    const direct = readKnownConfigurationReference(current, bindings);
-    return direct === FrameworkRegistrationKind.StateDefaultConfiguration ? null : direct;
-  }
-  if (!ts.isCallExpression(current)) {
-    return null;
-  }
-
-  const callee = unwrapExpression(current.expression);
-  if (!ts.isPropertyAccessExpression(callee)) {
-    return null;
-  }
-  const receiver = readKnownConfigurationReference(callee.expression, bindings)
-    ?? (ts.isCallExpression(unwrapExpression(callee.expression))
-      ? readKnownConfigurationRegistryKind(unwrapExpression(callee.expression) as ts.CallExpression, bindings)
-      : null);
-  return receiver != null && frameworkRegistrationKindSupportsChainMethod(receiver, callee.name.text)
-    ? receiver
-    : null;
-}
-
-function readKnownConfigurationReference(
-  expression: ts.Expression,
-  bindings: ImportedBindings,
-): FrameworkRegistrationKind | null {
-  const kind = readKnownFrameworkRegistrationReference(expression, bindings);
-  return kind != null && isKnownConfigurationKind(kind) ? kind : null;
-}
-
-function readKnownFrameworkRegistrationReference(
-  expression: ts.Expression,
-  bindings: ImportedBindings,
-): FrameworkRegistrationKind | null {
-  const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current)) {
-    return bindings.knownFrameworkRegistrationIdentifiers.get(current.text) ?? null;
-  }
-  if (!ts.isPropertyAccessExpression(current)) {
-    return null;
-  }
-  const namespace = unwrapExpression(current.expression);
-  if (!ts.isIdentifier(namespace)) {
-    return null;
-  }
-  const exports = bindings.knownFrameworkRegistrationNamespaces.get(namespace.text);
-  if (exports == null) {
-    return null;
-  }
-  return frameworkRegistrationKindForExportName(current.name.text, exports);
-}
-
-function readKnownFrameworkRegistrationExport(
-  moduleName: string,
-  importedName: string,
-): FrameworkRegistrationKind | null {
-  const exports = frameworkRegistrationKindsForModule(moduleName);
-  if (exports == null) {
-    return null;
-  }
-  return frameworkRegistrationKindForExportName(importedName, exports);
 }
 
 function registrationObservationForAppTask(
@@ -2267,28 +2377,6 @@ function readConfigurationBooleanObjectProperty(
   return value?.kind === 'boolean' ? value.value : null;
 }
 
-function readAureliaStaticMethod(
-  call: ts.CallExpression,
-  bindings: ImportedBindings,
-): string | null {
-  const expression = unwrapExpression(call.expression);
-  if (!ts.isPropertyAccessExpression(expression)) {
-    return null;
-  }
-  return isImportedAureliaExpression(expression.expression, bindings)
-    ? expression.name.text
-    : null;
-}
-
-function isAureliaStaticBrowserFacadeCall(
-  call: ts.CallExpression,
-  bindings: ImportedBindings,
-): boolean {
-  const expression = unwrapExpression(call.expression);
-  return ts.isPropertyAccessExpression(expression)
-    && isImportedAureliaBrowserFacadeExpression(expression.expression, bindings);
-}
-
 function readCallMemberName(call: ts.CallExpression): string | null {
   const expression = unwrapExpression(call.expression);
   return ts.isPropertyAccessExpression(expression) ? expression.name.text : null;
@@ -2317,34 +2405,6 @@ function readReceiverExpressionName(
   return ts.isPropertyAccessExpression(callee)
     ? readReceiverExpressionName(callee.expression)
     : null;
-}
-
-function isAureliaReceiver(
-  call: ts.CallExpression,
-  bindings: ImportedBindings,
-): boolean {
-  const expression = unwrapExpression(call.expression);
-  return ts.isPropertyAccessExpression(expression)
-    && isAureliaValueExpression(expression.expression, bindings);
-}
-
-function collectAureliaInstanceIdentifiers(
-  sourceFile: ts.SourceFile,
-  bindings: ImportedBindings,
-): void {
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isVariableDeclaration(node)
-      && ts.isIdentifier(node.name)
-      && node.initializer != null
-      && isAureliaValueExpression(node.initializer, bindings)
-    ) {
-      bindings.aureliaInstanceIdentifiers.add(node.name.text);
-    }
-    ts.forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
 }
 
 function collectContainerIdentifiers(
@@ -2376,26 +2436,41 @@ function collectContainerIdentifiers(
   visit(sourceFile);
 }
 
-function isRegistryRegisterMethod(
-  method: ts.MethodDeclaration,
-  bindings: ImportedBindings,
-): boolean {
-  return readPropertyName(method.name) === 'register'
-    && isRegistryOwner(method)
-    && isContainerParameter(method.parameters[0], bindings);
+class RegistryFunctionSource {
+  constructor(
+    readonly functionLike: ts.FunctionLikeDeclaration,
+    readonly owner: ts.Node,
+    readonly localName: string | null,
+  ) {}
 }
 
-function isRegistryOwner(
-  method: ts.MethodDeclaration,
-): boolean {
-  const owner = method.parent;
-  if (ts.isObjectLiteralExpression(owner)) {
-    return true;
+function readRegistryFunctionSource(
+  node: ts.Node,
+  bindings: ImportedBindings,
+): RegistryFunctionSource | null {
+  if (!ts.isMethodDeclaration(node) && !ts.isArrowFunction(node) && !ts.isFunctionExpression(node)) {
+    return null;
   }
-  if (ts.isClassLike(owner)) {
-    return true;
+  if (!isContainerParameter(node.parameters[0], bindings)) {
+    return null;
   }
-  return false;
+  if (ts.isMethodDeclaration(node)) {
+    if (
+      readPropertyName(node.name) !== 'register'
+      || (!ts.isObjectLiteralExpression(node.parent) && !ts.isClassLike(node.parent))
+    ) {
+      return null;
+    }
+    return new RegistryFunctionSource(node, node.parent, registryOwnerLocalName(node.parent));
+  }
+  const property = node.parent;
+  if (ts.isPropertyAssignment(property) && readPropertyName(property.name) === 'register') {
+    return new RegistryFunctionSource(node, property.parent, registryOwnerLocalName(property.parent));
+  }
+  if (ts.isPropertyDeclaration(property) && readPropertyName(property.name) === 'register' && ts.isClassLike(property.parent)) {
+    return new RegistryFunctionSource(node, property.parent, registryOwnerLocalName(property.parent));
+  }
+  return null;
 }
 
 function isContainerParameter(
@@ -2415,8 +2490,7 @@ function isContainerParameterName(name: string): boolean {
   return normalized === 'container' || normalized === 'ctn';
 }
 
-function registryRegisterMethodLocalName(method: ts.MethodDeclaration): string | null {
-  const owner = method.parent;
+function registryOwnerLocalName(owner: ts.Node): string | null {
   if (ts.isObjectLiteralExpression(owner)) {
     const ownerName = registryObjectLiteralLocalName(owner);
     return ownerName == null ? 'register' : `${ownerName}.register`;
@@ -2477,28 +2551,6 @@ function arrowFunctionLocalName(node: ts.ArrowFunction): string | null {
   return ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)
     ? parent.name.text
     : null;
-}
-
-function isAureliaValueExpression(
-  expression: ts.Expression,
-  bindings: ImportedBindings,
-): boolean {
-  const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current)) {
-    return bindings.aureliaInstanceIdentifiers.has(current.text);
-  }
-  if (ts.isNewExpression(current)) {
-    return isImportedAureliaExpression(current.expression, bindings);
-  }
-  if (!ts.isCallExpression(current)) {
-    return false;
-  }
-  const callee = unwrapExpression(current.expression);
-  if (!ts.isPropertyAccessExpression(callee)) {
-    return false;
-  }
-  return (callee.name.text === 'app' || callee.name.text === 'register')
-    && (isImportedAureliaExpression(callee.expression, bindings) || isAureliaValueExpression(callee.expression, bindings));
 }
 
 function isContainerReceiver(
@@ -2611,21 +2663,6 @@ function isRegistryTypeName(
   return false;
 }
 
-function isImportedAureliaBrowserFacadeExpression(
-  expression: ts.Expression,
-  bindings: ImportedBindings,
-): boolean {
-  const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current)) {
-    return bindings.aureliaBrowserFacadeIdentifiers.has(current.text);
-  }
-  if (!ts.isPropertyAccessExpression(current) || current.name.text !== 'Aurelia') {
-    return false;
-  }
-  const namespace = unwrapExpression(current.expression);
-  return ts.isIdentifier(namespace) && bindings.aureliaBrowserFacadeNamespaces.has(namespace.text);
-}
-
 function isImportedAppTaskExpression(
   expression: ts.Expression,
   bindings: ImportedBindings,
@@ -2664,11 +2701,10 @@ function isDeclarationValueNode(node: ts.Node): boolean {
 function readSpreadOpens(
   context: ConfigurationRecognitionContext,
   call: ts.CallExpression,
-  bindings: ImportedBindings,
 ): readonly ConfigurationRecognitionOpen[] {
   return call.arguments
     .filter(ts.isSpreadElement)
-    .filter((argument) => !isRecognizedRegisterSpread(context, argument, bindings))
+    .filter((argument) => !isRecognizedRegisterSpread(context, argument))
     .map((argument) => new ConfigurationRecognitionOpen(
       KernelVocabulary.Registration.OpenSpread.key,
       'Configuration register call contains a spread argument that must be resolved before registration spending.',
@@ -2679,13 +2715,13 @@ function readSpreadOpens(
 function isRecognizedRegisterSpread(
   context: ConfigurationRecognitionContext,
   argument: ts.SpreadElement,
-  bindings: ImportedBindings,
 ): boolean {
-  if (isKnownFrameworkRegistrationGroupSpread(argument, bindings)) {
-    return true;
-  }
   const value = context.expressionReader.evaluateExpression(argument.expression).value;
-  return value?.kind === EvaluationValueKind.Array && !value.mayHaveUnknownElements && !value.mayHaveUnknownOrder;
+  return value?.kind === EvaluationValueKind.Array
+    && (
+      aureliaFrameworkRegistrationEvaluationForValue(value) != null
+      || (!value.mayHaveUnknownElements && !value.mayHaveUnknownOrder)
+    );
 }
 
 function missingArgumentOpen(
@@ -2782,6 +2818,7 @@ function sequenceKindForSteps(
       ? ConfigurationSequenceKind.Builder
     : steps.some((step) =>
       step.stepKind === ConfigurationStepKind.CreateContainer
+      || step.stepKind === ConfigurationStepKind.CreateChildContainer
       || step.stepKind === ConfigurationStepKind.ContainerRegister
     )
       ? ConfigurationSequenceKind.Container
