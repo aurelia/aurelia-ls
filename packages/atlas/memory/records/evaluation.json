@@ -41,7 +41,10 @@
         "The evaluator module graph is runtime-shaped. Type-only imports and type-only re-exports should be erased before graph evaluation so TypeScript-only cycles do not become artificial runtime import cycles during DI/source-value activation.",
         "CommonJS carrier semantics belong in evaluation/commonjs.ts. StaticEvaluator materializes authored exports/module carriers there and StaticModuleGraphEvaluator reads export/require values through the same substrate.",
         "Class and function value execution belong in evaluation/class-values.ts and evaluation/function-values.ts. Keep class lifecycle and call-frame construction there while preserving StaticEvaluator as the owner of recursion, guardrails, and open seams.",
-        "EvaluationValueEvidence is the canonical value-bearing edge payload. Lexical bindings, call arguments/parameters, return and throw completions, ESM/CommonJS linkage, and namespace exports must retain exact edge pressure; module audit evidence remains complete while causal pressure is consumed into and replayed from those carriers.",
+        "EvaluationValueEvidence is the canonical value-bearing edge payload. Lexical bindings, call and intrinsic-callback arguments/results, array and Set elements, return and throw completions, ESM/CommonJS linkage, and namespace exports must retain exact edge pressure; module audit evidence remains complete while causal pressure is consumed into and replayed from those carriers. Predicate, reducer, comparator, index, property-name, and mutation decisions must never execute a retained candidate.",
+        "Retaining an already-audited seam on an array shape, property, or other child carrier is not a new evaluator encounter. Do not replay it into the audit stream during carrier construction; replay causal pressure when a later read spends that carrier.",
+        "EvaluationArrayShape keeps runtime extent, exact present-element/hole positions, and order independent. Authored elisions are exact holes; unresolved spreads can open extent/positions, while sort can open order without opening extent. Object enumeration projects those axes from EvaluationEnumerableOwnEntries with causal membership/order seams instead of rebuilding arrays from booleans.",
+        "EvaluationArgumentList is the positional call-phase product. It evaluates authored arguments left-to-right, expands closed Array/Set/Map/String iterators, and keeps unclosed arity/order separate from pressure on exact slots. A spread whose continuation stays open stops later effects from becoming definite; conditional continuation needs its own future carrier. Local calls, global intrinsics, and array intrinsics consume the list; syntax-only module recognition must not substitute for value evaluation.",
         "Retained evaluator candidates are projection evidence, not executable values. They must not choose branches, invoke getters or functions, or participate in scalar operations. Binding-source consumers may address an open aggregate only when its pressure is wholly owned by the aggregate shape and canonical member readers can select an exact child.",
         "Global intrinsic dispatch must admit the direct callee or namespace receiver path before evaluating arguments. Eager probe-time argument evaluation duplicates calls, seams, and abrupt completion before ordinary local-function dispatch.",
         "Aurelia runtime-host intrinsics may ask StaticIntrinsicEvaluationHost for generic class instantiation, but product-specific calls such as ambient resolve(ClassKey) should stay at the host boundary and only close in activation-like frames with `this`; `evaluateAureliaResolveCall(...)` owns direct class-key closure. Registered/interface keys join through the shared DiProviderActivationView, and RuntimeBindingSourceEvaluationFrame binds one activation session to the active modeled container rather than maintaining a second binding-source DI resolver.",
@@ -92,6 +95,30 @@
           "filePath": "packages/semantic-runtime/src/evaluation/value-pressure.ts",
           "symbolName": "EvaluationValueEvidence",
           "summary": "Canonical best-known value plus causal edge-pressure carrier."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/argument-list.ts",
+          "symbolName": "EvaluationArgumentList",
+          "summary": "Canonical positional argument expansion with slot-level causal evidence."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/array-callback-values.ts",
+          "symbolName": "EvaluationArrayCallbackRead",
+          "summary": "Host-neutral evidence-bearing callback and array-method decision algebra."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/values.ts",
+          "symbolName": "EvaluationArrayShape",
+          "summary": "Independent extent, exact present-position, and order closure with causal axis seams."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/enumerable-own-properties.ts",
+          "symbolName": "EvaluationEnumerableOwnEntries",
+          "summary": "Canonical enumerable membership/order product and result-array shape projection."
         },
         {
           "kind": "source",

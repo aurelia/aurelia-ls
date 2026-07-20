@@ -14,6 +14,7 @@ import {
 } from './value-pressure.js';
 import {
   EvaluationArrayElement,
+  EvaluationArrayShape,
   EvaluationArrayValue,
   EvaluationBoundaryValue,
   EvaluationNumberValue,
@@ -25,9 +26,12 @@ import {
   EvaluationValueKind,
   type EvaluationValue,
 } from './values.js';
+import { denseEvaluationArrayElements } from './array-value-operations.js';
 
 /** Host hooks that keep binding-pattern evaluation inside the owning evaluator's policy and seam stream. */
 export interface StaticBindingPatternHost {
+  maxArrayIterations(): number;
+
   evaluateExpression(
     expression: ts.Expression,
     environment: ModuleEnvironmentRecord,
@@ -155,7 +159,6 @@ function parameterValue(
           argumentValues.slice(index).map((argument) =>
             new EvaluationArrayElement(argument.value, null, argument.openSeams)
           ),
-          false,
           parameter,
         ),
         [],
@@ -326,7 +329,7 @@ function readArrayBindingValue(
         host,
       );
     }
-    const element = value.elements[index] ?? null;
+    const element = value.elementAtRuntimeIndex(index);
     return new EvaluationValueEvidence(
       element?.value ?? new EvaluationUndefinedValue(node),
       [...source.openSeams, ...(element?.openSeams ?? [])],
@@ -364,14 +367,37 @@ function readArrayBindingRest(
 ): EvaluationValueEvidence {
   const value = source.value;
   if (value.kind === EvaluationValueKind.Array) {
-    const exact = !value.mayHaveUnknownElements && !value.mayHaveUnknownOrder;
+    const exact = !value.mayHaveUnknownElements && !value.mayHaveUnknownOrder && value.exactLength != null;
+    if (exact && value.exactLength! - startIndex > host.maxArrayIterations()) {
+      return unknownBindingEvidence(
+        source,
+        'Array binding rest exceeds the static iteration guardrail.',
+        node,
+        moduleKey,
+        host,
+      );
+    }
+    const restElements = exact
+      ? denseEvaluationArrayElements(value)!
+          .slice(startIndex)
+          .map((element, index) => element.withRuntimeIndex(index))
+      : [];
     const rest = new EvaluationArrayValue(
-      exact ? value.elements.slice(startIndex) : [],
-      !exact,
+      restElements,
       node,
-      !exact,
-      value.uncertainties,
-      value.shapeOpenSeams,
+      exact
+        ? EvaluationArrayShape.exact(Math.max(0, value.exactLength! - startIndex))
+        : EvaluationArrayShape.from({
+            exactLength: value.exactLength == null
+              ? null
+              : Math.max(0, value.exactLength - startIndex),
+            hasExactElements: false,
+            hasExactOrder: !value.mayHaveUnknownOrder,
+            uncertainties: value.uncertainties,
+            extentOpenSeams: value.extentOpenSeams,
+            elementOpenSeams: value.elementOpenSeams,
+            orderOpenSeams: value.orderOpenSeams,
+          }),
     );
     return new EvaluationValueEvidence(rest, source.openSeams);
   }
@@ -460,15 +486,15 @@ function readObjectBindingValue(
     );
   }
   if (value.kind === EvaluationValueKind.Array && propertyName === 'length') {
-    return value.mayHaveUnknownElements || value.mayHaveUnknownOrder
+    return value.exactLength == null
       ? unknownBindingEvidence(
           source,
-          'Array length depends on unknown membership or order.',
+          'Array length depends on unknown extent.',
           node,
           moduleKey,
           host,
         )
-      : new EvaluationValueEvidence(new EvaluationNumberValue(value.elements.length, node), source.openSeams);
+      : new EvaluationValueEvidence(new EvaluationNumberValue(value.exactLength, node), source.openSeams);
   }
   if (value.kind === EvaluationValueKind.String && propertyName === 'length') {
     return new EvaluationValueEvidence(new EvaluationNumberValue(value.value.length, node), source.openSeams);

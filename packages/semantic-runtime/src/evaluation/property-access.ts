@@ -135,7 +135,7 @@ export interface StaticPropertyAccessEvaluationHost {
     argumentValues: readonly EvaluationValueEvidence[],
     moduleKey: string,
     depth: number,
-    thisValue?: EvaluationValueEvidence | null,
+    thisValue: EvaluationValueEvidence | null,
   ): EvaluationValue;
 
   unknown(
@@ -383,14 +383,14 @@ export function readStaticValueProperty(
     return staticValueMemberValue(new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `String.prototype.${propertyName}`, node));
   }
   if (receiver.kind === EvaluationValueKind.Array && propertyName === 'length') {
-    return receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder
+    return receiver.exactLength == null
       ? staticValueMemberOpen(
-          ['Array length depends on unknown membership or order.', ...evaluationArrayUncertaintySummaries(receiver)].join(' '),
+          ['Array length depends on unknown extent.', ...evaluationArrayUncertaintySummaries(receiver)].join(' '),
           EvaluationOpenSeamKind.UnresolvedIdentifier,
           [],
-          receiver.shapeOpenSeams,
+          receiver.extentOpenSeams,
         )
-      : staticValueMemberValue(new EvaluationNumberValue(receiver.elements.length, node));
+      : staticValueMemberValue(new EvaluationNumberValue(receiver.exactLength, node));
   }
   if (receiver.kind === EvaluationValueKind.Set && propertyName === 'size' && !receiver.weak) {
     return staticValueMemberValue(new EvaluationNumberValue(receiver.elements.length, node));
@@ -418,13 +418,13 @@ export function readStaticValueElement(
         [`Array index ${argument.value} depends on unknown membership or order.`, ...evaluationArrayUncertaintySummaries(receiver)].join(' '),
         EvaluationOpenSeamKind.UnresolvedIdentifier,
         [],
-        receiver.shapeOpenSeams,
+        receiver.aggregateOpenSeams,
       );
     }
     const index = Number.isInteger(argument.value) && argument.value >= 0
       ? argument.value
       : null;
-    const element = index == null ? null : receiver.elements[index] ?? null;
+    const element = index == null ? null : receiver.elementAtRuntimeIndex(index);
     if (element != null) {
       return element.openSeams.length === 0
         ? staticValueMemberValue(element.value)

@@ -1,5 +1,6 @@
 import {
   EvaluationArrayElement,
+  EvaluationArrayShape,
   EvaluationArrayUncertaintyKind,
   EvaluationArrayValue,
   EvaluationBoundaryKind,
@@ -24,7 +25,7 @@ import {
  * This is used when semantic-runtime intentionally does not materialize every runtime instance, such as repeated
  * template views or speculative branches with a dynamic condition. The result must stay safe: exact values are kept
  * only when every lane agrees, string-like lanes become a dynamic string pattern, object lanes keep only common
- * properties, arrays keep common prefix elements plus compact membership uncertainty, and unrelated lanes fall back
+ * properties, arrays keep common runtime slots plus compact membership uncertainty, and unrelated lanes fall back
  * to a binding-scope boundary value.
  */
 export function representativeEvaluationValues(
@@ -170,30 +171,57 @@ function representativeArrayValue(
   sourceBoundaryKind: EvaluationBoundaryKind | null,
 ): EvaluationArrayValue {
   const elements: EvaluationArrayElement[] = [];
-  const shortest = Math.min(...values.map((value) => value.elements.length));
-  for (let index = 0; index < shortest; index += 1) {
-    const first = values[0]!.elements[index]!;
-    if (!values.every((value) => evaluationValuesStrictlyEqual(value.elements[index]!.value, first.value))) {
-      break;
+  const firstValue = values[0]!;
+  if (values.every((value) => value.hasExactElementPositions)) {
+    for (const first of firstValue.elements) {
+      const runtimeIndex = first.runtimeIndex!;
+      const matching = values.map((value) => value.elementAtRuntimeIndex(runtimeIndex));
+      if (
+        matching.some((element) => element == null)
+        || !matching.every((element) => evaluationValuesStrictlyEqual(element!.value, first.value))
+      ) {
+        continue;
+      }
+      elements.push(new EvaluationArrayElement(
+        first.value,
+        first.expression,
+        matching.flatMap((element) => element!.openSeams),
+        runtimeIndex,
+      ));
     }
-    elements.push(new EvaluationArrayElement(first.value, first.expression));
   }
-  const mayHaveUnknownElements = values.some((value) => value.mayHaveUnknownElements)
-    || values.some((value) => value.elements.length !== elements.length);
+  const exactLengths = values.map((value) => value.exactLength);
+  const exactLength = exactLengths[0] != null && exactLengths.every((value) => value === exactLengths[0])
+    ? exactLengths[0]
+    : null;
+  const commonMembership = exactLength != null
+    && values.every((value) => value.hasExactElementPositions)
+    && values.every((value) => value.elements.length === firstValue.elements.length)
+    && firstValue.elements.every((first) => values.every((value) => {
+      const element = value.elementAtRuntimeIndex(first.runtimeIndex!);
+      return element != null && evaluationValuesStrictlyEqual(element.value, first.value);
+    }));
+  const mayHaveUnknownElements = !commonMembership;
   const mayHaveUnknownOrder = values.some((value) => value.mayHaveUnknownOrder);
   return new EvaluationArrayValue(
     elements,
-    mayHaveUnknownElements,
     values[0]?.node ?? null,
-    mayHaveUnknownOrder,
-    mergeEvaluationArrayUncertainties(...values, mayHaveUnknownElements
-        ? [{
-            kind: EvaluationArrayUncertaintyKind.ConditionalBranch,
-            node: values[0]?.node ?? null,
-            boundaryKind: sourceBoundaryKind ?? undefined,
-            boundaryPath: sourceLabel ?? path,
-          }]
-      : []),
+    EvaluationArrayShape.from({
+      exactLength,
+      hasExactElements: !mayHaveUnknownElements,
+      hasExactOrder: !mayHaveUnknownOrder,
+      uncertainties: mergeEvaluationArrayUncertainties(...values, mayHaveUnknownElements
+          ? [{
+              kind: EvaluationArrayUncertaintyKind.ConditionalBranch,
+              node: values[0]?.node ?? null,
+              boundaryKind: sourceBoundaryKind ?? undefined,
+              boundaryPath: sourceLabel ?? path,
+            }]
+        : []),
+      extentOpenSeams: values.flatMap((value) => value.extentOpenSeams),
+      elementOpenSeams: values.flatMap((value) => value.elementOpenSeams),
+      orderOpenSeams: values.flatMap((value) => value.orderOpenSeams),
+    }),
   );
 }
 

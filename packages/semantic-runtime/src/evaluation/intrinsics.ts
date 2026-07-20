@@ -62,7 +62,7 @@ import {
 } from './intrinsics/object-intrinsics.js';
 import { evaluatePromiseContinuation, evaluatePromiseResolve, evaluatePromiseThen } from './intrinsics/promise-intrinsics.js';
 import { evaluateRegExpCall, evaluateRegExpConstructor } from './intrinsics/regexp-intrinsics.js';
-import { evaluateCallArgumentValues } from './intrinsics/shared.js';
+import { evaluatePositionalIntrinsicArguments } from './intrinsics/shared.js';
 import {
   evaluateStringCall,
   evaluateStringAt,
@@ -76,7 +76,10 @@ import {
   evaluateStringTransform,
 } from './intrinsics/string-intrinsics.js';
 import { EvaluationOpenSeamKind } from './seams.js';
-import type { EvaluationValue } from './values.js';
+import {
+  EvaluationUnknownValue,
+  type EvaluationValue,
+} from './values.js';
 import { readCallCalleeText, unwrapExpression } from './ts-syntax.js';
 
 export type {
@@ -121,9 +124,25 @@ function evaluateGlobalIntrinsicConstructor(
   if (constructorName == null || !isAureliaExpressionGlobalName(constructorName)) {
     return null;
   }
-  const argumentValues = (expression.arguments ?? []).map((argument) =>
-    host.evaluateExpression(argument, environment, moduleKey, depth + 1)
+  const argumentRead = evaluatePositionalIntrinsicArguments(
+    expression.arguments ?? [],
+    expression,
+    environment,
+    moduleKey,
+    depth + 1,
+    host,
+    'Global constructor argument list did not close.',
   );
+  if (argumentRead.kind === 'open') {
+    return argumentRead.value;
+  }
+  const argumentEvidence = argumentRead.evidence;
+  const argumentOpenSeams = argumentEvidence.flatMap((argument) => argument.openSeams);
+  if (argumentOpenSeams.length > 0) {
+    host.replayOpenSeams(argumentOpenSeams);
+    return new EvaluationUnknownValue('Global constructor arguments retained open pressure.', expression, true);
+  }
+  const argumentValues = argumentEvidence.map((argument) => argument.value);
   const result = evaluateAureliaExpressionGlobalConstructor(constructorName, argumentValues, expression);
   switch (result.kind) {
     case AureliaGlobalIntrinsicEvaluationKind.Value:
@@ -191,7 +210,25 @@ function evaluateGlobalIntrinsicCall(
   ) {
     return null;
   }
-  const argumentValues = evaluateCallArgumentValues(call, environment, moduleKey, depth + 1, host);
+  const argumentRead = evaluatePositionalIntrinsicArguments(
+    call.arguments,
+    call,
+    environment,
+    moduleKey,
+    depth + 1,
+    host,
+    'Global intrinsic argument list did not close.',
+  );
+  if (argumentRead.kind === 'open') {
+    return argumentRead.value;
+  }
+  const argumentEvidence = argumentRead.evidence;
+  const argumentOpenSeams = argumentEvidence.flatMap((argument) => argument.openSeams);
+  if (argumentOpenSeams.length > 0) {
+    host.replayOpenSeams(argumentOpenSeams);
+    return new EvaluationUnknownValue('Global intrinsic arguments retained open pressure.', call, true);
+  }
+  const argumentValues = argumentEvidence.map((argument) => argument.value);
   const result = memberDot < 0
     ? evaluateAureliaExpressionGlobalCall(calleeText, argumentValues, call)
     : evaluateAureliaExpressionGlobalMemberCallFromPath(

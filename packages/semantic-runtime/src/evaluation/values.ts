@@ -205,8 +205,16 @@ export class EvaluationArrayElement {
     readonly expression: ts.Expression | null,
     /** Exact evaluator pressure produced while computing this element. */
     openSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    /** Runtime array index for this retained present element, or null when position is not statically known. */
+    readonly runtimeIndex: number | null = null,
   ) {
     this.openSeams = compactEvaluationOpenSeams(openSeams);
+  }
+
+  withRuntimeIndex(runtimeIndex: number | null): EvaluationArrayElement {
+    return this.runtimeIndex === runtimeIndex
+      ? this
+      : new EvaluationArrayElement(this.value, this.expression, this.openSeams, runtimeIndex);
   }
 }
 
@@ -215,8 +223,6 @@ export const enum EvaluationArrayUncertaintyKind {
   BoundarySpread = 'boundary-spread',
   /** Array membership depends on a dynamic conditional branch whose chosen lane is not statically known. */
   ConditionalBranch = 'conditional-branch',
-  /** Array membership includes an elision hole, so the evaluator cannot treat every slot as an authored element. */
-  OmittedElement = 'omitted-element',
   /** Array membership depends on a spread value that did not reduce to an evaluator-local Array. */
   NonArraySpread = 'non-array-spread',
   /** Array order depends on an operation that could not be reduced to exact static ordering. */
@@ -232,67 +238,316 @@ export interface EvaluationArrayUncertainty {
 
 const emptyEvaluationArrayUncertainties: readonly EvaluationArrayUncertainty[] = [];
 
+export interface EvaluationArrayShapeInit {
+  /** Exact runtime `length`, or null when unknown insertion/removal can change it. */
+  readonly exactLength: number | null;
+  /** Whether every present element and every hole is known, independently of their final order. */
+  readonly hasExactElements: boolean;
+  /** Whether retained elements remain in their exact runtime order. */
+  readonly hasExactOrder: boolean;
+  /** Compact local reasons for any open array axis. */
+  readonly uncertainties: readonly EvaluationArrayUncertainty[];
+  /** Pressure that prevents runtime `length` from closing. */
+  readonly extentOpenSeams: readonly EvaluationOpenSeam[];
+  /** Pressure that prevents retained elements from closing to exact positions. */
+  readonly elementOpenSeams: readonly EvaluationOpenSeam[];
+  /** Pressure that prevents retained elements from closing to exact order. */
+  readonly orderOpenSeams: readonly EvaluationOpenSeam[];
+}
+
+/** Immutable closure state for the independent axes of one evaluator-local array. */
+export class EvaluationArrayShape {
+  readonly uncertainties: readonly EvaluationArrayUncertainty[];
+  readonly extentOpenSeams: readonly EvaluationOpenSeam[];
+  readonly elementOpenSeams: readonly EvaluationOpenSeam[];
+  readonly orderOpenSeams: readonly EvaluationOpenSeam[];
+
+  constructor(
+    readonly exactLength: number | null,
+    readonly hasExactElements: boolean,
+    readonly hasExactOrder: boolean,
+    uncertainties: readonly EvaluationArrayUncertainty[],
+    extentOpenSeams: readonly EvaluationOpenSeam[],
+    elementOpenSeams: readonly EvaluationOpenSeam[],
+    orderOpenSeams: readonly EvaluationOpenSeam[],
+  ) {
+    if (exactLength != null && (!Number.isInteger(exactLength) || exactLength < 0)) {
+      throw new Error('An exact evaluator array length must be a non-negative integer.');
+    }
+    if (hasExactElements && exactLength == null) {
+      throw new Error('Exact evaluator array elements require an exact runtime length.');
+    }
+    this.uncertainties = uncertainties.length === 0
+      ? emptyEvaluationArrayUncertainties
+      : uniqueEvaluationArrayUncertainties(uncertainties);
+    this.extentOpenSeams = compactEvaluationOpenSeams(extentOpenSeams);
+    this.elementOpenSeams = compactEvaluationOpenSeams(elementOpenSeams);
+    this.orderOpenSeams = compactEvaluationOpenSeams(orderOpenSeams);
+  }
+
+  static exact(length: number): EvaluationArrayShape {
+    return new EvaluationArrayShape(length, true, true, [], [], [], []);
+  }
+
+  static from(init: EvaluationArrayShapeInit): EvaluationArrayShape {
+    return new EvaluationArrayShape(
+      init.exactLength,
+      init.hasExactElements,
+      init.hasExactOrder,
+      init.uncertainties,
+      init.extentOpenSeams,
+      init.elementOpenSeams,
+      init.orderOpenSeams,
+    );
+  }
+
+  get hasExactPositions(): boolean {
+    return this.hasExactElements && this.hasExactOrder;
+  }
+
+  get aggregateOpenSeams(): readonly EvaluationOpenSeam[] {
+    return compactEvaluationOpenSeams([
+      ...this.extentOpenSeams,
+      ...this.elementOpenSeams,
+      ...this.orderOpenSeams,
+    ]);
+  }
+
+  withUnknownExtent(
+    openSeams: readonly EvaluationOpenSeam[],
+    uncertainty: EvaluationArrayUncertainty | null = null,
+  ): EvaluationArrayShape {
+    return EvaluationArrayShape.from({
+      exactLength: null,
+      hasExactElements: false,
+      hasExactOrder: this.hasExactOrder,
+      uncertainties: appendArrayShapeUncertainty(this.uncertainties, uncertainty),
+      extentOpenSeams: [...this.extentOpenSeams, ...openSeams],
+      elementOpenSeams: [...this.elementOpenSeams, ...openSeams],
+      orderOpenSeams: this.orderOpenSeams,
+    });
+  }
+
+  withUnknownElements(
+    openSeams: readonly EvaluationOpenSeam[],
+    uncertainty: EvaluationArrayUncertainty | null = null,
+  ): EvaluationArrayShape {
+    return EvaluationArrayShape.from({
+      exactLength: this.exactLength,
+      hasExactElements: false,
+      hasExactOrder: this.hasExactOrder,
+      uncertainties: appendArrayShapeUncertainty(this.uncertainties, uncertainty),
+      extentOpenSeams: this.extentOpenSeams,
+      elementOpenSeams: [...this.elementOpenSeams, ...openSeams],
+      orderOpenSeams: this.orderOpenSeams,
+    });
+  }
+
+  withUnknownOrder(
+    openSeams: readonly EvaluationOpenSeam[],
+    uncertainty: EvaluationArrayUncertainty | null = null,
+  ): EvaluationArrayShape {
+    return EvaluationArrayShape.from({
+      exactLength: this.exactLength,
+      hasExactElements: this.hasExactElements,
+      hasExactOrder: false,
+      uncertainties: appendArrayShapeUncertainty(this.uncertainties, uncertainty),
+      extentOpenSeams: this.extentOpenSeams,
+      elementOpenSeams: this.elementOpenSeams,
+      orderOpenSeams: [...this.orderOpenSeams, ...openSeams],
+    });
+  }
+
+  withExactLengthDelta(delta: number): EvaluationArrayShape {
+    if (this.exactLength == null) {
+      return this;
+    }
+    const exactLength = this.exactLength + delta;
+    if (!Number.isInteger(delta) || exactLength < 0) {
+      throw new Error('An evaluator array length delta must preserve a non-negative integer length.');
+    }
+    return EvaluationArrayShape.from({
+      exactLength,
+      hasExactElements: this.hasExactElements,
+      hasExactOrder: this.hasExactOrder,
+      uncertainties: this.uncertainties,
+      extentOpenSeams: this.extentOpenSeams,
+      elementOpenSeams: this.elementOpenSeams,
+      orderOpenSeams: this.orderOpenSeams,
+    });
+  }
+}
+
 /** Array value with element-level evaluator values. */
 export class EvaluationArrayValue {
   readonly kind = EvaluationValueKind.Array;
   readonly elements: EvaluationArrayElement[];
-  uncertainties: readonly EvaluationArrayUncertainty[];
-  readonly shapeOpenSeams: readonly EvaluationOpenSeam[];
+  private _shape: EvaluationArrayShape;
 
   constructor(
     /** Concrete element values in array order. */
     elements: readonly EvaluationArrayElement[],
-    /** Whether a spread or hole prevented exact element closure. */
-    public mayHaveUnknownElements: boolean,
     /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,
-    /** Whether membership is known but order was affected by an unclosed ordering operation. */
-    public mayHaveUnknownOrder: boolean = false,
-    /** Compact local reasons for unknown membership/order, kept out of durable kernel records. */
-    uncertainties: readonly EvaluationArrayUncertainty[] = emptyEvaluationArrayUncertainties,
-    /** Exact pressure that prevents the array's membership or order from closing. */
-    shapeOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    /** Independent closure state for extent, element positions, and order. */
+    shape: EvaluationArrayShape = EvaluationArrayShape.exact(elements.length),
   ) {
-    this.elements = [...elements];
-    this.uncertainties = uncertainties.length === 0
-      ? emptyEvaluationArrayUncertainties
-      : uniqueEvaluationArrayUncertainties(uncertainties);
-    this.shapeOpenSeams = compactEvaluationOpenSeams(shapeOpenSeams);
+    this.elements = normalizeEvaluationArrayElements(elements, shape);
+    this._shape = shape;
   }
 
-  /** Mark the array as having element membership or values that static evaluation could not close. */
-  markUnknownElements(uncertainty: EvaluationArrayUncertainty | null = null): void {
-    this.mayHaveUnknownElements = true;
-    if (uncertainty != null) {
-      this.appendUncertainty(uncertainty);
-    }
+  get exactLength(): number | null {
+    return this._shape.exactLength;
   }
 
-  /** Mark the array as having an ordering operation that static evaluation could not close. */
-  markUnknownOrder(uncertainty: EvaluationArrayUncertainty | null = null): void {
-    this.mayHaveUnknownOrder = true;
-    if (uncertainty != null) {
-      this.appendUncertainty(uncertainty);
-    }
+  get shape(): EvaluationArrayShape {
+    return this._shape;
+  }
+
+  get hasExactElementPositions(): boolean {
+    return this._shape.hasExactPositions;
+  }
+
+  get isDense(): boolean {
+    return this._shape.hasExactPositions && this._shape.exactLength === this.elements.length;
+  }
+
+  elementAtRuntimeIndex(runtimeIndex: number): EvaluationArrayElement | null {
+    return this.elements.find((element) => element.runtimeIndex === runtimeIndex) ?? null;
+  }
+
+  get mayHaveUnknownElements(): boolean {
+    return !this._shape.hasExactElements;
+  }
+
+  get mayHaveUnknownOrder(): boolean {
+    return !this._shape.hasExactOrder;
+  }
+
+  get uncertainties(): readonly EvaluationArrayUncertainty[] {
+    return this._shape.uncertainties;
+  }
+
+  get extentOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._shape.extentOpenSeams;
+  }
+
+  get elementOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._shape.elementOpenSeams;
+  }
+
+  get orderOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._shape.orderOpenSeams;
+  }
+
+  get aggregateOpenSeams(): readonly EvaluationOpenSeam[] {
+    return this._shape.aggregateOpenSeams;
+  }
+
+  markUnknownExtent(
+    openSeams: readonly EvaluationOpenSeam[],
+    uncertainty: EvaluationArrayUncertainty | null = null,
+  ): void {
+    this.setShape(this._shape.withUnknownExtent(openSeams, uncertainty));
+  }
+
+  markUnknownElements(
+    openSeams: readonly EvaluationOpenSeam[],
+    uncertainty: EvaluationArrayUncertainty | null = null,
+  ): void {
+    this.setShape(this._shape.withUnknownElements(openSeams, uncertainty));
+  }
+
+  markUnknownOrder(
+    openSeams: readonly EvaluationOpenSeam[],
+    uncertainty: EvaluationArrayUncertainty | null = null,
+  ): void {
+    this.setShape(this._shape.withUnknownOrder(openSeams, uncertainty));
+  }
+
+  adjustExactLength(delta: number): void {
+    this.setShape(this._shape.withExactLengthDelta(delta));
   }
 
   /** Replace known element order after a mutating array operation such as sort. */
   replaceElementOrder(
     elements: readonly EvaluationArrayElement[],
-    mayHaveUnknownOrder: boolean,
+    orderIsOpen: boolean,
+    orderOpenSeams: readonly EvaluationOpenSeam[],
   ): void {
-    this.elements.splice(0, this.elements.length, ...elements);
-    this.mayHaveUnknownOrder ||= mayHaveUnknownOrder;
+    if (orderIsOpen) {
+      const shape = this._shape.withUnknownOrder(orderOpenSeams, {
+        kind: EvaluationArrayUncertaintyKind.UnknownOrder,
+        node: this.node,
+      });
+      this.replaceElements(elements, shape);
+      return;
+    }
+    this.replaceElements(
+      elements.map((element, runtimeIndex) => element.withRuntimeIndex(runtimeIndex)),
+      this._shape,
+    );
   }
 
-  private appendUncertainty(
-    uncertainty: EvaluationArrayUncertainty,
+  /** Atomically replace retained elements and closure state so positional invariants cannot drift. */
+  replaceElements(
+    elements: readonly EvaluationArrayElement[],
+    shape: EvaluationArrayShape = this._shape,
   ): void {
-    if (this.uncertainties === emptyEvaluationArrayUncertainties) {
-      this.uncertainties = [];
-    }
-    appendEvaluationArrayUncertainty(this.uncertainties as EvaluationArrayUncertainty[], uncertainty);
+    const normalized = normalizeEvaluationArrayElements(elements, shape);
+    this.elements.splice(0, this.elements.length, ...normalized);
+    this._shape = shape;
   }
+
+  private setShape(shape: EvaluationArrayShape): void {
+    if (!shape.hasExactPositions) {
+      for (let index = 0; index < this.elements.length; index += 1) {
+        this.elements[index] = this.elements[index]!.withRuntimeIndex(null);
+      }
+    }
+    this._shape = shape;
+  }
+}
+
+function normalizeEvaluationArrayElements(
+  elements: readonly EvaluationArrayElement[],
+  shape: EvaluationArrayShape,
+): EvaluationArrayElement[] {
+  if (!shape.hasExactPositions) {
+    return elements.map((element) => element.withRuntimeIndex(null));
+  }
+  if (shape.exactLength == null) {
+    throw new Error('Exact evaluator array positions require an exact runtime length.');
+  }
+  if (elements.length === shape.exactLength) {
+    return elements.map((element, runtimeIndex) => element.withRuntimeIndex(runtimeIndex));
+  }
+  const seen = new Set<number>();
+  let previous = -1;
+  for (const element of elements) {
+    const runtimeIndex = element.runtimeIndex;
+    if (
+      runtimeIndex == null
+      || runtimeIndex < 0
+      || runtimeIndex >= shape.exactLength
+      || runtimeIndex <= previous
+      || seen.has(runtimeIndex)
+    ) {
+      throw new Error('An exact sparse evaluator array requires unique ascending runtime element indices.');
+    }
+    seen.add(runtimeIndex);
+    previous = runtimeIndex;
+  }
+  return [...elements];
+}
+
+function appendArrayShapeUncertainty(
+  uncertainties: readonly EvaluationArrayUncertainty[],
+  uncertainty: EvaluationArrayUncertainty | null,
+): readonly EvaluationArrayUncertainty[] {
+  return uncertainty == null
+    ? uncertainties
+    : mergeEvaluationArrayUncertainties(uncertainties, [uncertainty]);
 }
 
 export function evaluationArrayBoundarySpreadUncertainty(
@@ -320,8 +575,6 @@ export function evaluationArrayUncertaintySummaries(
         return uncertainty.boundaryPath == null
           ? 'membership depends on a dynamic conditional branch'
           : `membership depends on conditional branch ${uncertainty.boundaryPath}`;
-      case EvaluationArrayUncertaintyKind.OmittedElement:
-        return 'membership includes an elision hole';
       case EvaluationArrayUncertaintyKind.NonArraySpread:
         return 'membership depends on a spread value that did not reduce to an array';
       case EvaluationArrayUncertaintyKind.UnknownOrder:

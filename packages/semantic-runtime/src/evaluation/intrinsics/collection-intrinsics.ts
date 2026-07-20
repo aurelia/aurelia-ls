@@ -1,7 +1,10 @@
 import ts from 'typescript';
 import type { ModuleEnvironmentRecord } from '../environment.js';
 import { EvaluationOpenSeamKind } from '../seams.js';
-import { evaluationArrayHasExactPositions } from '../array-value-operations.js';
+import {
+  evaluationArrayHasExactPositions,
+  evaluationArrayIteratorElements,
+} from '../array-value-operations.js';
 import {
   EvaluationArrayElement,
   EvaluationBooleanValue,
@@ -30,9 +33,18 @@ export function evaluateSetConstructor(
     return new EvaluationSetValue([], weak, expression, weak);
   }
   if (iterable.kind === EvaluationValueKind.Array) {
+    if (iterable.exactLength != null && iterable.exactLength > host.guardrails.maxLoopIterations) {
+      return host.unknown(
+        `${weak ? 'WeakSet' : 'Set'} constructor iterable exceeds the static iteration guardrail.`,
+        expression,
+        moduleKey,
+        EvaluationOpenSeamKind.DynamicCall,
+      );
+    }
+    const elements = evaluationArrayIteratorElements(iterable);
     return new EvaluationSetValue(
-      iterable.elements,
-      weak || iterable.mayHaveUnknownElements,
+      elements ?? iterable.elements,
+      weak || elements == null,
       expression,
       weak,
     );
@@ -67,22 +79,32 @@ export function evaluateMapConstructor(
       EvaluationOpenSeamKind.DynamicCall,
     );
   }
+  if (iterable.exactLength != null && iterable.exactLength > host.guardrails.maxLoopIterations) {
+    return host.unknown(
+      `${weak ? 'WeakMap' : 'Map'} constructor iterable exceeds the static iteration guardrail.`,
+      expression,
+      moduleKey,
+      EvaluationOpenSeamKind.DynamicCall,
+    );
+  }
 
   const entries: EvaluationMapEntry[] = [];
-  let mayHaveUnknownEntries = weak || iterable.mayHaveUnknownElements || iterable.mayHaveUnknownOrder;
-  for (const element of iterable.elements) {
+  const iterableElements = evaluationArrayIteratorElements(iterable);
+  let mayHaveUnknownEntries = weak || iterableElements == null;
+  for (const element of iterableElements ?? iterable.elements) {
     const value = element.value;
     if (
       value.kind !== EvaluationValueKind.Array
       || !evaluationArrayHasExactPositions(value)
-      || value.elements.length < 2
     ) {
       mayHaveUnknownEntries = true;
       continue;
     }
+    const key = value.elementAtRuntimeIndex(0);
+    const entryValue = value.elementAtRuntimeIndex(1);
     entries.push(new EvaluationMapEntry(
-      value.elements[0]!.value,
-      value.elements[1]!.value,
+      key?.value ?? EvaluationUndefined,
+      entryValue?.value ?? EvaluationUndefined,
       element.expression,
     ));
   }

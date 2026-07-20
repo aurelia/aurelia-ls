@@ -5,6 +5,7 @@ import {
 } from '../expression/global-names.js';
 import {
   EvaluationArrayElement,
+  EvaluationArrayShape,
   EvaluationArrayValue,
   EvaluationBigIntValue,
   EvaluationBooleanValue,
@@ -30,7 +31,13 @@ import {
   type EvaluationValue,
 } from './values.js';
 import { readEvaluationEnumerableOwnEntries } from './enumerable-own-properties.js';
-import { evaluationArrayHasExactPositions } from './array-value-operations.js';
+import { DefaultStaticEvaluationGuardrails } from './policy.js';
+import {
+  denseEvaluationArrayElements,
+  evaluationArrayHasExactPositions,
+  evaluationArrayIteratorElements,
+  isValidEvaluationArrayLength,
+} from './array-value-operations.js';
 import {
   regularExpressionFlagsText,
   regularExpressionPatternText,
@@ -111,7 +118,7 @@ export function evaluateAureliaExpressionGlobalCall(
     case AureliaExpressionGlobalName.RegExp:
       return regexpGlobalCall(argumentValues, node);
     case AureliaExpressionGlobalName.Array:
-      return value(arrayConstructorValue(argumentValues, node));
+      return arrayConstructorValue(argumentValues, node);
     case AureliaExpressionGlobalName.IsNaN:
       return numberPredicateGlobalCall(name, argumentValues, Number.isNaN, node);
     case AureliaExpressionGlobalName.IsFinite:
@@ -151,7 +158,7 @@ export function evaluateAureliaExpressionGlobalConstructor(
 ): AureliaGlobalIntrinsicEvaluation {
   switch (name) {
     case AureliaExpressionGlobalName.Array:
-      return value(arrayConstructorValue(argumentValues, node));
+      return arrayConstructorValue(argumentValues, node);
     case AureliaExpressionGlobalName.RegExp:
       return regexpGlobalCall(argumentValues, node);
     case AureliaExpressionGlobalName.Set:
@@ -460,14 +467,14 @@ function objectGlobalMemberCall(
         ? runtimeOpen('Object.keys(...) argument depends on runtime object shape.')
         : value(new EvaluationArrayValue(enumerable.entries.map((entry) =>
           new EvaluationArrayElement(new EvaluationStringValue(entry.name, node), entry.expression)
-        ), enumerable.mayHaveUnknownEntries, node, enumerable.mayHaveUnknownOrder));
+        ), node, enumerable.toArrayShape()));
     }
     case 'values': {
       return enumerable == null
         ? runtimeOpen('Object.values(...) argument depends on runtime object shape.')
         : value(new EvaluationArrayValue(enumerable.entries.map((entry) =>
-          new EvaluationArrayElement(entry.value, entry.expression)
-        ), enumerable.mayHaveUnknownEntries, node, enumerable.mayHaveUnknownOrder));
+          new EvaluationArrayElement(entry.value, entry.expression, entry.openSeams)
+        ), node, enumerable.toArrayShape()));
     }
     case 'entries': {
       return enumerable == null
@@ -475,9 +482,9 @@ function objectGlobalMemberCall(
         : value(new EvaluationArrayValue(enumerable.entries.map((entry) =>
           new EvaluationArrayElement(new EvaluationArrayValue([
             new EvaluationArrayElement(new EvaluationStringValue(entry.name, node), entry.expression),
-            new EvaluationArrayElement(entry.value, entry.expression),
-          ], false, node), entry.expression)
-        ), enumerable.mayHaveUnknownEntries, node, enumerable.mayHaveUnknownOrder));
+            new EvaluationArrayElement(entry.value, entry.expression, entry.openSeams),
+          ], node), entry.expression)
+        ), node, enumerable.toArrayShape()));
     }
     default:
       return unsupported(`Object.${memberName} is not modeled as a host global intrinsic.`);
@@ -495,7 +502,7 @@ function arrayGlobalMemberCall(
     case 'of':
       return value(new EvaluationArrayValue(argumentValues.map((argument) =>
         new EvaluationArrayElement(argument, null)
-      ), false, node));
+      ), node));
     case 'from':
       return arrayFromGlobalCall(argumentValues, node);
     default:
@@ -528,14 +535,23 @@ function arrayFromGlobalCall(
   argumentValues: readonly EvaluationValue[],
   node: ts.Node | null,
 ): AureliaGlobalIntrinsicEvaluation {
+  if (argumentValues.length > 1) {
+    return runtimeOpen('Array.from(...) mapper execution requires the syntax-aware intrinsic host.');
+  }
   const source = argumentValues[0] ?? EvaluationUndefined;
   if (source.kind === EvaluationValueKind.Array) {
-    return value(new EvaluationArrayValue(source.elements, source.mayHaveUnknownElements, node, source.mayHaveUnknownOrder));
+    if (source.exactLength == null || source.exactLength > DefaultStaticEvaluationGuardrails.maxLoopIterations) {
+      return runtimeOpen('Array.from(...) source exceeds the static iteration guardrail.');
+    }
+    const elements = denseEvaluationArrayElements(source);
+    return elements == null
+      ? runtimeOpen('Array.from(...) source iteration order depends on runtime array shape.')
+      : value(new EvaluationArrayValue(elements, node));
   }
   if (source.kind === EvaluationValueKind.String) {
     return value(new EvaluationArrayValue([...source.value].map((part) =>
       new EvaluationArrayElement(new EvaluationStringValue(part, node), null)
-    ), false, node));
+    ), node));
   }
   return runtimeOpen('Array.from(...) source depends on runtime iterable semantics.');
 }
@@ -597,18 +613,15 @@ function objectPrototypeToStringTag(value: EvaluationValue): string | null {
 function arrayConstructorValue(
   argumentValues: readonly EvaluationValue[],
   node: ts.Node | null,
-): EvaluationArrayValue {
+): AureliaGlobalIntrinsicEvaluation {
   if (argumentValues.length === 1 && argumentValues[0]?.kind === EvaluationValueKind.Number) {
-    const length = Math.max(0, Math.min(1_000, Math.trunc(argumentValues[0].value)));
-    return new EvaluationArrayValue(
-      Array.from({ length }, () => new EvaluationArrayElement(EvaluationUndefined, null)),
-      length !== argumentValues[0].value || argumentValues[0].value > 1_000,
-      node,
-    );
+    return isValidEvaluationArrayLength(argumentValues[0].value)
+      ? value(new EvaluationArrayValue([], node, EvaluationArrayShape.exact(argumentValues[0].value)))
+      : runtimeOpen('Array constructor numeric length throws RangeError.');
   }
-  return new EvaluationArrayValue(argumentValues.map((argument) =>
+  return value(new EvaluationArrayValue(argumentValues.map((argument) =>
     new EvaluationArrayElement(argument, null)
-  ), false, node);
+  ), node));
 }
 
 function setConstructorValue(
@@ -622,7 +635,11 @@ function setConstructorValue(
   if (iterable.kind !== EvaluationValueKind.Array) {
     return runtimeOpen('Set constructor iterable depends on runtime iterable semantics.');
   }
-  return value(new EvaluationSetValue(iterable.elements, iterable.mayHaveUnknownElements, node));
+  if (iterable.exactLength != null && iterable.exactLength > DefaultStaticEvaluationGuardrails.maxLoopIterations) {
+    return runtimeOpen('Set constructor iterable exceeds the static iteration guardrail.');
+  }
+  const elements = evaluationArrayIteratorElements(iterable);
+  return value(new EvaluationSetValue(elements ?? iterable.elements, elements == null, node));
 }
 
 function mapConstructorValue(
@@ -636,21 +653,26 @@ function mapConstructorValue(
   if (iterable.kind !== EvaluationValueKind.Array) {
     return runtimeOpen('Map constructor iterable depends on runtime iterable semantics.');
   }
+  if (iterable.exactLength != null && iterable.exactLength > DefaultStaticEvaluationGuardrails.maxLoopIterations) {
+    return runtimeOpen('Map constructor iterable exceeds the static iteration guardrail.');
+  }
   const entries: EvaluationMapEntry[] = [];
-  let mayHaveUnknownEntries = iterable.mayHaveUnknownElements || iterable.mayHaveUnknownOrder;
-  for (const element of iterable.elements) {
+  const iterableElements = evaluationArrayIteratorElements(iterable);
+  let mayHaveUnknownEntries = iterableElements == null;
+  for (const element of iterableElements ?? iterable.elements) {
     const entry = element.value;
     if (
       entry.kind !== EvaluationValueKind.Array
       || !evaluationArrayHasExactPositions(entry)
-      || entry.elements.length < 2
     ) {
       mayHaveUnknownEntries = true;
       continue;
     }
+    const key = entry.elementAtRuntimeIndex(0);
+    const entryValue = entry.elementAtRuntimeIndex(1);
     entries.push(new EvaluationMapEntry(
-      entry.elements[0]!.value,
-      entry.elements[1]!.value,
+      key?.value ?? EvaluationUndefined,
+      entryValue?.value ?? EvaluationUndefined,
       null,
     ));
   }
@@ -811,7 +833,7 @@ function evaluationValueFromHostValue(
       if (Array.isArray(hostValue)) {
         return new EvaluationArrayValue(hostValue.map((element) =>
           new EvaluationArrayElement(evaluationValueFromHostValue(element, node), null)
-        ), false, node);
+        ), node);
       }
       if (hostValue instanceof Set) {
         return new EvaluationSetValue([...hostValue].map((element) =>

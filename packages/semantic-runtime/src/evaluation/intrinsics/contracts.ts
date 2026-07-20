@@ -13,6 +13,7 @@ import type {
   EvaluationUnknownValue,
   EvaluationValue,
 } from '../values.js';
+import type { EvaluationValueEvidence } from '../value-pressure.js';
 
 export interface StaticIntrinsicEvaluationHost {
   readonly guardrails: StaticEvaluationGuardrails;
@@ -27,18 +28,26 @@ export interface StaticIntrinsicEvaluationHost {
     depth: number,
   ): EvaluationValue;
 
+  evaluateExpressionEvidence(
+    expression: ts.Expression,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+  ): EvaluationValueEvidence;
+
   evaluateFunctionWithArguments(
     callee: EvaluationFunctionValue,
     call: ts.CallExpression,
-    argumentValues: readonly EvaluationValue[],
+    argumentValues: readonly EvaluationValueEvidence[],
     moduleKey: string,
     depth: number,
+    thisValue: EvaluationValueEvidence | null,
   ): EvaluationValue;
 
   evaluateClassInstantiation(
     callee: EvaluationClassValue,
     expression: ts.Node,
-    argumentValues: readonly EvaluationValue[],
+    argumentValues: readonly EvaluationValueEvidence[],
     moduleKey: string,
     depth: number,
   ): EvaluationValue;
@@ -63,6 +72,10 @@ export interface StaticIntrinsicEvaluationHost {
   restore(checkpoint: StaticIntrinsicEvaluationCheckpoint): void;
 
   openSeamsSince(checkpoint: StaticIntrinsicEvaluationCheckpoint): readonly EvaluationOpenSeam[];
+
+  consumeOpenSeamsSince(checkpoint: StaticIntrinsicEvaluationCheckpoint): readonly EvaluationOpenSeam[];
+
+  replayOpenSeams(openSeams: readonly EvaluationOpenSeam[]): void;
 
   resolveCommonJsRequire(
     moduleKey: string,

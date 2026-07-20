@@ -39,6 +39,7 @@ export function evaluationValueOwnOpenSeams(
 ): readonly EvaluationOpenSeam[] {
   switch (value.kind) {
     case EvaluationValueKind.Array:
+      return value.aggregateOpenSeams;
     case EvaluationValueKind.Object:
       return value.shapeOpenSeams;
     case EvaluationValueKind.Instance:
@@ -107,7 +108,7 @@ function collectRetainedEvaluationOpenSeams(
       return;
     case EvaluationValueKind.ModuleNamespace:
       for (const entry of value.exportEntries.values()) {
-        collectRetainedEvaluationOpenSeams(entry.value, target, seen);
+        addSlotPressure(entry.openSeams, entry.value, target, seen);
       }
       return;
     case EvaluationValueKind.Promise:

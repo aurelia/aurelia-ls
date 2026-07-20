@@ -12,6 +12,7 @@ import {
   aureliaArrayMethodSemanticsFor,
 } from '../expression/array-method-semantics.js';
 import {
+  EvaluationArrayCallbackClosure,
   EvaluationArrayCallbackRead,
   EvaluationArrayMethodDecision,
   EvaluationArrayMethodDecisionKind,
@@ -25,11 +26,11 @@ import {
   evaluationArrayReduceDecision,
 } from '../evaluation/array-callback-values.js';
 import {
+  denseEvaluationArrayElements,
   evaluationArrayConcat,
-  evaluationExactArrayAt,
-  evaluationExactArrayIncludes,
-  evaluationExactArrayIndexOf,
-  evaluationExactArrayJoin,
+  evaluationArrayIncludes,
+  evaluationArrayIndexOf,
+  evaluationArrayJoin,
   evaluationArrayFlat,
   evaluationArraySlice,
   evaluationArraySortedElements,
@@ -40,6 +41,8 @@ import {
 } from '../evaluation/array-value-operations.js';
 import {
   EvaluationArrayElement,
+  EvaluationArrayShape,
+  EvaluationArrayUncertaintyKind,
   EvaluationArrayValue,
   EvaluationBooleanValue,
   EvaluationNumberValue,
@@ -49,6 +52,8 @@ import {
   EvaluationValueKind,
   type EvaluationValue,
 } from '../evaluation/values.js';
+import { EvaluationValueEvidence } from '../evaluation/value-pressure.js';
+import type { EvaluationOpenSeam } from '../evaluation/seams.js';
 import {
   readArrayStartIndex,
   readArrayAtIndex,
@@ -63,6 +68,7 @@ import {
   openBindingSourceNeedsRuntimeValue,
   RuntimeBindingSourceValueEvaluation,
   RuntimeBindingSourceValueEvaluationClosure,
+  bindingSourceValueEvaluationResult,
   bindingSourceValueEvaluationWithPressure,
 } from '../configuration/binding-source-value-evaluation.js';
 import type { RuntimeBindingSourceValueEvaluationContext } from './binding-source-value-evaluation-context.js';
@@ -88,11 +94,14 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
     }
 
     const callbackExpression = expression.args[0];
-    if (callbackExpression?.$kind === 'ArrowFunction' && receiver.elements.length > maxSourceValueCallbackEvaluations) {
+    const method = expression.name.name;
+    const callbackEvaluations = method === 'toSorted'
+        ? receiver.elements.length * receiver.elements.length
+        : receiver.exactLength ?? Number.POSITIVE_INFINITY;
+    if (callbackExpression?.$kind === 'ArrowFunction' && callbackEvaluations > maxSourceValueCallbackEvaluations) {
       return openBindingSourceNeedsRuntimeValue(`Array.${expression.name.name} exceeded the source-value callback budget.`);
     }
 
-    const method = expression.name.name;
     const semantics = aureliaArrayMethodSemanticsFor(method);
     switch (method) {
       case 'at':
@@ -193,7 +202,7 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
     const indexValue = this.evaluateOptionalArgument(expression, context, 0, EvaluationUndefined);
-    if (indexValue.abruptCompletion != null || indexValue.value == null) {
+    if (indexValue.abruptCompletion != null || indexValue.executableValue == null) {
       return indexValue;
     }
     if (receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
@@ -202,15 +211,30 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
         [indexValue],
       );
     }
-    const index = readArrayAtIndex(indexValue.value, receiver.elements.length);
+    if (receiver.exactLength == null) {
+      return bindingSourceValueEvaluationWithPressure(
+        openBindingSourceNeedsRuntimeValue('Array.at receiver extent did not close.'),
+        [indexValue],
+      );
+    }
+    const index = readArrayAtIndex(indexValue.executableValue, receiver.exactLength);
     if (index == null) {
       return bindingSourceValueEvaluationWithPressure(
         openBindingSourceNeedsRuntimeValue('Array.at index did not reduce to a finite number.'),
         [indexValue],
       );
     }
+    const element = receiver.elementAtRuntimeIndex(index);
     return bindingSourceValueEvaluationWithPressure(
-      RuntimeBindingSourceValueEvaluation.value(evaluationExactArrayAt(receiver, index)),
+      element == null
+        ? RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined)
+        : bindingSourceValueEvaluationResult(
+            element.value,
+            element.openSeams.map((seam) => seam.summary),
+            null,
+            [],
+            element.openSeams,
+          ),
       [indexValue],
     );
   }
@@ -220,18 +244,23 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
     expression: CallMemberExpression,
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
-    const argumentValues: EvaluationValue[] = [];
+    const argumentValues: EvaluationArrayElement[] = [];
     const pressure: RuntimeBindingSourceValueEvaluation[] = [];
     for (let index = 0; index < expression.args.length; index += 1) {
       const argument = this.evaluateArgument(expression, context, index);
       if (argument.abruptCompletion != null || argument.value == null) {
         return bindingSourceValueEvaluationWithPressure(argument, pressure);
       }
-      argumentValues.push(argument.value);
+      argumentValues.push(new EvaluationArrayElement(argument.value, null, argument.openSeams));
       pressure.push(argument);
     }
     return bindingSourceValueEvaluationWithPressure(
-      RuntimeBindingSourceValueEvaluation.value(evaluationArrayConcat(receiver, argumentValues, null)),
+      RuntimeBindingSourceValueEvaluation.value(evaluationArrayConcat(
+        receiver,
+        argumentValues,
+        EvaluationArrayShape.exact(argumentValues.length),
+        null,
+      )),
       pressure,
     );
   }
@@ -242,24 +271,30 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
     const search = this.evaluateOptionalArgument(expression, context, 0, EvaluationUndefined);
-    if (search.abruptCompletion != null || search.value == null) {
+    if (search.abruptCompletion != null || search.executableValue == null) {
       return search;
     }
-    const start = this.evaluateStartIndex(expression, context, receiver.elements.length, false);
-    if (start.abruptCompletion != null || start.value?.kind !== EvaluationValueKind.Number) {
+    const start = this.evaluateStartIndex(expression, context, receiver.exactLength ?? 0, false);
+    if (start.abruptCompletion != null || start.executableValue?.kind !== EvaluationValueKind.Number) {
       return bindingSourceValueEvaluationWithPressure(start, [search]);
     }
-    if (receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
+    if (receiver.exactLength == null || receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
       return bindingSourceValueEvaluationWithPressure(
         openBindingSourceNeedsRuntimeValue('Array.includes receiver membership or order did not close.'),
         [search, start],
       );
     }
+    const included = evaluationArrayIncludes(receiver, search.executableValue, start.executableValue.value);
     return bindingSourceValueEvaluationWithPressure(
-      RuntimeBindingSourceValueEvaluation.value(new EvaluationBooleanValue(
-        evaluationExactArrayIncludes(receiver, search.value, start.value.value),
-        null,
-      )),
+      included.value == null
+        ? bindingSourceValueEvaluationResult(
+            null,
+            included.openSeams.map((seam) => seam.summary),
+            null,
+            [],
+            included.openSeams,
+          )
+        : RuntimeBindingSourceValueEvaluation.value(new EvaluationBooleanValue(included.value, null)),
       [search, start],
     );
   }
@@ -272,24 +307,35 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
   ): RuntimeBindingSourceValueEvaluation {
     const method = rightToLeft ? 'lastIndexOf' : 'indexOf';
     const search = this.evaluateOptionalArgument(expression, context, 0, EvaluationUndefined);
-    if (search.abruptCompletion != null || search.value == null) {
+    if (search.abruptCompletion != null || search.executableValue == null) {
       return search;
     }
-    const start = this.evaluateStartIndex(expression, context, receiver.elements.length, rightToLeft);
-    if (start.abruptCompletion != null || start.value?.kind !== EvaluationValueKind.Number) {
+    const start = this.evaluateStartIndex(expression, context, receiver.exactLength ?? 0, rightToLeft);
+    if (start.abruptCompletion != null || start.executableValue?.kind !== EvaluationValueKind.Number) {
       return bindingSourceValueEvaluationWithPressure(start, [search]);
     }
-    if (receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
+    if (receiver.exactLength == null || receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
       return bindingSourceValueEvaluationWithPressure(
         openBindingSourceNeedsRuntimeValue(`Array.${method} receiver membership or order did not close.`),
         [search, start],
       );
     }
+    const index = evaluationArrayIndexOf(
+      receiver,
+      search.executableValue,
+      start.executableValue.value,
+      rightToLeft,
+    );
     return bindingSourceValueEvaluationWithPressure(
-      RuntimeBindingSourceValueEvaluation.value(new EvaluationNumberValue(
-        evaluationExactArrayIndexOf(receiver, search.value, start.value.value, rightToLeft),
-        null,
-      )),
+      index.value == null
+        ? bindingSourceValueEvaluationResult(
+            null,
+            index.openSeams.map((seam) => seam.summary),
+            null,
+            [],
+            index.openSeams,
+          )
+        : RuntimeBindingSourceValueEvaluation.value(new EvaluationNumberValue(index.value, null)),
       [search, start],
     );
   }
@@ -309,6 +355,12 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
         [separatorValue],
       );
     }
+    if (receiver.exactLength == null || receiver.exactLength > maxSourceValueCallbackEvaluations) {
+      return bindingSourceValueEvaluationWithPressure(
+        openBindingSourceNeedsRuntimeValue('Array.join receiver exceeds the source-value iteration budget.'),
+        [separatorValue],
+      );
+    }
     const separator = separatorValue.value.kind === EvaluationValueKind.Undefined
       ? ','
       : stringCoercionText(separatorValue.value);
@@ -318,10 +370,19 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
         [separatorValue],
       );
     }
-    const joined = evaluationExactArrayJoin(receiver, separator);
+    const joined = evaluationArrayJoin(receiver, separator);
     if (joined == null) {
+      const elementOpenSeams = receiver.elements.flatMap((element) => element.openSeams);
       return bindingSourceValueEvaluationWithPressure(
-        openBindingSourceNeedsRuntimeValue('Array.join element did not reduce to a string-coercible value.'),
+        elementOpenSeams.length === 0
+          ? openBindingSourceNeedsRuntimeValue('Array.join element did not reduce to a string-coercible value.')
+          : bindingSourceValueEvaluationResult(
+              null,
+              elementOpenSeams.map((seam) => seam.summary),
+              null,
+              [],
+              elementOpenSeams,
+            ),
         [separatorValue],
       );
     }
@@ -344,9 +405,10 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
     if (endValue.abruptCompletion != null || endValue.value == null) {
       return bindingSourceValueEvaluationWithPressure(endValue, [startValue]);
     }
-    const start = readSliceBound(startValue.value, receiver.elements.length, 0);
-    const end = readSliceBound(endValue.value, receiver.elements.length, receiver.elements.length);
-    if (start == null || end == null || receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
+    const length = receiver.exactLength;
+    const start = length == null ? null : readSliceBound(startValue.value, length, 0);
+    const end = length == null ? null : readSliceBound(endValue.value, length, length);
+    if (start == null || end == null || length == null || receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
       return bindingSourceValueEvaluationWithPressure(
         openBindingSourceNeedsRuntimeValue('Array.slice range or receiver positions did not close.'),
         [startValue, endValue],
@@ -355,8 +417,8 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
     return bindingSourceValueEvaluationWithPressure(
       RuntimeBindingSourceValueEvaluation.value(evaluationArraySlice(
         receiver,
-        Math.min(Math.max(start, 0), receiver.elements.length),
-        Math.min(Math.max(end, 0), receiver.elements.length),
+        Math.min(Math.max(start, 0), length),
+        Math.min(Math.max(end, 0), length),
         null,
       )),
       [startValue, endValue],
@@ -390,6 +452,9 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
   }
 
   private evaluateToReversedCall(receiver: EvaluationArrayValue): RuntimeBindingSourceValueEvaluation {
+    if (receiver.exactLength == null || receiver.exactLength > maxSourceValueCallbackEvaluations) {
+      return openBindingSourceNeedsRuntimeValue('Array.toReversed receiver exceeds the source-value iteration budget.');
+    }
     return RuntimeBindingSourceValueEvaluation.value(evaluationArrayToReversed(receiver, null));
   }
 
@@ -398,19 +463,41 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
     expression: CallMemberExpression,
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
+    if (
+      receiver.exactLength == null
+      || receiver.exactLength > maxSourceValueCallbackEvaluations
+      || receiver.mayHaveUnknownElements
+      || receiver.mayHaveUnknownOrder
+    ) {
+      return openBindingSourceNeedsRuntimeValue('Array.toSorted receiver exceeds the source-value iteration budget.');
+    }
+    const dense = denseEvaluationArrayElements(receiver)!;
     const comparator = expression.args[0] ?? null;
     const comparatorPressure: RuntimeBindingSourceValueEvaluation[] = [];
+    const orderOpenSeams: EvaluationOpenSeam[] = [];
     let comparatorBlocker: RuntimeBindingSourceValueEvaluation | null = null;
     const sorted = comparator == null
-      ? evaluationArraySortedElements(receiver.elements, defaultEvaluationArraySortCompare)
+      ? evaluationArraySortedElements(
+          dense,
+          (left, right) => {
+            if (left.openSeams.length > 0 || right.openSeams.length > 0) {
+              orderOpenSeams.push(...left.openSeams, ...right.openSeams);
+              return null;
+            }
+            return defaultEvaluationArraySortCompare(left, right);
+          },
+        )
       : comparator.$kind === 'ArrowFunction'
-        ? evaluationArraySortedElements(receiver.elements, (left, right) => {
+        ? evaluationArraySortedElements(dense, (left, right) => {
             if (comparatorBlocker != null) {
               return null;
             }
             const result = this.evaluateArrowFunctionCallback(
               comparator,
-              [left.value, right.value],
+              [
+                new EvaluationValueEvidence(left.value, left.openSeams),
+                new EvaluationValueEvidence(right.value, right.openSeams),
+              ],
               context,
               'Array.toSorted comparator',
             );
@@ -420,6 +507,8 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
             }
             if (result.closure === RuntimeBindingSourceValueEvaluationClosure.Open) {
               comparatorPressure.push(result);
+              orderOpenSeams.push(...result.openSeams);
+              return null;
             }
             const comparatorValue = result.executableValue;
             return comparatorValue?.kind === EvaluationValueKind.Number
@@ -433,13 +522,13 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
     if (sorted == null) {
       return openBindingSourceNeedsRuntimeValue('Array.toSorted comparator source-value reduction needs an inline Aurelia arrow function or no comparator.');
     }
-    const result = RuntimeBindingSourceValueEvaluation.value(new EvaluationArrayValue(
-      sorted.elements,
-      receiver.mayHaveUnknownElements,
-      null,
-      receiver.mayHaveUnknownOrder || sorted.mayHaveUnknownOrder,
-      receiver.uncertainties,
-    ));
+    const shape = sorted.mayHaveUnknownOrder
+      ? receiver.shape.withUnknownOrder(orderOpenSeams, {
+          kind: EvaluationArrayUncertaintyKind.UnknownOrder,
+          node: null,
+        })
+      : EvaluationArrayShape.exact(receiver.exactLength);
+    const result = RuntimeBindingSourceValueEvaluation.value(new EvaluationArrayValue(sorted.elements, null, shape));
     const methodPressure = receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder || sorted.mayHaveUnknownOrder
       ? [openBindingSourceNeedsRuntimeValue('Array.toSorted result order or membership did not close.')]
       : [];
@@ -451,13 +540,16 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
     expression: CallMemberExpression,
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
+    if (receiver.exactLength == null || receiver.exactLength > maxSourceValueCallbackEvaluations) {
+      return openBindingSourceNeedsRuntimeValue('Array.toSpliced receiver exceeds the source-value iteration budget.');
+    }
     const pressure: RuntimeBindingSourceValueEvaluation[] = [];
     const startArgument = this.evaluateOptionalArgument(expression, context, 0, EvaluationUndefined);
-    if (startArgument.abruptCompletion != null || startArgument.value == null) {
+    if (startArgument.abruptCompletion != null || startArgument.executableValue == null) {
       return startArgument;
     }
     pressure.push(startArgument);
-    const start = readArrayStartIndex(startArgument.value, receiver.elements.length);
+    const start = readArrayStartIndex(startArgument.executableValue, receiver.exactLength ?? 0);
     if (start == null) {
       return bindingSourceValueEvaluationWithPressure(
         openBindingSourceNeedsRuntimeValue('Array.toSpliced start index did not reduce to a finite number.'),
@@ -467,16 +559,16 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
     let deleteCountValue: EvaluationValue | null = null;
     if (expression.args[1] != null) {
       const deleteCountArgument = this.evaluateArgument(expression, context, 1);
-      if (deleteCountArgument.abruptCompletion != null || deleteCountArgument.value == null) {
+      if (deleteCountArgument.abruptCompletion != null || deleteCountArgument.executableValue == null) {
         return bindingSourceValueEvaluationWithPressure(deleteCountArgument, pressure);
       }
-      deleteCountValue = deleteCountArgument.value;
+      deleteCountValue = deleteCountArgument.executableValue;
       pressure.push(deleteCountArgument);
     }
     const deleteCount = readArraySpliceDeleteCount(
       deleteCountValue,
       start,
-      receiver.elements.length,
+      receiver.exactLength ?? 0,
       expression.args[0] != null,
       expression.args[1] != null,
     );
@@ -489,14 +581,14 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
 
     const inserted: EvaluationArrayElement[] = [];
     for (let index = 2; index < expression.args.length; index += 1) {
-      const argument = this.evaluateArgument(expression, context, index);
+      const argument = this.evaluateSlotArgument(expression, context, index, EvaluationUndefined);
       if (argument.abruptCompletion != null || argument.value == null) {
         return bindingSourceValueEvaluationWithPressure(argument, pressure);
       }
-      inserted.push(new EvaluationArrayElement(argument.value, null));
+      inserted.push(new EvaluationArrayElement(argument.value, null, argument.openSeams));
       pressure.push(argument);
     }
-    if (receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
+    if (receiver.exactLength == null || receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
       return bindingSourceValueEvaluationWithPressure(
         openBindingSourceNeedsRuntimeValue('Array.toSpliced receiver membership or order did not close.'),
         pressure,
@@ -509,8 +601,7 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
         start,
         deleteCount,
         inserted,
-        false,
-        false,
+        EvaluationArrayShape.exact(inserted.length),
         null,
       )),
       pressure,
@@ -522,18 +613,23 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
     expression: CallMemberExpression,
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
+    if (receiver.exactLength == null || receiver.exactLength > maxSourceValueCallbackEvaluations) {
+      return openBindingSourceNeedsRuntimeValue('Array.with receiver exceeds the source-value iteration budget.');
+    }
     const indexArgument = this.evaluateOptionalArgument(expression, context, 0, EvaluationUndefined);
-    if (indexArgument.abruptCompletion != null || indexArgument.value == null) {
+    if (indexArgument.abruptCompletion != null || indexArgument.executableValue == null) {
       return indexArgument;
     }
-    const index = readArrayWithIndex(indexArgument.value, receiver.elements.length);
+    const index = receiver.exactLength == null
+      ? null
+      : readArrayWithIndex(indexArgument.executableValue, receiver.exactLength);
     if (index == null) {
       return bindingSourceValueEvaluationWithPressure(
         openBindingSourceNeedsRuntimeValue('Array.with index did not reduce to an in-range index.'),
         [indexArgument],
       );
     }
-    const replacement = this.evaluateOptionalArgument(expression, context, 1, EvaluationUndefined);
+    const replacement = this.evaluateSlotArgument(expression, context, 1, EvaluationUndefined);
     if (replacement.abruptCompletion != null || replacement.value == null) {
       return bindingSourceValueEvaluationWithPressure(replacement, [indexArgument]);
     }
@@ -544,7 +640,12 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
       );
     }
     return bindingSourceValueEvaluationWithPressure(
-      RuntimeBindingSourceValueEvaluation.value(evaluationArrayWith(receiver, index, replacement.value, null)),
+      RuntimeBindingSourceValueEvaluation.value(evaluationArrayWith(
+        receiver,
+        index,
+        new EvaluationArrayElement(replacement.value, null, replacement.openSeams),
+        null,
+      )),
       [indexArgument, replacement],
     );
   }
@@ -649,15 +750,18 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
     initialExpression: CallMemberExpression['args'][number] | null,
   ): RuntimeBindingSourceValueEvaluation {
     const method = rightToLeft ? 'reduceRight' : 'reduce';
-    let initialValue: EvaluationValue | null = null;
+    let initialValue: EvaluationValueEvidence | null = null;
     let initialPressure: readonly RuntimeBindingSourceValueEvaluation[] = [];
     if (initialExpression != null) {
       const initial = this.evaluateContext(context.child(initialExpression));
       if (initial.abruptCompletion != null) {
         return initial;
       }
-      initialValue = initial.executableValue ?? new EvaluationUnknownValue(
-        initial.openReason ?? `Array.${method} initial value did not close.`,
+      initialValue = new EvaluationValueEvidence(
+        initial.value ?? new EvaluationUnknownValue(
+          initial.openReason ?? `Array.${method} initial value did not close.`,
+        ),
+        initial.openSeams,
       );
       initialPressure = initial.closure === RuntimeBindingSourceValueEvaluationClosure.Open ? [initial] : [];
     }
@@ -673,7 +777,7 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
 
   private evaluateCallbackRead(
     callback: ArrowFunction,
-    argumentValues: readonly EvaluationValue[],
+    argumentValues: readonly EvaluationValueEvidence[],
     context: RuntimeBindingSourceValueEvaluationContext,
     localKey: string,
   ): EvaluationArrayCallbackRead<RuntimeBindingSourceValueEvaluation, RuntimeBindingSourceValueEvaluation> {
@@ -681,12 +785,17 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
     if (result.abruptCompletion != null) {
       return EvaluationArrayCallbackRead.blocked(result);
     }
-    const value = result.executableValue ?? new EvaluationUnknownValue(
+    const value = result.value ?? new EvaluationUnknownValue(
       result.openReason ?? `${localKey} did not produce a source value.`,
     );
     return EvaluationArrayCallbackRead.value(
-      value,
-      result.closure === RuntimeBindingSourceValueEvaluationClosure.Open ? [result] : [],
+      new EvaluationValueEvidence(value, result.openSeams),
+      result.closure === RuntimeBindingSourceValueEvaluationClosure.Value
+        ? EvaluationArrayCallbackClosure.Value
+        : EvaluationArrayCallbackClosure.Open,
+      result.closure === RuntimeBindingSourceValueEvaluationClosure.Open && result.openSeams.length === 0
+        ? [result]
+        : [],
     );
   }
 
@@ -696,10 +805,28 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
     if (decision.kind === EvaluationArrayMethodDecisionKind.Blocked) {
       return bindingSourceValueEvaluationWithPressure(decision.blocker!, decision.pressure);
     }
-    const result = decision.value == null
-      ? openBindingSourceNeedsRuntimeValue(decision.openReason ?? 'Array method result did not close.')
-      : RuntimeBindingSourceValueEvaluation.value(decision.value);
-    const methodPressure = decision.kind === EvaluationArrayMethodDecisionKind.Open
+    const exactOpenSeams = [
+      ...decision.openSeams,
+      ...(decision.evidence?.openSeams ?? []),
+    ];
+    const result = decision.evidence == null
+      ? bindingSourceValueEvaluationResult(
+          null,
+          exactOpenSeams.length === 0
+            ? [decision.openReason ?? 'Array method result did not close.']
+            : exactOpenSeams.map((seam) => seam.summary),
+          null,
+          [],
+          exactOpenSeams,
+        )
+      : bindingSourceValueEvaluationResult(
+          decision.evidence.value,
+          exactOpenSeams.map((seam) => seam.summary),
+          null,
+          [],
+          exactOpenSeams,
+        );
+    const methodPressure = decision.kind === EvaluationArrayMethodDecisionKind.Open && decision.openSeams.length === 0
       ? [openBindingSourceNeedsRuntimeValue(decision.openReason!)]
       : [];
     return bindingSourceValueEvaluationWithPressure(result, [...decision.pressure, ...methodPressure]);
@@ -744,6 +871,18 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
         );
   }
 
+  private evaluateSlotArgument(
+    expression: CallMemberExpression,
+    context: RuntimeBindingSourceValueEvaluationContext,
+    index: number,
+    fallback: EvaluationValue,
+  ): RuntimeBindingSourceValueEvaluation {
+    const argument = expression.args[index] ?? null;
+    return argument == null
+      ? RuntimeBindingSourceValueEvaluation.value(fallback)
+      : this.evaluateContext(context.child(argument));
+  }
+
   private evaluateStartIndex(
     expression: CallMemberExpression,
     context: RuntimeBindingSourceValueEvaluationContext,
@@ -765,7 +904,7 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
 
   private evaluateArrowFunctionCallback(
     expression: ArrowFunction,
-    argumentValues: readonly EvaluationValue[],
+    argumentValues: readonly EvaluationValueEvidence[],
     context: RuntimeBindingSourceValueEvaluationContext,
     localKey: string,
   ): RuntimeBindingSourceValueEvaluation {
@@ -774,7 +913,7 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
 
   private arrowFunctionScope(
     expression: ArrowFunction,
-    argumentValues: readonly EvaluationValue[],
+    argumentValues: readonly EvaluationValueEvidence[],
     context: RuntimeBindingSourceValueEvaluationContext,
     localKey: string,
   ): BindingScope {
@@ -788,13 +927,22 @@ export class RuntimeBindingSourceArrayMethodEvaluator {
         null,
         null,
         [],
-        RuntimeBindingSourceValueEvaluation.value(expression.rest && index === lastIndex
-          ? new EvaluationArrayValue(
-              argumentValues.slice(index).map((value) => new EvaluationArrayElement(value, null)),
-              false,
+        expression.rest && index === lastIndex
+          ? RuntimeBindingSourceValueEvaluation.value(new EvaluationArrayValue(
+              argumentValues.slice(index).map((evidence) => new EvaluationArrayElement(
+                evidence.value,
+                null,
+                evidence.openSeams,
+              )),
               null,
-            )
-          : argumentValues[index] ?? EvaluationUndefined),
+            ))
+          : bindingSourceValueEvaluationResult(
+              argumentValues[index]?.value ?? EvaluationUndefined,
+              argumentValues[index]?.openSeams.map((seam) => seam.summary) ?? [],
+              null,
+              [],
+              argumentValues[index]?.openSeams ?? [],
+            ),
       )
     );
     return uncommittedScopeFromParent(this.store, {

@@ -264,12 +264,31 @@ boundaries, block completion handling, and expression-bodied return values. Prop
 call this lane through evaluator host methods instead of duplicating call-frame construction.
 
 `EvaluationValueEvidence` is the canonical payload for every value-bearing edge. Lexical bindings, function and
-constructor arguments, parameter/rest slots, return/throw completions, ESM imports/re-exports/namespaces, and CommonJS
-exports/require reads must carry both the best-known value and the exact pressure qualifying that edge. Container-owned
-pressure stays on addressable child slots or shape carriers; it must not be flattened onto unrelated siblings. The
+constructor arguments, parameter/rest slots, intrinsic callback inputs/results, array/Set elements, return/throw
+completions, ESM imports/re-exports/namespaces, and CommonJS exports/require reads must carry both the best-known value
+and the exact pressure qualifying that edge. Container-owned pressure stays on addressable child slots or shape
+carriers; it must not be flattened onto unrelated siblings. The
 module-wide audit seam stream remains complete evidence of what evaluation encountered, while the causal stream is
 consumed into edge carriers and replayed only when that edge is read. A retained candidate may be projected, but it
 must not select a branch, invoke a getter/function, perform arithmetic, or otherwise execute as a closed value.
+Moving already-audited pressure into an array shape, property, or other child carrier is not another encounter and must
+not append a duplicate audit row; reading that carrier later is the point at which causal pressure is replayed.
+
+Array closure is multi-axis. `EvaluationArrayShape` retains runtime extent, exact present-element/hole positions, and
+order independently, together with the exact seams that open each axis. Authored elisions are exact holes, so
+`[, value]` has length two and one present element at runtime index one. An unresolved spread opens extent and positions
+without inventing a reorder; sort can open order without contaminating length. `EvaluationEnumerableOwnEntries` owns
+the corresponding membership/order projection for `Object.keys`/`values`/`entries`, so those consumers do not
+reconstruct shape from lossy booleans.
+
+`EvaluationArgumentList` is the evaluator's positional call-phase product. It evaluates authored arguments left-to-right,
+expands Array/Set/Map/String spreads with iterator semantics, and separates unclosed arity/order from pressure on one
+exact runtime slot. An open spread that may fail stops definite evaluation of later arguments; those later effects need a
+future conditional-continuation carrier rather than being published as facts. Local calls, global intrinsics, and array
+intrinsics consume this product instead of re-reading `CallExpression.arguments`; a pressured slot may flow into an
+unused parameter without contaminating the return, but an unclosed spread prevents speculative callee effects.
+Syntax-only recognition such as module-specifier validation may still inspect authored arguments, but it must not
+masquerade as value evaluation.
 
 Statement completion is the authoritative control-flow result. Local functions, constructors, accessors, and runtime
 hosts tunnel abrupt completion through the evaluator's value-shaped recursive internals, then restore it at the nearest
@@ -429,14 +448,21 @@ TypeScript-authored.
   into imprecise evaluator values, such as unknown array order or membership, before it poisons module evaluation as a
   hard statement-limit seam.
 - Collection callback guardrails follow that rule. Callback-bearing array intrinsics use `IntrinsicCallbackFrame` to
-  checkpoint interpretation and restore abandoned seams/counters when the callback budget is exhausted, then return an
-  imprecise evaluator result rather than publishing a generic `dynamic-call` seam from the evaluator. If a later product
-  truly needs exact membership, order, or scalar closure, that product should emit the domain-specific open seam at
-  consumption time.
+  admit the complete worst-case traversal before executing user code; budget exhaustion never relies on rolling back
+  evaluator-visible mutations. Native callback methods snapshot the initial `length` but read each future runtime index
+  live, including holes filled or elements replaced by earlier callbacks, and never visit appended indices beyond that
+  snapshot. Callback arguments and results cross the host boundary as `EvaluationValueEvidence`; map-like results
+  localize pressure to output slots, while predicates, reducers, and comparators stop before an open candidate can
+  choose control flow or order.
 - Mutating array intrinsics update the evaluator-local receiver. `push`, `unshift`, `reverse`, exact `splice`, exact
   `pop`, exact `shift`, `sort`, and `fill` should not return detached arrays that hide receiver effects. When a spread,
-  unknown range, or non-exact receiver prevents exact closure, mark receiver membership/order imprecise or return an
-  evaluator unknown instead of pretending subsequent reads see an exact array.
+  splice range, or non-exact receiver prevents extent/order closure, retain its exact pressure on receiver shape and
+  return an evaluator unknown instead of pretending subsequent reads see an exact array. `fill` never changes extent or
+  order: an unknown fill range qualifies existing element values instead. Exact inserted/fill values retain pressure on
+  their element slots; scalar returns such as `push` length must not inherit pressure they do not use.
+- Computed property names are identity decisions. An exact-looking value carrying evaluator pressure may remain useful
+  evidence, but it cannot choose an object/class key or destructuring slot. The shared property-name reader refuses the
+  candidate and replays its exact seams so every structural consumer observes the same open identity.
 - Evaluation and TypeChecker projection will meet at several future boundaries, especially DI, view-model scopes,
   SSR/SSG, and template expression tooling. Keep that handoff explicit through product handles, identities, claims,
   and provenance rather than letting either layer pretend it owns the whole story.

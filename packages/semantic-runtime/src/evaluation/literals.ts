@@ -12,6 +12,7 @@ import {
 } from './value-pressure.js';
 import {
   EvaluationArrayElement,
+  EvaluationArrayShape,
   EvaluationArrayValue,
   EvaluationArrayUncertaintyKind,
   EvaluationObjectUncertaintyKind,
@@ -30,8 +31,11 @@ import {
   type EvaluationUnknownValue,
   type EvaluationValue,
 } from './values.js';
+import { evaluationArrayIteratorElements } from './array-value-operations.js';
 
 export interface StaticLiteralEvaluationHost {
+  maxArrayIterations(): number;
+
   evaluateExpression(
     expression: ts.Expression,
     environment: ModuleEnvironmentRecord,
@@ -79,32 +83,27 @@ export function evaluateStaticArrayLiteral(
   host: StaticLiteralEvaluationHost,
 ): EvaluationValue {
   const elements: EvaluationArrayElement[] = [];
-  let mayHaveUnknownElements = false;
+  let exactLength: number | null = 0;
+  let hasExactElements = true;
+  let hasExactOrder = true;
   const uncertainties: EvaluationArrayUncertainty[] = [];
-  const shapeOpenSeams: EvaluationOpenSeam[] = [];
+  const extentOpenSeams: EvaluationOpenSeam[] = [];
+  const elementOpenSeams: EvaluationOpenSeam[] = [];
+  const orderOpenSeams: EvaluationOpenSeam[] = [];
   for (const element of literal.elements) {
     const checkpoint = host.openSeamCheckpoint();
     if (ts.isOmittedExpression(element)) {
-      mayHaveUnknownElements = true;
-      uncertainties.push({
-        kind: EvaluationArrayUncertaintyKind.OmittedElement,
-        node: element,
-      });
-      host.open(
-        EvaluationOpenSeamKind.UnsupportedExpression,
-        'Array elision prevents exact evaluator element-position closure.',
-        element,
-        moduleKey,
-      );
-      shapeOpenSeams.push(...host.openSeamsSince(checkpoint));
+      exactLength = exactLength == null ? null : exactLength + 1;
+      host.consumeOpenSeamsSince(checkpoint);
       continue;
     }
     if (ts.isSpreadElement(element)) {
       const spread = host.evaluateExpression(element.expression, environment, moduleKey, depth + 1);
       if (spread.kind === EvaluationValueKind.BoundaryValue) {
-        mayHaveUnknownElements = true;
+        exactLength = null;
+        hasExactElements = false;
         uncertainties.push(evaluationArrayBoundarySpreadUncertainty(spread, element));
-        shapeOpenSeams.push(...compactEvaluationOpenSeams([
+        const spreadOpenSeams = compactEvaluationOpenSeams([
           ...host.openSeamsSince(checkpoint),
           new EvaluationOpenSeam(
             EvaluationOpenSeamKind.DynamicMutation,
@@ -113,45 +112,100 @@ export function evaluateStaticArrayLiteral(
             moduleKey,
             [openSeamReasonKindForEvaluationBoundary(spread.boundaryKind)],
           ),
-        ]));
+        ]);
+        extentOpenSeams.push(...spreadOpenSeams);
+        elementOpenSeams.push(...spreadOpenSeams);
         continue;
       }
       if (spread.kind === EvaluationValueKind.Array) {
         const directPressure = unretainedEvaluationOpenSeams(spread, host.openSeamsSince(checkpoint));
-        elements.push(...spread.elements.map((entry) => new EvaluationArrayElement(
+        const spreadElements = directPressure.length === 0
+          && spread.exactLength != null
+          && spread.exactLength <= host.maxArrayIterations()
+          ? evaluationArrayIteratorElements(spread)
+          : null;
+        if (spreadElements == null) {
+          if (
+            directPressure.length === 0
+            && spread.aggregateOpenSeams.length === 0
+            && spread.uncertainties.length === 0
+          ) {
+            host.open(
+              EvaluationOpenSeamKind.DynamicMutation,
+              'Array literal spread exceeded the static iteration guardrail or retained unexplained open positions.',
+              element,
+              moduleKey,
+            );
+          }
+          const spreadOpenSeams = compactEvaluationOpenSeams([
+            ...directPressure,
+            ...spread.aggregateOpenSeams,
+            ...host.openSeamsSince(checkpoint),
+          ]);
+          exactLength = null;
+          hasExactElements = false;
+          hasExactOrder &&= !spread.mayHaveUnknownOrder;
+          uncertainties.push(...spread.uncertainties);
+          extentOpenSeams.push(...spreadOpenSeams);
+          elementOpenSeams.push(...spreadOpenSeams);
+          orderOpenSeams.push(...spread.orderOpenSeams);
+          continue;
+        }
+        const offset = exactLength;
+        elements.push(...spreadElements.map((entry) => new EvaluationArrayElement(
           entry.value,
           entry.expression,
           compactEvaluationOpenSeams([...entry.openSeams, ...directPressure]),
+          offset == null || entry.runtimeIndex == null || directPressure.length > 0
+            ? null
+            : offset + entry.runtimeIndex,
         )));
-        mayHaveUnknownElements ||= spread.mayHaveUnknownElements || directPressure.length > 0;
+        exactLength = exactLength == null || spread.exactLength == null || directPressure.length > 0
+          ? null
+          : exactLength + spread.exactLength;
+        hasExactElements &&= !spread.mayHaveUnknownElements && directPressure.length === 0;
+        hasExactOrder &&= !spread.mayHaveUnknownOrder && directPressure.length === 0;
         uncertainties.push(...spread.uncertainties);
-        shapeOpenSeams.push(...spread.shapeOpenSeams, ...directPressure);
+        extentOpenSeams.push(...spread.extentOpenSeams, ...directPressure);
+        elementOpenSeams.push(...spread.elementOpenSeams, ...directPressure);
+        orderOpenSeams.push(...spread.orderOpenSeams, ...directPressure);
         continue;
       }
-      mayHaveUnknownElements = true;
+      exactLength = null;
+      hasExactElements = false;
       uncertainties.push({
         kind: EvaluationArrayUncertaintyKind.NonArraySpread,
         node: element,
       });
       host.open(EvaluationOpenSeamKind.DynamicMutation, 'Array spread did not reduce to a known array.', element, moduleKey);
-      shapeOpenSeams.push(...host.openSeamsSince(checkpoint));
+      const spreadOpenSeams = host.openSeamsSince(checkpoint);
+      extentOpenSeams.push(...spreadOpenSeams);
+      elementOpenSeams.push(...spreadOpenSeams);
       continue;
     }
     const value = host.evaluateExpression(element, environment, moduleKey, depth + 1);
     const evidence = evaluationValueEvidence(value, host.consumeOpenSeamsSince(checkpoint));
+    const runtimeIndex = exactLength;
     elements.push(new EvaluationArrayElement(
       evidence.value,
       element,
       evidence.openSeams,
+      runtimeIndex,
     ));
+    exactLength = exactLength == null ? null : exactLength + 1;
   }
   return new EvaluationArrayValue(
     elements,
-    mayHaveUnknownElements,
     literal,
-    false,
-    mergeEvaluationArrayUncertainties(uncertainties),
-    compactEvaluationOpenSeams(shapeOpenSeams),
+    EvaluationArrayShape.from({
+      exactLength,
+      hasExactElements,
+      hasExactOrder,
+      uncertainties: mergeEvaluationArrayUncertainties(uncertainties),
+      extentOpenSeams,
+      elementOpenSeams,
+      orderOpenSeams,
+    }),
   );
 }
 
@@ -171,6 +225,7 @@ export function evaluateStaticObjectLiteral(
     if (ts.isPropertyAssignment(property)) {
       const name = host.readPropertyName(property.name, environment, moduleKey, depth + 1);
       if (name == null) {
+        host.evaluateExpression(property.initializer, environment, moduleKey, depth + 1);
         mayHaveUnknownProperties = true;
         uncertainties.push({
           kind: EvaluationObjectUncertaintyKind.ComputedProperty,

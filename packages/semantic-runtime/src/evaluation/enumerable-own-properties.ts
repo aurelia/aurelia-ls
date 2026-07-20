@@ -1,8 +1,12 @@
 import ts from 'typescript';
-import type { EvaluationOpenSeam } from './seams.js';
+import {
+  compactEvaluationOpenSeams,
+  type EvaluationOpenSeam,
+} from './seams.js';
 
 import {
   EvaluationObjectPropertyState,
+  EvaluationArrayShape,
   EvaluationStringValue,
   EvaluationValueKind,
   type EvaluationObjectProperty,
@@ -27,13 +31,40 @@ export class EvaluationEnumerableOwnEntry {
 
 /** Known enumerable-own entries plus the closure state needed by structural consumers. */
 export class EvaluationEnumerableOwnEntries {
+  readonly membershipOpenSeams: readonly EvaluationOpenSeam[];
+  readonly orderOpenSeams: readonly EvaluationOpenSeam[];
+
   constructor(
     readonly entries: readonly EvaluationEnumerableOwnEntry[],
+    /** Exact runtime enumerable-own entry count, independent of retained key/value identity. */
+    readonly exactLength: number | null,
     /** Additional enumerable keys or values may exist. */
     readonly mayHaveUnknownEntries: boolean,
     /** The relative position of known entries may differ at runtime. */
     readonly mayHaveUnknownOrder: boolean,
-  ) {}
+    /** Exact pressure that prevents enumerable membership from closing. */
+    membershipOpenSeams: readonly EvaluationOpenSeam[] = [],
+    /** Exact pressure that prevents enumerable key order from closing. */
+    orderOpenSeams: readonly EvaluationOpenSeam[] = [],
+  ) {
+    this.membershipOpenSeams = compactEvaluationOpenSeams(membershipOpenSeams);
+    this.orderOpenSeams = compactEvaluationOpenSeams(orderOpenSeams);
+  }
+
+  /** Project enumeration closure into the independent axes of an evaluator-local result array. */
+  toArrayShape(): EvaluationArrayShape {
+    return this.mayHaveUnknownEntries || this.mayHaveUnknownOrder
+      ? EvaluationArrayShape.from({
+          exactLength: this.exactLength,
+          hasExactElements: !this.mayHaveUnknownEntries,
+          hasExactOrder: !this.mayHaveUnknownOrder,
+          uncertainties: [],
+          extentOpenSeams: this.membershipOpenSeams,
+          elementOpenSeams: this.membershipOpenSeams,
+          orderOpenSeams: this.orderOpenSeams,
+        })
+      : EvaluationArrayShape.exact(this.entries.length);
+  }
 }
 
 /**
@@ -51,7 +82,11 @@ export function readEvaluationEnumerableOwnEntries(
   switch (source.kind) {
     case EvaluationValueKind.Object:
     case EvaluationValueKind.Instance:
-      return entriesFromProperties(source.properties, source.mayHaveUnknownProperties);
+      return entriesFromProperties(
+        source.properties,
+        source.mayHaveUnknownProperties,
+        source.shapeOpenSeams,
+      );
     case EvaluationValueKind.Function:
     case EvaluationValueKind.Class:
       return entriesFromProperties(source.properties, false);
@@ -59,16 +94,25 @@ export function readEvaluationEnumerableOwnEntries(
       return entriesFromProperties(source.properties, true);
     case EvaluationValueKind.Array:
       return new EvaluationEnumerableOwnEntries(
-        source.elements.map((element, index) => new EvaluationEnumerableOwnEntry(
-          String(index),
-          element.value,
-          element.expression,
-          element.expression,
-          null,
-          element.openSeams,
-        )),
-        source.mayHaveUnknownElements,
+        source.elements.flatMap((element) => element.runtimeIndex == null
+          ? []
+          : [new EvaluationEnumerableOwnEntry(
+              String(element.runtimeIndex),
+              element.value,
+              element.expression,
+              element.expression,
+              null,
+              element.openSeams,
+            )]),
+        source.mayHaveUnknownElements ? null : source.elements.length,
+        source.mayHaveUnknownElements || source.elements.some((element) => element.runtimeIndex == null),
         source.mayHaveUnknownOrder,
+        [
+          ...source.extentOpenSeams,
+          ...source.elementOpenSeams,
+          ...(source.elements.some((element) => element.runtimeIndex == null) ? source.orderOpenSeams : []),
+        ],
+        source.orderOpenSeams,
       );
     case EvaluationValueKind.ModuleNamespace:
       return new EvaluationEnumerableOwnEntries(
@@ -78,19 +122,22 @@ export function readEvaluationEnumerableOwnEntries(
           entry.sourceNode,
           null,
           null,
+          entry.openSeams,
         )),
+        source.mayHaveUnknownExports ? null : source.exportEntries.size,
         source.mayHaveUnknownExports,
         false,
       );
     case EvaluationValueKind.String:
       return new EvaluationEnumerableOwnEntries(
-        [...source.value].map((part, index) => new EvaluationEnumerableOwnEntry(
+        source.value.split('').map((part, index) => new EvaluationEnumerableOwnEntry(
           String(index),
           new EvaluationStringValue(part, source.node),
           source.node,
           null,
           null,
         )),
+        source.value.length,
         false,
         false,
       );
@@ -102,7 +149,7 @@ export function readEvaluationEnumerableOwnEntries(
     case EvaluationValueKind.Set:
     case EvaluationValueKind.Map:
     case EvaluationValueKind.Promise:
-      return new EvaluationEnumerableOwnEntries([], false, false);
+      return new EvaluationEnumerableOwnEntries([], 0, false, false);
     case EvaluationValueKind.Unknown:
     case EvaluationValueKind.Undefined:
     case EvaluationValueKind.Null:
@@ -115,6 +162,7 @@ export function readEvaluationEnumerableOwnEntries(
 function entriesFromProperties(
   properties: ReadonlyMap<string, EvaluationObjectProperty>,
   mayHaveUnknownProperties: boolean,
+  shapeOpenSeams: readonly EvaluationOpenSeam[] = [],
 ): EvaluationEnumerableOwnEntries {
   const entries = [...properties.values()]
     .map((property) => new EvaluationEnumerableOwnEntry(
@@ -128,7 +176,20 @@ function entriesFromProperties(
   entries.sort(compareEnumerablePropertyKeys);
   const hasOpenProperty = entries.some((entry) => entry.property?.state === EvaluationObjectPropertyState.Open);
   const open = mayHaveUnknownProperties || hasOpenProperty;
-  return new EvaluationEnumerableOwnEntries(entries, open, open);
+  const openSeams = compactEvaluationOpenSeams([
+    ...shapeOpenSeams,
+    ...entries.flatMap((entry) =>
+      entry.property?.state === EvaluationObjectPropertyState.Open ? entry.openSeams : []
+    ),
+  ]);
+  return new EvaluationEnumerableOwnEntries(
+    entries,
+    open ? null : entries.length,
+    open,
+    open,
+    openSeams,
+    openSeams,
+  );
 }
 
 function propertyValueExpression(node: ts.Node | null): ts.Expression | null {

@@ -299,7 +299,6 @@ export function evaluateStringSplit(
   }
   return new EvaluationArrayValue(
     parts.map((part) => new EvaluationArrayElement(new EvaluationStringValue(part, call), null)),
-    false,
     call,
   );
 }

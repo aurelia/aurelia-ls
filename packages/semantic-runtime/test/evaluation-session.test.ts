@@ -16,6 +16,7 @@ import {
   EvaluationMapValue,
   EvaluationModuleNamespaceExport,
   EvaluationModuleNamespaceValue,
+  EvaluationNumberValue,
   EvaluationObjectProperty,
   EvaluationObjectPropertyState,
   EvaluationObjectValue,
@@ -256,6 +257,110 @@ describe('static evaluation sessions', () => {
     expect(secondResult.environment).not.toBe(firstResult.environment);
   });
 
+  test('adopts host-supplied call arguments before session-local mutation', () => {
+    const source = ts.createSourceFile(
+      'src/session-host-call.ts',
+      [
+        'function mutate(value) { value.x = 1; return value; }',
+        'function probe() { return hostInvoke(mutate); }',
+      ].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const canonical = new EvaluationObjectValue(new Map([
+      ['x', property('x', new EvaluationNumberValue(0, source), source)],
+    ]), false, source);
+    const runtimeHost: StaticEvaluationRuntimeHost = {
+      evaluateCallExpression: (call, environment, moduleKey, depth, host) => {
+        if (!ts.isIdentifier(call.expression) || call.expression.text !== 'hostInvoke') {
+          return null;
+        }
+        const calleeExpression = call.arguments[0];
+        if (calleeExpression == null) {
+          return null;
+        }
+        const callee = host.evaluateExpression(calleeExpression, environment, moduleKey, depth + 1);
+        return callee.kind === EvaluationValueKind.Function
+          ? host.evaluateFunctionWithArguments(
+              callee,
+              call,
+              [new EvaluationValueEvidence(canonical, [])],
+              moduleKey,
+              depth + 1,
+              null,
+            )
+          : null;
+      },
+    };
+    const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
+    const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
+    const probe = requireValueKind(session.environment.readValue('probe'), EvaluationValueKind.Function);
+    const result = requireValueKind(
+      new StaticEvaluator(session.policy, session.runtimeHost)
+        .evaluateFunctionValue(probe, probe.declaration, session.moduleKey, []).value,
+      EvaluationValueKind.Object,
+    );
+
+    expect(result).not.toBe(canonical);
+    expect(result.properties.get('x')?.value).toEqual(expect.objectContaining({
+      kind: EvaluationValueKind.Number,
+      value: 1,
+    }));
+    expect(canonical.properties.get('x')?.value).toEqual(expect.objectContaining({
+      kind: EvaluationValueKind.Number,
+      value: 0,
+    }));
+  });
+
+  test('preserves a host-supplied call receiver through a session fork', () => {
+    const source = ts.createSourceFile(
+      'src/session-host-receiver.ts',
+      [
+        'function offset(value) { return this.base + value; }',
+        'function probe() { return hostInvoke(offset); }',
+      ].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const canonicalReceiver = new EvaluationObjectValue(new Map([
+      ['base', property('base', new EvaluationNumberValue(10, source), source)],
+    ]), false, source);
+    const runtimeHost: StaticEvaluationRuntimeHost = {
+      evaluateCallExpression: (call, environment, moduleKey, depth, host) => {
+        if (!ts.isIdentifier(call.expression) || call.expression.text !== 'hostInvoke') {
+          return null;
+        }
+        const calleeExpression = call.arguments[0];
+        if (calleeExpression == null) {
+          return null;
+        }
+        const callee = host.evaluateExpression(calleeExpression, environment, moduleKey, depth + 1);
+        return callee.kind === EvaluationValueKind.Function
+          ? host.evaluateFunctionWithArguments(
+              callee,
+              call,
+              [new EvaluationValueEvidence(new EvaluationNumberValue(2, call), [])],
+              moduleKey,
+              depth + 1,
+              new EvaluationValueEvidence(canonicalReceiver, []),
+            )
+          : null;
+      },
+    };
+    const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
+    const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
+    const probe = requireValueKind(session.environment.readValue('probe'), EvaluationValueKind.Function);
+    const result = new StaticEvaluator(session.policy, session.runtimeHost)
+      .evaluateFunctionValue(probe, probe.declaration, session.moduleKey, []).value;
+
+    expect(result).toEqual(expect.objectContaining({
+      kind: EvaluationValueKind.Number,
+      value: 12,
+    }));
+  });
+
   test('forks every mutable value carrier once across class, collection, and module cycles', () => {
     const source = ts.createSourceFile(
       'src/graph.ts',
@@ -279,7 +384,7 @@ describe('static evaluation sessions', () => {
     const array = new EvaluationArrayValue([
       new EvaluationArrayElement(shared, null),
       new EvaluationArrayElement(shared, null),
-    ], false, declaration);
+    ], declaration);
     const set = new EvaluationSetValue([
       new EvaluationArrayElement(shared, null),
     ], false, declaration);

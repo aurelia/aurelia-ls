@@ -7,6 +7,7 @@ import {
   type EvaluationValue,
 } from '../values.js';
 import type { StaticIntrinsicEvaluationHost } from './contracts.js';
+import { EvaluationValueEvidence } from '../value-pressure.js';
 
 export function evaluatePromiseResolve(
   call: ts.CallExpression,
@@ -67,9 +68,10 @@ export function evaluatePromiseThen(
   const fulfilled = host.evaluateFunctionWithArguments(
     onFulfilled,
     call,
-    [receiver.fulfilledValue],
+    [new EvaluationValueEvidence(receiver.fulfilledValue, [])],
     moduleKey,
     depth + 1,
+    null,
   );
   return fulfilled.kind === EvaluationValueKind.Promise
     ? fulfilled

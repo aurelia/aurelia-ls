@@ -35,6 +35,7 @@ import { readStaticOwnProperty } from '../evaluation/property-access.js';
 import { readReferenceName } from '../evaluation/ts-syntax.js';
 import {
   EvaluationArrayElement,
+  EvaluationArrayShape,
   EvaluationArrayValue,
   type EvaluationFunctionValue,
   EvaluationObjectPropertyState,
@@ -1081,9 +1082,18 @@ export class DiProviderActivationSession {
     }
     const value = new EvaluationArrayValue(
       values,
-      openReason != null,
       dependencyNode,
-      openReason != null,
+      openReason == null
+        ? EvaluationArrayShape.exact(values.length)
+        : EvaluationArrayShape.from({
+            exactLength: null,
+            hasExactElements: false,
+            hasExactOrder: true,
+            uncertainties: [],
+            extentOpenSeams: openSeams,
+            elementOpenSeams: openSeams,
+            orderOpenSeams: [],
+          }),
     );
     return openReason == null
       ? activationValueWithPressure(value, openSeams)
@@ -2008,7 +2018,6 @@ export class DiProviderActivationSession {
           ? values[0]!
           : new EvaluationArrayValue(
               values.map((value, index) => new EvaluationArrayElement(value, call.arguments[index] ?? call)),
-              false,
               call,
             );
       });

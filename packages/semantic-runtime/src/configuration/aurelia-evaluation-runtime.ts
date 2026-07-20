@@ -18,11 +18,13 @@ import {
   ModuleLoaderTransformStatus,
 } from '../evaluation/module-loader.js';
 import { EvaluationOpenSeamKind } from '../evaluation/seams.js';
+import { EvaluationValueEvidence } from '../evaluation/value-pressure.js';
 import {
   EvaluationBoundaryKind,
   EvaluationBoundaryObjectValue,
   EvaluationBoundaryValue,
   EvaluationBooleanValue,
+  EvaluationArrayShape,
   EvaluationArrayValue,
   EvaluationFunctionValue,
   EvaluationStringValue,
@@ -738,7 +740,14 @@ function evaluateCreateInterfaceCall(
   }
 
   const builder = resolverBuilderObject(call);
-  const result = host.evaluateFunctionWithArguments(configure, call, [builder], moduleKey, depth + 1);
+  const result = host.evaluateFunctionWithArguments(
+    configure,
+    call,
+    [new EvaluationValueEvidence(builder, [])],
+    moduleKey,
+    depth + 1,
+    null,
+  );
   const effect = resolverBuilderEffectsByObject.get(builder)
     ?? (result.kind === EvaluationValueKind.Object ? resolverBuilderEffectsByResult.get(result) ?? null : null);
   const closed = effect != null && !invalidResolverBuilderObjects.has(builder);
@@ -1161,7 +1170,19 @@ function frameworkRegistrationGroupValue(
   kind: FrameworkRegistrationKind,
   node: ts.Node,
 ): EvaluationArrayValue {
-  const value = new EvaluationArrayValue([], true, node);
+  const value = new EvaluationArrayValue(
+    [],
+    node,
+    EvaluationArrayShape.from({
+      exactLength: null,
+      hasExactElements: false,
+      hasExactOrder: true,
+      uncertainties: [],
+      extentOpenSeams: [],
+      elementOpenSeams: [],
+      orderOpenSeams: [],
+    }),
+  );
   frameworkRegistrationEvaluationsByValue.set(value, new AureliaFrameworkRegistrationEvaluation(kind));
   return value;
 }

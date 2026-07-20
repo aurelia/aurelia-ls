@@ -1019,7 +1019,7 @@ export class RuntimeBindingSourceValueEvaluator {
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
     const elements: EvaluationArrayElement[] = [];
-    let mayHaveUnknownElements = false;
+    const pressure: RuntimeBindingSourceValueEvaluation[] = [];
     for (let index = 0; index < expression.elements.length; index += 1) {
       const element = expression.elements[index]!;
       const evaluated = this.evaluateNode(context.child(element));
@@ -1029,15 +1029,14 @@ export class RuntimeBindingSourceValueEvaluator {
       }
       const edgeOpenSeams = unretainedEvaluationOpenSeams(value, evaluated.openSeams);
       elements.push(new EvaluationArrayElement(value, null, edgeOpenSeams));
-      mayHaveUnknownElements ||= evaluated.closure === RuntimeBindingSourceValueEvaluationClosure.Open
-        && evaluated.addressableValue == null
-        && edgeOpenSeams.length === 0;
+      if (evaluated.closure === RuntimeBindingSourceValueEvaluationClosure.Open && edgeOpenSeams.length === 0) {
+        pressure.push(evaluated);
+      }
     }
-    return RuntimeBindingSourceValueEvaluation.value(new EvaluationArrayValue(
-      elements,
-      mayHaveUnknownElements,
-      null,
-    ));
+    return bindingSourceValueEvaluationWithPressure(
+      RuntimeBindingSourceValueEvaluation.value(new EvaluationArrayValue(elements, null)),
+      pressure,
+    );
   }
 
   private evaluateObjectLiteral(
@@ -2214,7 +2213,6 @@ function cookedTemplateArrayValue(
     expression.cooked.map((part) =>
       new EvaluationArrayElement(new EvaluationStringValue(part, null), null)
     ),
-    false,
     null,
   );
 }

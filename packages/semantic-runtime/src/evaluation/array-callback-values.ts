@@ -2,6 +2,7 @@ import type ts from 'typescript';
 
 import {
   EvaluationArrayUncertaintyKind,
+  EvaluationArrayShape,
   EvaluationArrayValue,
   EvaluationBooleanValue,
   EvaluationNumberValue,
@@ -11,6 +12,11 @@ import {
   type EvaluationValue,
 } from './values.js';
 import { evaluationArrayHasExactPositions } from './array-value-operations.js';
+import { EvaluationValueEvidence } from './value-pressure.js';
+import {
+  compactEvaluationOpenSeams,
+  type EvaluationOpenSeam,
+} from './seams.js';
 
 export const enum EvaluationArrayCallbackReadKind {
   /** Callback completed normally with a best-known value; pressure may remain. */
@@ -19,22 +25,32 @@ export const enum EvaluationArrayCallbackReadKind {
   Blocked = 'blocked',
 }
 
+export const enum EvaluationArrayCallbackClosure {
+  /** The callback result may drive control flow and subsequent evaluator execution. */
+  Value = 'value',
+  /** The result is a projection candidate only; retained pressure prevents semantic execution. */
+  Open = 'open',
+}
+
 /** Host-neutral callback result used by TypeScript and Aurelia expression adapters. */
 export class EvaluationArrayCallbackRead<TPressure, TBlocker> {
   private constructor(
     readonly kind: EvaluationArrayCallbackReadKind,
-    readonly value: EvaluationValue | null,
+    readonly evidence: EvaluationValueEvidence | null,
+    readonly closure: EvaluationArrayCallbackClosure,
     readonly pressure: readonly TPressure[],
     readonly blocker: TBlocker | null,
   ) {}
 
   static value<TPressure, TBlocker>(
-    value: EvaluationValue,
+    evidence: EvaluationValueEvidence,
+    closure: EvaluationArrayCallbackClosure,
     pressure: readonly TPressure[] = [],
   ): EvaluationArrayCallbackRead<TPressure, TBlocker> {
     return new EvaluationArrayCallbackRead<TPressure, TBlocker>(
       EvaluationArrayCallbackReadKind.Value,
-      value,
+      evidence,
+      closure,
       pressure,
       null,
     );
@@ -44,7 +60,13 @@ export class EvaluationArrayCallbackRead<TPressure, TBlocker> {
     blocker: TBlocker,
     pressure: readonly TPressure[] = [],
   ): EvaluationArrayCallbackRead<TPressure, TBlocker> {
-    return new EvaluationArrayCallbackRead(EvaluationArrayCallbackReadKind.Blocked, null, pressure, blocker);
+    return new EvaluationArrayCallbackRead(
+      EvaluationArrayCallbackReadKind.Blocked,
+      null,
+      EvaluationArrayCallbackClosure.Open,
+      pressure,
+      blocker,
+    );
   }
 }
 
@@ -59,13 +81,18 @@ export const enum EvaluationArrayMethodDecisionKind {
 
 /** Host-neutral array method decision; hosts retain ownership of pressure publication and abrupt completion. */
 export class EvaluationArrayMethodDecision<TPressure, TBlocker> {
+  readonly openSeams: readonly EvaluationOpenSeam[];
+
   private constructor(
     readonly kind: EvaluationArrayMethodDecisionKind,
-    readonly value: EvaluationValue | null,
+    readonly evidence: EvaluationValueEvidence | null,
     readonly pressure: readonly TPressure[],
     readonly blocker: TBlocker | null,
     readonly openReason: string | null,
-  ) {}
+    openSeams: readonly EvaluationOpenSeam[],
+  ) {
+    this.openSeams = compactEvaluationOpenSeams(openSeams);
+  }
 
   static value<TPressure, TBlocker>(
     value: EvaluationValue,
@@ -73,10 +100,25 @@ export class EvaluationArrayMethodDecision<TPressure, TBlocker> {
   ): EvaluationArrayMethodDecision<TPressure, TBlocker> {
     return new EvaluationArrayMethodDecision<TPressure, TBlocker>(
       EvaluationArrayMethodDecisionKind.Value,
-      value,
+      new EvaluationValueEvidence(value, []),
       pressure,
       null,
       null,
+      [],
+    );
+  }
+
+  static valueEvidence<TPressure, TBlocker>(
+    evidence: EvaluationValueEvidence,
+    pressure: readonly TPressure[] = [],
+  ): EvaluationArrayMethodDecision<TPressure, TBlocker> {
+    return new EvaluationArrayMethodDecision<TPressure, TBlocker>(
+      EvaluationArrayMethodDecisionKind.Value,
+      evidence,
+      pressure,
+      null,
+      null,
+      [],
     );
   }
 
@@ -84,13 +126,31 @@ export class EvaluationArrayMethodDecision<TPressure, TBlocker> {
     value: EvaluationValue | null,
     reason: string,
     pressure: readonly TPressure[] = [],
+    openSeams: readonly EvaluationOpenSeam[] = [],
   ): EvaluationArrayMethodDecision<TPressure, TBlocker> {
     return new EvaluationArrayMethodDecision<TPressure, TBlocker>(
       EvaluationArrayMethodDecisionKind.Open,
-      value,
+      value == null ? null : new EvaluationValueEvidence(value, []),
       pressure,
       null,
       reason,
+      openSeams,
+    );
+  }
+
+  static openEvidence<TPressure, TBlocker>(
+    evidence: EvaluationValueEvidence | null,
+    reason: string,
+    pressure: readonly TPressure[] = [],
+    openSeams: readonly EvaluationOpenSeam[] = [],
+  ): EvaluationArrayMethodDecision<TPressure, TBlocker> {
+    return new EvaluationArrayMethodDecision<TPressure, TBlocker>(
+      EvaluationArrayMethodDecisionKind.Open,
+      evidence,
+      pressure,
+      null,
+      reason,
+      openSeams,
     );
   }
 
@@ -98,12 +158,12 @@ export class EvaluationArrayMethodDecision<TPressure, TBlocker> {
     blocker: TBlocker,
     pressure: readonly TPressure[] = [],
   ): EvaluationArrayMethodDecision<TPressure, TBlocker> {
-    return new EvaluationArrayMethodDecision(EvaluationArrayMethodDecisionKind.Blocked, null, pressure, blocker, null);
+    return new EvaluationArrayMethodDecision(EvaluationArrayMethodDecisionKind.Blocked, null, pressure, blocker, null, []);
   }
 }
 
 export type EvaluationArrayIterationCallback<TPressure, TBlocker> = (
-  arguments_: readonly EvaluationValue[],
+  arguments_: readonly EvaluationValueEvidence[],
   index: number,
 ) => EvaluationArrayCallbackRead<TPressure, TBlocker>;
 
@@ -113,37 +173,56 @@ export function evaluationArrayIterationCallbackArguments(
   index: number,
   receiver: EvaluationArrayValue,
   node: ts.Node | null,
-): readonly EvaluationValue[] {
+): readonly EvaluationValueEvidence[] {
   return [
-    element.value,
-    new EvaluationNumberValue(index, node),
-    receiver,
+    new EvaluationValueEvidence(element.value, element.openSeams),
+    new EvaluationValueEvidence(new EvaluationNumberValue(index, node), []),
+    new EvaluationValueEvidence(receiver, []),
   ];
 }
 
 /** Standard JavaScript/Aurelia array reducer callback arguments: accumulator, value, index, and receiver array. */
 export function evaluationArrayReducerCallbackArguments(
-  accumulator: EvaluationValue,
+  accumulator: EvaluationValueEvidence,
   element: EvaluationArrayElement,
   index: number,
   receiver: EvaluationArrayValue,
   node: ts.Node | null,
-): readonly EvaluationValue[] {
+): readonly EvaluationValueEvidence[] {
   return [
     accumulator,
-    element.value,
-    new EvaluationNumberValue(index, node),
-    receiver,
+    new EvaluationValueEvidence(element.value, element.openSeams),
+    new EvaluationValueEvidence(new EvaluationNumberValue(index, node), []),
+    new EvaluationValueEvidence(receiver, []),
   ];
 }
 
-/** Enumerate known array elements in the callback order used by forward and reverse native array methods. */
-export function evaluationArrayElementsInIterationOrder(
+/** Snapshot native callback bounds while leaving each indexed property read live. */
+function evaluationArrayIterationIndices(length: number, rightToLeft: boolean): readonly number[] {
+  const indices = Array.from({ length }, (_, index) => index);
+  return rightToLeft ? indices.reverse() : indices;
+}
+
+function openIterationArray(
+  elements: readonly EvaluationArrayElement[],
+  node: ts.Expression | null,
+  exactLength: number | null,
   receiver: EvaluationArrayValue,
-  rightToLeft: boolean,
-): readonly { readonly element: EvaluationArrayElement | undefined; readonly index: number }[] {
-  const ordered = receiver.elements.map((element, index) => ({ element, index }));
-  return rightToLeft ? ordered.reverse() : ordered;
+): EvaluationArrayValue {
+  const openSeams = receiver.aggregateOpenSeams;
+  return new EvaluationArrayValue(
+    elements,
+    node,
+    EvaluationArrayShape.from({
+      exactLength,
+      hasExactElements: false,
+      hasExactOrder: true,
+      uncertainties: receiver.uncertainties,
+      extentOpenSeams: exactLength == null ? openSeams : [],
+      elementOpenSeams: openSeams,
+      orderOpenSeams: [],
+    }),
+  );
 }
 
 /** Execute Array.map traversal once for both evaluator hosts. */
@@ -153,20 +232,40 @@ export function evaluationArrayMapDecision<TPressure, TBlocker>(
   callback: EvaluationArrayIterationCallback<TPressure, TBlocker>,
 ): EvaluationArrayMethodDecision<TPressure, TBlocker> {
   if (!evaluationArrayHasExactPositions(receiver)) {
-    return EvaluationArrayMethodDecision.open(null, 'Array.map receiver membership or order did not close.');
+    return EvaluationArrayMethodDecision.open(null, 'Array.map receiver membership or order did not close.', [], receiver.aggregateOpenSeams);
   }
+  const length = receiver.exactLength!;
   const elements: EvaluationArrayElement[] = [];
   const pressure: TPressure[] = [];
-  for (let index = 0; index < receiver.elements.length; index += 1) {
-    const element = receiver.elements[index]!;
+  for (const index of evaluationArrayIterationIndices(length, false)) {
+    if (!evaluationArrayHasExactPositions(receiver)) {
+      return EvaluationArrayMethodDecision.open(
+        openIterationArray(elements, node, length, receiver),
+        'Array.map receiver became open during callback traversal.',
+        pressure,
+        receiver.aggregateOpenSeams,
+      );
+    }
+    const element = receiver.elementAtRuntimeIndex(index);
+    if (element == null) {
+      continue;
+    }
     const read = callback(evaluationArrayIterationCallbackArguments(element, index, receiver, node), index);
     pressure.push(...read.pressure);
     if (read.kind === EvaluationArrayCallbackReadKind.Blocked) {
       return EvaluationArrayMethodDecision.blocked(read.blocker!, pressure);
     }
-    elements.push(new EvaluationArrayElement(read.value!, element.expression));
+    elements.push(new EvaluationArrayElement(
+      read.evidence!.value,
+      element.expression,
+      read.evidence!.openSeams,
+      index,
+    ));
   }
-  return EvaluationArrayMethodDecision.value(new EvaluationArrayValue(elements, false, node), pressure);
+  return EvaluationArrayMethodDecision.value(
+    new EvaluationArrayValue(elements, node, EvaluationArrayShape.exact(length)),
+    pressure,
+  );
 }
 
 /** Execute Array.flatMap traversal once for both evaluator hosts. */
@@ -176,29 +275,66 @@ export function evaluationArrayFlatMapDecision<TPressure, TBlocker>(
   callback: EvaluationArrayIterationCallback<TPressure, TBlocker>,
 ): EvaluationArrayMethodDecision<TPressure, TBlocker> {
   if (!evaluationArrayHasExactPositions(receiver)) {
-    return EvaluationArrayMethodDecision.open(null, 'Array.flatMap receiver membership or order did not close.');
+    return EvaluationArrayMethodDecision.open(null, 'Array.flatMap receiver membership or order did not close.', [], receiver.aggregateOpenSeams);
   }
+  const length = receiver.exactLength!;
   const elements: EvaluationArrayElement[] = [];
   const pressure: TPressure[] = [];
   let mayHaveUnknownElements = false;
-  for (let index = 0; index < receiver.elements.length; index += 1) {
-    const element = receiver.elements[index]!;
+  const membershipOpenSeams: EvaluationOpenSeam[] = [];
+  let hasExactOrder = true;
+  const orderOpenSeams: EvaluationOpenSeam[] = [];
+  for (const index of evaluationArrayIterationIndices(length, false)) {
+    if (!evaluationArrayHasExactPositions(receiver)) {
+      return EvaluationArrayMethodDecision.open(
+        openIterationArray(elements, node, null, receiver),
+        'Array.flatMap receiver became open during callback traversal.',
+        pressure,
+        receiver.aggregateOpenSeams,
+      );
+    }
+    const element = receiver.elementAtRuntimeIndex(index);
+    if (element == null) {
+      continue;
+    }
     const read = callback(evaluationArrayIterationCallbackArguments(element, index, receiver, node), index);
     pressure.push(...read.pressure);
     if (read.kind === EvaluationArrayCallbackReadKind.Blocked) {
       return EvaluationArrayMethodDecision.blocked(read.blocker!, pressure);
     }
-    const value = read.value!;
+    if (read.closure === EvaluationArrayCallbackClosure.Open) {
+      mayHaveUnknownElements = true;
+      membershipOpenSeams.push(...read.evidence!.openSeams);
+      continue;
+    }
+    const value = read.evidence!.value;
     if (value.kind === 'array') {
       elements.push(...value.elements);
-      mayHaveUnknownElements ||= value.mayHaveUnknownElements || value.mayHaveUnknownOrder;
+      mayHaveUnknownElements ||= value.mayHaveUnknownElements;
+      membershipOpenSeams.push(...value.extentOpenSeams, ...value.elementOpenSeams);
+      hasExactOrder &&= !value.mayHaveUnknownOrder;
+      orderOpenSeams.push(...value.orderOpenSeams);
     } else if (value.kind === 'unknown' || value.kind === 'boundary-value' || value.kind === 'boundary-object') {
       mayHaveUnknownElements = true;
     } else {
       elements.push(new EvaluationArrayElement(value, element.expression));
     }
   }
-  const result = new EvaluationArrayValue(elements, mayHaveUnknownElements, node, mayHaveUnknownElements);
+  const result = new EvaluationArrayValue(
+    elements,
+    node,
+    EvaluationArrayShape.from({
+      exactLength: mayHaveUnknownElements ? null : elements.length,
+      hasExactElements: !mayHaveUnknownElements,
+      hasExactOrder,
+      uncertainties: mayHaveUnknownElements
+        ? [{ kind: EvaluationArrayUncertaintyKind.ConditionalBranch, node }]
+        : [],
+      extentOpenSeams: membershipOpenSeams,
+      elementOpenSeams: membershipOpenSeams,
+      orderOpenSeams,
+    }),
+  );
   return mayHaveUnknownElements
     ? EvaluationArrayMethodDecision.open(result, 'Array.flatMap result membership depended on an open callback value.', pressure)
     : EvaluationArrayMethodDecision.value(result, pressure);
@@ -211,19 +347,37 @@ export function evaluationArrayFilterDecision<TPressure, TBlocker>(
   callback: EvaluationArrayIterationCallback<TPressure, TBlocker>,
 ): EvaluationArrayMethodDecision<TPressure, TBlocker> {
   if (!evaluationArrayHasExactPositions(receiver)) {
-    return EvaluationArrayMethodDecision.open(null, 'Array.filter receiver membership or order did not close.');
+    return EvaluationArrayMethodDecision.open(null, 'Array.filter receiver membership or order did not close.', [], receiver.aggregateOpenSeams);
   }
+  const length = receiver.exactLength!;
   const elements: EvaluationArrayElement[] = [];
   const pressure: TPressure[] = [];
   let openMembership = false;
-  for (let index = 0; index < receiver.elements.length; index += 1) {
-    const element = receiver.elements[index]!;
+  const membershipOpenSeams: EvaluationOpenSeam[] = [];
+  for (const index of evaluationArrayIterationIndices(length, false)) {
+    if (!evaluationArrayHasExactPositions(receiver)) {
+      return EvaluationArrayMethodDecision.open(
+        openIterationArray(elements, node, null, receiver),
+        'Array.filter receiver became open during callback traversal.',
+        pressure,
+        receiver.aggregateOpenSeams,
+      );
+    }
+    const element = receiver.elementAtRuntimeIndex(index);
+    if (element == null) {
+      continue;
+    }
     const read = callback(evaluationArrayIterationCallbackArguments(element, index, receiver, node), index);
     pressure.push(...read.pressure);
     if (read.kind === EvaluationArrayCallbackReadKind.Blocked) {
       return EvaluationArrayMethodDecision.blocked(read.blocker!, pressure);
     }
-    const keep = readEvaluationTruthiness(read.value!);
+    if (read.closure === EvaluationArrayCallbackClosure.Open) {
+      openMembership = true;
+      membershipOpenSeams.push(...read.evidence!.openSeams);
+      continue;
+    }
+    const keep = readEvaluationTruthiness(read.evidence!.value);
     if (keep == null) {
       openMembership = true;
     } else if (keep) {
@@ -232,12 +386,18 @@ export function evaluationArrayFilterDecision<TPressure, TBlocker>(
   }
   const result = new EvaluationArrayValue(
     elements,
-    openMembership,
     node,
-    openMembership,
-    openMembership
-      ? [{ kind: EvaluationArrayUncertaintyKind.ConditionalBranch, node }]
-      : [],
+    EvaluationArrayShape.from({
+      exactLength: openMembership ? null : elements.length,
+      hasExactElements: !openMembership,
+      hasExactOrder: true,
+      uncertainties: openMembership
+        ? [{ kind: EvaluationArrayUncertaintyKind.ConditionalBranch, node }]
+        : [],
+      extentOpenSeams: membershipOpenSeams,
+      elementOpenSeams: membershipOpenSeams,
+      orderOpenSeams: [],
+    }),
   );
   return openMembership
     ? EvaluationArrayMethodDecision.open(result, 'Array.filter result membership depended on an open predicate.', pressure)
@@ -253,21 +413,38 @@ export function evaluationArrayFindDecision<TPressure, TBlocker>(
 ): EvaluationArrayMethodDecision<TPressure, TBlocker> {
   const method = rightToLeft ? 'findLast' : 'find';
   if (!evaluationArrayHasExactPositions(receiver)) {
-    return EvaluationArrayMethodDecision.open(null, `Array.${method} receiver membership or order did not close.`);
+    return EvaluationArrayMethodDecision.open(null, `Array.${method} receiver membership or order did not close.`, [], receiver.aggregateOpenSeams);
   }
+  const length = receiver.exactLength!;
   const pressure: TPressure[] = [];
-  for (const { element, index } of evaluationArrayElementsInIterationOrder(receiver, rightToLeft)) {
-    const read = callback(evaluationArrayIterationCallbackArguments(element!, index, receiver, node), index);
+  for (const index of evaluationArrayIterationIndices(length, rightToLeft)) {
+    if (!evaluationArrayHasExactPositions(receiver)) {
+      return EvaluationArrayMethodDecision.open(
+        null,
+        `Array.${method} receiver became open during callback traversal.`,
+        pressure,
+        receiver.aggregateOpenSeams,
+      );
+    }
+    const element = receiver.elementAtRuntimeIndex(index)
+      ?? new EvaluationArrayElement(EvaluationUndefined, null, [], index);
+    const read = callback(evaluationArrayIterationCallbackArguments(element, index, receiver, node), index);
     pressure.push(...read.pressure);
     if (read.kind === EvaluationArrayCallbackReadKind.Blocked) {
       return EvaluationArrayMethodDecision.blocked(read.blocker!, pressure);
     }
-    const keep = readEvaluationTruthiness(read.value!);
+    if (read.closure === EvaluationArrayCallbackClosure.Open) {
+      return EvaluationArrayMethodDecision.open(null, `Array.${method} stopped at an open predicate.`, pressure, read.evidence!.openSeams);
+    }
+    const keep = readEvaluationTruthiness(read.evidence!.value);
     if (keep == null) {
       return EvaluationArrayMethodDecision.open(null, `Array.${method} stopped at an open predicate.`, pressure);
     }
     if (keep) {
-      return EvaluationArrayMethodDecision.value(element!.value, pressure);
+      return EvaluationArrayMethodDecision.valueEvidence(
+        new EvaluationValueEvidence(element.value, element.openSeams),
+        pressure,
+      );
     }
   }
   return EvaluationArrayMethodDecision.value(EvaluationUndefined, pressure);
@@ -282,16 +459,30 @@ export function evaluationArrayFindIndexDecision<TPressure, TBlocker>(
 ): EvaluationArrayMethodDecision<TPressure, TBlocker> {
   const method = rightToLeft ? 'findLastIndex' : 'findIndex';
   if (!evaluationArrayHasExactPositions(receiver)) {
-    return EvaluationArrayMethodDecision.open(null, `Array.${method} receiver membership or order did not close.`);
+    return EvaluationArrayMethodDecision.open(null, `Array.${method} receiver membership or order did not close.`, [], receiver.aggregateOpenSeams);
   }
+  const length = receiver.exactLength!;
   const pressure: TPressure[] = [];
-  for (const { element, index } of evaluationArrayElementsInIterationOrder(receiver, rightToLeft)) {
-    const read = callback(evaluationArrayIterationCallbackArguments(element!, index, receiver, node), index);
+  for (const index of evaluationArrayIterationIndices(length, rightToLeft)) {
+    if (!evaluationArrayHasExactPositions(receiver)) {
+      return EvaluationArrayMethodDecision.open(
+        null,
+        `Array.${method} receiver became open during callback traversal.`,
+        pressure,
+        receiver.aggregateOpenSeams,
+      );
+    }
+    const element = receiver.elementAtRuntimeIndex(index)
+      ?? new EvaluationArrayElement(EvaluationUndefined, null, [], index);
+    const read = callback(evaluationArrayIterationCallbackArguments(element, index, receiver, node), index);
     pressure.push(...read.pressure);
     if (read.kind === EvaluationArrayCallbackReadKind.Blocked) {
       return EvaluationArrayMethodDecision.blocked(read.blocker!, pressure);
     }
-    const keep = readEvaluationTruthiness(read.value!);
+    if (read.closure === EvaluationArrayCallbackClosure.Open) {
+      return EvaluationArrayMethodDecision.open(null, `Array.${method} stopped at an open predicate.`, pressure, read.evidence!.openSeams);
+    }
+    const keep = readEvaluationTruthiness(read.evidence!.value);
     if (keep == null) {
       return EvaluationArrayMethodDecision.open(null, `Array.${method} stopped at an open predicate.`, pressure);
     }
@@ -310,17 +501,32 @@ export function evaluationArrayQuantifierDecision<TPressure, TBlocker>(
   callback: EvaluationArrayIterationCallback<TPressure, TBlocker>,
 ): EvaluationArrayMethodDecision<TPressure, TBlocker> {
   if (!evaluationArrayHasExactPositions(receiver)) {
-    return EvaluationArrayMethodDecision.open(null, `Array.${kind} receiver membership or order did not close.`);
+    return EvaluationArrayMethodDecision.open(null, `Array.${kind} receiver membership or order did not close.`, [], receiver.aggregateOpenSeams);
   }
+  const length = receiver.exactLength!;
   const pressure: TPressure[] = [];
-  for (let index = 0; index < receiver.elements.length; index += 1) {
-    const element = receiver.elements[index]!;
+  for (const index of evaluationArrayIterationIndices(length, false)) {
+    if (!evaluationArrayHasExactPositions(receiver)) {
+      return EvaluationArrayMethodDecision.open(
+        null,
+        `Array.${kind} receiver became open during callback traversal.`,
+        pressure,
+        receiver.aggregateOpenSeams,
+      );
+    }
+    const element = receiver.elementAtRuntimeIndex(index);
+    if (element == null) {
+      continue;
+    }
     const read = callback(evaluationArrayIterationCallbackArguments(element, index, receiver, node), index);
     pressure.push(...read.pressure);
     if (read.kind === EvaluationArrayCallbackReadKind.Blocked) {
       return EvaluationArrayMethodDecision.blocked(read.blocker!, pressure);
     }
-    const keep = readEvaluationTruthiness(read.value!);
+    if (read.closure === EvaluationArrayCallbackClosure.Open) {
+      return EvaluationArrayMethodDecision.open(null, `Array.${kind} stopped at an open predicate.`, pressure, read.evidence!.openSeams);
+    }
+    const keep = readEvaluationTruthiness(read.evidence!.value);
     if (keep == null) {
       return EvaluationArrayMethodDecision.open(null, `Array.${kind} stopped at an open predicate.`, pressure);
     }
@@ -338,11 +544,23 @@ export function evaluationArrayForEachDecision<TPressure, TBlocker>(
   callback: EvaluationArrayIterationCallback<TPressure, TBlocker>,
 ): EvaluationArrayMethodDecision<TPressure, TBlocker> {
   if (!evaluationArrayHasExactPositions(receiver)) {
-    return EvaluationArrayMethodDecision.open(null, 'Array.forEach receiver membership or order did not close.');
+    return EvaluationArrayMethodDecision.open(null, 'Array.forEach receiver membership or order did not close.', [], receiver.aggregateOpenSeams);
   }
+  const length = receiver.exactLength!;
   const pressure: TPressure[] = [];
-  for (let index = 0; index < receiver.elements.length; index += 1) {
-    const element = receiver.elements[index]!;
+  for (const index of evaluationArrayIterationIndices(length, false)) {
+    if (!evaluationArrayHasExactPositions(receiver)) {
+      return EvaluationArrayMethodDecision.open(
+        null,
+        'Array.forEach receiver became open during callback traversal.',
+        pressure,
+        receiver.aggregateOpenSeams,
+      );
+    }
+    const element = receiver.elementAtRuntimeIndex(index);
+    if (element == null) {
+      continue;
+    }
     const read = callback(evaluationArrayIterationCallbackArguments(element, index, receiver, node), index);
     pressure.push(...read.pressure);
     if (read.kind === EvaluationArrayCallbackReadKind.Blocked) {
@@ -357,34 +575,59 @@ export function evaluationArrayReduceDecision<TPressure, TBlocker>(
   receiver: EvaluationArrayValue,
   node: ts.Expression | null,
   rightToLeft: boolean,
-  initialValue: EvaluationValue | null,
+  initialValue: EvaluationValueEvidence | null,
   initialPressure: readonly TPressure[],
   callback: EvaluationArrayIterationCallback<TPressure, TBlocker>,
 ): EvaluationArrayMethodDecision<TPressure, TBlocker> {
   const method = rightToLeft ? 'reduceRight' : 'reduce';
   if (!evaluationArrayHasExactPositions(receiver)) {
-    return EvaluationArrayMethodDecision.open(null, `Array.${method} receiver membership or order did not close.`, initialPressure);
+    return EvaluationArrayMethodDecision.open(null, `Array.${method} receiver membership or order did not close.`, initialPressure, receiver.aggregateOpenSeams);
   }
-  const ordered = evaluationArrayElementsInIterationOrder(receiver, rightToLeft);
+  const length = receiver.exactLength!;
+  const indices = evaluationArrayIterationIndices(length, rightToLeft);
   let accumulator = initialValue;
   let start = 0;
   if (accumulator == null) {
-    const first = ordered[0]?.element ?? null;
-    if (first == null) {
+    while (start < indices.length) {
+      const first = receiver.elementAtRuntimeIndex(indices[start]!);
+      start += 1;
+      if (first != null) {
+        accumulator = new EvaluationValueEvidence(first.value, first.openSeams);
+        break;
+      }
+    }
+    if (accumulator == null) {
       return EvaluationArrayMethodDecision.open(null, `Array.${method} had no initial value and no first element.`, initialPressure);
     }
-    accumulator = first.value;
-    start = 1;
   }
   const pressure = [...initialPressure];
-  for (let position = start; position < ordered.length; position += 1) {
-    const { element, index } = ordered[position]!;
-    const read = callback(evaluationArrayReducerCallbackArguments(accumulator, element!, index, receiver, node), index);
+  for (let position = start; position < indices.length; position += 1) {
+    if (!evaluationArrayHasExactPositions(receiver)) {
+      return EvaluationArrayMethodDecision.openEvidence(
+        accumulator,
+        `Array.${method} receiver became open during callback traversal.`,
+        pressure,
+        receiver.aggregateOpenSeams,
+      );
+    }
+    const index = indices[position]!;
+    const element = receiver.elementAtRuntimeIndex(index);
+    if (element == null) {
+      continue;
+    }
+    const read = callback(evaluationArrayReducerCallbackArguments(accumulator, element, index, receiver, node), index);
     pressure.push(...read.pressure);
     if (read.kind === EvaluationArrayCallbackReadKind.Blocked) {
       return EvaluationArrayMethodDecision.blocked(read.blocker!, pressure);
     }
-    accumulator = read.value!;
+    if (read.closure === EvaluationArrayCallbackClosure.Open) {
+      return EvaluationArrayMethodDecision.openEvidence(
+        read.evidence,
+        `Array.${method} reducer returned an open accumulator.`,
+        pressure,
+      );
+    }
+    accumulator = read.evidence!;
   }
-  return EvaluationArrayMethodDecision.value(accumulator, pressure);
+  return EvaluationArrayMethodDecision.valueEvidence(accumulator, pressure);
 }

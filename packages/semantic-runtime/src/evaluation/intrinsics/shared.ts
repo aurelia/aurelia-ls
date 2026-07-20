@@ -1,7 +1,16 @@
 import ts from 'typescript';
-import { EvaluationOpenSeamKind } from '../seams.js';
+import { OpenSeamReasonKind } from '../../kernel/open-seam.js';
+import {
+  EvaluationArgumentList,
+  evaluateStaticArgumentList,
+} from '../argument-list.js';
+import {
+  EvaluationOpenSeamKind,
+  type EvaluationOpenSeam,
+} from '../seams.js';
 import {
   EvaluationBoundaryValue,
+  EvaluationUnknownValue,
   EvaluationValueKind,
   type EvaluationFunctionValue,
   type EvaluationRegularExpressionValue,
@@ -9,6 +18,10 @@ import {
 } from '../values.js';
 import type { ModuleEnvironmentRecord } from '../environment.js';
 import type { StaticIntrinsicEvaluationHost } from './contracts.js';
+import {
+  evaluationValueEvidence,
+  type EvaluationValueEvidence,
+} from '../value-pressure.js';
 import {
   readArrayStartIndex,
   readArraySpliceDeleteCount,
@@ -35,14 +48,13 @@ export const enum IntrinsicCallbackEvaluationKind {
 export type IntrinsicCallbackEvaluation =
   | {
     readonly kind: IntrinsicCallbackEvaluationKind.Evaluated;
-    readonly value: EvaluationValue;
+    readonly evidence: EvaluationValueEvidence;
   }
   | {
     readonly kind: IntrinsicCallbackEvaluationKind.BudgetExhausted;
   };
 
 export class IntrinsicCallbackFrame {
-  private readonly checkpoint;
   private evaluations = 0;
 
   constructor(
@@ -50,32 +62,40 @@ export class IntrinsicCallbackFrame {
     private readonly call: ts.CallExpression,
     private readonly moduleKey: string,
     private readonly depth: number,
-  ) {
-    this.checkpoint = host.checkpoint();
+    private readonly thisValue: EvaluationValueEvidence | null = null,
+  ) {}
+
+  /** Admit the complete callback traversal before any user code can mutate evaluator-visible state. */
+  admits(evaluations: number): boolean {
+    return Number.isInteger(evaluations)
+      && evaluations >= 0
+      && evaluations <= this.host.guardrails.maxIntrinsicCallbackEvaluations;
   }
 
   evaluate(
     callback: EvaluationFunctionValue,
-    argumentValues: readonly EvaluationValue[],
+    argumentValues: readonly EvaluationValueEvidence[],
   ): IntrinsicCallbackEvaluation {
     if (this.evaluations >= this.host.guardrails.maxIntrinsicCallbackEvaluations) {
       return { kind: IntrinsicCallbackEvaluationKind.BudgetExhausted };
     }
     this.evaluations++;
+    const checkpoint = this.host.checkpoint();
+    const value = this.host.evaluateFunctionWithArguments(
+      callback,
+      this.call,
+      argumentValues,
+      this.moduleKey,
+      this.depth,
+      this.thisValue,
+    );
     return {
       kind: IntrinsicCallbackEvaluationKind.Evaluated,
-      value: this.host.evaluateFunctionWithArguments(
-        callback,
-        this.call,
-        argumentValues,
-        this.moduleKey,
-        this.depth,
+      evidence: evaluationValueEvidence(
+        value,
+        this.host.consumeOpenSeamsSince(checkpoint),
       ),
     };
-  }
-
-  restore(): void {
-    this.host.restore(this.checkpoint);
   }
 }
 
@@ -100,57 +120,99 @@ export function boundaryIntrinsicCallValue(
   return new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}.${intrinsicName}(...)`, call);
 }
 
-export function readSliceRange(
-  call: ts.CallExpression,
-  length: number,
+/** Evaluate one intrinsic's authored arguments through the shared ECMAScript argument-list phase. */
+export function evaluateIntrinsicArgumentList(
+  args: readonly ts.Expression[],
   environment: ModuleEnvironmentRecord,
   moduleKey: string,
   depth: number,
   host: StaticIntrinsicEvaluationHost,
-): { readonly start: number; readonly end: number } | null {
-  const start = call.arguments[0] == null
-    ? 0
-    : readSliceBound(host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1), length, 0);
-  const end = call.arguments[1] == null
-    ? length
-    : readSliceBound(host.evaluateExpression(call.arguments[1], environment, moduleKey, depth + 1), length, length);
-  if (start == null || end == null) {
-    return null;
+): EvaluationArgumentList {
+  return evaluateStaticArgumentList(args, environment, moduleKey, depth, {
+    maxSpreadIterations: host.guardrails.maxLoopIterations,
+    evaluateExpressionEvidence: (expression, currentEnvironment, currentModuleKey, currentDepth) =>
+      host.evaluateExpressionEvidence(expression, currentEnvironment, currentModuleKey, currentDepth),
+    openSpread: (reason, node, currentModuleKey) => {
+      const checkpoint = host.checkpoint();
+      host.open(
+        EvaluationOpenSeamKind.DynamicCall,
+        reason,
+        node,
+        currentModuleKey,
+        [OpenSeamReasonKind.StaticEvaluationDynamicCall],
+      );
+      return host.consumeOpenSeamsSince(checkpoint);
+    },
+  });
+}
+
+/** Expand one authored argument list to exact runtime positions while retaining pressure on individual slots. */
+export function evaluatePositionalIntrinsicArguments(
+  args: readonly ts.Expression[],
+  node: ts.Node,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+  openReason: string,
+): {
+  readonly kind: 'known';
+  readonly argumentList: EvaluationArgumentList;
+  readonly evidence: readonly EvaluationValueEvidence[];
+} | {
+  readonly kind: 'open';
+  readonly value: EvaluationUnknownValue;
+} {
+  const argumentList = evaluateIntrinsicArgumentList(args, environment, moduleKey, depth + 1, host);
+  const evidence = argumentList.exactEvidence();
+  if (evidence != null) {
+    return { kind: 'known', argumentList, evidence };
+  }
+  const openSeams = argumentList.shape.aggregateOpenSeams;
+  if (openSeams.length > 0) {
+    host.replayOpenSeams(openSeams);
+    return { kind: 'open', value: new EvaluationUnknownValue(openReason, node, true) };
   }
   return {
-    start: Math.min(Math.max(start, 0), length),
-    end: Math.min(Math.max(end, 0), length),
+    kind: 'open',
+    value: host.unknown(openReason, node, moduleKey, EvaluationOpenSeamKind.DynamicCall),
   };
 }
 
-export function arrayCallbackValue(
-  call: ts.CallExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
-  host: StaticIntrinsicEvaluationHost,
-  label: string,
-): { readonly kind: 'known'; readonly value: EvaluationFunctionValue } | { readonly kind: 'open'; readonly value: EvaluationValue } {
-  const callbackExpression = call.arguments[0];
-  if (callbackExpression == null) {
-    return {
-      kind: 'open',
-      value: host.unknown(`${label} is missing.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall),
-    };
+export interface IntrinsicSliceRangeRead {
+  readonly range: { readonly start: number; readonly end: number } | null;
+  readonly openSeams: readonly EvaluationOpenSeam[];
+}
+
+export function readSliceRange(
+  arguments_: readonly EvaluationValueEvidence[],
+  length: number,
+): IntrinsicSliceRangeRead {
+  const startEvidence = arguments_[0] ?? null;
+  const endEvidence = arguments_[1] ?? null;
+  const openSeams = [
+    ...(startEvidence?.openSeams ?? []),
+    ...(endEvidence?.openSeams ?? []),
+  ];
+  if (openSeams.length > 0) {
+    return { range: null, openSeams };
   }
-  if (ts.isSpreadElement(callbackExpression)) {
-    return {
-      kind: 'open',
-      value: host.unknown(`${label} was provided through a spread argument.`, callbackExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall),
-    };
+  const start = startEvidence == null
+    ? 0
+    : readSliceBound(startEvidence.value, length, 0);
+  const end = endEvidence == null
+    ? length
+    : readSliceBound(endEvidence.value, length, length);
+  if (start == null || end == null) {
+    return { range: null, openSeams: [] };
   }
-  const callback = host.evaluateExpression(callbackExpression, environment, moduleKey, depth + 1);
-  return callback.kind === EvaluationValueKind.Function
-    ? { kind: 'known', value: callback }
-    : {
-      kind: 'open',
-      value: host.unknown(`${label} did not reduce to a known function.`, callbackExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall),
-    };
+  return {
+    range: {
+      start: Math.min(Math.max(start, 0), length),
+      end: Math.min(Math.max(end, 0), length),
+    },
+    openSeams: [],
+  };
 }
 
 export function regularExpressionValue(
@@ -165,23 +227,4 @@ export function regularExpressionValue(
     host.open(EvaluationOpenSeamKind.DynamicCall, 'Regular expression value did not construct in the host runtime.', node, moduleKey, []);
     return null;
   }
-}
-
-export function evaluateCallArgumentValues(
-  call: ts.CallExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
-  host: StaticIntrinsicEvaluationHost,
-): readonly EvaluationValue[] {
-  const values: EvaluationValue[] = [];
-  for (const argument of call.arguments) {
-    const value = host.evaluateExpression(argument, environment, moduleKey, depth + 1);
-    if (ts.isSpreadElement(argument) && value.kind === EvaluationValueKind.Array) {
-      values.push(...value.elements.map((element) => element.value));
-    } else {
-      values.push(value);
-    }
-  }
-  return values;
 }

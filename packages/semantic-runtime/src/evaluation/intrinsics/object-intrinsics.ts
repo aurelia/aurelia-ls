@@ -1,7 +1,10 @@
 import ts from 'typescript';
 import type { ModuleEnvironmentRecord } from '../environment.js';
 import { readEvaluationEnumerableOwnEntries } from '../enumerable-own-properties.js';
-import { evaluationArrayHasExactPositions } from '../array-value-operations.js';
+import {
+  evaluationArrayHasExactPositions,
+  evaluationArrayIteratorElements,
+} from '../array-value-operations.js';
 import {
   compactEvaluationOpenSeams,
   EvaluationOpenSeamKind,
@@ -92,9 +95,8 @@ export function evaluateObjectValues(
     entries.entries.map((entry) =>
       new EvaluationArrayElement(entry.value, entry.expression, entry.openSeams)
     ),
-    entries.mayHaveUnknownEntries,
     call,
-    entries.mayHaveUnknownEntries,
+    entries.toArrayShape(),
   );
 }
 
@@ -119,9 +121,8 @@ export function evaluateObjectKeys(
     entries.entries.map((entry) =>
       new EvaluationArrayElement(new EvaluationStringValue(entry.name, call), entry.expression)
     ),
-    entries.mayHaveUnknownEntries,
     call,
-    entries.mayHaveUnknownEntries,
+    entries.toArrayShape(),
   );
 }
 
@@ -148,13 +149,12 @@ export function evaluateObjectEntries(
         new EvaluationArrayValue([
           new EvaluationArrayElement(new EvaluationStringValue(entry.name, call), entry.expression),
           new EvaluationArrayElement(entry.value, entry.expression, entry.openSeams),
-        ], false, call),
+        ], call),
         entry.expression,
       )
     ),
-    entries.mayHaveUnknownEntries,
     call,
-    entries.mayHaveUnknownEntries,
+    entries.toArrayShape(),
   );
 }
 
@@ -207,7 +207,7 @@ export function evaluateObjectFromEntries(
       [],
     );
     const pressure = compactEvaluationOpenSeams([
-      ...(source.kind === EvaluationValueKind.Array ? source.shapeOpenSeams : []),
+      ...(source.kind === EvaluationValueKind.Array ? source.aggregateOpenSeams : []),
       ...host.openSeamsSince(checkpoint),
     ]);
     openEvaluationObjectProperties(properties, pressure);
@@ -250,8 +250,9 @@ export function iterableEntriesForObjectFromEntries(
     return null;
   }
   const entries: ObjectFromEntriesEntry[] = [];
-  let mayHaveUnknownEntries = source.mayHaveUnknownElements;
-  for (const element of source.elements) {
+  let mayHaveUnknownEntries = source.mayHaveUnknownElements || source.mayHaveUnknownOrder;
+  const iterableElements = evaluationArrayIteratorElements(source) ?? source.elements;
+  for (const element of iterableElements) {
     const entry = objectFromEntriesEntry(element.value, element.expression ?? call, element.openSeams);
     if (entry == null) {
       mayHaveUnknownEntries = true;
@@ -272,14 +273,16 @@ export function objectFromEntriesEntry(
     if (!evaluationArrayHasExactPositions(value)) {
       return null;
     }
+    const keyElement = value.elementAtRuntimeIndex(0);
+    const valueElement = value.elementAtRuntimeIndex(1);
     return {
-      key: value.elements[0]?.value ?? EvaluationUndefined,
-      value: value.elements[1]?.value ?? EvaluationUndefined,
+      key: keyElement?.value ?? EvaluationUndefined,
+      value: valueElement?.value ?? EvaluationUndefined,
       node,
       openSeams: compactEvaluationOpenSeams([
         ...openSeams,
-        ...(value.elements[0]?.openSeams ?? []),
-        ...(value.elements[1]?.openSeams ?? []),
+        ...(keyElement?.openSeams ?? []),
+        ...(valueElement?.openSeams ?? []),
       ]),
     };
   }

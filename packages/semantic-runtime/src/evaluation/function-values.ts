@@ -19,7 +19,6 @@ import {
 } from './seams.js';
 import {
   EvaluationValueEvidence,
-  evaluationValueEvidence,
 } from './value-pressure.js';
 import {
   EvaluationBoundaryKind,
@@ -57,34 +56,7 @@ export interface StaticFunctionEvaluationHost {
     seamKind: EvaluationOpenSeamKind,
   ): EvaluationUnknownValue;
 
-  openSeamCheckpoint(): number;
-
-  consumeOpenSeamsSince(checkpoint: number): readonly EvaluationOpenSeam[];
-
   replayOpenSeams(openSeams: readonly EvaluationOpenSeam[]): void;
-}
-
-export function evaluateStaticFunctionCall(
-  callee: EvaluationFunctionValue,
-  call: ts.CallExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
-  host: StaticFunctionEvaluationHost,
-): EvaluationValue {
-  const arguments_ = call.arguments.map((argument) => {
-    const checkpoint = host.openSeamCheckpoint();
-    const value = host.evaluateExpression(argument, environment, moduleKey, depth + 1);
-    return evaluationValueEvidence(value, host.consumeOpenSeamsSince(checkpoint));
-  });
-  return evaluateStaticFunctionWithArguments(
-    callee,
-    call,
-    arguments_,
-    moduleKey,
-    depth + 1,
-    host,
-  );
 }
 
 export function evaluateStaticFunctionWithArguments(
@@ -94,7 +66,7 @@ export function evaluateStaticFunctionWithArguments(
   moduleKey: string,
   depth: number,
   host: StaticFunctionEvaluationHost,
-  thisValue: EvaluationValueEvidence | null = null,
+  thisValue: EvaluationValueEvidence | null,
 ): EvaluationValue {
   if (callee.declaration.asteriskToken != null) {
     return host.unknown('Generator functions are not evaluated.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
@@ -111,14 +83,15 @@ export function evaluateStaticFunctionWithArguments(
   }
 
   const callEnvironment = callee.environment.clone(`${moduleKey}:call:${call.getStart()}`) as ModuleEnvironmentRecord;
-  if (thisValue != null) {
+  if (!ts.isArrowFunction(callee.declaration)) {
+    const callThis = thisValue ?? new EvaluationValueEvidence(EvaluationUndefined, []);
     callEnvironment.initializeBinding(
       'this',
-      thisValue.value,
+      callThis.value,
       EvaluationBindingKind.Parameter,
       true,
       call,
-      thisValue.openSeams,
+      callThis.openSeams,
     );
   }
   initializeStaticFunctionParameters(callee.declaration, argumentValues, callEnvironment, moduleKey, call, depth + 1, host.bindingHost);

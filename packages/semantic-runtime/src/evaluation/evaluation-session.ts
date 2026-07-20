@@ -21,6 +21,7 @@ import {
   type StaticEvaluationValueMetadataTransfer,
 } from './evaluator.js';
 import type { StaticIntrinsicEvaluationHost } from './intrinsics/contracts.js';
+import { EvaluationValueEvidence } from './value-pressure.js';
 import {
   EvaluationArrayElement,
   EvaluationArrayValue,
@@ -125,15 +126,12 @@ export class StaticEvaluationSessionFork {
       case EvaluationValueKind.Array: {
         const target = new EvaluationArrayValue(
           [],
-          source.mayHaveUnknownElements,
           source.node,
-          source.mayHaveUnknownOrder,
-          source.uncertainties,
-          source.shapeOpenSeams,
+          source.shape,
         );
         this.bindValue(source, target);
         target.elements.push(...source.elements.map((element) =>
-          new EvaluationArrayElement(this.forkValue(element.value), element.expression, element.openSeams)
+          new EvaluationArrayElement(this.forkValue(element.value), element.expression, element.openSeams, element.runtimeIndex)
         ));
         return target;
       }
@@ -141,7 +139,7 @@ export class StaticEvaluationSessionFork {
         const target = new EvaluationSetValue([], source.mayHaveUnknownElements, source.node, source.weak);
         this.bindValue(source, target);
         target.elements.push(...source.elements.map((element) =>
-          new EvaluationArrayElement(this.forkValue(element.value), element.expression, element.openSeams)
+          new EvaluationArrayElement(this.forkValue(element.value), element.expression, element.openSeams, element.runtimeIndex)
         ));
         return target;
       }
@@ -403,13 +401,33 @@ export class StaticEvaluationSessionFork {
       raise: (completion) => host.raise(this.forkExpressionAbruptCompletion(completion)),
       evaluateExpression: (expression, environment, moduleKey, depth) =>
         this.adoptSessionValueGraph(host.evaluateExpression(expression, environment, moduleKey, depth)),
-      evaluateFunctionWithArguments: (callee, call, argumentValues, moduleKey, depth) =>
+      evaluateExpressionEvidence: (expression, environment, moduleKey, depth) => {
+        const evidence = host.evaluateExpressionEvidence(expression, environment, moduleKey, depth);
+        return new EvaluationValueEvidence(
+          this.adoptSessionValueGraph(evidence.value),
+          evidence.openSeams,
+        );
+      },
+      evaluateFunctionWithArguments: (callee, call, argumentValues, moduleKey, depth, thisValue) =>
         this.adoptSessionValueGraph(
-          host.evaluateFunctionWithArguments(callee, call, argumentValues, moduleKey, depth),
+          host.evaluateFunctionWithArguments(
+            this.adoptSessionFunctionValue(callee),
+            call,
+            argumentValues.map((evidence) => this.adoptSessionEvidence(evidence)),
+            moduleKey,
+            depth,
+            thisValue == null ? null : this.adoptSessionEvidence(thisValue),
+          ),
         ),
       evaluateClassInstantiation: (callee, expression, argumentValues, moduleKey, depth) =>
         this.adoptSessionValueGraph(
-          host.evaluateClassInstantiation(callee, expression, argumentValues, moduleKey, depth),
+          host.evaluateClassInstantiation(
+            this.adoptSessionClassValue(callee),
+            expression,
+            argumentValues.map((evidence) => this.adoptSessionEvidence(evidence)),
+            moduleKey,
+            depth,
+          ),
         ),
       open: (seamKind, summary, node, moduleKey, reasonKinds) =>
         host.open(seamKind, summary, node, moduleKey, reasonKinds),
@@ -417,6 +435,8 @@ export class StaticEvaluationSessionFork {
       checkpoint: () => host.checkpoint(),
       restore: (checkpoint) => host.restore(checkpoint),
       openSeamsSince: (checkpoint) => host.openSeamsSince(checkpoint),
+      consumeOpenSeamsSince: (checkpoint) => host.consumeOpenSeamsSince(checkpoint),
+      replayOpenSeams: (openSeams) => host.replayOpenSeams(openSeams),
       resolveCommonJsRequire: (moduleKey, moduleSpecifier, node) =>
         this.adoptNullableSessionValue(host.resolveCommonJsRequire(moduleKey, moduleSpecifier, node)),
       resolveDynamicImport: (moduleKey, moduleSpecifier, node) =>
@@ -432,6 +452,29 @@ export class StaticEvaluationSessionFork {
           ),
         ),
     };
+  }
+
+  private adoptSessionEvidence(evidence: EvaluationValueEvidence): EvaluationValueEvidence {
+    return new EvaluationValueEvidence(
+      this.adoptSessionValueGraph(evidence.value),
+      evidence.openSeams,
+    );
+  }
+
+  private adoptSessionFunctionValue(value: EvaluationFunctionValue): EvaluationFunctionValue {
+    const adopted = this.adoptSessionValueGraph(value);
+    if (adopted.kind !== EvaluationValueKind.Function) {
+      throw new Error('Static evaluation session changed a function value kind while adopting its graph.');
+    }
+    return adopted;
+  }
+
+  private adoptSessionClassValue(value: EvaluationClassValue): EvaluationClassValue {
+    const adopted = this.adoptSessionValueGraph(value);
+    if (adopted.kind !== EvaluationValueKind.Class) {
+      throw new Error('Static evaluation session changed a class value kind while adopting its graph.');
+    }
+    return adopted;
   }
 
   private forkRuntimeValueResult(
@@ -498,7 +541,7 @@ export class StaticEvaluationSessionFork {
           const element = value.elements[index]!;
           const adopted = this.adoptSessionValueGraph(element.value);
           if (adopted !== element.value) {
-            value.elements[index] = new EvaluationArrayElement(adopted, element.expression, element.openSeams);
+            value.elements[index] = new EvaluationArrayElement(adopted, element.expression, element.openSeams, element.runtimeIndex);
           }
         }
         break;

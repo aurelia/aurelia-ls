@@ -260,18 +260,32 @@ export function bindingSourceValueEvaluationWithPressure(
   result: RuntimeBindingSourceValueEvaluation,
   sources: readonly RuntimeBindingSourceValueEvaluation[],
 ): RuntimeBindingSourceValueEvaluation {
-  const pressured = [result, ...sources].filter(
-    (source) => source.closure === RuntimeBindingSourceValueEvaluationClosure.Open,
-  );
+  const sourcePressure = sources.flatMap((source) => {
+    if (source.closure !== RuntimeBindingSourceValueEvaluationClosure.Open) {
+      return [];
+    }
+    if (
+      result.value == null
+      || source.abruptCompletion != null
+      || source.openSeams.length === 0
+    ) {
+      return [{ source, openSeams: source.openSeams }];
+    }
+    const openSeams = unretainedEvaluationOpenSeams(result.value, source.openSeams);
+    return openSeams.length === 0 ? [] : [{ source, openSeams }];
+  });
+  const pressured = result.closure === RuntimeBindingSourceValueEvaluationClosure.Open
+    ? [{ source: result, openSeams: result.openSeams }, ...sourcePressure]
+    : sourcePressure;
   if (pressured.length === 0) {
     return result;
   }
   return bindingSourceValueEvaluationResult(
     result.value,
-    pressured.flatMap((source) => source.openReason == null ? [] : [source.openReason]),
-    pressured.find((source) => source.abruptCompletion != null)?.abruptCompletion ?? null,
-    pressured.flatMap((source) => source.openReasonKinds),
-    pressured.flatMap((source) => source.openSeams),
+    pressured.flatMap(({ source }) => source.openReason == null ? [] : [source.openReason]),
+    pressured.find(({ source }) => source.abruptCompletion != null)?.source.abruptCompletion ?? null,
+    pressured.flatMap(({ source }) => source.openReasonKinds),
+    pressured.flatMap(({ openSeams }) => openSeams),
   );
 }
 

@@ -303,11 +303,13 @@ describe('DI provider model', () => {
 
     expect(partial.state).toBe(DiProviderActivationState.Multiple);
     expect(arrayMarkers(partial.value)).toEqual(['partial-multi']);
-    expect(partial.value).toEqual(expect.objectContaining({
-      kind: EvaluationValueKind.Array,
-      mayHaveUnknownElements: true,
-      mayHaveUnknownOrder: true,
-    }));
+    expect(partial.value?.kind).toBe(EvaluationValueKind.Array);
+    if (partial.value?.kind !== EvaluationValueKind.Array) {
+      throw new Error('Expected all(...) to retain an evaluator array value.');
+    }
+    expect(partial.value.shape.exactLength).toBeNull();
+    expect(partial.value.shape.hasExactElements).toBe(false);
+    expect(partial.value.shape.hasExactOrder).toBe(true);
     expect(partial.reason).toContain('runtime callback boundary');
 
     const directKey = activateNamedSite(fixture, session, 'pressuredKeyRead');

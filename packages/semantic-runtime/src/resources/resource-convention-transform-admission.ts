@@ -29,6 +29,7 @@ import {
   StaticValueMemberReadKind,
 } from '../evaluation/property-access.js';
 import { unwrapExpression } from '../evaluation/ts-syntax.js';
+import { EvaluationValueEvidence } from '../evaluation/value-pressure.js';
 import {
   isEvaluatedProjectSource,
   StaticProjectEvaluationComputationPreparation,
@@ -250,14 +251,18 @@ export class ResourceConventionToolingEvaluationContext {
       ? host.evaluateFunctionWithArguments(
           config,
           call,
-          [new EvaluationBoundaryObjectValue(
-            EvaluationBoundaryKind.HostEnvironment,
-            'vite.config-env',
-            new Map(),
-            call,
+          [new EvaluationValueEvidence(
+            new EvaluationBoundaryObjectValue(
+              EvaluationBoundaryKind.HostEnvironment,
+              'vite.config-env',
+              new Map(),
+              call,
+            ),
+            [],
           )],
           moduleKey,
           depth + 1,
+          null,
         )
       : config;
   }
