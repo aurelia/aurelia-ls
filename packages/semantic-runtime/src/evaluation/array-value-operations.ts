@@ -3,6 +3,9 @@ import type ts from 'typescript';
 import {
   EvaluationArrayElement,
   EvaluationArrayValue,
+  EvaluationUndefined,
+  evaluationValuesSameValueZero,
+  evaluationValuesStrictlyEqual,
   mergeEvaluationArrayUncertainties,
   type EvaluationArrayUncertainty,
   type EvaluationValue,
@@ -12,6 +15,66 @@ import { stringCoercionText } from './value-coercion.js';
 export interface EvaluationArraySortResult {
   readonly elements: readonly EvaluationArrayElement[];
   readonly mayHaveUnknownOrder: boolean;
+}
+
+/** Whether compact evaluator elements still correspond one-for-one with runtime array positions. */
+export function evaluationArrayHasExactPositions(receiver: EvaluationArrayValue): boolean {
+  return !receiver.mayHaveUnknownElements && !receiver.mayHaveUnknownOrder;
+}
+
+/** Read Array.at from an exact-position evaluator array. */
+export function evaluationExactArrayAt(
+  receiver: EvaluationArrayValue,
+  index: number,
+): EvaluationValue {
+  return receiver.elements[index]?.value ?? EvaluationUndefined;
+}
+
+/** Read Array.includes with SameValueZero from an exact-position evaluator array. */
+export function evaluationExactArrayIncludes(
+  receiver: EvaluationArrayValue,
+  search: EvaluationValue,
+  start: number,
+): boolean {
+  return receiver.elements.slice(start).some((element) => evaluationValuesSameValueZero(element.value, search));
+}
+
+/** Read Array.indexOf/lastIndexOf with strict equality from an exact-position evaluator array. */
+export function evaluationExactArrayIndexOf(
+  receiver: EvaluationArrayValue,
+  search: EvaluationValue,
+  start: number,
+  rightToLeft: boolean,
+): number {
+  if (rightToLeft) {
+    return receiver.elements
+      .slice(0, start + 1)
+      .findLastIndex((element) => evaluationValuesStrictlyEqual(element.value, search));
+  }
+  const relative = receiver.elements
+    .slice(start)
+    .findIndex((element) => evaluationValuesStrictlyEqual(element.value, search));
+  return relative < 0 ? -1 : start + relative;
+}
+
+/** Read Array.join from an exact-position evaluator array, returning null for unmodeled coercion. */
+export function evaluationExactArrayJoin(
+  receiver: EvaluationArrayValue,
+  separator: string,
+): string | null {
+  const parts: string[] = [];
+  for (const element of receiver.elements) {
+    if (element.value.kind === 'undefined' || element.value.kind === 'null') {
+      parts.push('');
+      continue;
+    }
+    const text = stringCoercionText(element.value);
+    if (text == null) {
+      return null;
+    }
+    parts.push(text);
+  }
+  return parts.join(separator);
 }
 
 /** Concatenates evaluator-local Array values using native Array.concat one-level array argument spreading. */

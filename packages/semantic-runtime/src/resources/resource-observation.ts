@@ -1,5 +1,6 @@
 import type ts from 'typescript';
 import type { EvidenceHandle } from '../kernel/handles.js';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
 import type { ResourceDefinitionHeader } from './resource-definition.js';
 import type { ResourceCarrierKind } from './resource-kind.js';
@@ -19,6 +20,8 @@ export class ResourceRecognitionOpen {
     readonly summary: string,
     /** Source node where the unresolved pressure appeared. */
     readonly node: ts.Node,
+    /** Lower-level evaluator reasons that caused this recognition seam. */
+    readonly reasonKinds: readonly OpenSeamReasonKind[],
   ) {}
 }
 

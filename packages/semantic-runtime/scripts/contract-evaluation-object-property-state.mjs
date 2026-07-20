@@ -39,8 +39,8 @@ const result = new StaticEvaluator().evaluateSourceFile(sourceFile, sourceFile.f
 const spread = objectValue(result.environment.readValue('spread'));
 const forwarded = objectValue(result.environment.readValue('forwarded'));
 const assigned = objectValue(result.environment.readValue('assigned'));
-const beforeRead = result.environment.readValue('beforeRead');
-const afterRead = result.environment.readValue('afterRead');
+const beforeRead = result.environment.readEvidence('beforeRead');
+const afterRead = result.environment.readEvidence('afterRead');
 
 const expectations = [
   [spread, 'before', EvaluationObjectPropertyState.Open],
@@ -61,11 +61,11 @@ const failures = expectations.flatMap(([object, propertyName, expectedState]) =>
     ? []
     : [`Expected ${propertyName} state ${expectedState}, got ${actualState ?? '<missing>'}.`];
 });
-if (beforeRead?.kind !== EvaluationValueKind.Unknown) {
-  failures.push(`Expected spread.before to remain open, got ${beforeRead?.kind ?? '<missing>'}.`);
+if (beforeRead?.value.kind !== EvaluationValueKind.String || beforeRead.value.value !== 'before' || beforeRead.openSeams.length === 0) {
+  failures.push(`Expected spread.before to retain the best-known value with open evidence, got ${beforeRead?.value.kind ?? '<missing>'} with ${beforeRead?.openSeams.length ?? 0} seam(s).`);
 }
-if (afterRead?.kind !== EvaluationValueKind.String || afterRead.value !== 'after') {
-  failures.push(`Expected spread.after to close to "after", got ${afterRead?.kind ?? '<missing>'}.`);
+if (afterRead?.value.kind !== EvaluationValueKind.String || afterRead.value.value !== 'after' || afterRead.openSeams.length !== 0) {
+  failures.push(`Expected spread.after to close to "after", got ${afterRead?.value.kind ?? '<missing>'} with ${afterRead?.openSeams.length ?? 0} seam(s).`);
 }
 
 const summary = {
@@ -73,8 +73,10 @@ const summary = {
   spread: propertyStates(spread),
   forwarded: propertyStates(forwarded),
   assigned: propertyStates(assigned),
-  beforeReadKind: beforeRead?.kind ?? null,
-  afterReadKind: afterRead?.kind ?? null,
+  beforeReadKind: beforeRead?.value.kind ?? null,
+  beforeReadOpenSeams: beforeRead?.openSeams.length ?? null,
+  afterReadKind: afterRead?.value.kind ?? null,
+  afterReadOpenSeams: afterRead?.openSeams.length ?? null,
 };
 
 if (failures.length > 0) {

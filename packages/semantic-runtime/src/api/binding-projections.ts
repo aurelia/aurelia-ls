@@ -314,6 +314,7 @@ function expressionResourceLifecycleEffectsRow(
     rateLimitDelayState: effects.rateLimitDelayState,
     configurationSource: describeAddress(store, effects.configurationSourceAddressHandle),
     openReason: effects.openReason,
+    openReasonKinds: effects.openReasonKinds,
     ...(handles ? {
       handles: {
         configurationSourceAddressHandle: effects.configurationSourceAddressHandle,

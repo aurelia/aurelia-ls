@@ -6,13 +6,21 @@ import {
 } from './binding-patterns.js';
 import {
   EvaluationCompletionKind,
+  type EvaluationExpressionAbruptCompletion,
   type EvaluationCompletion,
 } from './completion.js';
 import {
   EvaluationBindingKind,
   type ModuleEnvironmentRecord,
 } from './environment.js';
-import { EvaluationOpenSeamKind } from './seams.js';
+import {
+  EvaluationOpenSeamKind,
+  type EvaluationOpenSeam,
+} from './seams.js';
+import {
+  EvaluationValueEvidence,
+  evaluationValueEvidence,
+} from './value-pressure.js';
 import {
   EvaluationBoundaryKind,
   EvaluationBoundaryValue,
@@ -25,6 +33,8 @@ import {
 
 export interface StaticFunctionEvaluationHost {
   readonly bindingHost: StaticBindingPatternHost;
+
+  raise(completion: EvaluationExpressionAbruptCompletion): never;
 
   evaluateExpression(
     expression: ts.Expression,
@@ -46,6 +56,12 @@ export interface StaticFunctionEvaluationHost {
     moduleKey: string,
     seamKind: EvaluationOpenSeamKind,
   ): EvaluationUnknownValue;
+
+  openSeamCheckpoint(): number;
+
+  consumeOpenSeamsSince(checkpoint: number): readonly EvaluationOpenSeam[];
+
+  replayOpenSeams(openSeams: readonly EvaluationOpenSeam[]): void;
 }
 
 export function evaluateStaticFunctionCall(
@@ -56,10 +72,15 @@ export function evaluateStaticFunctionCall(
   depth: number,
   host: StaticFunctionEvaluationHost,
 ): EvaluationValue {
+  const arguments_ = call.arguments.map((argument) => {
+    const checkpoint = host.openSeamCheckpoint();
+    const value = host.evaluateExpression(argument, environment, moduleKey, depth + 1);
+    return evaluationValueEvidence(value, host.consumeOpenSeamsSince(checkpoint));
+  });
   return evaluateStaticFunctionWithArguments(
     callee,
     call,
-    call.arguments.map((argument) => host.evaluateExpression(argument, environment, moduleKey, depth + 1)),
+    arguments_,
     moduleKey,
     depth + 1,
     host,
@@ -69,11 +90,11 @@ export function evaluateStaticFunctionCall(
 export function evaluateStaticFunctionWithArguments(
   callee: EvaluationFunctionValue,
   call: ts.Node,
-  argumentValues: readonly EvaluationValue[],
+  argumentValues: readonly EvaluationValueEvidence[],
   moduleKey: string,
   depth: number,
   host: StaticFunctionEvaluationHost,
-  thisValue: EvaluationValue | null = null,
+  thisValue: EvaluationValueEvidence | null = null,
 ): EvaluationValue {
   if (callee.declaration.asteriskToken != null) {
     return host.unknown('Generator functions are not evaluated.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
@@ -91,7 +112,14 @@ export function evaluateStaticFunctionWithArguments(
 
   const callEnvironment = callee.environment.clone(`${moduleKey}:call:${call.getStart()}`) as ModuleEnvironmentRecord;
   if (thisValue != null) {
-    callEnvironment.initializeBinding('this', thisValue, EvaluationBindingKind.Parameter, true, call);
+    callEnvironment.initializeBinding(
+      'this',
+      thisValue.value,
+      EvaluationBindingKind.Parameter,
+      true,
+      call,
+      thisValue.openSeams,
+    );
   }
   initializeStaticFunctionParameters(callee.declaration, argumentValues, callEnvironment, moduleKey, call, depth + 1, host.bindingHost);
 
@@ -105,10 +133,15 @@ export function evaluateStaticFunctionWithArguments(
 
   const completion = host.evaluateBlock(body, callEnvironment, moduleKey, depth + 1);
   if (completion.kind === EvaluationCompletionKind.Return) {
+    host.replayOpenSeams(completion.openSeams);
     return completion.value;
   }
   if (completion.kind === EvaluationCompletionKind.Normal) {
     return EvaluationUndefined;
+  }
+  if (completion.kind === EvaluationCompletionKind.Throw) {
+    host.replayOpenSeams(completion.openSeams);
+    return host.raise(completion);
   }
   return host.unknown('Function body did not complete with a static return value.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
 }

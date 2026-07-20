@@ -12,6 +12,7 @@ import {
 } from '../evaluation/policy.js';
 import { delegateStaticEvaluationRuntimeHost } from '../evaluation/runtime-host.js';
 import type { EvaluationOpenSeam } from '../evaluation/seams.js';
+import type { EvaluationExpressionAbruptCompletion } from '../evaluation/completion.js';
 import {
   type EvaluationFunctionValue,
   type EvaluationValue,
@@ -36,7 +37,8 @@ export type DiRegistryContainerCallHandler = (
 /** Candidate-local answer from one evaluator-backed registry invocation. */
 export class DiRegistryExecutionResult {
   constructor(
-    readonly value: EvaluationValue,
+    readonly value: EvaluationValue | null,
+    readonly abruptCompletion: EvaluationExpressionAbruptCompletion | null,
     readonly openSeams: readonly EvaluationOpenSeam[],
     readonly handledCalls: readonly DiRegistryExecutedContainerCall[],
   ) {}
@@ -97,5 +99,10 @@ export function executeDiRegistryFunction(
     [containerValue],
     registryValue,
   );
-  return new DiRegistryExecutionResult(result.value, result.openSeams, handledCalls);
+  return new DiRegistryExecutionResult(
+    result.value,
+    result.abruptCompletion,
+    result.openSeams,
+    handledCalls,
+  );
 }

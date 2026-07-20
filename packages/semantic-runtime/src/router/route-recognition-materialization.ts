@@ -20,6 +20,7 @@ import {
   RouterIssueKind,
   RouterIssueModel,
   RouterIssuePhase,
+  RouterClosureKind,
   RouteParameterValueModel,
   RouteRecognizerStateKind,
   ViewportAgentCandidateResolutionKind,
@@ -156,6 +157,9 @@ export class RouteRecognitionMaterializationProjectPass {
     tree: ViewportInstructionTreeModel,
     indexes: RouteRecognitionIndexes,
   ): readonly RouteRecognitionEmission[] {
+    if (tree.closure === RouterClosureKind.Open) {
+      return [];
+    }
     const routeContext = routeContextForInstructionTree(tree, indexes.routeContextsByIdentity);
     const routeConfigContext = routeConfigContextForRouteContext(routeContext, indexes.routeConfigContextsByIdentity);
     const routeConfig = routeConfigForRouteConfigContext(routeConfigContext, indexes.routeConfigsByIdentity);

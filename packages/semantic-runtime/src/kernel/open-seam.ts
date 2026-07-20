@@ -38,6 +38,8 @@ export const enum OpenSeamReasonKind {
   StaticEvaluationUnsupportedLoopStatement = 'static-evaluation-unsupported-loop-statement',
   /** Static evaluation reached a compound assignment before compound mutation semantics were modeled. */
   StaticEvaluationUnsupportedCompoundAssignment = 'static-evaluation-unsupported-compound-assignment',
+  /** Static evaluation produced modeled abrupt control flow instead of an expression value. */
+  StaticEvaluationAbruptCompletion = 'static-evaluation-abrupt-completion',
   /** Resource dependencies metadata could not be fully enumerated as static entries. */
   ResourceDefinitionDependenciesOpen = 'resource-definition-dependencies-open',
   /** One resource dependency entry did not resolve to a class, function, or registry dependency. */
@@ -62,6 +64,10 @@ export const enum OpenSeamReasonKind {
   BindingSourceTypeOpen = 'binding-source-type-open',
   /** Binding-source projection could not close a referenced resource surface without guessing. */
   BindingSourceResourceOpen = 'binding-source-resource-open',
+  /** One runtime-composition input retained a usable value or type while its source value remained open. */
+  RuntimeCompositionInputOpen = 'runtime-composition-input-open',
+  /** Runtime composition could not close custom-element candidate resolution or the composed-child handoff. */
+  RuntimeCompositionComponentResolutionOpen = 'runtime-composition-component-resolution-open',
   /** Select value-channel analysis could not close the authored select target. */
   BindingValueChannelSelectTargetOpen = 'binding-value-channel-select-target-open',
   /** Select value-channel analysis could not close option value/model facts. */

@@ -1,9 +1,16 @@
 import ts from 'typescript';
 import {
+  openSeamReasonKindsForEvaluationPressure,
+  openSeamReasonKindsForEvaluationRead,
+  openSeamReasonKindsForEvaluationValue,
+} from '../evaluation/boundary-open-reason.js';
+import {
+  EvaluationRead,
   readStaticStringArrayValue,
   readStaticStringValue,
   StaticEvaluationExpressionReader,
 } from '../evaluation/expression-reader.js';
+import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own-properties.js';
 import {
   EvaluationValueKind,
   EvaluationObjectPropertyState,
@@ -12,6 +19,8 @@ import {
   type EvaluationObjectValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
+import type { EvaluationOpenSeam } from '../evaluation/seams.js';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { readReferenceName } from '../evaluation/ts-syntax.js';
 import {
   NodeObserverLocatorAccessorOverride,
@@ -24,126 +33,390 @@ import {
   RuntimeNodeObserverKind,
 } from '../template/runtime-binding.js';
 
+/** One source-local node-observer customization that could not be represented as a confident applied value. */
+export class NodeObserverCustomizationOpen {
+  constructor(
+    readonly node: ts.Node,
+    readonly summary: string,
+    readonly reasonKinds: readonly OpenSeamReasonKind[],
+  ) {}
+}
+
+/** Known customization values plus the evaluator/domain pressure observed while reading them. */
+export class NodeObserverCustomizationRead<TValue> {
+  constructor(
+    readonly values: readonly TValue[],
+    readonly evaluations: readonly EvaluationRead<EvaluationValue>[],
+    readonly open: readonly NodeObserverCustomizationOpen[],
+  ) {}
+}
+
 export function nodeObserverNodeConfigsFromUseConfigCall(
   call: ts.CallExpression,
   reader: StaticEvaluationExpressionReader,
-): readonly NodeObserverLocatorNodeConfig[] {
+): NodeObserverCustomizationRead<NodeObserverLocatorNodeConfig> {
   const [first, second, third] = call.arguments;
   if (first == null || ts.isSpreadElement(first)) {
-    return [];
+    return openNodeObserverCustomization(first ?? call, 'Node-observer useConfig did not expose one direct configuration argument.');
   }
   if (second != null && third != null && !ts.isSpreadElement(second) && !ts.isSpreadElement(third)) {
     const tagName = staticStringFromExpression(first, reader);
     const key = staticStringFromExpression(second, reader);
     const config = nodeObserverConfigFromExpression(third, reader);
-    return tagName != null && key != null && config != null
-      ? [new NodeObserverLocatorNodeConfig(tagName, key, config)]
-      : [];
+    return new NodeObserverCustomizationRead(
+      tagName.value != null && key.value != null
+        ? [new NodeObserverLocatorNodeConfig(tagName.value, key.value, config.value)]
+        : [],
+      [
+        tagName.evaluation,
+        key.evaluation,
+        ...nodeObserverConfigPressure(config),
+      ],
+      [
+        ...tagName.open,
+        ...key.open,
+        ...(config.evaluation.value == null
+          ? []
+          : nodeObserverConfigOpen(
+              third,
+              config.value,
+              openSeamReasonKindsForEvaluationRead(config.evaluation),
+            )),
+      ],
+    );
   }
 
-  const value = reader.evaluateExpression(first).value;
+  const evaluation = reader.evaluateExpression(first);
+  const value = evaluation.value;
   if (value?.kind !== EvaluationValueKind.Object) {
-    return [];
+    return new NodeObserverCustomizationRead(
+      [],
+      [evaluation],
+      value == null ? [] : [new NodeObserverCustomizationOpen(
+        first,
+        'Node-observer useConfig argument did not reduce to an object value.',
+        nodeObserverReasonKindsForValue(value, []),
+      )],
+    );
   }
   const configs: NodeObserverLocatorNodeConfig[] = [];
-  for (const tagProperty of value.properties.values()) {
-    if (tagProperty.value.kind !== EvaluationValueKind.Object) {
+  const open: NodeObserverCustomizationOpen[] = [];
+  const tags = readEvaluationEnumerableOwnEntries(value);
+  if (tags == null) {
+    return new NodeObserverCustomizationRead([], [evaluation], [
+      new NodeObserverCustomizationOpen(
+        first,
+        'Node-observer useConfig argument did not expose enumerable own entries.',
+        openSeamReasonKindsForEvaluationRead(evaluation),
+      ),
+    ]);
+  }
+  if (tags.mayHaveUnknownEntries || tags.mayHaveUnknownOrder) {
+    open.push(new NodeObserverCustomizationOpen(
+      first,
+      'Node-observer useConfig may contain additional configuration tags or a runtime-dependent contribution order.',
+      nodeObserverReasonKindsForValue(value, []),
+    ));
+  }
+  for (const tagEntry of tags.entries) {
+    if (tagEntry.property?.state === EvaluationObjectPropertyState.Open) {
+      open.push(new NodeObserverCustomizationOpen(
+        tagEntry.property.node ?? first,
+        `Node-observer configs for '${tagEntry.name}' may be replaced by an unknown property contribution.`,
+        nodeObserverReasonKindsForValue(tagEntry.value, tagEntry.property.openSeams),
+      ));
       continue;
     }
-    for (const property of tagProperty.value.properties.values()) {
-      const config = nodeObserverConfigFromValue(property.value);
-      if (config != null) {
-        configs.push(new NodeObserverLocatorNodeConfig(tagProperty.name, property.name, config));
+    if (tagEntry.value.kind !== EvaluationValueKind.Object) {
+      open.push(new NodeObserverCustomizationOpen(
+        tagEntry.property?.node ?? first,
+        `Node-observer configs for '${tagEntry.name}' did not reduce to an object value.`,
+        nodeObserverReasonKindsForValue(tagEntry.value, tagEntry.openSeams),
+      ));
+      continue;
+    }
+    const properties = readEvaluationEnumerableOwnEntries(tagEntry.value);
+    if (properties == null) {
+      open.push(new NodeObserverCustomizationOpen(
+        tagEntry.property?.node ?? first,
+        `Node-observer configs for '${tagEntry.name}' did not expose enumerable own entries.`,
+        nodeObserverReasonKindsForValue(tagEntry.value, tagEntry.openSeams),
+      ));
+      continue;
+    }
+    if (properties.mayHaveUnknownEntries || properties.mayHaveUnknownOrder) {
+      open.push(new NodeObserverCustomizationOpen(
+        tagEntry.property?.node ?? first,
+        `Node-observer configs for '${tagEntry.name}' may contain additional properties or a runtime-dependent contribution order.`,
+        nodeObserverReasonKindsForValue(tagEntry.value, tagEntry.openSeams),
+      ));
+    }
+    for (const property of properties.entries) {
+      if (property.property?.state === EvaluationObjectPropertyState.Open) {
+        open.push(new NodeObserverCustomizationOpen(
+          property.property.node ?? tagEntry.property?.node ?? first,
+          `Node-observer config '${tagEntry.name}.${property.name}' may be replaced by an unknown property contribution.`,
+          nodeObserverReasonKindsForValue(property.value, property.property.openSeams),
+        ));
+        continue;
       }
+      const config = nodeObserverConfigFromValue(property.value);
+      configs.push(new NodeObserverLocatorNodeConfig(tagEntry.name, property.name, config));
+      open.push(...nodeObserverConfigOpen(
+        property.property?.node ?? first,
+        config,
+        nodeObserverReasonKindsForValue(property.value, property.openSeams),
+      ));
     }
   }
-  return configs;
+  return new NodeObserverCustomizationRead(configs, open.length === 0 ? [] : [evaluation], open);
 }
 
 export function nodeObserverGlobalConfigsFromUseConfigGlobalCall(
   call: ts.CallExpression,
   reader: StaticEvaluationExpressionReader,
-): readonly NodeObserverLocatorGlobalConfig[] {
+): NodeObserverCustomizationRead<NodeObserverLocatorGlobalConfig> {
   const [first, second] = call.arguments;
   if (first == null || ts.isSpreadElement(first)) {
-    return [];
+    return openNodeObserverCustomization(first ?? call, 'Node-observer useConfigGlobal did not expose one direct configuration argument.');
   }
   if (second != null && !ts.isSpreadElement(second)) {
     const key = staticStringFromExpression(first, reader);
     const config = nodeObserverConfigFromExpression(second, reader);
-    return key != null && config != null
-      ? [new NodeObserverLocatorGlobalConfig(key, config)]
-      : [];
+    return new NodeObserverCustomizationRead(
+      key.value == null ? [] : [new NodeObserverLocatorGlobalConfig(key.value, config.value)],
+      [key.evaluation, ...nodeObserverConfigPressure(config)],
+      [
+        ...key.open,
+        ...(config.evaluation.value == null
+          ? []
+          : nodeObserverConfigOpen(
+              second,
+              config.value,
+              openSeamReasonKindsForEvaluationRead(config.evaluation),
+            )),
+      ],
+    );
   }
 
-  const value = reader.evaluateExpression(first).value;
+  const evaluation = reader.evaluateExpression(first);
+  const value = evaluation.value;
   if (value?.kind !== EvaluationValueKind.Object) {
-    return [];
+    return new NodeObserverCustomizationRead(
+      [],
+      [evaluation],
+      value == null ? [] : [new NodeObserverCustomizationOpen(
+        first,
+        'Node-observer useConfigGlobal argument did not reduce to an object value.',
+        nodeObserverReasonKindsForValue(value, []),
+      )],
+    );
   }
   const configs: NodeObserverLocatorGlobalConfig[] = [];
-  for (const property of value.properties.values()) {
-    const config = nodeObserverConfigFromValue(property.value);
-    if (config != null) {
-      configs.push(new NodeObserverLocatorGlobalConfig(property.name, config));
-    }
+  const open: NodeObserverCustomizationOpen[] = [];
+  const entries = readEvaluationEnumerableOwnEntries(value);
+  if (entries == null) {
+    return new NodeObserverCustomizationRead([], [evaluation], [
+      new NodeObserverCustomizationOpen(
+        first,
+        'Node-observer useConfigGlobal argument did not expose enumerable own entries.',
+        openSeamReasonKindsForEvaluationRead(evaluation),
+      ),
+    ]);
   }
-  return configs;
+  if (entries.mayHaveUnknownEntries || entries.mayHaveUnknownOrder) {
+    open.push(new NodeObserverCustomizationOpen(
+      first,
+      'Global node-observer configuration may contain additional properties or a runtime-dependent contribution order.',
+      nodeObserverReasonKindsForValue(value, []),
+    ));
+  }
+  for (const property of entries.entries) {
+    if (property.property?.state === EvaluationObjectPropertyState.Open) {
+      open.push(new NodeObserverCustomizationOpen(
+        property.property.node ?? first,
+        `Global node-observer config '${property.name}' may be replaced by an unknown property contribution.`,
+        nodeObserverReasonKindsForValue(property.value, property.property.openSeams),
+      ));
+      continue;
+    }
+    const config = nodeObserverConfigFromValue(property.value);
+    configs.push(new NodeObserverLocatorGlobalConfig(property.name, config));
+    open.push(...nodeObserverConfigOpen(
+      property.property?.node ?? first,
+      config,
+      nodeObserverReasonKindsForValue(property.value, property.openSeams),
+    ));
+  }
+  return new NodeObserverCustomizationRead(configs, open.length === 0 ? [] : [evaluation], open);
 }
 
 export function nodeObserverAccessorOverridesFromCall(
   call: ts.CallExpression,
   reader: StaticEvaluationExpressionReader,
-): readonly NodeObserverLocatorAccessorOverride[] {
+): NodeObserverCustomizationRead<NodeObserverLocatorAccessorOverride> {
   const [first, second] = call.arguments;
   if (first == null || ts.isSpreadElement(first)) {
-    return [];
+    return openNodeObserverCustomization(first ?? call, 'Node-observer overrideAccessor did not expose one direct argument.');
   }
   if (second != null && !ts.isSpreadElement(second)) {
     const tagName = staticStringFromExpression(first, reader);
     const key = staticStringFromExpression(second, reader);
-    return tagName != null && key != null
-      ? [new NodeObserverLocatorAccessorOverride(tagName, key)]
-      : [];
+    return new NodeObserverCustomizationRead(
+      tagName.value != null && key.value != null
+        ? [new NodeObserverLocatorAccessorOverride(tagName.value, key.value)]
+        : [],
+      [tagName.evaluation, key.evaluation],
+      [...tagName.open, ...key.open],
+    );
   }
 
-  const value = reader.evaluateExpression(first).value;
+  const evaluation = reader.evaluateExpression(first);
+  const value = evaluation.value;
   if (value?.kind !== EvaluationValueKind.Object) {
-    return [];
+    return new NodeObserverCustomizationRead(
+      [],
+      [evaluation],
+      value == null ? [] : [new NodeObserverCustomizationOpen(
+        first,
+        'Node-observer overrideAccessor argument did not reduce to an object value.',
+        nodeObserverReasonKindsForValue(value, []),
+      )],
+    );
   }
   const overrides: NodeObserverLocatorAccessorOverride[] = [];
-  for (const tagProperty of value.properties.values()) {
+  const open: NodeObserverCustomizationOpen[] = [];
+  const entries = readEvaluationEnumerableOwnEntries(value);
+  if (entries == null) {
+    return new NodeObserverCustomizationRead([], [evaluation], [
+      new NodeObserverCustomizationOpen(
+        first,
+        'Node-observer overrideAccessor argument did not expose enumerable own entries.',
+        openSeamReasonKindsForEvaluationRead(evaluation),
+      ),
+    ]);
+  }
+  if (entries.mayHaveUnknownEntries || entries.mayHaveUnknownOrder) {
+    open.push(new NodeObserverCustomizationOpen(
+      first,
+      'Node-observer accessor overrides may contain additional tags or a runtime-dependent contribution order.',
+      nodeObserverReasonKindsForValue(value, []),
+    ));
+  }
+  for (const tagProperty of entries.entries) {
+    if (tagProperty.property?.state === EvaluationObjectPropertyState.Open) {
+      open.push(new NodeObserverCustomizationOpen(
+        tagProperty.property.node ?? first,
+        `Node-observer accessor overrides for '${tagProperty.name}' may be replaced by an unknown property contribution.`,
+        nodeObserverReasonKindsForValue(tagProperty.value, tagProperty.property.openSeams),
+      ));
+      continue;
+    }
     const keys = readStaticStringArrayValue(tagProperty.value);
     if (keys == null) {
+      open.push(new NodeObserverCustomizationOpen(
+        tagProperty.property?.node ?? first,
+        `Node-observer accessor overrides for '${tagProperty.name}' did not reduce to a closed string array.`,
+        nodeObserverReasonKindsForValue(tagProperty.value, tagProperty.openSeams),
+      ));
       continue;
     }
     for (const key of keys) {
       overrides.push(new NodeObserverLocatorAccessorOverride(tagProperty.name, key));
     }
   }
-  return overrides;
+  return new NodeObserverCustomizationRead(overrides, open.length === 0 ? [] : [evaluation], open);
 }
 
 export function nodeObserverGlobalAccessorOverridesFromCall(
   call: ts.CallExpression,
   reader: StaticEvaluationExpressionReader,
-): readonly string[] {
-  return call.arguments.flatMap((argument) => {
+): NodeObserverCustomizationRead<string> {
+  const values: string[] = [];
+  const evaluations: EvaluationRead<EvaluationValue>[] = [];
+  const open: NodeObserverCustomizationOpen[] = [];
+  for (const argument of call.arguments) {
     if (ts.isSpreadElement(argument)) {
-      return [];
+      const evaluation = reader.evaluateExpression(argument.expression);
+      const spreadValues = evaluation.value == null
+        ? null
+        : readStaticStringArrayValue(evaluation.value);
+      if (spreadValues == null) {
+        evaluations.push(evaluation);
+        open.push(new NodeObserverCustomizationOpen(
+          argument,
+          'Global node-observer accessor override spread did not close to a string array.',
+          openSeamReasonKindsForEvaluationRead(evaluation),
+        ));
+      } else {
+        values.push(...spreadValues);
+      }
+      continue;
     }
     const key = staticStringFromExpression(argument, reader);
-    return key == null ? [] : [key];
-  });
+    evaluations.push(key.evaluation);
+    open.push(...key.open);
+    if (key.value != null) {
+      values.push(key.value);
+    }
+  }
+  return new NodeObserverCustomizationRead(values, evaluations, open);
 }
 
 export function nodeObserverConfigFromExpression(
   expression: ts.Expression,
   reader: StaticEvaluationExpressionReader,
-): RuntimeNodeObserverConfig {
-  const value = reader.evaluateExpression(expression).value;
-  return value == null
-    ? RuntimeNodeObserverConfig.open('Node observer config expression did not produce a static evaluation value.')
-    : nodeObserverConfigFromValue(value);
+): NodeObserverExpressionRead<RuntimeNodeObserverConfig> {
+  const evaluation = reader.evaluateExpression(expression);
+  return new NodeObserverExpressionRead(
+    evaluation.value == null
+      ? RuntimeNodeObserverConfig.open('Node observer config expression did not produce a static evaluation value.')
+      : nodeObserverConfigFromValue(evaluation.value),
+    evaluation,
+  );
+}
+
+class NodeObserverExpressionRead<TValue> {
+  constructor(
+    readonly value: TValue,
+    readonly evaluation: EvaluationRead<EvaluationValue>,
+    readonly open: readonly NodeObserverCustomizationOpen[] = [],
+  ) {}
+}
+
+function openNodeObserverCustomization<TValue>(
+  node: ts.Node,
+  summary: string,
+): NodeObserverCustomizationRead<TValue> {
+  return new NodeObserverCustomizationRead([], [], [new NodeObserverCustomizationOpen(node, summary, [])]);
+}
+
+function nodeObserverConfigOpen(
+  node: ts.Node,
+  config: RuntimeNodeObserverConfig,
+  reasonKinds: readonly OpenSeamReasonKind[],
+): readonly NodeObserverCustomizationOpen[] {
+  return config.openReason == null
+    ? []
+    : [new NodeObserverCustomizationOpen(node, config.openReason, reasonKinds)];
+}
+
+function nodeObserverReasonKindsForValue(
+  value: EvaluationValue,
+  openSeams: readonly EvaluationOpenSeam[],
+): readonly OpenSeamReasonKind[] {
+  return [...new Set([
+    ...openSeamReasonKindsForEvaluationValue(value),
+    ...openSeamReasonKindsForEvaluationPressure(openSeams, null),
+  ])];
+}
+
+function nodeObserverConfigPressure(
+  read: NodeObserverExpressionRead<RuntimeNodeObserverConfig>,
+): readonly EvaluationRead<EvaluationValue>[] {
+  return read.value.openReason == null && read.evaluation.abruptCompletion == null
+    ? []
+    : [read.evaluation];
 }
 
 export function nodeObserverConfigFromValue(
@@ -382,7 +655,18 @@ function nodeObserverDefaultFromConfig(config: EvaluationObjectValue): NodeObser
 function staticStringFromExpression(
   expression: ts.Expression,
   reader: StaticEvaluationExpressionReader,
-): string | null {
-  const value = reader.evaluateExpression(expression).value;
-  return value == null ? null : readStaticStringValue(value);
+): NodeObserverExpressionRead<string | null> {
+  const evaluation = reader.evaluateExpression(expression);
+  const value = evaluation.value == null ? null : readStaticStringValue(evaluation.value);
+  return new NodeObserverExpressionRead(
+    value,
+    evaluation,
+    evaluation.value != null && value == null
+      ? [new NodeObserverCustomizationOpen(
+          expression,
+          'Node-observer configuration argument did not reduce to a string.',
+          openSeamReasonKindsForEvaluationRead(evaluation),
+        )]
+      : [],
+  );
 }

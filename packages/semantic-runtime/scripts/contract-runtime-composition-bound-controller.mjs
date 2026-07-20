@@ -35,9 +35,16 @@ const failures = [
   widgetHostRows.some((row) => row.renderingContextKind === 'definition-resource')
     ? null
     : 'Expected a definition-resource widget-host row from the resource analysis pass.',
-  openRows.length === 0
+  openRows.length === 1
     ? null
-    : `Expected no open runtime composition rows; observed ${openRows.length}.`,
+    : `Expected one honest repeat-local composition candidate row; observed ${openRows.length}.`,
+  openRows[0]?.componentResolutionKind === 'type-candidate'
+    && openRows[0].resolvedComponentClassNames.includes('ChartWidget')
+    && openRows[0].resolvedComponentClassNames.includes('InventoryWidget')
+    && openRows[0].composedChildControllerCount === 0
+    && openRows[0].reasonKinds.includes('binding-source-slot-no-static-value')
+    ? null
+    : `Expected the repeat-local composition to retain type candidates without materializing a confident child controller: ${JSON.stringify(openRows[0] ?? null)}.`,
   ...widgetHostRows.map((row) =>
     row.componentResolutionKind === 'static-value'
     && row.modelResolutionKind === 'static-value'

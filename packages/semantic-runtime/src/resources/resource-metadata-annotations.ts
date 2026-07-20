@@ -21,6 +21,7 @@ import {
 } from './resource-reference.js';
 import {
   ConvergenceOpen,
+  convergenceOpenForReadPressure,
   convergenceReasonKindsForRead,
   decoratorCallNamed,
   decoratorIdentifierNamed,
@@ -97,13 +98,44 @@ export function readAliasMetadataAnnotations(
 export function readStaticAliasMetadata(
   context: ResourceRecognitionContext,
   targetClass: ts.ClassLikeDeclarationBase | null,
-): readonly ResourceAliasObservation[] {
+): AliasAnnotationRead {
+  if (targetClass == null) {
+    return { aliases: [], open: [] };
+  }
   const read = readStaticClassPropertyValue(context, targetClass, 'aliases');
-  if (read?.value == null) {
-    return [];
+  if (read == null) {
+    return { aliases: [], open: [] };
+  }
+  if (read.value == null) {
+    return {
+      aliases: [],
+      open: [new ConvergenceOpen(
+        'Static resource aliases evaluation did not produce a value.',
+        read.node ?? targetClass,
+        convergenceReasonKindsForRead(read, [OpenSeamReasonKind.ResourceAnnotationOpen]),
+      )],
+    };
+  }
+  if (read.value.kind === EvaluationValueKind.Undefined || read.value.kind === EvaluationValueKind.Null) {
+    return {
+      aliases: [],
+      open: convergenceOpenForReadPressure('Static resource aliases evaluation remained open.', read),
+    };
   }
   const entries = readStaticStringArrayEntries(read.value, read.node);
-  return entries?.map((entry) => new ResourceAliasObservation(entry.value, entry.valueNode)) ?? [];
+  return entries == null
+    ? {
+        aliases: [],
+        open: [new ConvergenceOpen(
+          'Static resource aliases did not close to a string array.',
+          read.node ?? targetClass,
+          convergenceReasonKindsForRead(read, [OpenSeamReasonKind.ResourceAnnotationOpen]),
+        )],
+      }
+    : {
+        aliases: entries.map((entry) => new ResourceAliasObservation(entry.value, entry.valueNode)),
+        open: [],
+      };
 }
 
 /** Merge framework-priority alias sources while preserving the winning authored token. */
@@ -284,13 +316,18 @@ function readShadowDomAnnotation(
       open: null,
     };
   }
-  const mode = value.properties.get('mode')?.value;
+  const modeRead = context.expressionReader.readObjectProperty(argument, 'mode');
+  const mode = modeRead.value;
   const modeText = mode == null ? null : readStaticStringValue(mode);
+  const pressure = convergenceOpenForReadPressure(
+    '@useShadowDOM(...) options retained open evaluator pressure.',
+    modeRead,
+  )[0] ?? null;
   switch (modeText) {
     case 'open':
-      return { shadowOptions: new ShadowOptionsDefinition(ShadowRootMode.Open), sourceNode: argument, open: null };
+      return { shadowOptions: new ShadowOptionsDefinition(ShadowRootMode.Open), sourceNode: argument, open: pressure };
     case 'closed':
-      return { shadowOptions: new ShadowOptionsDefinition(ShadowRootMode.Closed), sourceNode: argument, open: null };
+      return { shadowOptions: new ShadowOptionsDefinition(ShadowRootMode.Closed), sourceNode: argument, open: pressure };
     default:
       return {
         shadowOptions: null,
@@ -298,7 +335,7 @@ function readShadowDomAnnotation(
         open: new ConvergenceOpen(
           '@useShadowDOM(...) options did not expose a static open/closed mode.',
           argument,
-          convergenceReasonKindsForRead(read, [OpenSeamReasonKind.ResourceAnnotationOpen]),
+          convergenceReasonKindsForRead(modeRead, [OpenSeamReasonKind.ResourceAnnotationOpen]),
         ),
       };
   }

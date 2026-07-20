@@ -39,21 +39,17 @@ do {
   cursor = answer.page?.nextCursor ?? null;
 } while (cursor != null);
 
-assert.equal(rows.length, 12, `Expected twelve value-converter lifecycle applications, got ${rows.length}.`);
+assert.equal(rows.length, 15, `Expected fifteen value-converter lifecycle applications across five authored sites, got ${rows.length}.`);
 assert.deepEqual(
   [...new Set(rows.map((row) => row.converterName))].sort(),
   ['dynamicContextProducts', 'featuredProducts', 'importedSignalProducts', 'openSignalProducts'],
   'Expected every fixture value converter to materialize as lifecycle application rows.',
 );
 
-for (const converterName of [
-  'dynamicContextProducts',
-  'featuredProducts',
-  'importedSignalProducts',
-  'openSignalProducts',
-]) {
-  expectConverterRows(converterName);
-}
+expectConverterRows('dynamicContextProducts', 2);
+expectConverterRows('featuredProducts');
+expectConverterRows('importedSignalProducts');
+expectConverterRows('openSignalProducts');
 
 expectSignalLifecycle('dynamicContextProducts', 'absent', []);
 expectSignalLifecycle('featuredProducts', 'closed', ['featured-refresh']);
@@ -93,13 +89,20 @@ assert.equal(
 
 console.log(`Value converter applications contract passed (${rows.length} row(s)).`);
 
-function expectConverterRows(converterName) {
+function expectConverterRows(converterName, expectedApplicationCount = 1) {
   const converterRows = rows.filter((candidate) => candidate.converterName === converterName);
-  assert.equal(converterRows.length, 3, `Expected three lifecycle rows for value converter ${converterName}.`);
-  assert.deepEqual(
-    converterRows.map((row) => row.phase).sort(),
-    ['bind', 'to-view', 'unbind'],
-    `${converterName} should publish bind, conversion, and unbind phases.`,
+  assert.equal(converterRows.length, expectedApplicationCount * 3, `Expected three lifecycle rows for each authored ${converterName} application.`);
+  for (const phase of ['bind', 'to-view', 'unbind']) {
+    assert.equal(
+      converterRows.filter((row) => row.phase === phase).length,
+      expectedApplicationCount,
+      `${converterName} should publish one ${phase} row per authored application.`,
+    );
+  }
+  assert.equal(
+    new Set(converterRows.map((row) => row.source?.label)).size,
+    expectedApplicationCount,
+    `${converterName} should retain each authored application source independently.`,
   );
   for (const row of converterRows) {
     assert.equal(row.definitionName, 'value-converter-source-value-app', `${converterName} should belong to the fixture app definition.`);
@@ -124,18 +127,21 @@ function expectConverterRows(converterName) {
 
 function expectSignalLifecycle(converterName, signalState, signalNames) {
   for (const phase of ['bind', 'unbind']) {
-    const row = converterRow(converterName, phase);
-    assert.equal(row.lifecycleEffects.signalState, signalState, `${converterName} ${phase} signal state should be ${signalState}.`);
-    assert.deepEqual(
-      row.lifecycleEffects.signals.map((signal) => signal.name),
-      signalNames,
-      `${converterName} ${phase} should retain its known signal names.`,
-    );
-    assert.deepEqual(
-      row.lifecycleEffects.effectKinds,
-      signalState === 'absent' ? [] : ['signal-subscription'],
-      `${converterName} ${phase} should expose signal subscription effects only when signals may exist.`,
-    );
+    const phaseRows = rows.filter((candidate) => candidate.converterName === converterName && candidate.phase === phase);
+    assert.ok(phaseRows.length > 0, `Expected at least one ${phase} row for value converter ${converterName}.`);
+    for (const row of phaseRows) {
+      assert.equal(row.lifecycleEffects.signalState, signalState, `${converterName} ${phase} signal state should be ${signalState}.`);
+      assert.deepEqual(
+        row.lifecycleEffects.signals.map((signal) => signal.name),
+        signalNames,
+        `${converterName} ${phase} should retain its known signal names.`,
+      );
+      assert.deepEqual(
+        row.lifecycleEffects.effectKinds,
+        signalState === 'absent' ? [] : ['signal-subscription'],
+        `${converterName} ${phase} should expose signal subscription effects only when signals may exist.`,
+      );
+    }
   }
 }
 

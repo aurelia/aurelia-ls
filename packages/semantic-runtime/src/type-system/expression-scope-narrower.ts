@@ -560,7 +560,7 @@ export class CheckerExpressionScopeNarrower {
       ownerType,
       slot.sourceAddressHandle,
       slot.fieldProvenance,
-      slot.staticValue,
+      slot.staticValueEvaluation,
       [
         ...slot.memberTypes.filter((candidate) => candidate.name !== memberName),
         memberRefinement,
@@ -1097,7 +1097,7 @@ function bindingContextSlotWithTargetType(
     targetType,
     sourceAddressHandle,
     source.fieldProvenance,
-    source.staticValue,
+    source.staticValueEvaluation,
     source.memberTypes,
     source.assignmentAccessKind,
     source.targetType != null && sameCheckerTypeReference(targetType, source.targetType)

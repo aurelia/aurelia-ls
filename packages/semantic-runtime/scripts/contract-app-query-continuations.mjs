@@ -1275,7 +1275,11 @@ async function verifyContinuationTargetQueriesEnterClaimGraph() {
     inquiryProfile: 'exploration',
     appRetention: 'retain-app',
   });
-  expect(followedAnswer.outcome === SemanticRuntimeAnswerOutcome.Hit, 'Following a targetQuery should use the normal public app-query answer path.');
+  expect(
+    followedAnswer.outcome === SemanticRuntimeAnswerOutcome.Hit
+      || followedAnswer.outcome === SemanticRuntimeAnswerOutcome.Partial,
+    'Following a targetQuery should use the normal public app-query answer path, including ordinary partial paging.',
+  );
   expect(followedAnswer.value?.rows?.length >= 1, 'Following a targetQuery should return the expected continuation target rows.');
 
   const intentFilteredAnswer = await runtime.answerAppQuery({

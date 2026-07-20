@@ -1,12 +1,23 @@
 import ts from 'typescript';
 import type { ModuleEnvironmentRecord } from '../environment.js';
 import {
-  evaluationArrayElementsInIterationOrder,
-  evaluationArrayIterationCallbackArguments,
-  evaluationArrayReducerCallbackArguments,
+  EvaluationArrayCallbackRead,
+  type EvaluationArrayMethodDecision,
+  EvaluationArrayMethodDecisionKind,
+  evaluationArrayFilterDecision,
+  evaluationArrayFindDecision,
+  evaluationArrayFindIndexDecision,
+  evaluationArrayFlatMapDecision,
+  evaluationArrayForEachDecision,
+  evaluationArrayMapDecision,
+  evaluationArrayQuantifierDecision,
+  evaluationArrayReduceDecision,
 } from '../array-callback-values.js';
 import {
   evaluationArrayConcat,
+  evaluationExactArrayIncludes,
+  evaluationExactArrayIndexOf,
+  evaluationExactArrayJoin,
   evaluationArrayFlat,
   evaluationArraySlice,
   evaluationArraySortedElements,
@@ -16,6 +27,7 @@ import {
   defaultEvaluationArraySortCompare,
 } from '../array-value-operations.js';
 import { EvaluationOpenSeamKind } from '../seams.js';
+import { OpenSeamReasonKind } from '../../kernel/open-seam.js';
 import {
   EvaluationArrayElement,
   EvaluationArrayValue,
@@ -24,8 +36,7 @@ import {
   EvaluationStringValue,
   EvaluationUndefined,
   EvaluationValueKind,
-  evaluationValuesEqual,
-  readEvaluationTruthiness,
+  type EvaluationFunctionValue,
   type EvaluationValue,
 } from '../values.js';
 import type { StaticIntrinsicEvaluationHost } from './contracts.js';
@@ -35,6 +46,7 @@ import {
   evaluateCallArgumentValues,
   IntrinsicCallbackEvaluationKind,
   IntrinsicCallbackFrame,
+  type IntrinsicCallbackEvaluation,
   isBoundaryEvaluationValue,
   readArrayStartIndex,
   readArraySpliceDeleteCount,
@@ -42,8 +54,50 @@ import {
   readSliceRange,
   stringCoercionText,
 } from './shared.js';
-import { readArrayLastIndexStart } from '../value-coercion.js';
+import { readArrayAtIndex, readArrayLastIndexStart } from '../value-coercion.js';
 import { evaluateStringPredicateFromReceiver } from './string-intrinsics.js';
+
+function staticArrayCallbackRead(
+  frame: IntrinsicCallbackFrame,
+  callback: EvaluationFunctionValue,
+  argumentValues: readonly EvaluationValue[],
+): EvaluationArrayCallbackRead<never, IntrinsicCallbackEvaluation> {
+  const read = frame.evaluate(callback, argumentValues);
+  return read.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted
+    ? EvaluationArrayCallbackRead.blocked(read)
+    : EvaluationArrayCallbackRead.value(read.value);
+}
+
+function materializeStaticArrayDecision(
+  decision: EvaluationArrayMethodDecision<never, IntrinsicCallbackEvaluation>,
+  callbackFrame: IntrinsicCallbackFrame,
+  call: ts.CallExpression,
+  moduleKey: string,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue {
+  if (decision.kind === EvaluationArrayMethodDecisionKind.Blocked) {
+    callbackFrame.restore();
+    return host.unknown(
+      'Array callback evaluation exceeded the intrinsic callback budget.',
+      call,
+      moduleKey,
+      EvaluationOpenSeamKind.DynamicCall,
+    );
+  }
+  if (decision.kind === EvaluationArrayMethodDecisionKind.Open) {
+    if (decision.value == null) {
+      return host.unknown(decision.openReason!, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+    }
+    host.open(
+      EvaluationOpenSeamKind.DynamicCall,
+      decision.openReason!,
+      call,
+      moduleKey,
+      [OpenSeamReasonKind.StaticEvaluationDynamicCall],
+    );
+  }
+  return decision.value!;
+}
 
 export function evaluateArrayConstructor(
   expression: ts.NewExpression,
@@ -221,25 +275,14 @@ export function evaluateArrayMap(
   if (callback.kind !== 'known') {
     return callback.value;
   }
-
   const callbackFrame = new IntrinsicCallbackFrame(host, call, moduleKey, depth + 1);
-  const elements: EvaluationArrayElement[] = [];
-  for (let index = 0; index < receiver.elements.length; index++) {
-    const element = receiver.elements[index];
-    if (element == null) {
-      continue;
-    }
-    const mapped = callbackFrame.evaluate(
-      callback.value,
-      evaluationArrayIterationCallbackArguments(element, index, receiver, call),
-    );
-    if (mapped.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
-      callbackFrame.restore();
-      return new EvaluationArrayValue([], true, call, true);
-    }
-    elements.push(new EvaluationArrayElement(mapped.value, element.expression));
-  }
-  return new EvaluationArrayValue(elements, receiver.mayHaveUnknownElements, call, receiver.mayHaveUnknownOrder);
+  return materializeStaticArrayDecision(
+    evaluationArrayMapDecision(receiver, call, (arguments_) => staticArrayCallbackRead(callbackFrame, callback.value, arguments_)),
+    callbackFrame,
+    call,
+    moduleKey,
+    host,
+  );
 }
 
 export function evaluateArrayFlatMap(
@@ -262,29 +305,13 @@ export function evaluateArrayFlatMap(
     return callback.value;
   }
   const callbackFrame = new IntrinsicCallbackFrame(host, call, moduleKey, depth + 1);
-  const elements: EvaluationArrayElement[] = [];
-  let mayHaveUnknownElements = receiver.mayHaveUnknownElements;
-  for (let index = 0; index < receiver.elements.length; index++) {
-    const element = receiver.elements[index];
-    if (element == null) {
-      continue;
-    }
-    const mapped = callbackFrame.evaluate(
-      callback.value,
-      evaluationArrayIterationCallbackArguments(element, index, receiver, call),
-    );
-    if (mapped.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
-      callbackFrame.restore();
-      return new EvaluationArrayValue([], true, call, true);
-    }
-    if (mapped.value.kind === EvaluationValueKind.Array) {
-      elements.push(...mapped.value.elements);
-      mayHaveUnknownElements ||= mapped.value.mayHaveUnknownElements;
-      continue;
-    }
-    elements.push(new EvaluationArrayElement(mapped.value, element.expression));
-  }
-  return new EvaluationArrayValue(elements, mayHaveUnknownElements, call, receiver.mayHaveUnknownOrder);
+  return materializeStaticArrayDecision(
+    evaluationArrayFlatMapDecision(receiver, call, (arguments_) => staticArrayCallbackRead(callbackFrame, callback.value, arguments_)),
+    callbackFrame,
+    call,
+    moduleKey,
+    host,
+  );
 }
 
 export function evaluateArrayFilter(
@@ -306,34 +333,14 @@ export function evaluateArrayFilter(
   if (predicate.kind !== 'known') {
     return predicate.value;
   }
-
   const callbackFrame = new IntrinsicCallbackFrame(host, call, moduleKey, depth + 1);
-  const elements: EvaluationArrayElement[] = [];
-  let mayHaveUnknownElements = receiver.mayHaveUnknownElements;
-  let mayHaveUnknownOrder = receiver.mayHaveUnknownOrder;
-  for (let index = 0; index < receiver.elements.length; index++) {
-    const element = receiver.elements[index];
-    if (element == null) {
-      continue;
-    }
-    const predicateResult = callbackFrame.evaluate(
-      predicate.value,
-      evaluationArrayIterationCallbackArguments(element, index, receiver, call),
-    );
-    if (predicateResult.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
-      callbackFrame.restore();
-      return new EvaluationArrayValue([], true, call, true);
-    }
-    const keep = readEvaluationTruthiness(predicateResult.value);
-    if (keep == null) {
-      mayHaveUnknownElements = true;
-      continue;
-    }
-    if (keep) {
-      elements.push(element);
-    }
-  }
-  return new EvaluationArrayValue(elements, mayHaveUnknownElements, call, mayHaveUnknownOrder);
+  return materializeStaticArrayDecision(
+    evaluationArrayFilterDecision(receiver, call, (arguments_) => staticArrayCallbackRead(callbackFrame, predicate.value, arguments_)),
+    callbackFrame,
+    call,
+    moduleKey,
+    host,
+  );
 }
 
 export function evaluateArrayFind(
@@ -358,31 +365,18 @@ export function evaluateArrayFind(
     return predicate.value;
   }
   const callbackFrame = new IntrinsicCallbackFrame(host, call, moduleKey, depth + 1);
-  let sawOpenPredicate = receiver.mayHaveUnknownElements;
-  for (const { element, index } of evaluationArrayElementsInIterationOrder(receiver, rightToLeft)) {
-    if (element == null) {
-      continue;
-    }
-    const predicateResult = callbackFrame.evaluate(
-      predicate.value,
-      evaluationArrayIterationCallbackArguments(element, index, receiver, call),
-    );
-    if (predicateResult.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
-      callbackFrame.restore();
-      return host.unknown(`Array.${intrinsicName} exceeded intrinsic callback budget.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
-    }
-    const keep = readEvaluationTruthiness(predicateResult.value);
-    if (keep == null) {
-      sawOpenPredicate = true;
-      continue;
-    }
-    if (keep) {
-      return element.value;
-    }
-  }
-  return sawOpenPredicate
-    ? host.unknown(`Array.${intrinsicName} result depended on an open predicate or unknown element membership.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
-    : EvaluationUndefined;
+  return materializeStaticArrayDecision(
+    evaluationArrayFindDecision(
+      receiver,
+      call,
+      rightToLeft,
+      (arguments_) => staticArrayCallbackRead(callbackFrame, predicate.value, arguments_),
+    ),
+    callbackFrame,
+    call,
+    moduleKey,
+    host,
+  );
 }
 
 export function evaluateArrayFindIndex(
@@ -407,31 +401,18 @@ export function evaluateArrayFindIndex(
     return predicate.value;
   }
   const callbackFrame = new IntrinsicCallbackFrame(host, call, moduleKey, depth + 1);
-  let sawOpenPredicate = receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder;
-  for (const { element, index } of evaluationArrayElementsInIterationOrder(receiver, rightToLeft)) {
-    if (element == null) {
-      continue;
-    }
-    const predicateResult = callbackFrame.evaluate(
-      predicate.value,
-      evaluationArrayIterationCallbackArguments(element, index, receiver, call),
-    );
-    if (predicateResult.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
-      callbackFrame.restore();
-      return host.unknown(`Array.${intrinsicName} exceeded intrinsic callback budget.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
-    }
-    const keep = readEvaluationTruthiness(predicateResult.value);
-    if (keep == null) {
-      sawOpenPredicate = true;
-      continue;
-    }
-    if (keep) {
-      return new EvaluationNumberValue(index, call);
-    }
-  }
-  return sawOpenPredicate
-    ? host.unknown(`Array.${intrinsicName} result depended on an open predicate, unknown order, or unknown membership.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
-    : new EvaluationNumberValue(-1, call);
+  return materializeStaticArrayDecision(
+    evaluationArrayFindIndexDecision(
+      receiver,
+      call,
+      rightToLeft,
+      (arguments_) => staticArrayCallbackRead(callbackFrame, predicate.value, arguments_),
+    ),
+    callbackFrame,
+    call,
+    moduleKey,
+    host,
+  );
 }
 
 export function evaluateArraySome(
@@ -477,36 +458,18 @@ export function evaluateArrayQuantifier(
     return predicate.value;
   }
   const callbackFrame = new IntrinsicCallbackFrame(host, call, moduleKey, depth + 1);
-  let sawOpenPredicate = receiver.mayHaveUnknownElements;
-  for (let index = 0; index < receiver.elements.length; index++) {
-    const element = receiver.elements[index];
-    if (element == null) {
-      continue;
-    }
-    const predicateResult = callbackFrame.evaluate(
-      predicate.value,
-      evaluationArrayIterationCallbackArguments(element, index, receiver, call),
-    );
-    if (predicateResult.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
-      callbackFrame.restore();
-      return host.unknown(`Array.${kind} exceeded intrinsic callback budget.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
-    }
-    const keep = readEvaluationTruthiness(predicateResult.value);
-    if (keep == null) {
-      sawOpenPredicate = true;
-      continue;
-    }
-    if (kind === 'some' && keep) {
-      return new EvaluationBooleanValue(true, call);
-    }
-    if (kind === 'every' && !keep) {
-      return new EvaluationBooleanValue(false, call);
-    }
-  }
-  if (sawOpenPredicate) {
-    return host.unknown(`Array.${kind} result depended on an open predicate or unknown element membership.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
-  }
-  return new EvaluationBooleanValue(kind === 'every', call);
+  return materializeStaticArrayDecision(
+    evaluationArrayQuantifierDecision(
+      receiver,
+      call,
+      kind,
+      (arguments_) => staticArrayCallbackRead(callbackFrame, predicate.value, arguments_),
+    ),
+    callbackFrame,
+    call,
+    moduleKey,
+    host,
+  );
 }
 
 export function evaluateArrayForEach(
@@ -528,25 +491,18 @@ export function evaluateArrayForEach(
   if (callback.kind !== 'known') {
     return callback.value;
   }
-  if (receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
-    return host.unknown('Array.forEach receiver has unknown membership or order.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
-  }
   const callbackFrame = new IntrinsicCallbackFrame(host, call, moduleKey, depth + 1);
-  for (let index = 0; index < receiver.elements.length; index++) {
-    const element = receiver.elements[index];
-    if (element == null) {
-      continue;
-    }
-    const result = callbackFrame.evaluate(
-      callback.value,
-      evaluationArrayIterationCallbackArguments(element, index, receiver, call),
-    );
-    if (result.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
-      callbackFrame.restore();
-      return host.unknown('Array.forEach exceeded intrinsic callback budget.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
-    }
-  }
-  return EvaluationUndefined;
+  return materializeStaticArrayDecision(
+    evaluationArrayForEachDecision(
+      receiver,
+      call,
+      (arguments_) => staticArrayCallbackRead(callbackFrame, callback.value, arguments_),
+    ),
+    callbackFrame,
+    call,
+    moduleKey,
+    host,
+  );
 }
 
 export function evaluateArrayReduce(
@@ -570,45 +526,25 @@ export function evaluateArrayReduce(
   if (reducer.kind !== 'known') {
     return reducer.value;
   }
-  const ordered = rightToLeft
-    ? receiver.elements.slice().reverse()
-    : receiver.elements;
-  let accumulator: EvaluationValue;
-  let start = 0;
-  if (call.arguments[1] == null) {
-    const first = ordered[0];
-    if (first == null) {
-      return host.unknown(`Array.${intrinsicName} had no initial value and no known first element.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
-    }
-    accumulator = first.value;
-    start = 1;
-  } else {
-    accumulator = host.evaluateExpression(call.arguments[1], environment, moduleKey, depth + 1);
-  }
+  const initialValue = call.arguments[1] == null
+    ? null
+    : host.evaluateExpression(call.arguments[1], environment, moduleKey, depth + 1);
 
   const callbackFrame = new IntrinsicCallbackFrame(host, call, moduleKey, depth + 1);
-  for (let position = start; position < ordered.length; position++) {
-    const element = ordered[position];
-    if (element == null) {
-      continue;
-    }
-    const originalIndex = rightToLeft
-      ? receiver.elements.length - position - 1
-      : position;
-    const result = callbackFrame.evaluate(
-      reducer.value,
-      evaluationArrayReducerCallbackArguments(accumulator, element, originalIndex, receiver, call),
-    );
-    if (result.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
-      callbackFrame.restore();
-      return host.unknown(`Array.${intrinsicName} exceeded intrinsic callback budget.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
-    }
-    accumulator = result.value;
-  }
-  if (receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
-    return host.unknown(`Array.${intrinsicName} result depended on unknown element membership or order.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
-  }
-  return accumulator;
+  return materializeStaticArrayDecision(
+    evaluationArrayReduceDecision(
+      receiver,
+      call,
+      rightToLeft,
+      initialValue,
+      [],
+      (arguments_) => staticArrayCallbackRead(callbackFrame, reducer.value, arguments_),
+    ),
+    callbackFrame,
+    call,
+    moduleKey,
+    host,
+  );
 }
 
 export function evaluateArrayOrStringIncludes(
@@ -624,6 +560,38 @@ export function evaluateArrayOrStringIncludes(
     return evaluateStringPredicateFromReceiver(call, receiver, environment, moduleKey, depth + 1, host, 'includes');
   }
   return evaluateArrayIncludesFromReceiver(call, receiver, environment, moduleKey, depth + 1, host);
+}
+
+export function evaluateArrayOrStringAt(
+  call: ts.CallExpression,
+  receiverExpression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue {
+  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  if (isBoundaryEvaluationValue(receiver)) {
+    return boundaryIntrinsicCallValue(receiver, 'at', call);
+  }
+  if (receiver.kind !== EvaluationValueKind.Array && receiver.kind !== EvaluationValueKind.String) {
+    return host.unknown('Array/String.at receiver did not reduce to a known array or string.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  const indexValue = call.arguments[0] == null
+    ? EvaluationUndefined
+    : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
+  const length = receiver.kind === EvaluationValueKind.Array ? receiver.elements.length : receiver.value.length;
+  const index = readArrayAtIndex(indexValue, length);
+  if (index == null) {
+    return host.unknown('Array/String.at index did not reduce to a finite number.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  if (receiver.kind === EvaluationValueKind.Array) {
+    return receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder
+      ? host.unknown('Array.at receiver membership or order did not close.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
+      : receiver.elements[index]?.value ?? EvaluationUndefined;
+  }
+  const value = receiver.value[index];
+  return value == null ? EvaluationUndefined : new EvaluationStringValue(value, call);
 }
 
 export function evaluateArrayIncludesFromReceiver(
@@ -649,15 +617,10 @@ export function evaluateArrayIncludesFromReceiver(
   const startIndex = call.arguments[1] == null
     ? 0
     : readArrayStartIndex(host.evaluateExpression(call.arguments[1], environment, moduleKey, depth + 1), receiver.elements.length);
-  if (startIndex == null || receiver.mayHaveUnknownOrder) {
-    return host.unknown('Array.includes start index or element order did not close statically.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  if (startIndex == null || receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
+    return host.unknown('Array.includes start index or receiver positions did not close statically.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
-  const found = receiver.elements
-    .slice(startIndex)
-    .some((element) => evaluationValuesEqual(element.value, search));
-  return found || !receiver.mayHaveUnknownElements
-    ? new EvaluationBooleanValue(found, call)
-    : host.unknown('Array.includes search did not match known elements and the array may contain unknown elements.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  return new EvaluationBooleanValue(evaluationExactArrayIncludes(receiver, search, startIndex), call);
 }
 
 export function evaluateArrayIndexOf(
@@ -705,18 +668,10 @@ export function evaluateArrayIndexOf(
   if (search.kind === EvaluationValueKind.Unknown) {
     return search;
   }
-  if (receiver.mayHaveUnknownOrder) {
-    return host.unknown(`Array.${intrinsicName} depended on unknown element order.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  if (receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
+    return host.unknown(`Array.${intrinsicName} depended on unknown membership or order.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
-  const foundIndex = rightToLeft
-    ? receiver.elements.slice(0, start + 1).findLastIndex((element) => evaluationValuesEqual(element.value, search))
-    : receiver.elements.slice(start).findIndex((element) => evaluationValuesEqual(element.value, search));
-  if (foundIndex >= 0) {
-    return new EvaluationNumberValue(rightToLeft ? foundIndex : start + foundIndex, call);
-  }
-  return receiver.mayHaveUnknownElements
-    ? host.unknown(`Array.${intrinsicName} search did not match known elements and the array may contain unknown elements.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
-    : new EvaluationNumberValue(-1, call);
+  return new EvaluationNumberValue(evaluationExactArrayIndexOf(receiver, search, start, rightToLeft), call);
 }
 
 export function evaluateArrayJoin(
@@ -743,20 +698,11 @@ export function evaluateArrayJoin(
   if (separator == null) {
     return host.unknown('Array.join separator did not reduce to a static string.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
-  const parts: string[] = [];
-  for (const element of receiver.elements) {
-    const value = element.value;
-    if (value.kind === EvaluationValueKind.Undefined || value.kind === EvaluationValueKind.Null) {
-      parts.push('');
-      continue;
-    }
-    const text = stringCoercionText(value);
-    if (text == null) {
-      return host.unknown('Array.join element did not reduce to a string-coercible primitive.', element.expression ?? call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
-    }
-    parts.push(text);
+  const joined = evaluationExactArrayJoin(receiver, separator);
+  if (joined == null) {
+    return host.unknown('Array.join element did not reduce to a string-coercible primitive.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
-  return new EvaluationStringValue(parts.join(separator), call);
+  return new EvaluationStringValue(joined, call);
 }
 
 export function evaluateArrayFlat(
@@ -802,9 +748,10 @@ export function evaluateArrayFill(
     ? EvaluationUndefined
     : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
   const range = readSliceRange(call, receiver.elements.length, environment, moduleKey, depth + 1, host);
-  if (range == null) {
+  if (range == null || receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
     receiver.markUnknownElements();
-    return receiver;
+    receiver.markUnknownOrder();
+    return host.unknown('Array.fill target positions did not close statically.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
   for (let index = range.start; index < range.end; index++) {
     receiver.elements[index] = new EvaluationArrayElement(value, call.arguments[0] ?? null);
@@ -949,6 +896,9 @@ export function evaluateArrayToSpliced(
     return host.unknown('Array.toSpliced delete count did not close statically.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
   const inserted = evaluateArrayMutationElements(call.arguments.slice(2), environment, moduleKey, depth + 1, host);
+  if (receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
+    return host.unknown('Array.toSpliced receiver membership or order did not close statically.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
   return evaluationArrayToSpliced(
     receiver,
     start,
@@ -990,6 +940,9 @@ export function evaluateArrayWith(
   const value = valueExpression == null || ts.isSpreadElement(valueExpression)
     ? EvaluationUndefined
     : host.evaluateExpression(valueExpression, environment, moduleKey, depth + 1);
+  if (receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
+    return host.unknown('Array.with receiver membership or order did not close statically.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
   return evaluationArrayWith(receiver, index, value, call);
 }
 
@@ -1143,9 +1096,12 @@ export function evaluateArrayOrStringSlice(
     return boundaryIntrinsicCallValue(receiver, 'slice', call);
   }
   if (receiver.kind === EvaluationValueKind.Array) {
+    if (receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
+      return host.unknown('Array.slice receiver membership or order did not close statically.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+    }
     const range = readSliceRange(call, receiver.elements.length, environment, moduleKey, depth + 1, host);
     return range == null
-      ? new EvaluationArrayValue(receiver.elements, true, call, true)
+      ? host.unknown('Array.slice bounds did not reduce to static numbers.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
       : evaluationArraySlice(receiver, range.start, range.end, call);
   }
   if (receiver.kind === EvaluationValueKind.String) {

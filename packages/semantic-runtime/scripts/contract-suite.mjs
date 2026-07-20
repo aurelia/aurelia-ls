@@ -93,6 +93,11 @@ const contractSuites = [
     'bindables',
     'open-seams',
   ], 'contract-resource-bindable-boundary-config.mjs', 'Open bindable configuration spreads publish resource reason kinds while avoiding fabricated mode/setter certainty.'),
+  contract('configuration', 'fast', [
+    'configuration',
+    'evaluation',
+    'open-seams',
+  ], 'contract-configuration-open-seam-reasons.mjs', 'Configuration-owned seams preserve machine-readable evaluator causes through customization projections.'),
   contract('evaluation', 'fast', [
     'evaluation',
     'class',
@@ -221,6 +226,12 @@ const contractSuites = [
     'runtime-boundary',
     'template',
   ], 'contract-runtime-composition-bound-controller.mjs', 'AuCompose component/model values through parent-to-child bindable flow and static method this binding.'),
+  contract('composition', 'fast', [
+    'composition',
+    'au-compose',
+    'open-seams',
+    'provenance',
+  ], 'contract-runtime-composition-open-pressure.mjs', 'AuCompose retains independent input pressure, useful component candidates, and refused-child causal materializations.'),
   contract('template', 'fast', [
     'template',
     'rendering',

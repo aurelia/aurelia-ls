@@ -401,6 +401,11 @@ static type surfaces rather than hydrated runtime values.
   framework `astEvaluate` uses. Guarded local class getter and evaluator-local function reads stay on this path too.
   Consumers such as router resources can ask for a static source value without moving binding lookup or getter
   execution into router-specific code. Host-dependent values stay open with evaluator reasons.
+  Open value presence is not execution authority. Closed results are executable; an open aggregate is addressable only
+  when all retained pressure belongs to its own shape, so shared member readers can still select exact child slots;
+  every other open value is a projection-only candidate. Control flow, calls, arithmetic, coercion, sorting, and keyed
+  selection must use executable values. Template-authored array/object literals localize child pressure onto existing
+  element/property carriers instead of qualifying the whole aggregate and contaminating siblings.
   `binding-source-array-method-value.ts` owns native array method reduction for binding-source values, including safe
   non-mutating methods such as at/concat/includes/indexOf/lastIndexOf/join/slice/flat/toReversed/toSorted and the framework
   `Scope.fromParent(...)`-shaped callback parameter scope for map/filter/find/findLast/findIndex/

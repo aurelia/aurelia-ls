@@ -15,10 +15,7 @@ import {
 } from '../configuration/scope.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
 import {
-  EvaluationBoundaryKind,
-  EvaluationBoundaryValue,
   evaluationPrimitiveValueFromExpressionValue,
-  type EvaluationValue,
 } from '../evaluation/values.js';
 import type {
   BindingIdentifier,
@@ -31,8 +28,10 @@ import {
   RuntimeBindingSourceValueEvaluator,
 } from '../observation/binding-source-value-evaluator.js';
 import {
-  RuntimeBindingSourceValueEvaluationKind,
-} from '../observation/binding-source-value-evaluation.js';
+  bindingSourceValueEvaluationWithPressure,
+  openBindingSourceSlotNoStaticValue,
+  RuntimeBindingSourceValueEvaluation,
+} from '../configuration/binding-source-value-evaluation.js';
 import {
   projectRuntimeBindingSourceValueContextInScope,
   type RuntimeBindingSourceValueContextProjection,
@@ -240,7 +239,6 @@ class IteratorLocalSlotProjection {
 interface LetStaticValueEvaluationFrame {
   readonly input: TemplateScopeConstructionRequest;
   readonly effect: LetBindingScopeEffect;
-  readonly targetType: CheckerTypeReference | null;
   readonly sourceValueEvaluator: RuntimeBindingSourceValueEvaluator;
   readonly contextProjection: RuntimeBindingSourceValueContextProjection;
 }
@@ -852,7 +850,7 @@ export class TemplateControllerScopeMaterializer {
         inference.targetType ?? declaration.targetType,
         declaration.sourceAddressHandle,
         declaration.fieldProvenance,
-        declaration.staticValue,
+        declaration.staticValueEvaluation,
         declaration.memberTypes,
         declaration.assignmentAccessKind,
         inference.targetTypeSourceMemberHandle,
@@ -879,7 +877,7 @@ export class TemplateControllerScopeMaterializer {
         declaration?.targetType ?? null,
         declaration?.sourceAddressHandle ?? bindable.nameSourceAddressHandle ?? bindable.sourceAddressHandle,
         declaration?.fieldProvenance ?? [],
-        declaration?.staticValue ?? null,
+        declaration?.staticValueEvaluation ?? null,
         declaration?.memberTypes ?? [],
         contextType == null ? BindingContextSlotAssignmentAccessKind.Writable : declaration?.assignmentAccessKind ?? null,
         declaration?.targetTypeSourceMemberHandle ?? null,
@@ -1990,7 +1988,7 @@ export class TemplateControllerScopeMaterializer {
       targetType,
       effect.targetSourceAddressHandle ?? effect.sourceAddressHandle,
       existingSlot?.fieldProvenance ?? [],
-      this.letStaticValue(frame, parent, effect, targetType),
+      this.letStaticValue(frame, parent, effect),
       [],
       existingSlot?.assignmentAccessKind
         ?? (existingSlot == null ? BindingContextSlotAssignmentAccessKind.Writable : null),
@@ -2015,14 +2013,17 @@ export class TemplateControllerScopeMaterializer {
     frame: TemplateScopeConstructionFrame,
     parent: BindingScope,
     effect: LetBindingScopeEffect,
-    targetType: CheckerTypeReference | null,
-  ): EvaluationValue | null {
+  ): RuntimeBindingSourceValueEvaluation | null {
     if (effect.literalValue != null) {
-      return evaluationPrimitiveValueFromExpressionValue(effect.literalValue);
+      return RuntimeBindingSourceValueEvaluation.value(
+        evaluationPrimitiveValueFromExpressionValue(effect.literalValue),
+      );
     }
-    const evaluationFrame = this.letStaticValueEvaluationFrame(frame, parent, effect, targetType);
+    const evaluationFrame = this.letStaticValueEvaluationFrame(frame, parent, effect);
     if (evaluationFrame == null) {
-      return null;
+      return openBindingSourceSlotNoStaticValue(
+        `Let target '${effect.target}' did not expose an evaluable source expression.`,
+      );
     }
     return this.evaluateLetStaticValue(evaluationFrame);
   }
@@ -2031,7 +2032,6 @@ export class TemplateControllerScopeMaterializer {
     frame: TemplateScopeConstructionFrame,
     parent: BindingScope,
     effect: LetBindingScopeEffect,
-    targetType: CheckerTypeReference | null,
   ): LetStaticValueEvaluationFrame | null {
     const input = frame.input;
     if (input.evaluation == null) {
@@ -2062,7 +2062,6 @@ export class TemplateControllerScopeMaterializer {
     return {
       input,
       effect,
-      targetType,
       sourceValueEvaluator: RuntimeBindingSourceValueEvaluator.create(
         input.expressionWorld.projector.publication,
         input.expressionWorld.projector,
@@ -2077,28 +2076,22 @@ export class TemplateControllerScopeMaterializer {
 
   private evaluateLetStaticValue(
     frame: LetStaticValueEvaluationFrame,
-  ): EvaluationValue | null {
-    const { contextProjection, effect, sourceValueEvaluator, targetType } = frame;
+  ): RuntimeBindingSourceValueEvaluation {
+    const { contextProjection, effect, sourceValueEvaluator } = frame;
     if (contextProjection.context == null) {
-      return targetType == null
-        ? null
-        : new EvaluationBoundaryValue(
-          EvaluationBoundaryKind.BindingScope,
-          `let.${effect.target}`,
-          null,
-        );
+      return openBindingSourceSlotNoStaticValue(
+        `Let target '${effect.target}' did not retain a binding-source evaluation context.`,
+      );
     }
     const evaluation = sourceValueEvaluator.evaluate(contextProjection.context);
-    if (evaluation.kind === RuntimeBindingSourceValueEvaluationKind.Value && evaluation.value != null) {
-      return evaluation.value;
-    }
-    return targetType == null
-      ? null
-      : new EvaluationBoundaryValue(
-        EvaluationBoundaryKind.BindingScope,
-        `let.${effect.target}`,
-        null,
-      );
+    return evaluation.value != null
+      ? evaluation
+      : bindingSourceValueEvaluationWithPressure(
+          openBindingSourceSlotNoStaticValue(
+            `Let target '${effect.target}' did not retain a usable source value.`,
+          ),
+          [evaluation],
+        );
   }
 
   private recordsForInstructionScopeApplications(

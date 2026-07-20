@@ -1,9 +1,13 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createSemanticRuntime } from '../out/index.js';
+import {
+  createSemanticRuntime,
+  SemanticAppQueryKind,
+} from '../out/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/node-observer-config-errors');
+const pressureFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-native-target-precedence');
 
 const runtime = await createSemanticRuntime({
   workspaceRoot: fixtureRoot,
@@ -40,6 +44,42 @@ const duplicateMappingIssues = configurationIssueRows.filter((row) =>
   || row.frameworkErrorCode === 'runtime-html:ErrorNames.node_observer_mapping_existed:AUR0653'
 );
 
+const pressureRuntime = await createSemanticRuntime({
+  workspaceRoot: pressureFixtureRoot,
+  storeKey: 'node-observer-service-customization-pressure-contract',
+});
+const pressureApp = await pressureRuntime.openApp({
+  analysisDepth: 'binding-observation',
+});
+const pressureTargetAccessRows = pressureApp.ask({
+  kind: SemanticAppQueryKind.BindingTargetAccesses,
+  page: { size: 1000 },
+}).value.rows;
+const pressureSites = pressureApp.ask({
+  kind: SemanticAppQueryKind.OpenSeamSites,
+  openSeamKindKey: 'configuration.open-configuration-option',
+  page: { size: 1000 },
+}).value.rows;
+const openDirectionObserver = pressureTargetAccessRows.find((row) =>
+  row.targetType === 'HTMLDivElement'
+  && row.targetProperty === 'dir'
+);
+const closedSpellcheckObserver = pressureTargetAccessRows.find((row) =>
+  row.targetType === 'HTMLDivElement'
+  && row.targetProperty === 'spellcheck'
+);
+const runtimeFieldPressure = pressureSites.find((row) =>
+  row.reasonKinds.includes('host-environment-value')
+  && row.sampleSummary.includes('Node observer type may be replaced')
+);
+const unsupportedTwoWayPressure = pressureSites.find((row) =>
+  row.sampleSummary.includes('useTwoWay predicate could not be reduced')
+);
+const closedAfterSpreadPressure = pressureSites.find((row) =>
+  row.source?.path?.endsWith('src/main.ts') === true
+  && row.sourceRange?.start?.line === 91
+);
+
 const failures = [];
 if (customNodeValueObserver == null) {
   failures.push('Expected app-authored MY-ELEMENT value config to close an HTMLElement value binding through ValueAttributeObserver.');
@@ -60,6 +100,29 @@ for (const observer of customNodeValueObservers) {
 if (duplicateMappingIssues.length !== 3) {
   failures.push(`Expected three duplicate NodeObserverLocator mapping issues, got ${duplicateMappingIssues.length}.`);
 }
+if (
+  openDirectionObserver?.strategy !== 'unknown'
+  || openDirectionObserver.nodeObserverConfig?.fieldStates.type !== 'open'
+  || openDirectionObserver.nodeObserverConfig?.eventNames[0] !== 'direction-change'
+) {
+  failures.push(`Expected a spread after known node-observer fields to retain known values with open field state, got ${JSON.stringify(openDirectionObserver)}.`);
+}
+if (
+  closedSpellcheckObserver?.strategy !== 'value-attribute-observer'
+  || closedSpellcheckObserver.nodeObserverConfig?.fieldStates.type !== 'closed'
+  || closedSpellcheckObserver.nodeObserverConfig?.eventNames[0] !== 'spellcheck-change'
+) {
+  failures.push(`Expected explicit node-observer fields after an unknown spread to close the consumed config, got ${JSON.stringify(closedSpellcheckObserver)}.`);
+}
+if (runtimeFieldPressure == null) {
+  failures.push(`Expected open node-observer fields to retain their host-environment evaluator cause, got ${JSON.stringify(pressureSites)}.`);
+}
+if (unsupportedTwoWayPressure == null) {
+  failures.push('Expected a predicate with an unmodeled element-state guard to remain an explicit configuration seam.');
+}
+if (closedAfterSpreadPressure != null) {
+  failures.push(`Expected irrelevant unknown fields before explicit observer fields to be discharged by projection, got ${JSON.stringify(closedAfterSpreadPressure)}.`);
+}
 
 const summary = {
   fixture: 'node-observer-config-errors',
@@ -68,6 +131,10 @@ const summary = {
   inputValueObserver,
   duplicateMappingIssueCount: duplicateMappingIssues.length,
   duplicateMappingMessages: duplicateMappingIssues.map((row) => row.message),
+  openDirectionObserver,
+  closedSpellcheckObserver,
+  runtimeFieldPressure,
+  unsupportedTwoWayPressure,
 };
 
 if (failures.length > 0) {

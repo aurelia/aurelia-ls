@@ -208,6 +208,7 @@ export class ResourceRecognitionPublicationSupport {
         start: seam.node.getStart(context.sourceFile),
         end: seam.node.end,
         evidenceRoles: [EvidenceRole.Diagnostic],
+        reasonKinds: seam.reasonKinds,
         includeProvenanceRecord: true,
       })),
     );

@@ -30,6 +30,18 @@ export class TransientConsumer {
   readonly marker = 'transient-consumer';
 }
 
+export class OpenSingleton {
+  readonly marker = Math.random();
+
+  constructor() {
+    Math.random();
+  }
+}
+
+export class OpenSingletonConsumer {
+  readonly service = resolve(OpenSingleton);
+}
+
 class DefaultSingletonService {
   readonly marker = 'default-singleton';
 }
@@ -60,8 +72,24 @@ const exactInstance = { marker: 'exact-instance' };
 const rootOnly = { marker: 'root-only' };
 const multiFirst = { marker: 'multi-first' };
 const multiSecond = { marker: 'multi-second' };
+const partialMulti = { marker: 'partial-multi' };
 const lateInstance = { marker: 'late-instance' };
 let lexicalInstance = { marker: 'lexical-before' };
+
+function keyWithPressure(): string {
+  Math.random();
+  return 'exact-instance';
+}
+
+function ancestorSearchWithPressure(): boolean {
+  Math.random();
+  return true;
+}
+
+function containerWithPressure(): typeof container {
+  Math.random();
+  return container;
+}
 
 const implicitUndefinedRegistry = {
   register(): void {},
@@ -94,8 +122,12 @@ container.register(
   Registration.instance('root-only', rootOnly),
   Registration.instance('multi', multiFirst),
   Registration.instance('multi', multiSecond),
+  Registration.instance('partial-multi', partialMulti),
+  Registration.callback('partial-multi', () => Math.random()),
   Registration.singleton(ScopedService, ScopedService),
   Registration.singleton(SingletonConsumer, SingletonConsumer),
+  Registration.singleton(OpenSingleton, OpenSingleton),
+  Registration.singleton(OpenSingletonConsumer, OpenSingletonConsumer),
   Registration.transient(TransientConsumer, TransientConsumer),
   Registration.aliasTo('exact-instance', 'exact-alias'),
   Registration.aliasTo('exact-alias', 'alias-chain'),
@@ -113,6 +145,8 @@ export const singletonReadOne = container.get(SingletonConsumer);
 export const singletonReadTwo = container.get(SingletonConsumer);
 export const transientReadOne = container.get(TransientConsumer);
 export const transientReadTwo = container.get(TransientConsumer);
+export const openSingletonConsumerRead = container.get(OpenSingletonConsumer);
+export const openSingletonReadAfterConsumer = container.get(OpenSingleton);
 export const interfaceDefaultSingletonReadOne = container.get(IDefaultSingleton);
 export const interfaceDefaultSingletonReadTwo = container.get(IDefaultSingleton);
 export const interfaceDefaultTransientReadOne = container.get(IDefaultTransient);
@@ -127,6 +161,7 @@ export const optionalResourceMissingRead = container.get(optionalResource('missi
 export const allMultiRead = container.get(all('multi'));
 export const allMultiAncestorsRead = container.get(all('multi', true));
 export const allMultiResourcesRead = container.get(allResources('multi'));
+export const partialMultiRead = container.get(all('partial-multi'));
 export const lastMultiRead = container.get(last('multi'));
 export const lazyRead = container.get(lazy('exact-instance'));
 export const factoryRead = container.get(factory(TransientConsumer));
@@ -138,6 +173,9 @@ export const ownScopedRead = container.get(own(ScopedService));
 export const allScopedRead = container.get(all(ScopedService));
 export const allScopedAncestorsRead = container.get(all(ScopedService, true));
 export const allScopedResourcesRead = container.get(allResources(ScopedService));
+export const pressuredKeyRead = container.get(keyWithPressure());
+export const pressuredAncestorRead = container.get(all('multi', ancestorSearchWithPressure()));
+export const pressuredReceiverRead = containerWithPressure().get('exact-instance');
 
 export const beforeRegistrationRead = container.get('late');
 container.register(Registration.instance('late', lateInstance));

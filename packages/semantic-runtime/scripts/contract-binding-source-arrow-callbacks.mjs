@@ -33,23 +33,38 @@ const getterFeaturedSlot = resource == null ? null : repeatLocalSlot(resource, '
 const getterJoinedIdsSlot = resource == null ? null : repeatLocalSlot(resource, 'getterJoinedIds');
 const callScopeProductSlot = resource == null ? null : repeatLocalSlot(resource, 'callScopeProduct');
 const thisCallProductSlot = resource == null ? null : repeatLocalSlot(resource, 'thisCallProduct');
-const featuredId = featuredSlot?.staticValue == null ? null : readStaticProperty(featuredSlot.staticValue, 'id');
-const featuredLabel = featuredSlot?.staticValue == null ? null : readStaticProperty(featuredSlot.staticValue, 'label');
-const lastFeaturedId = lastFeaturedSlot?.staticValue == null ? null : readStaticProperty(lastFeaturedSlot.staticValue, 'id');
-const reducedFeaturedId = reducedFeaturedSlot?.staticValue == null ? null : readStaticProperty(reducedFeaturedSlot.staticValue, 'id');
-const slicedProductId = slicedProductSlot?.staticValue == null ? null : readStaticProperty(slicedProductSlot.staticValue, 'id');
-const reversedProductId = reversedProductSlot?.staticValue == null ? null : readStaticProperty(reversedProductSlot.staticValue, 'id');
-const sortedProductId = sortedProductSlot?.staticValue == null ? null : readStaticProperty(sortedProductSlot.staticValue, 'id');
-const splicedProductId = splicedProductSlot?.staticValue == null ? null : readStaticProperty(splicedProductSlot.staticValue, 'id');
-const withProductId = withProductSlot?.staticValue == null ? null : readStaticProperty(withProductSlot.staticValue, 'id');
-const flatProductId = flatProductSlot?.staticValue == null ? null : readStaticProperty(flatProductSlot.staticValue, 'id');
+const featuredValue = slotStaticValue(featuredSlot);
+const lastFeaturedValue = slotStaticValue(lastFeaturedSlot);
+const reducedFeaturedValue = slotStaticValue(reducedFeaturedSlot);
+const slicedProductValue = slotStaticValue(slicedProductSlot);
+const reversedProductValue = slotStaticValue(reversedProductSlot);
+const sortedProductValue = slotStaticValue(sortedProductSlot);
+const splicedProductValue = slotStaticValue(splicedProductSlot);
+const withProductValue = slotStaticValue(withProductSlot);
+const flatProductValue = slotStaticValue(flatProductSlot);
+const featuredId = featuredValue == null ? null : readStaticProperty(featuredValue, 'id');
+const featuredLabel = featuredValue == null ? null : readStaticProperty(featuredValue, 'label');
+const lastFeaturedId = lastFeaturedValue == null ? null : readStaticProperty(lastFeaturedValue, 'id');
+const reducedFeaturedId = reducedFeaturedValue == null ? null : readStaticProperty(reducedFeaturedValue, 'id');
+const slicedProductId = slicedProductValue == null ? null : readStaticProperty(slicedProductValue, 'id');
+const reversedProductId = reversedProductValue == null ? null : readStaticProperty(reversedProductValue, 'id');
+const sortedProductId = sortedProductValue == null ? null : readStaticProperty(sortedProductValue, 'id');
+const splicedProductId = splicedProductValue == null ? null : readStaticProperty(splicedProductValue, 'id');
+const withProductId = withProductValue == null ? null : readStaticProperty(withProductValue, 'id');
+const flatProductId = flatProductValue == null ? null : readStaticProperty(flatProductValue, 'id');
 const flatProductType = flatProductSlot?.targetType?.display ?? null;
-const joinedIds = joinedIdsSlot?.staticValue?.kind === 'string' ? joinedIdsSlot.staticValue.value : null;
-const featuredIndex = featuredIndexSlot?.staticValue?.kind === 'number' ? featuredIndexSlot.staticValue.value : null;
-const getterFeaturedId = getterFeaturedSlot?.staticValue == null ? null : readStaticProperty(getterFeaturedSlot.staticValue, 'id');
-const getterJoinedIds = getterJoinedIdsSlot?.staticValue?.kind === 'string' ? getterJoinedIdsSlot.staticValue.value : null;
-const callScopeProductId = callScopeProductSlot?.staticValue == null ? null : readStaticProperty(callScopeProductSlot.staticValue, 'id');
-const thisCallProductId = thisCallProductSlot?.staticValue == null ? null : readStaticProperty(thisCallProductSlot.staticValue, 'id');
+const joinedIdsValue = slotStaticValue(joinedIdsSlot);
+const featuredIndexValue = slotStaticValue(featuredIndexSlot);
+const getterFeaturedValue = slotStaticValue(getterFeaturedSlot);
+const getterJoinedIdsValue = slotStaticValue(getterJoinedIdsSlot);
+const callScopeProductValue = slotStaticValue(callScopeProductSlot);
+const thisCallProductValue = slotStaticValue(thisCallProductSlot);
+const joinedIds = joinedIdsValue?.kind === 'string' ? joinedIdsValue.value : null;
+const featuredIndex = featuredIndexValue?.kind === 'number' ? featuredIndexValue.value : null;
+const getterFeaturedId = getterFeaturedValue == null ? null : readStaticProperty(getterFeaturedValue, 'id');
+const getterJoinedIds = getterJoinedIdsValue?.kind === 'string' ? getterJoinedIdsValue.value : null;
+const callScopeProductId = callScopeProductValue == null ? null : readStaticProperty(callScopeProductValue, 'id');
+const thisCallProductId = thisCallProductValue == null ? null : readStaticProperty(thisCallProductValue, 'id');
 
 const failures = [];
 const assert = (condition, message) => {
@@ -61,7 +76,7 @@ const assert = (condition, message) => {
 assert(resource != null, 'Expected the arrow-callback source-value fixture to compile one app resource.');
 assert(featuredSlot != null, 'Expected repeat local `featured` to materialize a binding-context slot.');
 assert(
-  featuredSlot?.staticValue != null,
+  featuredValue != null,
   'Expected repeat local `featured` to carry a static representative value after Array.filter arrow reduction.',
 );
 assert(
@@ -72,12 +87,12 @@ assert(
   featuredLabel === 'Featured',
   `Expected arrow-filtered repeat local label to be 'Featured', observed ${featuredLabel ?? 'missing'}.`,
 );
-assert(lastFeaturedSlot?.staticValue != null, 'Expected Array.findLast repeat local to carry a static representative value.');
+assert(lastFeaturedValue != null, 'Expected Array.findLast repeat local to carry a static representative value.');
 assert(
   lastFeaturedId === 'featured',
   `Expected Array.findLast repeat local id to be 'featured', observed ${lastFeaturedId ?? 'missing'}.`,
 );
-assert(reducedFeaturedSlot?.staticValue != null, 'Expected Array.reduce repeat local to carry a static representative value.');
+assert(reducedFeaturedValue != null, 'Expected Array.reduce repeat local to carry a static representative value.');
 assert(
   reducedFeaturedId === 'featured',
   `Expected Array.reduce repeat local id to be 'featured', observed ${reducedFeaturedId ?? 'missing'}.`,
@@ -178,7 +193,7 @@ for (const methodName of ['flat', 'join', 'lastIndexOf', 'toSorted', 'toSpliced'
 const summary = {
   fixtureRoot,
   hasResource: resource != null,
-  slotStaticValueKind: featuredSlot?.staticValue?.kind ?? null,
+  slotStaticValueKind: featuredValue?.kind ?? null,
   featuredId,
   featuredLabel,
   lastFeaturedId,
@@ -216,6 +231,10 @@ function repeatLocalSlot(resource, name) {
     }
   }
   return null;
+}
+
+function slotStaticValue(slot) {
+  return slot?.staticValueEvaluation?.value ?? null;
 }
 
 function readStaticProperty(value, propertyName) {

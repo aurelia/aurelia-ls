@@ -25,6 +25,10 @@ const sites = app.ask({
 const reasonSite = sites.rows.find((row) =>
   row.reasonKinds.includes('static-evaluation-identifier-not-in-environment')
 );
+const attributeMapperSite = sites.rows.find((row) =>
+  row.reasonKinds.includes('host-environment-value')
+  && row.sampleSummary.includes('Attribute-mapper global mappings may contain additional attributes')
+);
 
 const failures = [
   reasonSite == null
@@ -36,6 +40,9 @@ const failures = [
   reasonSite?.sourceRange?.start?.line != null
     ? null
     : `Expected reason-preserving seam to expose source range, observed ${JSON.stringify(reasonSite?.sourceRange)}.`,
+  attributeMapperSite == null
+    ? `Expected the attribute-mapper domain seam to retain its host-environment evaluator cause, observed ${JSON.stringify(sites.rows.map((row) => ({ reasonKinds: row.reasonKinds, sampleSummary: row.sampleSummary })))}.`
+    : null,
 ].filter(Boolean);
 
 if (failures.length > 0) {
@@ -53,6 +60,11 @@ if (failures.length > 0) {
       reasonKinds: reasonSite.reasonKinds,
       source: reasonSite.source?.label,
       sourceRange: reasonSite.sourceRange,
+    },
+    attributeMapperSite: {
+      reasonKinds: attributeMapperSite.reasonKinds,
+      source: attributeMapperSite.source?.label,
+      sampleSummary: attributeMapperSite.sampleSummary,
     },
   }, null, 2));
 }

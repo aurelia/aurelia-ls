@@ -1,4 +1,6 @@
 <template>
+  <let dynamic-products.bind="products | dynamicContextProducts"></let>
+  <span>${dynamicProducts.length}</span>
   <section repeat.for="featured of products | featuredProducts">
     <span>${featured.id}</span>
     <span>${featured.label}</span>

@@ -2,8 +2,10 @@ import {
   RuntimeBindingSourceValueEvaluator,
 } from '../observation/binding-source-value-evaluator.js';
 import {
-  RuntimeBindingSourceValueEvaluationKind,
-} from '../observation/binding-source-value-evaluation.js';
+  bindingSourceValueEvaluationWithPressure,
+  openBindingSourceSlotNoStaticValue,
+  RuntimeBindingSourceValueEvaluation,
+} from '../configuration/binding-source-value-evaluation.js';
 import {
   projectRuntimeBindingSourceValueContextInScope,
 } from '../observation/binding-source-value-evaluation-context.js';
@@ -41,7 +43,7 @@ export function repeatStaticLocalValue(
   runtimeBindings: RuntimeRenderingEmission | null = null,
   bindingExpressionScopes: RuntimeBindingExpressionScopeProjector | null = null,
   resourceScope: TemplateResourceScope | null = null,
-): EvaluationValue | null {
+): RuntimeBindingSourceValueEvaluation | null {
   if (sourceValueEvaluator == null || parse?.result.kind !== ExpressionParseResultKind.IteratorSuccess) {
     return null;
   }
@@ -58,17 +60,35 @@ export function repeatStaticLocalValue(
     return null;
   }
   const evaluation = sourceValueEvaluator.evaluate(contextProjection.context);
-  if (evaluation.kind !== RuntimeBindingSourceValueEvaluationKind.Value || evaluation.value == null) {
-    return null;
-  }
-  const item = repeatItemRepresentativeValue(evaluation.value, `repeat.${localName}`, effect.sourceAddressHandle == null ? null : localName);
+  const item = evaluation.value == null
+    ? null
+    : repeatItemRepresentativeValue(
+        evaluation.value,
+        `repeat.${localName}`,
+        effect.sourceAddressHandle == null ? null : localName,
+      );
   if (item == null) {
-    return null;
+    return bindingSourceValueEvaluationWithPressure(
+      openBindingSourceSlotNoStaticValue(
+        `Repeat source did not expose a representative value for local '${localName}'.`,
+      ),
+      [evaluation],
+    );
   }
-  if (effect.localNames.length === 1) {
-    return item;
-  }
-  return readRepresentativeProperty(item, localName) ?? null;
+  const localValue = effect.localNames.length === 1
+    ? item
+    : readRepresentativeProperty(item, localName);
+  return localValue == null
+    ? bindingSourceValueEvaluationWithPressure(
+        openBindingSourceSlotNoStaticValue(
+          `Repeat representative value did not expose destructured local '${localName}'.`,
+        ),
+        [evaluation],
+      )
+    : bindingSourceValueEvaluationWithPressure(
+        RuntimeBindingSourceValueEvaluation.value(localValue),
+        [evaluation],
+      );
 }
 
 function repeatItemRepresentativeValue(

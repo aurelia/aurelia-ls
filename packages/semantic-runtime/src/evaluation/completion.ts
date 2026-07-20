@@ -2,6 +2,10 @@ import {
   EvaluationUndefined,
   type EvaluationValue,
 } from './values.js';
+import {
+  compactEvaluationOpenSeams,
+  type EvaluationOpenSeam,
+} from './seams.js';
 
 export const enum EvaluationCompletionKind {
   /** Statement or expression completed normally. */
@@ -31,21 +35,31 @@ export class NormalEvaluationCompletion {
 /** Return completion from a function body. */
 export class ReturnEvaluationCompletion {
   readonly kind = EvaluationCompletionKind.Return;
+  readonly openSeams: readonly EvaluationOpenSeam[];
 
   constructor(
     /** Returned evaluator-local value. */
     readonly value: EvaluationValue = EvaluationUndefined,
-  ) {}
+    /** Exact pressure qualifying the returned value across the call-frame edge. */
+    openSeams: readonly EvaluationOpenSeam[] = [],
+  ) {
+    this.openSeams = compactEvaluationOpenSeams(openSeams);
+  }
 }
 
 /** Throw completion from a throw statement or unsupported effect. */
 export class ThrowEvaluationCompletion {
   readonly kind = EvaluationCompletionKind.Throw;
+  readonly openSeams: readonly EvaluationOpenSeam[];
 
   constructor(
     /** Thrown evaluator-local value. */
     readonly value: EvaluationValue = EvaluationUndefined,
-  ) {}
+    /** Exact pressure qualifying the thrown value across throw/catch and module edges. */
+    openSeams: readonly EvaluationOpenSeam[] = [],
+  ) {
+    this.openSeams = compactEvaluationOpenSeams(openSeams);
+  }
 }
 
 /** Break completion with an optional label. */
@@ -86,3 +100,41 @@ export type EvaluationCompletion =
   | BreakEvaluationCompletion
   | ContinueEvaluationCompletion
   | OpenEvaluationCompletion;
+
+/** Completion that cannot be represented as an expression value. */
+export type EvaluationAbruptCompletion = Exclude<EvaluationCompletion, NormalEvaluationCompletion>;
+
+/** Abrupt completion that can cross an expression-shaped evaluator boundary. */
+export type EvaluationExpressionAbruptCompletion = ThrowEvaluationCompletion;
+
+/** Completion admitted by a value-returning expression boundary. */
+export type EvaluationExpressionCompletion =
+  | NormalEvaluationCompletion
+  | EvaluationExpressionAbruptCompletion;
+
+/** Internal bridge that carries a thrown value through value-returning expression evaluators. */
+export class EvaluationAbruptCompletionSignal extends Error {
+  constructor(
+    readonly completion: EvaluationExpressionAbruptCompletion,
+  ) {
+    super(`Static evaluation produced an abrupt ${completion.kind} completion.`);
+  }
+}
+
+/** Stable human explanation for consumers whose own result vocabulary cannot expose ECMAScript completion directly. */
+export function evaluationAbruptCompletionSummary(
+  completion: EvaluationAbruptCompletion,
+): string {
+  switch (completion.kind) {
+    case EvaluationCompletionKind.Return:
+      return 'Static evaluation reached a return completion outside a function result.';
+    case EvaluationCompletionKind.Throw:
+      return 'Static evaluation reached a thrown value.';
+    case EvaluationCompletionKind.Break:
+      return 'Static evaluation reached a break completion outside its target.';
+    case EvaluationCompletionKind.Continue:
+      return 'Static evaluation reached a continue completion outside its target.';
+    case EvaluationCompletionKind.Open:
+      return completion.summary;
+  }
+}

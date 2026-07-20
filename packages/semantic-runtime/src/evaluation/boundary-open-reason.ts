@@ -1,4 +1,9 @@
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import type { EvaluationAbruptCompletion } from './completion.js';
+import {
+  evaluationOpenSeamDefaultReasonKinds,
+  type EvaluationOpenSeam,
+} from './seams.js';
 import {
   EvaluationBoundaryKind,
   EvaluationValueKind,
@@ -42,4 +47,48 @@ export function openSeamReasonKindsForEvaluationValue(
     default:
       return [];
   }
+}
+
+/** Preserve abrupt-control-flow identity when a value-shaped consumer publishes an open boundary. */
+export function openSeamReasonKindsForEvaluationAbruptCompletion(
+  completion: EvaluationAbruptCompletion | null,
+): readonly OpenSeamReasonKind[] {
+  return completion == null ? [] : [OpenSeamReasonKind.StaticEvaluationAbruptCompletion];
+}
+
+/** Preserve every machine-readable cause carried by one evaluator value read. */
+export function openSeamReasonKindsForEvaluationRead(
+  read: {
+    readonly value: EvaluationValue | null;
+    readonly openSeams: readonly EvaluationOpenSeam[];
+    readonly abruptCompletion: EvaluationAbruptCompletion | null;
+  } | null,
+): readonly OpenSeamReasonKind[] {
+  if (read == null) {
+    return [];
+  }
+  return [...new Set([
+    ...read.openSeams.flatMap((seam) =>
+      seam.reasonKinds.length === 0
+        ? evaluationOpenSeamDefaultReasonKinds(seam.seamKind)
+        : seam.reasonKinds
+    ),
+    ...openSeamReasonKindsForEvaluationValue(read.value),
+    ...openSeamReasonKindsForEvaluationAbruptCompletion(read.abruptCompletion),
+  ])];
+}
+
+/** Preserve evaluator pressure from reads, such as target reads, which do not expose a value carrier. */
+export function openSeamReasonKindsForEvaluationPressure(
+  openSeams: readonly EvaluationOpenSeam[],
+  abruptCompletion: EvaluationAbruptCompletion | null,
+): readonly OpenSeamReasonKind[] {
+  return [...new Set([
+    ...openSeams.flatMap((seam) =>
+      seam.reasonKinds.length === 0
+        ? evaluationOpenSeamDefaultReasonKinds(seam.seamKind)
+        : seam.reasonKinds
+    ),
+    ...openSeamReasonKindsForEvaluationAbruptCompletion(abruptCompletion),
+  ])];
 }

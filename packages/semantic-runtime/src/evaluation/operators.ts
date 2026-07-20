@@ -8,7 +8,7 @@ import {
   EvaluationStringValue,
   EvaluationUndefined,
   EvaluationUndefinedValue,
-  evaluationValuesEqual,
+  evaluationValuesStrictlyEqual,
   isEvaluationPrimitiveValue,
   readEvaluationPrimitive,
   readEvaluationTruthiness,
@@ -61,11 +61,11 @@ export function evaluateStaticBinaryOperation(
     case '==':
       return new EvaluationBooleanValue(evaluationValuesLooselyEqual(left, right), node);
     case '===':
-      return new EvaluationBooleanValue(evaluationValuesEqual(left, right), node);
+      return new EvaluationBooleanValue(evaluationValuesStrictlyEqual(left, right), node);
     case '!=':
       return new EvaluationBooleanValue(!evaluationValuesLooselyEqual(left, right), node);
     case '!==':
-      return new EvaluationBooleanValue(!evaluationValuesEqual(left, right), node);
+      return new EvaluationBooleanValue(!evaluationValuesStrictlyEqual(left, right), node);
     case 'in':
       return evaluateStaticInOperation(left, right, node);
     case 'instanceof':
@@ -363,7 +363,7 @@ function evaluationValuesLooselyEqual(
   if (left.kind === EvaluationValueKind.Number && right.kind === EvaluationValueKind.String) {
     return left.value === Number(right.value);
   }
-  return evaluationValuesEqual(left, right);
+  return evaluationValuesStrictlyEqual(left, right);
 }
 
 function staticBinaryOperationForToken(operator: ts.SyntaxKind): StaticBinaryOperation | null {

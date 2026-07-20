@@ -1,4 +1,5 @@
 import type { AddressHandle } from '../kernel/handles.js';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 
 export const enum RuntimeExpressionResourceBindReachability {
   /** `astBind` reaches this authored wrapper and attempts resource resolution/application. */
@@ -71,6 +72,7 @@ export class RuntimeExpressionResourceLifecycleEffects {
     null,
     null,
     null,
+    [],
   );
 
   constructor(
@@ -88,5 +90,7 @@ export class RuntimeExpressionResourceLifecycleEffects {
     readonly configurationSourceAddressHandle: AddressHandle | null,
     /** Why app-owned lifecycle effects or values remain open. */
     readonly openReason: string | null,
+    /** Machine-readable lower-level reasons that kept lifecycle effects open. */
+    readonly openReasonKinds: readonly OpenSeamReasonKind[],
   ) {}
 }

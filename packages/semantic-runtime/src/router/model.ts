@@ -90,8 +90,11 @@ export const enum RouteConfigStageKind {
   Applied = 'applied',
 }
 
-export const enum RouteConfigClosureKind {
+/** Whether a router product is exact or retains product-relevant open pressure. */
+export const enum RouterClosureKind {
+  /** Every field consumed to produce this router product is statically exact. */
   Closed = 'closed',
+  /** The product retains a usable candidate beside unresolved causal pressure. */
   Open = 'open',
 }
 
@@ -1412,7 +1415,7 @@ export class RouteConfigModel {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly stage: RouteConfigStageKind,
-    readonly closure: RouteConfigClosureKind,
+    readonly closure: RouterClosureKind,
     readonly routeKind: RouteConfigKind,
     readonly id: string | null,
     readonly paths: readonly string[],
@@ -1573,6 +1576,7 @@ export class ViewportInstructionModel {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
+    readonly closure: RouterClosureKind,
     readonly component: RouterReference | null,
     readonly viewport: string | null,
     readonly parametersProductHandle: ProductHandle | null,
@@ -1598,6 +1602,7 @@ export class ViewportInstructionTreeModel {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
+    readonly closure: RouterClosureKind,
     readonly routeContext: RouterReference | null,
     readonly instructions: readonly RouterReference[],
     readonly options: RouterOptionsReference | null,
@@ -1622,6 +1627,7 @@ export class TypedNavigationInstructionModel {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
+    readonly closure: RouterClosureKind,
     readonly instructionKind: NavigationInstructionKind,
     readonly value: string | null,
     readonly component: RouterReference | null,

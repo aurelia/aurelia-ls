@@ -1,5 +1,7 @@
 import ts from 'typescript';
+import { evaluationAbruptCompletionSummary } from '../evaluation/completion.js';
 import {
+  EvaluationTargetResolutionKind,
   EvaluationTargetRead,
   readClassTarget,
   StaticEvaluationExpressionReader,
@@ -148,12 +150,18 @@ function readDecoratorResource(
     decorator,
     `Decorator ${calleeName}(...) did not expose a static resource name.`,
   );
+  const openSeams = [...read.openSeams];
+  appendTargetReadOpen(
+    openSeams,
+    target,
+    `Decorator ${calleeName}(...) target evaluation remained open.`,
+  );
   return new ResourceRecognitionObservation(
     ResourceCarrierKind.Decorator,
     decorator,
     definitionExpression,
     read.definition,
-    read.openSeams,
+    openSeams,
   );
 }
 
@@ -204,7 +212,12 @@ function recognizeEvaluatedClassBindings(
       binding.value.declaration,
       wantedKind,
       reader,
-      new EvaluationTargetRead(binding.name, binding.declaration.name, binding.declaration),
+      new EvaluationTargetRead(
+        EvaluationTargetResolutionKind.ResolvedDeclaration,
+        binding.name,
+        binding.declaration.name,
+        binding.declaration,
+      ),
     ));
   }
   return observations;
@@ -222,9 +235,12 @@ function recognizeStaticAu(
 
   const kindRead = readResourceKindField(initializer, context.expressionReader);
   let resourceKind = kindRead.value;
+  const templateControllerRead = resourceKind === ResourceDefinitionKind.CustomAttribute
+    ? readTemplateControllerFlag(initializer, context.expressionReader)
+    : null;
   if (
     resourceKind === ResourceDefinitionKind.CustomAttribute
-    && readTemplateControllerFlag(initializer, context.expressionReader)
+    && templateControllerRead?.value === true
   ) {
     resourceKind = ResourceDefinitionKind.TemplateController;
   }
@@ -242,6 +258,7 @@ function recognizeStaticAu(
               KernelVocabulary.Resource.OpenKindExpression.key,
               kindRead.openSummary ?? 'Static $au resource kind did not close to a recognized resource type.',
               kindRead.node ?? initializer,
+              kindRead.openReasonKinds,
             ),
           ],
         ),
@@ -263,13 +280,30 @@ function recognizeStaticAu(
     initializer,
     'Static $au resource name did not close to a static string.',
   );
+  const openSeams = [...read.openSeams];
+  if (kindRead.openSummary != null) {
+    openSeams.push(new ResourceRecognitionOpen(
+      KernelVocabulary.Resource.OpenKindExpression.key,
+      kindRead.openSummary,
+      kindRead.node ?? initializer,
+      kindRead.openReasonKinds,
+    ));
+  }
+  if (templateControllerRead?.openSummary != null) {
+    openSeams.push(new ResourceRecognitionOpen(
+      KernelVocabulary.Resource.OpenKindExpression.key,
+      templateControllerRead.openSummary,
+      templateControllerRead.node ?? initializer,
+      templateControllerRead.openReasonKinds,
+    ));
+  }
   return [
     new ResourceRecognitionObservation(
       ResourceCarrierKind.StaticAu,
       initializer,
       initializer,
       read.definition,
-      read.openSeams,
+      openSeams,
     ),
   ];
 }
@@ -330,7 +364,7 @@ function readDefineCallTargetClass(
   call: ts.CallExpression,
   wantedKind: NamedResourceDefinitionKind | null,
 ): ts.ClassLikeDeclarationBase | null {
-  const resourceKind = readDefineCallResourceKind(context, call);
+  const resourceKind = readDefineCallResourceKind(context, call).value;
   if (
     resourceKind == null
     || resourceKind === ResourceDefinitionKind.AttributePattern
@@ -350,7 +384,8 @@ function recognizeDefineCall(
   call: ts.CallExpression,
   wantedKind: NamedResourceDefinitionKind | null,
 ): ResourceRecognitionObservation | null {
-  const resourceKind = readDefineCallResourceKind(context, call);
+  const resourceKindRead = readDefineCallResourceKind(context, call);
+  const resourceKind = resourceKindRead.value;
   if (
     resourceKind == null
     || resourceKind === ResourceDefinitionKind.AttributePattern
@@ -361,9 +396,12 @@ function recognizeDefineCall(
 
   const definitionExpression = call.arguments[0] ?? null;
   const targetExpression = call.arguments[1] ?? null;
-  const target = targetExpression == null
+  const targetRead = targetExpression == null
+    ? null
+    : readEvaluatedExpressionTarget(targetExpression, context.expressionReader);
+  const target = targetRead == null
     ? generatedDefineCallTarget(call, resourceKind)
-    : resourceTargetObservation(readEvaluatedExpressionTarget(targetExpression, context.expressionReader));
+    : resourceTargetObservation(targetRead);
   const read = readNamedResourceDefinition(
     resourceKind,
     target,
@@ -372,13 +410,19 @@ function recognizeDefineCall(
     call,
     'Define call did not expose a static resource name.',
   );
-  const openSeams: ResourceRecognitionOpen[] = [...read.openSeams];
+  const openSeams: ResourceRecognitionOpen[] = [
+    ...read.openSeams,
+    ...(resourceKindRead.open == null ? [] : [resourceKindRead.open]),
+  ];
   if (target == null || target.localName == null) {
     openSeams.push(new ResourceRecognitionOpen(
       KernelVocabulary.Resource.OpenTargetExpression.key,
       'Define call did not expose a statically named resource target.',
       targetExpression ?? call,
+      targetRead?.openReasonKinds ?? [],
     ));
+  } else if (targetRead != null) {
+    appendTargetReadOpen(openSeams, targetRead, 'Define-call target evaluation remained open.');
   }
 
   return new ResourceRecognitionObservation(
@@ -423,23 +467,36 @@ function generatedDefineCallTarget(
 function resourceTargetObservation(
   target: ReturnType<typeof readEvaluatedExpressionTarget>,
 ): ResourceTargetObservation | null {
-  return target == null
+  return target == null || target.resolutionKind !== EvaluationTargetResolutionKind.ResolvedDeclaration
     ? null
     : new ResourceTargetObservation(target.localName, target.node, target.declarationNode);
+}
+
+interface DefineCallResourceKindRead {
+  readonly value: ResourceDefinitionKind | null;
+  readonly open: ResourceRecognitionOpen | null;
 }
 
 function readDefineCallResourceKind(
   context: ResourceRecognitionContext,
   call: ts.CallExpression,
-): ResourceDefinitionKind | null {
+): DefineCallResourceKindRead {
   const resourceKind = readDefineCallKind(call);
-  if (
-    resourceKind === ResourceDefinitionKind.CustomAttribute
-    && readTemplateControllerFlag(call.arguments[0] ?? call, context.expressionReader)
-  ) {
-    return ResourceDefinitionKind.TemplateController;
+  if (resourceKind !== ResourceDefinitionKind.CustomAttribute) {
+    return { value: resourceKind, open: null };
   }
-  return resourceKind;
+  const flag = readTemplateControllerFlag(call.arguments[0] ?? call, context.expressionReader);
+  return {
+    value: flag.value === true ? ResourceDefinitionKind.TemplateController : resourceKind,
+    open: flag.openSummary == null
+      ? null
+      : new ResourceRecognitionOpen(
+          KernelVocabulary.Resource.OpenKindExpression.key,
+          flag.openSummary,
+          flag.node ?? call.arguments[0] ?? call,
+          flag.openReasonKinds,
+        ),
+  };
 }
 
 function readNamedResourceDefinition(
@@ -463,10 +520,23 @@ function readNamedResourceDefinition(
       KernelVocabulary.Resource.OpenNameExpression.key,
       name?.openSummary ?? missingNameSummary,
       name?.node ?? definitionExpression ?? carrierNode,
+      name?.openReasonKinds ?? [],
+    ));
+  } else if (name.openSummary != null) {
+    openSeams.push(new ResourceRecognitionOpen(
+      KernelVocabulary.Resource.OpenNameExpression.key,
+      name.openSummary,
+      name.node ?? definitionExpression,
+      name.openReasonKinds,
     ));
   }
   if (aliases?.openSummary != null && aliases.node != null) {
-    openSeams.push(new ResourceRecognitionOpen(KernelVocabulary.Resource.OpenAliasExpression.key, aliases.openSummary, aliases.node));
+    openSeams.push(new ResourceRecognitionOpen(
+      KernelVocabulary.Resource.OpenAliasExpression.key,
+      aliases.openSummary,
+      aliases.node,
+      aliases.openReasonKinds,
+    ));
   }
 
   return {
@@ -479,6 +549,27 @@ function readNamedResourceDefinition(
     ),
     openSeams,
   };
+}
+
+function appendTargetReadOpen(
+  openSeams: ResourceRecognitionOpen[],
+  target: EvaluationTargetRead,
+  summary: string,
+): void {
+  const reasonKinds = target.openReasonKinds;
+  if (reasonKinds.length === 0) {
+    return;
+  }
+  const details = [
+    ...target.openSeams.map((seam) => seam.summary),
+    ...(target.abruptCompletion == null ? [] : [evaluationAbruptCompletionSummary(target.abruptCompletion)]),
+  ];
+  openSeams.push(new ResourceRecognitionOpen(
+    KernelVocabulary.Resource.OpenTargetExpression.key,
+    details.length === 0 ? summary : `${summary} ${details.join(' ')}`,
+    target.node,
+    reasonKinds,
+  ));
 }
 
 function hasExplicitResourceCarrier(classNode: ts.ClassLikeDeclarationBase): boolean {

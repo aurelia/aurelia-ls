@@ -1,14 +1,16 @@
 import type ts from 'typescript';
 import {
   StaticEvaluator,
+  StaticEvaluationRuntimeValueResult,
   type StaticEvaluationRuntimeHost,
   type StaticEvaluationImportValues,
   type StaticModuleEvaluationResult,
 } from './evaluator.js';
 import {
   readStaticCommonJsExportMap,
+  readStaticCommonJsExportEvidence,
   readStaticCommonJsExportValue,
-  readStaticCommonJsRequireValue,
+  readStaticCommonJsRequireEvidence,
 } from './commonjs.js';
 import {
   DefaultStaticEvaluationPolicy,
@@ -33,6 +35,12 @@ import {
   type EvaluationValue,
 } from './values.js';
 import { isRelativeModuleSpecifier } from './module-specifier.js';
+import {
+  EvaluationCompletionKind,
+  evaluationAbruptCompletionSummary,
+  type EvaluationAbruptCompletion,
+} from './completion.js';
+import { EvaluationValueEvidence } from './value-pressure.js';
 
 /** Result of evaluating a graph of local ECMAScript modules. */
 export class StaticModuleGraphEvaluationResult {
@@ -109,64 +117,116 @@ export class StaticModuleGraphEvaluator {
     }
 
     this.evaluatingModules.add(moduleKey);
-    const imports = this.resolveImportValues(record);
-    const result = new StaticEvaluator(this.policy, this.evaluatorRuntimeHost)
-      .evaluateSourceFile(record.sourceFile, moduleKey, imports);
+    const dependencyCompletion = this.evaluateStaticDependencies(record);
+    const imports = dependencyCompletion == null
+      ? this.resolveImportValues(record)
+      : new Map();
+    const evaluator = new StaticEvaluator(this.policy, this.evaluatorRuntimeHost);
+    const result = dependencyCompletion == null
+      ? evaluator.evaluateSourceFile(record.sourceFile, moduleKey, imports)
+      : evaluator.evaluateSourceFileAfterDependencyCompletion(
+          record.sourceFile,
+          moduleKey,
+          imports,
+          dependencyCompletion,
+        );
     this.moduleResults.set(moduleKey, result);
     this.evaluatingModules.delete(moduleKey);
     return result;
   }
 
-  /** Resolve one export value from a module, following re-export edges when possible. */
-  readExportValue(moduleKey: string, exportName: string): EvaluationValue | null {
-    return this.readExportValueCore(moduleKey, exportName, true);
+  private evaluateStaticDependencies(
+    record: EvaluationModuleRecord,
+  ): EvaluationAbruptCompletion | null {
+    const dependencies = [
+      ...record.imports.flatMap((entry) =>
+        entry.importKind === EvaluationImportKind.CommonJsRequire
+          || entry.importKind === EvaluationImportKind.DynamicImport
+          ? []
+          : [{ moduleSpecifier: entry.moduleSpecifier, node: entry.node }]
+      ),
+      ...record.exports.flatMap((entry) => entry.moduleSpecifier == null
+        ? []
+        : [{ moduleSpecifier: entry.moduleSpecifier, node: entry.node }]),
+    ].sort((left, right) => left.node.getStart() - right.node.getStart());
+    const visited = new Set<string>();
+    for (const dependency of dependencies) {
+      const targetModuleKey = this.graph.readLinkedModule(record.moduleKey, dependency.moduleSpecifier);
+      if (targetModuleKey == null || visited.has(targetModuleKey)) {
+        continue;
+      }
+      visited.add(targetModuleKey);
+      const result = this.evaluateModule(targetModuleKey);
+      if (result != null && result.completion.kind !== EvaluationCompletionKind.Normal) {
+        return result.completion;
+      }
+    }
+    return null;
   }
 
-  private readExportValueCore(
+  /** Resolve one export value from a module, following re-export edges when possible. */
+  readExportValue(moduleKey: string, exportName: string): EvaluationValue | null {
+    return this.readExportEvidence(moduleKey, exportName)?.value ?? null;
+  }
+
+  /** Resolve one export together with pressure retained by its live binding edge. */
+  readExportEvidence(moduleKey: string, exportName: string): EvaluationValueEvidence | null {
+    return this.readExportEvidenceCore(moduleKey, exportName, true);
+  }
+
+  private readExportEvidenceCore(
     moduleKey: string,
     exportName: string,
     reportMissing: boolean,
-  ): EvaluationValue | null {
+  ): EvaluationValueEvidence | null {
     const resolutionKey = `${moduleKey}\0${exportName}`;
     if (this.resolvingExports.has(resolutionKey)) {
       const record = this.graph.readModule(moduleKey);
       return reportMissing
-        ? this.openValue(`Circular export resolution reached '${exportName}' on ${moduleKey}.`, record?.sourceFile ?? null)
+        ? this.openEvidence(`Circular export resolution reached '${exportName}' on ${moduleKey}.`, record?.sourceFile ?? null)
         : null;
     }
 
     this.resolvingExports.add(resolutionKey);
     try {
-      return this.readExportValueCoreUnlocked(moduleKey, exportName, reportMissing);
+      return this.readExportEvidenceCoreUnlocked(moduleKey, exportName, reportMissing);
     } finally {
       this.resolvingExports.delete(resolutionKey);
     }
   }
 
-  private readExportValueCoreUnlocked(
+  private readExportEvidenceCoreUnlocked(
     moduleKey: string,
     exportName: string,
     reportMissing: boolean,
-  ): EvaluationValue | null {
+  ): EvaluationValueEvidence | null {
     const record = this.graph.readModule(moduleKey);
     if (record == null) {
-      return this.openValue(`Module ${moduleKey} is not present in the evaluation graph.`, null);
+      return this.openEvidence(`Module ${moduleKey} is not present in the evaluation graph.`, null);
     }
     const result = this.evaluateModule(moduleKey);
     if (result == null) {
-      return this.openValue(`Module ${moduleKey} could not be evaluated.`, record.sourceFile);
+      return this.openEvidence(`Module ${moduleKey} could not be evaluated.`, record.sourceFile);
+    }
+    if (result.completion.kind !== EvaluationCompletionKind.Normal) {
+      return reportMissing
+        ? this.openEvidence(
+            `Module ${moduleKey} did not complete normally; export '${exportName}' is unavailable.`,
+            record.sourceFile,
+          )
+        : null;
     }
 
     for (const entry of record.exports) {
       if (entry.exportKind === EvaluationExportKind.Local && entry.exportName === exportName && entry.valueName != null) {
-        return result.environment.readValue(entry.valueName)
-          ?? this.openValue(`Local export '${exportName}' did not resolve to an environment binding.`, entry.node);
+        return result.environment.readEvidence(entry.valueName)
+          ?? this.openEvidence(`Local export '${exportName}' did not resolve to an environment binding.`, entry.node);
       }
       if (entry.exportKind === EvaluationExportKind.Default && exportName === 'default') {
         return entry.valueName == null
-          ? this.openValue('Default export did not expose a local environment binding.', entry.node)
-          : result.environment.readValue(entry.valueName)
-            ?? this.openValue('Default export did not resolve to a static value.', entry.node);
+          ? this.openEvidence('Default export did not expose a local environment binding.', entry.node)
+          : result.environment.readEvidence(entry.valueName)
+            ?? this.openEvidence('Default export did not resolve to a static value.', entry.node);
       }
       if (
         entry.exportKind === EvaluationExportKind.ReExport
@@ -174,14 +234,17 @@ export class StaticModuleGraphEvaluator {
         && entry.moduleSpecifier != null
         && entry.valueName != null
       ) {
-        return this.readReExportValue(moduleKey, entry.moduleSpecifier, entry.valueName, entry.node, true);
+        return this.readReExportEvidence(moduleKey, entry.moduleSpecifier, entry.valueName, entry.node, true);
       }
       if (
         entry.exportKind === EvaluationExportKind.NamespaceReExport
         && entry.exportName === exportName
         && entry.moduleSpecifier != null
       ) {
-        return this.readNamespaceReExportValue(moduleKey, entry.moduleSpecifier, entry.node);
+        return new EvaluationValueEvidence(
+          this.readNamespaceReExportValue(moduleKey, entry.moduleSpecifier, entry.node),
+          [],
+        );
       }
     }
 
@@ -190,37 +253,43 @@ export class StaticModuleGraphEvaluator {
     if (uniqueExportAllCandidates.length === 1) {
       const candidate = uniqueExportAllCandidates[0];
       if (candidate != null) {
-        return candidate.value;
+        return candidate.evidence;
       }
     }
     if (uniqueExportAllCandidates.length > 1) {
       return reportMissing
-        ? this.openValue(`Export '${exportName}' is ambiguous across export-star entries in ${moduleKey}.`, record.sourceFile)
+        ? this.openEvidence(`Export '${exportName}' is ambiguous across export-star entries in ${moduleKey}.`, record.sourceFile)
         : null;
     }
 
-    const commonJsExport = readStaticCommonJsExportValue(result.environment, exportName);
+    const commonJsExport = readStaticCommonJsExportEvidence(result.environment, exportName);
     if (commonJsExport != null) {
       return commonJsExport;
     }
 
     return reportMissing
-      ? this.openValue(`Export '${exportName}' is not known on module ${moduleKey}.`, record.sourceFile)
+      ? this.openEvidence(`Export '${exportName}' is not known on module ${moduleKey}.`, record.sourceFile)
       : null;
   }
 
   private resolveImportValues(record: EvaluationModuleRecord): StaticEvaluationImportValues {
-    const imports = new Map<string, EvaluationValue>();
+    const imports = new Map<string, EvaluationValueEvidence>();
     for (const entry of record.imports) {
       if (entry.importKind === EvaluationImportKind.SideEffect) {
         this.evaluateSideEffectImport(record.moduleKey, entry);
         continue;
       }
+      if (
+        entry.importKind === EvaluationImportKind.CommonJsRequire
+        || entry.importKind === EvaluationImportKind.DynamicImport
+      ) {
+        continue;
+      }
       if (entry.localName == null) {
         continue;
       }
-      const value = this.resolveImportValue(record.moduleKey, entry);
-      imports.set(entry.localName, value);
+      const evidence = this.resolveImportEvidence(record.moduleKey, entry);
+      imports.set(entry.localName, evidence);
     }
     return imports;
   }
@@ -240,50 +309,68 @@ export class StaticModuleGraphEvaluator {
     }
   }
 
-  private resolveImportValue(fromModuleKey: string, entry: EvaluationImportEntry): EvaluationValue {
-    if (entry.importKind === EvaluationImportKind.CommonJsRequire) {
-      return this.resolveCommonJsRequireValue(fromModuleKey, entry.moduleSpecifier, entry.node);
-    }
+  private resolveImportEvidence(fromModuleKey: string, entry: EvaluationImportEntry): EvaluationValueEvidence {
     const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, entry.moduleSpecifier);
     if (targetModuleKey == null) {
-      return this.externalValueResolver?.resolveImportValue(fromModuleKey, entry)
+      const value = this.externalValueResolver?.resolveImportValue(fromModuleKey, entry)
         ?? (isRelativeModuleSpecifier(entry.moduleSpecifier)
           ? this.openValue(`Import '${entry.moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`, entry.node)
           : externalImportBoundaryValue(entry));
+      return new EvaluationValueEvidence(value, []);
     }
     if (entry.importKind === EvaluationImportKind.Namespace) {
-      return this.readModuleNamespaceValue(targetModuleKey, entry.node);
+      return new EvaluationValueEvidence(this.readModuleNamespaceValue(targetModuleKey, entry.node), []);
     }
     const exportName = entry.exportName ?? 'default';
-    return this.readExportValue(targetModuleKey, exportName)
-      ?? this.openValue(`Import '${entry.localName ?? exportName}' from ${entry.moduleSpecifier} did not resolve to a static export.`, entry.node);
+    return this.readExportEvidence(targetModuleKey, exportName)
+      ?? this.openEvidence(`Import '${entry.localName ?? exportName}' from ${entry.moduleSpecifier} did not resolve to a static export.`, entry.node);
   }
 
   private resolveCommonJsRequireValue(
     fromModuleKey: string,
     moduleSpecifier: string,
     node: ts.Node,
-  ): EvaluationValue {
+  ): StaticEvaluationRuntimeValueResult {
     const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, moduleSpecifier);
     if (targetModuleKey == null) {
-      return isRelativeModuleSpecifier(moduleSpecifier)
+      const value = isRelativeModuleSpecifier(moduleSpecifier)
         ? this.openValue(`CommonJS require '${moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`, node)
         : new EvaluationBoundaryValue(
           EvaluationBoundaryKind.ExternalModule,
           `CommonJS require '${moduleSpecifier}'`,
           node,
         );
+      return new StaticEvaluationRuntimeValueResult(value, null);
     }
     const result = this.evaluateModule(targetModuleKey);
     if (result == null) {
       const record = this.graph.readModule(targetModuleKey);
-      return this.openValue(`CommonJS require '${moduleSpecifier}' target could not be evaluated.`, record?.sourceFile ?? node);
+      return new StaticEvaluationRuntimeValueResult(
+        this.openValue(`CommonJS require '${moduleSpecifier}' target could not be evaluated.`, record?.sourceFile ?? node),
+        null,
+      );
     }
-    const commonJsExport = readStaticCommonJsRequireValue(result.environment);
+    if (result.completion.kind === EvaluationCompletionKind.Throw) {
+      return new StaticEvaluationRuntimeValueResult(null, result.completion);
+    }
+    if (result.completion.kind !== EvaluationCompletionKind.Normal) {
+      return new StaticEvaluationRuntimeValueResult(
+        this.openValue(
+          `CommonJS require '${moduleSpecifier}' target did not complete normally: ${evaluationAbruptCompletionSummary(result.completion)}`,
+          result.environment.readBinding('module')?.declaration ?? node,
+        ),
+        null,
+      );
+    }
+    const commonJsExport = readStaticCommonJsRequireEvidence(result.environment);
     if (commonJsExport != null) {
-      return commonJsExport;
+      return new StaticEvaluationRuntimeValueResult(
+        commonJsExport.value,
+        null,
+        commonJsExport.openSeams,
+      );
     }
-    return this.readModuleNamespaceValue(targetModuleKey, node);
+    return new StaticEvaluationRuntimeValueResult(this.readModuleNamespaceValue(targetModuleKey, node), null);
   }
 
   private resolveDynamicImportValue(
@@ -305,30 +392,42 @@ export class StaticModuleGraphEvaluator {
           node,
         );
     }
-    this.evaluateModule(targetModuleKey);
+    const result = this.evaluateModule(targetModuleKey);
+    if (result == null) {
+      return this.openValue(`Dynamic import '${moduleSpecifier}' target could not be evaluated.`, node);
+    }
+    if (result.completion.kind !== EvaluationCompletionKind.Normal) {
+      return this.openValue(
+        `Dynamic import '${moduleSpecifier}' target did not complete normally; promise rejection settlement is not modeled: ${evaluationAbruptCompletionSummary(result.completion)}`,
+        node,
+      );
+    }
     return new EvaluationPromiseValue(
       this.readModuleNamespaceValue(targetModuleKey, node),
       node,
     );
   }
 
-  private readReExportValue(
+  private readReExportEvidence(
     fromModuleKey: string,
     moduleSpecifier: string,
     exportName: string,
     node: ts.Node,
     reportMissing: boolean,
-  ): EvaluationValue | null {
+  ): EvaluationValueEvidence | null {
     const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, moduleSpecifier);
     return targetModuleKey == null
       ? isRelativeModuleSpecifier(moduleSpecifier)
-        ? this.openValue(`Re-export '${moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`, node)
-        : new EvaluationBoundaryValue(
-          EvaluationBoundaryKind.ExternalModule,
-          `re-export '${exportName}' from '${moduleSpecifier}'`,
-          node,
-        )
-      : this.readExportValueCore(targetModuleKey, exportName, reportMissing);
+        ? this.openEvidence(`Re-export '${moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`, node)
+        : new EvaluationValueEvidence(
+            new EvaluationBoundaryValue(
+              EvaluationBoundaryKind.ExternalModule,
+              `re-export '${exportName}' from '${moduleSpecifier}'`,
+              node,
+            ),
+            [],
+          )
+      : this.readExportEvidenceCore(targetModuleKey, exportName, reportMissing);
   }
 
   private readNamespaceReExportValue(
@@ -358,10 +457,10 @@ export class StaticModuleGraphEvaluator {
       if (entry.exportKind !== EvaluationExportKind.ExportAll || entry.moduleSpecifier == null) {
         continue;
       }
-      const value = this.readReExportValue(record.moduleKey, entry.moduleSpecifier, exportName, entry.node, false);
-      if (value != null && value.kind !== EvaluationValueKind.Unknown) {
+      const evidence = this.readReExportEvidence(record.moduleKey, entry.moduleSpecifier, exportName, entry.node, false);
+      if (evidence != null && evidence.value.kind !== EvaluationValueKind.Unknown) {
         candidates.push(new EvaluationExportCandidate(
-          value,
+          evidence,
           this.readReExportBindingIdentity(record.moduleKey, entry.moduleSpecifier, exportName, new Set())
             ?? `open:${record.moduleKey}:${index}:${exportName}`,
         ));
@@ -508,16 +607,18 @@ export class StaticModuleGraphEvaluator {
     const exportEntries = new Map<string, EvaluationModuleNamespaceExport>();
     let mayHaveUnknownExports = names.open;
     for (const name of [...names.names].sort()) {
-      const value = this.readExportValueCore(moduleKey, name, false);
-      if (value == null) {
+      const evidence = this.readExportEvidenceCore(moduleKey, name, false);
+      if (evidence == null) {
         mayHaveUnknownExports = true;
         continue;
       }
+      const value = evidence.value;
       mayHaveUnknownExports ||= value.kind === EvaluationValueKind.Unknown;
       exportEntries.set(name, new EvaluationModuleNamespaceExport(
         name,
         value,
         this.readModuleExportSourceNode(moduleKey, name, new Set()) ?? value.node,
+        evidence.openSeams,
       ));
     }
     return new EvaluationModuleNamespaceValue(moduleKey, exportEntries, mayHaveUnknownExports, node);
@@ -613,6 +714,10 @@ export class StaticModuleGraphEvaluator {
     this.openValues.push(value);
     return value;
   }
+
+  private openEvidence(reason: string, node: ts.Node | null): EvaluationValueEvidence {
+    return new EvaluationValueEvidence(this.openValue(reason, node), []);
+  }
 }
 
 class ModuleNamespaceExportNameSet {
@@ -624,7 +729,7 @@ class ModuleNamespaceExportNameSet {
 
 class EvaluationExportCandidate {
   constructor(
-    readonly value: EvaluationValue,
+    readonly evidence: EvaluationValueEvidence,
     readonly bindingIdentity: string,
   ) {}
 }

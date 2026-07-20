@@ -13,7 +13,7 @@ import {
   EvaluationStringPatternValue,
   EvaluationStringValue,
   EvaluationValueKind,
-  evaluationValuesEqual,
+  evaluationValuesStrictlyEqual,
   mergeEvaluationArrayUncertainties,
   type EvaluationValue,
 } from './values.js';
@@ -173,7 +173,7 @@ function representativeArrayValue(
   const shortest = Math.min(...values.map((value) => value.elements.length));
   for (let index = 0; index < shortest; index += 1) {
     const first = values[0]!.elements[index]!;
-    if (!values.every((value) => evaluationValuesEqual(value.elements[index]!.value, first.value))) {
+    if (!values.every((value) => evaluationValuesStrictlyEqual(value.elements[index]!.value, first.value))) {
       break;
     }
     elements.push(new EvaluationArrayElement(first.value, first.expression));

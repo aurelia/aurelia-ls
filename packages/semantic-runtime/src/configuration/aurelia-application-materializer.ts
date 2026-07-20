@@ -1,4 +1,3 @@
-import ts from 'typescript';
 import {
   SourceSpanRole,
 } from '../kernel/address.js';
@@ -10,6 +9,7 @@ import {
 import type {
   ClaimHandle,
   IdentityHandle,
+  OpenSeamHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -105,6 +105,7 @@ export class AppRootConfigEmission {
     readonly identityHandle: IdentityHandle,
     readonly config: AppRootConfig,
     readonly source: ConfigurationSourceRecordSet,
+    readonly openSeamHandles: readonly OpenSeamHandle[],
   ) {}
 }
 
@@ -442,7 +443,7 @@ export class AureliaApplicationMaterializer {
       provenanceHandle: emission.source.provenanceHandle,
       localName: null,
       claimHandles: [producerClaimHandle(producerClaimHandlesByProduct, emission.productHandle)],
-      openSeamHandles: [],
+      openSeamHandles: emission.openSeamHandles,
     });
   }
 
@@ -465,7 +466,7 @@ export class AureliaApplicationMaterializer {
         ...draft.appRootClaimHandles,
         producerClaimHandle(producerClaimHandlesByProduct, appRoot.productHandle),
       ],
-      openSeamHandles: [],
+      openSeamHandles: config.openSeamHandles,
     });
   }
 
@@ -487,6 +488,11 @@ export class AureliaApplicationMaterializer {
 
     const host = this.recordsForAppRootHost(context, observation, local);
     const component = this.recordsForAppRootComponent(context, observation, local, resources);
+    const openSeams = this.publication.recordsForOpenSeams(
+      context,
+      observation.openSeams,
+      `configuration-app-root-config:${local}`,
+    );
     const handles = this.publication.configurationProductHandles(`configuration-app-root-config:${local}`);
     const config = this.appRootConfigForObservation(observation, source, host, component);
 
@@ -496,11 +502,13 @@ export class AureliaApplicationMaterializer {
         ...source.records,
         ...(host == null ? [] : host.records),
         ...(component == null ? [] : component.records),
+        ...openSeams.records,
       ],
       handles.productHandle,
       handles.identityHandle,
       config,
       source,
+      openSeams.handles,
     );
   }
 
@@ -591,7 +599,7 @@ export class AureliaApplicationMaterializer {
   ): ConfigurationTargetEmission {
     const source = this.recordsForTargetSource(context, observation, local);
     const records: KernelStoreRecord[] = [...source.records];
-    const definition = this.resourceDefinitionForTarget(context, observation, resources);
+    const definition = this.resourceDefinitionForTarget(observation, resources);
     const identityHandle = this.targetIdentityHandle(observation, local, definition);
     records.push(...this.recordsForTargetIdentity(context, observation, source, identityHandle, definition));
     return new ConfigurationTargetEmission(
@@ -623,13 +631,10 @@ export class AureliaApplicationMaterializer {
   }
 
   private resourceDefinitionForTarget(
-    context: ConfigurationRecognitionContext,
     observation: ConfigurationTargetObservation,
     resources: ResourceDefinitionIndex | null,
   ): FullResourceDefinition | null {
-    return resources != null && ts.isExpression(observation.node)
-      ? resources.lookupExpression(observation.node, context.expressionReader)
-      : null;
+    return resources?.lookupValue(observation.evaluation.value) ?? null;
   }
 
   private targetIdentityHandle(

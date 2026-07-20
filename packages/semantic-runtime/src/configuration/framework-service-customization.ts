@@ -1,17 +1,29 @@
 import ts from 'typescript';
 import {
+  openSeamReasonKindsForEvaluationPressure,
+  openSeamReasonKindsForEvaluationRead,
+  openSeamReasonKindsForEvaluationValue,
+} from '../evaluation/boundary-open-reason.js';
+import {
+  EvaluationRead,
   readStaticStringValue,
   StaticEvaluationExpressionReader,
 } from '../evaluation/expression-reader.js';
+import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own-properties.js';
 import {
+  EvaluationObjectPropertyState,
   EvaluationValueKind,
+  type EvaluationValue,
 } from '../evaluation/values.js';
+import type { EvaluationOpenSeam } from '../evaluation/seams.js';
 import {
   isEvaluatedProjectSource,
 } from '../evaluation/project-evaluation.js';
 import {
   projectModuleSourceNodeOrdinalLocalKey,
 } from '../kernel/local-key.js';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   KernelStoreBatch,
   type KernelStore,
@@ -47,7 +59,13 @@ import {
   readSourceFileAddressHandlesByFileName,
   type ConfigurationRecognitionProjectResult,
 } from './configuration-recognition-project-pass.js';
-import type { AppTaskObservation, ConfigurationCallbackObservation } from './configuration-observation.js';
+import {
+  configurationRecognitionOpensForEvaluationRead,
+  ConfigurationRecognitionOpen,
+  type AppTaskObservation,
+  type ConfigurationCallbackObservation,
+} from './configuration-observation.js';
+import { ConfigurationKernelPublication } from './configuration-publication.js';
 import {
   ConfigurationRecognitionContext,
 } from './configuration-recognition-context.js';
@@ -138,7 +156,8 @@ export class FrameworkServiceCustomizationProjectResult {
   get isEmpty(): boolean {
     return this.attributeMapper.isEmpty
       && this.nodeObserverLocator.isEmpty
-      && this.issues.length === 0;
+      && this.issues.length === 0
+      && this.records.length === 0;
   }
 }
 
@@ -158,10 +177,44 @@ class FrameworkServiceCustomizationDraft {
   private readonly attributeMappingKeys = new Set<string>(builtInAttributeMappingKeys);
   private readonly globalAttributeMappingKeys = new Set<string>(builtInGlobalAttributeMappingKeys);
   private issueOrdinal = 0;
+  private openOrdinal = 0;
 
   constructor(
     private readonly issuePublisher: ConfigurationIssuePublisher,
+    private readonly configurationPublication: ConfigurationKernelPublication,
   ) {}
+
+  addEvaluationPressure(
+    context: ConfigurationRecognitionContext,
+    read: EvaluationRead<EvaluationValue>,
+    node: ts.Node,
+    summary: string,
+  ): void {
+    this.addOpenSeams(
+      context,
+      node,
+      configurationRecognitionOpensForEvaluationRead(
+        read,
+        KernelVocabulary.Configuration.OpenConfigurationOption.key,
+        summary,
+        node,
+      ),
+    );
+  }
+
+  addDomainPressure(
+    context: ConfigurationRecognitionContext,
+    node: ts.Node,
+    summary: string,
+    reasonKinds: readonly OpenSeamReasonKind[],
+  ): void {
+    this.addOpenSeams(context, node, [new ConfigurationRecognitionOpen(
+      KernelVocabulary.Configuration.OpenConfigurationOption.key,
+      summary,
+      node,
+      reasonKinds,
+    )]);
+  }
 
   addNodeConfig(
     context: ConfigurationRecognitionContext,
@@ -217,6 +270,24 @@ class FrameworkServiceCustomizationDraft {
       this.issues,
       this.records,
     );
+  }
+
+  private addOpenSeams(
+    context: ConfigurationRecognitionContext,
+    node: ts.Node,
+    seams: readonly ConfigurationRecognitionOpen[],
+  ): void {
+    if (seams.length === 0) {
+      return;
+    }
+    const local = `framework-service-customization:${projectModuleSourceNodeOrdinalLocalKey({
+      projectKey: context.projectKey,
+      moduleKey: context.moduleKey,
+      sourceFile: context.sourceFile,
+      node,
+      index: this.openOrdinal++,
+    })}`;
+    this.records.push(...this.configurationPublication.recordsForOpenSeams(context, seams, local).records);
   }
 
   private publishDuplicateNodeObserverMapping(
@@ -312,7 +383,10 @@ export class FrameworkServiceCustomizationRecognitionPass {
   ) {}
 
   recognize(configuration: ConfigurationRecognitionProjectResult): FrameworkServiceCustomizationProjectResult {
-    const draft = new FrameworkServiceCustomizationDraft(new ConfigurationIssuePublisher(this.store));
+    const draft = new FrameworkServiceCustomizationDraft(
+      new ConfigurationIssuePublisher(this.store),
+      new ConfigurationKernelPublication(this.store),
+    );
     const evaluatedByAdmission = new Map(
       configuration.evaluation.readEvaluatedSources().map((source) => [source.admission.addressHandle, source]),
     );
@@ -400,7 +474,7 @@ function recognizeAppTaskServiceCustomizations(
       recognizeServiceMethodCall(context, node, reader, serviceLocals, containerLocals, draft);
     }
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-      recognizeServiceAssignment(node, reader, serviceLocals, containerLocals, draft);
+      recognizeServiceAssignment(context, node, reader, serviceLocals, containerLocals, draft);
     }
 
     ts.forEachChild(node, visit);
@@ -413,6 +487,7 @@ function recognizeAppTaskServiceCustomizations(
 }
 
 function recognizeServiceAssignment(
+  context: ConfigurationRecognitionContext,
   assignment: ts.BinaryExpression,
   reader: StaticEvaluationExpressionReader,
   serviceLocals: ReadonlyMap<string, FrameworkServiceKind>,
@@ -427,9 +502,22 @@ function recognizeServiceAssignment(
   if (service !== FrameworkServiceKind.NodeObserverLocator) {
     return;
   }
-  const value = reader.evaluateExpression(assignment.right).value;
-  if (value?.kind === EvaluationValueKind.Boolean) {
-    draft.nodeObserverLocatorAllowDirtyCheck = value.value;
+  const read = reader.evaluateExpression(assignment.right);
+  draft.addEvaluationPressure(
+    context,
+    read,
+    assignment.right,
+    'Node-observer allowDirtyCheck assignment retained open or abrupt static-evaluation pressure.',
+  );
+  if (read.value?.kind === EvaluationValueKind.Boolean) {
+    draft.nodeObserverLocatorAllowDirtyCheck = read.value.value;
+  } else if (read.value != null) {
+    draft.addDomainPressure(
+      context,
+      assignment.right,
+      'Node-observer allowDirtyCheck assignment did not reduce to a boolean value.',
+      [],
+    );
   }
 }
 
@@ -492,24 +580,94 @@ function recognizeAttrMapperCall(
 ): void {
   switch (methodName) {
     case 'useTwoWay': {
-      const rule = call.arguments[0] == null || ts.isSpreadElement(call.arguments[0])
-        ? null
-        : readTwoWayRule(call.arguments[0], reader);
-      if (rule != null) {
-        draft.attributeTwoWayRules.push(rule);
+      const argument = call.arguments[0];
+      if (argument == null || ts.isSpreadElement(argument)) {
+        draft.addDomainPressure(
+          context,
+          argument ?? call,
+          'Attribute-mapper useTwoWay did not expose one direct predicate.',
+          [],
+        );
+        return;
+      }
+      const read = readTwoWayRule(argument, reader);
+      for (const evaluation of read.evaluations) {
+        draft.addEvaluationPressure(
+          context,
+          evaluation,
+          evaluation.node ?? argument,
+          'Attribute-mapper two-way predicate retained open or abrupt static-evaluation pressure.',
+        );
+      }
+      if (read.rule != null) {
+        draft.attributeTwoWayRules.push(read.rule);
+      } else {
+        draft.addDomainPressure(
+          context,
+          argument,
+          'Attribute-mapper useTwoWay predicate could not be reduced without widening its runtime behavior.',
+          [],
+        );
       }
       return;
     }
     case 'useMapping':
       if (call.arguments[0] != null && !ts.isSpreadElement(call.arguments[0])) {
-        draft.addAttributeMappings(context, call, readAttributeMappings(call.arguments[0], reader, false));
+        addAttributeMappingsFromRead(
+          context,
+          call,
+          call.arguments[0],
+          readAttributeMappings(call.arguments[0], reader, false),
+          draft,
+        );
+      } else {
+        draft.addDomainPressure(
+          context,
+          call.arguments[0] ?? call,
+          'Attribute-mapper useMapping did not expose one direct mapping object.',
+          [],
+        );
       }
       return;
     case 'useGlobalMapping':
       if (call.arguments[0] != null && !ts.isSpreadElement(call.arguments[0])) {
-        draft.addAttributeMappings(context, call, readAttributeMappings(call.arguments[0], reader, true));
+        addAttributeMappingsFromRead(
+          context,
+          call,
+          call.arguments[0],
+          readAttributeMappings(call.arguments[0], reader, true),
+          draft,
+        );
+      } else {
+        draft.addDomainPressure(
+          context,
+          call.arguments[0] ?? call,
+          'Attribute-mapper useGlobalMapping did not expose one direct mapping object.',
+          [],
+        );
       }
       return;
+  }
+}
+
+function addAttributeMappingsFromRead(
+  context: ConfigurationRecognitionContext,
+  call: ts.CallExpression,
+  argument: ts.Expression,
+  read: FrameworkAttributeMappingsRead,
+  draft: FrameworkServiceCustomizationDraft,
+): void {
+  draft.addAttributeMappings(context, call, read.mappings);
+  for (const evaluation of read.evaluations) {
+    draft.addEvaluationPressure(
+      context,
+      evaluation,
+      evaluation.node ?? argument,
+      'Attribute-mapper mapping object retained open or abrupt static-evaluation pressure.',
+    );
+  }
+  for (const open of read.open) {
+    draft.addDomainPressure(context, open.node, open.summary, open.reasonKinds);
   }
 }
 
@@ -521,22 +679,60 @@ function recognizeNodeObserverLocatorCall(
   draft: FrameworkServiceCustomizationDraft,
 ): void {
   switch (methodName) {
-    case 'useConfig':
-      for (const config of nodeObserverNodeConfigsFromUseConfigCall(call, reader)) {
+    case 'useConfig': {
+      const read = nodeObserverNodeConfigsFromUseConfigCall(call, reader);
+      publishNodeObserverReadPressure(context, call, read, draft);
+      for (const config of read.values) {
         draft.addNodeConfig(context, call, config);
       }
       return;
-    case 'useConfigGlobal':
-      for (const config of nodeObserverGlobalConfigsFromUseConfigGlobalCall(call, reader)) {
+    }
+    case 'useConfigGlobal': {
+      const read = nodeObserverGlobalConfigsFromUseConfigGlobalCall(call, reader);
+      publishNodeObserverReadPressure(context, call, read, draft);
+      for (const config of read.values) {
         draft.addGlobalNodeConfig(context, call, config);
       }
       return;
-    case 'overrideAccessor':
-      draft.nodeAccessorOverrides.push(...nodeObserverAccessorOverridesFromCall(call, reader));
+    }
+    case 'overrideAccessor': {
+      const read = nodeObserverAccessorOverridesFromCall(call, reader);
+      publishNodeObserverReadPressure(context, call, read, draft);
+      draft.nodeAccessorOverrides.push(...read.values);
       return;
-    case 'overrideAccessorGlobal':
-      draft.globalAccessorOverrides.push(...nodeObserverGlobalAccessorOverridesFromCall(call, reader));
+    }
+    case 'overrideAccessorGlobal': {
+      const read = nodeObserverGlobalAccessorOverridesFromCall(call, reader);
+      publishNodeObserverReadPressure(context, call, read, draft);
+      draft.globalAccessorOverrides.push(...read.values);
       return;
+    }
+  }
+}
+
+function publishNodeObserverReadPressure(
+  context: ConfigurationRecognitionContext,
+  call: ts.CallExpression,
+  read: {
+    readonly evaluations: readonly EvaluationRead<EvaluationValue>[];
+    readonly open: readonly {
+      readonly node: ts.Node;
+      readonly summary: string;
+      readonly reasonKinds: readonly OpenSeamReasonKind[];
+    }[];
+  },
+  draft: FrameworkServiceCustomizationDraft,
+): void {
+  for (const evaluation of read.evaluations) {
+    draft.addEvaluationPressure(
+      context,
+      evaluation,
+      evaluation.node ?? call,
+      'Node-observer customization retained open or abrupt static-evaluation pressure.',
+    );
+  }
+  for (const open of read.open) {
+    draft.addDomainPressure(context, open.node, open.summary, open.reasonKinds);
   }
 }
 
@@ -609,56 +805,205 @@ function readAttributeMappings(
   expression: ts.Expression,
   reader: StaticEvaluationExpressionReader,
   global: boolean,
-): readonly AttributeMapperMapping[] {
-  const value = reader.evaluateExpression(expression).value;
+): FrameworkAttributeMappingsRead {
+  const evaluation = reader.evaluateExpression(expression);
+  const value = evaluation.value;
   if (value?.kind !== EvaluationValueKind.Object) {
-    return [];
+    return new FrameworkAttributeMappingsRead(
+      [],
+      [evaluation],
+      value == null
+        ? []
+        : [new FrameworkServiceCustomizationOpen(
+            expression,
+            'Attribute-mapper mapping argument did not reduce to an object value.',
+            openSeamReasonKindsForEvaluationRead(evaluation),
+          )],
+    );
+  }
+  const entries = readEvaluationEnumerableOwnEntries(value);
+  if (entries == null) {
+    return new FrameworkAttributeMappingsRead(
+      [],
+      [evaluation],
+      [new FrameworkServiceCustomizationOpen(
+        expression,
+        'Attribute-mapper mapping argument did not expose enumerable own entries.',
+        openSeamReasonKindsForEvaluationRead(evaluation),
+      )],
+    );
   }
   if (global) {
-    return [...value.properties.values()].flatMap((property) => {
-      const propertyName = readStaticStringValue(property.value);
-      return propertyName == null
-        ? []
-        : [new AttributeMapperMapping(null, property.name, propertyName)];
-    });
+    const mappings: AttributeMapperMapping[] = [];
+    const open: FrameworkServiceCustomizationOpen[] = [];
+    if (entries.mayHaveUnknownEntries || entries.mayHaveUnknownOrder) {
+      open.push(new FrameworkServiceCustomizationOpen(
+        expression,
+        'Attribute-mapper global mappings may contain additional attributes or a runtime-dependent contribution order.',
+        frameworkServiceReasonKindsForValue(value, []),
+      ));
+    }
+    for (const entry of entries.entries) {
+      if (entry.property?.state === EvaluationObjectPropertyState.Open) {
+        open.push(new FrameworkServiceCustomizationOpen(
+          entry.sourceNode ?? expression,
+          `Attribute-mapper global mapping '${entry.name}' may be replaced by an unknown property contribution.`,
+          frameworkServiceReasonKindsForValue(entry.value, entry.openSeams),
+        ));
+        continue;
+      }
+      const propertyName = readStaticStringValue(entry.value);
+      if (propertyName == null) {
+        open.push(new FrameworkServiceCustomizationOpen(
+          entry.sourceNode ?? expression,
+          `Attribute-mapper global mapping '${entry.name}' did not reduce to a string.`,
+          frameworkServiceReasonKindsForValue(entry.value, entry.openSeams),
+        ));
+        continue;
+      }
+      mappings.push(new AttributeMapperMapping(null, entry.name, propertyName));
+    }
+    return new FrameworkAttributeMappingsRead(
+      mappings,
+      open.length === 0 ? [] : [evaluation],
+      open,
+    );
   }
 
   const mappings: AttributeMapperMapping[] = [];
-  for (const tagProperty of value.properties.values()) {
-    if (tagProperty.value.kind !== EvaluationValueKind.Object) {
+  const open: FrameworkServiceCustomizationOpen[] = [];
+  if (entries.mayHaveUnknownEntries || entries.mayHaveUnknownOrder) {
+    open.push(new FrameworkServiceCustomizationOpen(
+      expression,
+      'Attribute-mapper mappings may contain additional tags or a runtime-dependent contribution order.',
+      frameworkServiceReasonKindsForValue(value, []),
+    ));
+  }
+  for (const tagEntry of entries.entries) {
+    if (tagEntry.property?.state === EvaluationObjectPropertyState.Open) {
+      open.push(new FrameworkServiceCustomizationOpen(
+        tagEntry.sourceNode ?? expression,
+        `Attribute-mapper mappings for '${tagEntry.name}' may be replaced by an unknown property contribution.`,
+        frameworkServiceReasonKindsForValue(tagEntry.value, tagEntry.openSeams),
+      ));
       continue;
     }
-    for (const property of tagProperty.value.properties.values()) {
-      const propertyName = readStaticStringValue(property.value);
+    if (tagEntry.value.kind !== EvaluationValueKind.Object) {
+      open.push(new FrameworkServiceCustomizationOpen(
+        tagEntry.sourceNode ?? expression,
+        `Attribute-mapper mappings for '${tagEntry.name}' did not reduce to an object value.`,
+        frameworkServiceReasonKindsForValue(tagEntry.value, tagEntry.openSeams),
+      ));
+      continue;
+    }
+    const tagMappings = readEvaluationEnumerableOwnEntries(tagEntry.value);
+    if (tagMappings == null) {
+      open.push(new FrameworkServiceCustomizationOpen(
+        tagEntry.sourceNode ?? expression,
+        `Attribute-mapper mappings for '${tagEntry.name}' did not expose enumerable own entries.`,
+        frameworkServiceReasonKindsForValue(tagEntry.value, tagEntry.openSeams),
+      ));
+      continue;
+    }
+    if (tagMappings.mayHaveUnknownEntries || tagMappings.mayHaveUnknownOrder) {
+      open.push(new FrameworkServiceCustomizationOpen(
+        tagEntry.sourceNode ?? expression,
+        `Attribute-mapper mappings for '${tagEntry.name}' may contain additional attributes or a runtime-dependent contribution order.`,
+        frameworkServiceReasonKindsForValue(tagEntry.value, tagEntry.openSeams),
+      ));
+    }
+    for (const entry of tagMappings.entries) {
+      if (entry.property?.state === EvaluationObjectPropertyState.Open) {
+        open.push(new FrameworkServiceCustomizationOpen(
+          entry.sourceNode ?? tagEntry.sourceNode ?? expression,
+          `Attribute-mapper mapping '${tagEntry.name}.${entry.name}' may be replaced by an unknown property contribution.`,
+          frameworkServiceReasonKindsForValue(entry.value, entry.openSeams),
+        ));
+        continue;
+      }
+      const propertyName = readStaticStringValue(entry.value);
       if (propertyName != null) {
-        mappings.push(new AttributeMapperMapping(tagProperty.name, property.name, propertyName));
+        mappings.push(new AttributeMapperMapping(tagEntry.name, entry.name, propertyName));
+      } else {
+        open.push(new FrameworkServiceCustomizationOpen(
+          entry.sourceNode ?? tagEntry.sourceNode ?? expression,
+          `Attribute-mapper mapping '${tagEntry.name}.${entry.name}' did not reduce to a string.`,
+          frameworkServiceReasonKindsForValue(entry.value, entry.openSeams),
+        ));
       }
     }
   }
-  return mappings;
+  return new FrameworkAttributeMappingsRead(
+    mappings,
+    open.length === 0 ? [] : [evaluation],
+    open,
+  );
+}
+
+class FrameworkAttributeMappingsRead {
+  constructor(
+    readonly mappings: readonly AttributeMapperMapping[],
+    readonly evaluations: readonly EvaluationRead<EvaluationValue>[],
+    readonly open: readonly FrameworkServiceCustomizationOpen[],
+  ) {}
+}
+
+class FrameworkServiceCustomizationOpen {
+  constructor(
+    readonly node: ts.Node,
+    readonly summary: string,
+    readonly reasonKinds: readonly OpenSeamReasonKind[],
+  ) {}
+}
+
+function frameworkServiceReasonKindsForValue(
+  value: EvaluationValue,
+  openSeams: readonly EvaluationOpenSeam[],
+): readonly OpenSeamReasonKind[] {
+  return [...new Set([
+    ...openSeamReasonKindsForEvaluationValue(value),
+    ...openSeamReasonKindsForEvaluationPressure(openSeams, null),
+  ])];
 }
 
 function readTwoWayRule(
   expression: ts.Expression,
   reader: StaticEvaluationExpressionReader,
-): AttributeMapperTwoWayRule | null {
+): FrameworkTwoWayRuleRead {
+  const evaluations: EvaluationRead<EvaluationValue>[] = [];
   const current = unwrapExpression(expression);
   if (!ts.isArrowFunction(current) && !ts.isFunctionExpression(current)) {
-    return null;
+    return new FrameworkTwoWayRuleRead(null, evaluations);
   }
   const elementParameter = parameterIdentifierName(current.parameters[0]);
   const propertyParameter = parameterIdentifierName(current.parameters[1]);
   if (elementParameter == null && propertyParameter == null) {
-    return null;
+    return new FrameworkTwoWayRuleRead(null, evaluations);
   }
   const bodyExpression = functionReturnExpression(current);
   if (bodyExpression == null) {
-    return null;
+    return new FrameworkTwoWayRuleRead(null, evaluations);
   }
-  const facts = readTwoWayPredicateFacts(bodyExpression, reader, elementParameter, propertyParameter);
-  return facts == null || (facts.tagName == null && facts.propertyName == null)
-    ? null
-    : new AttributeMapperTwoWayRule(facts.tagName, facts.propertyName);
+  const facts = readTwoWayPredicateFacts(
+    bodyExpression,
+    reader,
+    elementParameter,
+    propertyParameter,
+    evaluations,
+  );
+  return new FrameworkTwoWayRuleRead(
+    facts == null || (facts.tagName == null && facts.propertyName == null)
+      ? null
+      : new AttributeMapperTwoWayRule(facts.tagName, facts.propertyName),
+    evaluations,
+  );
+}
+
+class FrameworkTwoWayRuleRead {
+  constructor(
+    readonly rule: AttributeMapperTwoWayRule | null,
+    readonly evaluations: readonly EvaluationRead<EvaluationValue>[],
+  ) {}
 }
 
 function functionReturnExpression(
@@ -680,11 +1025,12 @@ function readTwoWayPredicateFacts(
   reader: StaticEvaluationExpressionReader,
   elementParameter: string | null,
   propertyParameter: string | null,
+  evaluations: EvaluationRead<EvaluationValue>[],
 ): { readonly tagName: string | null; readonly propertyName: string | null } | null {
   const current = unwrapExpression(expression);
   if (ts.isBinaryExpression(current) && current.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
-    const left = readTwoWayPredicateFacts(current.left, reader, elementParameter, propertyParameter);
-    const right = readTwoWayPredicateFacts(current.right, reader, elementParameter, propertyParameter);
+    const left = readTwoWayPredicateFacts(current.left, reader, elementParameter, propertyParameter, evaluations);
+    const right = readTwoWayPredicateFacts(current.right, reader, elementParameter, propertyParameter, evaluations);
     // Spending only part of a conjunction would widen the runtime predicate.
     if (
       left == null
@@ -702,8 +1048,8 @@ function readTwoWayPredicateFacts(
   if (!ts.isBinaryExpression(current) || !isEqualityOperator(current.operatorToken.kind)) {
     return null;
   }
-  return readTwoWayEqualityFact(current.left, current.right, reader, elementParameter, propertyParameter)
-    ?? readTwoWayEqualityFact(current.right, current.left, reader, elementParameter, propertyParameter);
+  return readTwoWayEqualityFact(current.left, current.right, reader, elementParameter, propertyParameter, evaluations)
+    ?? readTwoWayEqualityFact(current.right, current.left, reader, elementParameter, propertyParameter, evaluations);
 }
 
 function readTwoWayEqualityFact(
@@ -712,10 +1058,11 @@ function readTwoWayEqualityFact(
   reader: StaticEvaluationExpressionReader,
   elementParameter: string | null,
   propertyParameter: string | null,
+  evaluations: EvaluationRead<EvaluationValue>[],
 ): { readonly tagName: string | null; readonly propertyName: string | null } | null {
   const current = unwrapExpression(subject);
   if (propertyParameter != null && ts.isIdentifier(current) && current.text === propertyParameter) {
-    const propertyName = readStaticString(value, reader);
+    const propertyName = readStaticString(value, reader, evaluations);
     return propertyName == null ? null : { tagName: null, propertyName };
   }
   if (
@@ -725,7 +1072,7 @@ function readTwoWayEqualityFact(
     && ts.isIdentifier(unwrapExpression(current.expression))
     && (unwrapExpression(current.expression) as ts.Identifier).text === elementParameter
   ) {
-    const tagName = readStaticString(value, reader);
+    const tagName = readStaticString(value, reader, evaluations);
     return tagName == null ? null : { tagName, propertyName: null };
   }
   return null;
@@ -734,9 +1081,11 @@ function readTwoWayEqualityFact(
 function readStaticString(
   expression: ts.Expression,
   reader: StaticEvaluationExpressionReader,
+  evaluations: EvaluationRead<EvaluationValue>[],
 ): string | null {
-  const value = reader.evaluateExpression(expression).value;
-  return value == null ? null : readStaticStringValue(value);
+  const read = reader.evaluateExpression(expression);
+  evaluations.push(read);
+  return read.value == null ? null : readStaticStringValue(read.value);
 }
 
 function parameterIdentifierName(parameter: ts.ParameterDeclaration | undefined): string | null {

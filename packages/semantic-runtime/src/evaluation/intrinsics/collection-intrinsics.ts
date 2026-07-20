@@ -1,6 +1,7 @@
 import ts from 'typescript';
 import type { ModuleEnvironmentRecord } from '../environment.js';
 import { EvaluationOpenSeamKind } from '../seams.js';
+import { evaluationArrayHasExactPositions } from '../array-value-operations.js';
 import {
   EvaluationArrayElement,
   EvaluationBooleanValue,
@@ -9,7 +10,7 @@ import {
   EvaluationSetValue,
   EvaluationUndefined,
   EvaluationValueKind,
-  evaluationValuesEqual,
+  evaluationValuesSameValueZero,
   type EvaluationValue,
 } from '../values.js';
 import type { StaticIntrinsicEvaluationHost } from './contracts.js';
@@ -68,10 +69,14 @@ export function evaluateMapConstructor(
   }
 
   const entries: EvaluationMapEntry[] = [];
-  let mayHaveUnknownEntries = weak || iterable.mayHaveUnknownElements;
+  let mayHaveUnknownEntries = weak || iterable.mayHaveUnknownElements || iterable.mayHaveUnknownOrder;
   for (const element of iterable.elements) {
     const value = element.value;
-    if (value.kind !== EvaluationValueKind.Array || value.elements.length < 2) {
+    if (
+      value.kind !== EvaluationValueKind.Array
+      || !evaluationArrayHasExactPositions(value)
+      || value.elements.length < 2
+    ) {
       mayHaveUnknownEntries = true;
       continue;
     }
@@ -104,7 +109,7 @@ export function evaluateMapGet(
   if (key.kind === EvaluationValueKind.Unknown) {
     return key;
   }
-  const entry = receiver.entries.find((candidate) => evaluationValuesEqual(candidate.key, key)) ?? null;
+  const entry = receiver.entries.find((candidate) => evaluationValuesSameValueZero(candidate.key, key)) ?? null;
   if (entry != null) {
     return entry.value;
   }
@@ -139,7 +144,7 @@ export function evaluateMapSet(
   if (value.kind === EvaluationValueKind.Unknown) {
     return value;
   }
-  const existing = receiver.entries.find((candidate) => evaluationValuesEqual(candidate.key, key)) ?? null;
+  const existing = receiver.entries.find((candidate) => evaluationValuesSameValueZero(candidate.key, key)) ?? null;
   if (existing == null) {
     receiver.entries.push(new EvaluationMapEntry(key, value, call));
   } else {
@@ -169,8 +174,8 @@ export function evaluateCollectionHas(
     return key;
   }
   const known = receiver.kind === EvaluationValueKind.Map
-    ? receiver.entries.some((candidate) => evaluationValuesEqual(candidate.key, key))
-    : receiver.elements.some((candidate) => evaluationValuesEqual(candidate.value, key));
+    ? receiver.entries.some((candidate) => evaluationValuesSameValueZero(candidate.key, key))
+    : receiver.elements.some((candidate) => evaluationValuesSameValueZero(candidate.value, key));
   const mayHaveUnknown = receiver.kind === EvaluationValueKind.Map
     ? receiver.mayHaveUnknownEntries
     : receiver.mayHaveUnknownElements;
@@ -199,7 +204,7 @@ export function evaluateSetAdd(
   if (value.kind === EvaluationValueKind.Unknown) {
     return value;
   }
-  if (!receiver.elements.some((candidate) => evaluationValuesEqual(candidate.value, value))) {
+  if (!receiver.elements.some((candidate) => evaluationValuesSameValueZero(candidate.value, value))) {
     receiver.elements.push(new EvaluationArrayElement(value, call.arguments[0] ?? null));
   }
   return receiver;
@@ -226,14 +231,14 @@ export function evaluateCollectionDelete(
     return key;
   }
   if (receiver.kind === EvaluationValueKind.Map) {
-    const index = receiver.entries.findIndex((candidate) => evaluationValuesEqual(candidate.key, key));
+    const index = receiver.entries.findIndex((candidate) => evaluationValuesSameValueZero(candidate.key, key));
     if (index >= 0) {
       receiver.entries.splice(index, 1);
       return new EvaluationBooleanValue(true, call);
     }
     return new EvaluationBooleanValue(false, call);
   }
-  const index = receiver.elements.findIndex((candidate) => evaluationValuesEqual(candidate.value, key));
+  const index = receiver.elements.findIndex((candidate) => evaluationValuesSameValueZero(candidate.value, key));
   if (index >= 0) {
     receiver.elements.splice(index, 1);
     return new EvaluationBooleanValue(true, call);

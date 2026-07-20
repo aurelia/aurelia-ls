@@ -7,6 +7,7 @@ import {
   ReturnEvaluationCompletion,
   ThrowEvaluationCompletion,
   type EvaluationCompletion,
+  type EvaluationExpressionAbruptCompletion,
 } from './completion.js';
 import {
   EvaluationBinding,
@@ -14,6 +15,7 @@ import {
 } from './environment.js';
 import {
   StaticExecutedCall,
+  StaticEvaluationRuntimeValueResult,
   StaticModuleEvaluationResult,
   type StaticEvaluationRuntimeHost,
   type StaticEvaluationValueMetadataTransfer,
@@ -34,6 +36,7 @@ import {
   EvaluationObjectValue,
   EvaluationPromiseValue,
   EvaluationSetValue,
+  EvaluationUnknownValue,
   EvaluationValueKind,
   type EvaluationValue,
 } from './values.js';
@@ -106,6 +109,19 @@ export class StaticEvaluationSessionFork {
 
   private forkMutableValue(source: EvaluationValue): EvaluationValue {
     switch (source.kind) {
+      case EvaluationValueKind.Unknown: {
+        if (source.retainedCandidate == null) {
+          return source;
+        }
+        const target = new EvaluationUnknownValue(
+          source.reason,
+          source.node,
+          source.hasOpenSeam,
+          this.forkValue(source.retainedCandidate),
+        );
+        this.bindValue(source, target);
+        return target;
+      }
       case EvaluationValueKind.Array: {
         const target = new EvaluationArrayValue(
           [],
@@ -113,10 +129,11 @@ export class StaticEvaluationSessionFork {
           source.node,
           source.mayHaveUnknownOrder,
           source.uncertainties,
+          source.shapeOpenSeams,
         );
         this.bindValue(source, target);
         target.elements.push(...source.elements.map((element) =>
-          new EvaluationArrayElement(this.forkValue(element.value), element.expression)
+          new EvaluationArrayElement(this.forkValue(element.value), element.expression, element.openSeams)
         ));
         return target;
       }
@@ -124,7 +141,7 @@ export class StaticEvaluationSessionFork {
         const target = new EvaluationSetValue([], source.mayHaveUnknownElements, source.node, source.weak);
         this.bindValue(source, target);
         target.elements.push(...source.elements.map((element) =>
-          new EvaluationArrayElement(this.forkValue(element.value), element.expression)
+          new EvaluationArrayElement(this.forkValue(element.value), element.expression, element.openSeams)
         ));
         return target;
       }
@@ -144,6 +161,7 @@ export class StaticEvaluationSessionFork {
           source.mayHaveUnknownProperties,
           source.node,
           source.uncertainties,
+          source.shapeOpenSeams,
         );
         this.bindValue(source, target);
         this.forkProperties(source.properties, target.properties);
@@ -180,6 +198,8 @@ export class StaticEvaluationSessionFork {
           new Map(),
           source.mayHaveUnknownProperties,
           source.node,
+          source.constructionOpenSeams,
+          source.shapeOpenSeams,
         );
         this.bindValue(source, target);
         this.populateClass(source.classValue, classValue);
@@ -200,6 +220,7 @@ export class StaticEvaluationSessionFork {
             entry.name,
             this.forkValue(entry.value),
             entry.sourceNode,
+            entry.openSeams,
           ));
         }
         return target;
@@ -242,6 +263,7 @@ export class StaticEvaluationSessionFork {
           binding.declaration,
           binding.state,
           this.forkValue(binding.value),
+          binding.openSeams,
         );
         target.installBinding(targetBinding);
       }
@@ -261,6 +283,7 @@ export class StaticEvaluationSessionFork {
         this.forkValue(property.value),
         property.node,
         property.state,
+        property.openSeams,
       ));
     }
   }
@@ -313,9 +336,9 @@ export class StaticEvaluationSessionFork {
       case EvaluationCompletionKind.Normal:
         return new NormalEvaluationCompletion(this.forkValue(completion.value));
       case EvaluationCompletionKind.Return:
-        return new ReturnEvaluationCompletion(this.forkValue(completion.value));
+        return new ReturnEvaluationCompletion(this.forkValue(completion.value), completion.openSeams);
       case EvaluationCompletionKind.Throw:
-        return new ThrowEvaluationCompletion(this.forkValue(completion.value));
+        return new ThrowEvaluationCompletion(this.forkValue(completion.value), completion.openSeams);
       case EvaluationCompletionKind.Break:
         return new BreakEvaluationCompletion(completion.label);
       case EvaluationCompletionKind.Continue:
@@ -323,6 +346,12 @@ export class StaticEvaluationSessionFork {
       case EvaluationCompletionKind.Open:
         return new OpenEvaluationCompletion(completion.summary);
     }
+  }
+
+  private forkExpressionAbruptCompletion(
+    completion: EvaluationExpressionAbruptCompletion,
+  ): EvaluationExpressionAbruptCompletion {
+    return new ThrowEvaluationCompletion(this.forkValue(completion.value), completion.openSeams);
   }
 
   forkRuntimeHost(host: StaticEvaluationRuntimeHost): StaticEvaluationRuntimeHost {
@@ -339,7 +368,7 @@ export class StaticEvaluationSessionFork {
       resolveIdentifier: (identifier, environment, moduleKey) =>
         this.forkNullableValue(sourceHost.resolveIdentifier?.(identifier, environment, moduleKey) ?? null),
       resolveCommonJsRequire: (moduleKey, moduleSpecifier, node) =>
-        this.forkNullableValue(sourceHost.resolveCommonJsRequire?.(moduleKey, moduleSpecifier, node) ?? null),
+        this.forkRuntimeValueResult(sourceHost.resolveCommonJsRequire?.(moduleKey, moduleSpecifier, node) ?? null),
       resolveDynamicImport: (moduleKey, moduleSpecifier, node) =>
         this.forkNullableValue(sourceHost.resolveDynamicImport?.(moduleKey, moduleSpecifier, node) ?? null),
       evaluateCallExpression: (call, environment, moduleKey, depth, intrinsicHost) =>
@@ -371,6 +400,7 @@ export class StaticEvaluationSessionFork {
   private sessionIntrinsicHost(host: StaticIntrinsicEvaluationHost): StaticIntrinsicEvaluationHost {
     return {
       guardrails: host.guardrails,
+      raise: (completion) => host.raise(this.forkExpressionAbruptCompletion(completion)),
       evaluateExpression: (expression, environment, moduleKey, depth) =>
         this.adoptSessionValueGraph(host.evaluateExpression(expression, environment, moduleKey, depth)),
       evaluateFunctionWithArguments: (callee, call, argumentValues, moduleKey, depth) =>
@@ -381,10 +411,12 @@ export class StaticEvaluationSessionFork {
         this.adoptSessionValueGraph(
           host.evaluateClassInstantiation(callee, expression, argumentValues, moduleKey, depth),
         ),
-      open: (seamKind, summary, node, moduleKey) => host.open(seamKind, summary, node, moduleKey),
+      open: (seamKind, summary, node, moduleKey, reasonKinds) =>
+        host.open(seamKind, summary, node, moduleKey, reasonKinds),
       unknown: (reason, node, moduleKey, seamKind) => host.unknown(reason, node, moduleKey, seamKind),
       checkpoint: () => host.checkpoint(),
       restore: (checkpoint) => host.restore(checkpoint),
+      openSeamsSince: (checkpoint) => host.openSeamsSince(checkpoint),
       resolveCommonJsRequire: (moduleKey, moduleSpecifier, node) =>
         this.adoptNullableSessionValue(host.resolveCommonJsRequire(moduleKey, moduleSpecifier, node)),
       resolveDynamicImport: (moduleKey, moduleSpecifier, node) =>
@@ -400,6 +432,20 @@ export class StaticEvaluationSessionFork {
           ),
         ),
     };
+  }
+
+  private forkRuntimeValueResult(
+    result: StaticEvaluationRuntimeValueResult | null,
+  ): StaticEvaluationRuntimeValueResult | null {
+    return result == null
+      ? null
+      : new StaticEvaluationRuntimeValueResult(
+          this.forkNullableValue(result.value),
+          result.abruptCompletion == null
+            ? null
+            : this.forkExpressionAbruptCompletion(result.abruptCompletion),
+          result.openSeams,
+        );
   }
 
   private transferRuntimeHostMetadata(source: EvaluationValue, target: EvaluationValue): void {
@@ -452,7 +498,7 @@ export class StaticEvaluationSessionFork {
           const element = value.elements[index]!;
           const adopted = this.adoptSessionValueGraph(element.value);
           if (adopted !== element.value) {
-            value.elements[index] = new EvaluationArrayElement(adopted, element.expression);
+            value.elements[index] = new EvaluationArrayElement(adopted, element.expression, element.openSeams);
           }
         }
         break;
@@ -535,6 +581,7 @@ export class StaticEvaluationSessionFork {
           value,
           property.node,
           property.state,
+          property.openSeams,
         ));
       }
     }
@@ -543,6 +590,8 @@ export class StaticEvaluationSessionFork {
 
 function evaluationValueHasMutableGraph(value: EvaluationValue): boolean {
   switch (value.kind) {
+    case EvaluationValueKind.Unknown:
+      return value.retainedCandidate != null && evaluationValueHasMutableGraph(value.retainedCandidate);
     case EvaluationValueKind.Array:
     case EvaluationValueKind.Set:
     case EvaluationValueKind.Map:

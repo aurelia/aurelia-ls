@@ -382,6 +382,7 @@ function lifecycleEffectsForBindingBehavior(
       null,
       null,
       `Binding behavior '${behavior.name.name}' is app-owned; lifecycle effects beyond statically proven direct calls remain runtime-dependent.`,
+      [],
     );
   }
 
@@ -444,6 +445,7 @@ function lifecycleEffectsForRateLimit(
     delay.state,
     null,
     [delay.openReason, signals.openReason].filter((reason): reason is string => reason != null).join(' ') || null,
+    [],
   );
 }
 
@@ -474,6 +476,7 @@ function lifecycleEffectsForSignals(
     state === RuntimeExpressionResourceValueState.Open
       ? openReason ?? 'One or more signal names depend on runtime expression values.'
       : openReason,
+    [],
   );
 }
 
@@ -488,6 +491,7 @@ function closedLifecycleEffects(
     null,
     null,
     null,
+    [],
   );
 }
 

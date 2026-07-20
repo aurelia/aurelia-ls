@@ -1,5 +1,4 @@
 import ts from 'typescript';
-import type { StaticExpressionEvaluationReader } from '../evaluation/expression-reader.js';
 import { normalizeModuleKey } from '../evaluation/module-graph.js';
 import {
   readDeclarationLocalName,
@@ -255,16 +254,6 @@ export class ResourceDefinitionIndex {
     return carrier != null && ts.isExpression(carrier)
       ? this.bySourceNode.get(unwrapExpression(carrier)) ?? null
       : null;
-  }
-
-  lookupExpression(
-    expression: ts.Expression,
-    reader: StaticExpressionEvaluationReader,
-  ): FullResourceDefinition | null {
-    const read = reader.evaluateExpression(expression);
-    return this.lookupValue(read.value)
-      ?? this.lookupByCarrierNode(expression)
-      ?? null;
   }
 }
 

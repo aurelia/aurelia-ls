@@ -263,6 +263,21 @@ owning evaluator's recursion, binding-pattern host, and open-seam stream.
 boundaries, block completion handling, and expression-bodied return values. Property accessors and intrinsics should
 call this lane through evaluator host methods instead of duplicating call-frame construction.
 
+`EvaluationValueEvidence` is the canonical payload for every value-bearing edge. Lexical bindings, function and
+constructor arguments, parameter/rest slots, return/throw completions, ESM imports/re-exports/namespaces, and CommonJS
+exports/require reads must carry both the best-known value and the exact pressure qualifying that edge. Container-owned
+pressure stays on addressable child slots or shape carriers; it must not be flattened onto unrelated siblings. The
+module-wide audit seam stream remains complete evidence of what evaluation encountered, while the causal stream is
+consumed into edge carriers and replayed only when that edge is read. A retained candidate may be projected, but it
+must not select a branch, invoke a getter/function, perform arithmetic, or otherwise execute as a closed value.
+
+Statement completion is the authoritative control-flow result. Local functions, constructors, accessors, and runtime
+hosts tunnel abrupt completion through the evaluator's value-shaped recursive internals, then restore it at the nearest
+statement or direct-read boundary. Direct reads expose a nullable value plus the exact completion; DI, binding, and
+resource consumers must carry that completion until their own result boundary instead of replacing it with an unknown
+value. Compact kernel seams retain a machine-readable `static-evaluation-abrupt-completion` reason rather than the
+potentially large evaluator-local thrown value graph.
+
 `binding-patterns.ts` owns environment-cell materialization for variable declarations, function/constructor parameters,
 destructuring defaults, rest bindings, and supported loop declaration initializers. It uses a small host delegation
 boundary back into `StaticEvaluator` for expression defaults, computed property names, own-property reads, and seam
@@ -284,6 +299,9 @@ evaluator while Aurelia parser admission continues to reject it.
 `JSON`, `Array`, and `Object`. This is shared by the TS-shaped static evaluator and Aurelia binding-source value
 evaluation: parser admission stays in `expression/global-names.ts`, TypeChecker projection stays in the type-system
 lane, and host-dependent globals remain boundary/runtime-open values instead of becoming observed binding dependencies.
+Intrinsic dispatch must establish that a callee or receiver path belongs to this modeled global set before evaluating
+arguments. Probe-time argument evaluation is observable evaluator work and would otherwise duplicate calls, pressure,
+and abrupt completion before ordinary local-function dispatch.
 
 `representative-values.ts` owns conservative value summaries for places where semantic-runtime intentionally does not
 materialize every possible runtime instance. Repeated template views and speculative conditional branches can keep exact

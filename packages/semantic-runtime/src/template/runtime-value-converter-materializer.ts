@@ -62,6 +62,7 @@ import {
   type RuntimeValueConverterIssueDraft,
 } from './runtime-value-converter.js';
 import { RuntimeHtmlAstFrameworkErrorCode } from '../type-system/framework-error-code.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { sourceSpanEvidenceForSite } from '../kernel/source-address.js';
 import { sourceSpanRangeForNode } from '../resources/resource-source-address.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
@@ -280,6 +281,7 @@ export class RuntimeValueConverterMaterializer {
               null,
               null,
               null,
+              [],
             ),
         [],
       );
@@ -289,11 +291,13 @@ export class RuntimeValueConverterMaterializer {
     if (definition == null || definition.type !== ResourceDefinitionKind.ValueConverter) {
       return openValueConverterLifecycle(
         `Value converter '${entry.expression.name.name}' has no app-owned definition for instance lifecycle analysis.`,
+        [OpenSeamReasonKind.BindingSourceResourceOpen],
       );
     }
     if (input.sourceValueEvaluator == null) {
       return openValueConverterLifecycle(
         `Value converter '${entry.expression.name.name}' instance signals require static project evaluation.`,
+        [OpenSeamReasonKind.BindingSourceNeedsRuntimeValue],
       );
     }
 
@@ -331,6 +335,7 @@ export class RuntimeValueConverterMaterializer {
               ? `Value converter '${definition.name}' signals value was not retained.`
               : `Value converter '${definition.name}' signals value is not a statically closed string array.`,
           ].join(' '),
+          propertyRead.openReasonKinds,
         ),
         propertySource?.records ?? [],
       );
@@ -382,6 +387,7 @@ export class RuntimeValueConverterMaterializer {
         null,
         propertySource?.addressHandle ?? null,
         openReasons.length === 0 ? null : openReasons.join(' '),
+        propertyRead.openReasonKinds,
       ),
       records,
     );
@@ -642,16 +648,20 @@ function lifecycleEffectsForValueConverter(
   return configuredEffects;
 }
 
-function openValueConverterLifecycle(reason: string): RuntimeValueConverterLifecyclePublication {
+function openValueConverterLifecycle(
+  reason: string,
+  reasonKinds: readonly OpenSeamReasonKind[],
+): RuntimeValueConverterLifecyclePublication {
   return new RuntimeValueConverterLifecyclePublication(
     new RuntimeExpressionResourceLifecycleEffects(
-    [],
-    RuntimeExpressionResourceValueState.Open,
-    [],
-    null,
-    null,
-    null,
+      [],
+      RuntimeExpressionResourceValueState.Open,
+      [],
+      null,
+      null,
+      null,
       reason,
+      reasonKinds,
     ),
     [],
   );

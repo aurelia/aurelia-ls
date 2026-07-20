@@ -8,9 +8,10 @@ import type {
   SourceFileAdmission,
 } from '../boot/frames.js';
 import type { ModuleEnvironmentRecord } from '../evaluation/environment.js';
-import type {
-  StaticEvaluationRuntimeHost,
-  StaticEvaluationValueMetadataTransfer,
+import {
+  StaticEvaluationRuntimeValueResult,
+  type StaticEvaluationRuntimeHost,
+  type StaticEvaluationValueMetadataTransfer,
 } from '../evaluation/evaluator.js';
 import { readStaticCommonJsExportValue } from '../evaluation/commonjs.js';
 import type { StaticIntrinsicEvaluationHost } from '../evaluation/intrinsics/contracts.js';
@@ -22,6 +23,11 @@ import {
 import { DefaultEvaluationModuleResolutionPolicy } from '../evaluation/module-host.js';
 import { DefaultStaticEvaluationPolicy } from '../evaluation/policy.js';
 import { openSeamReasonKindsForEvaluationValue } from '../evaluation/boundary-open-reason.js';
+import {
+  closedStaticValueMemberValue,
+  readStaticValueProperty,
+  StaticValueMemberReadKind,
+} from '../evaluation/property-access.js';
 import { unwrapExpression } from '../evaluation/ts-syntax.js';
 import {
   isEvaluatedProjectSource,
@@ -174,8 +180,10 @@ export class ResourceConventionToolingEvaluationContext {
       this.transferValueMetadata(source, target, transfer),
     evaluateCallExpression: (call, environment, moduleKey, depth, host) =>
       this.evaluateCallExpression(call, environment, moduleKey, depth, host),
-    resolveCommonJsRequire: (_moduleKey, moduleSpecifier, node) =>
-      this.resolveCommonJsRequire(moduleSpecifier, node),
+    resolveCommonJsRequire: (_moduleKey, moduleSpecifier, node) => {
+      const value = this.resolveCommonJsRequire(moduleSpecifier, node);
+      return value == null ? null : new StaticEvaluationRuntimeValueResult(value, null);
+    },
   };
 
   readonly externalValueResolver: StaticModuleExternalValueResolver = {
@@ -282,9 +290,11 @@ export class ResourceConventionToolingEvaluationContext {
       return null;
     }
     const value = environment.readValue(receiver.text);
-    return value?.kind === EvaluationValueKind.Object
-      ? value.properties.get(expression.name.text)?.value ?? null
-      : null;
+    if (value?.kind !== EvaluationValueKind.Object) {
+      return null;
+    }
+    const read = readStaticValueProperty(value, expression.name.text, expression);
+    return closedStaticValueMemberValue(read);
   }
 
   private resolveCommonJsRequire(
@@ -508,17 +518,20 @@ function readConventionTransforms(
       config,
     );
   }
-  const pluginsProperty = config.properties.get('plugins') ?? null;
-  if (pluginsProperty == null || objectUncertaintyCanOverrideProperty(config, pluginsProperty.node)) {
-    return config.mayHaveUnknownProperties || pluginsProperty != null
-      ? openConventionTransformCalls(
-          calls,
-          'The Aurelia Vite conventions plugin is called, but the exported Vite plugin list could not be closed statically.',
-          config,
-        )
-      : new ResourceConventionTransformReadResult([], []);
+  const pluginsRead = readStaticValueProperty(config, 'plugins', config.node);
+  const pluginsValue = closedStaticValueMemberValue(pluginsRead);
+  if (pluginsValue == null) {
+    return openConventionTransformCalls(
+      calls,
+      'The Aurelia Vite conventions plugin is called, but the exported Vite plugin list could not be closed statically.',
+      config,
+      pluginsRead.kind === StaticValueMemberReadKind.Open ? pluginsRead.reasonKinds : [],
+    );
   }
-  const list = readConventionPluginList(pluginsProperty.value, toolingHost);
+  if (pluginsValue.kind === EvaluationValueKind.Undefined) {
+    return new ResourceConventionTransformReadResult([], []);
+  }
+  const list = readConventionPluginList(pluginsValue, toolingHost);
   const admissions: ResourceConventionTransformRead[] = [];
   const opens: ResourceConventionTransformOpen[] = [];
   const handledCalls = new Set<ts.CallExpression>();
@@ -546,7 +559,7 @@ function readConventionTransforms(
       .map((call) => new ResourceConventionTransformOpen(
         call,
         'The Aurelia Vite conventions plugin is behind a plugin-list expression that could not be closed statically.',
-        conventionTransformOpenReasonKinds(pluginsProperty.value),
+        conventionTransformOpenReasonKinds(pluginsValue),
       )));
   }
   return new ResourceConventionTransformReadResult(admissions, opens);
@@ -556,13 +569,14 @@ function openConventionTransformCalls(
   calls: readonly ts.CallExpression[],
   summary: string,
   value: EvaluationValue | null,
+  reasonKinds: readonly OpenSeamReasonKind[] = [],
 ): ResourceConventionTransformReadResult {
   return new ResourceConventionTransformReadResult(
     [],
     calls.map((call) => new ResourceConventionTransformOpen(
       call,
       summary,
-      conventionTransformOpenReasonKinds(value),
+      reasonKinds.length === 0 ? conventionTransformOpenReasonKinds(value) : reasonKinds,
     )),
   );
 }
@@ -610,10 +624,22 @@ function readConventionPluginOptions(value: EvaluationValue): ConventionPluginOp
   if (value.kind === EvaluationValueKind.Undefined) {
     return new ConventionPluginOptionsRead(ConventionPluginOptionsState.Enabled, [DEFAULT_VITE_INCLUDE]);
   }
-  if (value.kind !== EvaluationValueKind.Object || value.mayHaveUnknownProperties) {
+  if (value.kind !== EvaluationValueKind.Object) {
     return new ConventionPluginOptionsRead(ConventionPluginOptionsState.Open);
   }
-  const enabled = value.properties.get('enableConventions')?.value ?? EvaluationUndefined;
+  const enabledRead = readStaticValueProperty(value, 'enableConventions', value.node);
+  const includeRead = readStaticValueProperty(value, 'include', value.node);
+  const excludeRead = readStaticValueProperty(value, 'exclude', value.node);
+  const enabled = closedStaticValueMemberValue(enabledRead);
+  const includeValue = closedStaticValueMemberValue(includeRead);
+  const excludeValue = closedStaticValueMemberValue(excludeRead);
+  if (
+    enabled == null
+    || includeValue == null
+    || excludeValue == null
+  ) {
+    return new ConventionPluginOptionsRead(ConventionPluginOptionsState.Open);
+  }
   if (
     (enabled.kind === EvaluationValueKind.Boolean && !enabled.value)
     || enabled.kind === EvaluationValueKind.Null
@@ -627,11 +653,11 @@ function readConventionPluginOptions(value: EvaluationValue): ConventionPluginOp
     return new ConventionPluginOptionsRead(ConventionPluginOptionsState.Open);
   }
   const include = readSourcePatterns(
-    value.properties.get('include')?.value ?? EvaluationUndefined,
+    includeValue,
     [DEFAULT_VITE_INCLUDE],
   );
   const exclude = readSourcePatterns(
-    value.properties.get('exclude')?.value ?? EvaluationUndefined,
+    excludeValue,
     [],
   );
   return include == null || exclude == null
@@ -668,17 +694,6 @@ function readSourcePatterns(
     default:
       return null;
   }
-}
-
-function objectUncertaintyCanOverrideProperty(
-  value: EvaluationObjectValue,
-  propertyNode: ts.Node | null,
-): boolean {
-  return value.uncertainties.some((uncertainty) =>
-    uncertainty.node == null
-    || propertyNode == null
-    || uncertainty.node.pos > propertyNode.pos
-  );
 }
 
 function isViteConfigPath(sourcePath: string): boolean {

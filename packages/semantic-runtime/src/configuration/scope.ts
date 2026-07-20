@@ -6,8 +6,8 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
-import type { EvaluationValue } from '../evaluation/values.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
+import type { RuntimeBindingSourceValueEvaluation } from './binding-source-value-evaluation.js';
 
 export const enum BindingContextKind {
   ViewModel = 'view-model',
@@ -158,8 +158,8 @@ export class BindingContextSlot {
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for mixed-source scope entries. */
     readonly fieldProvenance: readonly FieldProvenance<BindingContextSlotField>[] = [],
-    /** Evaluator-local value carried by runtime-created slots such as repeat locals, when statically knowable. */
-    readonly staticValue: EvaluationValue | null = null,
+    /** Best-known evaluator value and any pressure retained by runtime-created slots such as repeat locals. */
+    readonly staticValueEvaluation: RuntimeBindingSourceValueEvaluation | null = null,
     /** Member-level type refinements supplied by framework/template semantics. */
     readonly memberTypes: readonly BindingContextSlotMemberType[] = [],
     /** Assignment authority when framework construction, rather than TypeScript, owns the slot. */
@@ -189,8 +189,8 @@ export class BindingContextSlotDraft {
     readonly sourceAddressHandle: AddressHandle | null = null,
     /** Field-level provenance for mixed-source scope entries. */
     readonly fieldProvenance: readonly FieldProvenance<BindingContextSlotField>[] = [],
-    /** Evaluator-local value carried by runtime-created slots such as repeat locals, when statically knowable. */
-    readonly staticValue: EvaluationValue | null = null,
+    /** Best-known evaluator value and any pressure retained by runtime-created slots such as repeat locals. */
+    readonly staticValueEvaluation: RuntimeBindingSourceValueEvaluation | null = null,
     /** Member-level type refinements supplied by framework/template semantics. */
     readonly memberTypes: readonly BindingContextSlotMemberType[] = [],
     /** Assignment authority when framework construction, rather than TypeScript, owns the slot. */
@@ -207,7 +207,7 @@ export class BindingContextSlotDraft {
       slot.targetType,
       slot.sourceAddressHandle,
       slot.fieldProvenance,
-      slot.staticValue,
+      slot.staticValueEvaluation,
       slot.memberTypes,
       slot.assignmentAccessKind,
       slot.targetTypeSourceMemberHandle,
@@ -222,7 +222,7 @@ export class BindingContextSlotDraft {
       this.targetType,
       this.sourceAddressHandle,
       this.fieldProvenance,
-      this.staticValue,
+      this.staticValueEvaluation,
       this.memberTypes,
       this.assignmentAccessKind,
       this.targetTypeSourceMemberHandle,

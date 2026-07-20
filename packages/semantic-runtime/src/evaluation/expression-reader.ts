@@ -1,4 +1,7 @@
 import ts from 'typescript';
+import type { EvaluationExpressionAbruptCompletion } from './completion.js';
+import { openSeamReasonKindsForEvaluationRead } from './boundary-open-reason.js';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
   readReferenceName,
   unwrapExpression,
@@ -13,33 +16,57 @@ import {
   DefaultStaticEvaluationPolicy,
   type StaticEvaluationPolicy,
 } from './policy.js';
-import type { EvaluationOpenSeam } from './seams.js';
+import {
+  compactEvaluationOpenSeams,
+  type EvaluationOpenSeam,
+} from './seams.js';
+import {
+  readStaticOwnProperty,
+} from './property-access.js';
 import {
   EvaluationValueKind,
   type EvaluationInstanceValue,
-  type EvaluationObjectValue,
   type EvaluationValue,
 } from './values.js';
 
 export class EvaluationRead<TValue> {
+  readonly openSeams: readonly EvaluationOpenSeam[];
+
   constructor(
     /** Value that closed, or null when the read stayed open. */
     readonly value: TValue | null,
     /** Source node that best explains this read. */
     readonly node: ts.Node | null,
     /** Evaluator seams observed while producing this read. */
-    readonly openSeams: readonly EvaluationOpenSeam[] = [],
-  ) {}
+    openSeams: readonly EvaluationOpenSeam[] = [],
+    /** Abrupt ECMAScript completion produced while reading the expression, when one occurred. */
+    readonly abruptCompletion: EvaluationExpressionAbruptCompletion | null = null,
+  ) {
+    this.openSeams = compactEvaluationOpenSeams(openSeams);
+  }
+}
+
+export const enum EvaluationTargetResolutionKind {
+  /** Evaluation proved a class declaration that owns the target identity. */
+  ResolvedDeclaration = 'resolved-declaration',
+  /** Evaluation closed normally to a value that is not a resource target. */
+  ClosedNonTarget = 'closed-non-target',
+  /** Evaluation pressure prevented a trustworthy target decision. */
+  Unresolved = 'unresolved',
 }
 
 export class EvaluationTargetRead {
   constructor(
+    readonly resolutionKind: EvaluationTargetResolutionKind,
     readonly localName: string | null,
     /** Exact authored target token or expression. */
     readonly node: ts.Node,
     /** Full declaration that owns the target, when static evaluation proved one. */
     readonly declarationNode: ts.Declaration | null,
     readonly openSeams: readonly EvaluationOpenSeam[] = [],
+    readonly abruptCompletion: EvaluationExpressionAbruptCompletion | null = null,
+    /** Machine-readable evaluator pressure, including boundary values that do not emit evaluator seams. */
+    readonly openReasonKinds: readonly OpenSeamReasonKind[] = [],
   ) {}
 }
 
@@ -61,7 +88,7 @@ export class StaticEvaluationExpressionReader implements StaticExpressionEvaluat
 
   evaluateExpression(expression: ts.Expression): EvaluationRead<EvaluationValue> {
     const result = this.evaluatorForReader().evaluateExpressionInEnvironment(expression, this.environment, this.moduleKey);
-    return new EvaluationRead(result.value, expression, result.openSeams);
+    return new EvaluationRead(result.value, expression, result.openSeams, result.abruptCompletion);
   }
 
   readObjectProperty(
@@ -70,6 +97,9 @@ export class StaticEvaluationExpressionReader implements StaticExpressionEvaluat
   ): EvaluationRead<EvaluationValue> {
     const result = this.evaluateExpression(expression);
     const value = result.value;
+    if (result.abruptCompletion != null) {
+      return new EvaluationRead<EvaluationValue>(null, expression, result.openSeams, result.abruptCompletion);
+    }
     if (
       value?.kind !== EvaluationValueKind.Object
       && value?.kind !== EvaluationValueKind.BoundaryObject
@@ -77,33 +107,46 @@ export class StaticEvaluationExpressionReader implements StaticExpressionEvaluat
     ) {
       return new EvaluationRead<EvaluationValue>(null, expression, result.openSeams);
     }
-    const property = value.properties.get(propertyName);
-    return property == null
-      ? new EvaluationRead<EvaluationValue>(null, value.node, result.openSeams)
-      : new EvaluationRead(property.value, property.node, result.openSeams);
-  }
-
-  readObjectStringProperty(
-    value: EvaluationObjectValue,
-    propertyName: string,
-  ): EvaluationRead<string> | null {
-    const property = value.properties.get(propertyName);
-    if (property == null) {
-      return null;
-    }
-    const stringValue = readStaticStringValue(property.value);
-    return stringValue == null
+    const propertyResult = this.evaluatorForReader().evaluatePropertyValue(
+      value,
+      propertyName,
+      this.moduleKey,
+      expression,
+    );
+    const property = readStaticOwnProperty(value, propertyName);
+    const propertyValue = property == null
+      && propertyResult.value?.kind === EvaluationValueKind.Undefined
       ? null
-      : new EvaluationRead(stringValue, property.node);
+      : propertyResult.value;
+    return new EvaluationRead(
+      propertyValue,
+      property?.node ?? propertyValue?.node ?? value.node ?? expression,
+      [...result.openSeams, ...propertyResult.openSeams],
+      propertyResult.abruptCompletion,
+    );
   }
 
   readExpressionTarget(expression: ts.Expression): EvaluationTargetRead {
     const result = this.evaluateExpression(expression);
     const value = result.value;
+    const openReasonKinds = openSeamReasonKindsForEvaluationRead(result);
     if (value?.kind === EvaluationValueKind.Class || value?.kind === EvaluationValueKind.Instance) {
-      return readClassTarget(classDeclarationForTargetValue(value), result.openSeams);
+      return readClassTarget(
+        classDeclarationForTargetValue(value),
+        result.openSeams,
+        result.abruptCompletion,
+        openReasonKinds,
+      );
     }
-    return readSyntaxTarget(expression, result.openSeams);
+    return readSyntaxTarget(
+      expression,
+      openReasonKinds.length === 0
+        ? EvaluationTargetResolutionKind.ClosedNonTarget
+        : EvaluationTargetResolutionKind.Unresolved,
+      result.openSeams,
+      result.abruptCompletion,
+      openReasonKinds,
+    );
   }
 
   private evaluatorForReader(): StaticEvaluator {
@@ -168,25 +211,36 @@ export class StaticModuleEvaluationExpressionReader implements StaticExpressionE
 export function readClassTarget(
   classNode: ts.ClassLikeDeclarationBase,
   openSeams: readonly EvaluationOpenSeam[] = [],
+  abruptCompletion: EvaluationExpressionAbruptCompletion | null = null,
+  openReasonKinds: readonly OpenSeamReasonKind[] = [],
 ): EvaluationTargetRead {
   return new EvaluationTargetRead(
+    EvaluationTargetResolutionKind.ResolvedDeclaration,
     classNode.name?.text ?? null,
     classNode.name ?? classNode,
     classNode,
     openSeams,
+    abruptCompletion,
+    openReasonKinds,
   );
 }
 
 export function readSyntaxTarget(
   expression: ts.Expression,
+  resolutionKind: EvaluationTargetResolutionKind,
   openSeams: readonly EvaluationOpenSeam[] = [],
+  abruptCompletion: EvaluationExpressionAbruptCompletion | null = null,
+  openReasonKinds: readonly OpenSeamReasonKind[] = [],
 ): EvaluationTargetRead {
   const current = unwrapExpression(expression);
   return new EvaluationTargetRead(
+    resolutionKind,
     readReferenceName(current),
     current,
     null,
     openSeams,
+    abruptCompletion,
+    openReasonKinds,
   );
 }
 

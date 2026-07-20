@@ -86,3 +86,29 @@ export class EvaluationOpenSeam {
     this.sourceFile = node.getSourceFile();
   }
 }
+
+/** Collapse repeated publication of the same epistemic pressure within one evaluator read. */
+export function compactEvaluationOpenSeams(
+  seams: readonly EvaluationOpenSeam[],
+): readonly EvaluationOpenSeam[] {
+  const compact: EvaluationOpenSeam[] = [];
+  for (const seam of seams) {
+    if (compact.some((candidate) => sameEvaluationOpenSeam(candidate, seam))) {
+      continue;
+    }
+    compact.push(seam);
+  }
+  return compact;
+}
+
+function sameEvaluationOpenSeam(
+  left: EvaluationOpenSeam,
+  right: EvaluationOpenSeam,
+): boolean {
+  return left.seamKind === right.seamKind
+    && left.summary === right.summary
+    && left.node === right.node
+    && left.moduleKey === right.moduleKey
+    && left.reasonKinds.length === right.reasonKinds.length
+    && left.reasonKinds.every((reason, index) => reason === right.reasonKinds[index]);
+}

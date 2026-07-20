@@ -36,6 +36,10 @@ import {
   type EvaluatedProjectSource,
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
+import type { EvaluationAbruptCompletion } from '../evaluation/completion.js';
+import { openSeamReasonKindsForEvaluationRead } from '../evaluation/boundary-open-reason.js';
+import type { EvaluationOpenSeam } from '../evaluation/seams.js';
+import { unretainedEvaluationOpenSeams } from '../evaluation/value-pressure.js';
 import {
   evaluateStaticBinaryOperation,
   evaluateStaticUnaryOperation,
@@ -110,14 +114,16 @@ import { RuntimeBindingSourceEvaluationFrame } from './binding-source-evaluation
 import { RuntimeBindingSourceArrayMethodEvaluator } from './binding-source-array-method-value.js';
 import { RuntimeBindingSourceMemberValueReader } from './binding-source-member-value.js';
 import {
+  bindingSourceValueEvaluationForRead,
   bindingSourceValueEvaluationResult,
+  bindingSourceValueEvaluationWithPressure,
   openBindingSourceMemberNoStaticValue,
   openBindingSourceNeedsRuntimeValue,
   openBindingSourceSlotNoStaticValue,
   openBindingSourceUnsupportedExpression,
   RuntimeBindingSourceValueEvaluation,
-  RuntimeBindingSourceValueEvaluationKind,
-} from './binding-source-value-evaluation.js';
+  RuntimeBindingSourceValueEvaluationClosure,
+} from '../configuration/binding-source-value-evaluation.js';
 import { RuntimeBindingSourceValueEvaluationContext } from './binding-source-value-evaluation-context.js';
 import {
   runtimeBindingSourceValueExpressionSupportForKind,
@@ -161,6 +167,8 @@ export class RuntimeValueConverterInstancePropertyRead {
     readonly value: EvaluationValue | null,
     readonly property: EvaluationObjectProperty | null,
     readonly openReasons: readonly string[],
+    readonly openReasonKinds: readonly OpenSeamReasonKind[],
+    readonly abruptCompletion: EvaluationAbruptCompletion | null = null,
   ) {}
 }
 
@@ -168,6 +176,7 @@ interface RuntimeValueConverterInstanceRead {
   readonly instance: EvaluationInstanceValue | null;
   readonly open: RuntimeBindingSourceValueEvaluation | null;
   readonly openReasons: readonly string[];
+  readonly openReasonKinds: readonly OpenSeamReasonKind[];
 }
 
 /**
@@ -363,20 +372,24 @@ export class RuntimeBindingSourceValueEvaluator {
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
     const input = this.evaluateNode(context.child(expression.expression));
-    if (input.kind === RuntimeBindingSourceValueEvaluationKind.Open || input.value == null) {
+    const inputValue = input.executableValue;
+    if (inputValue == null) {
       return input;
     }
 
     const argumentsRead = this.evaluateCallArguments(`ValueConverter '${expression.name.name}'`, expression.args, context);
-    if (argumentsRead.kind === RuntimeBindingSourceValueEvaluationKind.Open) {
-      return argumentsRead.open
-        ?? RuntimeBindingSourceValueEvaluation.open(`ValueConverter '${expression.name.name}' arguments did not close.`);
+    if (argumentsRead.blocking != null) {
+      return bindingSourceValueEvaluationWithPressure(argumentsRead.blocking, [input]);
     }
+    const inputPressure = [input, ...argumentsRead.pressure];
 
     const definition = this.valueConverterDefinition(expression, context.resourceScope);
     if (definition == null) {
-      return openBindingSourceUnsupportedExpression(
-        `Value converter '${expression.name.name}' was not resolved through the current compiler resource scope.`,
+      return bindingSourceValueEvaluationWithPressure(
+        openBindingSourceUnsupportedExpression(
+          `Value converter '${expression.name.name}' was not resolved through the current compiler resource scope.`,
+        ),
+        inputPressure,
       );
     }
 
@@ -384,40 +397,57 @@ export class RuntimeBindingSourceValueEvaluator {
       definition,
       context.containerOrDefault(this.defaultActiveContainer),
     );
-    if (instanceRead.open != null || instanceRead.instance == null) {
-      return instanceRead.open
-        ?? openBindingSourceNeedsRuntimeValue(`Value converter '${definition.name}' instance did not close.`);
-    }
-    if (instanceRead.openReasons.length > 0) {
-      return RuntimeBindingSourceValueEvaluation.open(
-        instanceRead.openReasons.join(' '),
-        [OpenSeamReasonKind.BindingSourceNeedsRuntimeValue],
+    if (instanceRead.instance == null) {
+      return bindingSourceValueEvaluationWithPressure(
+        instanceRead.open
+          ?? openBindingSourceNeedsRuntimeValue(`Value converter '${definition.name}' instance did not close.`),
+        inputPressure,
       );
     }
+    const instancePressure = bindingSourceValueEvaluationResult(
+      instanceRead.instance,
+      instanceRead.openReasons,
+      null,
+      instanceRead.openReasonKinds,
+    );
 
     const methodRead = this.evaluateValueConverterMethod(instanceRead.instance, VALUE_CONVERTER_TO_VIEW_METHOD);
-    if (methodRead.kind === RuntimeBindingSourceValueEvaluationKind.Open || methodRead.value == null) {
-      return methodRead;
+    const method = methodRead.executableValue;
+    if (method == null) {
+      return bindingSourceValueEvaluationWithPressure(methodRead, [...inputPressure, instancePressure]);
     }
-    if (methodRead.value.kind === EvaluationValueKind.Undefined) {
-      return input;
+    if (method.kind === EvaluationValueKind.Undefined) {
+      return bindingSourceValueEvaluationWithPressure(input, [
+        ...argumentsRead.pressure,
+        instancePressure,
+        methodRead,
+      ]);
     }
-    if (methodRead.value.kind !== EvaluationValueKind.Function) {
-      return openBindingSourceNeedsRuntimeValue(
-        `Value converter '${definition.name}' toView member did not reduce to an evaluator-local function.`,
+    if (method.kind !== EvaluationValueKind.Function) {
+      return bindingSourceValueEvaluationWithPressure(
+        openBindingSourceNeedsRuntimeValue(
+          `Value converter '${definition.name}' toView member did not reduce to an evaluator-local function.`,
+        ),
+        [...inputPressure, instancePressure, methodRead],
       );
     }
 
     const withContext = this.valueConverterUsesCallerContext(instanceRead.instance, definition);
     if (withContext.open != null) {
-      return withContext.open;
+      return bindingSourceValueEvaluationWithPressure(
+        withContext.open,
+        [...inputPressure, instancePressure, methodRead],
+      );
     }
     const callArguments = [
-      input.value,
+      inputValue,
       ...(withContext.value ? [valueConverterCallerContext(expression)] : []),
       ...argumentsRead.values,
     ];
-    return this.evaluateValueConverterCall(definition, methodRead.value, instanceRead.instance, callArguments);
+    return bindingSourceValueEvaluationWithPressure(
+      this.evaluateValueConverterCall(definition, method, instanceRead.instance, callArguments),
+      [...inputPressure, instancePressure, methodRead],
+    );
   }
 
   private valueConverterDefinition(
@@ -458,12 +488,19 @@ export class RuntimeBindingSourceValueEvaluator {
     if (target == null) {
       return openValueConverterInstance(`Value converter '${definition.name}' target was not part of static project evaluation.`);
     }
+    if (target.value == null) {
+      return openValueConverterInstance(
+        `Value converter '${definition.name}' target evaluation completed abruptly.`,
+        target.abruptCompletion,
+      );
+    }
     const targetOpenReasons = target.openSeams.map((seam) => seam.summary);
     if (target.value.kind === EvaluationValueKind.Instance) {
       return {
         instance: target.value,
         open: null,
         openReasons: targetOpenReasons,
+        openReasonKinds: openSeamReasonKindsForEvaluationRead(target),
       };
     }
     if (target.value.kind !== EvaluationValueKind.Class) {
@@ -478,13 +515,29 @@ export class RuntimeBindingSourceValueEvaluator {
       target.value,
       target.value.node ?? target.value.declaration,
     );
+    if (instance.value == null) {
+      return openValueConverterInstance(
+        `Value converter '${definition.name}' constructor completed abruptly.`,
+        instance.abruptCompletion,
+      );
+    }
     return instance.value.kind === EvaluationValueKind.Instance
       ? {
           instance: instance.value,
           open: null,
           openReasons: [
             ...targetOpenReasons,
-            ...instance.openSeams.map((seam) => seam.summary),
+            ...instance.value.constructionOpenSeams.map((seam) => seam.summary),
+          ],
+          openReasonKinds: [
+            ...new Set([
+              ...openSeamReasonKindsForEvaluationRead(target),
+              ...openSeamReasonKindsForEvaluationRead({
+                value: instance.value,
+                openSeams: instance.value.constructionOpenSeams,
+                abruptCompletion: null,
+              }),
+            ]),
           ],
         }
       : openValueConverterInstance(`Value converter '${definition.name}' constructor did not produce an evaluator-local instance.`);
@@ -498,11 +551,12 @@ export class RuntimeBindingSourceValueEvaluator {
     const checker = this.readValueConverterCheckerProperty(definition, propertyName);
     const instanceRead = this.readValueConverterInstance(definition, activeContainer);
     if (instanceRead.instance == null) {
-      return checker.absenceProven
+      return checker.absenceProven && instanceRead.open?.abruptCompletion == null
         ? new RuntimeValueConverterInstancePropertyRead(
             RuntimeValueConverterInstancePropertyReadState.Absent,
             null,
             null,
+            [],
             [],
           )
         : new RuntimeValueConverterInstancePropertyRead(
@@ -514,6 +568,8 @@ export class RuntimeBindingSourceValueEvaluator {
                 ?? checker.openReason
                 ?? `Value converter '${definition.name}' property '${propertyName}' could not be read from a static instance.`,
             ],
+            instanceRead.open?.openReasonKinds ?? [],
+            instanceRead.open?.abruptCompletion ?? null,
           );
     }
 
@@ -529,6 +585,7 @@ export class RuntimeBindingSourceValueEvaluator {
           ...instanceRead.openReasons,
           `Value converter '${definition.name}' instance source was not part of static project evaluation.`,
         ],
+        instanceRead.openReasonKinds,
       );
     }
 
@@ -542,6 +599,23 @@ export class RuntimeBindingSourceValueEvaluator {
       ...instanceRead.openReasons,
       ...valueRead.openSeams.map((seam) => seam.summary),
     ];
+    if (valueRead.value == null) {
+      return new RuntimeValueConverterInstancePropertyRead(
+        RuntimeValueConverterInstancePropertyReadState.Open,
+        null,
+        property,
+        openReasons.length > 0
+          ? openReasons
+          : [`Value converter '${definition.name}' property '${propertyName}' completed abruptly.`],
+        [
+          ...new Set([
+            ...instanceRead.openReasonKinds,
+            ...openSeamReasonKindsForEvaluationRead(valueRead),
+          ]),
+        ],
+        valueRead.abruptCompletion,
+      );
+    }
     if ((valueRead.value.kind === EvaluationValueKind.Undefined || valueRead.value.kind === EvaluationValueKind.Null)
       && openReasons.length === 0
       && property?.state !== EvaluationObjectPropertyState.Open) {
@@ -549,6 +623,7 @@ export class RuntimeBindingSourceValueEvaluator {
         RuntimeValueConverterInstancePropertyReadState.Absent,
         valueRead.value,
         property,
+        [],
         [],
       );
     }
@@ -568,6 +643,12 @@ export class RuntimeBindingSourceValueEvaluator {
               : valueRead.value.reason,
           ]
         : openReasons,
+      [
+        ...new Set([
+          ...instanceRead.openReasonKinds,
+          ...openSeamReasonKindsForEvaluationRead(valueRead),
+        ]),
+      ],
     );
   }
 
@@ -619,7 +700,7 @@ export class RuntimeBindingSourceValueEvaluator {
       methodName,
       instance.node ?? source.sourceFile,
     );
-    return bindingSourceValueEvaluationResult(read.value, read.openSeams.map((seam) => seam.summary));
+    return bindingSourceValueEvaluationForRead(read);
   }
 
   private valueConverterUsesCallerContext(
@@ -695,19 +776,22 @@ export class RuntimeBindingSourceValueEvaluator {
       VALUE_CONVERTER_WITH_CONTEXT_PROPERTY,
       instance.node ?? source.sourceFile,
     );
+    if (read.value == null) {
+      return {
+        value: false,
+        open: bindingSourceValueEvaluationForRead(read),
+      };
+    }
     if (read.openSeams.length > 0) {
       return {
         value: false,
-        open: RuntimeBindingSourceValueEvaluation.open(
-          read.openSeams.map((seam) => seam.summary).join(' '),
-          [OpenSeamReasonKind.BindingSourceNeedsRuntimeValue],
-        ),
+        open: bindingSourceValueEvaluationForRead(read),
       };
     }
     if (read.value.kind === EvaluationValueKind.Unknown || read.value.kind === EvaluationValueKind.BoundaryValue) {
       return {
         value: false,
-        open: bindingSourceValueEvaluationResult(read.value, []),
+        open: bindingSourceValueEvaluationForRead(read),
       };
     }
     return {
@@ -733,7 +817,7 @@ export class RuntimeBindingSourceValueEvaluator {
       argumentValues,
       instance,
     );
-    return bindingSourceValueEvaluationResult(read.value, read.openSeams.map((seam) => seam.summary));
+    return bindingSourceValueEvaluationForRead(read);
   }
 
   private evaluateAccessScope(
@@ -874,22 +958,25 @@ export class RuntimeBindingSourceValueEvaluator {
     }
 
     const owner = this.evaluateNode(context.child(expression.object));
-    if (owner.kind === RuntimeBindingSourceValueEvaluationKind.Open || owner.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(
-        owner.openReason ?? `Owner for member '${expression.name.name}' did not close.`,
-        owner.openReasonKinds,
+    const ownerValue = owner.addressableValue;
+    if (ownerValue == null) {
+      return bindingSourceValueEvaluationWithPressure(
+        openBindingSourceNeedsRuntimeValue(
+          `Member access '${expression.name.name}' requires an executable or addressable owner value.`,
+        ),
+        [owner],
       );
     }
-    if (expression.optional && isNullishValue(owner.value)) {
+    if (expression.optional && isNullishValue(ownerValue)) {
       return RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined);
     }
-    if (isNullishValue(owner.value)) {
+    if (isNullishValue(ownerValue)) {
       return nullishSourceValueResult(
         context,
-        `Aurelia strict astEvaluate rejects member access '${expression.name.name}' because the owner value is ${owner.value.kind}.`,
+        `Aurelia strict astEvaluate rejects member access '${expression.name.name}' because the owner value is ${ownerValue.kind}.`,
       );
     }
-    return this.memberValues.property(owner.value, expression.name.name);
+    return this.memberValues.property(ownerValue, expression.name.name);
   }
 
   private evaluateAccessKeyed(
@@ -903,29 +990,28 @@ export class RuntimeBindingSourceValueEvaluator {
     }
 
     const owner = this.evaluateNode(context.child(expression.object));
-    if (owner.kind === RuntimeBindingSourceValueEvaluationKind.Open || owner.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(
-        owner.openReason ?? 'Owner for keyed access did not close.',
-        owner.openReasonKinds,
+    const ownerValue = owner.addressableValue;
+    if (ownerValue == null) {
+      return bindingSourceValueEvaluationWithPressure(
+        openBindingSourceNeedsRuntimeValue('Keyed access requires an executable or addressable owner value.'),
+        [owner],
       );
     }
-    const key = this.evaluateNode(context.child(expression.key));
-    if (key.kind === RuntimeBindingSourceValueEvaluationKind.Open || key.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(
-        key.openReason ?? 'Keyed access key did not close.',
-        key.openReasonKinds,
-      );
-    }
-    if (expression.optional && isNullishValue(owner.value)) {
+    if (expression.optional && isNullishValue(ownerValue)) {
       return RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined);
     }
-    if (isNullishValue(owner.value)) {
+    const key = this.evaluateNode(context.child(expression.key));
+    const keyValue = key.executableValue;
+    if (keyValue == null) {
+      return bindingSourceValueEvaluationWithPressure(key, [owner]);
+    }
+    if (isNullishValue(ownerValue)) {
       return nullishSourceValueResult(
         context,
-        `Aurelia strict astEvaluate rejects keyed access because the owner value is ${owner.value.kind}.`,
+        `Aurelia strict astEvaluate rejects keyed access because the owner value is ${ownerValue.kind}.`,
       );
     }
-    return this.memberValues.element(owner.value, key.value);
+    return this.memberValues.element(ownerValue, keyValue);
   }
 
   private evaluateArrayLiteral(
@@ -933,19 +1019,25 @@ export class RuntimeBindingSourceValueEvaluator {
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
     const elements: EvaluationArrayElement[] = [];
+    let mayHaveUnknownElements = false;
     for (let index = 0; index < expression.elements.length; index += 1) {
       const element = expression.elements[index]!;
       const evaluated = this.evaluateNode(context.child(element));
-      const value = valueOrBoundaryForOpen(evaluated, element);
+      const value = retainedSlotValueForOpen(evaluated, element);
       if (value == null) {
-        return RuntimeBindingSourceValueEvaluation.open(
-          evaluated.openReason ?? `Array literal element ${index} did not close.`,
-          evaluated.openReasonKinds,
-        );
+        return evaluated;
       }
-      elements.push(new EvaluationArrayElement(value, null));
+      const edgeOpenSeams = unretainedEvaluationOpenSeams(value, evaluated.openSeams);
+      elements.push(new EvaluationArrayElement(value, null, edgeOpenSeams));
+      mayHaveUnknownElements ||= evaluated.closure === RuntimeBindingSourceValueEvaluationClosure.Open
+        && evaluated.addressableValue == null
+        && edgeOpenSeams.length === 0;
     }
-    return RuntimeBindingSourceValueEvaluation.value(new EvaluationArrayValue(elements, false, null));
+    return RuntimeBindingSourceValueEvaluation.value(new EvaluationArrayValue(
+      elements,
+      mayHaveUnknownElements,
+      null,
+    ));
   }
 
   private evaluateObjectLiteral(
@@ -959,15 +1051,23 @@ export class RuntimeBindingSourceValueEvaluator {
     for (let index = 0; index < expression.keys.length; index += 1) {
       const valueExpression = expression.values[index]!;
       const evaluated = this.evaluateNode(context.child(valueExpression));
-      const value = valueOrBoundaryForOpen(evaluated, valueExpression);
+      const value = retainedSlotValueForOpen(evaluated, valueExpression);
       if (value == null) {
-        return RuntimeBindingSourceValueEvaluation.open(
-          evaluated.openReason ?? `Object literal property '${String(expression.keys[index])}' did not close.`,
-          evaluated.openReasonKinds,
-        );
+        return evaluated;
       }
       const name = String(expression.keys[index]);
-      properties.set(name, new EvaluationObjectProperty(name, value, null, EvaluationObjectPropertyState.Closed));
+      const edgeOpenSeams = unretainedEvaluationOpenSeams(value, evaluated.openSeams);
+      properties.set(name, new EvaluationObjectProperty(
+        name,
+        value,
+        null,
+        evaluated.closure === RuntimeBindingSourceValueEvaluationClosure.Open
+          && evaluated.addressableValue == null
+          && edgeOpenSeams.length === 0
+          ? EvaluationObjectPropertyState.Open
+          : EvaluationObjectPropertyState.Closed,
+        edgeOpenSeams,
+      ));
     }
     return RuntimeBindingSourceValueEvaluation.value(new EvaluationObjectValue(properties, false, null));
   }
@@ -982,32 +1082,36 @@ export class RuntimeBindingSourceValueEvaluator {
       context,
       expression.optionalAccess,
     );
-    if (target.callee.kind === RuntimeBindingSourceValueEvaluationKind.Open || target.callee.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(
-        target.callee.openReason ?? `CallScope '${expression.name.name}' callee did not close.`,
-        target.callee.openReasonKinds,
-      );
+    const callee = target.callee.executableValue;
+    if (callee == null) {
+      return target.callee;
     }
-    if (isNullishValue(target.callee.value)) {
+    if (isNullishValue(callee)) {
       const nullishKind = target.nullishKind ?? RuntimeBindingSourceCallTargetNullishKind.Callee;
       if (
         (expression.optionalAccess && nullishKind === RuntimeBindingSourceCallTargetNullishKind.Owner)
         || (expression.optional && nullishKind === RuntimeBindingSourceCallTargetNullishKind.Callee)
       ) {
-        return RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined);
+        return bindingSourceValueEvaluationWithPressure(
+          RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined),
+          [target.callee],
+        );
       }
-      return nullishSourceValueResult(
-        context,
-        `Aurelia strict astEvaluate rejects CallScope '${expression.name.name}' because the callee value is ${target.callee.value.kind}.`,
+      return bindingSourceValueEvaluationWithPressure(
+        nullishSourceValueResult(
+          context,
+          `Aurelia strict astEvaluate rejects CallScope '${expression.name.name}' because the callee value is ${callee.kind}.`,
+        ),
+        [target.callee],
       );
     }
     return this.evaluateFunctionLikeCall(
       `CallScope '${expression.name.name}'`,
-      target.callee.value,
+      callee,
       expression.args,
       context,
       target.thisValue,
-      target.openSummaries,
+      [target.callee],
     );
   }
 
@@ -1021,80 +1125,100 @@ export class RuntimeBindingSourceValueEvaluator {
       context,
     );
     if (contextMember != null) {
-      if (contextMember.callee.kind === RuntimeBindingSourceValueEvaluationKind.Open || contextMember.callee.value == null) {
+      const callee = contextMember.callee.executableValue;
+      if (callee == null) {
         return contextMember.callee;
       }
-      if (isNullishValue(contextMember.callee.value)) {
+      if (isNullishValue(callee)) {
         const nullishKind = contextMember.nullishKind ?? RuntimeBindingSourceCallTargetNullishKind.Callee;
         if (expression.optionalMember && nullishKind === RuntimeBindingSourceCallTargetNullishKind.Owner) {
-          return RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined);
+          return bindingSourceValueEvaluationWithPressure(
+            RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined),
+            [contextMember.callee],
+          );
         }
         if (expression.optionalCall && nullishKind === RuntimeBindingSourceCallTargetNullishKind.Callee) {
-          return RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined);
+          return bindingSourceValueEvaluationWithPressure(
+            RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined),
+            [contextMember.callee],
+          );
         }
-        return nullishSourceValueResult(
-          context,
-          nullishKind === RuntimeBindingSourceCallTargetNullishKind.Owner
-            ? `Aurelia strict astEvaluate rejects method access '${expression.name.name}' because the owner value is ${contextMember.callee.value.kind}.`
-            : `Aurelia strict astEvaluate rejects CallMember '${expression.name.name}' because the callee value is ${contextMember.callee.value.kind}.`,
+        return bindingSourceValueEvaluationWithPressure(
+          nullishSourceValueResult(
+            context,
+            nullishKind === RuntimeBindingSourceCallTargetNullishKind.Owner
+              ? `Aurelia strict astEvaluate rejects method access '${expression.name.name}' because the owner value is ${callee.kind}.`
+              : `Aurelia strict astEvaluate rejects CallMember '${expression.name.name}' because the callee value is ${callee.kind}.`,
+          ),
+          [contextMember.callee],
         );
       }
       return this.evaluateFunctionLikeCall(
         `CallMember '${expression.name.name}'`,
-        contextMember.callee.value,
+        callee,
         expression.args,
         context,
         contextMember.thisValue,
-        contextMember.openSummaries,
+        [contextMember.callee],
       );
     }
 
     const owner = this.evaluateNode(context.child(expression.object));
-    if (owner.kind === RuntimeBindingSourceValueEvaluationKind.Open || owner.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(
-        owner.openReason ?? `Owner for method '${expression.name.name}' did not close.`,
-        owner.openReasonKinds,
-      );
+    const ownerValue = owner.addressableValue;
+    if (ownerValue == null) {
+      return owner;
     }
-    if (isNullishValue(owner.value)) {
-      return expression.optionalMember
-        ? RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined)
-        : nullishSourceValueResult(
+    if (isNullishValue(ownerValue)) {
+      return bindingSourceValueEvaluationWithPressure(
+        expression.optionalMember
+          ? RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined)
+          : nullishSourceValueResult(
             context,
-            `Aurelia strict astEvaluate rejects method access '${expression.name.name}' because the owner value is ${owner.value.kind}.`,
-          );
-    }
-    const arrayMethodCall = this.arrayMethods.evaluateMemberCall(expression, owner.value, context);
-    if (arrayMethodCall != null) {
-      return arrayMethodCall;
-    }
-    const globalMemberCall = this.evaluateGlobalMemberCall(expression, owner.value, context);
-    if (globalMemberCall != null) {
-      return globalMemberCall;
-    }
-    const source = this.evaluationFrame.sourceForValue(owner.value);
-    if (source == null) {
-      return openBindingSourceMemberNoStaticValue(`CallMember '${expression.name.name}' owner did not retain an evaluated source module.`);
-    }
-    const read = this.evaluationFrame.readPropertyValue(source, owner.value, expression.name.name, source.sourceFile);
-    if (expression.optionalCall && isNullishValue(read.value)) {
-      return RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined);
-    }
-    if (isNullishValue(read.value)) {
-      return nullishSourceValueResult(
-        context,
-        `Aurelia strict astEvaluate rejects CallMember '${expression.name.name}' because the callee value is ${read.value.kind}.`,
+            `Aurelia strict astEvaluate rejects method access '${expression.name.name}' because the owner value is ${ownerValue.kind}.`,
+          ),
+        [owner],
       );
     }
-    if (read.value.kind === EvaluationValueKind.Unknown || read.value.kind === EvaluationValueKind.BoundaryValue) {
-      return bindingSourceValueEvaluationResult(read.value, read.openSeams.map((seam) => seam.summary));
+    const arrayMethodCall = this.arrayMethods.evaluateMemberCall(expression, ownerValue, context);
+    if (arrayMethodCall != null) {
+      return bindingSourceValueEvaluationWithPressure(arrayMethodCall, [owner]);
+    }
+    const globalMemberCall = this.evaluateGlobalMemberCall(expression, ownerValue, context);
+    if (globalMemberCall != null) {
+      return bindingSourceValueEvaluationWithPressure(globalMemberCall, [owner]);
+    }
+    const source = this.evaluationFrame.sourceForValue(ownerValue);
+    if (source == null) {
+      return bindingSourceValueEvaluationWithPressure(
+        openBindingSourceMemberNoStaticValue(`CallMember '${expression.name.name}' owner did not retain an evaluated source module.`),
+        [owner],
+      );
+    }
+    const read = this.evaluationFrame.readPropertyValue(source, ownerValue, expression.name.name, source.sourceFile);
+    const readEvaluation = bindingSourceValueEvaluationForRead(read);
+    const callee = readEvaluation.executableValue;
+    if (callee == null) {
+      return bindingSourceValueEvaluationWithPressure(readEvaluation, [owner]);
+    }
+    if (expression.optionalCall && isNullishValue(callee)) {
+      return bindingSourceValueEvaluationWithPressure(
+        RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined),
+        [owner, readEvaluation],
+      );
+    }
+    if (isNullishValue(callee)) {
+      return bindingSourceValueEvaluationWithPressure(nullishSourceValueResult(
+        context,
+        `Aurelia strict astEvaluate rejects CallMember '${expression.name.name}' because the callee value is ${callee.kind}.`,
+      ), [owner, readEvaluation]);
     }
     return this.evaluateFunctionLikeCall(
       `CallMember '${expression.name.name}'`,
-      read.value,
+      callee,
       expression.args,
       context,
-      owner.value,
+      ownerValue,
+      [owner, readEvaluation],
     );
   }
 
@@ -1103,12 +1227,14 @@ export class RuntimeBindingSourceValueEvaluator {
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
     const argumentsRead = this.evaluateCallArguments(`CallGlobal '${expression.name.name}'`, expression.args, context);
-    if (argumentsRead.kind === RuntimeBindingSourceValueEvaluationKind.Open) {
-      return argumentsRead.open
-        ?? RuntimeBindingSourceValueEvaluation.open(`CallGlobal '${expression.name.name}' arguments did not close.`);
+    if (argumentsRead.blocking != null) {
+      return argumentsRead.blocking;
     }
-    return runtimeBindingSourceValueFromGlobalIntrinsic(
-      evaluateAureliaExpressionGlobalCall(expression.name.name, argumentsRead.values),
+    return bindingSourceValueEvaluationWithPressure(
+      runtimeBindingSourceValueFromGlobalIntrinsic(
+        evaluateAureliaExpressionGlobalCall(expression.name.name, argumentsRead.values),
+      ),
+      argumentsRead.pressure,
     );
   }
 
@@ -1118,16 +1244,20 @@ export class RuntimeBindingSourceValueEvaluator {
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation | null {
     const argumentsRead = this.evaluateCallArguments(`CallMember '${expression.name.name}'`, expression.args, context);
-    if (argumentsRead.kind === RuntimeBindingSourceValueEvaluationKind.Open) {
-      return argumentsRead.open
-        ?? RuntimeBindingSourceValueEvaluation.open(`CallMember '${expression.name.name}' arguments did not close.`);
+    if (argumentsRead.blocking != null) {
+      return argumentsRead.blocking;
     }
     const result = evaluateAureliaExpressionGlobalMemberCall(
       receiver,
       expression.name.name,
       argumentsRead.values,
     );
-    return result == null ? null : runtimeBindingSourceValueFromGlobalIntrinsic(result);
+    return result == null
+      ? null
+      : bindingSourceValueEvaluationWithPressure(
+          runtimeBindingSourceValueFromGlobalIntrinsic(result),
+          argumentsRead.pressure,
+        );
   }
 
   private evaluateCallFunction(
@@ -1135,22 +1265,23 @@ export class RuntimeBindingSourceValueEvaluator {
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
     const callee = this.evaluateNode(context.child(expression.func));
-    if (callee.kind === RuntimeBindingSourceValueEvaluationKind.Open || callee.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(
-        callee.openReason ?? 'CallFunction callee did not close.',
-        callee.openReasonKinds,
+    const calleeValue = callee.executableValue;
+    if (calleeValue == null) {
+      return callee;
+    }
+    if (expression.optional && isNullishValue(calleeValue)) {
+      return bindingSourceValueEvaluationWithPressure(
+        RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined),
+        [callee],
       );
     }
-    if (expression.optional && isNullishValue(callee.value)) {
-      return RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined);
-    }
-    if (isNullishValue(callee.value)) {
-      return nullishSourceValueResult(
+    if (isNullishValue(calleeValue)) {
+      return bindingSourceValueEvaluationWithPressure(nullishSourceValueResult(
         context,
-        `Aurelia strict astEvaluate rejects CallFunction because the callee value is ${callee.value.kind}.`,
-      );
+        `Aurelia strict astEvaluate rejects CallFunction because the callee value is ${calleeValue.kind}.`,
+      ), [callee]);
     }
-    return this.evaluateFunctionLikeCall('CallFunction', callee.value, expression.args, context);
+    return this.evaluateFunctionLikeCall('CallFunction', calleeValue, expression.args, context, null, [callee]);
   }
 
   private evaluateNew(
@@ -1160,43 +1291,51 @@ export class RuntimeBindingSourceValueEvaluator {
     const globalConstructorName = accessGlobalName(expression.func);
     if (globalConstructorName != null) {
       const argumentsRead = this.evaluateCallArguments(`New '${globalConstructorName}'`, expression.args, context);
-      if (argumentsRead.kind === RuntimeBindingSourceValueEvaluationKind.Open) {
-        return argumentsRead.open
-          ?? RuntimeBindingSourceValueEvaluation.open(`New '${globalConstructorName}' arguments did not close.`);
+      if (argumentsRead.blocking != null) {
+        return argumentsRead.blocking;
       }
-      return runtimeBindingSourceValueFromGlobalIntrinsic(
-        evaluateAureliaExpressionGlobalConstructor(globalConstructorName, argumentsRead.values),
+      return bindingSourceValueEvaluationWithPressure(
+        runtimeBindingSourceValueFromGlobalIntrinsic(
+          evaluateAureliaExpressionGlobalConstructor(globalConstructorName, argumentsRead.values),
+        ),
+        argumentsRead.pressure,
       );
     }
     const callee = this.evaluateNode(context.child(expression.func));
-    if (callee.kind === RuntimeBindingSourceValueEvaluationKind.Open || callee.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(
-        callee.openReason ?? 'New expression constructor did not close.',
-        callee.openReasonKinds,
+    const calleeValue = callee.executableValue;
+    if (calleeValue == null) {
+      return callee;
+    }
+    if (calleeValue.kind === EvaluationValueKind.BoundaryValue) {
+      return bindingSourceValueEvaluationWithPressure(bindingSourceValueEvaluationResult(calleeValue, []), [callee]);
+    }
+    if (calleeValue.kind !== EvaluationValueKind.Class) {
+      return bindingSourceValueEvaluationWithPressure(
+        openBindingSourceNeedsRuntimeValue('New expression constructor did not reduce to an evaluator-local class.'),
+        [callee],
       );
     }
-    if (callee.value.kind === EvaluationValueKind.BoundaryValue) {
-      return bindingSourceValueEvaluationResult(callee.value, []);
-    }
-    if (callee.value.kind !== EvaluationValueKind.Class) {
-      return openBindingSourceNeedsRuntimeValue('New expression constructor did not reduce to an evaluator-local class.');
-    }
     const argumentsRead = this.evaluateCallArguments('New expression', expression.args, context);
-    if (argumentsRead.kind === RuntimeBindingSourceValueEvaluationKind.Open) {
-      return argumentsRead.open
-        ?? RuntimeBindingSourceValueEvaluation.open('New expression arguments did not close.');
+    if (argumentsRead.blocking != null) {
+      return bindingSourceValueEvaluationWithPressure(argumentsRead.blocking, [callee]);
     }
-    const source = this.evaluationFrame.sourceForValue(callee.value);
+    const source = this.evaluationFrame.sourceForValue(calleeValue);
     if (source == null) {
-      return openBindingSourceMemberNoStaticValue('New expression class source module was not part of static project evaluation.');
+      return bindingSourceValueEvaluationWithPressure(
+        openBindingSourceMemberNoStaticValue('New expression class source module was not part of static project evaluation.'),
+        [callee, ...argumentsRead.pressure],
+      );
     }
     const instance = this.evaluationFrame.instantiateClassValue(
       source,
-      callee.value,
-      callee.value.node ?? callee.value.declaration,
+      calleeValue,
+      calleeValue.node ?? calleeValue.declaration,
       argumentsRead.values,
     );
-    return bindingSourceValueEvaluationResult(instance.value, instance.openSeams.map((seam) => seam.summary));
+    return bindingSourceValueEvaluationWithPressure(
+      bindingSourceValueEvaluationForInstanceRead(instance),
+      [callee, ...argumentsRead.pressure],
+    );
   }
 
   private evaluateTaggedTemplate(
@@ -1204,21 +1343,20 @@ export class RuntimeBindingSourceValueEvaluator {
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
     const callee = this.evaluateNode(context.child(expression.func));
-    if (callee.kind === RuntimeBindingSourceValueEvaluationKind.Open || callee.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(
-        callee.openReason ?? 'TaggedTemplate tag function did not close.',
-        callee.openReasonKinds,
-      );
+    const calleeValue = callee.executableValue;
+    if (calleeValue == null) {
+      return callee;
     }
     const expressions = this.evaluateCallArguments('TaggedTemplate expressions', expression.expressions, context);
-    if (expressions.kind === RuntimeBindingSourceValueEvaluationKind.Open) {
-      return expressions.open
-        ?? RuntimeBindingSourceValueEvaluation.open('TaggedTemplate expressions did not close.');
+    if (expressions.blocking != null) {
+      return bindingSourceValueEvaluationWithPressure(expressions.blocking, [callee]);
     }
     return this.evaluateFunctionLikeCallWithValues(
       'TaggedTemplate',
-      callee.value,
+      calleeValue,
       [cookedTemplateArrayValue(expression), ...expressions.values],
+      null,
+      [callee, ...expressions.pressure],
     );
   }
 
@@ -1228,14 +1366,19 @@ export class RuntimeBindingSourceValueEvaluator {
     args: readonly ExpressionAstNode[],
     context: RuntimeBindingSourceValueEvaluationContext,
     thisValue: EvaluationValue | null = null,
-    openSummaries: readonly string[] = [],
+    pressure: readonly RuntimeBindingSourceValueEvaluation[] = [],
   ): RuntimeBindingSourceValueEvaluation {
     const argumentsRead = this.evaluateCallArguments(label, args, context);
-    if (argumentsRead.kind === RuntimeBindingSourceValueEvaluationKind.Open) {
-      return argumentsRead.open
-        ?? RuntimeBindingSourceValueEvaluation.open(`${label} arguments did not close.`);
+    if (argumentsRead.blocking != null) {
+      return bindingSourceValueEvaluationWithPressure(argumentsRead.blocking, pressure);
     }
-    return this.evaluateFunctionLikeCallWithValues(label, callee, argumentsRead.values, thisValue, openSummaries);
+    return this.evaluateFunctionLikeCallWithValues(
+      label,
+      callee,
+      argumentsRead.values,
+      thisValue,
+      [...pressure, ...argumentsRead.pressure],
+    );
   }
 
   private evaluateFunctionLikeCallWithValues(
@@ -1243,20 +1386,23 @@ export class RuntimeBindingSourceValueEvaluator {
     callee: EvaluationValue,
     argumentValues: readonly EvaluationValue[],
     thisValue: EvaluationValue | null = null,
-    openSummaries: readonly string[] = [],
+    pressure: readonly RuntimeBindingSourceValueEvaluation[] = [],
   ): RuntimeBindingSourceValueEvaluation {
     if (callee.kind !== EvaluationValueKind.Function) {
-      return openBindingSourceNeedsRuntimeValue(`${label} callee did not reduce to an evaluator-local function.`);
+      return bindingSourceValueEvaluationWithPressure(
+        openBindingSourceNeedsRuntimeValue(`${label} callee did not reduce to an evaluator-local function.`),
+        pressure,
+      );
     }
     const source = this.evaluationFrame.sourceForValue(callee);
     if (source == null) {
-      return openBindingSourceMemberNoStaticValue(`${label} function source module was not part of static project evaluation.`);
+      return bindingSourceValueEvaluationWithPressure(
+        openBindingSourceMemberNoStaticValue(`${label} function source module was not part of static project evaluation.`),
+        pressure,
+      );
     }
     const read = this.evaluationFrame.callFunctionValue(source, callee, callee.node ?? source.sourceFile, argumentValues, thisValue);
-    return bindingSourceValueEvaluationResult(read.value, [
-      ...openSummaries,
-      ...read.openSeams.map((seam) => seam.summary),
-    ]);
+    return bindingSourceValueEvaluationWithPressure(bindingSourceValueEvaluationForRead(read), pressure);
   }
 
   private evaluateCallArguments(
@@ -1265,25 +1411,30 @@ export class RuntimeBindingSourceValueEvaluator {
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceArgumentsEvaluation {
     const values: EvaluationValue[] = [];
+    const pressure: RuntimeBindingSourceValueEvaluation[] = [];
     for (let index = 0; index < args.length; index += 1) {
       const argument = this.evaluateNode(context.child(args[index]!));
-      if (argument.kind === RuntimeBindingSourceValueEvaluationKind.Value && argument.value != null) {
-        values.push(argument.value);
+      const value = argument.executableValue;
+      if (value != null) {
+        values.push(value);
+        pressure.push(argument);
         continue;
       }
       const boundary = boundaryValueForOpenArgument(argument, args[index]!);
       if (boundary != null) {
         values.push(boundary);
+        pressure.push(argument);
         continue;
       }
-      return RuntimeBindingSourceArgumentsEvaluation.open(
-        RuntimeBindingSourceValueEvaluation.open(
+      return RuntimeBindingSourceArgumentsEvaluation.blocked(
+        bindingSourceValueEvaluationWithPressure(RuntimeBindingSourceValueEvaluation.open(
           `${label} argument ${index} did not close.${argument.openReason == null ? '' : ` ${argument.openReason}`}`,
           argument.openReasonKinds,
-        ),
+          argument.abruptCompletion,
+        ), pressure),
       );
     }
-    return RuntimeBindingSourceArgumentsEvaluation.value(values);
+    return RuntimeBindingSourceArgumentsEvaluation.values(values, pressure);
   }
 
   private evaluateSlot(
@@ -1291,8 +1442,8 @@ export class RuntimeBindingSourceValueEvaluator {
     scope: BindingScope | null,
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
-    if (slot.staticValue != null) {
-      return RuntimeBindingSourceValueEvaluation.value(slot.staticValue);
+    if (slot.staticValueEvaluation != null) {
+      return slot.staticValueEvaluation;
     }
     const stateInitialValue = this.evaluateStateBindingInitialStateSlot(slot, scope);
     if (stateInitialValue != null) {
@@ -1336,10 +1487,14 @@ export class RuntimeBindingSourceValueEvaluator {
         `State store '${storeConfiguration.name ?? 'default'}' initial-state source was not part of static project evaluation.`,
       );
     }
+    if (initialState.value == null) {
+      return bindingSourceValueEvaluationForRead(initialState);
+    }
     return this.memberValues.property(
       initialState.value,
       slot.name,
       initialState.openSeams.map((seam) => seam.summary),
+      openSeamReasonKindsForEvaluationRead(initialState),
     );
   }
 
@@ -1369,20 +1524,20 @@ export class RuntimeBindingSourceValueEvaluator {
     }
 
     const instance = this.evaluationFrame.instantiateClassValue(target.target.source, target.target.classValue, target.target.classNode);
+    if (instance.value == null) {
+      return RuntimeBindingSourceCallTargetEvaluation.open(bindingSourceValueEvaluationForRead(instance));
+    }
     if (instance.value.kind === EvaluationValueKind.Unknown) {
       return RuntimeBindingSourceCallTargetEvaluation.open(
-        bindingSourceValueEvaluationResult(instance.value, instance.openSeams.map((seam) => seam.summary)),
+        bindingSourceValueEvaluationForRead(instance),
       );
     }
-    this.applyBoundControllerValues(instance.value, scope, context);
-    const read = this.evaluationFrame.readPropertyValue(target.target.source, instance.value, member.name, target.target.classNode);
+    const boundValues = this.applyBoundControllerValues(instance.value, scope, context);
+    const boundValue = boundValues.get(member.name) ?? null;
+    const read = boundValue ?? this.memberValues.property(instance.value, member.name);
     return new RuntimeBindingSourceCallTargetEvaluation(
-      bindingSourceValueEvaluationResult(read.value, [
-        ...instance.openSeams.map((seam) => seam.summary),
-        ...read.openSeams.map((seam) => seam.summary),
-      ]),
+      read,
       instance.value,
-      [],
     );
   }
 
@@ -1393,15 +1548,15 @@ export class RuntimeBindingSourceValueEvaluator {
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
     const instance = this.evaluationFrame.instantiateClassValue(target.source, target.classValue, target.classNode);
-    if (instance.value.kind === EvaluationValueKind.Unknown) {
-      return bindingSourceValueEvaluationResult(instance.value, instance.openSeams.map((seam) => seam.summary));
+    if (instance.value == null) {
+      return bindingSourceValueEvaluationForRead(instance);
     }
-    this.applyBoundControllerValues(instance.value, scope, context);
-    const value = this.evaluationFrame.readPropertyValue(target.source, instance.value, memberName, target.classNode);
-    return bindingSourceValueEvaluationResult(value.value, [
-      ...instance.openSeams.map((seam) => seam.summary),
-      ...value.openSeams.map((seam) => seam.summary),
-    ]);
+    if (instance.value.kind === EvaluationValueKind.Unknown) {
+      return bindingSourceValueEvaluationForRead(instance);
+    }
+    const boundValues = this.applyBoundControllerValues(instance.value, scope, context);
+    return boundValues.get(memberName)
+      ?? this.memberValues.property(instance.value, memberName);
   }
 
   private classValueTargetForMember(
@@ -1458,10 +1613,11 @@ export class RuntimeBindingSourceValueEvaluator {
     instance: EvaluationValue,
     scope: BindingScope | null,
     context: RuntimeBindingSourceValueEvaluationContext,
-  ): void {
+  ): ReadonlyMap<string, RuntimeBindingSourceValueEvaluation> {
     if (instance.kind !== EvaluationValueKind.Instance) {
-      return;
+      return new Map();
     }
+    const values = new Map<string, RuntimeBindingSourceValueEvaluation>();
     for (const bound of this.boundControllerValues.readAll(
       scope?.bindingContext.ownerProductHandle ?? null,
       scope?.bindingContext.contextType ?? null,
@@ -1470,7 +1626,9 @@ export class RuntimeBindingSourceValueEvaluator {
       if (expression == null || bound.sourceScope == null) {
         continue;
       }
-      const value = this.evaluateBoundControllerValueExpression(bound, expression, context);
+      const evaluation = this.evaluateBoundControllerValueExpression(bound, expression, context);
+      values.set(bound.propertyName, evaluation);
+      const value = valueOrBoundaryForOpen(evaluation, expression);
       if (value == null) {
         continue;
       }
@@ -1478,18 +1636,24 @@ export class RuntimeBindingSourceValueEvaluator {
         bound.propertyName,
         value,
         value.node ?? instance.node ?? instance.classValue.node ?? instance.classValue.declaration,
-        EvaluationObjectPropertyState.Closed,
+        evaluation.closure === RuntimeBindingSourceValueEvaluationClosure.Open
+          ? EvaluationObjectPropertyState.Open
+          : EvaluationObjectPropertyState.Closed,
+        evaluation.openSeams,
       ));
     }
+    return values;
   }
 
   private evaluateBoundControllerValueExpression(
     bound: RuntimeBoundControllerPropertyValue,
     expression: ExpressionAstNode,
     context: RuntimeBindingSourceValueEvaluationContext,
-  ): EvaluationValue | null {
+  ): RuntimeBindingSourceValueEvaluation {
     if (bound.sourceScope == null) {
-      return null;
+      return openBindingSourceSlotNoStaticValue(
+        `Bound controller property '${bound.propertyName}' did not retain its parent binding Scope.`,
+      );
     }
     const key = `${bound.controllerProductHandle}:${bound.propertyName}:${bound.bindingProductHandle}`;
     const sourceContext = context.projectBindingSourceValueContext(
@@ -1504,26 +1668,25 @@ export class RuntimeBindingSourceValueEvaluator {
       bound.sourceDefaultContainer,
     );
     if (sourceContext.context == null) {
-      return new EvaluationBoundaryValue(
-        EvaluationBoundaryKind.BindingScope,
-        sourceContext.openReason ?? `Bound controller property '${bound.propertyName}' did not project to a source-value context.`,
-        null,
+      const reason = sourceContext.openReason
+        ?? `Bound controller property '${bound.propertyName}' did not project to a source-value context.`;
+      return RuntimeBindingSourceValueEvaluation.openWithValue(
+        new EvaluationBoundaryValue(EvaluationBoundaryKind.BindingScope, reason, null),
+        reason,
+        [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
       );
     }
     return context.withBoundControllerRead(
       key,
-      () => new EvaluationBoundaryValue(
-        EvaluationBoundaryKind.BindingScope,
-        `Bound controller property '${bound.propertyName}' recursively depends on itself.`,
-        null,
-      ),
       () => {
-        const evaluated = this.evaluateNode(sourceContext.context!);
-        if (evaluated.kind === RuntimeBindingSourceValueEvaluationKind.Value && evaluated.value != null) {
-          return evaluated.value;
-        }
-        return boundaryValueForOpenArgument(evaluated, expression);
+        const reason = `Bound controller property '${bound.propertyName}' recursively depends on itself.`;
+        return RuntimeBindingSourceValueEvaluation.openWithValue(
+          new EvaluationBoundaryValue(EvaluationBoundaryKind.BindingScope, reason, null),
+          reason,
+          [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
+        );
       },
+      () => this.evaluateNode(sourceContext.context!),
     );
   }
 
@@ -1550,24 +1713,30 @@ export class RuntimeBindingSourceValueEvaluator {
       return openBindingSourceUnsupportedExpression('Template/interpolation parts do not align with expression holes.');
     }
     const builder = new EvaluationStringPatternBuilder(parts[0] ?? '');
+    const pressure: RuntimeBindingSourceValueEvaluation[] = [];
     for (let index = 0; index < expressions.length; index += 1) {
       const evaluated = this.evaluateNode(context.child(expressions[index]!));
-      if (evaluated.kind === RuntimeBindingSourceValueEvaluationKind.Open || evaluated.value == null) {
+      pressure.push(evaluated);
+      const value = evaluated.executableValue;
+      if (value == null) {
         const boundary = boundaryValueForOpenArgument(evaluated, expressions[index]!);
         if (boundary == null) {
-          return RuntimeBindingSourceValueEvaluation.open(
-            evaluated.openReason ?? `Expression hole ${index} did not close.`,
-            evaluated.openReasonKinds,
-          );
+          return bindingSourceValueEvaluationWithPressure(evaluated, pressure.slice(0, -1));
         }
         builder.appendBoundary(boundary, parts[index + 1] ?? '');
         continue;
       }
-      if (!appendEvaluationStringLikePart(builder, evaluated.value, parts[index + 1] ?? '')) {
-        return openBindingSourceUnsupportedExpression(`Expression hole ${index} did not reduce to a primitive value.`);
+      if (!appendEvaluationStringLikePart(builder, value, parts[index + 1] ?? '')) {
+        return bindingSourceValueEvaluationWithPressure(
+          openBindingSourceUnsupportedExpression(`Expression hole ${index} did not reduce to a primitive value.`),
+          pressure,
+        );
       }
     }
-    return RuntimeBindingSourceValueEvaluation.value(builder.build(null));
+    return bindingSourceValueEvaluationWithPressure(
+      RuntimeBindingSourceValueEvaluation.value(builder.build(null)),
+      pressure,
+    );
   }
 
   private evaluateBinary(
@@ -1581,42 +1750,38 @@ export class RuntimeBindingSourceValueEvaluator {
     if (expression.operation === '+') {
       const leftValue = valueOrBoundaryForOpen(left, expression.left);
       if (leftValue == null) {
-        return RuntimeBindingSourceValueEvaluation.open(
-          left.openReason ?? "Left operand for '+' did not close.",
-          left.openReasonKinds,
-        );
+        return left;
       }
       const right = this.evaluateNode(context.child(expression.right));
       const rightValue = valueOrBoundaryForOpen(right, expression.right);
       if (rightValue == null) {
-        return RuntimeBindingSourceValueEvaluation.open(
-          right.openReason ?? "Right operand for '+' did not close.",
-          right.openReasonKinds,
-        );
+        return bindingSourceValueEvaluationWithPressure(right, [left]);
       }
-      return evaluatePlus(leftValue, rightValue);
+      return bindingSourceValueEvaluationWithPressure(evaluatePlus(leftValue, rightValue), [left, right]);
     }
-    if (left.kind === RuntimeBindingSourceValueEvaluationKind.Open || left.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(
-        left.openReason ?? `Left operand for '${expression.operation}' did not close.`,
-        left.openReasonKinds,
-      );
+    const leftValue = left.executableValue;
+    if (leftValue == null) {
+      return left;
     }
     const right = this.evaluateNode(context.child(expression.right));
-    if (right.kind === RuntimeBindingSourceValueEvaluationKind.Open || right.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(
-        right.openReason ?? `Right operand for '${expression.operation}' did not close.`,
-        right.openReasonKinds,
-      );
+    const rightValue = right.executableValue;
+    if (rightValue == null) {
+      return bindingSourceValueEvaluationWithPressure(right, [left]);
     }
     const operation = staticBinaryOperationForRuntimeBinding(expression.operation);
     if (operation == null) {
-      return openBindingSourceUnsupportedExpression(`Binary operator '${expression.operation}' is type-visible but not value-reduced by binding-source value flow.`);
+      return bindingSourceValueEvaluationWithPressure(
+        openBindingSourceUnsupportedExpression(`Binary operator '${expression.operation}' is type-visible but not value-reduced by binding-source value flow.`),
+        [left, right],
+      );
     }
-    const value = evaluateStaticBinaryOperation(operation, left.value, right.value, null);
-    return value == null
-      ? openBindingSourceUnsupportedExpression(`Binary operator '${expression.operation}' did not reduce over known operands.`)
-      : RuntimeBindingSourceValueEvaluation.value(value);
+    const value = evaluateStaticBinaryOperation(operation, leftValue, rightValue, null);
+    return bindingSourceValueEvaluationWithPressure(
+      value == null
+        ? openBindingSourceUnsupportedExpression(`Binary operator '${expression.operation}' did not reduce over known operands.`)
+        : RuntimeBindingSourceValueEvaluation.value(value),
+      [left, right],
+    );
   }
 
   private evaluateShortCircuitBinary(
@@ -1624,24 +1789,25 @@ export class RuntimeBindingSourceValueEvaluator {
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
     const left = this.evaluateNode(context.child(expression.left));
-    if (left.kind === RuntimeBindingSourceValueEvaluationKind.Open || left.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(
-        left.openReason ?? `Left operand for '${expression.operation}' did not close.`,
-        left.openReasonKinds,
-      );
+    const leftValue = left.executableValue;
+    if (leftValue == null) {
+      return left;
     }
     if (expression.operation === '??') {
-      return left.value.kind === EvaluationValueKind.Null || left.value.kind === EvaluationValueKind.Undefined
-        ? this.evaluateNode(context.child(expression.right))
+      return leftValue.kind === EvaluationValueKind.Null || leftValue.kind === EvaluationValueKind.Undefined
+        ? bindingSourceValueEvaluationWithPressure(this.evaluateNode(context.child(expression.right)), [left])
         : left;
     }
-    const truthy = readEvaluationTruthiness(left.value);
+    const truthy = readEvaluationTruthiness(leftValue);
     if (truthy == null) {
-      return openBindingSourceUnsupportedExpression(`Left operand for '${expression.operation}' did not reduce to known truthiness.`);
+      return bindingSourceValueEvaluationWithPressure(
+        openBindingSourceUnsupportedExpression(`Left operand for '${expression.operation}' did not reduce to known truthiness.`),
+        [left],
+      );
     }
     return expression.operation === '||'
-      ? truthy ? left : this.evaluateNode(context.child(expression.right))
-      : truthy ? this.evaluateNode(context.child(expression.right)) : left;
+      ? truthy ? left : bindingSourceValueEvaluationWithPressure(this.evaluateNode(context.child(expression.right)), [left])
+      : truthy ? bindingSourceValueEvaluationWithPressure(this.evaluateNode(context.child(expression.right)), [left]) : left;
   }
 
   private evaluateUnary(
@@ -1649,7 +1815,8 @@ export class RuntimeBindingSourceValueEvaluator {
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
     const value = this.evaluateNode(context.child(expression.expression));
-    if (value.kind === RuntimeBindingSourceValueEvaluationKind.Open || value.value == null) {
+    const operand = value.executableValue;
+    if (operand == null) {
       return value;
     }
     switch (expression.operation) {
@@ -1658,13 +1825,19 @@ export class RuntimeBindingSourceValueEvaluator {
       case '-':
       case 'typeof':
       case 'void': {
-        const unaryValue = evaluateStaticUnaryOperation(expression.operation, value.value, null);
-        return unaryValue == null
-          ? openBindingSourceUnsupportedExpression(`Unary operator '${expression.operation}' did not reduce over a known operand.`)
-          : RuntimeBindingSourceValueEvaluation.value(unaryValue);
+        const unaryValue = evaluateStaticUnaryOperation(expression.operation, operand, null);
+        return bindingSourceValueEvaluationWithPressure(
+          unaryValue == null
+            ? openBindingSourceUnsupportedExpression(`Unary operator '${expression.operation}' did not reduce over a known operand.`)
+            : RuntimeBindingSourceValueEvaluation.value(unaryValue),
+          [value],
+        );
       }
       default:
-        return openBindingSourceUnsupportedExpression(`Unary operator '${expression.operation}' is not value-reduced by binding-source value flow.`);
+        return bindingSourceValueEvaluationWithPressure(
+          openBindingSourceUnsupportedExpression(`Unary operator '${expression.operation}' is not value-reduced by binding-source value flow.`),
+          [value],
+        );
     }
   }
 
@@ -1673,30 +1846,42 @@ export class RuntimeBindingSourceValueEvaluator {
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
     const condition = this.evaluateNode(context.child(expression.condition));
-    if (condition.kind === RuntimeBindingSourceValueEvaluationKind.Open || condition.value == null) {
+    const conditionValue = condition.executableValue;
+    if (conditionValue == null) {
       return condition;
     }
-    const truthy = readEvaluationTruthiness(condition.value);
+    const truthy = readEvaluationTruthiness(conditionValue);
     if (truthy == null) {
-      return this.evaluateConditionalBranchRepresentative(expression, context)
-        ?? openBindingSourceUnsupportedExpression('Conditional expression condition did not reduce to known truthiness.');
+      return bindingSourceValueEvaluationWithPressure(
+        this.evaluateConditionalBranchRepresentative(expression, context)
+          ?? openBindingSourceUnsupportedExpression('Conditional expression condition did not reduce to known truthiness.'),
+        [condition],
+      );
     }
-    return this.evaluateNode(context.child(truthy ? expression.yes : expression.no));
+    return bindingSourceValueEvaluationWithPressure(
+      this.evaluateNode(context.child(truthy ? expression.yes : expression.no)),
+      [condition],
+    );
   }
 
   private evaluateConditionalBranchRepresentative(
     expression: ConditionalExpression,
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation | null {
-    const yes = valueOrBoundaryForOpen(this.evaluateNode(context.child(expression.yes)), expression.yes);
-    const no = valueOrBoundaryForOpen(this.evaluateNode(context.child(expression.no)), expression.no);
+    const yesEvaluation = this.evaluateNode(context.child(expression.yes));
+    const noEvaluation = this.evaluateNode(context.child(expression.no));
+    const yes = valueOrBoundaryForOpen(yesEvaluation, expression.yes);
+    const no = valueOrBoundaryForOpen(noEvaluation, expression.no);
     if (yes == null || no == null) {
       return null;
     }
     const representative = representativeEvaluationValues([yes, no], `binding.conditional.${expression.$kind}`, null);
     return representative == null
       ? null
-      : RuntimeBindingSourceValueEvaluation.value(representative);
+      : bindingSourceValueEvaluationWithPressure(
+          RuntimeBindingSourceValueEvaluation.value(representative),
+          [yesEvaluation, noEvaluation],
+        );
   }
 
   private evaluateContextKeyedMemberForOwner(
@@ -1707,16 +1892,17 @@ export class RuntimeBindingSourceValueEvaluator {
       return null;
     }
     const key = this.evaluateNode(context.child(expression.key));
-    if (key.kind === RuntimeBindingSourceValueEvaluationKind.Open || key.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(
-        key.openReason ?? 'Keyed context access key did not close.',
-        key.openReasonKinds,
-      );
+    const keyValue = key.executableValue;
+    if (keyValue == null) {
+      return key;
     }
-    const propertyName = evaluationPropertyKeyString(key.value);
-    return propertyName == null
-      ? openBindingSourceUnsupportedExpression(`Keyed context access key reduced to '${key.value.kind}', which is not a static property key.`)
-      : this.evaluateContextMemberForOwner(expression.object, propertyName, context);
+    const propertyName = evaluationPropertyKeyString(keyValue);
+    return bindingSourceValueEvaluationWithPressure(
+      propertyName == null
+        ? openBindingSourceUnsupportedExpression(`Keyed context access key reduced to '${keyValue.kind}', which is not a static property key.`)
+        : this.evaluateContextMemberForOwner(expression.object, propertyName, context)!,
+      [key],
+    );
   }
 
   private evaluateContextMemberForOwner(
@@ -1906,24 +2092,21 @@ export class RuntimeBindingSourceValueEvaluator {
     const bound = bindingContext === scope?.bindingContext
       ? this.evaluateBoundControllerValue(scope, slot.name, context)
       : null;
-    if (bound != null) {
-      return new RuntimeBindingSourceCallTargetEvaluation(
-        bound,
-        this.contextReceiverValue(scope, bindingContext, label, context),
-        [],
-      );
+    if (bound == null) {
+      const member = this.checkerMemberForSlot(slot);
+      if (member != null && bindingContext === scope?.bindingContext) {
+        return this.evaluateMemberCallTarget(member, scope, context);
+      }
     }
 
-    const member = this.checkerMemberForSlot(slot);
-    if (member != null && bindingContext === scope?.bindingContext) {
-      return this.evaluateMemberCallTarget(member, scope, context);
+    const callee = bound ?? this.evaluateSlot(slot, scope, context);
+    const receiver = this.contextReceiverValue(scope, bindingContext, label, context);
+    if (receiver.value == null) {
+      return RuntimeBindingSourceCallTargetEvaluation.open(receiver);
     }
-
-    const callee = this.evaluateSlot(slot, scope, context);
     return new RuntimeBindingSourceCallTargetEvaluation(
-      callee,
-      this.contextReceiverValue(scope, bindingContext, label, context),
-      [],
+      bindingSourceValueEvaluationWithPressure(callee, [receiver]),
+      receiver.value,
     );
   }
 
@@ -1932,18 +2115,18 @@ export class RuntimeBindingSourceValueEvaluator {
     context: BindingScopeContext,
     label: string,
     request: RuntimeBindingSourceValueEvaluationContext,
-  ): EvaluationValue {
+  ): RuntimeBindingSourceValueEvaluation {
     const instance = context === scope?.bindingContext
       ? this.evaluateBindingContextInstance(scope, context, request)
       : null;
-    return instance ?? this.contextBoundaryObject(scope, context, label);
+    return instance ?? RuntimeBindingSourceValueEvaluation.value(this.contextBoundaryObject(scope, context, label));
   }
 
   private evaluateBindingContextInstance(
     scope: BindingScope | null,
     context: BindingScopeContext,
     request: RuntimeBindingSourceValueEvaluationContext,
-  ): EvaluationValue | null {
+  ): RuntimeBindingSourceValueEvaluation | null {
     const classNode = this.classNodeForContextType(context);
     if (classNode?.name == null) {
       return null;
@@ -1962,11 +2145,14 @@ export class RuntimeBindingSourceValueEvaluator {
       target.target.classValue,
       target.target.classNode,
     );
+    if (instance.value == null) {
+      return bindingSourceValueEvaluationForRead(instance);
+    }
     if (instance.value.kind === EvaluationValueKind.Unknown) {
       return null;
     }
     this.applyBoundControllerValues(instance.value, scope, request);
-    return instance.value;
+    return bindingSourceValueEvaluationForInstanceRead(instance);
   }
 
   private classNodeForContextType(
@@ -1993,8 +2179,15 @@ export class RuntimeBindingSourceValueEvaluator {
   ): EvaluationBoundaryObjectValue {
     const properties = new Map<string, EvaluationObjectProperty>();
     for (const slot of context.slots) {
-      if (slot.staticValue != null) {
-        properties.set(slot.name, new EvaluationObjectProperty(slot.name, slot.staticValue, null, EvaluationObjectPropertyState.Closed));
+      if (slot.staticValueEvaluation?.value != null) {
+        properties.set(slot.name, new EvaluationObjectProperty(
+          slot.name,
+          slot.staticValueEvaluation.value,
+          null,
+          slot.staticValueEvaluation.closure === RuntimeBindingSourceValueEvaluationClosure.Value
+            ? EvaluationObjectPropertyState.Closed
+            : EvaluationObjectPropertyState.Open,
+        ));
       }
     }
     return new EvaluationBoundaryObjectValue(
@@ -2077,17 +2270,20 @@ function runtimeBindingSourceValueFromGlobalIntrinsic(
 
 class RuntimeBindingSourceArgumentsEvaluation {
   private constructor(
-    readonly kind: RuntimeBindingSourceValueEvaluationKind,
     readonly values: readonly EvaluationValue[],
-    readonly open: RuntimeBindingSourceValueEvaluation | null,
+    readonly pressure: readonly RuntimeBindingSourceValueEvaluation[],
+    readonly blocking: RuntimeBindingSourceValueEvaluation | null,
   ) {}
 
-  static value(values: readonly EvaluationValue[]): RuntimeBindingSourceArgumentsEvaluation {
-    return new RuntimeBindingSourceArgumentsEvaluation(RuntimeBindingSourceValueEvaluationKind.Value, values, null);
+  static values(
+    values: readonly EvaluationValue[],
+    pressure: readonly RuntimeBindingSourceValueEvaluation[],
+  ): RuntimeBindingSourceArgumentsEvaluation {
+    return new RuntimeBindingSourceArgumentsEvaluation(values, pressure, null);
   }
 
-  static open(open: RuntimeBindingSourceValueEvaluation): RuntimeBindingSourceArgumentsEvaluation {
-    return new RuntimeBindingSourceArgumentsEvaluation(RuntimeBindingSourceValueEvaluationKind.Open, [], open);
+  static blocked(blocking: RuntimeBindingSourceValueEvaluation): RuntimeBindingSourceArgumentsEvaluation {
+    return new RuntimeBindingSourceArgumentsEvaluation([], [], blocking);
   }
 }
 
@@ -2096,7 +2292,6 @@ class RuntimeBindingSourceCallTargetEvaluation {
   constructor(
     readonly callee: RuntimeBindingSourceValueEvaluation,
     readonly thisValue: EvaluationValue | null,
-    readonly openSummaries: readonly string[] = [],
     readonly nullishKind: RuntimeBindingSourceCallTargetNullishKind | null = null,
   ) {}
 
@@ -2105,7 +2300,7 @@ class RuntimeBindingSourceCallTargetEvaluation {
   }
 
   static nullishOwner(callee: RuntimeBindingSourceValueEvaluation): RuntimeBindingSourceCallTargetEvaluation {
-    return new RuntimeBindingSourceCallTargetEvaluation(callee, null, [], RuntimeBindingSourceCallTargetNullishKind.Owner);
+    return new RuntimeBindingSourceCallTargetEvaluation(callee, null, RuntimeBindingSourceCallTargetNullishKind.Owner);
   }
 }
 
@@ -2164,11 +2359,35 @@ function boundaryValueForOpenArgument(
   );
 }
 
-function openValueConverterInstance(reason: string): RuntimeValueConverterInstanceRead {
+function bindingSourceValueEvaluationForInstanceRead(
+  read: {
+    readonly value: EvaluationValue | null;
+    readonly openSeams: readonly EvaluationOpenSeam[];
+    readonly abruptCompletion: EvaluationAbruptCompletion | null;
+  },
+): RuntimeBindingSourceValueEvaluation {
+  if (read.value?.kind !== EvaluationValueKind.Instance || read.abruptCompletion != null) {
+    return bindingSourceValueEvaluationForRead(read);
+  }
+  return bindingSourceValueEvaluationForRead({
+    value: read.value,
+    openSeams: read.value.constructionOpenSeams,
+    abruptCompletion: null,
+  });
+}
+
+function openValueConverterInstance(
+  reason: string,
+  abruptCompletion: EvaluationAbruptCompletion | null = null,
+): RuntimeValueConverterInstanceRead {
+  const open = abruptCompletion == null
+    ? openBindingSourceNeedsRuntimeValue(reason)
+    : bindingSourceValueEvaluationResult(null, [reason], abruptCompletion);
   return {
     instance: null,
-    open: openBindingSourceNeedsRuntimeValue(reason),
+    open,
     openReasons: [reason],
+    openReasonKinds: open.openReasonKinds,
   };
 }
 
@@ -2176,10 +2395,17 @@ function valueOrBoundaryForOpen(
   evaluation: RuntimeBindingSourceValueEvaluation,
   expression: ExpressionAstNode,
 ): EvaluationValue | null {
-  if (evaluation.kind === RuntimeBindingSourceValueEvaluationKind.Value && evaluation.value != null) {
-    return evaluation.value;
+  if (evaluation.executableValue != null) {
+    return evaluation.executableValue;
   }
   return boundaryValueForOpenArgument(evaluation, expression);
+}
+
+function retainedSlotValueForOpen(
+  evaluation: RuntimeBindingSourceValueEvaluation,
+  expression: ExpressionAstNode,
+): EvaluationValue | null {
+  return evaluation.value ?? boundaryValueForOpenArgument(evaluation, expression);
 }
 
 function evaluatePlus(

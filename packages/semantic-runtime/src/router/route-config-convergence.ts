@@ -19,7 +19,7 @@ import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
   RouteableComponentKind,
   RouteableComponentReference,
-  RouteConfigClosureKind,
+  RouterClosureKind,
   RouteConfigContributionEffectKind,
   type RouteConfigContributionModel,
   type RouteConfigContributionReference,
@@ -589,7 +589,7 @@ class RouteConfigConvergenceFrame {
       seed.productHandle,
       seed.identityHandle,
       seed.stage,
-      seed.openFields.size === 0 ? RouteConfigClosureKind.Closed : RouteConfigClosureKind.Open,
+      seed.openFields.size === 0 ? RouterClosureKind.Closed : RouterClosureKind.Open,
       seed.routeKind,
       seed.id,
       seed.paths,

@@ -49,6 +49,7 @@ import {
   EvaluationValueKind,
   type EvaluationValue,
 } from '../src/evaluation/values.js';
+import { evaluationValueOwnOpenSeams } from '../src/evaluation/value-pressure.js';
 import {
   SourceFileAddress,
   SourceSpanAddress,
@@ -269,6 +270,58 @@ describe('DI provider model', () => {
 
     expect(before.state).toBe(DiProviderActivationState.Failed);
     expect(marker(after.value)).toBe('late-instance');
+  });
+
+  test('replays cached singleton pressure without flattening it onto its consumer', async () => {
+    const fixture = await openProviderActivationFixture('nested-singleton-pressure');
+    const session = fixture.activation.createSession();
+    const consumer = activateNamedSite(fixture, session, 'openSingletonConsumerRead');
+    const singleton = activateNamedSite(fixture, session, 'openSingletonReadAfterConsumer');
+
+    expect(consumer.state).toBe(DiProviderActivationState.Value);
+    expect(singleton.state).toBe(DiProviderActivationState.Value);
+    const service = instanceProperty(consumer.value, 'service');
+    expect(service).toBe(singleton.value);
+    expect(consumer.openSeams).toHaveLength(0);
+    expect(singleton.openSeams).toHaveLength(1);
+    expect(evaluationValueOwnOpenSeams(service!).map(activationSeamKey))
+      .toEqual(singleton.openSeams.map(activationSeamKey));
+
+    const secondSessionSingleton = activateNamedSite(
+      fixture,
+      fixture.activation.createSession(),
+      'openSingletonReadAfterConsumer',
+    );
+    expect(secondSessionSingleton.openSeams).toHaveLength(1);
+    expect(secondSessionSingleton.value).not.toBe(singleton.value);
+  });
+
+  test('retains partial all values and pressure-bearing wrapper inputs', async () => {
+    const fixture = await openProviderActivationFixture('partial-aggregate-pressure');
+    const session = fixture.activation.createSession();
+    const partial = activateNamedSite(fixture, session, 'partialMultiRead');
+
+    expect(partial.state).toBe(DiProviderActivationState.Multiple);
+    expect(arrayMarkers(partial.value)).toEqual(['partial-multi']);
+    expect(partial.value).toEqual(expect.objectContaining({
+      kind: EvaluationValueKind.Array,
+      mayHaveUnknownElements: true,
+      mayHaveUnknownOrder: true,
+    }));
+    expect(partial.reason).toContain('runtime callback boundary');
+
+    const directKey = activateNamedSite(fixture, session, 'pressuredKeyRead');
+    const containerKey = activateContainerSite(fixture, 'pressuredKeyRead');
+    const ancestors = activateNamedSite(fixture, session, 'pressuredAncestorRead');
+    const receiver = activateContainerSite(fixture, 'pressuredReceiverRead');
+    expect(marker(directKey.value)).toBe('exact-instance');
+    expect(marker(containerKey.value)).toBe('exact-instance');
+    expect(arrayMarkers(ancestors.value)).toEqual(['multi-first', 'multi-second']);
+    expect(marker(receiver.value)).toBe('exact-instance');
+    expect(directKey.openSeams).toHaveLength(1);
+    expect(containerKey.openSeams.map(activationSeamKey)).toEqual(directKey.openSeams.map(activationSeamKey));
+    expect(ancestors.openSeams).toHaveLength(1);
+    expect(receiver.openSeams).toHaveLength(1);
   });
 
   test('uses registry completion and keeps container-mutating registry bodies open', async () => {
@@ -1005,6 +1058,18 @@ function arrayValues(value: EvaluationValue | null): readonly EvaluationValue[] 
   return value?.kind === EvaluationValueKind.Array
     ? value.elements.map((element) => element.value)
     : [];
+}
+
+function activationSeamKey(
+  seam: DiProviderActivationResult['openSeams'][number],
+): string {
+  return [
+    seam.seamKind,
+    seam.moduleKey,
+    seam.node.getStart(seam.sourceFile),
+    seam.node.end,
+    seam.summary,
+  ].join(':');
 }
 
 function arrayMarkers(value: EvaluationValue | null): readonly (string | null)[] {

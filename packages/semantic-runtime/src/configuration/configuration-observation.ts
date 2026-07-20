@@ -1,4 +1,9 @@
 import type ts from 'typescript';
+import { evaluationAbruptCompletionSummary } from '../evaluation/completion.js';
+import { openSeamReasonKindsForEvaluationRead } from '../evaluation/boundary-open-reason.js';
+import type { EvaluationRead } from '../evaluation/expression-reader.js';
+import { evaluationOpenSeamDefaultReasonKinds } from '../evaluation/seams.js';
+import type { EvaluationValue } from '../evaluation/values.js';
 import type {
   AureliaContainerEvaluation,
   AureliaFacadeEvaluation,
@@ -56,6 +61,37 @@ export class ConfigurationRecognitionOpen {
   ) {}
 }
 
+/** Project one evaluator read into source-precise configuration pressure without flattening its causes. */
+export function configurationRecognitionOpensForEvaluationRead(
+  read: EvaluationRead<EvaluationValue>,
+  openKind: OpenSeamKindKey,
+  summary: string,
+  fallbackNode: ts.Node,
+): readonly ConfigurationRecognitionOpen[] {
+  const opens = read.openSeams.map((seam) => new ConfigurationRecognitionOpen(
+    openKind,
+    seam.summary,
+    seam.node,
+    seam.reasonKinds.length === 0
+      ? evaluationOpenSeamDefaultReasonKinds(seam.seamKind)
+      : seam.reasonKinds,
+  ));
+  const coveredReasons = new Set(opens.flatMap((open) => open.reasonKinds));
+  const residualReasons = openSeamReasonKindsForEvaluationRead(read)
+    .filter((reason) => !coveredReasons.has(reason));
+  if (residualReasons.length > 0) {
+    opens.push(new ConfigurationRecognitionOpen(
+      openKind,
+      read.abruptCompletion == null
+        ? summary
+        : evaluationAbruptCompletionSummary(read.abruptCompletion),
+      read.node ?? fallbackNode,
+      residualReasons,
+    ));
+  }
+  return opens;
+}
+
 /** Source-level resource/component target observed in an app-root config. */
 export class ConfigurationTargetObservation {
   constructor(
@@ -65,6 +101,8 @@ export class ConfigurationTargetObservation {
     readonly node: ts.Node,
     /** Whether the node is an actual declaration/name site rather than only a reference expression. */
     readonly isDeclaration: boolean,
+    /** Candidate-local evaluator read retained for resource lookup and open-pressure projection. */
+    readonly evaluation: EvaluationRead<EvaluationValue>,
   ) {}
 }
 

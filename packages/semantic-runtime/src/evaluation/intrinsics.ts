@@ -18,6 +18,7 @@ import {
   evaluateArrayMap,
   evaluateArrayOf,
   evaluateArrayOrStringIncludes,
+  evaluateArrayOrStringAt,
   evaluateArrayOrStringSlice,
   evaluateArrayPop,
   evaluateArrayPush,
@@ -48,6 +49,7 @@ import {
   evaluateAureliaExpressionGlobalCall,
   evaluateAureliaExpressionGlobalConstructor,
   evaluateAureliaExpressionGlobalMemberCallFromPath,
+  isAureliaExpressionGlobalMemberCallReceiverPath,
 } from './global-intrinsics.js';
 import { isAureliaExpressionGlobalName } from '../expression/global-names.js';
 import { evaluateDynamicImport, evaluateCommonJsRequire } from './intrinsics/module-intrinsics.js';
@@ -180,14 +182,20 @@ function evaluateGlobalIntrinsicCall(
   if (calleeText == null) {
     return null;
   }
-  const argumentValues = evaluateCallArgumentValues(call, environment, moduleKey, depth + 1, host);
   const memberDot = calleeText.lastIndexOf('.');
+  const receiverPath = memberDot < 0 ? null : calleeText.slice(0, memberDot);
+  if (
+    memberDot < 0
+      ? !isAureliaExpressionGlobalName(calleeText)
+      : receiverPath == null || !isAureliaExpressionGlobalMemberCallReceiverPath(receiverPath)
+  ) {
+    return null;
+  }
+  const argumentValues = evaluateCallArgumentValues(call, environment, moduleKey, depth + 1, host);
   const result = memberDot < 0
-    ? isAureliaExpressionGlobalName(calleeText)
-      ? evaluateAureliaExpressionGlobalCall(calleeText, argumentValues, call)
-      : null
+    ? evaluateAureliaExpressionGlobalCall(calleeText, argumentValues, call)
     : evaluateAureliaExpressionGlobalMemberCallFromPath(
-      calleeText.slice(0, memberDot),
+      receiverPath!,
       calleeText.slice(memberDot + 1),
       argumentValues,
       call,
@@ -321,7 +329,7 @@ function evaluatePrototypeIntrinsicCall(
     case 'slice':
       return evaluateArrayOrStringSlice(call, receiverExpression, environment, moduleKey, depth + 1, host);
     case 'at':
-      return evaluateStringAt(call, receiverExpression, environment, moduleKey, depth + 1, host, 'at');
+      return evaluateArrayOrStringAt(call, receiverExpression, environment, moduleKey, depth + 1, host);
     case 'charAt':
       return evaluateStringAt(call, receiverExpression, environment, moduleKey, depth + 1, host, 'charAt');
     case 'charCodeAt':

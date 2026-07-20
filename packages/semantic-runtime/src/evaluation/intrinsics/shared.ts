@@ -162,7 +162,7 @@ export function regularExpressionValue(
   try {
     return new RegExp(value.pattern, value.flags);
   } catch {
-    host.open(EvaluationOpenSeamKind.DynamicCall, 'Regular expression value did not construct in the host runtime.', node, moduleKey);
+    host.open(EvaluationOpenSeamKind.DynamicCall, 'Regular expression value did not construct in the host runtime.', node, moduleKey, []);
     return null;
   }
 }

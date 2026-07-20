@@ -8,9 +8,6 @@ import {
   type ModuleItem,
 } from '../evaluation/module-loader.js';
 import {
-  readDeclarationLocalName,
-} from '../evaluation/ts-syntax.js';
-import {
   EvaluationObjectPropertyState,
   EvaluationValueKind,
   type EvaluationObjectProperty,
@@ -47,7 +44,6 @@ import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
-import { firstSymbolDeclaration } from '../type-system/checker-node-helpers.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import {
@@ -1009,7 +1005,7 @@ export class ConfigurationStepMaterializer {
     }
     const enriched = observation.registrationAdmissions.map((admission) => {
       const appTaskEnriched = enrichAppTaskRegistration(admission, appTaskEmissions);
-      return enrichResourceRegistration(appTaskEnriched, context, resources);
+      return enrichResourceRegistration(appTaskEnriched, resources);
     }).flatMap((admission) => [
       admission,
       ...aliasedResourcesRegistryBodyRegistrations(admission, context, resources),
@@ -1467,10 +1463,9 @@ function enrichAppTaskRegistration(
 
 function enrichResourceRegistration(
   observation: RegistrationAdmissionObservation,
-  context: ConfigurationRecognitionContext,
   resources: ResourceDefinitionIndex | null,
 ): RegistrationAdmissionObservation {
-  const definition = resourceDefinitionForRegistrationValue(observation, context, resources);
+  const definition = resourceDefinitionForRegistrationValue(observation, resources);
   if (definition == null || observation.registeredValue == null) {
     return observation;
   }
@@ -1504,7 +1499,6 @@ function enrichResourceRegistration(
 
 function resourceDefinitionForRegistrationValue(
   observation: RegistrationAdmissionObservation,
-  context: ConfigurationRecognitionContext,
   resources: ResourceDefinitionIndex | null,
 ): FullResourceDefinition | null {
   if (resources == null || observation.registeredValue == null) {
@@ -1527,22 +1521,7 @@ function resourceDefinitionForRegistrationValue(
   if (carrierDefinition?.productHandle != null) {
     return carrierDefinition;
   }
-  if (!ts.isExpression(observation.registeredValue.node)) {
-    return null;
-  }
-  const targetSymbol = context.typeSystem?.readProgramAliasedSymbolAtLocation(observation.registeredValue.node) ?? null;
-  const targetDeclaration = targetSymbol == null ? null : firstSymbolDeclaration(targetSymbol);
-  const targetModuleKey = targetDeclaration == null
-    ? null
-    : context.typeSystem?.readModuleKeyForSourceFile(targetDeclaration.getSourceFile()) ?? null;
-  const targetLocalName = readDeclarationLocalName(targetDeclaration);
-  if (targetModuleKey != null && targetLocalName != null) {
-    const definition = resources.lookupByModuleLocal(targetModuleKey, targetLocalName);
-    if (definition?.productHandle != null) {
-      return definition;
-    }
-  }
-  const definition = resources.lookupExpression(observation.registeredValue.node, context.expressionReader);
+  const definition = resources.lookupValue(observation.registeredValue.evaluatedValue);
   return definition?.productHandle == null
     ? null
     : definition;

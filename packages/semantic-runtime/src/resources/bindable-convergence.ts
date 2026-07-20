@@ -20,7 +20,15 @@ import {
   EvaluationRead,
   readStaticStringValue,
 } from '../evaluation/expression-reader.js';
+import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own-properties.js';
 import {
+  closedStaticValueMemberValue,
+  readStaticOwnProperty,
+  readStaticValueProperty,
+  StaticValueMemberReadKind,
+} from '../evaluation/property-access.js';
+import {
+  EvaluationObjectPropertyState,
   EvaluationValueKind,
   type EvaluationObjectValue,
   type EvaluationValue,
@@ -52,6 +60,7 @@ import type { ResourceRecognitionContext } from './resource-recognition-context.
 import {
   decoratorCallNamed,
   decoratorIdentifierNamed,
+  convergenceOpenForReadPressure,
   memberName,
   memberNameNode,
   nullableConvergenceOpenForNode,
@@ -128,7 +137,7 @@ class ClassBindableDecoratorFrame {
       return bindableEntry(this.store, this.context, this.local, value.value, null, this.contributionKind, source);
     }
     if (value?.kind === EvaluationValueKind.Object) {
-      return this.readObjectConfiguration(value, argument, source);
+      return this.readObjectConfiguration(read, value, argument, source);
     }
     return {
       bindable: null,
@@ -144,12 +153,24 @@ class ClassBindableDecoratorFrame {
   }
 
   private readObjectConfiguration(
+    read: EvaluationRead<EvaluationValue>,
     value: EvaluationObjectValue,
     argument: ts.Expression,
     source: SourceSpanEvidencePublication | null,
   ): BindableEntryRead {
-    const nameProperty = value.properties.get('name') ?? null;
-    const name = nameProperty == null ? null : readStaticStringValue(nameProperty.value);
+    const nameProperty = readStaticOwnProperty(value, 'name');
+    const nameRead = readStaticValueProperty(value, 'name', argument);
+    const nameValue = closedStaticValueMemberValue(nameRead);
+    if (nameValue == null) {
+      return bindableReadOpen(
+        nameRead.openSeams[0]?.summary
+          ?? (nameRead.kind === StaticValueMemberReadKind.Open
+            ? nameRead.reason
+            : 'Class-level @bindable name getter requires runtime execution.'),
+        argument,
+      );
+    }
+    const name = readStaticStringValue(nameValue);
     if (name != null && name.length > 0) {
       const entry = bindableEntry(this.store, this.context, this.local, name, value, this.contributionKind, source);
       return value.mayHaveUnknownProperties
@@ -158,12 +179,15 @@ class ClassBindableDecoratorFrame {
           open: new ConvergenceOpen(
             convergenceSummaryForObjectUncertainties(value, 'Class-level @bindable configuration included open object properties.'),
             argument,
-            convergenceReasonKindsForRead(new EvaluationRead(value, argument), [OpenSeamReasonKind.ResourceBindableConfigurationOpen]),
+            convergenceReasonKindsForRead(
+              new EvaluationRead(value, argument, read.openSeams, read.abruptCompletion),
+              [OpenSeamReasonKind.ResourceBindableConfigurationOpen],
+            ),
           ),
         }
         : entry;
     }
-    if (nameProperty != null && nameProperty.value.kind !== EvaluationValueKind.String) {
+    if (nameProperty != null && nameValue.kind !== EvaluationValueKind.String) {
       return this.publishInvalidConfiguration(
         ResourceIssueKind.InvalidBindableDecoratorUsageSymbol,
         'Class-level @bindable property names must be strings.',
@@ -464,8 +488,14 @@ function readBindableListValue(
   contributionKind: BindableContributionKind,
 ): readonly BindableEntryRead[] {
   const value = read?.value;
-  if (read == null || value == null || value.kind === EvaluationValueKind.Undefined) {
+  if (read == null) {
     return [];
+  }
+  if (value?.kind === EvaluationValueKind.Undefined) {
+    return bindableReadPressure('Bindable list evaluation remained open.', read);
+  }
+  if (value == null) {
+    return [bindableReadOpen('Bindable list evaluation did not produce a value.', read)];
   }
   if (value.kind === EvaluationValueKind.Array) {
     const entries = value.elements.map((element, index) => {
@@ -494,28 +524,35 @@ function readBindableListValue(
     if (value.mayHaveUnknownElements || value.mayHaveUnknownOrder) {
       return [
         ...entries,
-        bindableReadOpen('Bindable array includes open spread, hole, or unknown-order entries.', value.node),
+        bindableReadOpen('Bindable array includes open spread, hole, or unknown-order entries.', read),
       ];
     }
-    return entries;
+    return [...entries, ...bindableReadPressure('Bindable array evaluation remained open.', read)];
   }
   if (value.kind === EvaluationValueKind.Object) {
     const entries: BindableEntryRead[] = [];
-    for (const property of value.properties.values()) {
-      const source = sourceSpanEvidenceForNode(store, context, property.node, `${local}:object:${property.name}`, SourceSpanRole.Name);
-      if (property.value.kind === EvaluationValueKind.Boolean && property.value.value === true) {
-        entries.push(bindableEntry(store, context, `${local}:object:${property.name}`, property.name, null, contributionKind, source));
+    const enumerable = readEvaluationEnumerableOwnEntries(value);
+    if (enumerable == null) {
+      return [bindableReadOpen('Bindable object properties could not be enumerated.', read)];
+    }
+    for (const entry of enumerable.entries) {
+      if (entry.property?.state === EvaluationObjectPropertyState.Open) {
         continue;
       }
-      if (property.value.kind === EvaluationValueKind.Object) {
-        entries.push(bindableEntry(store, context, `${local}:object:${property.name}`, property.name, property.value, contributionKind, source));
-        if (property.value.mayHaveUnknownProperties) {
+      const source = sourceSpanEvidenceForNode(store, context, entry.sourceNode, `${local}:object:${entry.name}`, SourceSpanRole.Name);
+      if (entry.value.kind === EvaluationValueKind.Boolean && entry.value.value === true) {
+        entries.push(bindableEntry(store, context, `${local}:object:${entry.name}`, entry.name, null, contributionKind, source));
+        continue;
+      }
+      if (entry.value.kind === EvaluationValueKind.Object) {
+        entries.push(bindableEntry(store, context, `${local}:object:${entry.name}`, entry.name, entry.value, contributionKind, source));
+        if (entry.value.mayHaveUnknownProperties) {
           entries.push({
             bindable: null,
             contribution: null,
             open: nullableConvergenceOpenForRead(
-              convergenceSummaryForObjectUncertainties(property.value, `Bindable '${property.name}' configuration included open object properties.`),
-              new EvaluationRead(property.value, property.node ?? property.value.node ?? read.node ?? value.node, read.openSeams),
+              convergenceSummaryForObjectUncertainties(entry.value, `Bindable '${entry.name}' configuration included open object properties.`),
+              new EvaluationRead(entry.value, entry.sourceNode ?? entry.value.node ?? read.node ?? value.node, read.openSeams),
               [OpenSeamReasonKind.ResourceBindableConfigurationOpen],
             ),
             records: [],
@@ -524,16 +561,28 @@ function readBindableListValue(
         }
         continue;
       }
-      entries.push(bindableReadOpen(`Bindable '${property.name}' did not close to true or a static configuration object.`, property.node));
+      entries.push(bindableReadOpen(`Bindable '${entry.name}' did not close to true or a static configuration object.`, entry.sourceNode));
     }
-    if (value.mayHaveUnknownProperties) {
-      entries.push(bindableReadOpen('Bindable object includes open spread or computed property entries.', value.node));
+    if (enumerable.mayHaveUnknownEntries || enumerable.mayHaveUnknownOrder) {
+      entries.push(bindableReadOpen('Bindable object includes open spread or computed property entries.', read));
+    } else {
+      entries.push(...bindableReadPressure('Bindable object evaluation remained open.', read));
     }
     return entries;
   }
   return [
     bindableReadOpen('Bindable list did not close to a static array or object.', read),
   ];
+}
+
+function bindableReadPressure(
+  summary: string,
+  read: EvaluationRead<EvaluationValue>,
+): readonly BindableEntryRead[] {
+  const open = convergenceOpenForReadPressure(summary, read)[0] ?? null;
+  return open == null
+    ? []
+    : [{ bindable: null, contribution: null, open, records: [], issues: [] }];
 }
 
 function bindableReadOpen(
@@ -558,7 +607,9 @@ function bindableEntry(
 ): BindableEntryRead {
   const attribute = readObjectString(partial, 'attribute') ?? bindableAttributeNameForProperty(propertyName);
   const callback = readObjectString(partial, 'callback') ?? `${propertyName}Changed`;
-  const mode = readBindableMode(partial?.properties.get('mode')?.value) ?? defaultBindableMode(partial);
+  const modeRead = partial == null ? null : readStaticValueProperty(partial, 'mode', partial.node);
+  const mode = readBindableMode(modeRead == null ? null : closedStaticValueMemberValue(modeRead))
+    ?? defaultBindableMode(partial);
   const name = readObjectString(partial, 'name') ?? propertyName;
   const setter = setterOverride ?? readBindableSetter(partial);
   const nameSource = readObjectStringFieldSource(store, context, `${local}:name`, partial, 'name') ?? source;
@@ -747,17 +798,30 @@ function defaultBindableMode(
 }
 
 function readBindableSetter(partial: EvaluationObjectValue | null): BindableSetterDefinition {
-  const set = partial?.properties.get('set')?.value ?? null;
+  if (partial == null) {
+    return new BindableSetterDefinition(BindableSetterKind.Default);
+  }
+  const setRead = readStaticValueProperty(partial, 'set', partial.node);
+  const setValue = closedStaticValueMemberValue(setRead);
+  if (setValue == null) {
+    return new BindableSetterDefinition(BindableSetterKind.Open);
+  }
+  const set = setValue.kind === EvaluationValueKind.Undefined ? null : setValue;
   if (set?.kind === EvaluationValueKind.Function) {
     return new BindableSetterDefinition(BindableSetterKind.Function, targetReferenceForFunction(set, null));
   }
   if (set != null) {
     return new BindableSetterDefinition(BindableSetterKind.Open);
   }
-  if (partial?.properties.has('type') === true) {
+  const typeRead = readStaticValueProperty(partial, 'type', partial.node);
+  const typeValue = closedStaticValueMemberValue(typeRead);
+  if (typeValue == null) {
+    return new BindableSetterDefinition(BindableSetterKind.Open);
+  }
+  if (typeValue.kind !== EvaluationValueKind.Undefined) {
     return new BindableSetterDefinition(BindableSetterKind.TypeCoercion);
   }
-  if (partial?.mayHaveUnknownProperties === true) {
+  if (partial.mayHaveUnknownProperties) {
     return new BindableSetterDefinition(BindableSetterKind.Open);
   }
   return new BindableSetterDefinition(BindableSetterKind.Default);

@@ -6,15 +6,17 @@ import {
   readStaticStringValue,
   type StaticEvaluationExpressionReader,
 } from '../evaluation/expression-reader.js';
-import { openSeamReasonKindsForEvaluationValue } from '../evaluation/boundary-open-reason.js';
 import {
-  evaluationOpenSeamDefaultReasonKinds,
-  type EvaluationOpenSeam,
-} from '../evaluation/seams.js';
+  openSeamReasonKindsForEvaluationRead,
+} from '../evaluation/boundary-open-reason.js';
 import {
   hasStaticModifier,
   readPropertyName,
 } from '../evaluation/ts-syntax.js';
+import {
+  closedStaticValueMemberValue,
+  readStaticValueProperty,
+} from '../evaluation/property-access.js';
 import {
   EvaluationValueKind,
   evaluationObjectUncertaintySummaries,
@@ -32,6 +34,15 @@ export class ConvergenceOpen {
     readonly summary: string,
     readonly node: ts.Node,
     readonly reasonKinds: readonly OpenSeamReasonKind[],
+  ) {}
+}
+
+/** One optional scalar definition field, retaining any open evaluation pressure beside a known value. */
+export class ConvergenceScalarRead<TValue> {
+  constructor(
+    readonly value: TValue | null,
+    readonly open: readonly ConvergenceOpen[],
+    readonly sourceNode: ts.Node | null,
   ) {}
 }
 
@@ -83,14 +94,23 @@ export function nullableConvergenceOpenForRead(
   return convergenceOpenForRead(summary, read, reasonKinds)[0] ?? null;
 }
 
+/** Publish only lower-level evaluator pressure, without treating a closed value as open by itself. */
+export function convergenceOpenForReadPressure(
+  summary: string,
+  read: EvaluationRead<EvaluationValue> | null,
+): readonly ConvergenceOpen[] {
+  return openSeamReasonKindsForEvaluationRead(read).length === 0
+    ? []
+    : convergenceOpenForRead(summary, read, []);
+}
+
 export function convergenceReasonKindsForRead(
   read: EvaluationRead<EvaluationValue> | null,
   fallbackReasonKinds: readonly OpenSeamReasonKind[],
 ): readonly OpenSeamReasonKind[] {
   return compactConvergenceOpenReasonKinds([
     ...fallbackReasonKinds,
-    ...convergenceReasonKindsForEvaluationOpenSeams(read?.openSeams ?? []),
-    ...openSeamReasonKindsForEvaluationValue(read?.value ?? null),
+    ...openSeamReasonKindsForEvaluationRead(read),
   ]);
 }
 
@@ -100,16 +120,6 @@ export function convergenceSummaryForObjectUncertainties(
 ): string {
   const summaries = evaluationObjectUncertaintySummaries(value);
   return summaries.length === 0 ? fallbackSummary : `${fallbackSummary} ${summaries.join('; ')}.`;
-}
-
-function convergenceReasonKindsForEvaluationOpenSeams(
-  openSeams: readonly EvaluationOpenSeam[],
-): readonly OpenSeamReasonKind[] {
-  return openSeams.flatMap((seam) =>
-    seam.reasonKinds.length === 0
-      ? evaluationOpenSeamDefaultReasonKinds(seam.seamKind)
-      : seam.reasonKinds
-  );
 }
 
 function compactConvergenceOpenReasonKinds(
@@ -157,14 +167,12 @@ export function readObjectProperty(
   if (expression == null) {
     return null;
   }
-  const evaluated = reader.evaluateExpression(expression);
-  if (evaluated.value?.kind !== EvaluationValueKind.Object) {
-    return null;
-  }
-  const property = evaluated.value.properties.get(propertyName);
-  return property == null
+  const read = reader.readObjectProperty(expression, propertyName);
+  return read.value == null
+    && read.openSeams.length === 0
+    && read.abruptCompletion == null
     ? null
-    : new EvaluationRead(property.value, property.node, evaluated.openSeams);
+    : read;
 }
 
 export function readFieldValue(
@@ -191,9 +199,11 @@ export function readBooleanField(
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
   fieldName: string,
-): boolean | null {
-  const value = readFieldValue(context, definitionExpression, targetClass, fieldName)?.value;
-  return value?.kind === EvaluationValueKind.Boolean ? value.value : null;
+  openSummary: string,
+): ConvergenceScalarRead<boolean> {
+  const read = readFieldValue(context, definitionExpression, targetClass, fieldName);
+  const value = read?.value?.kind === EvaluationValueKind.Boolean ? read.value.value : null;
+  return convergenceScalarRead(read, value, openSummary);
 }
 
 export function readStringField(
@@ -201,9 +211,31 @@ export function readStringField(
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
   fieldName: string,
-): string | null {
-  const value = readFieldValue(context, definitionExpression, targetClass, fieldName)?.value;
-  return value == null ? null : readStaticStringValue(value);
+  openSummary: string,
+): ConvergenceScalarRead<string> {
+  const read = readFieldValue(context, definitionExpression, targetClass, fieldName);
+  const value = read?.value == null ? null : readStaticStringValue(read.value);
+  return convergenceScalarRead(read, value, openSummary);
+}
+
+function convergenceScalarRead<TValue>(
+  read: EvaluationRead<EvaluationValue> | null,
+  value: TValue | null,
+  openSummary: string,
+): ConvergenceScalarRead<TValue> {
+  if (read == null) {
+    return new ConvergenceScalarRead<TValue>(null, [], null);
+  }
+  const closedAbsence = read.value?.kind === EvaluationValueKind.Undefined
+    || read.value?.kind === EvaluationValueKind.Null;
+  const reasonKinds = openSeamReasonKindsForEvaluationRead(read);
+  return (value != null || closedAbsence) && reasonKinds.length === 0
+    ? new ConvergenceScalarRead<TValue>(value, [], read.node ?? read.value?.node ?? null)
+    : new ConvergenceScalarRead<TValue>(
+        value,
+        convergenceOpenForRead(openSummary, read, []),
+        read.node ?? read.value?.node ?? null,
+      );
 }
 
 export function readObjectString(
@@ -213,8 +245,9 @@ export function readObjectString(
   if (value == null) {
     return null;
   }
-  const property = value.properties.get(propertyName);
-  return property == null ? null : readStaticStringValue(property.value);
+  const read = readStaticValueProperty(value, propertyName, value.node);
+  const memberValue = closedStaticValueMemberValue(read);
+  return memberValue == null ? null : readStaticStringValue(memberValue);
 }
 
 export function targetReferenceForFunction(

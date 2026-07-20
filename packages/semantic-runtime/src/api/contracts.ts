@@ -281,7 +281,7 @@ import type {
 import type {
   NavigationInstructionKind,
   RouteableComponentKind,
-  RouteConfigClosureKind,
+  RouterClosureKind,
   RouteConfigContributionEffectKind,
   RouteConfigExecutionKind,
   RouteConfigFieldStateKind,
@@ -2735,7 +2735,7 @@ export interface SemanticRouteConfigRow {
   readonly effectKind: RouteConfigContributionEffectKind | `${RouteConfigContributionEffectKind}`;
   /** Framework-shaped facts joined from the associated definition or per-use applied RouteConfig. */
   readonly stage: RouteConfigStageKind | `${RouteConfigStageKind}`;
-  readonly closure: RouteConfigClosureKind | `${RouteConfigClosureKind}`;
+  readonly closure: RouterClosureKind | `${RouterClosureKind}`;
   readonly id: string | null;
   readonly paths: readonly string[];
   readonly title: string | null;
@@ -2965,6 +2965,7 @@ export interface SemanticRouteConfigReferenceRow {
 
 export interface SemanticTypedNavigationInstructionRow {
   readonly projectKey: string;
+  readonly closure: RouterClosureKind | `${RouterClosureKind}`;
   readonly instructionKind: NavigationInstructionKind | `${NavigationInstructionKind}`;
   readonly value: string | null;
   readonly component: SemanticRouterProductReferenceRow | null;
@@ -2989,6 +2990,7 @@ export interface SemanticViewportInstructionComponentRow extends SemanticRouterP
 
 export interface SemanticViewportInstructionRow {
   readonly projectKey: string;
+  readonly closure: RouterClosureKind | `${RouterClosureKind}`;
   readonly component: SemanticViewportInstructionComponentRow | null;
   readonly viewport: string | null;
   readonly childCount: number;
@@ -3016,6 +3018,7 @@ export interface SemanticViewportInstructionsResult {
 
 export interface SemanticViewportInstructionTreeRow {
   readonly projectKey: string;
+  readonly closure: RouterClosureKind | `${RouterClosureKind}`;
   readonly routeContext: {
     readonly label: string | null;
     readonly source: SemanticSourceReference | null;
@@ -4479,6 +4482,7 @@ export interface SemanticExpressionResourceLifecycleEffectsRow {
   readonly rateLimitDelayState: RuntimeExpressionResourceValueState | `${RuntimeExpressionResourceValueState}` | null;
   readonly configurationSource: SemanticSourceReference | null;
   readonly openReason: string | null;
+  readonly openReasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
   readonly handles?: {
     readonly configurationSourceAddressHandle: AddressHandle | null;
   };

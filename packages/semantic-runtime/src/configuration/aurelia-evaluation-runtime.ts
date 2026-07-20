@@ -265,7 +265,7 @@ for (const statement of syntheticSource.statements) {
   if (ts.isFunctionDeclaration(statement) && statement.name != null) {
     const value = new EvaluationFunctionValue(statement, syntheticEnvironment, statement);
     syntheticFunctions.set(statement.name.text, value);
-    syntheticEnvironment.initializeBinding(statement.name.text, value, EvaluationBindingKind.Function, false, statement);
+    syntheticEnvironment.initializeBinding(statement.name.text, value, EvaluationBindingKind.Function, false, statement, []);
     continue;
   }
   if (!ts.isVariableStatement(statement)) {
@@ -277,7 +277,7 @@ for (const statement of syntheticSource.statements) {
     }
     const value = new EvaluationFunctionValue(declaration.initializer, syntheticEnvironment, declaration.initializer);
     syntheticFunctions.set(declaration.name.text, value);
-    syntheticEnvironment.initializeBinding(declaration.name.text, value, EvaluationBindingKind.Const, false, declaration);
+    syntheticEnvironment.initializeBinding(declaration.name.text, value, EvaluationBindingKind.Const, false, declaration, []);
   }
 }
 

@@ -1,5 +1,6 @@
 import { route } from '@aurelia/router';
 import { customElement } from '@aurelia/runtime-html';
+import { routeInstructionDefaults } from 'router-pressure-vendor-links';
 import { ProductDetailsRoute } from './routes/product-details-route';
 import { ProductsRoute } from './routes/products-route';
 import template from './router-pattern-app.html';
@@ -99,4 +100,17 @@ export class RouterPatternApp {
       ],
     },
   ];
+  readonly pressuredInstruction = {
+    ...routeInstructionDefaults,
+    component: ProductsRoute,
+    params: {},
+    viewport: null,
+    children: [
+      {
+        component: ProductDetailsRoute,
+        params: { productId: 'pressured' },
+        viewport: 'details',
+      },
+    ],
+  };
 }

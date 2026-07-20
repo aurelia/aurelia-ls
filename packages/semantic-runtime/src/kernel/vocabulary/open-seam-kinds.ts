@@ -318,6 +318,13 @@ export const KernelOpenSeamKinds = {
     ),
   },
   Template: {
+    /** Runtime AuCompose retained candidate inputs but could not close the complete composition operation. */
+    OpenRuntimeComposition: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'open-runtime-composition',
+      KernelVocabularySlot.OpenSeamKind,
+      'Runtime AuCompose retained candidate inputs while one input, component resolution, or child handoff remained open.',
+    ),
   },
   Binding: {
     /** Runtime binding target-side accessor or observer selection stayed open. */

@@ -1,6 +1,11 @@
 import ts from 'typescript';
+import { openSeamReasonKindsForEvaluationRead } from '../evaluation/boundary-open-reason.js';
 import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own-properties.js';
 import { readStaticStringArrayValue } from '../evaluation/expression-reader.js';
+import {
+  closedStaticValueMemberValue,
+  readStaticValueProperty,
+} from '../evaluation/property-access.js';
 import {
   EvaluationObjectPropertyState,
   EvaluationValueKind,
@@ -88,6 +93,7 @@ import {
   ConfigurationCarrierKind,
   ConfigurationOptionContributionObservation,
   ConfigurationOptionValueObservation,
+  configurationRecognitionOpensForEvaluationRead,
   ConfigurationRecognitionOpen,
   ConfigurationSequenceObservation,
   ConfigurationStepObservation,
@@ -880,11 +886,11 @@ function readAppRootConfig(
 
   const current = unwrapExpression(expression);
   if (!ts.isObjectLiteralExpression(current)) {
-    return appRootValueConfigObservation(current);
+    return appRootValueConfigObservation(context, current);
   }
 
   const hostExpression = readObjectPropertyExpression(current, 'host');
-  const component = readAppRootComponentTarget(current);
+  const component = readAppRootComponentTarget(context, current);
   const allowActionlessForm = readConfigurationBooleanObjectProperty(context, current, 'allowActionlessForm');
   const strictBinding = readConfigurationBooleanObjectProperty(context, current, 'strictBinding');
   const ssrScopeExpression = readObjectPropertyExpression(current, 'ssrScope');
@@ -901,12 +907,14 @@ function readAppRootConfig(
 }
 
 function appRootValueConfigObservation(
+  context: ConfigurationRecognitionContext,
   expression: ts.Expression,
 ): AppRootConfigObservation {
+  const evaluation = context.expressionReader.evaluateExpression(expression);
   return new AppRootConfigObservation(
     expression,
     null,
-    new ConfigurationTargetObservation(readReferenceName(expression), expression, false),
+    new ConfigurationTargetObservation(readReferenceName(expression), expression, false, evaluation),
     null,
     null,
     null,
@@ -914,12 +922,18 @@ function appRootValueConfigObservation(
 }
 
 function readAppRootComponentTarget(
+  context: ConfigurationRecognitionContext,
   object: ts.ObjectLiteralExpression,
 ): ConfigurationTargetObservation | null {
   const componentExpression = readObjectPropertyExpression(object, 'component');
   return componentExpression == null
     ? null
-    : new ConfigurationTargetObservation(readReferenceName(componentExpression), componentExpression, false);
+    : new ConfigurationTargetObservation(
+        readReferenceName(componentExpression),
+        componentExpression,
+        false,
+        context.expressionReader.evaluateExpression(componentExpression),
+      );
 }
 
 function appRootConfigOpenSeams(
@@ -941,6 +955,16 @@ function appRootConfigOpenSeams(
       'AppRoot config did not expose a closed component property.',
       object,
     ));
+  } else {
+    const reasonKinds = openSeamReasonKindsForEvaluationRead(component.evaluation);
+    if (reasonKinds.length > 0) {
+      openSeams.push(new ConfigurationRecognitionOpen(
+        KernelVocabulary.Configuration.OpenConfigurationTarget.key,
+        'AppRoot component evaluation retained open or abrupt static-evaluation pressure.',
+        component.node,
+        reasonKinds,
+      ));
+    }
   }
   return openSeams;
 }
@@ -1503,7 +1527,7 @@ function evaluationRegistryOpenSeams(
   openSeams: ReturnType<ConfigurationRecognitionContext['expressionReader']['evaluateExpression']>['openSeams'],
 ): readonly RegistrationRecognitionOpen[] {
   return openSeams.map((seam) => new RegistrationRecognitionOpen(
-    KernelVocabulary.Registration.OpenStrategy.key,
+    KernelVocabulary.Registration.OpenValueExpression.key,
     seam.summary,
     seam.node ?? argument,
     seam.reasonKinds,
@@ -1626,7 +1650,8 @@ function hasEvaluationRegisterFunction(value: EvaluationValue | null): boolean {
   ) {
     return false;
   }
-  return value.properties.get('register')?.value.kind === EvaluationValueKind.Function;
+  const register = readStaticValueProperty(value, 'register', value.node);
+  return closedStaticValueMemberValue(register)?.kind === EvaluationValueKind.Function;
 }
 
 function isPlainClassFallbackValue(value: EvaluationValue | null): value is EvaluationClassValue | EvaluationFunctionValue {
@@ -2790,12 +2815,12 @@ function evaluationOpenSeams(
   context: ConfigurationRecognitionContext,
   expression: ts.Expression,
 ): readonly ConfigurationRecognitionOpen[] {
-  return context.expressionReader.evaluateExpression(expression).openSeams.map((seam) => new ConfigurationRecognitionOpen(
+  return configurationRecognitionOpensForEvaluationRead(
+    context.expressionReader.evaluateExpression(expression),
     KernelVocabulary.Configuration.OpenConfigurationOption.key,
-    seam.summary,
-    seam.node ?? expression,
-    seam.reasonKinds,
-  ));
+    'Configuration expression retained open or abrupt static-evaluation pressure.',
+    expression,
+  );
 }
 
 function sequenceKindForSteps(

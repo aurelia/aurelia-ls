@@ -30,6 +30,7 @@ import {
   type EvaluationValue,
 } from './values.js';
 import { readEvaluationEnumerableOwnEntries } from './enumerable-own-properties.js';
+import { evaluationArrayHasExactPositions } from './array-value-operations.js';
 import {
   regularExpressionFlagsText,
   regularExpressionPatternText,
@@ -209,6 +210,21 @@ export function evaluateAureliaExpressionGlobalMemberCallFromPath(
         : unsupported(`Object.prototype.toString.${memberName} is not modeled as a host global intrinsic.`);
     default:
       return null;
+  }
+}
+
+/** Whether a dotted callee receiver is one of the namespace paths modeled by the shared global intrinsic evaluator. */
+export function isAureliaExpressionGlobalMemberCallReceiverPath(receiverPath: string): boolean {
+  switch (receiverPath) {
+    case AureliaExpressionGlobalName.Math:
+    case AureliaExpressionGlobalName.JSON:
+    case AureliaExpressionGlobalName.Object:
+    case AureliaExpressionGlobalName.Array:
+    case AureliaExpressionGlobalName.Number:
+    case 'Object.prototype.toString':
+      return true;
+    default:
+      return false;
   }
 }
 
@@ -621,10 +637,14 @@ function mapConstructorValue(
     return runtimeOpen('Map constructor iterable depends on runtime iterable semantics.');
   }
   const entries: EvaluationMapEntry[] = [];
-  let mayHaveUnknownEntries = iterable.mayHaveUnknownElements;
+  let mayHaveUnknownEntries = iterable.mayHaveUnknownElements || iterable.mayHaveUnknownOrder;
   for (const element of iterable.elements) {
     const entry = element.value;
-    if (entry.kind !== EvaluationValueKind.Array || entry.elements.length < 2) {
+    if (
+      entry.kind !== EvaluationValueKind.Array
+      || !evaluationArrayHasExactPositions(entry)
+      || entry.elements.length < 2
+    ) {
       mayHaveUnknownEntries = true;
       continue;
     }

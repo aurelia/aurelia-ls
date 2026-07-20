@@ -51,6 +51,10 @@ import {
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { readStaticStringValue } from '../evaluation/expression-reader.js';
 import {
+  closedStaticValueMemberValue,
+  readStaticValueProperty,
+} from '../evaluation/property-access.js';
+import {
   hasStaticModifier,
   readDeclarationLocalName,
   readPropertyName,
@@ -159,9 +163,11 @@ import {
 } from './resource-source-address.js';
 import {
   ConvergenceOpen,
+  ConvergenceScalarRead,
   appendConvergenceOpen,
   convergenceOpenForNode,
   convergenceOpenForRead,
+  convergenceOpenForReadPressure,
   decoratorCallNamed,
   decoratorIdentifierNamed,
   dependencyReferenceForFunction,
@@ -236,6 +242,7 @@ class ProcessContentRead {
     readonly target: ResourceTargetReference | null,
     readonly records: readonly KernelStoreRecord[] = [],
     readonly issues: readonly ResourceIssue[] = [],
+    readonly open: readonly ConvergenceOpen[] = [],
   ) {}
 }
 
@@ -243,6 +250,7 @@ class ResourceIssueRead {
   constructor(
     readonly records: readonly KernelStoreRecord[] = [],
     readonly issues: readonly ResourceIssue[] = [],
+    readonly open: readonly ConvergenceOpen[] = [],
   ) {}
 }
 
@@ -251,6 +259,28 @@ class TemplateDefinitionRead {
     readonly template: CustomElementTemplateDefinition,
     readonly records: readonly KernelStoreRecord[] = [],
     readonly dependencies: ResourceDependenciesRead = new ResourceDependenciesRead([], []),
+    readonly open: readonly ConvergenceOpen[] = [],
+  ) {}
+}
+
+class CustomElementCaptureRead {
+  constructor(
+    readonly capture: CustomElementCaptureDefinition,
+    readonly open: readonly ConvergenceOpen[],
+  ) {}
+}
+
+class ShadowOptionsRead {
+  constructor(
+    readonly options: ShadowOptionsDefinition | null,
+    readonly open: readonly ConvergenceOpen[],
+  ) {}
+}
+
+class ResourceTargetFieldRead {
+  constructor(
+    readonly target: ResourceTargetReference | null,
+    readonly open: readonly ConvergenceOpen[],
   ) {}
 }
 
@@ -345,21 +375,63 @@ class CustomElementConvergenceFrame {
 
     const bindables = this.readBindables(target);
     const watches = this.readWatches();
+    const staticAliases = readStaticAliasMetadata(this.context, this.targetClass);
     const aliases = mergeResourceAliasObservations(
       this.annotations.aliases,
       this.definition.aliases,
-      readStaticAliasMetadata(this.context, this.targetClass),
+      staticAliases.aliases,
     );
-    const capture = this.annotations.capture
-      ?? readCustomElementCapture(this.context, this.definitionExpression, this.targetClass);
+    const captureRead = this.annotations.capture == null
+      ? readCustomElementCapture(this.context, this.definitionExpression, this.targetClass)
+      : new CustomElementCaptureRead(this.annotations.capture, []);
+    const capture = captureRead.capture;
     const template = this.readTemplate();
     const dependencies = this.readDependencies(template);
+    const containerlessRead = this.annotations.containerless == null
+      ? readBooleanField(
+          this.context,
+          this.definitionExpression,
+          this.targetClass,
+          'containerless',
+          'Custom element containerless metadata did not close to a boolean.',
+        )
+      : new ConvergenceScalarRead<boolean>(null, [], null);
     const containerless = this.annotations.containerless
-      ?? readBooleanField(this.context, this.definitionExpression, this.targetClass, 'containerless')
+      ?? containerlessRead.value
       ?? false;
-    const shadowOptions = this.annotations.shadowOptions
-      ?? readShadowOptions(this.context, this.definitionExpression, this.targetClass);
-    const hasSlots = readBooleanField(this.context, this.definitionExpression, this.targetClass, 'hasSlots') ?? false;
+    const shadowOptionsRead = this.annotations.shadowOptions == null
+      ? readShadowOptions(this.context, this.definitionExpression, this.targetClass)
+      : new ShadowOptionsRead(this.annotations.shadowOptions, []);
+    const shadowOptions = shadowOptionsRead.options;
+    const hasSlotsRead = readBooleanField(
+      this.context,
+      this.definitionExpression,
+      this.targetClass,
+      'hasSlots',
+      'Custom element hasSlots metadata did not close to a boolean.',
+    );
+    const enhanceRead = readBooleanField(
+      this.context,
+      this.definitionExpression,
+      this.targetClass,
+      'enhance',
+      'Custom element enhance metadata did not close to a boolean.',
+    );
+    const needsCompileRead = readBooleanField(
+      this.context,
+      this.definitionExpression,
+      this.targetClass,
+      'needsCompile',
+      'Custom element needsCompile metadata did not close to a boolean.',
+    );
+    const strictRead = readBooleanField(
+      this.context,
+      this.definitionExpression,
+      this.targetClass,
+      'strict',
+      'Custom element strict metadata did not close to a boolean.',
+    );
+    const hasSlots = hasSlotsRead.value ?? false;
     const controllerIssue = this.readControllerIssue(containerless, shadowOptions, hasSlots);
     const processContent = this.readProcessContent();
     const decoratorIssues = this.readDecoratorIssues();
@@ -384,9 +456,9 @@ class CustomElementConvergenceFrame {
       containerless,
       shadowOptions,
       hasSlots,
-      enhance: readBooleanField(this.context, this.definitionExpression, this.targetClass, 'enhance') ?? false,
-      needsCompile: readBooleanField(this.context, this.definitionExpression, this.targetClass, 'needsCompile') ?? true,
-      strict: readBooleanField(this.context, this.definitionExpression, this.targetClass, 'strict'),
+      enhance: enhanceRead.value ?? false,
+      needsCompile: needsCompileRead.value ?? true,
+      strict: strictRead.value,
       processContent: processContent.target,
       issueRecords: [
         ...(controllerIssue?.records ?? []),
@@ -400,7 +472,20 @@ class CustomElementConvergenceFrame {
         ...decoratorIssues.issues,
         ...(controllerIssue == null ? [] : [controllerIssue.issue]),
       ],
-      open: this.readOpen(bindables, watches, dependencies),
+      open: this.readOpen(
+        bindables,
+        watches,
+        dependencies,
+        staticAliases.open,
+        [
+          ...captureRead.open,
+          ...template.open,
+          ...shadowOptionsRead.open,
+          ...processContent.open,
+          ...decoratorIssues.open,
+          ...[containerlessRead, hasSlotsRead, enhanceRead, needsCompileRead, strictRead].flatMap((read) => read.open),
+        ],
+      ),
     };
   }
 
@@ -476,14 +561,15 @@ class CustomElementConvergenceFrame {
   private readProcessContent(): ProcessContentRead {
     const target = readTargetField(this.context, this.definitionExpression, this.targetClass, 'processContent');
     if (this.targetClass == null) {
-      return new ProcessContentRead(target);
+      return new ProcessContentRead(target.target, [], [], target.open);
     }
-    const classDecorators = this.readClassProcessContentDecorators(target);
+    const classDecorators = this.readClassProcessContentDecorators(target.target);
     const memberDecorators = this.readMemberProcessContentDecorators(classDecorators.target);
     return new ProcessContentRead(
       memberDecorators.target,
       [...classDecorators.records, ...memberDecorators.records],
       [...classDecorators.issues, ...memberDecorators.issues],
+      [...target.open, ...classDecorators.open, ...memberDecorators.open],
     );
   }
 
@@ -495,6 +581,7 @@ class CustomElementConvergenceFrame {
     }
     const records: KernelStoreRecord[] = [];
     const issues: ResourceIssue[] = [];
+    const open: ConvergenceOpen[] = [];
     let target = initialTarget;
     for (const [index, decorator] of (ts.canHaveDecorators(this.targetClass) ? ts.getDecorators(this.targetClass) ?? [] : []).entries()) {
       const call = decoratorCallNamed(decorator, 'processContent');
@@ -525,6 +612,7 @@ class CustomElementConvergenceFrame {
         records.push(...hook.records);
         continue;
       }
+      open.push(...hook.open);
       if (hook.issueNode != null) {
         const issue = this.publishInvalidProcessContentHook(
           `class:${index}`,
@@ -536,7 +624,7 @@ class CustomElementConvergenceFrame {
         issues.push(issue.issue);
       }
     }
-    return new ProcessContentRead(target, records, issues);
+    return new ProcessContentRead(target, records, issues, open);
   }
 
   private readMemberProcessContentDecorators(
@@ -619,9 +707,13 @@ class CustomElementConvergenceFrame {
     bindables: BindableRead,
     watches: WatchRead,
     dependencies: ResourceDependenciesRead,
+    aliasOpen: readonly ConvergenceOpen[],
+    scalarOpen: readonly ConvergenceOpen[],
   ): readonly ConvergenceOpen[] {
     return [
       ...this.annotations.open,
+      ...aliasOpen,
+      ...scalarOpen,
       ...bindables.open,
       ...watches.open,
       ...dependencies.open,
@@ -1001,6 +1093,7 @@ export class ResourceDefinitionConverger {
     const targetClass = resourceTargetClassLikeNode(definition.target);
     const definitionExpression = expressionNode(observation.definitionNode);
     const annotations = readAliasMetadataAnnotations(context, targetClass);
+    const staticAliases = readStaticAliasMetadata(context, targetClass);
     const bindables = readBindables(
       this.store,
       context,
@@ -1029,20 +1122,49 @@ export class ResourceDefinitionConverger {
       mergeResourceAliasObservations(
         annotations.aliases,
         definition.aliases,
-        readStaticAliasMetadata(context, targetClass),
+        staticAliases.aliases,
       ),
     );
+    const isTemplateControllerRead = definition.type === ResourceDefinitionKind.TemplateController
+      ? new ConvergenceScalarRead<boolean>(true, [], null)
+      : readBooleanField(
+          context,
+          definitionExpression,
+          targetClass,
+          'isTemplateController',
+          'Custom attribute isTemplateController metadata did not close to a boolean.',
+        );
+    const noMultiBindingsRead = readBooleanField(
+      context,
+      definitionExpression,
+      targetClass,
+      'noMultiBindings',
+      'Custom attribute noMultiBindings metadata did not close to a boolean.',
+    );
+    const defaultPropertyRead = readStringField(
+      context,
+      definitionExpression,
+      targetClass,
+      'defaultProperty',
+      'Custom attribute defaultProperty metadata did not close to a string.',
+    );
+    const containerStrategyRead = readContainerStrategy(context, definitionExpression, targetClass);
     const isTemplateController = definition.type === ResourceDefinitionKind.TemplateController
-      || readBooleanField(context, definitionExpression, targetClass, 'isTemplateController') === true;
-    const noMultiBindings = readBooleanField(context, definitionExpression, targetClass, 'noMultiBindings') ?? false;
-    const defaultProperty = readStringField(context, definitionExpression, targetClass, 'defaultProperty') ?? 'value';
-    const containerStrategy = readContainerStrategy(context, definitionExpression, targetClass);
+      || isTemplateControllerRead.value === true;
+    const noMultiBindings = noMultiBindingsRead.value ?? false;
+    const defaultProperty = defaultPropertyRead.value ?? 'value';
+    const containerStrategy = containerStrategyRead.value ?? CustomAttributeContainerStrategy.Reuse;
     const dependencies = readResourceDependencies(context, definitionExpression, targetClass);
     const open = [
       ...annotations.open,
+      ...staticAliases.open,
       ...bindables.open,
       ...watches.open,
       ...dependencies.open,
+      ...isTemplateControllerRead.open,
+      ...noMultiBindingsRead.open,
+      ...defaultPropertyRead.open,
+      ...containerStrategyRead.open,
     ];
     const nameSource = this.nameSourceForDefinition(context, definition, header);
     return new ConvergedResourceDefinition(
@@ -1111,6 +1233,7 @@ export class ResourceDefinitionConverger {
 
     const targetClass = resourceTargetClassLikeNode(definition.target);
     const annotations = readAliasMetadataAnnotations(context, targetClass);
+    const staticAliases = readStaticAliasMetadata(context, targetClass);
     const aliases = materializeResourceAliases(
       this.store,
       context,
@@ -1118,7 +1241,7 @@ export class ResourceDefinitionConverger {
       mergeResourceAliasObservations(
         annotations.aliases,
         definition.aliases,
-        readStaticAliasMetadata(context, targetClass),
+        staticAliases.aliases,
       ),
     );
     const nameSource = this.nameSourceForDefinition(context, definition, header);
@@ -1137,7 +1260,7 @@ export class ResourceDefinitionConverger {
             [],
             nameSource?.addressHandle ?? null,
           ),
-          annotations.open,
+          [...annotations.open, ...staticAliases.open],
           [...(nameSource?.records ?? []), ...aliases.records],
         );
       }
@@ -1155,7 +1278,7 @@ export class ResourceDefinitionConverger {
             [],
             nameSource?.addressHandle ?? null,
           ),
-          annotations.open,
+          [...annotations.open, ...staticAliases.open],
           [...(nameSource?.records ?? []), ...aliases.records],
         );
       }
@@ -1173,7 +1296,7 @@ export class ResourceDefinitionConverger {
             [],
             nameSource?.addressHandle ?? null,
           ),
-          annotations.open,
+          [...annotations.open, ...staticAliases.open],
           [...(nameSource?.records ?? []), ...aliases.records],
         );
       }
@@ -1374,22 +1497,45 @@ function readCustomElementCapture(
   context: ResourceRecognitionContext,
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
-): CustomElementCaptureDefinition {
+): CustomElementCaptureRead {
   const read = readFieldValue(context, definitionExpression, targetClass, 'capture');
+  if (read == null) {
+    return new CustomElementCaptureRead(new CustomElementCaptureDefinition(CustomElementCaptureKind.None), []);
+  }
   const value = read?.value;
-  if (value == null || (value.kind === EvaluationValueKind.Boolean && !value.value)) {
-    return new CustomElementCaptureDefinition(CustomElementCaptureKind.None);
-  }
-  if (value.kind === EvaluationValueKind.Boolean && value.value) {
-    return new CustomElementCaptureDefinition(CustomElementCaptureKind.All);
-  }
-  if (value.kind === EvaluationValueKind.Function) {
-    return new CustomElementCaptureDefinition(
-      CustomElementCaptureKind.Predicate,
-      targetReferenceForFunction(value, null),
+  if (value == null) {
+    return new CustomElementCaptureRead(
+      new CustomElementCaptureDefinition(CustomElementCaptureKind.Open),
+      convergenceOpenForRead('Custom element capture metadata evaluation did not produce a value.', read, []),
     );
   }
-  return new CustomElementCaptureDefinition(CustomElementCaptureKind.Open);
+  if (value.kind === EvaluationValueKind.Undefined
+    || value.kind === EvaluationValueKind.Null
+    || (value.kind === EvaluationValueKind.Boolean && !value.value)) {
+    return new CustomElementCaptureRead(
+      new CustomElementCaptureDefinition(CustomElementCaptureKind.None),
+      convergenceOpenForReadPressure('Custom element capture metadata evaluation remained open.', read),
+    );
+  }
+  if (value.kind === EvaluationValueKind.Boolean && value.value) {
+    return new CustomElementCaptureRead(
+      new CustomElementCaptureDefinition(CustomElementCaptureKind.All),
+      convergenceOpenForReadPressure('Custom element capture metadata evaluation remained open.', read),
+    );
+  }
+  if (value.kind === EvaluationValueKind.Function) {
+    return new CustomElementCaptureRead(
+      new CustomElementCaptureDefinition(
+        CustomElementCaptureKind.Predicate,
+        targetReferenceForFunction(value, null),
+      ),
+      convergenceOpenForReadPressure('Custom element capture metadata evaluation remained open.', read),
+    );
+  }
+  return new CustomElementCaptureRead(
+    new CustomElementCaptureDefinition(CustomElementCaptureKind.Open),
+    convergenceOpenForRead('Custom element capture metadata did not close to a boolean or predicate.', read, []),
+  );
 }
 
 function readCustomElementTemplate(
@@ -1410,6 +1556,14 @@ function readCustomElementTemplate(
   }
 
   const value = read?.value;
+  if (read != null && value == null) {
+    return new TemplateDefinitionRead(
+      new CustomElementTemplateDefinition(CustomElementTemplateKind.Open),
+      [],
+      new ResourceDependenciesRead([], []),
+      convergenceOpenForRead('Custom element template metadata evaluation did not produce a value.', read, []),
+    );
+  }
   if (value == null || value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined) {
     const conventional = readConventionalHtmlTemplate(store, context, targetClass, observation, local, sourceTextCache);
     if (conventional != null) {
@@ -1430,9 +1584,16 @@ function readCustomElementTemplate(
         sourceTextContentRevision(context.sourceFile.text),
       ),
       source?.records ?? [],
+      new ResourceDependenciesRead([], []),
+      convergenceOpenForReadPressure('Custom element template metadata evaluation remained open.', read),
     );
   }
-  return new TemplateDefinitionRead(new CustomElementTemplateDefinition(CustomElementTemplateKind.Open));
+  return new TemplateDefinitionRead(
+    new CustomElementTemplateDefinition(CustomElementTemplateKind.Open),
+    [],
+    new ResourceDependenciesRead([], []),
+    convergenceOpenForRead('Custom element template metadata did not close to markup or an imported template.', read, []),
+  );
 }
 
 function readConventionalHtmlTemplate(
@@ -1582,20 +1743,49 @@ function readShadowOptions(
   context: ResourceRecognitionContext,
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
-): ShadowOptionsDefinition | null {
-  const value = readFieldValue(context, definitionExpression, targetClass, 'shadowOptions')?.value;
-  if (value?.kind !== EvaluationValueKind.Object) {
-    return null;
+): ShadowOptionsRead {
+  const read = readFieldValue(context, definitionExpression, targetClass, 'shadowOptions');
+  if (read == null) {
+    return new ShadowOptionsRead(null, []);
   }
-  const mode = value.properties.get('mode')?.value;
-  const modeText = mode == null ? null : readStaticStringValue(mode);
+  const value = read.value;
+  if (value == null) {
+    return new ShadowOptionsRead(
+      null,
+      convergenceOpenForRead('Custom element shadowOptions evaluation did not produce a value.', read, []),
+    );
+  }
+  if (value.kind === EvaluationValueKind.Undefined || value.kind === EvaluationValueKind.Null) {
+    return new ShadowOptionsRead(
+      null,
+      convergenceOpenForReadPressure('Custom element shadowOptions evaluation remained open.', read),
+    );
+  }
+  if (value?.kind !== EvaluationValueKind.Object) {
+    return new ShadowOptionsRead(
+      null,
+      convergenceOpenForRead('Custom element shadowOptions did not close to an object.', read, []),
+    );
+  }
+  const mode = readStaticValueProperty(value, 'mode', read.node);
+  const modeValue = closedStaticValueMemberValue(mode);
+  const modeText = modeValue == null ? null : readStaticStringValue(modeValue);
   switch (modeText) {
     case 'open':
-      return new ShadowOptionsDefinition(ShadowRootMode.Open);
+      return new ShadowOptionsRead(
+        new ShadowOptionsDefinition(ShadowRootMode.Open),
+        convergenceOpenForReadPressure('Custom element shadowOptions evaluation remained open.', read),
+      );
     case 'closed':
-      return new ShadowOptionsDefinition(ShadowRootMode.Closed);
+      return new ShadowOptionsRead(
+        new ShadowOptionsDefinition(ShadowRootMode.Closed),
+        convergenceOpenForReadPressure('Custom element shadowOptions evaluation remained open.', read),
+      );
     default:
-      return null;
+      return new ShadowOptionsRead(
+        null,
+        convergenceOpenForRead('Custom element shadowOptions mode did not close to open or closed.', read, []),
+      );
   }
 }
 
@@ -1657,6 +1847,7 @@ function readCustomElementDecoratorIssues(
   }
   const records: KernelStoreRecord[] = [];
   const issues: ResourceIssue[] = [];
+  const open: ConvergenceOpen[] = [];
 
   for (const [decoratorIndex, decorator] of (ts.canHaveDecorators(targetClass) ? ts.getDecorators(targetClass) ?? [] : []).entries()) {
     if (!isSlottedDecorator(decorator)) {
@@ -1683,7 +1874,10 @@ function readCustomElementDecoratorIssues(
     const decorators = ts.canHaveDecorators(member) ? ts.getDecorators(member) ?? [] : [];
     for (const [decoratorIndex, decorator] of decorators.entries()) {
       const childrenQuery = readChildrenDecoratorQuery(context, decorator);
-      if (childrenQuery != null && /[\s>]/.test(childrenQuery.query)) {
+      if (childrenQuery != null) {
+        open.push(...childrenQuery.open);
+      }
+      if (childrenQuery?.query != null && /[\s>]/.test(childrenQuery.query)) {
         const publication = publishResourceIssue(
           store,
           context,
@@ -1721,13 +1915,21 @@ function readCustomElementDecoratorIssues(
     }
   }
 
-  return new ResourceIssueRead(records, issues);
+  return new ResourceIssueRead(records, issues, open);
+}
+
+class ChildrenDecoratorQueryRead {
+  constructor(
+    readonly query: string | null,
+    readonly sourceNode: ts.Node,
+    readonly open: readonly ConvergenceOpen[],
+  ) {}
 }
 
 function readChildrenDecoratorQuery(
   context: ResourceRecognitionContext,
   decorator: ts.Decorator,
-): { readonly query: string; readonly sourceNode: ts.Node } | null {
+): ChildrenDecoratorQueryRead | null {
   const call = decoratorCallNamed(decorator, 'children');
   if (call == null) {
     return null;
@@ -1739,9 +1941,18 @@ function readChildrenDecoratorQuery(
   const queryRead = readObjectProperty(context.expressionReader, argument, 'query')
     ?? context.expressionReader.evaluateExpression(argument);
   const query = queryRead.value == null ? null : readStaticStringValue(queryRead.value);
+  const sourceNode = queryRead.node ?? argument;
   return query == null
-    ? null
-    : { query, sourceNode: queryRead.node ?? argument };
+    ? new ChildrenDecoratorQueryRead(
+        null,
+        sourceNode,
+        convergenceOpenForRead('Children query metadata did not close to a string.', queryRead, []),
+      )
+    : new ChildrenDecoratorQueryRead(
+        query,
+        sourceNode,
+        convergenceOpenForReadPressure('Children query metadata evaluation remained open.', queryRead),
+      );
 }
 
 function readProcessContentHookArgument(
@@ -1750,25 +1961,49 @@ function readProcessContentHookArgument(
   local: string,
   targetClass: ts.ClassLikeDeclarationBase,
   argument: ts.Expression,
-): { readonly target: ResourceTargetReference | null; readonly records: readonly KernelStoreRecord[]; readonly issueNode: ts.Node | null } {
+): {
+  readonly target: ResourceTargetReference | null;
+  readonly records: readonly KernelStoreRecord[];
+  readonly issueNode: ts.Node | null;
+  readonly open: readonly ConvergenceOpen[];
+} {
   const read = context.expressionReader.evaluateExpression(argument);
   const value = read.value;
   if (value?.kind === EvaluationValueKind.Function) {
     const source = sourceSpanAddressForNode(store, context, argument, `${local}:source`, SourceSpanRole.Value);
-    return { target: targetReferenceForFunction(value, source?.addressHandle ?? null), records: source?.records ?? [], issueNode: null };
+    return {
+      target: targetReferenceForFunction(value, source?.addressHandle ?? null),
+      records: source?.records ?? [],
+      issueNode: null,
+      open: convergenceOpenForReadPressure('Process-content hook evaluation remained open.', read),
+    };
   }
   if (value?.kind === EvaluationValueKind.String) {
     const member = readStaticMethod(targetClass, value.value);
     if (member == null) {
-      return { target: null, records: [], issueNode: argument };
+      return { target: null, records: [], issueNode: argument, open: [] };
     }
     const source = sourceSpanAddressForNode(store, context, memberNameNode(member) ?? member, `${local}:source`, SourceSpanRole.Name);
-    return { target: new ResourceTargetReference(null, source?.addressHandle ?? null, value.value), records: source?.records ?? [], issueNode: null };
+    return {
+      target: new ResourceTargetReference(null, source?.addressHandle ?? null, value.value),
+      records: source?.records ?? [],
+      issueNode: null,
+      open: convergenceOpenForReadPressure('Process-content hook evaluation remained open.', read),
+    };
   }
   if (value == null || value.kind === EvaluationValueKind.Unknown || value.kind === EvaluationValueKind.BoundaryValue) {
-    return { target: null, records: [], issueNode: null };
+    return {
+      target: null,
+      records: [],
+      issueNode: null,
+      open: convergenceOpenForRead(
+        'Process-content hook did not close to a function or method name.',
+        read,
+        [],
+      ),
+    };
   }
-  return { target: null, records: [], issueNode: argument };
+  return { target: null, records: [], issueNode: argument, open: [] };
 }
 
 function readStaticMethod(
@@ -1788,12 +2023,27 @@ function readTargetField(
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
   fieldName: string,
-): ResourceTargetReference | null {
-  const value = readFieldValue(context, definitionExpression, targetClass, fieldName)?.value;
-  if (value?.kind !== EvaluationValueKind.Function && value?.kind !== EvaluationValueKind.Class) {
-    return null;
+): ResourceTargetFieldRead {
+  const read = readFieldValue(context, definitionExpression, targetClass, fieldName);
+  if (read == null) {
+    return new ResourceTargetFieldRead(null, []);
   }
-  return targetReferenceForFunction(value, null);
+  const value = read.value;
+  if (value?.kind !== EvaluationValueKind.Function && value?.kind !== EvaluationValueKind.Class) {
+    return value?.kind === EvaluationValueKind.Undefined || value?.kind === EvaluationValueKind.Null
+      ? new ResourceTargetFieldRead(
+          null,
+          convergenceOpenForReadPressure(`Resource ${fieldName} evaluation remained open.`, read),
+        )
+      : new ResourceTargetFieldRead(
+          null,
+          convergenceOpenForRead(`Resource ${fieldName} did not close to a function or class.`, read, []),
+        );
+  }
+  return new ResourceTargetFieldRead(
+    targetReferenceForFunction(value, null),
+    convergenceOpenForReadPressure(`Resource ${fieldName} evaluation remained open.`, read),
+  );
 }
 
 function readResourceDependencies(
@@ -1802,10 +2052,25 @@ function readResourceDependencies(
   targetClass: ts.ClassLikeDeclarationBase | null,
 ): ResourceDependenciesRead {
   const read = readFieldValue(context, definitionExpression, targetClass, 'dependencies');
-  if (read == null || read.value == null
-    || read.value.kind === EvaluationValueKind.Undefined
-    || read.value.kind === EvaluationValueKind.Null) {
+  if (read == null) {
     return new ResourceDependenciesRead([], []);
+  }
+  if (read.value == null) {
+    return new ResourceDependenciesRead(
+      [],
+      convergenceOpenForRead(
+        'Resource dependencies evaluation did not produce a value.',
+        read,
+        [OpenSeamReasonKind.ResourceDefinitionDependenciesOpen],
+      ),
+    );
+  }
+  if (read.value.kind === EvaluationValueKind.Undefined
+    || read.value.kind === EvaluationValueKind.Null) {
+    return new ResourceDependenciesRead(
+      [],
+      convergenceOpenForReadPressure('Resource dependencies evaluation remained open.', read),
+    );
   }
   const value = read.value;
   if (value.kind !== EvaluationValueKind.Array) {
@@ -1820,7 +2085,9 @@ function readResourceDependencies(
   }
 
   const dependencies: ResourceDependencyReference[] = [];
-  const open: ConvergenceOpen[] = [];
+  const open: ConvergenceOpen[] = [
+    ...convergenceOpenForReadPressure('Resource dependencies evaluation remained open.', read),
+  ];
   for (const element of value.elements) {
     if (
       element.value.kind !== EvaluationValueKind.Class
@@ -2043,13 +2310,34 @@ function readContainerStrategy(
   context: ResourceRecognitionContext,
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
-): CustomAttributeContainerStrategy {
-  switch (readStringField(context, definitionExpression, targetClass, 'containerStrategy')) {
+): ConvergenceScalarRead<CustomAttributeContainerStrategy> {
+  const read = readStringField(
+    context,
+    definitionExpression,
+    targetClass,
+    'containerStrategy',
+    'Custom attribute containerStrategy metadata did not close to a string.',
+  );
+  switch (read.value) {
     case 'new':
-      return CustomAttributeContainerStrategy.New;
+      return new ConvergenceScalarRead(CustomAttributeContainerStrategy.New, read.open, read.sourceNode);
     case 'reuse':
+      return new ConvergenceScalarRead(CustomAttributeContainerStrategy.Reuse, read.open, read.sourceNode);
+    case null:
+      return new ConvergenceScalarRead(CustomAttributeContainerStrategy.Reuse, read.open, read.sourceNode);
     default:
-      return CustomAttributeContainerStrategy.Reuse;
+      return new ConvergenceScalarRead(
+        CustomAttributeContainerStrategy.Reuse,
+        [
+          ...read.open,
+          ...convergenceOpenForNode(
+            `Custom attribute containerStrategy '${read.value}' is not recognized.`,
+            read.sourceNode,
+            [],
+          ),
+        ],
+        read.sourceNode,
+      );
   }
 }
 

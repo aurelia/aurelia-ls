@@ -9,10 +9,15 @@ import {
 } from '../configuration/aurelia-evaluation-runtime.js';
 import type { ModuleEnvironmentRecord } from '../evaluation/environment.js';
 import {
+  evaluationAbruptCompletionSummary,
+  type EvaluationExpressionAbruptCompletion,
+} from '../evaluation/completion.js';
+import {
   StaticEvaluator,
   type StaticExecutedCall,
   type StaticEvaluationRuntimeHost,
 } from '../evaluation/evaluator.js';
+import { EvaluationRead } from '../evaluation/expression-reader.js';
 import type { StaticIntrinsicEvaluationHost } from '../evaluation/intrinsics.js';
 import { normalizeModuleKey } from '../evaluation/module-graph.js';
 import {
@@ -20,7 +25,11 @@ import {
   type EvaluatedProjectSource,
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
-import { EvaluationOpenSeamKind } from '../evaluation/seams.js';
+import {
+  compactEvaluationOpenSeams,
+  EvaluationOpenSeamKind,
+  type EvaluationOpenSeam,
+} from '../evaluation/seams.js';
 import { DefaultStaticEvaluationPolicy } from '../evaluation/policy.js';
 import { readStaticOwnProperty } from '../evaluation/property-access.js';
 import { readReferenceName } from '../evaluation/ts-syntax.js';
@@ -122,13 +131,21 @@ export const enum DiProviderActivationState {
 
 /** Candidate-local answer from spending one DI key through modeled container state. */
 export class DiProviderActivationResult {
+  readonly openSeams: readonly EvaluationOpenSeam[];
+
   constructor(
     readonly state: DiProviderActivationState,
     readonly value: EvaluationValue | null,
     readonly reason: string | null,
-    readonly failureKind: ContainerResolutionFailureKind | null = null,
-    readonly cycle: readonly DiDependencyCycleStep[] | null = null,
-  ) {}
+    readonly failureKind: ContainerResolutionFailureKind | null,
+    readonly cycle: readonly DiDependencyCycleStep[] | null,
+    /** Evaluator pressure retained beside a usable activation value. */
+    openSeams: readonly EvaluationOpenSeam[],
+    /** Exact evaluator completion when activation opened because modeled user code completed abruptly. */
+    readonly abruptCompletion: EvaluationExpressionAbruptCompletion | null,
+  ) {
+    this.openSeams = compactEvaluationOpenSeams(openSeams);
+  }
 }
 
 /** Exact failure and receiver policy proven by one ordered container API activation. */
@@ -193,6 +210,7 @@ interface DiProviderActivationExecutionEvent {
 interface DiContainerApiActivationContext {
   readonly requestor: Container;
   readonly call: StaticExecutedCall;
+  readonly openSeams: readonly EvaluationOpenSeam[];
 }
 
 type DiProviderActivationSlot =
@@ -217,7 +235,7 @@ class DiInterfaceDefaultProvider {
 }
 
 class DiScopedInstanceProvider {
-  constructor(readonly value: EvaluationValue) {}
+  constructor(readonly result: DiProviderActivationResult) {}
 }
 
 const enum DiRegistryResolverReturnState {
@@ -369,14 +387,18 @@ export class DiProviderActivationView {
       return null;
     }
     const context = this.containerApiActivationContext(site);
-    return context == null
-      ? null
-      : this.createSession().activateExecutedEntryExpression(
-          context.requestor,
-          site.keyExpression,
-          context.call,
-          site.sourceNode,
-        );
+    if (context == null) {
+      return null;
+    }
+    return activationWithAdditionalPressure(
+      this.createSession().activateExecutedEntryExpression(
+        context.requestor,
+        site.keyExpression,
+        context.call,
+        site.sourceNode,
+      ),
+      context.openSeams,
+    );
   }
 
   private containerApiActivationContext(
@@ -391,22 +413,24 @@ export class DiProviderActivationView {
       return null;
     }
     const evaluator = new StaticEvaluator(source.evaluation.policy, source.evaluation.runtimeHost);
-    const receiverValue = evaluator.evaluateExpressionInEnvironment(
+    const receiverRead = evaluator.evaluateExpressionInEnvironment(
       site.receiverExpression,
       executedCall.environment,
       executedCall.moduleKey,
-    ).value;
+    );
+    const receiverValue = receiverRead.value;
     const containerEvaluation = aureliaContainerEvaluationForValue(receiverValue);
     const requestor = containerEvaluation == null
       ? null
       : this.configuration.evaluationBindings.containersByEvaluation.get(containerEvaluation) ?? null;
-    if (requestor == null) {
+    if (requestor == null || receiverValue == null) {
       return null;
     }
     this.evaluationValuesByContainer.set(requestor, receiverValue);
     return {
       requestor,
       call: executedCall,
+      openSeams: receiverRead.openSeams,
     };
   }
 
@@ -641,7 +665,7 @@ export class DiProviderActivationSession {
   private readonly internalRuntimeHosts = new WeakMap<StaticEvaluationRuntimeHost, StaticEvaluationRuntimeHost>();
   private readonly evaluatorsByModuleKey = new Map<string, StaticEvaluator>();
   private readonly overlaySlots = new Map<Container, Map<IdentityHandle, DiProviderActivationSlot[]>>();
-  private readonly singletonValues = new Map<object, EvaluationValue>();
+  private readonly singletonValues = new Map<object, DiProviderActivationResult>();
   private readonly activeSingletons = new Set<object>();
   private readonly activeAliases = new Set<Resolver>();
   private activeRequestor: Container | null = null;
@@ -716,7 +740,7 @@ export class DiProviderActivationSession {
         ).failureKind;
       }
 
-      const value = this.evaluateExpression(
+      const read = this.evaluateExpressionRead(
         requestor,
         expression,
         call.environment,
@@ -724,6 +748,10 @@ export class DiProviderActivationSession {
         null,
         0,
       );
+      const value = read.value;
+      if (value == null) {
+        return null;
+      }
       if (containerApiMethodValidatesKey(site.methodKind)
         && (value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined)) {
         return ContainerResolutionFailureKind.NullUndefinedKey;
@@ -783,7 +811,10 @@ export class DiProviderActivationSession {
         environment,
         moduleKey,
         dependencyNode,
-        (argument) => host.evaluateExpression(argument, environment, moduleKey, depth + 1),
+        (argument) => new EvaluationRead(
+          host.evaluateExpression(argument, environment, moduleKey, depth + 1),
+          argument,
+        ),
         host,
         depth,
       );
@@ -801,8 +832,14 @@ export class DiProviderActivationSession {
     if (result.cycle != null && this.detectedCycle == null) {
       this.detectedCycle = result;
     }
+    for (const seam of result.openSeams) {
+      host.open(seam.seamKind, seam.summary, seam.node, seam.moduleKey, seam.reasonKinds);
+    }
     if (result.value != null) {
       return result.value;
+    }
+    if (result.abruptCompletion != null) {
+      return host.raise(result.abruptCompletion);
     }
     return host.unknown(
       result.reason ?? `Aurelia DI activation remained ${result.state}.`,
@@ -830,13 +867,18 @@ export class DiProviderActivationSession {
         environment,
         moduleKey,
         entryNode,
-        (argument) => this.evaluateExpression(requestor, argument, environment, moduleKey, null, 0),
+        (argument) => this.evaluateExpressionRead(requestor, argument, environment, moduleKey, null, 0),
         null,
         0,
       );
     }
-    const value = this.evaluateExpression(requestor, expression, environment, moduleKey, null, 0);
-    return this.activateExpressionWithValue(requestor, expression, value, entryNode, null, 0);
+    const read = this.evaluateExpressionRead(requestor, expression, environment, moduleKey, null, 0);
+    return read.value == null
+      ? activationOpenForExpressionRead(read)
+      : activationWithAdditionalPressure(
+          this.activateExpressionWithValue(requestor, expression, read.value, entryNode, null, 0),
+          read.openSeams,
+        );
   }
 
   private activateExpressionWithValue(
@@ -856,7 +898,7 @@ export class DiProviderActivationSession {
     environment: ModuleEnvironmentRecord,
     moduleKey: string,
     dependencyNode: ts.Node,
-    evaluate: (expression: ts.Expression) => EvaluationValue,
+    evaluate: (expression: ts.Expression) => EvaluationRead<EvaluationValue>,
     host: StaticIntrinsicEvaluationHost | null,
     depth: number,
   ): DiProviderActivationResult {
@@ -868,21 +910,41 @@ export class DiProviderActivationSession {
       return activationOpen(`Aurelia ${wrapperKind}(...) did not expose an inner DI key.`);
     }
     let searchAncestors = false;
+    const openSeams: EvaluationOpenSeam[] = [];
     if (wrapperKind === 'all' && wrapper.call.arguments[1] != null) {
-      const searchValue = evaluate(wrapper.call.arguments[1]);
+      const searchRead = evaluate(wrapper.call.arguments[1]);
+      if (searchRead.value == null) {
+        return activationOpenForExpressionRead(searchRead);
+      }
+      openSeams.push(...searchRead.openSeams);
+      const searchValue = searchRead.value;
       if (searchValue.kind !== EvaluationValueKind.Boolean) {
-        return activationOpen('Aurelia all(...) searchAncestors did not reduce to one boolean value.');
+        return activationWithAdditionalPressure(
+          activationOpen('Aurelia all(...) searchAncestors did not reduce to one boolean value.'),
+          openSeams,
+        );
       }
       searchAncestors = searchValue.value;
     }
-    return this.activateKnownWrapper(
-      requestor,
-      wrapperKind,
-      this.view.keyForExpression(innerExpression, evaluate(innerExpression)),
-      searchAncestors,
-      dependencyNode,
-      host,
-      depth,
+    const innerRead = evaluate(innerExpression);
+    if (innerRead.value == null) {
+      return activationWithAdditionalPressure(
+        activationOpenForExpressionRead(innerRead),
+        openSeams,
+      );
+    }
+    openSeams.push(...innerRead.openSeams);
+    return activationWithAdditionalPressure(
+      this.activateKnownWrapper(
+        requestor,
+        wrapperKind,
+        this.view.keyForExpression(innerExpression, innerRead.value),
+        searchAncestors,
+        dependencyNode,
+        host,
+        depth,
+      ),
+      openSeams,
     );
   }
 
@@ -967,11 +1029,15 @@ export class DiProviderActivationSession {
           DiProviderActivationState.Deferred,
           null,
           `Aurelia ${wrapperKind}(...) defers the inner DI lookup until a returned function is invoked.`,
+          null,
+          null,
+          [],
+          null,
         );
       case 'newInstanceForScope': {
         const result = this.activateFresh(requestor, inner, dependencyNode, host, depth);
         if (result.state === DiProviderActivationState.Value && result.value != null) {
-          this.appendOverlaySlot(requestor, inner.key.identityHandle, new DiScopedInstanceProvider(result.value));
+          this.appendOverlaySlot(requestor, inner.key.identityHandle, new DiScopedInstanceProvider(result));
         }
         return result;
       }
@@ -988,22 +1054,24 @@ export class DiProviderActivationSession {
     host: StaticIntrinsicEvaluationHost | null,
     depth: number,
   ): DiProviderActivationResult {
-    if (lookupSet.closure === DiProviderActivationLookupClosure.Open) {
-      return activationLookupOrderOpen();
-    }
     const values: EvaluationArrayElement[] = [];
+    const openSeams: EvaluationOpenSeam[] = [];
+    let openReason = lookupSet.closure === DiProviderActivationLookupClosure.Open
+      ? 'Aurelia DI resolver availability could not be ordered relative to this authored lookup.'
+      : null;
     for (const lookup of lookupSet.lookups) {
       for (const slot of lookup.slots) {
         const result = this.activateSlot(requestor, slot, lookup.handler, key, dependencyNode, host, depth);
         if (result.cycle != null) {
-          return result;
+          return activationWithAdditionalPressure(result, openSeams);
         }
+        openSeams.push(...result.openSeams);
         if (result.value == null) {
-          return new DiProviderActivationResult(
-            DiProviderActivationState.Multiple,
-            null,
-            result.reason ?? 'Aurelia all(...) included a resolver whose value remained open.',
-          );
+          if (result.abruptCompletion != null) {
+            return activationWithAdditionalPressure(result, openSeams);
+          }
+          openReason ??= result.reason ?? 'Aurelia all(...) included a resolver whose value remained open.';
+          continue;
         }
         values.push(new EvaluationArrayElement(
           result.value,
@@ -1011,7 +1079,23 @@ export class DiProviderActivationSession {
         ));
       }
     }
-    return activationValue(new EvaluationArrayValue(values, false, dependencyNode));
+    const value = new EvaluationArrayValue(
+      values,
+      openReason != null,
+      dependencyNode,
+      openReason != null,
+    );
+    return openReason == null
+      ? activationValueWithPressure(value, openSeams)
+      : new DiProviderActivationResult(
+          DiProviderActivationState.Multiple,
+          value,
+          openReason,
+          null,
+          null,
+          openSeams,
+          null,
+        );
   }
 
   private activateKey(
@@ -1053,15 +1137,15 @@ export class DiProviderActivationSession {
     depth: number,
   ): DiProviderActivationResult {
     if (slot instanceof DiScopedInstanceProvider) {
-      return activationValue(slot.value);
+      return slot.result;
     }
     if (slot instanceof DiInterfaceDefaultProvider) {
       return this.activateInterfaceDefault(requestor, slot, dependencyNode, host, depth);
     }
     if (slot instanceof DiJitProvider) {
       return slot.strategy === ContainerDefaultResolverPolicy.Singleton
-        ? this.activateSingleton(requestor, slot, slot.classValue, key.key, dependencyNode, host, depth)
-        : this.activateClass(requestor, slot.classValue, key.key, dependencyNode, null, host, depth);
+        ? this.activateSingleton(requestor, slot, slot.classValue, key.key, dependencyNode)
+        : this.activateClass(requestor, slot.classValue, key.key, dependencyNode, null);
     }
     if (slot instanceof ContainerSelfResolverSlot) {
       return activationOpen('Aurelia resolve(...) reached the built-in IContainer self resolver.');
@@ -1081,9 +1165,9 @@ export class DiProviderActivationSession {
       case ResolverResolutionKind.Instance:
         return this.directValueForReference(requestor, resolution.value, dependencyNode, host, depth);
       case ResolverResolutionKind.SingletonFactory:
-        return this.activateSingletonReference(requestor, resolver, resolution.value, key.key, dependencyNode, host, depth);
+        return this.activateSingletonReference(requestor, resolver, resolution.value, key.key, dependencyNode);
       case ResolverResolutionKind.TransientFactory:
-        return this.activateConstructableReference(requestor, resolution.value, key.key, dependencyNode, null, host, depth);
+        return this.activateConstructableReference(requestor, resolution.value, key.key, dependencyNode, null);
       case ResolverResolutionKind.Alias: {
         const aliasKey = containerLookupKeyForRegistrationValue(resolution.value);
         if (aliasKey == null) {
@@ -1130,8 +1214,8 @@ export class DiProviderActivationSession {
           return activationOpen(`Aurelia interface default ${effect.strategy} provider did not reduce to a class value.`);
         }
         return effect.strategy === RegistrationStrategy.Singleton
-          ? this.activateSingleton(requestor, provider, value, provider.key.key, dependencyNode, host, depth)
-          : this.activateClass(requestor, value, provider.key.key, dependencyNode, null, host, depth);
+          ? this.activateSingleton(requestor, provider, value, provider.key.key, dependencyNode)
+          : this.activateClass(requestor, value, provider.key.key, dependencyNode, null);
       }
       case RegistrationStrategy.AliasTo:
         return effect.valueExpression == null
@@ -1288,8 +1372,21 @@ export class DiProviderActivationSession {
         EvaluationOpenSeamKind.DynamicCall,
       ),
     );
+    if (evaluated.value == null) {
+      return activationOpenWithPressure(
+        evaluated.abruptCompletion == null
+          ? 'Aurelia registry execution did not produce a value.'
+          : evaluationAbruptCompletionSummary(evaluated.abruptCompletion),
+        evaluated.openSeams,
+        evaluated.abruptCompletion,
+      );
+    }
     if (evaluated.openSeams.length > 0) {
-      return activationOpen(evaluated.openSeams.map((seam) => seam.summary).join(' '));
+      return activationOpenWithPressure(
+        evaluated.openSeams.map((seam) => seam.summary).join(' '),
+        evaluated.openSeams,
+        null,
+      );
     }
     switch (registryResolverReturnState(evaluated.value)) {
       case DiRegistryResolverReturnState.Valid:
@@ -1336,10 +1433,13 @@ export class DiProviderActivationSession {
     }
     const environment = call?.environment ?? source.evaluation.environment;
     const moduleKey = call?.moduleKey ?? source.moduleKey;
-    const value = this.evaluateExpression(requestor, expression, environment, moduleKey, host, depth + 1);
-    return value.kind === EvaluationValueKind.Unknown
-      ? activationOpen(value.reason)
-      : activationValue(value);
+    const read = this.evaluateExpressionRead(requestor, expression, environment, moduleKey, host, depth + 1);
+    if (read.value == null) {
+      return activationOpenForExpressionRead(read);
+    }
+    return read.value.kind === EvaluationValueKind.Unknown
+      ? activationOpenWithPressure(read.value.reason, read.openSeams, null)
+      : activationValueWithPressure(read.value, read.openSeams);
   }
 
   private activateSingletonReference(
@@ -1348,13 +1448,11 @@ export class DiProviderActivationSession {
     reference: RegistrationValueReference | null,
     key: ContainerLookupKey,
     dependencyNode: ts.Node,
-    host: StaticIntrinsicEvaluationHost | null,
-    depth: number,
   ): DiProviderActivationResult {
     const value = this.view.classValueForReference(reference);
     return value == null
       ? activationOpen('Aurelia singleton resolver value did not map to an evaluator class declaration.')
-      : this.activateSingleton(requestor, resolver, value, key, dependencyNode, host, depth);
+      : this.activateSingleton(requestor, resolver, value, key, dependencyNode);
   }
 
   private activateConstructableReference(
@@ -1363,8 +1461,6 @@ export class DiProviderActivationSession {
     key: ContainerLookupKey,
     dependencyNode: ts.Node,
     cycleIdentity: object | null,
-    host: StaticIntrinsicEvaluationHost | null,
-    depth: number,
   ): DiProviderActivationResult {
     if (reference == null || !registrationValueKindCanConstruct(reference.valueKind)) {
       return activationOpen('Aurelia factory resolver did not retain a constructable source value.');
@@ -1372,7 +1468,7 @@ export class DiProviderActivationSession {
     const value = this.view.classValueForReference(reference);
     return value == null
       ? activationOpen('Aurelia factory resolver value did not map to an evaluator class declaration.')
-      : this.activateClass(requestor, value, key, dependencyNode, cycleIdentity, host, depth);
+      : this.activateClass(requestor, value, key, dependencyNode, cycleIdentity);
   }
 
   private activateSingleton(
@@ -1381,12 +1477,10 @@ export class DiProviderActivationSession {
     value: EvaluationClassValue,
     key: ContainerLookupKey,
     dependencyNode: ts.Node,
-    host: StaticIntrinsicEvaluationHost | null,
-    depth: number,
   ): DiProviderActivationResult {
     const cached = this.singletonValues.get(cycleIdentity);
     if (cached != null) {
-      return activationValue(cached);
+      return cached;
     }
     if (this.activeSingletons.has(cycleIdentity)) {
       const repeatedIndex = this.frames.findIndex((frame) => frame.cycleIdentity === cycleIdentity);
@@ -1401,13 +1495,15 @@ export class DiProviderActivationSession {
           key,
           dependencyNode,
         ),
+        [],
+        null,
       );
     }
     this.activeSingletons.add(cycleIdentity);
     try {
-      const result = this.activateClass(requestor, value, key, dependencyNode, cycleIdentity, host, depth);
+      const result = this.activateClass(requestor, value, key, dependencyNode, cycleIdentity);
       if (result.state === DiProviderActivationState.Value && result.value != null) {
-        this.singletonValues.set(cycleIdentity, result.value);
+        this.singletonValues.set(cycleIdentity, result);
       }
       return result;
     } finally {
@@ -1421,8 +1517,6 @@ export class DiProviderActivationSession {
     key: ContainerLookupKey,
     dependencyNode: ts.Node,
     cycleIdentity: object | null,
-    host: StaticIntrinsicEvaluationHost | null,
-    depth: number,
   ): DiProviderActivationResult {
     const frame: DiProviderActivationFrame = {
       cycleIdentity,
@@ -1436,25 +1530,28 @@ export class DiProviderActivationSession {
       if (source == null) {
         return activationOpen('Aurelia provider class is outside the admitted static-evaluation graph.');
       }
-      const result = this.withActiveRequestor(requestor, () => host == null
-        ? this.evaluatorForSource(source).evaluateClassValueInstantiation(
-            value,
-            source.moduleKey,
-            dependencyNode,
-          ).value
-        : host.evaluateClassInstantiation(
-            value,
-            dependencyNode,
-            [],
-            source.moduleKey,
-            depth + 1,
-          ));
+      const read = this.withActiveRequestor(requestor, (): EvaluationRead<EvaluationValue> => {
+        const result = this.evaluatorForSource(source).evaluateClassValueInstantiation(
+          value,
+          source.moduleKey,
+          dependencyNode,
+        );
+        return new EvaluationRead(
+          result.value,
+          dependencyNode,
+          result.openSeams,
+          result.abruptCompletion,
+        );
+      });
       if (this.detectedCycle != null) {
         return this.detectedCycle;
       }
-      return result.kind === EvaluationValueKind.Unknown
-        ? activationOpen(result.reason)
-        : activationValue(result);
+      if (read.value == null) {
+        return activationOpenForExpressionRead(read);
+      }
+      return read.value.kind === EvaluationValueKind.Unknown
+        ? activationOpenWithPressure(read.value.reason, read.openSeams, null)
+        : activationValueWithPressure(read.value, read.openSeams);
     } finally {
       this.frames.pop();
     }
@@ -1475,7 +1572,7 @@ export class DiProviderActivationSession {
       const value = key.classValue ?? this.view.classValueForKey(key.key);
       return value == null
         ? activationOpen('Aurelia found an explicit factory for the fresh-instance key, but the factory target remains opaque.')
-        : this.activateClass(requestor, value, key.key, dependencyNode, null, host, depth);
+        : this.activateClass(requestor, value, key.key, dependencyNode, null);
     }
     const answer = this.lookup(requestor, key.key);
     if (answer.closure === DiProviderActivationLookupClosure.Open) {
@@ -1496,7 +1593,7 @@ export class DiProviderActivationSession {
           ContainerResolutionFailureKind.UnableJitNonConstructor,
           `Aurelia key '${key.key.localName ?? key.key.identityHandle}' has no constructable factory for a fresh instance.`,
         )
-      : this.activateClass(requestor, value, key.key, dependencyNode, null, host, depth);
+      : this.activateClass(requestor, value, key.key, dependencyNode, null);
   }
 
   private activateFreshInterfaceDefault(
@@ -1542,7 +1639,7 @@ export class DiProviderActivationSession {
       case RegistrationStrategy.Singleton:
       case RegistrationStrategy.Transient:
         return effect.value.kind === EvaluationValueKind.Class
-          ? this.activateClass(requestor, effect.value, key.key, dependencyNode, null, host, depth)
+          ? this.activateClass(requestor, effect.value, key.key, dependencyNode, null)
           : activationOpen(`Aurelia interface default ${effect.strategy} factory target did not reduce to a class value.`);
       case RegistrationStrategy.AliasTo:
         return effect.valueExpression == null
@@ -1588,7 +1685,7 @@ export class DiProviderActivationSession {
       return this.activateFreshInterfaceEffect(requestor, key, slot.effect, dependencyNode, host, depth);
     }
     if (slot instanceof DiJitProvider) {
-      return this.activateClass(requestor, slot.classValue, key.key, dependencyNode, null, host, depth);
+      return this.activateClass(requestor, slot.classValue, key.key, dependencyNode, null);
     }
     if (slot instanceof DiScopedInstanceProvider || slot instanceof ContainerSelfResolverSlot) {
       return key.key.keyKind === ContainerLookupKeyKind.Interface
@@ -1606,7 +1703,7 @@ export class DiProviderActivationSession {
     switch (resolution.resolutionKind) {
       case ResolverResolutionKind.SingletonFactory:
       case ResolverResolutionKind.TransientFactory:
-        return this.activateConstructableReference(requestor, resolution.value, key.key, dependencyNode, null, host, depth);
+        return this.activateConstructableReference(requestor, resolution.value, key.key, dependencyNode, null);
       case ResolverResolutionKind.Alias: {
         const aliasKey = containerLookupKeyForRegistrationValue(resolution.value);
         if (aliasKey == null || this.activeAliases.has(resolver)) {
@@ -1704,9 +1801,10 @@ export class DiProviderActivationSession {
       }
     }
     slots.push(...(this.overlaySlots.get(container)?.get(key.identityHandle) ?? []));
+    const lookup = slots.length === 0 ? null : { handler: container, slots };
     return closure === DiProviderActivationLookupClosure.Open
-      ? openLookup()
-      : closedLookup(slots.length === 0 ? null : { handler: container, slots });
+      ? openLookup(lookup)
+      : closedLookup(lookup);
   }
 
   private lookupAll(
@@ -1717,22 +1815,25 @@ export class DiProviderActivationSession {
     if (!searchAncestors) {
       const answer = this.lookup(requestor, key);
       return answer.closure === DiProviderActivationLookupClosure.Open
-        ? openLookupSet()
+        ? openLookupSet(answer.lookup == null ? [] : [answer.lookup])
         : closedLookupSet(answer.lookup == null ? [] : [answer.lookup]);
     }
     const lookups: DiProviderActivationLookup[] = [];
+    let closure = DiProviderActivationLookupClosure.Closed;
     let current: Container | null = requestor;
     while (current != null) {
       const local = this.lookupLocal(current, key);
       if (local.closure === DiProviderActivationLookupClosure.Open) {
-        return openLookupSet();
+        closure = DiProviderActivationLookupClosure.Open;
       }
       if (local.lookup != null) {
         lookups.push(local.lookup);
       }
       current = current.parent;
     }
-    return closedLookupSet(lookups);
+    return closure === DiProviderActivationLookupClosure.Open
+      ? openLookupSet(lookups)
+      : closedLookupSet(lookups);
   }
 
   private lookupAllResources(
@@ -1740,19 +1841,19 @@ export class DiProviderActivationSession {
     key: ContainerLookupKey,
   ): DiProviderActivationLookupSet {
     const local = this.lookupLocal(requestor, key);
-    if (local.closure === DiProviderActivationLookupClosure.Open) {
-      return openLookupSet();
-    }
     if (requestor === requestor.root) {
-      return closedLookupSet(local.lookup == null ? [] : [local.lookup]);
+      return local.closure === DiProviderActivationLookupClosure.Open
+        ? openLookupSet(local.lookup == null ? [] : [local.lookup])
+        : closedLookupSet(local.lookup == null ? [] : [local.lookup]);
     }
     const root = this.lookupLocal(requestor.root, key);
-    if (root.closure === DiProviderActivationLookupClosure.Open) {
-      return openLookupSet();
-    }
-    return closedLookupSet(local.lookup == null
+    const lookups = local.lookup == null
       ? root.lookup == null ? [] : [root.lookup]
-      : root.lookup == null ? [local.lookup] : [local.lookup, root.lookup]);
+      : root.lookup == null ? [local.lookup] : [local.lookup, root.lookup];
+    return local.closure === DiProviderActivationLookupClosure.Open
+      || root.closure === DiProviderActivationLookupClosure.Open
+      ? openLookupSet(lookups)
+      : closedLookupSet(lookups);
   }
 
   private appendOverlaySlot(
@@ -1812,17 +1913,33 @@ export class DiProviderActivationSession {
     return true;
   }
 
-  private evaluateExpression(
+  private evaluateExpressionRead(
     requestor: Container,
     expression: ts.Expression,
     environment: ModuleEnvironmentRecord,
     moduleKey: string,
     host: StaticIntrinsicEvaluationHost | null,
     depth: number,
-  ): EvaluationValue {
-    return this.withActiveRequestor(requestor, () => host == null
-      ? this.evaluatorForModule(moduleKey).evaluateExpressionInEnvironment(expression, environment, moduleKey).value
-      : host.evaluateExpression(expression, environment, moduleKey, depth + 1));
+  ): EvaluationRead<EvaluationValue> {
+    return this.withActiveRequestor(requestor, () => {
+      if (host != null) {
+        return new EvaluationRead(
+          host.evaluateExpression(expression, environment, moduleKey, depth + 1),
+          expression,
+        );
+      }
+      const result = this.evaluatorForModule(moduleKey).evaluateExpressionInEnvironment(
+        expression,
+        environment,
+        moduleKey,
+      );
+      return new EvaluationRead(
+        result.value,
+        expression,
+        result.openSeams,
+        result.abruptCompletion,
+      );
+    });
   }
 
   private evaluatorForModule(moduleKey: string): StaticEvaluator {
@@ -2002,22 +2119,101 @@ function containerApiMethodValidatesKey(
 }
 
 function activationValue(value: EvaluationValue): DiProviderActivationResult {
-  return new DiProviderActivationResult(DiProviderActivationState.Value, value, null);
+  return activationValueWithPressure(value, []);
+}
+
+function activationValueWithPressure(
+  value: EvaluationValue,
+  openSeams: readonly EvaluationOpenSeam[],
+): DiProviderActivationResult {
+  return new DiProviderActivationResult(
+    DiProviderActivationState.Value,
+    value,
+    null,
+    null,
+    null,
+    openSeams,
+    null,
+  );
+}
+
+function activationWithAdditionalPressure(
+  result: DiProviderActivationResult,
+  openSeams: readonly EvaluationOpenSeam[],
+): DiProviderActivationResult {
+  if (openSeams.length === 0) {
+    return result;
+  }
+  return new DiProviderActivationResult(
+    result.state,
+    result.value,
+    result.reason,
+    result.failureKind,
+    result.cycle,
+    [...openSeams, ...result.openSeams],
+    result.abruptCompletion,
+  );
 }
 
 function activationUndefined(): DiProviderActivationResult {
-  return new DiProviderActivationResult(DiProviderActivationState.Undefined, EvaluationUndefined, null);
+  return new DiProviderActivationResult(
+    DiProviderActivationState.Undefined,
+    EvaluationUndefined,
+    null,
+    null,
+    null,
+    [],
+    null,
+  );
 }
 
-function activationOpen(reason: string): DiProviderActivationResult {
-  return new DiProviderActivationResult(DiProviderActivationState.Open, null, reason);
+function activationOpen(
+  reason: string,
+): DiProviderActivationResult {
+  return activationOpenWithPressure(reason, [], null);
+}
+
+function activationOpenWithPressure(
+  reason: string,
+  openSeams: readonly EvaluationOpenSeam[],
+  abruptCompletion: EvaluationExpressionAbruptCompletion | null,
+): DiProviderActivationResult {
+  return new DiProviderActivationResult(
+    DiProviderActivationState.Open,
+    null,
+    reason,
+    null,
+    null,
+    openSeams,
+    abruptCompletion,
+  );
+}
+
+function activationOpenForExpressionRead(
+  read: EvaluationRead<EvaluationValue>,
+): DiProviderActivationResult {
+  return activationOpenWithPressure(
+    read.abruptCompletion == null
+      ? read.openSeams.map((seam) => seam.summary).join(' ') || 'Static expression evaluation did not produce a value.'
+      : evaluationAbruptCompletionSummary(read.abruptCompletion),
+    read.openSeams,
+    read.abruptCompletion,
+  );
 }
 
 function activationFailed(
   failureKind: ContainerResolutionFailureKind,
   reason: string,
 ): DiProviderActivationResult {
-  return new DiProviderActivationResult(DiProviderActivationState.Failed, null, reason, failureKind);
+  return new DiProviderActivationResult(
+    DiProviderActivationState.Failed,
+    null,
+    reason,
+    failureKind,
+    null,
+    [],
+    null,
+  );
 }
 
 function activationLookupOrderOpen(): DiProviderActivationResult {
@@ -2028,16 +2224,20 @@ function closedLookup(lookup: DiProviderActivationLookup | null): DiProviderActi
   return { lookup, closure: DiProviderActivationLookupClosure.Closed };
 }
 
-function openLookup(): DiProviderActivationLookupAnswer {
-  return { lookup: null, closure: DiProviderActivationLookupClosure.Open };
+function openLookup(
+  lookup: DiProviderActivationLookup | null = null,
+): DiProviderActivationLookupAnswer {
+  return { lookup, closure: DiProviderActivationLookupClosure.Open };
 }
 
 function closedLookupSet(lookups: readonly DiProviderActivationLookup[]): DiProviderActivationLookupSet {
   return { lookups, closure: DiProviderActivationLookupClosure.Closed };
 }
 
-function openLookupSet(): DiProviderActivationLookupSet {
-  return { lookups: [], closure: DiProviderActivationLookupClosure.Open };
+function openLookupSet(
+  lookups: readonly DiProviderActivationLookup[] = [],
+): DiProviderActivationLookupSet {
+  return { lookups, closure: DiProviderActivationLookupClosure.Open };
 }
 
 function registrationValueKindCanConstruct(valueKind: RegistrationValueKind): boolean {

@@ -55,7 +55,7 @@ import {
   frameworkTemplateControllerSemanticsForName,
 } from '../template/template-controller-semantics.js';
 import { RuntimeBindingSourceValueEvaluator } from '../observation/binding-source-value-evaluator.js';
-import { RuntimeBindingSourceValueEvaluationKind } from '../observation/binding-source-value-evaluation.js';
+import { RuntimeBindingSourceValueEvaluationClosure } from '../configuration/binding-source-value-evaluation.js';
 import { EvaluationValueKind } from '../evaluation/values.js';
 import {
   RouteConfigContextModel,
@@ -994,17 +994,25 @@ function viewportStringField(
   );
   if (bound != null) {
     const evaluated = sourceValueEvaluator.evaluateBoundControllerPropertyValue(bound);
-    if (
-      evaluated.kind === RuntimeBindingSourceValueEvaluationKind.Value
-      && evaluated.value?.kind === EvaluationValueKind.String
-    ) {
+    if (evaluated.value?.kind === EvaluationValueKind.String) {
       return {
         value: evaluated.value.value,
-        state: new ViewportFieldState(field, ViewportFieldStateKind.Closed, bound.sourceAddressHandle),
+        state: evaluated.closure === RuntimeBindingSourceValueEvaluationClosure.Value
+          ? new ViewportFieldState(field, ViewportFieldStateKind.Closed, bound.sourceAddressHandle)
+          : new ViewportFieldState(
+              field,
+              ViewportFieldStateKind.Open,
+              bound.sourceAddressHandle,
+              evaluated.openReason,
+              evaluated.openReasonKinds,
+            ),
         provenanceHandle: bound.sourceProvenanceHandle,
       };
     }
-    if (evaluated.kind === RuntimeBindingSourceValueEvaluationKind.Value && evaluated.value != null) {
+    if (
+      evaluated.closure === RuntimeBindingSourceValueEvaluationClosure.Value
+      && evaluated.value != null
+    ) {
       return {
         value: null,
         state: new ViewportFieldState(

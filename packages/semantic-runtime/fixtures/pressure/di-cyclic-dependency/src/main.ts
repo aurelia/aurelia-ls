@@ -8,11 +8,11 @@ interface IFoo {
   parent: IFoo | undefined;
 }
 
-const IFoo = DI.createInterface<IFoo>('IFoo', (builder) => builder.singleton(Foo));
-
 class Foo implements IFoo {
   parent = resolve(optional(IFoo));
 }
+
+const IFoo = DI.createInterface<IFoo>('IFoo', (builder) => builder.singleton(Foo));
 
 directContainer.register(IFoo);
 reexportedContainer.get(IFoo);

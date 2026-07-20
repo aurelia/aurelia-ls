@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import ts from 'typescript';
 import { afterEach, describe, expect, test } from 'vitest';
 
 import { bootWorkspace } from '../src/boot/boot-workspace.js';
@@ -9,6 +10,11 @@ import {
   StaticProjectEvaluationPass,
   type StaticProjectEvaluationResult,
 } from '../src/evaluation/project-evaluation.js';
+import { EvaluationCompletionKind } from '../src/evaluation/completion.js';
+import type { StaticEvaluationRuntimeHost } from '../src/evaluation/evaluator.js';
+import { StaticModuleGraphEvaluator } from '../src/evaluation/module-evaluator.js';
+import { buildEvaluationModuleGraph } from '../src/evaluation/module-host.js';
+import { EvaluationOpenSeamKind } from '../src/evaluation/seams.js';
 import { EvaluationValueKind } from '../src/evaluation/values.js';
 
 const temporaryRoots: string[] = [];
@@ -106,6 +112,156 @@ describe('project static evaluation', () => {
       expect.stringContaining('Circular module evaluation reached'),
     ]));
     expect(evaluation.forkSession().graphOpenValues).toEqual(evaluation.graphOpenValues);
+  });
+
+  test('propagates a dependency throw before executing an importing module body', () => {
+    const root = temporaryProject({
+      'entry.ts': [
+        "import { state } from './dependency';",
+        'state.importerReached = true;',
+        "export const entryMarker = 'unreachable';",
+      ].join('\n'),
+      'dependency.ts': [
+        'export const state = { importerReached: false };',
+        "throw 'dependency failure';",
+      ].join('\n'),
+    });
+    const project = bootWorkspace({
+      rootDir: root,
+      storeKey: 'test:project-evaluation-dependency-completion',
+      projects: [{
+        projectKey: 'dependency-completion',
+        rootDir: root,
+        sourceFiles: [
+          { path: 'entry.ts' },
+          { path: 'dependency.ts' },
+        ],
+      }],
+    }).projects[0];
+    if (project == null) {
+      throw new Error('Expected one booted project.');
+    }
+
+    const evaluation = new StaticProjectEvaluationPass().evaluate(project);
+    const entry = evaluation.readEvaluatedSources().find((candidate) => candidate.admission.path === 'entry.ts');
+    const dependency = evaluation.readEvaluatedSources().find((candidate) => candidate.admission.path === 'dependency.ts');
+    expect(dependency?.evaluation.completion).toEqual(expect.objectContaining({
+      kind: EvaluationCompletionKind.Throw,
+      value: expect.objectContaining({ kind: EvaluationValueKind.String, value: 'dependency failure' }),
+    }));
+    expect(entry?.evaluation.completion).toEqual(expect.objectContaining({
+      kind: EvaluationCompletionKind.Throw,
+      value: expect.objectContaining({ kind: EvaluationValueKind.String, value: 'dependency failure' }),
+    }));
+    expect(entry?.evaluation.environment.readValue('entryMarker')).toBeNull();
+    const state = dependency?.evaluation.environment.readValue('state') ?? null;
+    expect(state?.kind === EvaluationValueKind.Object
+      ? state.properties.get('importerReached')?.value
+      : null).toEqual(expect.objectContaining({
+        kind: EvaluationValueKind.Boolean,
+        value: false,
+      }));
+  });
+
+  test.each([
+    ['side-effect imports', "import './bad';\nimport './later';"],
+    ['named imports', "import { bad } from './bad';\nimport { later } from './later';"],
+    ['namespace imports', "import * as bad from './bad';\nimport * as later from './later';"],
+    ['re-exports', "export { bad } from './bad';\nexport * from './later';"],
+  ])('stops dependency scheduling after the first abrupt %s edge', (_label, dependencyEdges) => {
+    const result = evaluateModuleGraph({
+      'entry.ts': `${dependencyEdges}\nexport const entryMarker = 'unreachable';`,
+      'bad.ts': "export const bad = 'bad';\nthrow 'dependency failure';",
+      'later.ts': "export const later = 'later';",
+    });
+    const entry = result.modules.get('entry.ts');
+    const bad = result.modules.get('bad.ts');
+
+    expect(bad?.completion).toEqual(expect.objectContaining({
+      kind: EvaluationCompletionKind.Throw,
+      value: expect.objectContaining({ kind: EvaluationValueKind.String, value: 'dependency failure' }),
+    }));
+    expect(entry?.completion).toEqual(expect.objectContaining({
+      kind: EvaluationCompletionKind.Throw,
+      value: expect.objectContaining({ kind: EvaluationValueKind.String, value: 'dependency failure' }),
+    }));
+    expect(entry?.environment.readValue('entryMarker')).toBeNull();
+    expect(result.modules.has('later.ts')).toBe(false);
+  });
+
+  test('propagates CommonJS module throws synchronously through caller try/catch', () => {
+    const result = evaluateModuleGraph({
+      'entry.ts': [
+        "let observed = 'before';",
+        'try {',
+        "  const loaded = require('./bad');",
+        '  observed = loaded.marker;',
+        '} catch (error) {',
+        '  observed = error;',
+        '}',
+        "export const after = 'after';",
+      ].join('\n'),
+      'bad.ts': [
+        "module.exports = { marker: 'partial' };",
+        "throw 'require failure';",
+      ].join('\n'),
+    });
+    const entry = result.modules.get('entry.ts');
+
+    expect(result.modules.get('bad.ts')?.completion.kind).toBe(EvaluationCompletionKind.Throw);
+    expect(entry?.completion.kind).toBe(EvaluationCompletionKind.Normal);
+    expect(entry?.environment.readValue('observed')).toEqual(expect.objectContaining({
+      kind: EvaluationValueKind.String,
+      value: 'require failure',
+    }));
+    expect(entry?.environment.readValue('after')).toEqual(expect.objectContaining({
+      kind: EvaluationValueKind.String,
+      value: 'after',
+    }));
+  });
+
+  test('keeps a failed dynamic import open instead of fabricating a fulfilled namespace', () => {
+    const result = evaluateModuleGraph({
+      'entry.ts': [
+        'let fulfilled = false;',
+        "import('./bad').then(() => { fulfilled = true; });",
+        "export const after = 'after';",
+      ].join('\n'),
+      'bad.ts': "throw 'dynamic failure';",
+    });
+    const entry = result.modules.get('entry.ts');
+
+    expect(result.modules.get('bad.ts')?.completion.kind).toBe(EvaluationCompletionKind.Throw);
+    expect(entry?.completion.kind).toBe(EvaluationCompletionKind.Normal);
+    expect(entry?.environment.readValue('fulfilled')).toEqual(expect.objectContaining({
+      kind: EvaluationValueKind.Boolean,
+      value: false,
+    }));
+    expect(entry?.environment.readValue('after')).toEqual(expect.objectContaining({
+      kind: EvaluationValueKind.String,
+      value: 'after',
+    }));
+    expect(result.openValues.map((value) => value.reason)).toEqual(expect.arrayContaining([
+      expect.stringContaining('promise rejection settlement is not modeled'),
+    ]));
+  });
+
+  test('does not execute module edges found only inside an unreachable branch', () => {
+    const result = evaluateModuleGraph({
+      'entry.ts': [
+        'if (false) {',
+        "  require('./required');",
+        "  import('./imported');",
+        '}',
+        "export const after = 'after';",
+      ].join('\n'),
+      'required.ts': "throw 'unreachable require';",
+      'imported.ts': "throw 'unreachable import';",
+    });
+
+    expect(result.modules.get('entry.ts')?.completion.kind).toBe(EvaluationCompletionKind.Normal);
+    expect(result.modules.has('required.ts')).toBe(false);
+    expect(result.modules.has('imported.ts')).toBe(false);
   });
 
   test('captures live lexical bindings for functions, object methods, and class methods', () => {
@@ -289,6 +445,49 @@ describe('project static evaluation', () => {
       ? cycle.mayHaveUnknownExports
       : true).toBe(false);
   });
+
+  test('preserves causal value pressure across imports, re-exports, and namespace reads', () => {
+    const evaluation = evaluateModuleGraph({
+      'entry.ts': [
+        "import { candidate } from './source';",
+        "import { renamed } from './barrel';",
+        "import * as namespace from './barrel';",
+        "export const direct = candidate ? 'trusted' : 'fallback';",
+        "export const reexported = renamed ? 'trusted' : 'fallback';",
+        "export const namespaced = namespace.renamed ? 'trusted' : 'fallback';",
+      ].join('\n'),
+      'source.ts': 'export const candidate = pressure(true);',
+      'barrel.ts': "export { candidate as renamed } from './source';",
+    }, pressureRuntimeHost);
+    const entry = evaluation.modules.get('entry.ts');
+
+    for (const name of ['candidate', 'renamed', 'direct', 'reexported', 'namespaced']) {
+      const binding = entry?.environment.readBinding(name) ?? null;
+      expect(binding?.state).toBe('open');
+      expect(binding?.openSeams.map((seam) => seam.summary)).toEqual([
+        'pressure(true) retained a best-known value.',
+      ]);
+    }
+    expect(entry?.environment.readValue('direct')?.kind).toBe(EvaluationValueKind.Unknown);
+    expect(entry?.environment.readValue('reexported')?.kind).toBe(EvaluationValueKind.Unknown);
+    expect(entry?.environment.readValue('namespaced')?.kind).toBe(EvaluationValueKind.Unknown);
+  });
+
+  test('preserves causal value pressure through CommonJS exports and require destructuring', () => {
+    const evaluation = evaluateModuleGraph({
+      'entry.ts': [
+        "const { candidate } = require('./source');",
+        "export const result = candidate ? 'trusted' : 'fallback';",
+      ].join('\n'),
+      'source.ts': 'exports.candidate = pressure(true);',
+    }, pressureRuntimeHost);
+    const entry = evaluation.modules.get('entry.ts');
+
+    expect(entry?.environment.readBinding('candidate')?.openSeams.map((seam) => seam.summary)).toEqual([
+      'pressure(true) retained a best-known value.',
+    ]);
+    expect(entry?.environment.readValue('result')?.kind).toBe(EvaluationValueKind.Unknown);
+  });
 });
 
 function temporaryProject(files: Readonly<Record<string, string>>): string {
@@ -312,3 +511,43 @@ function evaluatedBinding(
   }
   return value;
 }
+
+function evaluateModuleGraph(
+  files: Readonly<Record<string, string>>,
+  runtimeHost?: StaticEvaluationRuntimeHost,
+) {
+  const sources = new Map(Object.entries(files).map(([moduleKey, text]) => [
+    moduleKey,
+    ts.createSourceFile(moduleKey, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS),
+  ] as const));
+  const build = buildEvaluationModuleGraph('entry.ts', {
+    readSourceFile: (moduleKey) => sources.get(moduleKey) ?? null,
+    resolveModuleSpecifier: (fromModuleKey, moduleSpecifier) => {
+      const base = path.posix.normalize(path.posix.join(path.posix.dirname(fromModuleKey), moduleSpecifier));
+      return [base, `${base}.ts`, `${base}/index.ts`]
+        .find((candidate) => sources.has(candidate)) ?? null;
+    },
+  });
+  return new StaticModuleGraphEvaluator(build.graph, undefined, runtimeHost).evaluate('entry.ts');
+}
+
+const pressureRuntimeHost: StaticEvaluationRuntimeHost = {
+  evaluateCallExpression: (call, environment, moduleKey, depth, host) => {
+    if (!ts.isIdentifier(call.expression) || call.expression.text !== 'pressure') {
+      return null;
+    }
+    const argument = call.arguments[0];
+    if (argument == null) {
+      throw new Error('The pressure test intrinsic requires one argument.');
+    }
+    const value = host.evaluateExpression(argument, environment, moduleKey, depth + 1);
+    host.open(
+      EvaluationOpenSeamKind.DynamicCall,
+      `${call.getText(call.getSourceFile())} retained a best-known value.`,
+      call,
+      moduleKey,
+      [],
+    );
+    return value;
+  },
+};

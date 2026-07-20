@@ -85,6 +85,7 @@ function instantiateStaticFunctionDeclaration(
     EvaluationBindingKind.Function,
     false,
     statement,
+    [],
   );
 }
 
@@ -112,10 +113,11 @@ function instantiateStaticImportDeclaration(
     const imported = imports.get(clause.name.text);
     environment.initializeBinding(
       clause.name.text,
-      imported ?? new EvaluationUnknownValue('Default import binding is not linked to its source module in this evaluator pass.', clause.name),
+      imported?.value ?? new EvaluationUnknownValue('Default import binding is not linked to its source module in this evaluator pass.', clause.name),
       EvaluationBindingKind.Import,
       false,
       clause,
+      imported?.openSeams ?? [],
     );
   }
   if (clause.namedBindings == null) {
@@ -125,10 +127,11 @@ function instantiateStaticImportDeclaration(
     const imported = imports.get(clause.namedBindings.name.text);
     environment.initializeBinding(
       clause.namedBindings.name.text,
-      imported ?? new EvaluationUnknownValue('Namespace import binding is not linked to its source module in this evaluator pass.', clause.namedBindings.name),
+      imported?.value ?? new EvaluationUnknownValue('Namespace import binding is not linked to its source module in this evaluator pass.', clause.namedBindings.name),
       EvaluationBindingKind.Import,
       false,
       clause.namedBindings,
+      imported?.openSeams ?? [],
     );
     return;
   }
@@ -136,10 +139,11 @@ function instantiateStaticImportDeclaration(
     const imported = imports.get(element.name.text);
     environment.initializeBinding(
       element.name.text,
-      imported ?? new EvaluationUnknownValue('Named import binding is not linked to its source module in this evaluator pass.', element.name),
+      imported?.value ?? new EvaluationUnknownValue('Named import binding is not linked to its source module in this evaluator pass.', element.name),
       EvaluationBindingKind.Import,
       false,
       element,
+      imported?.openSeams ?? [],
     );
   }
 }

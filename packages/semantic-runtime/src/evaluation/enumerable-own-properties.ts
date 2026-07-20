@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import type { EvaluationOpenSeam } from './seams.js';
 
 import {
   EvaluationObjectPropertyState,
@@ -19,6 +20,8 @@ export class EvaluationEnumerableOwnEntry {
     readonly expression: ts.Expression | null,
     /** Original object-property record when this entry came from a property map. */
     readonly property: EvaluationObjectProperty | null,
+    /** Exact pressure that qualifies this entry's retained value. */
+    readonly openSeams: readonly EvaluationOpenSeam[] = [],
   ) {}
 }
 
@@ -62,6 +65,7 @@ export function readEvaluationEnumerableOwnEntries(
           element.expression,
           element.expression,
           null,
+          element.openSeams,
         )),
         source.mayHaveUnknownElements,
         source.mayHaveUnknownOrder,
@@ -119,6 +123,7 @@ function entriesFromProperties(
       property.node,
       propertyValueExpression(property.node),
       property,
+      property.openSeams,
     ));
   entries.sort(compareEnumerablePropertyKeys);
   const hasOpenProperty = entries.some((entry) => entry.property?.state === EvaluationObjectPropertyState.Open);

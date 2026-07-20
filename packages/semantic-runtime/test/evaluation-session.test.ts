@@ -5,6 +5,7 @@ import { EvaluationBindingKind, ModuleEnvironmentRecord } from '../src/evaluatio
 import { StaticEvaluationSessionFork } from '../src/evaluation/evaluation-session.js';
 import { StaticEvaluator, type StaticEvaluationRuntimeHost } from '../src/evaluation/evaluator.js';
 import { EvaluationImportEntry, EvaluationImportKind } from '../src/evaluation/module-graph.js';
+import { EvaluationValueEvidence } from '../src/evaluation/value-pressure.js';
 import {
   EvaluationArrayElement,
   EvaluationArrayValue,
@@ -305,9 +306,9 @@ describe('static evaluation sessions', () => {
       ['namespace', property('namespace', namespace, declaration)],
       ['promise', property('promise', promise, declaration)],
     ]), false, declaration);
-    environment.initializeBinding('root', root, EvaluationBindingKind.Const, false, declaration);
-    environment.initializeBinding('shared', shared, EvaluationBindingKind.Const, false, declaration);
-    environment.initializeBinding('Example', classValue, EvaluationBindingKind.Class, false, declaration);
+    environment.initializeBinding('root', root, EvaluationBindingKind.Const, false, declaration, []);
+    environment.initializeBinding('shared', shared, EvaluationBindingKind.Const, false, declaration, []);
+    environment.initializeBinding('Example', classValue, EvaluationBindingKind.Class, false, declaration, []);
 
     const session = new StaticEvaluationSessionFork({}).forkEnvironment(environment);
     const sessionRoot = requireValueKind(session.readValue('root'), EvaluationValueKind.Object);
@@ -396,7 +397,7 @@ describe('static evaluation sessions', () => {
     const original = new StaticEvaluator(undefined, aureliaStaticEvaluationRuntimeHost).evaluateSourceFile(
       source,
       source.fileName,
-      new Map([['StandardConfiguration', standardValue]]),
+      new Map([['StandardConfiguration', new EvaluationValueEvidence(standardValue, [])]]),
     );
     const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
     const configured = session.environment.readValue('configured');
@@ -462,14 +463,14 @@ describe('static evaluation sessions', () => {
       source,
       source.fileName,
       new Map([
-        ['StateDefaultConfiguration', stateFactory],
-        ['RouterConfiguration', external('@aurelia/router', 'RouterConfiguration')],
-        ['AppTask', appTaskFactory],
-        ['DialogConfigurationStandard', dialog],
-        ['createDialogConfiguration', external('@aurelia/dialog', 'createDialogConfiguration')],
-        ['LoggerConfiguration', loggerFactory],
-        ['StyleConfiguration', styleFactory],
-        ['ValidationI18nConfiguration', localizedValidation],
+        ['StateDefaultConfiguration', new EvaluationValueEvidence(stateFactory, [])],
+        ['RouterConfiguration', new EvaluationValueEvidence(external('@aurelia/router', 'RouterConfiguration'), [])],
+        ['AppTask', new EvaluationValueEvidence(appTaskFactory, [])],
+        ['DialogConfigurationStandard', new EvaluationValueEvidence(dialog, [])],
+        ['createDialogConfiguration', new EvaluationValueEvidence(external('@aurelia/dialog', 'createDialogConfiguration'), [])],
+        ['LoggerConfiguration', new EvaluationValueEvidence(loggerFactory, [])],
+        ['StyleConfiguration', new EvaluationValueEvidence(styleFactory, [])],
+        ['ValidationI18nConfiguration', new EvaluationValueEvidence(localizedValidation, [])],
       ]),
     );
     const state = requireValueKind(evaluation.environment.readValue('state'), EvaluationValueKind.Object);

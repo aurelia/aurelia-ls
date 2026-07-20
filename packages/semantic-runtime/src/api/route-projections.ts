@@ -492,6 +492,7 @@ function typedNavigationInstructionRow(
 ): SemanticTypedNavigationInstructionRow {
   return {
     projectKey: emission.project.projectKey,
+    closure: instruction.closure,
     instructionKind: instruction.instructionKind,
     value: instruction.value,
     component: routerProductReferenceRow(store, instruction.component),
@@ -517,6 +518,7 @@ function viewportInstructionRow(
 ): SemanticViewportInstructionRow {
   return {
     projectKey: emission.project.projectKey,
+    closure: instruction.closure,
     component: viewportInstructionComponentRow(store, instruction.component, typedInstructionsByIdentity),
     viewport: instruction.viewport,
     childCount: instruction.children.length,
@@ -549,6 +551,7 @@ function viewportInstructionTreeRow(
 ): SemanticViewportInstructionTreeRow {
   return {
     projectKey: emission.project.projectKey,
+    closure: instructionTree.closure,
     routeContext: instructionTree.routeContext == null
       ? null
       : {

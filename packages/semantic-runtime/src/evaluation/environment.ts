@@ -3,6 +3,11 @@ import {
   EvaluationUndefined,
   type EvaluationValue,
 } from './values.js';
+import {
+  compactEvaluationOpenSeams,
+  type EvaluationOpenSeam,
+} from './seams.js';
+import { EvaluationValueEvidence } from './value-pressure.js';
 
 export const enum EvaluationBindingKind {
   /** Binding introduced by `var`. */
@@ -34,6 +39,8 @@ export const enum EvaluationBindingState {
 
 /** One binding cell inside a module or function environment record. */
 export class EvaluationBinding {
+  public openSeams: readonly EvaluationOpenSeam[];
+
   constructor(
     /** Name used for lexical lookup. */
     readonly name: string,
@@ -44,10 +51,14 @@ export class EvaluationBinding {
     /** Declaration node that produced the binding, when one exists. */
     readonly declaration: ts.Node | null,
     /** Current binding state. */
-    public state: EvaluationBindingState = EvaluationBindingState.Uninitialized,
+    public state: EvaluationBindingState,
     /** Current evaluator-local value. */
-    public value: EvaluationValue = EvaluationUndefined,
-  ) {}
+    public value: EvaluationValue,
+    /** Exact pressure that qualifies the retained value in this lexical slot. */
+    openSeams: readonly EvaluationOpenSeam[],
+  ) {
+    this.openSeams = compactEvaluationOpenSeams(openSeams);
+  }
 }
 
 /** ECMAScript-like environment record for one module or evaluator-local function call. */
@@ -67,7 +78,15 @@ export class ModuleEnvironmentRecord {
     mutable: boolean,
     declaration: ts.Node | null,
   ): EvaluationBinding {
-    const binding = new EvaluationBinding(name, bindingKind, mutable, declaration);
+    const binding = new EvaluationBinding(
+      name,
+      bindingKind,
+      mutable,
+      declaration,
+      EvaluationBindingState.Uninitialized,
+      EvaluationUndefined,
+      [],
+    );
     this.bindings.set(name, binding);
     return binding;
   }
@@ -79,24 +98,31 @@ export class ModuleEnvironmentRecord {
     bindingKind: EvaluationBindingKind,
     mutable: boolean,
     declaration: ts.Node | null,
+    openSeams: readonly EvaluationOpenSeam[],
   ): EvaluationBinding {
     const binding = this.bindings.get(name)
       ?? this.declareBinding(name, bindingKind, mutable, declaration);
     binding.value = value;
-    binding.state = value.kind === 'unknown'
+    binding.openSeams = compactEvaluationOpenSeams(openSeams);
+    binding.state = value.kind === 'unknown' || binding.openSeams.length > 0
       ? EvaluationBindingState.Open
       : EvaluationBindingState.Initialized;
     return binding;
   }
 
   /** Assign a value to an existing mutable binding. */
-  setBinding(name: string, value: EvaluationValue): boolean {
+  setBinding(
+    name: string,
+    value: EvaluationValue,
+    openSeams: readonly EvaluationOpenSeam[],
+  ): boolean {
     const binding = this.bindings.get(name);
     if (binding == null || !binding.mutable) {
       return false;
     }
     binding.value = value;
-    binding.state = value.kind === 'unknown'
+    binding.openSeams = compactEvaluationOpenSeams(openSeams);
+    binding.state = value.kind === 'unknown' || binding.openSeams.length > 0
       ? EvaluationBindingState.Open
       : EvaluationBindingState.Initialized;
     return true;
@@ -115,6 +141,14 @@ export class ModuleEnvironmentRecord {
   /** Read a binding value by lexical name. */
   readValue(name: string): EvaluationValue | null {
     return this.bindings.get(name)?.value ?? null;
+  }
+
+  /** Read a binding value together with the pressure retained by its lexical edge. */
+  readEvidence(name: string): EvaluationValueEvidence | null {
+    const binding = this.bindings.get(name);
+    return binding == null
+      ? null
+      : new EvaluationValueEvidence(binding.value, binding.openSeams);
   }
 
   /** Snapshot all binding cells in insertion order. */
@@ -153,6 +187,7 @@ export class ModuleEnvironmentRecord {
           binding.declaration,
           binding.state,
           binding.value,
+          binding.openSeams,
         ),
       );
     }
