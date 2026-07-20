@@ -429,7 +429,10 @@ describe('static evaluation sessions', () => {
       false,
       declaration,
     );
-    const promise = new EvaluationPromiseValue(shared, declaration);
+    const promise = EvaluationPromiseValue.fulfilled(
+      new EvaluationValueEvidence(shared, []),
+      declaration,
+    );
     shared.properties.set('promise', property('promise', promise, declaration));
     const root = new EvaluationObjectValue(new Map([
       ['shared', property('shared', shared, declaration)],
@@ -483,7 +486,7 @@ describe('static evaluation sessions', () => {
     expect(sessionMap.entries[0]?.value).toBe(sessionInstance);
     expect(sessionNamespace.exportEntries.get('shared')?.value).toBe(sessionShared);
     expect(sessionNamespace.exportEntries.get('instance')?.value).toBe(sessionInstance);
-    expect(sessionPromise.fulfilledValue).toBe(sessionShared);
+    expect(sessionPromise.settlement.evidence.value).toBe(sessionShared);
     expect(sessionShared.properties.get('promise')?.value).toBe(sessionPromise);
     expect(sessionClass.properties.get('instance')?.value).toBe(sessionInstance);
     expect(sessionInstance.classValue).toBe(sessionClass);

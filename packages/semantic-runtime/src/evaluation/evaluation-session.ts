@@ -57,6 +57,7 @@ import {
   EvaluationModuleNamespaceValue,
   EvaluationObjectProperty,
   EvaluationObjectValue,
+  EvaluationPromiseSettlement,
   EvaluationPromiseValue,
   EvaluationSetElement,
   EvaluationSetValue,
@@ -297,7 +298,13 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
       case EvaluationValueKind.Promise: {
         const target = EvaluationPromiseValue.forkShell(source.node);
         this.bindValue(source, target);
-        target.completeFork(this.forkValue(source.fulfilledValue));
+        target.completeFork(new EvaluationPromiseSettlement(
+          source.settlement.kind,
+          new EvaluationValueEvidence(
+            this.forkValue(source.settlement.evidence.value),
+            source.settlement.evidence.openSeams,
+          ),
+        ));
         return target;
       }
       default:
@@ -665,8 +672,11 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
         }
         break;
       case EvaluationValueKind.Promise:
-        if (this.normalizeRetainedValue(value.fulfilledValue, retention, values, environments) !== value.fulfilledValue) {
-          throw new Error('Owned Promise retained a fulfillment value from another mutable graph.');
+        if (
+          this.normalizeRetainedValue(value.settlement.evidence.value, retention, values, environments)
+          !== value.settlement.evidence.value
+        ) {
+          throw new Error('Owned Promise retained a settlement value from another mutable graph.');
         }
         break;
     }

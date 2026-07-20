@@ -8,6 +8,7 @@ import {
   compactEvaluationOpenSeams,
   type EvaluationOpenSeam,
 } from './seams.js';
+import type { EvaluationValueEvidence } from './value-pressure.js';
 
 const noEvaluationOpenSeams: readonly EvaluationOpenSeam[] = [];
 
@@ -1373,38 +1374,105 @@ export class EvaluationModuleNamespaceValue {
   ) {}
 }
 
-/** Promise-shaped value such as `import(...)` with a statically known fulfillment value. */
+/** Settlement authority retained by an evaluator Promise without claiming when it becomes observable. */
+export const enum EvaluationPromiseSettlementKind {
+  /** The Promise is known to fulfill with the retained value evidence. */
+  Fulfilled = 'fulfilled',
+  /** The Promise is known to reject with the retained reason evidence. */
+  Rejected = 'rejected',
+  /** Fulfillment versus rejection cannot be selected without runtime execution. */
+  Open = 'open',
+}
+
+/** One Promise settlement lane with exact evidence for its value or best-known candidate. */
+export class EvaluationPromiseSettlement {
+  constructor(
+    readonly kind: EvaluationPromiseSettlementKind,
+    readonly evidence: EvaluationValueEvidence,
+  ) {}
+}
+
+/** Promise-shaped value such as `import(...)` with explicit settlement evidence. */
 export class EvaluationPromiseValue {
   readonly kind = EvaluationValueKind.Promise;
 
   private forkShell = false;
 
-  constructor(
-    /** Value that would be observed by promise fulfillment when static evaluation can close it. */
-    private fulfilledValueState: EvaluationValue,
+  private constructor(
+    private settlementState: EvaluationPromiseSettlement | null,
     /** Syntax node that produced the promise, when one exists. */
     readonly node: ts.Node | null = null,
   ) {}
 
-  get fulfilledValue(): EvaluationValue {
-    return this.fulfilledValueState;
+  get settlement(): EvaluationPromiseSettlement {
+    if (this.settlementState == null) {
+      throw new Error('Evaluation Promise graph-fork shell has not been completed.');
+    }
+    return this.settlementState;
+  }
+
+  static fromSettlement(
+    settlement: EvaluationPromiseSettlement,
+    node: ts.Node | null = null,
+  ): EvaluationPromiseValue {
+    return new EvaluationPromiseValue(settlement, node);
+  }
+
+  static fulfilled(
+    evidence: EvaluationValueEvidence,
+    node: ts.Node | null = null,
+  ): EvaluationPromiseValue {
+    return EvaluationPromiseValue.fromSettlement(
+      new EvaluationPromiseSettlement(EvaluationPromiseSettlementKind.Fulfilled, evidence),
+      node,
+    );
+  }
+
+  static rejected(
+    evidence: EvaluationValueEvidence,
+    node: ts.Node | null = null,
+  ): EvaluationPromiseValue {
+    return EvaluationPromiseValue.fromSettlement(
+      new EvaluationPromiseSettlement(EvaluationPromiseSettlementKind.Rejected, evidence),
+      node,
+    );
+  }
+
+  static open(
+    evidence: EvaluationValueEvidence,
+    node: ts.Node | null = null,
+  ): EvaluationPromiseValue {
+    return EvaluationPromiseValue.fromSettlement(
+      new EvaluationPromiseSettlement(EvaluationPromiseSettlementKind.Open, evidence),
+      node,
+    );
   }
 
   /** Create an unpublished shell so graph-preserving session forks can close Promise back-edges. */
   static forkShell(node: ts.Node | null): EvaluationPromiseValue {
-    const shell = new EvaluationPromiseValue(EvaluationUndefined, node);
+    const shell = new EvaluationPromiseValue(null, node);
     shell.forkShell = true;
     return shell;
   }
 
   /** Complete a graph-fork shell exactly once before the session graph is exposed. */
-  completeFork(fulfilledValue: EvaluationValue): void {
+  completeFork(settlement: EvaluationPromiseSettlement): void {
     if (!this.forkShell) {
       throw new Error('Evaluation Promise value is not an incomplete graph-fork shell.');
     }
-    this.fulfilledValueState = fulfilledValue;
+    this.settlementState = settlement;
     this.forkShell = false;
   }
+}
+
+/** Return a Promise fulfillment only when both settlement selection and fulfillment evidence are closed. */
+export function closedEvaluationPromiseFulfillment(
+  promise: EvaluationPromiseValue,
+): EvaluationValue | null {
+  return promise.settlement.kind === EvaluationPromiseSettlementKind.Fulfilled
+    && promise.settlement.evidence.openSeams.length === 0
+    ? promise.settlement.evidence.value
+    : null;
 }
 
 /** Concrete primitive value classes that can be safely converted to JS primitive values. */

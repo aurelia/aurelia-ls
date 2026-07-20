@@ -1,7 +1,14 @@
 import ts from 'typescript';
 import type { StaticInvocationFrame } from '../invocation.js';
-import { EvaluationOpenSeamKind } from '../seams.js';
 import {
+  EvaluationOpenSeamKind,
+  type EvaluationOpenSeam,
+} from '../seams.js';
+import {
+  EvaluationBoundaryKind,
+  EvaluationBoundaryObjectValue,
+  EvaluationBoundaryValue,
+  EvaluationPromiseSettlementKind,
   EvaluationPromiseValue,
   EvaluationUndefined,
   EvaluationUnknownValue,
@@ -23,43 +30,33 @@ export function evaluatePromiseResolve(
   }
   const argument = argumentRead.evidence[0]
     ?? new EvaluationValueEvidence(EvaluationUndefined, []);
-  if (argument.openSeams.length > 0) {
-    return new EvaluationUnknownValue(
-      'Promise.resolve value retained open pressure.',
-      call,
-      true,
-    );
-  }
   const value = argument.value;
-  return value.kind === EvaluationValueKind.Promise
+  return value.kind === EvaluationValueKind.Promise && argument.openSeams.length === 0
     ? value
-    : new EvaluationPromiseValue(value, call);
+    : argument.openSeams.length === 0
+      ? EvaluationPromiseValue.fulfilled(argument, call)
+      : EvaluationPromiseValue.open(argument, call);
 }
 
-export function evaluatePromiseContinuation(
+export function evaluatePromiseReject(
   frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
-): EvaluationValue | null {
-  const { node: call } = frame;
-  const receiverRead = promiseInvocationReceiver(frame, host, 'Promise continuation receiver retained open pressure.');
-  if (receiverRead.kind === 'open') {
-    return receiverRead.value;
-  }
-  const receiver = receiverRead.value;
-  const argumentRead = promiseInvocationArguments(frame, host, 'Promise continuation argument list did not close.');
+): EvaluationValue {
+  const argumentRead = promiseInvocationArguments(frame, host, 'Promise.reject argument list did not close.');
   if (argumentRead.kind === 'open') {
     return argumentRead.value;
   }
-  return receiver.kind === EvaluationValueKind.Promise
-    ? new EvaluationPromiseValue(receiver.fulfilledValue, call)
-    : null;
+  return EvaluationPromiseValue.rejected(
+    argumentRead.evidence[0] ?? new EvaluationValueEvidence(EvaluationUndefined, []),
+    frame.node,
+  );
 }
 
 export function evaluatePromiseThen(
   frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue | null {
-  const { node: call, moduleKey, depth } = frame;
+  const { node: call, moduleKey } = frame;
   const receiverRead = promiseInvocationReceiver(frame, host, 'Promise.then receiver retained open pressure.');
   if (receiverRead.kind === 'open') {
     return receiverRead.value;
@@ -72,37 +69,162 @@ export function evaluatePromiseThen(
   if (argumentRead.kind === 'open') {
     return argumentRead.value;
   }
-  const onFulfilledEvidence = argumentRead.evidence[0] ?? null;
-  if (onFulfilledEvidence == null) {
-    return new EvaluationPromiseValue(receiver.fulfilledValue, call);
-  }
-  if (onFulfilledEvidence.openSeams.length > 0) {
-    return new EvaluationUnknownValue(
-      'Promise.then fulfillment callback retained open pressure.',
-      argumentRead.argumentList.elements[0]?.expression ?? call,
-      true,
-    );
-  }
-  const onFulfilled = onFulfilledEvidence.value;
-  if (onFulfilled.kind !== EvaluationValueKind.Function) {
-    return host.unknown(
-      'Promise.then fulfillment callback did not reduce to a known function.',
-      argumentRead.argumentList.elements[0]?.expression ?? call,
+  const settlement = receiver.settlement;
+  if (settlement.kind === EvaluationPromiseSettlementKind.Open) {
+    const onFulfilled = argumentRead.evidence[0] ?? null;
+    const onRejected = argumentRead.evidence[1] ?? null;
+    if (!promiseHandlerMayExecute(onFulfilled) && !promiseHandlerMayExecute(onRejected)) {
+      return EvaluationPromiseValue.fromSettlement(settlement, call);
+    }
+    return openPromiseReaction(
+      settlement.evidence,
+      call,
       moduleKey,
-      EvaluationOpenSeamKind.DynamicCall,
+      host,
+      'Promise.then source settlement remained open.',
+      [...promiseHandlerPressure(onFulfilled), ...promiseHandlerPressure(onRejected)],
     );
   }
-  const fulfilled = host.evaluateFunctionWithArguments(
-    onFulfilled,
+  const callbackEvidence = settlement.kind === EvaluationPromiseSettlementKind.Fulfilled
+    ? argumentRead.evidence[0] ?? null
+    : argumentRead.evidence[1] ?? null;
+  return promiseReactionWithoutExecution(
+    receiver,
+    callbackEvidence,
+    argumentRead.argumentList.elements[settlement.kind === EvaluationPromiseSettlementKind.Fulfilled ? 0 : 1]?.expression
+      ?? call,
     call,
-    [new EvaluationValueEvidence(receiver.fulfilledValue, [])],
     moduleKey,
-    depth + 1,
-    null,
+    host,
   );
-  return fulfilled.kind === EvaluationValueKind.Promise
-    ? fulfilled
-    : new EvaluationPromiseValue(fulfilled, call);
+}
+
+export function evaluatePromiseCatch(
+  frame: StaticInvocationFrame<ts.CallExpression>,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue | null {
+  const receiverRead = promiseInvocationReceiver(frame, host, 'Promise.catch receiver retained open pressure.');
+  if (receiverRead.kind === 'open') {
+    return receiverRead.value;
+  }
+  const receiver = receiverRead.value;
+  if (receiver.kind !== EvaluationValueKind.Promise) {
+    return null;
+  }
+  const argumentRead = promiseInvocationArguments(frame, host, 'Promise.catch argument list did not close.');
+  if (argumentRead.kind === 'open') {
+    return argumentRead.value;
+  }
+  return receiver.settlement.kind === EvaluationPromiseSettlementKind.Rejected
+    ? promiseReactionWithoutExecution(
+        receiver,
+        argumentRead.evidence[0] ?? null,
+        argumentRead.argumentList.elements[0]?.expression ?? frame.node,
+        frame.node,
+        frame.moduleKey,
+        host,
+      )
+    : receiver.settlement.kind === EvaluationPromiseSettlementKind.Fulfilled
+      ? EvaluationPromiseValue.fromSettlement(receiver.settlement, frame.node)
+      : promiseHandlerMayExecute(argumentRead.evidence[0] ?? null)
+        ? openPromiseReaction(
+            receiver.settlement.evidence,
+            frame.node,
+            frame.moduleKey,
+            host,
+            'Promise.catch source settlement remained open.',
+            promiseHandlerPressure(argumentRead.evidence[0] ?? null),
+          )
+        : EvaluationPromiseValue.fromSettlement(receiver.settlement, frame.node);
+}
+
+export function evaluatePromiseFinally(
+  frame: StaticInvocationFrame<ts.CallExpression>,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue | null {
+  const receiverRead = promiseInvocationReceiver(frame, host, 'Promise.finally receiver retained open pressure.');
+  if (receiverRead.kind === 'open') {
+    return receiverRead.value;
+  }
+  const receiver = receiverRead.value;
+  if (receiver.kind !== EvaluationValueKind.Promise) {
+    return null;
+  }
+  const argumentRead = promiseInvocationArguments(frame, host, 'Promise.finally argument list did not close.');
+  if (argumentRead.kind === 'open') {
+    return argumentRead.value;
+  }
+  const callback = argumentRead.evidence[0] ?? null;
+  return callback == null || isDefinitelyNonCallable(callback.value)
+    ? EvaluationPromiseValue.fromSettlement(receiver.settlement, frame.node)
+      : openPromiseReaction(
+          receiver.settlement.evidence,
+          frame.node,
+          frame.moduleKey,
+          host,
+          'Promise.finally callback settlement requires deferred execution.',
+          promiseHandlerPressure(callback),
+        );
+}
+
+function promiseReactionWithoutExecution(
+  receiver: EvaluationPromiseValue,
+  callback: EvaluationValueEvidence | null,
+  callbackNode: ts.Node,
+  call: ts.CallExpression,
+  moduleKey: string,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationPromiseValue {
+  if (callback == null || isDefinitelyNonCallable(callback.value)) {
+    return EvaluationPromiseValue.fromSettlement(receiver.settlement, call);
+  }
+  return openPromiseReaction(
+    receiver.settlement.evidence,
+    callbackNode,
+    moduleKey,
+    host,
+    'Promise reaction callback requires deferred graph-isolated execution.',
+    promiseHandlerPressure(callback),
+  );
+}
+
+function openPromiseReaction(
+  candidate: EvaluationValueEvidence,
+  node: ts.Node,
+  moduleKey: string,
+  host: StaticIntrinsicEvaluationHost,
+  summary: string,
+  dependencyOpenSeams: readonly EvaluationOpenSeam[] = [],
+): EvaluationPromiseValue {
+  const checkpoint = host.checkpoint();
+  host.open(EvaluationOpenSeamKind.DynamicCall, summary, node, moduleKey, []);
+  const openSeams = host.consumeOpenSeamsSince(checkpoint);
+  return EvaluationPromiseValue.open(
+    new EvaluationValueEvidence(
+      new EvaluationBoundaryValue(
+        EvaluationBoundaryKind.AsyncExecution,
+        'Promise reaction settlement',
+        node,
+      ),
+      [...candidate.openSeams, ...dependencyOpenSeams, ...openSeams],
+    ),
+    node,
+  );
+}
+
+function isDefinitelyNonCallable(value: EvaluationValue): boolean {
+  return value.kind !== EvaluationValueKind.Function
+    && !(value instanceof EvaluationBoundaryObjectValue && value.callable)
+    && value.kind !== EvaluationValueKind.BoundaryValue
+    && value.kind !== EvaluationValueKind.Unknown;
+}
+
+function promiseHandlerMayExecute(handler: EvaluationValueEvidence | null): boolean {
+  return handler != null && !isDefinitelyNonCallable(handler.value);
+}
+
+function promiseHandlerPressure(handler: EvaluationValueEvidence | null): readonly EvaluationOpenSeam[] {
+  return handler?.openSeams ?? [];
 }
 
 function promiseInvocationArguments(

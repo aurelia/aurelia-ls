@@ -26,6 +26,7 @@ import {
 import {
   EvaluationBoundaryKind,
   EvaluationBoundaryValue,
+  EvaluationPromiseSettlementKind,
   EvaluationValueKind,
 } from '../src/evaluation/values.js';
 
@@ -232,7 +233,7 @@ describe('project static evaluation', () => {
     }));
   });
 
-  test('keeps a failed dynamic import open instead of fabricating a fulfilled namespace', () => {
+  test('retains failed dynamic import rejection without running its unmatched fulfillment handler', () => {
     const result = evaluateModuleGraph({
       'entry.ts': [
         'let fulfilled = false;',
@@ -253,9 +254,20 @@ describe('project static evaluation', () => {
       kind: EvaluationValueKind.String,
       value: 'after',
     }));
-    expect(result.openValues.map((value) => value.reason)).toEqual(expect.arrayContaining([
-      expect.stringContaining('promise rejection settlement is not modeled'),
-    ]));
+    const reaction = entry?.invocations.find((invocation) => invocation.node.getText().includes('.then('));
+    expect(reaction?.completion).toEqual(expect.objectContaining({
+      kind: EvaluationCompletionKind.Normal,
+      value: expect.objectContaining({
+        kind: EvaluationValueKind.Promise,
+        settlement: expect.objectContaining({
+          kind: EvaluationPromiseSettlementKind.Rejected,
+          evidence: expect.objectContaining({
+            value: expect.objectContaining({ value: 'dynamic failure' }),
+          }),
+        }),
+      }),
+    }));
+    expect(result.openValues).toEqual([]);
   });
 
   test('does not execute module edges found only inside an unreachable branch', () => {

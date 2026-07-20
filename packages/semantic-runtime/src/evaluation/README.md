@@ -437,12 +437,14 @@ TypeScript-authored.
   to the declared names so downstream materializers can decide whether a product-specific seam is needed.
 - Optional property access, element access, and optional calls over concrete `null`/`undefined` receivers reduce to
   `undefined`. Optional chains over unknown or boundary receivers still preserve the underlying unknown/boundary lane.
-- Async function calls return `EvaluationPromiseValue` with an `async-execution` boundary as the fulfillment value.
-  `Promise.resolve(value)` wraps a statically known value into the same promise lane so downstream consumers can unwrap
-  framework-supported promise inputs without treating the ambient `Promise` object as a host boundary. Promise
-  `then`/`catch`/`finally` intrinsics preserve the fulfillment lane without running callbacks; deeper async
-  scheduling, rejection state, and callback execution remain future evaluator substrate rather than product-level
-  guesswork.
+- `EvaluationPromiseValue` owns explicit fulfilled, rejected, or open settlement evidence without claiming when that
+  settlement becomes observable. `Promise.resolve(...)`, `Promise.reject(...)`, dynamic imports, and async-function
+  boundaries all publish through this vocabulary. Downstream consumers may unwrap only a closed fulfillment; rejection
+  and open settlement must not be reinterpreted as a missing or fulfilled value.
+- Promise `then`/`catch`/`finally` preserve the incoming settlement when the selected handler is absent or definitely
+  non-callable. Callable reactions do not execute in the synchronous module graph and currently leave the resulting
+  settlement open. Graph-isolated reaction execution and scheduling belong to the evaluator's future execution-lane
+  substrate, not product-level callbacks or recognizer replay.
 - `for await...of` does not execute its body synchronously. Until promise outcome and continuation scheduling have an
   explicit evaluator carrier, it returns an open completion after evaluating the iterable expression. Do not recover
   apparent progress by publishing body or post-loop effects as definite facts.

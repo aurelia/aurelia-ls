@@ -134,7 +134,12 @@ function collectRetainedEvaluationOpenSeams(
       }
       return;
     case EvaluationValueKind.Promise:
-      collectRetainedEvaluationOpenSeams(value.fulfilledValue, target, seen);
+      addSlotPressure(
+        value.settlement.evidence.openSeams,
+        value.settlement.evidence.value,
+        target,
+        seen,
+      );
       return;
     case EvaluationValueKind.Unknown:
     case EvaluationValueKind.Undefined:

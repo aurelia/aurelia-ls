@@ -381,29 +381,44 @@ export class StaticModuleGraphEvaluator {
     const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, moduleSpecifier);
     if (targetModuleKey == null) {
       return isRelativeModuleSpecifier(moduleSpecifier)
-        ? this.openValue(`Dynamic import '${moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`, node)
-        : new EvaluationPromiseValue(
+        ? EvaluationPromiseValue.open(new EvaluationValueEvidence(
+            this.openValue(`Dynamic import '${moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`, node),
+            [],
+          ), node)
+        : EvaluationPromiseValue.open(new EvaluationValueEvidence(
           new EvaluationBoundaryObjectValue(
             EvaluationBoundaryKind.ExternalModule,
             `dynamic import '${moduleSpecifier}'`,
             new Map(),
             node,
           ),
-          node,
-        );
+          [],
+        ), node);
     }
     const result = this.evaluateModule(targetModuleKey);
     if (result == null) {
-      return this.openValue(`Dynamic import '${moduleSpecifier}' target could not be evaluated.`, node);
+      return EvaluationPromiseValue.open(new EvaluationValueEvidence(
+        this.openValue(`Dynamic import '${moduleSpecifier}' target could not be evaluated.`, node),
+        [],
+      ), node);
     }
-    if (result.completion.kind !== EvaluationCompletionKind.Normal) {
-      return this.openValue(
-        `Dynamic import '${moduleSpecifier}' target did not complete normally; promise rejection settlement is not modeled: ${evaluationAbruptCompletionSummary(result.completion)}`,
+    if (result.completion.kind === EvaluationCompletionKind.Throw) {
+      return EvaluationPromiseValue.rejected(
+        new EvaluationValueEvidence(result.completion.value, result.completion.openSeams),
         node,
       );
     }
-    return new EvaluationPromiseValue(
-      this.readModuleNamespaceValue(targetModuleKey, node),
+    if (result.completion.kind !== EvaluationCompletionKind.Normal) {
+      return EvaluationPromiseValue.open(new EvaluationValueEvidence(
+        this.openValue(
+          `Dynamic import '${moduleSpecifier}' target did not settle to a modeled fulfillment or rejection: ${evaluationAbruptCompletionSummary(result.completion)}`,
+          node,
+        ),
+        [],
+      ), node);
+    }
+    return EvaluationPromiseValue.fulfilled(
+      new EvaluationValueEvidence(this.readModuleNamespaceValue(targetModuleKey, node), []),
       node,
     );
   }

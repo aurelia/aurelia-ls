@@ -6,6 +6,7 @@ import type {
   EvaluationValue,
 } from './values.js';
 import {
+  EvaluationPromiseSettlementKind,
   EvaluationValueKind,
 } from './values.js';
 
@@ -82,7 +83,10 @@ export class ModuleLoader {
   /** Analyze a module-like object or promise-shaped evaluator value using the framework's input branches. */
   load(value: EvaluationValue): ModuleLoaderTransformResult {
     if (value.kind === EvaluationValueKind.Promise) {
-      return this.analyze(value.fulfilledValue, ModuleLoaderInputPosition.PromiseFulfillment);
+      return value.settlement.kind === EvaluationPromiseSettlementKind.Fulfilled
+        && value.settlement.evidence.openSeams.length === 0
+        ? this.analyze(value.settlement.evidence.value, ModuleLoaderInputPosition.PromiseFulfillment)
+        : ModuleLoaderTransformResult.open();
     }
     if (isDirectModuleTransformObject(value)) {
       return this.analyze(value, ModuleLoaderInputPosition.Direct);

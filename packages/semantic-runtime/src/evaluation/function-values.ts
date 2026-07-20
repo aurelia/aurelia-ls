@@ -72,12 +72,12 @@ export function evaluateStaticFunctionWithArguments(
     return host.unknown('Generator functions are not evaluated.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
   if (isAsyncFunctionLike(callee.declaration)) {
-    return new EvaluationPromiseValue(
-      new EvaluationBoundaryValue(
+    return EvaluationPromiseValue.open(
+      new EvaluationValueEvidence(new EvaluationBoundaryValue(
         EvaluationBoundaryKind.AsyncExecution,
         asyncFunctionBoundaryPath(callee.declaration),
         call,
-      ),
+      ), []),
       call,
     );
   }

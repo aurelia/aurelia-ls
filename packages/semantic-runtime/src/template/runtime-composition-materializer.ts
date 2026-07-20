@@ -12,6 +12,7 @@ import type { Container } from '../di/container.js';
 import {
   EvaluationStringValue,
   EvaluationValueKind,
+  closedEvaluationPromiseFulfillment,
   type EvaluationValue,
 } from '../evaluation/values.js';
 import { readDeclarationLocalName } from '../evaluation/ts-syntax.js';
@@ -856,7 +857,10 @@ export class RuntimeCompositionMaterializer {
       return [];
     }
     if (value.kind === EvaluationValueKind.Promise) {
-      return this.resolveComponentValue(input, controller, value.fulfilledValue, resolutionKind, model);
+      const fulfillment = closedEvaluationPromiseFulfillment(value);
+      return fulfillment == null
+        ? []
+        : this.resolveComponentValue(input, controller, fulfillment, resolutionKind, model);
     }
     if (value.kind === EvaluationValueKind.String) {
       const slot = controller.parent?.containerFrame?.find('custom-element', value.value).resourceSlot ?? null;
@@ -1157,7 +1161,8 @@ function componentResolutionWithInputPressure(
 
 function valueIsObjectViewModelComponent(value: EvaluationValue): boolean {
   if (value.kind === EvaluationValueKind.Promise) {
-    return valueIsObjectViewModelComponent(value.fulfilledValue);
+    const fulfillment = closedEvaluationPromiseFulfillment(value);
+    return fulfillment != null && valueIsObjectViewModelComponent(fulfillment);
   }
   return value.kind === EvaluationValueKind.Object
     || value.kind === EvaluationValueKind.Instance
@@ -1243,7 +1248,7 @@ function literalStringFromValue(value: EvaluationValue | null): string | null {
     return value.value;
   }
   if (value?.kind === EvaluationValueKind.Promise) {
-    return literalStringFromValue(value.fulfilledValue);
+    return literalStringFromValue(closedEvaluationPromiseFulfillment(value));
   }
   return null;
 }

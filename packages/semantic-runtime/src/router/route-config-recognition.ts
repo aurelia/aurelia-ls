@@ -2,6 +2,7 @@ import ts from 'typescript';
 import { readClassTarget, readStaticStringArrayValue, StaticEvaluationExpressionReader } from '../evaluation/expression-reader.js';
 import {
   EvaluationValueKind,
+  closedEvaluationPromiseFulfillment,
   type EvaluationPromiseValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
@@ -1797,7 +1798,10 @@ function promiseRouteableComponent(
     localName: dynamicImportSpecifier ?? resourceDefinition?.target.localName ?? readReferenceName(expression),
     sourceNode: expression,
     resourceDefinition,
-    invalidLazyImport: resourceDefinition == null && promiseFulfillmentIsKnownInvalidLazyImport(context, promise.fulfilledValue),
+    invalidLazyImport: resourceDefinition == null && promiseFulfillmentIsKnownInvalidLazyImport(
+      context,
+      closedEvaluationPromiseFulfillment(promise),
+    ),
   };
 }
 
@@ -1864,15 +1868,19 @@ function routeableResourceDefinitionForPromise(
   context: RouteConfigRecognitionContext,
   promise: EvaluationPromiseValue,
 ): FullResourceDefinition | null {
-  return routeableResourceDefinitionForFulfillment(context, promise.fulfilledValue);
+  const fulfillment = closedEvaluationPromiseFulfillment(promise);
+  return fulfillment == null ? null : routeableResourceDefinitionForFulfillment(context, fulfillment);
 }
 
 function promiseFulfillmentIsKnownInvalidLazyImport(
   context: RouteConfigRecognitionContext,
-  value: EvaluationValue,
+  value: EvaluationValue | null,
 ): boolean {
+  if (value == null) {
+    return false;
+  }
   if (value.kind === EvaluationValueKind.Promise) {
-    return promiseFulfillmentIsKnownInvalidLazyImport(context, value.fulfilledValue);
+    return promiseFulfillmentIsKnownInvalidLazyImport(context, closedEvaluationPromiseFulfillment(value));
   }
   if (routeableResourceDefinitionForFulfillment(context, value) != null) {
     return false;

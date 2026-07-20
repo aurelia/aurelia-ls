@@ -61,7 +61,13 @@ import {
   evaluateObjectKeys,
   evaluateObjectValues,
 } from './intrinsics/object-intrinsics.js';
-import { evaluatePromiseContinuation, evaluatePromiseResolve, evaluatePromiseThen } from './intrinsics/promise-intrinsics.js';
+import {
+  evaluatePromiseCatch,
+  evaluatePromiseFinally,
+  evaluatePromiseReject,
+  evaluatePromiseResolve,
+  evaluatePromiseThen,
+} from './intrinsics/promise-intrinsics.js';
 import { evaluateRegExpCall, evaluateRegExpConstructor } from './intrinsics/regexp-intrinsics.js';
 import { evaluatePositionalIntrinsicArguments } from './intrinsics/shared.js';
 import {
@@ -282,6 +288,9 @@ function evaluateStaticIntrinsicCall(
   if (calleeText === 'Promise.resolve') {
     return evaluatePromiseResolve(frame, host);
   }
+  if (calleeText === 'Promise.reject') {
+    return evaluatePromiseReject(frame, host);
+  }
   return null;
 }
 
@@ -397,8 +406,9 @@ function evaluatePrototypeIntrinsicCall(
     case 'then':
       return evaluatePromiseThen(frame, host);
     case 'catch':
+      return evaluatePromiseCatch(frame, host);
     case 'finally':
-      return evaluatePromiseContinuation(frame, host);
+      return evaluatePromiseFinally(frame, host);
   }
   return null;
 }

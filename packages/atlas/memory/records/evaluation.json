@@ -45,6 +45,7 @@
         "Retaining an already-audited seam on an array shape, property, or other child carrier is not a new evaluator encounter. Do not replay it into the audit stream during carrier construction; replay causal pressure when a later read spends that carrier.",
         "EvaluationArrayShape keeps runtime extent, exact present-element/hole positions, and order independent. Authored elisions are exact holes; unresolved spreads can open extent/positions, while sort can open order without opening extent. Object enumeration projects those axes from EvaluationEnumerableOwnEntries with causal membership/order seams instead of rebuilding arrays from booleans.",
         "EvaluationKeyedCollectionShape keeps exact size, membership, and iteration order independent. Set elements carry value/identity evidence and Map entries carry key/value evidence independently; presence state and tombstones preserve conditional writes, delete, clear, overwrite position, and live iteration. SameValueZero lookup and mutation belong in keyed-collection-operations.ts, while weak capability stays orthogonal to membership precision.",
+        "EvaluationPromiseValue owns fulfilled, rejected, or open settlement evidence without claiming scheduling. Promise.resolve, Promise.reject, dynamic imports, async-function boundaries, session forks, and downstream loaders spend that one vocabulary. Consumers may unwrap only closed fulfillment; absent or definitely non-callable reactions preserve the selected settlement, while callable reactions remain open until evaluator-owned graph-isolated execution lanes exist.",
         "Built-in iterable semantics belong in evaluation/iterator-projection.ts. Drained projections serve spread and constructor consumers; live iterators serve loops and callback consumers that can mutate the source. Preserve Array holes as yielded undefined, String code-point order, keyed collection row-log order, and independent Map pair evidence instead of reusing own-property enumeration or snapshotting every iterator.",
         "EvaluationArgumentList is the positional call-phase product. It evaluates authored arguments left-to-right, expands closed Array/Set/Map/String iterators, and keeps unclosed arity/order separate from pressure on exact slots. A spread whose continuation stays open stops later effects from becoming definite; conditional continuation needs its own future carrier. Local calls, global intrinsics, and array intrinsics consume the list; syntax-only module recognition must not substitute for value evaluation.",
         "Aurelia expression-global admission and TypeScript-shaped static-evaluator global identity are related but distinct vocabularies. expression/global-names.ts owns the exact Aurelia subset plus the broader StaticEvaluationGlobalName set needed for WeakMap, WeakSet, Promise, and future evaluator-only globals; never widen parser admission merely to make a static intrinsic reachable. Boundary objects retain callable capability and keyed carriers retain weak capability, so typeof, instanceof, and host tags spend value identity rather than source spelling or a lossy shared value kind.",
@@ -128,6 +129,12 @@
           "filePath": "packages/semantic-runtime/src/evaluation/keyed-collection-operations.ts",
           "symbolName": "evaluationMapLookup",
           "summary": "Shared SameValueZero lookup and mutation algebra for evidence-bearing Set and Map carriers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/values.ts",
+          "symbolName": "EvaluationPromiseSettlement",
+          "summary": "Promise settlement selection and exact value/reason evidence without scheduling claims."
         },
         {
           "kind": "source",

@@ -320,7 +320,7 @@ export class StaticModuleEvaluationExpressionReader implements StaticExpressionE
         }
         return;
       case EvaluationValueKind.Promise:
-        this.indexRetainedChildEvidence(value.fulfilledValue, owner, seen);
+        this.indexRetainedChildEvidence(value.settlement.evidence.value, owner, seen);
         return;
       case EvaluationValueKind.ModuleNamespace:
       case EvaluationValueKind.Unknown:

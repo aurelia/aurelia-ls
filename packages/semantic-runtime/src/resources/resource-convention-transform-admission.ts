@@ -53,6 +53,7 @@ import {
   EvaluationUndefined,
   EvaluationUndefinedValue,
   EvaluationValueKind,
+  closedEvaluationPromiseFulfillment,
   type EvaluationValue,
 } from '../evaluation/values.js';
 import {
@@ -615,7 +616,10 @@ function readConventionPluginList(
     );
   }
   if (value.kind === EvaluationValueKind.Promise) {
-    return readConventionPluginList(value.fulfilledValue, toolingHost);
+    const fulfillment = closedEvaluationPromiseFulfillment(value);
+    return fulfillment == null
+      ? new ConventionPluginListRead([], false)
+      : readConventionPluginList(fulfillment, toolingHost);
   }
   return new ConventionPluginListRead(
     [],
