@@ -23,6 +23,7 @@ import {
   type EvaluationFunctionValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
+import { evaluationValuesShareLineage } from '../evaluation/value-relation.js';
 
 export type DiRegistryContainerCallHandler = (
   frame: StaticInvocationFrame,
@@ -53,7 +54,7 @@ export function executeDiRegistryFunction(
   const evaluationRegisterFunction = graph?.adoptExternal(registerFunction) ?? registerFunction;
   const evaluationRegistryValue = graph?.adoptExternal(registryValue) ?? registryValue;
   const evaluationContainerValue = graph?.adoptExternal(containerValue) ?? containerValue;
-  const handledArgumentLists = new Set<object>();
+  const handledInvocations = new Set<StaticInvocationFrame['identity']>();
   const runtimeHost = delegateStaticEvaluationRuntimeHost(
     baseRuntimeHost,
     (frame, host) => {
@@ -68,7 +69,7 @@ export function executeDiRegistryFunction(
       if (host.checkpoint().openSeamCount > 0) {
         return staticInvocationValue(evaluationContainerValue);
       }
-      handledArgumentLists.add(frame.argumentList);
+      handledInvocations.add(frame.identity);
       return staticInvocationValue(onContainerCall(frame, host));
     },
   );
@@ -94,9 +95,10 @@ export function executeDiRegistryFunction(
     result.invocations.filter((invocation): invocation is StaticInvocationOccurrence<ts.CallExpression> =>
       invocation.kind === StaticInvocationKind.Call
       && ts.isCallExpression(invocation.node)
-      && invocation.thisValue?.value === evaluationContainerValue
+      && invocation.thisValue != null
+      && evaluationValuesShareLineage(invocation.thisValue.value, evaluationContainerValue)
       && invocation.propertyKey != null
-      && handledArgumentLists.has(invocation.argumentList)
+      && handledInvocations.has(invocation.identity)
     ),
   );
 }

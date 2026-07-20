@@ -32,6 +32,9 @@ export const enum StaticInvocationPreparationBoundaryKind {
   ArgumentListOpen = 'argument-list-open',
 }
 
+/** Stable identity for one reached invocation preparation, independent from its retained value snapshots. */
+export class StaticInvocationIdentity {}
+
 /** One evaluated ECMAScript reference, preserving every value-bearing edge needed by invocation consumers. */
 export class StaticInvocationReference {
   constructor(
@@ -52,6 +55,8 @@ export class StaticInvocationReference {
 export class StaticInvocationFrame<
   TNode extends ts.CallExpression | ts.NewExpression = ts.CallExpression | ts.NewExpression,
 > {
+  readonly identity = new StaticInvocationIdentity();
+
   constructor(
     readonly kind: StaticInvocationKind,
     readonly node: TNode,
@@ -79,7 +84,7 @@ export class StaticInvocationFrame<
   }
 }
 
-/** Immutable evidence from one invocation point reached by modeled execution. */
+/** Staged evidence from one invocation point reached by modeled execution. */
 export class StaticInvocationOccurrence<
   TNode extends ts.CallExpression | ts.NewExpression = ts.CallExpression | ts.NewExpression,
 > {
@@ -87,6 +92,7 @@ export class StaticInvocationOccurrence<
   readonly openSeams: readonly EvaluationOpenSeam[];
 
   constructor(
+    readonly identity: StaticInvocationIdentity,
     readonly ordinal: number,
     readonly kind: StaticInvocationKind,
     readonly node: TNode,
@@ -113,7 +119,7 @@ export class StaticInvocationOccurrence<
 }
 
 /**
- * Immutable evidence from invocation preparation that ran but could not prove
+ * Staged evidence from invocation preparation that ran but could not prove
  * that the invocation operation itself was reached.
  */
 export class StaticInvocationPreparationBoundary<
@@ -123,6 +129,7 @@ export class StaticInvocationPreparationBoundary<
   readonly openSeams: readonly EvaluationOpenSeam[];
 
   constructor(
+    readonly identity: StaticInvocationIdentity,
     readonly ordinal: number,
     readonly boundaryKind: StaticInvocationPreparationBoundaryKind,
     readonly kind: StaticInvocationKind,

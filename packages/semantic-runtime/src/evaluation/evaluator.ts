@@ -53,6 +53,14 @@ import {
 import { StaticEvaluationSessionFork } from './evaluation-session.js';
 import { joinStaticEvaluationBranches } from './branch-state.js';
 import {
+  mapEvaluationArgumentListValues,
+  mapEvaluationExpressionCompletionValues,
+  mapStaticInvocationReferenceValues,
+  StaticConditionalExecution,
+  StaticEvaluationExecutionTopology,
+  type StaticEvaluationExecutionEvent,
+} from './execution-topology.js';
+import {
   evaluateKnownConstructor,
   evaluateKnownIntrinsic,
   type StaticIntrinsicEvaluationCheckpoint,
@@ -62,6 +70,7 @@ import {
   StaticInvocationDispatchKind,
   isStaticInvocationOccurrence,
   StaticInvocationFrame,
+  StaticInvocationIdentity,
   StaticInvocationKind,
   StaticInvocationOccurrence,
   StaticInvocationPreparationBoundary,
@@ -282,10 +291,17 @@ export interface StaticEvaluationRuntimeHost extends StaticEvaluationRuntimeHost
   readonly graphIsolatedBranchOperations?: StaticEvaluationRuntimeHostOperations;
 }
 
+interface StaticInvocationPreparationEvidence {
+  readonly identity: StaticInvocationFrame['identity'];
+  readonly reference: StaticInvocationReference;
+  readonly argumentList: EvaluationArgumentList;
+}
+
 /** Result of evaluating one expression against an existing module environment. */
 export class StaticExpressionEvaluationResult {
   readonly openSeams: readonly EvaluationOpenSeam[];
   readonly auditOpenSeams: readonly EvaluationOpenSeam[];
+  readonly invocationEvaluations: readonly StaticInvocationEvaluation[];
   /** Calls and constructions that reached the modeled invocation operation. */
   readonly invocations: readonly StaticInvocationOccurrence[];
 
@@ -294,14 +310,15 @@ export class StaticExpressionEvaluationResult {
     readonly completion: EvaluationExpressionCompletion,
     /** Open seams observed during this expression read. */
     openSeams: readonly EvaluationOpenSeam[],
-    /** Reached invocations and pre-invocation boundaries, in ECMAScript evaluation order. */
-    readonly invocationEvaluations: readonly StaticInvocationEvaluation[],
+    /** Definite and mutually exclusive execution evidence produced by this expression. */
+    readonly executionTopology: StaticEvaluationExecutionTopology,
     /** Every seam observed while evaluating the expression, including non-causal nested pressure. */
     auditOpenSeams: readonly EvaluationOpenSeam[] = openSeams,
   ) {
     this.openSeams = compactEvaluationOpenSeams(openSeams);
     this.auditOpenSeams = compactEvaluationOpenSeams(auditOpenSeams);
-    this.invocations = invocationEvaluations.filter(isStaticInvocationOccurrence);
+    this.invocationEvaluations = executionTopology.invocationEvaluations;
+    this.invocations = this.invocationEvaluations.filter(isStaticInvocationOccurrence);
   }
 
   /** Value produced by a normal expression completion. */
@@ -401,8 +418,8 @@ export class StaticEvaluator {
     open: (seamKind, summary, node, moduleKey) =>
       this.open(seamKind, summary, node, moduleKey),
   };
-  private readonly invocationEvaluations: StaticInvocationEvaluation[] = [];
-  private nextInvocationOrdinal = 0;
+  private readonly executionEvents: StaticEvaluationExecutionEvent[] = [];
+  private nextExecutionOrdinal = 0;
   private statementCount = 0;
   private executionBudget = new StaticEvaluationExecutionBudget();
 
@@ -443,8 +460,8 @@ export class StaticEvaluator {
     this.auditOpenSeams.length = 0;
     this.auditedOpenSeams.clear();
     this.causalOpenSeams.length = 0;
-    this.invocationEvaluations.length = 0;
-    this.nextInvocationOrdinal = 0;
+    this.executionEvents.length = 0;
+    this.nextExecutionOrdinal = 0;
     this.statementCount = 0;
     const environment = new ModuleEnvironmentRecord(moduleKey, null);
     const graph = this.runtimeHost.evaluationValueGraph;
@@ -479,7 +496,7 @@ export class StaticEvaluator {
       environment,
       completion,
       [...this.auditOpenSeams],
-      this.orderedInvocationEvaluationsSince(0),
+      this.orderedExecutionTopologySince(0),
       this.policy,
       this.runtimeHost,
     );
@@ -602,7 +619,7 @@ export class StaticEvaluator {
         return new StaticExpressionEvaluationResult(
           new NormalEvaluationCompletion(value),
           this.causalOpenSeams.slice(checkpoint.openSeamCount),
-          this.orderedInvocationEvaluationsSince(checkpoint.invocationCount),
+          this.orderedExecutionTopologySince(checkpoint.executionEventCount),
           this.auditOpenSeams.slice(checkpoint.auditOpenSeamCount),
         );
       } catch (error) {
@@ -612,7 +629,7 @@ export class StaticEvaluator {
         return new StaticExpressionEvaluationResult(
           error.completion,
           this.causalOpenSeams.slice(checkpoint.openSeamCount),
-          this.orderedInvocationEvaluationsSince(checkpoint.invocationCount),
+          this.orderedExecutionTopologySince(checkpoint.executionEventCount),
           this.auditOpenSeams.slice(checkpoint.auditOpenSeamCount),
         );
       } finally {
@@ -1995,12 +2012,14 @@ export class StaticEvaluator {
     frame: StaticInvocationFrame<TNode>,
     evaluate: () => EvaluationValue,
   ): EvaluationValue {
-    const ordinal = this.nextInvocationOrdinal++;
+    const ordinal = this.nextExecutionOrdinal++;
     const pressureCheckpoint = this.causalOpenSeams.length;
+    const preparation = this.snapshotInvocationPreparation(frame);
     try {
       const value = evaluate();
       this.retainInvocationOccurrence(
         frame,
+        preparation,
         ordinal,
         new NormalEvaluationCompletion(value),
         pressureCheckpoint,
@@ -2008,7 +2027,7 @@ export class StaticEvaluator {
       return value;
     } catch (error) {
       if (error instanceof EvaluationAbruptCompletionSignal) {
-        this.retainInvocationOccurrence(frame, ordinal, error.completion, pressureCheckpoint);
+        this.retainInvocationOccurrence(frame, preparation, ordinal, error.completion, pressureCheckpoint);
       }
       throw error;
     }
@@ -2018,18 +2037,20 @@ export class StaticEvaluator {
     TNode extends ts.CallExpression | ts.NewExpression,
   >(
     frame: StaticInvocationFrame<TNode>,
+    preparation: StaticInvocationPreparationEvidence,
     ordinal: number,
     completion: EvaluationExpressionCompletion,
     pressureCheckpoint: number,
   ): void {
-    this.invocationEvaluations.push(new StaticInvocationOccurrence(
+    this.executionEvents.push(new StaticInvocationOccurrence(
+      frame.identity,
       ordinal,
       frame.kind,
       frame.node,
       frame.moduleKey,
-      frame.reference,
-      frame.argumentList,
-      completion,
+      preparation.reference,
+      preparation.argumentList,
+      this.snapshotInvocationCompletion(completion),
       [
         ...frame.callee.openSeams,
         ...(frame.thisValue?.openSeams ?? []),
@@ -2050,14 +2071,20 @@ export class StaticEvaluator {
     reference: StaticInvocationReference,
     argumentList: EvaluationArgumentList,
   ): void {
-    this.invocationEvaluations.push(new StaticInvocationPreparationBoundary(
-      this.nextInvocationOrdinal++,
+    const preparation = this.snapshotInvocationPreparation({
+      identity: new StaticInvocationIdentity(),
+      reference,
+      argumentList,
+    });
+    this.executionEvents.push(new StaticInvocationPreparationBoundary(
+      preparation.identity,
+      this.nextExecutionOrdinal++,
       StaticInvocationPreparationBoundaryKind.ArgumentListOpen,
       kind,
       node,
       moduleKey,
-      reference,
-      argumentList,
+      preparation.reference,
+      preparation.argumentList,
       [
         ...reference.callee.openSeams,
         ...(reference.thisValue?.openSeams ?? []),
@@ -2065,6 +2092,29 @@ export class StaticEvaluator {
         ...argumentList.aggregateOpenSeams,
       ],
     ));
+  }
+
+  private snapshotInvocationPreparation(
+    frame: Pick<StaticInvocationFrame, 'identity' | 'reference' | 'argumentList'>,
+  ): StaticInvocationPreparationEvidence {
+    const snapshot = new StaticEvaluationSessionFork(this.runtimeHost);
+    const mapValue = (value: EvaluationValue): EvaluationValue => snapshot.forkValue(value);
+    return {
+      identity: frame.identity,
+      reference: mapStaticInvocationReferenceValues(frame.reference, mapValue, 'invocation.preparation'),
+      argumentList: mapEvaluationArgumentListValues(frame.argumentList, mapValue, 'invocation.preparation'),
+    };
+  }
+
+  private snapshotInvocationCompletion(
+    completion: EvaluationExpressionCompletion,
+  ): EvaluationExpressionCompletion {
+    const snapshot = new StaticEvaluationSessionFork(this.runtimeHost);
+    return mapEvaluationExpressionCompletionValues(
+      completion,
+      (value) => snapshot.forkValue(value),
+      'invocation.completion',
+    );
   }
 
   private dispatchCall(
@@ -2416,8 +2466,8 @@ export class StaticEvaluator {
       checkpoint: () => ({
         auditOpenSeamCount: this.auditOpenSeams.length,
         openSeamCount: this.causalOpenSeams.length,
-        invocationCount: this.invocationEvaluations.length,
-        nextInvocationOrdinal: this.nextInvocationOrdinal,
+        executionEventCount: this.executionEvents.length,
+        nextExecutionOrdinal: this.nextExecutionOrdinal,
         statementCount: this.statementCount,
       }),
       restore: (checkpoint) => {
@@ -2688,7 +2738,12 @@ export class StaticEvaluator {
     moduleKey: string,
     depth: number,
   ): EvaluationValue {
+    const conditionPressureCheckpoint = this.causalOpenSeams.length;
     const condition = this.evaluateExpression(expression.condition, environment, moduleKey, depth + 1);
+    const conditionEvidence = new EvaluationValueEvidence(
+      condition,
+      this.openSeamsSince(conditionPressureCheckpoint),
+    );
     if (condition.kind === EvaluationValueKind.Unknown) {
       return this.materializeUnknownUse(condition, expression.condition, moduleKey, 'Conditional expression depended on an open condition.', EvaluationOpenSeamKind.DynamicBranch);
     }
@@ -2702,7 +2757,7 @@ export class StaticEvaluator {
         );
         return boundaryDependencyValue(expression, condition);
       }
-      return this.evaluateConditionalBranchRepresentative(expression, condition, environment, moduleKey, depth + 1)
+      return this.evaluateConditionalBranchRepresentative(expression, conditionEvidence, environment, moduleKey, depth + 1)
         ?? boundaryDependencyValue(expression, condition);
     }
     const truthy = readEvaluationTruthiness(condition);
@@ -2715,7 +2770,7 @@ export class StaticEvaluator {
           EvaluationOpenSeamKind.DynamicBranch,
         );
       }
-      return this.evaluateConditionalBranchRepresentative(expression, condition, environment, moduleKey, depth + 1)
+      return this.evaluateConditionalBranchRepresentative(expression, conditionEvidence, environment, moduleKey, depth + 1)
         ?? this.unknown('Conditional expression condition did not reduce to known truthiness.', expression.condition, moduleKey, EvaluationOpenSeamKind.DynamicBranch);
     }
     return this.evaluateExpression(truthy ? expression.whenTrue : expression.whenFalse, environment, moduleKey, depth + 1);
@@ -2741,7 +2796,7 @@ export class StaticEvaluator {
 
   private evaluateConditionalBranchRepresentative(
     expression: ts.ConditionalExpression,
-    condition: EvaluationValue,
+    condition: EvaluationValueEvidence,
     environment: ModuleEnvironmentRecord,
     moduleKey: string,
     depth: number,
@@ -2804,8 +2859,6 @@ export class StaticEvaluator {
     if (
       whenTrue.value == null
       || whenFalse.value == null
-      || whenTrue.invocationEvaluations.length > 0
-      || whenFalse.invocationEvaluations.length > 0
     ) {
       return null;
     }
@@ -2820,15 +2873,26 @@ export class StaticEvaluator {
       rightValue: whenFalse.value,
       leftOpenSeams: whenTrue.openSeams,
       rightOpenSeams: whenFalse.openSeams,
+      leftExecutionTopology: whenTrue.executionTopology,
+      rightExecutionTopology: whenFalse.executionTopology,
       branchSeam,
       path,
-      sourceLabel: condition.kind === EvaluationValueKind.BoundaryValue ? condition.path : null,
-      sourceBoundaryKind: condition.kind === EvaluationValueKind.BoundaryValue ? condition.boundaryKind : null,
+      sourceLabel: condition.value.kind === EvaluationValueKind.BoundaryValue ? condition.value.path : null,
+      sourceBoundaryKind: condition.value.kind === EvaluationValueKind.BoundaryValue ? condition.value.boundaryKind : null,
       targetGraph: environment.readGraphOwner(),
     });
     if (joined == null) {
       return null;
     }
+    this.executionEvents.push(new StaticConditionalExecution(
+      this.nextExecutionOrdinal++,
+      expression,
+      moduleKey,
+      condition,
+      branchSeam,
+      joined.leftExecutionTopology,
+      joined.rightExecutionTopology,
+    ));
     this.replayOpenSeams(joined.openSeams);
     return joined.value;
   }
@@ -3147,21 +3211,23 @@ export class StaticEvaluator {
     return {
       auditOpenSeamCount: this.auditOpenSeams.length,
       openSeamCount: this.causalOpenSeams.length,
-      invocationCount: this.invocationEvaluations.length,
-      nextInvocationOrdinal: this.nextInvocationOrdinal,
+      executionEventCount: this.executionEvents.length,
+      nextExecutionOrdinal: this.nextExecutionOrdinal,
       statementCount: this.statementCount,
     };
   }
 
   private restoreEvaluationCheckpoint(checkpoint: StaticIntrinsicEvaluationCheckpoint): void {
     this.restorePressureCheckpoint(checkpoint);
-    this.invocationEvaluations.splice(checkpoint.invocationCount);
-    this.nextInvocationOrdinal = checkpoint.nextInvocationOrdinal;
+    this.executionEvents.splice(checkpoint.executionEventCount);
+    this.nextExecutionOrdinal = checkpoint.nextExecutionOrdinal;
     this.statementCount = checkpoint.statementCount;
   }
 
-  private orderedInvocationEvaluationsSince(index: number): readonly StaticInvocationEvaluation[] {
-    return this.invocationEvaluations.slice(index).sort((left, right) => left.ordinal - right.ordinal);
+  private orderedExecutionTopologySince(index: number): StaticEvaluationExecutionTopology {
+    return new StaticEvaluationExecutionTopology(
+      this.executionEvents.slice(index).sort((left, right) => left.ordinal - right.ordinal),
+    );
   }
 
   private restorePressureCheckpoint(checkpoint: StaticIntrinsicEvaluationCheckpoint): void {

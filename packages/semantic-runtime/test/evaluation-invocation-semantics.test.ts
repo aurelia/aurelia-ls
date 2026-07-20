@@ -246,6 +246,80 @@ describe('static evaluator invocation semantics', () => {
     expect(arrayPrimitiveValues(result.environment.readValue('events'))).toEqual(['consume']);
   });
 
+  test('keeps call-time object evidence stable across later in-place mutation', () => {
+    const result = evaluate([
+      "const options = { marker: 'before' };",
+      'function consume(value) { return value.marker; }',
+      'const answer = consume(options);',
+      "options.marker = 'after';",
+    ]);
+    const invocation = result.invocations.find((candidate) =>
+      candidate.node.getText(candidate.node.getSourceFile()) === 'consume(options)'
+    );
+    if (invocation == null || !ts.isCallExpression(invocation.node)) {
+      throw new Error('Expected the consume(options) invocation occurrence.');
+    }
+    const argument = invocation.node.arguments[0];
+    if (argument == null) {
+      throw new Error('Expected the options argument.');
+    }
+
+    expect(objectStringProperty(
+      new StaticModuleEvaluationExpressionReader(result).evaluateExpression(argument).value,
+      'marker',
+    )).toBe('before');
+    expect(objectStringProperty(result.environment.readValue('options'), 'marker')).toBe('after');
+  });
+
+  test('separates pre-invocation argument state from post-invocation completion state', () => {
+    const result = evaluate([
+      "const options = { marker: 'before' };",
+      "function consume(value) { value.marker = 'during'; return value; }",
+      'const answer = consume(options);',
+      "options.marker = 'after';",
+    ]);
+    const invocation = result.invocations.find((candidate) =>
+      candidate.node.getText(candidate.node.getSourceFile()) === 'consume(options)'
+    );
+    if (invocation == null || !ts.isCallExpression(invocation.node)) {
+      throw new Error('Expected the consume(options) invocation occurrence.');
+    }
+    const argument = invocation.node.arguments[0];
+    if (argument == null) {
+      throw new Error('Expected the options argument.');
+    }
+    const reader = new StaticModuleEvaluationExpressionReader(result);
+
+    expect(objectStringProperty(reader.evaluateExpression(argument).value, 'marker')).toBe('before');
+    expect(objectStringProperty(reader.evaluateExpression(invocation.node).value, 'marker')).toBe('during');
+    expect(objectStringProperty(result.environment.readValue('options'), 'marker')).toBe('after');
+  });
+
+  test('separates receiver preparation from abrupt completion and final module state', () => {
+    const result = evaluate([
+      "const target = { marker: 'before', fail() { this.marker = 'during'; throw this; } };",
+      'try { target.fail(); } catch {}',
+      "target.marker = 'after';",
+    ]);
+    const invocation = result.invocations.find((candidate) =>
+      candidate.node.getText(candidate.node.getSourceFile()) === 'target.fail()'
+    );
+    if (invocation == null || !ts.isCallExpression(invocation.node)) {
+      throw new Error('Expected the target.fail() invocation occurrence.');
+    }
+    const receiver = invocation.reference.receiverNode;
+    if (receiver == null) {
+      throw new Error('Expected retained target receiver evidence.');
+    }
+    const reader = new StaticModuleEvaluationExpressionReader(result);
+    const invocationRead = reader.evaluateExpression(invocation.node);
+
+    expect(objectStringProperty(reader.evaluateExpression(receiver).value, 'marker')).toBe('before');
+    expect(invocationRead.value).toBeNull();
+    expect(objectStringProperty(invocationRead.abruptCompletion?.value ?? null, 'marker')).toBe('during');
+    expect(objectStringProperty(result.environment.readValue('target'), 'marker')).toBe('after');
+  });
+
   test('retains authored spread evidence separately from expanded runtime positions', () => {
     const result = evaluate([
       'function count(...values) { return values.length; }',

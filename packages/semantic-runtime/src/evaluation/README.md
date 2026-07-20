@@ -331,11 +331,19 @@ unused parameter without contaminating the return, but an unclosed spread preven
 Syntax-only recognition such as module-specifier validation may still inspect authored arguments, but it must not
 masquerade as value evaluation.
 
+`StaticEvaluationExecutionTopology` is the retained partial order for modeled execution. Each lane owns an ordered
+event list; `StaticConditionalExecution` nests mutually exclusive child lanes rather than flattening either arm into
+definite effects. Ordinals are local to one lane and must never be compared across siblings. The compatibility
+`invocationEvaluations` projection contains only invocation events definitely reached in that exact lane. Consumers
+that understand conditional reachability must traverse the topology and preserve the qualifying branch seam.
+
 `StaticInvocationFrame` is the transient dispatch product after one reference evaluation and one argument-list phase.
 It carries callee, receiver/`this`, computed property-key, authored-argument, and expanded positional evidence; runtime
-hosts and intrinsic families decide applicability from those values without re-evaluating source. The retained
-`invocationEvaluations` stream keeps the same evidence after the live frame is gone. `StaticInvocationOccurrence`
-means the ECMAScript invocation operation was actually reached and owns its normal or abrupt completion.
+hosts and intrinsic families decide applicability from those values without re-evaluating source. Retained preparation
+evidence snapshots that completed phase immediately before dispatch; retained normal or abrupt completion evidence is
+snapshotted separately after dispatch. Later mutation therefore cannot rewrite either historical stage, while explicit
+`StaticInvocationIdentity` and evaluator-value lineage preserve event and runtime identity across those snapshot graphs.
+`StaticInvocationOccurrence` means the ECMAScript invocation operation was actually reached and owns its completion.
 `StaticInvocationPreparationBoundary` means reference and argument preparation ran but an open argument list prevented
 proving that invocation occurred. It is deliberately absent from the derived `invocations` view, while remaining
 available to domain recognizers that must project a scoped uncertainty from the evaluated receiver and authored spread.

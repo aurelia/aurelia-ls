@@ -5,6 +5,10 @@ import {
 } from './environment.js';
 import type { StaticEvaluationSessionFork } from './evaluation-session.js';
 import type { StaticEvaluationValueGraph } from './evaluation-graph.js';
+import {
+  mapStaticEvaluationExecutionTopologyValues,
+  type StaticEvaluationExecutionTopology,
+} from './execution-topology.js';
 import { evaluationEnumerableOwnPropertyNames } from './enumerable-own-properties.js';
 import { representativeEvaluationValues } from './representative-values.js';
 import {
@@ -52,6 +56,8 @@ export class StaticEvaluationBranchJoinResult {
   constructor(
     readonly value: EvaluationValue,
     openSeams: readonly EvaluationOpenSeam[],
+    readonly leftExecutionTopology: StaticEvaluationExecutionTopology,
+    readonly rightExecutionTopology: StaticEvaluationExecutionTopology,
   ) {
     this.openSeams = compactEvaluationOpenSeams(openSeams);
   }
@@ -67,6 +73,8 @@ export interface StaticEvaluationBranchJoinInput {
   readonly rightValue: EvaluationValue;
   readonly leftOpenSeams: readonly EvaluationOpenSeam[];
   readonly rightOpenSeams: readonly EvaluationOpenSeam[];
+  readonly leftExecutionTopology: StaticEvaluationExecutionTopology;
+  readonly rightExecutionTopology: StaticEvaluationExecutionTopology;
   readonly branchSeam: EvaluationOpenSeam;
   readonly path: string;
   readonly sourceLabel: string | null;
@@ -107,6 +115,28 @@ class StaticEvaluationBranchJoiner {
     }
     this.populateEnvironment(this.input.leftEnvironment, this.input.rightEnvironment, environment);
     const value = this.joinValue(this.input.leftValue, this.input.rightValue, this.input.path);
+    const leftExecutionTopology = mapStaticEvaluationExecutionTopologyValues(
+      this.input.leftExecutionTopology,
+      (candidate, path) => this.projectSingleLaneValue(
+        candidate,
+        this.input.leftGraph,
+        this.input.rightGraph,
+        true,
+        path,
+      ),
+      `${this.input.path}.execution.left`,
+    );
+    const rightExecutionTopology = mapStaticEvaluationExecutionTopologyValues(
+      this.input.rightExecutionTopology,
+      (candidate, path) => this.projectSingleLaneValue(
+        candidate,
+        this.input.rightGraph,
+        this.input.leftGraph,
+        false,
+        path,
+      ),
+      `${this.input.path}.execution.right`,
+    );
 
     for (const created of this.newValues) {
       this.input.targetGraph?.retainProduced(created);
@@ -120,7 +150,7 @@ class StaticEvaluationBranchJoiner {
       ...(evaluationOpenSeamSetsEqual(this.input.leftOpenSeams, this.input.rightOpenSeams)
         ? []
         : [this.input.branchSeam]),
-    ]);
+    ], leftExecutionTopology, rightExecutionTopology);
   }
 
   private joinValue(left: EvaluationValue, right: EvaluationValue, path: string): EvaluationValue {

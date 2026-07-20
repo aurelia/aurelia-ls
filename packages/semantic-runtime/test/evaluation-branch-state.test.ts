@@ -17,8 +17,14 @@ import {
 } from '../src/evaluation/evaluator.js';
 import { joinStaticEvaluationBranches } from '../src/evaluation/branch-state.js';
 import { StaticEvaluationSessionFork } from '../src/evaluation/evaluation-session.js';
+import { evaluationValueGraphOwner } from '../src/evaluation/evaluation-graph.js';
+import {
+  StaticConditionalExecution,
+  StaticEvaluationExecutionTopology,
+} from '../src/evaluation/execution-topology.js';
 import {
   StaticInvocationNotApplicable,
+  StaticInvocationOccurrence,
   staticInvocationValue,
 } from '../src/evaluation/invocation.js';
 import { DefaultStaticEvaluationRuntimeHost } from '../src/evaluation/runtime-host.js';
@@ -357,6 +363,79 @@ describe('static evaluation branch state', () => {
       .toEqual(['dynamicValue', 'flag']);
   });
 
+  test('retains mutually exclusive invocation lanes without flattening them into definite calls', () => {
+    const graph = new StaticEvaluationSessionFork(branchRuntimeHost);
+    const runtimeHost = graph.forkRuntimeHost(branchRuntimeHost);
+    const result = evaluate([
+      'function before() { return 0; }',
+      'function left(value) { return value; }',
+      'function right(value) { return value; }',
+      'function after() { return 3; }',
+      'const beforeValue = before();',
+      "const selected = flag ? left({ side: 'left' }) : right({ side: 'right' });",
+      'const afterValue = after();',
+    ], runtimeHost);
+    const [before, branch, after] = result.executionTopology.events;
+
+    expect(before).toBeInstanceOf(StaticInvocationOccurrence);
+    expect(branch).toBeInstanceOf(StaticConditionalExecution);
+    expect(after).toBeInstanceOf(StaticInvocationOccurrence);
+    expect(result.invocations.map((invocation) => invocation.node.getText())).toEqual([
+      'before()',
+      'after()',
+    ]);
+    if (!(branch instanceof StaticConditionalExecution)) {
+      return;
+    }
+    expect(branch.whenTrue.invocationEvaluations.map((invocation) => invocation.node.getText()))
+      .toEqual(["left({ side: 'left' })"]);
+    expect(branch.whenFalse.invocationEvaluations.map((invocation) => invocation.node.getText()))
+      .toEqual(["right({ side: 'right' })"]);
+
+    const leftArgument = branch.whenTrue.invocationEvaluations[0]?.argumentList.authoredArguments[0]?.evidence.value;
+    const rightArgument = branch.whenFalse.invocationEvaluations[0]?.argumentList.authoredArguments[0]?.evidence.value;
+    expect(leftArgument == null ? null : evaluationValueGraphOwner(leftArgument)).toBe(graph);
+    expect(rightArgument == null ? null : evaluationValueGraphOwner(rightArgument)).toBe(graph);
+
+    const fork = new StaticEvaluationSessionFork(result.runtimeHost);
+    const forked = fork.forkModuleEvaluation(result);
+    const forkedBranch = forked.executionTopology.events[1];
+    expect(forkedBranch).toBeInstanceOf(StaticConditionalExecution);
+    if (forkedBranch instanceof StaticConditionalExecution) {
+      const forkedArgument = forkedBranch.whenTrue.invocationEvaluations[0]
+        ?.argumentList.authoredArguments[0]?.evidence.value;
+      expect(forkedArgument).not.toBe(leftArgument);
+      expect(forkedArgument == null ? null : evaluationValueGraphOwner(forkedArgument)).toBe(fork);
+    }
+  });
+
+  test('nests conditional execution lanes without comparing sibling-local ordinals', () => {
+    const result = evaluate([
+      'function left() { return 1; }',
+      'function middle() { return 2; }',
+      'function right() { return 3; }',
+      'const selected = flag ? (dynamicValue ? left() : middle()) : right();',
+    ]);
+    const outer = result.executionTopology.events[0];
+
+    expect(outer).toBeInstanceOf(StaticConditionalExecution);
+    if (!(outer instanceof StaticConditionalExecution)) {
+      return;
+    }
+    expect(outer.whenFalse.invocationEvaluations.map((invocation) => invocation.node.getText()))
+      .toEqual(['right()']);
+    const inner = outer.whenTrue.events[0];
+    expect(inner).toBeInstanceOf(StaticConditionalExecution);
+    if (!(inner instanceof StaticConditionalExecution)) {
+      return;
+    }
+    expect(inner.ordinal).toBe(0);
+    expect(inner.whenTrue.invocationEvaluations.map((invocation) => invocation.node.getText()))
+      .toEqual(['left()']);
+    expect(inner.whenFalse.invocationEvaluations.map((invocation) => invocation.node.getText()))
+      .toEqual(['middle()']);
+  });
+
   test('preserves one joined instance across a class back-reference cycle', () => {
     const source = ts.createSourceFile(
       'src/cyclic-instance.ts',
@@ -415,6 +494,8 @@ describe('static evaluation branch state', () => {
       rightValue: rightInstance,
       leftOpenSeams: [],
       rightOpenSeams: [],
+      leftExecutionTopology: StaticEvaluationExecutionTopology.Empty,
+      rightExecutionTopology: StaticEvaluationExecutionTopology.Empty,
       branchSeam,
       path: 'cyclic-instance',
       sourceLabel: 'flag',
@@ -474,6 +555,8 @@ describe('static evaluation branch state', () => {
       rightValue: new EvaluationNumberValue(1),
       leftOpenSeams: [],
       rightOpenSeams: [],
+      leftExecutionTopology: StaticEvaluationExecutionTopology.Empty,
+      rightExecutionTopology: StaticEvaluationExecutionTopology.Empty,
       branchSeam,
       path: 'transaction',
       sourceLabel: 'flag',

@@ -7,33 +7,23 @@ import {
   ReturnEvaluationCompletion,
   ThrowEvaluationCompletion,
   type EvaluationCompletion,
-  type EvaluationExpressionCompletion,
-  type EvaluationExpressionAbruptCompletion,
 } from './completion.js';
 import {
   EvaluationBinding,
   ModuleEnvironmentRecord,
 } from './environment.js';
 import {
-  EvaluationArgumentList,
-  EvaluationAuthoredArgument,
-} from './argument-list.js';
-import {
   type StaticEvaluationRuntimeHost,
   type StaticEvaluationValueMetadataTransfer,
 } from './evaluator.js';
+import { mapStaticEvaluationExecutionTopologyValues } from './execution-topology.js';
 import { StaticModuleEvaluationResult } from './module-evaluation-result.js';
 import type { StaticIntrinsicEvaluationHost } from './intrinsics/contracts.js';
 import {
   StaticInvocationDispatchKind,
   StaticInvocationHandled,
   StaticInvocationNotApplicable,
-  isStaticInvocationOccurrence,
-  StaticInvocationOccurrence,
-  StaticInvocationPreparationBoundary,
-  StaticInvocationReference,
   type StaticInvocationDispatch,
-  type StaticInvocationEvaluation,
 } from './invocation.js';
 import { EvaluationValueEvidence } from './value-pressure.js';
 import {
@@ -104,48 +94,14 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
       this.forkEnvironment(source.environment),
       this.forkCompletion(source.completion),
       source.openSeams,
-      source.invocationEvaluations.map((invocation) => this.forkInvocationEvaluation(invocation)),
+      mapStaticEvaluationExecutionTopologyValues(
+        source.executionTopology,
+        (value) => this.forkValue(value),
+        'session-fork.execution',
+      ),
       source.policy,
       runtimeHost,
     );
-  }
-
-  private forkInvocationEvaluation(
-    invocation: StaticInvocationEvaluation,
-  ): StaticInvocationEvaluation {
-    const reference = new StaticInvocationReference(
-      invocation.reference.calleeNode,
-      this.forkEvidence(invocation.reference.callee),
-      invocation.reference.receiverNode,
-      invocation.reference.thisValue == null ? null : this.forkEvidence(invocation.reference.thisValue),
-      invocation.reference.propertyKeyNode,
-      invocation.reference.propertyKey,
-      invocation.reference.propertyKeyEvidence == null
-        ? null
-        : this.forkEvidence(invocation.reference.propertyKeyEvidence),
-    );
-    const argumentList = this.forkArgumentList(invocation.argumentList);
-    return isStaticInvocationOccurrence(invocation)
-      ? new StaticInvocationOccurrence(
-          invocation.ordinal,
-          invocation.kind,
-          invocation.node,
-          invocation.moduleKey,
-          reference,
-          argumentList,
-          this.forkExpressionCompletion(invocation.completion),
-          invocation.openSeams,
-        )
-      : new StaticInvocationPreparationBoundary(
-          invocation.ordinal,
-          invocation.boundaryKind,
-          invocation.kind,
-          invocation.node,
-          invocation.moduleKey,
-          reference,
-          argumentList,
-          invocation.openSeams,
-        );
   }
 
   forkEnvironment(source: ModuleEnvironmentRecord): ModuleEnvironmentRecord {
@@ -463,42 +419,6 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
       case EvaluationCompletionKind.Open:
         return new OpenEvaluationCompletion(completion.summary);
     }
-  }
-
-  private forkExpressionAbruptCompletion(
-    completion: EvaluationExpressionAbruptCompletion,
-  ): EvaluationExpressionAbruptCompletion {
-    return new ThrowEvaluationCompletion(this.forkValue(completion.value), completion.openSeams);
-  }
-
-  private forkExpressionCompletion(
-    completion: EvaluationExpressionCompletion,
-  ): EvaluationExpressionCompletion {
-    return completion.kind === EvaluationCompletionKind.Normal
-      ? new NormalEvaluationCompletion(this.forkValue(completion.value))
-      : this.forkExpressionAbruptCompletion(completion);
-  }
-
-  private forkEvidence(evidence: EvaluationValueEvidence): EvaluationValueEvidence {
-    return new EvaluationValueEvidence(this.forkValue(evidence.value), evidence.openSeams);
-  }
-
-  private forkArgumentList(argumentList: EvaluationArgumentList): EvaluationArgumentList {
-    return new EvaluationArgumentList(
-      argumentList.authoredArguments.map((argument) => new EvaluationAuthoredArgument(
-        argument.node,
-        argument.valueExpression,
-        this.forkEvidence(argument.evidence),
-      )),
-      argumentList.elements.map((element) => new EvaluationArrayElement(
-        this.forkValue(element.value),
-        element.expression,
-        element.openSeams,
-        element.runtimeIndex,
-      )),
-      argumentList.shape,
-      argumentList.outcome,
-    );
   }
 
   forkRuntimeHost(host: StaticEvaluationRuntimeHost): StaticEvaluationRuntimeHost {

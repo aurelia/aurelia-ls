@@ -93,7 +93,7 @@ export interface StaticIntrinsicEvaluationHost {
 export interface StaticIntrinsicEvaluationCheckpoint {
   readonly auditOpenSeamCount: number;
   readonly openSeamCount: number;
-  readonly invocationCount: number;
-  readonly nextInvocationOrdinal: number;
+  readonly executionEventCount: number;
+  readonly nextExecutionOrdinal: number;
   readonly statementCount: number;
 }
