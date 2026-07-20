@@ -4,11 +4,23 @@ import { describe, expect, test } from 'vitest';
 import { EvaluationBindingKind, ModuleEnvironmentRecord } from '../src/evaluation/environment.js';
 import { StaticEvaluationSessionFork } from '../src/evaluation/evaluation-session.js';
 import { StaticEvaluator, type StaticEvaluationRuntimeHost } from '../src/evaluation/evaluator.js';
+import { evaluationValueGraphOwner } from '../src/evaluation/evaluation-graph.js';
+import { delegateStaticEvaluationRuntimeHost } from '../src/evaluation/runtime-host.js';
+import {
+  StaticInvocationKind,
+  StaticInvocationNotApplicable,
+  staticInvocationValue,
+  type StaticInvocationFrame,
+  type StaticInvocationHandled,
+} from '../src/evaluation/invocation.js';
+import type { StaticIntrinsicEvaluationHost } from '../src/evaluation/intrinsics/contracts.js';
 import { EvaluationImportEntry, EvaluationImportKind } from '../src/evaluation/module-graph.js';
 import { EvaluationValueEvidence } from '../src/evaluation/value-pressure.js';
 import {
   EvaluationArrayElement,
   EvaluationArrayValue,
+  EvaluationBoundaryKind,
+  EvaluationBoundaryValue,
   EvaluationClassValue,
   EvaluationFunctionValue,
   EvaluationInstanceValue,
@@ -27,10 +39,12 @@ import {
 } from '../src/evaluation/values.js';
 import {
   aureliaExternalEvaluationValueResolver,
+  aureliaFacadeEvaluationForValue,
   aureliaFrameworkRegistrationFactoryEvaluationForValue,
   aureliaFrameworkRegistrationKindForEvaluationValue,
   aureliaRegistryBodyForEvaluationValue,
   aureliaStaticEvaluationRuntimeHost,
+  isAureliaResolveEvaluationFunction,
 } from '../src/configuration/aurelia-evaluation-runtime.js';
 import {
   ModuleLoader,
@@ -39,6 +53,39 @@ import {
 import { FrameworkRegistrationKind } from '../src/registration/registration-reference.js';
 
 describe('static evaluation sessions', () => {
+  test('dispatches Aurelia facades from imported value identity across aliases and namespaces', () => {
+    const source = ts.createSourceFile(
+      'src/aurelia-facade-identity.ts',
+      [
+        "import Quickstart from 'aurelia';",
+        "import { Aurelia as RuntimeAurelia } from '@aurelia/runtime-html';",
+        "import * as browser from 'aurelia';",
+        "import * as runtime from '@aurelia/runtime-html';",
+        'const Alias = Quickstart;',
+        'const quick = new Alias();',
+        'const runtimeInstance = new RuntimeAurelia();',
+        'const browserStatic = browser.Aurelia.register({});',
+        'const namespaceRuntime = new runtime.Aurelia();',
+        'function Aurelia() {}',
+        'const local = new Aurelia();',
+      ].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const result = new StaticEvaluator(undefined, aureliaStaticEvaluationRuntimeHost).evaluateSourceFile(
+      source,
+      source.fileName,
+      aureliaImportValues(source),
+    );
+
+    expect(aureliaFacadeEvaluationForValue(result.environment.readValue('quick'))?.includesBrowserDefaults).toBe(true);
+    expect(aureliaFacadeEvaluationForValue(result.environment.readValue('runtimeInstance'))?.includesBrowserDefaults).toBe(false);
+    expect(aureliaFacadeEvaluationForValue(result.environment.readValue('browserStatic'))?.includesBrowserDefaults).toBe(true);
+    expect(aureliaFacadeEvaluationForValue(result.environment.readValue('namespaceRuntime'))?.includesBrowserDefaults).toBe(false);
+    expect(aureliaFacadeEvaluationForValue(result.environment.readValue('local'))).toBeNull();
+  });
+
   test('preserves partial module membership through ModuleLoader analysis', () => {
     const source = ts.createSourceFile(
       'src/open-module.ts',
@@ -224,16 +271,13 @@ describe('static evaluation sessions', () => {
     if (singletonDeclaration == null) {
       throw new Error('Expected a canonical host function declaration.');
     }
-    const canonicalEnvironment = new ModuleEnvironmentRecord('host:canonical');
+    const canonicalEnvironment = new ModuleEnvironmentRecord('host:canonical', null);
     const canonical = new EvaluationFunctionValue(
       singletonDeclaration,
       canonicalEnvironment,
       singletonDeclaration,
     );
-    const runtimeHost: StaticEvaluationRuntimeHost = {
-      evaluateCallExpression: (call) =>
-        ts.isIdentifier(call.expression) && call.expression.text === 'host' ? canonical : null,
-    };
+    const runtimeHost = runtimeHostForCall('host', source, () => staticInvocationValue(canonical));
     const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
     const first = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
     const second = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
@@ -271,28 +315,20 @@ describe('static evaluation sessions', () => {
     const canonical = new EvaluationObjectValue(new Map([
       ['x', property('x', new EvaluationNumberValue(0, source), source)],
     ]), false, source);
-    const runtimeHost: StaticEvaluationRuntimeHost = {
-      evaluateCallExpression: (call, environment, moduleKey, depth, host) => {
-        if (!ts.isIdentifier(call.expression) || call.expression.text !== 'hostInvoke') {
-          return null;
-        }
-        const calleeExpression = call.arguments[0];
-        if (calleeExpression == null) {
-          return null;
-        }
-        const callee = host.evaluateExpression(calleeExpression, environment, moduleKey, depth + 1);
-        return callee.kind === EvaluationValueKind.Function
-          ? host.evaluateFunctionWithArguments(
-              callee,
-              call,
-              [new EvaluationValueEvidence(canonical, [])],
-              moduleKey,
-              depth + 1,
-              null,
-            )
-          : null;
-      },
-    };
+    const runtimeHost = runtimeHostForCall('hostInvoke', source, (frame, host) => {
+      const callee = frame.argumentList.exactEvidence()?.[0]?.value;
+      if (callee?.kind !== EvaluationValueKind.Function) {
+        throw new Error('Expected hostInvoke(...) to receive the prepared mutate function.');
+      }
+      return staticInvocationValue(host.evaluateFunctionWithArguments(
+        callee,
+        frame.node,
+        [new EvaluationValueEvidence(canonical, [])],
+        frame.moduleKey,
+        frame.depth + 1,
+        null,
+      ));
+    });
     const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
     const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
     const probe = requireValueKind(session.environment.readValue('probe'), EvaluationValueKind.Function);
@@ -327,28 +363,20 @@ describe('static evaluation sessions', () => {
     const canonicalReceiver = new EvaluationObjectValue(new Map([
       ['base', property('base', new EvaluationNumberValue(10, source), source)],
     ]), false, source);
-    const runtimeHost: StaticEvaluationRuntimeHost = {
-      evaluateCallExpression: (call, environment, moduleKey, depth, host) => {
-        if (!ts.isIdentifier(call.expression) || call.expression.text !== 'hostInvoke') {
-          return null;
-        }
-        const calleeExpression = call.arguments[0];
-        if (calleeExpression == null) {
-          return null;
-        }
-        const callee = host.evaluateExpression(calleeExpression, environment, moduleKey, depth + 1);
-        return callee.kind === EvaluationValueKind.Function
-          ? host.evaluateFunctionWithArguments(
-              callee,
-              call,
-              [new EvaluationValueEvidence(new EvaluationNumberValue(2, call), [])],
-              moduleKey,
-              depth + 1,
-              new EvaluationValueEvidence(canonicalReceiver, []),
-            )
-          : null;
-      },
-    };
+    const runtimeHost = runtimeHostForCall('hostInvoke', source, (frame, host) => {
+      const callee = frame.argumentList.exactEvidence()?.[0]?.value;
+      if (callee?.kind !== EvaluationValueKind.Function) {
+        throw new Error('Expected hostInvoke(...) to receive the prepared offset function.');
+      }
+      return staticInvocationValue(host.evaluateFunctionWithArguments(
+        callee,
+        frame.node,
+        [new EvaluationValueEvidence(new EvaluationNumberValue(2, frame.node), [])],
+        frame.moduleKey,
+        frame.depth + 1,
+        new EvaluationValueEvidence(canonicalReceiver, []),
+      ));
+    });
     const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
     const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
     const probe = requireValueKind(session.environment.readValue('probe'), EvaluationValueKind.Function);
@@ -373,7 +401,7 @@ describe('static evaluation sessions', () => {
     if (declaration == null) {
       throw new Error('Expected the evaluation graph fixture to contain a class declaration.');
     }
-    const environment = new ModuleEnvironmentRecord('src/graph.ts');
+    const environment = new ModuleEnvironmentRecord('src/graph.ts', null);
     const shared = new EvaluationObjectValue(new Map(), false, declaration);
     shared.properties.set('self', property('self', shared, declaration));
     const classValue = new EvaluationClassValue(declaration, environment, declaration);
@@ -472,7 +500,7 @@ describe('static evaluation sessions', () => {
       'src/configuration.ts',
       [
         "import { StandardConfiguration } from '@aurelia/runtime-html';",
-        "import { aliasedResourcesRegistry } from '@aurelia/kernel';",
+        "import { DI, aliasedResourcesRegistry, resolve } from '@aurelia/kernel';",
         'const configured = StandardConfiguration.customize({});',
         'const registry = aliasedResourcesRegistry([], {});',
       ].join('\n'),
@@ -480,11 +508,18 @@ describe('static evaluation sessions', () => {
       true,
       ts.ScriptKind.TS,
     );
-    const standardImport = source.statements
-      .filter(ts.isImportDeclaration)[0]
-      ?.importClause?.namedBindings;
-    if (standardImport == null || !ts.isNamedImports(standardImport)) {
-      throw new Error('Expected the evaluation fixture to import StandardConfiguration.');
+    const imports = source.statements
+      .filter(ts.isImportDeclaration)
+      .map((declaration) => declaration.importClause?.namedBindings ?? null);
+    const standardImport = imports[0];
+    const aliasedResourcesImport = imports[1];
+    if (
+      standardImport == null
+      || !ts.isNamedImports(standardImport)
+      || aliasedResourcesImport == null
+      || !ts.isNamedImports(aliasedResourcesImport)
+    ) {
+      throw new Error('Expected the evaluation fixture to import both tested Aurelia values.');
     }
     const standardValue = aureliaExternalEvaluationValueResolver.resolveImportValue(
       source.fileName,
@@ -499,18 +534,66 @@ describe('static evaluation sessions', () => {
     if (standardValue == null) {
       throw new Error('Expected StandardConfiguration to resolve to a framework registration value.');
     }
+    const aliasedResourcesValue = aureliaExternalEvaluationValueResolver.resolveImportValue(
+      source.fileName,
+      new EvaluationImportEntry(
+        EvaluationImportKind.Named,
+        '@aurelia/kernel',
+        'aliasedResourcesRegistry',
+        'aliasedResourcesRegistry',
+        aliasedResourcesImport.elements[1]!,
+      ),
+    );
+    if (aliasedResourcesValue == null) {
+      throw new Error('Expected aliasedResourcesRegistry to resolve to an Aurelia evaluation value.');
+    }
+    const resolveValue = aureliaExternalEvaluationValueResolver.resolveImportValue(
+      source.fileName,
+      new EvaluationImportEntry(
+        EvaluationImportKind.Named,
+        '@aurelia/kernel',
+        'resolve',
+        'resolve',
+        aliasedResourcesImport.elements[2]!,
+      ),
+    );
+    const diValue = aureliaExternalEvaluationValueResolver.resolveImportValue(
+      source.fileName,
+      new EvaluationImportEntry(
+        EvaluationImportKind.Named,
+        '@aurelia/kernel',
+        'DI',
+        'DI',
+        aliasedResourcesImport.elements[0]!,
+      ),
+    );
+    if (resolveValue == null || diValue == null) {
+      throw new Error('Expected the Aurelia DI facade and resolve function to have external evaluation identities.');
+    }
     const original = new StaticEvaluator(undefined, aureliaStaticEvaluationRuntimeHost).evaluateSourceFile(
       source,
       source.fileName,
-      new Map([['StandardConfiguration', new EvaluationValueEvidence(standardValue, [])]]),
+      new Map([
+        ['StandardConfiguration', new EvaluationValueEvidence(standardValue, [])],
+        ['aliasedResourcesRegistry', new EvaluationValueEvidence(aliasedResourcesValue, [])],
+        ['resolve', new EvaluationValueEvidence(resolveValue, [])],
+        ['DI', new EvaluationValueEvidence(diValue, [])],
+      ]),
     );
     const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
     const configured = session.environment.readValue('configured');
     const registry = session.environment.readValue('registry');
+    const sessionResolve = session.environment.readValue('resolve');
+    const sessionDi = session.environment.readValue('DI');
 
     expect(aureliaFrameworkRegistrationKindForEvaluationValue(configured))
       .toBe(FrameworkRegistrationKind.StandardConfiguration);
     expect(aureliaRegistryBodyForEvaluationValue(registry)).not.toBeNull();
+    expect(isAureliaResolveEvaluationFunction(sessionResolve)).toBe(true);
+    expect(sessionDi?.kind).toBe(EvaluationValueKind.BoundaryObject);
+    expect(sessionDi?.kind === EvaluationValueKind.BoundaryObject
+      ? sessionDi.properties.get('createContainer')?.value.kind
+      : null).toBe(EvaluationValueKind.Function);
   });
 
   test('models framework registration exports through their exact runtime stages', () => {
@@ -633,10 +716,9 @@ describe('static evaluation sessions', () => {
     if (declaration == null || call == null || !ts.isCallExpression(call)) {
       throw new Error('Expected the host-closure fixture to contain a function and call.');
     }
-    const runtimeHost: StaticEvaluationRuntimeHost = {
-      evaluateCallExpression: (_call, environment) =>
-        new EvaluationFunctionValue(declaration, environment, declaration),
-    };
+    const runtimeHost = runtimeHostForCall('host', source, (frame) => staticInvocationValue(
+      new EvaluationFunctionValue(declaration, frame.environment, declaration),
+    ));
     const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
     const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
     const result = new StaticEvaluator(session.policy, session.runtimeHost)
@@ -658,21 +740,22 @@ describe('static evaluation sessions', () => {
       true,
       ts.ScriptKind.TS,
     );
-    const runtimeHost: StaticEvaluationRuntimeHost = {
-      evaluateCallExpression: (call, environment, moduleKey, depth, host) => {
-        if (!ts.isIdentifier(call.expression) || call.expression.text !== 'host') {
-          return null;
-        }
-        const service = environment.readValue('Service');
-        const retained = environment.readValue('retained');
-        if (service?.kind !== EvaluationValueKind.Class || retained?.kind !== EvaluationValueKind.Object) {
-          throw new Error('Expected the host instance fixture to expose Service and retained.');
-        }
-        const instance = host.evaluateClassInstantiation(service, call, [], moduleKey, depth + 1);
-        retained.properties.set('instance', property('instance', instance, call));
-        return instance;
-      },
-    };
+    const runtimeHost = runtimeHostForCall('host', source, (frame, host) => {
+      const service = frame.environment.readValue('Service');
+      const retained = frame.environment.readValue('retained');
+      if (service?.kind !== EvaluationValueKind.Class || retained?.kind !== EvaluationValueKind.Object) {
+        throw new Error('Expected the host instance fixture to expose Service and retained.');
+      }
+      const instance = host.evaluateClassInstantiation(
+        service,
+        frame.node,
+        [],
+        frame.moduleKey,
+        frame.depth + 1,
+      );
+      retained.properties.set('instance', property('instance', instance, frame.node));
+      return staticInvocationValue(instance);
+    });
     const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
     const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
     const create = requireValueKind(session.environment.readValue('create'), EvaluationValueKind.Function);
@@ -686,6 +769,181 @@ describe('static evaluation sessions', () => {
       kind: EvaluationValueKind.Object,
       properties: new Map(),
     }));
+  });
+
+  test('preserves aliases installed by a host for a session-created plain object', () => {
+    const source = ts.createSourceFile(
+      'src/host-object-alias.ts',
+      [
+        'const retained = {};',
+        'function probe() { const local = {}; return host(local); }',
+      ].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const runtimeHost = runtimeHostForCall('host', source, (frame) => {
+      const local = frame.argumentList.exactEvidence()?.[0]?.value;
+      const retained = frame.environment.readValue('retained');
+      if (local?.kind !== EvaluationValueKind.Object || retained?.kind !== EvaluationValueKind.Object) {
+        throw new Error('Expected the host object-alias fixture to expose local and retained objects.');
+      }
+      retained.properties.set('local', property('local', local, frame.node));
+      return staticInvocationValue(local);
+    });
+    const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
+    const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
+    const probe = requireValueKind(session.environment.readValue('probe'), EvaluationValueKind.Function);
+    const retained = requireValueKind(session.environment.readValue('retained'), EvaluationValueKind.Object);
+    const returned = requireValueKind(
+      new StaticEvaluator(session.policy, session.runtimeHost)
+        .evaluateFunctionValue(probe, probe.declaration, session.moduleKey, []).value,
+      EvaluationValueKind.Object,
+    );
+
+    expect(retained.properties.get('local')?.value).toBe(returned);
+    expect(original.environment.readValue('retained')).toEqual(expect.objectContaining({
+      kind: EvaluationValueKind.Object,
+      properties: new Map(),
+    }));
+  });
+
+  test('retains an in-progress instance when a hosted field initializer validates its environment', () => {
+    const source = ts.createSourceFile(
+      'src/hosted-field.ts',
+      'class Consumer { value = host(); after = 1; }',
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const runtimeHost = runtimeHostForCall('host', source, (frame) => staticInvocationValue(
+      new EvaluationObjectValue(new Map(), false, frame.node),
+    ));
+    const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
+    const sessionGraph = new StaticEvaluationSessionFork(original.runtimeHost);
+    const session = sessionGraph.forkModuleEvaluation(original);
+    const consumer = requireValueKind(session.environment.readValue('Consumer'), EvaluationValueKind.Class);
+    const result = new StaticEvaluator(session.policy, session.runtimeHost)
+      .evaluateClassValueInstantiation(consumer, session.moduleKey, consumer.declaration);
+    const instance = requireValueKind(result.value, EvaluationValueKind.Instance);
+
+    expect([...instance.properties.keys()]).toEqual(['value', 'after']);
+    expect(instance.properties.get('value')?.value.kind).toBe(EvaluationValueKind.Object);
+    expect(instance.properties.get('after')?.value).toEqual(expect.objectContaining({
+      kind: EvaluationValueKind.Number,
+      value: 1,
+    }));
+    expect(evaluationValueGraphOwner(instance)).toBe(sessionGraph);
+  });
+
+  test('forks foreign direct-call arguments before evaluator-local mutation', () => {
+    const source = ts.createSourceFile(
+      'src/direct-argument.ts',
+      'function mutate(value) { value.x = 1; return value; }',
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const original = new StaticEvaluator().evaluateSourceFile(source);
+    const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
+    const mutate = requireValueKind(session.environment.readValue('mutate'), EvaluationValueKind.Function);
+    const canonical = new EvaluationObjectValue(new Map([
+      ['x', property('x', new EvaluationNumberValue(0, source), source)],
+    ]), false, source);
+    const returned = requireValueKind(
+      new StaticEvaluator(session.policy, session.runtimeHost)
+        .evaluateFunctionValue(mutate, mutate.declaration, session.moduleKey, [canonical]).value,
+      EvaluationValueKind.Object,
+    );
+
+    expect(returned).not.toBe(canonical);
+    expect(returned.properties.get('x')?.value).toEqual(expect.objectContaining({ value: 1 }));
+    expect(canonical.properties.get('x')?.value).toEqual(expect.objectContaining({ value: 0 }));
+  });
+
+  test('forks canonical values returned by an outer delegated runtime host', () => {
+    const source = ts.createSourceFile(
+      'src/delegated-host.ts',
+      'function probe() { return host(); }',
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const baseHost = runtimeHostForCall('host', source, () => staticInvocationValue(
+      new EvaluationObjectValue(new Map(), false, source),
+    ));
+    const original = new StaticEvaluator(undefined, baseHost).evaluateSourceFile(source);
+    const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
+    const canonical = new EvaluationObjectValue(new Map(), false, source);
+    const delegatedHost = delegateStaticEvaluationRuntimeHost(session.runtimeHost, (frame) =>
+      ts.isIdentifier(frame.calleeNode) && frame.calleeNode.text === 'host'
+        ? staticInvocationValue(canonical)
+        : StaticInvocationNotApplicable
+    );
+    const probe = requireValueKind(session.environment.readValue('probe'), EvaluationValueKind.Function);
+    const returned = requireValueKind(
+      new StaticEvaluator(session.policy, delegatedHost)
+        .evaluateFunctionValue(probe, probe.declaration, session.moduleKey, []).value,
+      EvaluationValueKind.Object,
+    );
+
+    expect(returned).not.toBe(canonical);
+    expect(evaluationValueGraphOwner(canonical)).toBeNull();
+  });
+
+  test('normalizes a foreign child inserted after a session object was first retained', () => {
+    const source = ts.createSourceFile(
+      'src/late-child.ts',
+      [
+        'const retained = {};',
+        'function probe() { host(retained); return retained; }',
+      ].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const canonical = new EvaluationObjectValue(new Map(), false, source);
+    const runtimeHost = runtimeHostForCall('host', source, (frame) => {
+      const retained = frame.argumentList.exactEvidence()?.[0]?.value;
+      if (retained?.kind !== EvaluationValueKind.Object) {
+        throw new Error('Expected host(...) to receive the retained session object.');
+      }
+      retained.properties.set('child', property('child', canonical, frame.node));
+      return staticInvocationValue(retained);
+    });
+    const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
+    const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
+    const probe = requireValueKind(session.environment.readValue('probe'), EvaluationValueKind.Function);
+    const returned = requireValueKind(
+      new StaticEvaluator(session.policy, session.runtimeHost)
+        .evaluateFunctionValue(probe, probe.declaration, session.moduleKey, []).value,
+      EvaluationValueKind.Object,
+    );
+
+    expect(returned.properties.get('child')?.value).not.toBe(canonical);
+    expect(evaluationValueGraphOwner(canonical)).toBeNull();
+  });
+
+  test('retains nested intrinsic products in the same evaluation graph', () => {
+    const source = ts.createSourceFile(
+      'src/nested-intrinsic.ts',
+      'function probe() { return Object.entries({ value: 1 }); }',
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const original = new StaticEvaluator().evaluateSourceFile(source);
+    const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
+    const probe = requireValueKind(session.environment.readValue('probe'), EvaluationValueKind.Function);
+    const outer = requireValueKind(
+      new StaticEvaluator(session.policy, session.runtimeHost)
+        .evaluateFunctionValue(probe, probe.declaration, session.moduleKey, []).value,
+      EvaluationValueKind.Array,
+    );
+    const inner = requireValueKind(outer.elements[0]?.value ?? null, EvaluationValueKind.Array);
+
+    expect(evaluationValueGraphOwner(outer)).not.toBeNull();
+    expect(evaluationValueGraphOwner(inner)).toBe(evaluationValueGraphOwner(outer));
   });
 
   test('keeps host-returned closures on their session-owned call frame', () => {
@@ -708,16 +966,13 @@ describe('static evaluation sessions', () => {
     }
     let hostEnvironment: ModuleEnvironmentRecord | null = null;
     let hostPayload: EvaluationValue | null = null;
-    const runtimeHost: StaticEvaluationRuntimeHost = {
-      evaluateCallExpression: (call, environment) => {
-        if (!ts.isIdentifier(call.expression) || call.expression.text !== 'host') {
-          return null;
-        }
-        hostEnvironment = environment;
-        hostPayload = environment.readValue('payload');
-        return new EvaluationFunctionValue(returnedDeclaration, environment, returnedDeclaration);
-      },
-    };
+    const runtimeHost = runtimeHostForCall('host', source, (frame) => {
+      hostEnvironment = frame.environment;
+      hostPayload = frame.environment.readValue('payload');
+      return staticInvocationValue(
+        new EvaluationFunctionValue(returnedDeclaration, frame.environment, returnedDeclaration),
+      );
+    });
     const original = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
     const session = new StaticEvaluationSessionFork(original.runtimeHost).forkModuleEvaluation(original);
     const probe = requireValueKind(session.environment.readValue('probe'), EvaluationValueKind.Function);
@@ -733,12 +988,95 @@ describe('static evaluation sessions', () => {
   });
 });
 
+function runtimeHostForCall(
+  identifierName: string,
+  node: ts.Node,
+  evaluateCall: (
+    frame: StaticInvocationFrame<ts.CallExpression>,
+    host: StaticIntrinsicEvaluationHost,
+  ) => StaticInvocationHandled,
+): StaticEvaluationRuntimeHost {
+  const calleeIdentity = new EvaluationBoundaryValue(
+    EvaluationBoundaryKind.HostEnvironment,
+    `test-runtime:${identifierName}`,
+    node,
+  );
+  return {
+    resolveIdentifier: (identifier) => identifier.text === identifierName ? calleeIdentity : null,
+    evaluateInvocation: (frame, host) => {
+      if (
+        frame.kind !== StaticInvocationKind.Call
+        || !ts.isCallExpression(frame.node)
+        || frame.callee.value !== calleeIdentity
+      ) {
+        return StaticInvocationNotApplicable;
+      }
+      return evaluateCall(frame as StaticInvocationFrame<ts.CallExpression>, host);
+    },
+  };
+}
+
 function property(
   name: string,
   value: EvaluationValue,
   node: ts.Node,
 ): EvaluationObjectProperty {
   return new EvaluationObjectProperty(name, value, node, EvaluationObjectPropertyState.Closed);
+}
+
+function aureliaImportValues(source: ts.SourceFile): Map<string, EvaluationValueEvidence> {
+  const values = new Map<string, EvaluationValueEvidence>();
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue;
+    }
+    const moduleSpecifier = statement.moduleSpecifier.text;
+    const clause = statement.importClause;
+    if (clause?.name != null) {
+      retainAureliaImport(values, source, new EvaluationImportEntry(
+        EvaluationImportKind.Default,
+        moduleSpecifier,
+        clause.name.text,
+        'default',
+        clause.name,
+      ));
+    }
+    const bindings = clause?.namedBindings;
+    if (bindings == null) {
+      continue;
+    }
+    if (ts.isNamespaceImport(bindings)) {
+      retainAureliaImport(values, source, new EvaluationImportEntry(
+        EvaluationImportKind.Namespace,
+        moduleSpecifier,
+        bindings.name.text,
+        '*',
+        bindings.name,
+      ));
+      continue;
+    }
+    for (const element of bindings.elements) {
+      retainAureliaImport(values, source, new EvaluationImportEntry(
+        EvaluationImportKind.Named,
+        moduleSpecifier,
+        element.name.text,
+        element.propertyName?.text ?? element.name.text,
+        element,
+      ));
+    }
+  }
+  return values;
+}
+
+function retainAureliaImport(
+  values: Map<string, EvaluationValueEvidence>,
+  source: ts.SourceFile,
+  entry: EvaluationImportEntry,
+): void {
+  const value = aureliaExternalEvaluationValueResolver.resolveImportValue(source.fileName, entry);
+  if (value != null) {
+    values.set(entry.localName, new EvaluationValueEvidence(value, []));
+  }
 }
 
 function requireValueKind<TKind extends EvaluationValueKind>(

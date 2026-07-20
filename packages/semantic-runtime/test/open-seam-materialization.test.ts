@@ -74,8 +74,8 @@ describe('open seam materialization ownership', () => {
       });
     }
 
-    const evaluator = await analyzeFixture('di-key-identity');
-    const evaluatorSeams = seamsOfKind(evaluator, KernelVocabulary.Evaluation.DynamicCall.key);
+    const evaluator = await analyzeFixture('evaluation-open-seam-sites');
+    const evaluatorSeams = seamsOfKind(evaluator, KernelVocabulary.Evaluation.UnresolvedIdentifier.key);
     expect(evaluatorSeams.length).toBeGreaterThan(0);
     for (const seam of evaluatorSeams) {
       expect(materializationsForSeam(evaluator, seam)).toEqual([]);

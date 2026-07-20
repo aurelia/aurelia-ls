@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import type { ModuleEnvironmentRecord } from '../environment.js';
+import type { StaticInvocationFrame } from '../invocation.js';
 import {
   EvaluationArrayCallbackClosure,
   EvaluationArrayCallbackRead,
@@ -95,21 +95,17 @@ function staticArrayCallbackRead(
 }
 
 function evaluateArrayCallbackInvocation(
-  call: ts.CallExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
   label: string,
   thisArgumentIndex: number | null = 1,
 ): { readonly kind: 'known'; readonly value: StaticArrayCallbackInvocation }
   | { readonly kind: 'open'; readonly value: EvaluationValue } {
+  const call = frame.node;
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
-    moduleKey,
-    depth + 1,
+    frame.moduleKey,
     host,
     `${label} argument list did not close.`,
   );
@@ -122,7 +118,7 @@ function evaluateArrayCallbackInvocation(
     host.replayOpenSeams(callback?.openSeams ?? []);
     return {
       kind: 'open',
-      value: host.unknown(`${label} did not reduce to a known function.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall),
+      value: host.unknown(`${label} did not reduce to a known function.`, call, frame.moduleKey, EvaluationOpenSeamKind.DynamicCall),
     };
   }
   return {
@@ -275,18 +271,14 @@ function materializeStaticArrayDecision(
 }
 
 export function evaluateArrayConstructor(
-  expression: ts.NewExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.NewExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
+  const expression = frame.node;
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    expression.arguments ?? [],
+    frame.argumentList,
     expression,
-    environment,
-    moduleKey,
-    depth + 1,
+    frame.moduleKey,
     host,
     'Array constructor argument list did not close.',
   );
@@ -321,7 +313,7 @@ export function evaluateArrayConstructor(
     return host.unknown(
       'Array constructor numeric length would throw RangeError.',
       expression,
-      moduleKey,
+      frame.moduleKey,
       EvaluationOpenSeamKind.DynamicCall,
     );
   }
@@ -333,24 +325,19 @@ export function evaluateArrayConstructor(
 }
 
 export function evaluateArrayConcat(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'concat');
+  const call = frame.node;
+  const receiverRead = evaluateArrayReceiver(frame, host, 'concat');
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
-    moduleKey,
-    depth + 1,
+    frame.moduleKey,
     host,
     'Array.concat argument list did not close.',
   );
@@ -362,18 +349,16 @@ export function evaluateArrayConcat(
 }
 
 export function evaluateArrayFrom(
-  call: ts.CallExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
+  const call = frame.node;
+  const moduleKey = frame.moduleKey;
+  const depth = frame.depth;
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.from argument list did not close.',
   );
@@ -506,19 +491,16 @@ function iterableArrayShape(knownLength: number, open: boolean): EvaluationArray
 }
 
 export function evaluateArrayMap(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'map');
+  const { node: call, moduleKey, depth } = frame;
+  const receiverRead = evaluateArrayReceiver(frame, host, 'map');
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
-  const invocation = evaluateArrayCallbackInvocation(call, environment, moduleKey, depth + 1, host, 'Array.map callback');
+  const invocation = evaluateArrayCallbackInvocation(frame, host, 'Array.map callback');
   if (invocation.kind !== 'known') {
     return invocation.value;
   }
@@ -537,19 +519,16 @@ export function evaluateArrayMap(
 }
 
 export function evaluateArrayFlatMap(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'flatMap');
+  const { node: call, moduleKey, depth } = frame;
+  const receiverRead = evaluateArrayReceiver(frame, host, 'flatMap');
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
-  const invocation = evaluateArrayCallbackInvocation(call, environment, moduleKey, depth + 1, host, 'Array.flatMap callback');
+  const invocation = evaluateArrayCallbackInvocation(frame, host, 'Array.flatMap callback');
   if (invocation.kind !== 'known') {
     return invocation.value;
   }
@@ -568,19 +547,16 @@ export function evaluateArrayFlatMap(
 }
 
 export function evaluateArrayFilter(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'filter');
+  const { node: call, moduleKey, depth } = frame;
+  const receiverRead = evaluateArrayReceiver(frame, host, 'filter');
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
-  const invocation = evaluateArrayCallbackInvocation(call, environment, moduleKey, depth + 1, host, 'Array.filter predicate');
+  const invocation = evaluateArrayCallbackInvocation(frame, host, 'Array.filter predicate');
   if (invocation.kind !== 'known') {
     return invocation.value;
   }
@@ -599,21 +575,18 @@ export function evaluateArrayFilter(
 }
 
 export function evaluateArrayFind(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
   rightToLeft: boolean,
 ): EvaluationValue {
+  const { node: call, moduleKey, depth } = frame;
   const intrinsicName = rightToLeft ? 'findLast' : 'find';
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, intrinsicName);
+  const receiverRead = evaluateArrayReceiver(frame, host, intrinsicName);
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
-  const invocation = evaluateArrayCallbackInvocation(call, environment, moduleKey, depth + 1, host, `Array.${intrinsicName} predicate`);
+  const invocation = evaluateArrayCallbackInvocation(frame, host, `Array.${intrinsicName} predicate`);
   if (invocation.kind !== 'known') {
     return invocation.value;
   }
@@ -637,21 +610,18 @@ export function evaluateArrayFind(
 }
 
 export function evaluateArrayFindIndex(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
   rightToLeft: boolean,
 ): EvaluationValue {
+  const { node: call, moduleKey, depth } = frame;
   const intrinsicName = rightToLeft ? 'findLastIndex' : 'findIndex';
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, intrinsicName);
+  const receiverRead = evaluateArrayReceiver(frame, host, intrinsicName);
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
-  const invocation = evaluateArrayCallbackInvocation(call, environment, moduleKey, depth + 1, host, `Array.${intrinsicName} predicate`);
+  const invocation = evaluateArrayCallbackInvocation(frame, host, `Array.${intrinsicName} predicate`);
   if (invocation.kind !== 'known') {
     return invocation.value;
   }
@@ -675,42 +645,31 @@ export function evaluateArrayFindIndex(
 }
 
 export function evaluateArraySome(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  return evaluateArrayQuantifier(call, receiverExpression, environment, moduleKey, depth, host, 'some');
+  return evaluateArrayQuantifier(frame, host, 'some');
 }
 
 export function evaluateArrayEvery(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  return evaluateArrayQuantifier(call, receiverExpression, environment, moduleKey, depth, host, 'every');
+  return evaluateArrayQuantifier(frame, host, 'every');
 }
 
 export function evaluateArrayQuantifier(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
   kind: 'some' | 'every',
 ): EvaluationValue {
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, kind);
+  const { node: call, moduleKey, depth } = frame;
+  const receiverRead = evaluateArrayReceiver(frame, host, kind);
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
-  const invocation = evaluateArrayCallbackInvocation(call, environment, moduleKey, depth + 1, host, `Array.${kind} predicate`);
+  const invocation = evaluateArrayCallbackInvocation(frame, host, `Array.${kind} predicate`);
   if (invocation.kind !== 'known') {
     return invocation.value;
   }
@@ -734,19 +693,16 @@ export function evaluateArrayQuantifier(
 }
 
 export function evaluateArrayForEach(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'forEach');
+  const { node: call, moduleKey, depth } = frame;
+  const receiverRead = evaluateArrayReceiver(frame, host, 'forEach');
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
-  const invocation = evaluateArrayCallbackInvocation(call, environment, moduleKey, depth + 1, host, 'Array.forEach callback');
+  const invocation = evaluateArrayCallbackInvocation(frame, host, 'Array.forEach callback');
   if (invocation.kind !== 'known') {
     return invocation.value;
   }
@@ -769,21 +725,18 @@ export function evaluateArrayForEach(
 }
 
 export function evaluateArrayReduce(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
   rightToLeft: boolean,
 ): EvaluationValue {
+  const { node: call, moduleKey, depth } = frame;
   const intrinsicName = rightToLeft ? 'reduceRight' : 'reduce';
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, intrinsicName);
+  const receiverRead = evaluateArrayReceiver(frame, host, intrinsicName);
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
-  const invocation = evaluateArrayCallbackInvocation(call, environment, moduleKey, depth + 1, host, `Array.${intrinsicName} reducer`, null);
+  const invocation = evaluateArrayCallbackInvocation(frame, host, `Array.${intrinsicName} reducer`, null);
   if (invocation.kind !== 'known') {
     return invocation.value;
   }
@@ -814,19 +767,13 @@ export function evaluateArrayReduce(
 }
 
 export function evaluateArrayOrStringIncludes(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
+  const call = frame.node;
   const receiverRead = evaluateClosedIntrinsicInput(
+    frame.thisValue,
     call,
-    receiverExpression,
-    environment,
-    moduleKey,
-    depth + 1,
     host,
     'Array/String.includes receiver retained open pressure.',
   );
@@ -835,25 +782,19 @@ export function evaluateArrayOrStringIncludes(
   }
   const receiver = receiverRead.value;
   if (receiver.kind === EvaluationValueKind.String) {
-    return evaluateStringPredicateFromReceiver(call, receiver, environment, moduleKey, depth + 1, host, 'includes');
+    return evaluateStringPredicateFromReceiver(frame, receiver, host, 'includes');
   }
-  return evaluateArrayIncludesFromReceiver(call, receiver, environment, moduleKey, depth + 1, host);
+  return evaluateArrayIncludesFromReceiver(frame, receiver, host);
 }
 
 export function evaluateArrayOrStringAt(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
+  const { node: call, moduleKey } = frame;
   const receiverRead = evaluateClosedIntrinsicInput(
+    frame.thisValue,
     call,
-    receiverExpression,
-    environment,
-    moduleKey,
-    depth + 1,
     host,
     'Array/String.at receiver retained open pressure.',
   );
@@ -868,11 +809,9 @@ export function evaluateArrayOrStringAt(
     return host.unknown('Array/String.at receiver did not reduce to a known array or string.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array/String.at argument list did not close.',
   );
@@ -905,13 +844,11 @@ export function evaluateArrayOrStringAt(
 }
 
 export function evaluateArrayIncludesFromReceiver(
-  call: ts.CallExpression,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   receiver: EvaluationValue,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
+  const { node: call, moduleKey } = frame;
   if (isBoundaryEvaluationValue(receiver)) {
     return boundaryIntrinsicCallValue(receiver, 'includes', call);
   }
@@ -919,11 +856,9 @@ export function evaluateArrayIncludesFromReceiver(
     return host.unknown('Array.includes receiver did not reduce to a known array.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.includes argument list did not close.',
   );
@@ -957,21 +892,15 @@ export function evaluateArrayIncludesFromReceiver(
 }
 
 export function evaluateArrayIndexOf(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
   rightToLeft: boolean,
 ): EvaluationValue {
+  const { node: call, moduleKey } = frame;
   const intrinsicName = rightToLeft ? 'lastIndexOf' : 'indexOf';
   const receiverRead = evaluateClosedIntrinsicInput(
+    frame.thisValue,
     call,
-    receiverExpression,
-    environment,
-    moduleKey,
-    depth + 1,
     host,
     `${intrinsicName} receiver retained open pressure.`,
   );
@@ -983,14 +912,12 @@ export function evaluateArrayIndexOf(
     return boundaryIntrinsicCallValue(receiver, intrinsicName, call);
   }
   if (receiver.kind !== EvaluationValueKind.Array && receiver.kind !== EvaluationValueKind.String) {
-    return host.unknown(`${intrinsicName} receiver did not reduce to a known array or string.`, receiverExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+    return host.unknown(`${intrinsicName} receiver did not reduce to a known array or string.`, frame.calleeNode, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     `Array/String.${intrinsicName} argument list did not close.`,
   );
@@ -1042,24 +969,19 @@ export function evaluateArrayIndexOf(
 }
 
 export function evaluateArrayJoin(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'join');
+  const { node: call, moduleKey } = frame;
+  const receiverRead = evaluateArrayReceiver(frame, host, 'join');
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.join argument list did not close.',
   );
@@ -1098,24 +1020,19 @@ export function evaluateArrayJoin(
 }
 
 export function evaluateArrayFlat(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'flat');
+  const { node: call, moduleKey } = frame;
+  const receiverRead = evaluateArrayReceiver(frame, host, 'flat');
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.flat argument list did not close.',
   );
@@ -1134,24 +1051,19 @@ export function evaluateArrayFlat(
 }
 
 export function evaluateArrayFill(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'fill');
+  const { node: call, moduleKey } = frame;
+  const receiverRead = evaluateArrayReceiver(frame, host, 'fill');
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.fill argument list did not close.',
   );
@@ -1220,24 +1132,19 @@ export function evaluateArrayFill(
 }
 
 export function evaluateArrayPush(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiver = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'push');
+  const { node: call, moduleKey } = frame;
+  const receiver = evaluateArrayReceiver(frame, host, 'push');
   if (receiver.kind !== 'known') {
     return receiver.value;
   }
 
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.push argument list did not close.',
   );
@@ -1259,24 +1166,19 @@ export function evaluateArrayPush(
 }
 
 export function evaluateArrayUnshift(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiver = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'unshift');
+  const { node: call, moduleKey } = frame;
+  const receiver = evaluateArrayReceiver(frame, host, 'unshift');
   if (receiver.kind !== 'known') {
     return receiver.value;
   }
 
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.unshift argument list did not close.',
   );
@@ -1296,23 +1198,18 @@ export function evaluateArrayUnshift(
 }
 
 export function evaluateArrayPop(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiver = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'pop');
+  const { node: call, moduleKey } = frame;
+  const receiver = evaluateArrayReceiver(frame, host, 'pop');
   if (receiver.kind !== 'known') {
     return receiver.value;
   }
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.pop argument list did not close.',
   );
@@ -1335,23 +1232,18 @@ export function evaluateArrayPop(
 }
 
 export function evaluateArrayShift(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiver = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'shift');
+  const { node: call, moduleKey } = frame;
+  const receiver = evaluateArrayReceiver(frame, host, 'shift');
   if (receiver.kind !== 'known') {
     return receiver.value;
   }
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.shift argument list did not close.',
   );
@@ -1374,23 +1266,18 @@ export function evaluateArrayShift(
 }
 
 export function evaluateArrayReverse(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiver = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'reverse');
+  const { node: call, moduleKey } = frame;
+  const receiver = evaluateArrayReceiver(frame, host, 'reverse');
   if (receiver.kind !== 'known') {
     return receiver.value;
   }
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.reverse argument list did not close.',
   );
@@ -1407,24 +1294,19 @@ export function evaluateArrayReverse(
 }
 
 export function evaluateArrayToReversed(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'toReversed');
+  const { node: call, moduleKey } = frame;
+  const receiverRead = evaluateArrayReceiver(frame, host, 'toReversed');
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.toReversed argument list did not close.',
   );
@@ -1438,24 +1320,19 @@ export function evaluateArrayToReversed(
 }
 
 export function evaluateArrayToSpliced(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'toSpliced');
+  const { node: call, moduleKey } = frame;
+  const receiverRead = evaluateArrayReceiver(frame, host, 'toSpliced');
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.toSpliced argument list did not close.',
   );
@@ -1506,24 +1383,19 @@ export function evaluateArrayToSpliced(
 }
 
 export function evaluateArrayWith(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'with');
+  const { node: call, moduleKey } = frame;
+  const receiverRead = evaluateArrayReceiver(frame, host, 'with');
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.with argument list did not close.',
   );
@@ -1558,14 +1430,11 @@ export function evaluateArrayWith(
 }
 
 export function evaluateArraySplice(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiver = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'splice');
+  const { node: call, moduleKey } = frame;
+  const receiver = evaluateArrayReceiver(frame, host, 'splice');
   if (receiver.kind !== 'known') {
     return receiver.value;
   }
@@ -1579,11 +1448,9 @@ export function evaluateArraySplice(
     );
   }
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.splice argument list did not close.',
   );
@@ -1659,39 +1526,30 @@ export function evaluateArraySplice(
 }
 
 function evaluateClosedIntrinsicInput(
+  evidence: EvaluationValueEvidence | null,
   call: ts.CallExpression,
-  expression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
   host: StaticIntrinsicEvaluationHost,
   openReason: string,
 ): { readonly kind: 'known'; readonly value: EvaluationValue }
   | { readonly kind: 'open'; readonly value: EvaluationValue } {
-  const evidence = host.evaluateExpressionEvidence(expression, environment, moduleKey, depth);
-  return evidence.openSeams.length === 0
-    ? { kind: 'known', value: evidence.value }
+  const current = evidence ?? new EvaluationValueEvidence(EvaluationUndefined, []);
+  return current.openSeams.length === 0
+    ? { kind: 'known', value: current.value }
     : {
         kind: 'open',
-        value: unknownFromEvidence(evidence, openReason, call, host),
+        value: unknownFromEvidence(current, openReason, call, host),
       };
 }
 
 function evaluateArrayReceiver(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
   methodName: string,
 ): { readonly kind: 'known'; readonly value: EvaluationArrayValue } | { readonly kind: 'open'; readonly value: EvaluationValue } {
+  const { node: call, moduleKey } = frame;
   const receiverRead = evaluateClosedIntrinsicInput(
+    frame.thisValue,
     call,
-    receiverExpression,
-    environment,
-    moduleKey,
-    depth,
     host,
     `Array.${methodName} receiver retained open pressure.`,
   );
@@ -1705,7 +1563,7 @@ function evaluateArrayReceiver(
   if (receiver.kind !== EvaluationValueKind.Array) {
     return {
       kind: 'open',
-      value: host.unknown(`Array.${methodName} receiver did not reduce to a known array.`, receiverExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall),
+      value: host.unknown(`Array.${methodName} receiver did not reduce to a known array.`, frame.calleeNode, moduleKey, EvaluationOpenSeamKind.DynamicCall),
     };
   }
   return { kind: 'known', value: receiver };
@@ -1813,19 +1671,13 @@ function readSpliceDeleteCount(
 }
 
 export function evaluateArrayOrStringSlice(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
+  const { node: call, moduleKey } = frame;
   const receiverRead = evaluateClosedIntrinsicInput(
+    frame.thisValue,
     call,
-    receiverExpression,
-    environment,
-    moduleKey,
-    depth + 1,
     host,
     'Array/String.slice receiver retained open pressure.',
   );
@@ -1837,11 +1689,9 @@ export function evaluateArrayOrStringSlice(
     return boundaryIntrinsicCallValue(receiver, 'slice', call);
   }
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array/String.slice argument list did not close.',
   );
@@ -1879,22 +1729,18 @@ export function evaluateArrayOrStringSlice(
       ? host.unknown('String.slice bounds did not reduce to static numbers.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
       : new EvaluationStringValue(receiver.value.slice(rangeRead.range.start, rangeRead.range.end), call);
   }
-  return host.unknown('slice receiver did not reduce to a known array or string.', receiverExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  return host.unknown('slice receiver did not reduce to a known array or string.', frame.calleeNode, moduleKey, EvaluationOpenSeamKind.DynamicCall);
 }
 
 export function evaluateArrayIsArray(
-  call: ts.CallExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
+  const { node: call, moduleKey } = frame;
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.isArray argument list did not close.',
   );
@@ -1916,24 +1762,19 @@ export function evaluateArrayIsArray(
 }
 
 export function evaluateArraySort(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'sort');
+  const { node: call, moduleKey, depth } = frame;
+  const receiverRead = evaluateArrayReceiver(frame, host, 'sort');
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.sort argument list did not close.',
   );
@@ -1949,24 +1790,19 @@ export function evaluateArraySort(
 }
 
 export function evaluateArrayToSorted(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const receiverRead = evaluateArrayReceiver(call, receiverExpression, environment, moduleKey, depth + 1, host, 'toSorted');
+  const { node: call, moduleKey, depth } = frame;
+  const receiverRead = evaluateArrayReceiver(frame, host, 'toSorted');
   if (receiverRead.kind !== 'known') {
     return receiverRead.value;
   }
   const receiver = receiverRead.value;
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.toSorted argument list did not close.',
   );
@@ -2095,18 +1931,14 @@ export function sortArrayElements(
 }
 
 export function evaluateArrayOf(
-  call: ts.CallExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
+  const { node: call, moduleKey } = frame;
   const argumentRead = evaluatePositionalIntrinsicArguments(
-    call.arguments,
+    frame.argumentList,
     call,
-    environment,
     moduleKey,
-    depth + 1,
     host,
     'Array.of argument list did not close.',
   );

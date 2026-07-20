@@ -2170,9 +2170,9 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/evaluation/evaluator.ts",
-          "symbolName": "evaluateCallExpression",
-          "summary": "Static evaluator call semantics, including receiver-bound property method calls."
+          "filePath": "packages/semantic-runtime/src/evaluation/invocation.ts",
+          "symbolName": "StaticInvocationFrame",
+          "summary": "Single-evaluation callee, receiver, property-key, and argument evidence consumed by runtime composition calls."
         },
         {
           "kind": "fixture",

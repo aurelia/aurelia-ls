@@ -1,9 +1,5 @@
 import ts from 'typescript';
-import { OpenSeamReasonKind } from '../../kernel/open-seam.js';
-import {
-  EvaluationArgumentList,
-  evaluateStaticArgumentList,
-} from '../argument-list.js';
+import type { EvaluationArgumentList } from '../argument-list.js';
 import {
   EvaluationOpenSeamKind,
   type EvaluationOpenSeam,
@@ -16,7 +12,6 @@ import {
   type EvaluationRegularExpressionValue,
   type EvaluationValue,
 } from '../values.js';
-import type { ModuleEnvironmentRecord } from '../environment.js';
 import type { StaticIntrinsicEvaluationHost } from './contracts.js';
 import {
   evaluationValueEvidence,
@@ -120,39 +115,11 @@ export function boundaryIntrinsicCallValue(
   return new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}.${intrinsicName}(...)`, call);
 }
 
-/** Evaluate one intrinsic's authored arguments through the shared ECMAScript argument-list phase. */
-export function evaluateIntrinsicArgumentList(
-  args: readonly ts.Expression[],
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
-  host: StaticIntrinsicEvaluationHost,
-): EvaluationArgumentList {
-  return evaluateStaticArgumentList(args, environment, moduleKey, depth, {
-    maxSpreadIterations: host.guardrails.maxLoopIterations,
-    evaluateExpressionEvidence: (expression, currentEnvironment, currentModuleKey, currentDepth) =>
-      host.evaluateExpressionEvidence(expression, currentEnvironment, currentModuleKey, currentDepth),
-    openSpread: (reason, node, currentModuleKey) => {
-      const checkpoint = host.checkpoint();
-      host.open(
-        EvaluationOpenSeamKind.DynamicCall,
-        reason,
-        node,
-        currentModuleKey,
-        [OpenSeamReasonKind.StaticEvaluationDynamicCall],
-      );
-      return host.consumeOpenSeamsSince(checkpoint);
-    },
-  });
-}
-
-/** Expand one authored argument list to exact runtime positions while retaining pressure on individual slots. */
+/** Read exact runtime positions from the evaluator's already-completed argument-list phase. */
 export function evaluatePositionalIntrinsicArguments(
-  args: readonly ts.Expression[],
+  argumentList: EvaluationArgumentList,
   node: ts.Node,
-  environment: ModuleEnvironmentRecord,
   moduleKey: string,
-  depth: number,
   host: StaticIntrinsicEvaluationHost,
   openReason: string,
 ): {
@@ -163,14 +130,12 @@ export function evaluatePositionalIntrinsicArguments(
   readonly kind: 'open';
   readonly value: EvaluationUnknownValue;
 } {
-  const argumentList = evaluateIntrinsicArgumentList(args, environment, moduleKey, depth + 1, host);
   const evidence = argumentList.exactEvidence();
   if (evidence != null) {
     return { kind: 'known', argumentList, evidence };
   }
-  const openSeams = argumentList.shape.aggregateOpenSeams;
+  const openSeams = argumentList.aggregateOpenSeams;
   if (openSeams.length > 0) {
-    host.replayOpenSeams(openSeams);
     return { kind: 'open', value: new EvaluationUnknownValue(openReason, node, true) };
   }
   return {

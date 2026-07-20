@@ -1,11 +1,16 @@
 import type { StaticEvaluationRuntimeHost } from './evaluator.js';
+import {
+  StaticInvocationDispatchKind,
+  StaticInvocationNotApplicable,
+} from './invocation.js';
 
-/** Layer one call-expression interpreter over an existing static-evaluation runtime host. */
+/** Layer one invocation dispatcher over an existing static-evaluation runtime host. */
 export function delegateStaticEvaluationRuntimeHost(
   baseHost: StaticEvaluationRuntimeHost,
-  evaluateCallExpression: NonNullable<StaticEvaluationRuntimeHost['evaluateCallExpression']>,
+  evaluateInvocation: NonNullable<StaticEvaluationRuntimeHost['evaluateInvocation']>,
 ): StaticEvaluationRuntimeHost {
   return {
+    evaluationValueGraph: baseHost.evaluationValueGraph,
     transferValueMetadata: (source, target, transfer) =>
       baseHost.transferValueMetadata?.(source, target, transfer),
     resolveIdentifier: (identifier, environment, moduleKey) =>
@@ -14,11 +19,11 @@ export function delegateStaticEvaluationRuntimeHost(
       baseHost.resolveCommonJsRequire?.(moduleKey, moduleSpecifier, node) ?? null,
     resolveDynamicImport: (moduleKey, moduleSpecifier, node) =>
       baseHost.resolveDynamicImport?.(moduleKey, moduleSpecifier, node) ?? null,
-    evaluateCallExpression: (call, environment, moduleKey, depth, host) =>
-      evaluateCallExpression(call, environment, moduleKey, depth, host)
-        ?? baseHost.evaluateCallExpression?.(call, environment, moduleKey, depth, host)
-        ?? null,
-    evaluateNewExpression: (expression, environment, moduleKey, depth, host) =>
-      baseHost.evaluateNewExpression?.(expression, environment, moduleKey, depth, host) ?? null,
+    evaluateInvocation: (frame, host) => {
+      const result = evaluateInvocation(frame, host);
+      return result.kind === StaticInvocationDispatchKind.NotApplicable
+        ? baseHost.evaluateInvocation?.(frame, host) ?? StaticInvocationNotApplicable
+        : result;
+    },
   };
 }

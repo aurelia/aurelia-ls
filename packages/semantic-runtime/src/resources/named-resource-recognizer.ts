@@ -58,8 +58,8 @@ function recognizeNamedResources(
   context: ResourceRecognitionContext,
   resourceKind: NamedResourceDefinitionKind | null,
 ): readonly ResourceRecognitionObservation[] {
-  const executedCalls = new Set(context.evaluation.executedCalls.map((call) => call.expression));
-  const defineCallTargets = collectDefineCallTargets(context, resourceKind, executedCalls);
+  const reachedCalls = new Set(context.evaluation.invocations.map((invocation) => invocation.node).filter(ts.isCallExpression));
+  const defineCallTargets = collectDefineCallTargets(context, resourceKind, reachedCalls);
   const observations: ResourceRecognitionObservation[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
@@ -67,7 +67,7 @@ function recognizeNamedResources(
         observations.push(...recognizeClassCarriers(context, node, resourceKind, defineCallTargets));
       }
     }
-    if (ts.isCallExpression(node) && executedCalls.has(node)) {
+    if (ts.isCallExpression(node) && reachedCalls.has(node)) {
       const observation = recognizeDefineCall(context, node, resourceKind);
       if (observation != null) {
         observations.push(observation);
@@ -84,11 +84,11 @@ function recognizeNamedResources(
 function collectDefineCallTargets(
   context: ResourceRecognitionContext,
   wantedKind: NamedResourceDefinitionKind | null,
-  executedCalls: ReadonlySet<ts.CallExpression>,
+  reachedCalls: ReadonlySet<ts.CallExpression>,
 ): ReadonlySet<ts.ClassLikeDeclarationBase> {
   const targets = new Set<ts.ClassLikeDeclarationBase>();
   const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && executedCalls.has(node)) {
+    if (ts.isCallExpression(node) && reachedCalls.has(node)) {
       const target = readDefineCallTargetClass(context, node, wantedKind);
       if (target != null) {
         targets.add(target);

@@ -96,7 +96,7 @@ export function buildRegistryBodyStepIndex(
 }
 
 interface RegistryAdmissionExecution {
-  readonly registerCalls: readonly import('../di/registry-execution.js').DiRegistryExecutedContainerCall[];
+  readonly registerCalls: readonly import('../evaluation/invocation.js').StaticInvocationOccurrence<ts.CallExpression>[];
   readonly closed: boolean;
 }
 
@@ -128,17 +128,17 @@ function executeRegistryAdmission(
     registerFunction.declaration,
     sourceEvaluation.policy,
     sourceEvaluation.runtimeHost,
-    (event, host) => event.methodName === 'register'
+    (frame, host) => frame.propertyKey === 'register'
       ? containerValue
       : host.unknown(
-          `Registry execution reached unsupported container.${event.methodName}(...).`,
-          event.call,
-          event.callTimeEnvironment.moduleKey,
+          `Registry execution reached unsupported container.${frame.propertyKey ?? '<computed>'}(...).`,
+          frame.node,
+          frame.moduleKey,
           EvaluationOpenSeamKind.DynamicCall,
         ),
   );
   return {
-    registerCalls: execution.handledCalls.filter((event) => event.methodName === 'register'),
+    registerCalls: execution.handledInvocations.filter((invocation) => invocation.propertyKey === 'register'),
     closed: execution.openSeams.length === 0,
   };
 }
@@ -175,12 +175,12 @@ function matchReachedRegisterCalls(
   records: KernelStoreReadView,
   evaluation: StaticProjectEvaluationResult,
   inventory: readonly ConfigurationStep[],
-  calls: readonly import('../di/registry-execution.js').DiRegistryExecutedContainerCall[],
+  calls: readonly import('../evaluation/invocation.js').StaticInvocationOccurrence<ts.CallExpression>[],
 ): { readonly steps: readonly ConfigurationStep[]; readonly complete: boolean } {
   const sourceFileHandles = evaluatedSourceFileHandles(evaluation);
   const remainingBySource = new Map<string, number>();
   for (const event of calls) {
-    const key = sourceNodeKey(event.call, sourceFileHandles);
+    const key = sourceNodeKey(event.node, sourceFileHandles);
     if (key != null) {
       remainingBySource.set(key, (remainingBySource.get(key) ?? 0) + 1);
     }

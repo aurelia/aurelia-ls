@@ -171,6 +171,25 @@ export function evaluateStaticPropertyAccess(
   const receiverCheckpoint = host.openSeamCheckpoint();
   const receiver = host.evaluateExpression(expression.expression, environment, moduleKey, depth + 1);
   const receiverPressure = host.consumeOpenSeamsSince(receiverCheckpoint);
+  return evaluateStaticPropertyAccessFromReceiver(
+    expression,
+    receiver,
+    receiverPressure,
+    moduleKey,
+    depth,
+    host,
+  );
+}
+
+/** Complete a property read after its receiver phase has already run. */
+export function evaluateStaticPropertyAccessFromReceiver(
+  expression: ts.PropertyAccessExpression,
+  receiver: EvaluationValue,
+  receiverPressure: readonly EvaluationOpenSeam[],
+  moduleKey: string,
+  depth: number,
+  host: StaticPropertyAccessEvaluationHost,
+): EvaluationValue {
   const receiverEdgePressure = unretainedEvaluationOpenSeams(receiver, receiverPressure);
   if (receiverEdgePressure.length > 0) {
     host.replayOpenSeams(receiverEdgePressure);
@@ -340,6 +359,9 @@ export function readStaticValueProperty(
   if (receiver.kind === EvaluationValueKind.BoundaryValue) {
     return staticValueMemberValue(new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}.${propertyName}`, node));
   }
+  if (receiver.kind === EvaluationValueKind.Function && propertyName === 'call') {
+    return staticValueMemberValue(new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, 'Function.prototype.call', node));
+  }
   if ((receiver.kind === EvaluationValueKind.Object || receiver.kind === EvaluationValueKind.Instance)
     && !receiver.mayHaveUnknownProperties) {
     return staticValueMemberValue(new EvaluationUndefinedValue(node));
@@ -381,6 +403,17 @@ export function readStaticValueProperty(
   }
   if (receiver.kind === EvaluationValueKind.String && isKnownStringPrototypeFunction(propertyName)) {
     return staticValueMemberValue(new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `String.prototype.${propertyName}`, node));
+  }
+  if (receiver.kind === EvaluationValueKind.Set && isKnownSetPrototypeFunction(propertyName)) {
+    const collectionName = receiver.weak ? 'WeakSet' : 'Set';
+    return staticValueMemberValue(new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `${collectionName}.prototype.${propertyName}`, node));
+  }
+  if (receiver.kind === EvaluationValueKind.Map && isKnownMapPrototypeFunction(propertyName)) {
+    const collectionName = receiver.weak ? 'WeakMap' : 'Map';
+    return staticValueMemberValue(new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `${collectionName}.prototype.${propertyName}`, node));
+  }
+  if (receiver.kind === EvaluationValueKind.Promise && isKnownPromisePrototypeFunction(propertyName)) {
+    return staticValueMemberValue(new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `Promise.prototype.${propertyName}`, node));
   }
   if (receiver.kind === EvaluationValueKind.Array && propertyName === 'length') {
     return receiver.exactLength == null
@@ -454,7 +487,6 @@ export function evaluateStaticElementAccess(
   const receiverCheckpoint = host.openSeamCheckpoint();
   const receiver = host.evaluateExpression(expression.expression, environment, moduleKey, depth + 1);
   const receiverPressure = host.consumeOpenSeamsSince(receiverCheckpoint);
-  const receiverEdgePressure = unretainedEvaluationOpenSeams(receiver, receiverPressure);
   if (hasQuestionDotToken(expression) && isNullishEvaluationValue(receiver)) {
     return new EvaluationUndefinedValue(expression);
   }
@@ -463,6 +495,30 @@ export function evaluateStaticElementAccess(
     ? null
     : host.evaluateExpression(expression.argumentExpression, environment, moduleKey, depth + 1);
   const argumentPressure = host.consumeOpenSeamsSince(argumentCheckpoint);
+  return evaluateStaticElementAccessFromValues(
+    expression,
+    receiver,
+    receiverPressure,
+    argument,
+    argumentPressure,
+    moduleKey,
+    depth,
+    host,
+  );
+}
+
+/** Complete an element read after its receiver and computed-key phases have already run. */
+export function evaluateStaticElementAccessFromValues(
+  expression: ts.ElementAccessExpression,
+  receiver: EvaluationValue,
+  receiverPressure: readonly EvaluationOpenSeam[],
+  argument: EvaluationValue | null,
+  argumentPressure: readonly EvaluationOpenSeam[],
+  moduleKey: string,
+  depth: number,
+  host: StaticPropertyAccessEvaluationHost,
+): EvaluationValue {
+  const receiverEdgePressure = unretainedEvaluationOpenSeams(receiver, receiverPressure);
   const argumentEdgePressure = argument == null
     ? []
     : unretainedEvaluationOpenSeams(argument, argumentPressure);
@@ -582,4 +638,16 @@ function isKnownArrayPrototypeFunction(name: string): boolean {
 
 function isKnownStringPrototypeFunction(name: string): boolean {
   return staticStringPrototypeBoundaryMethods.has(name);
+}
+
+function isKnownSetPrototypeFunction(name: string): boolean {
+  return name === 'add' || name === 'has' || name === 'delete';
+}
+
+function isKnownMapPrototypeFunction(name: string): boolean {
+  return name === 'get' || name === 'set' || name === 'has' || name === 'delete';
+}
+
+function isKnownPromisePrototypeFunction(name: string): boolean {
+  return name === 'then' || name === 'catch' || name === 'finally';
 }

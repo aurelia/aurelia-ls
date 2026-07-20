@@ -12,10 +12,22 @@ import {
 } from '../src/evaluation/project-evaluation.js';
 import { EvaluationCompletionKind } from '../src/evaluation/completion.js';
 import type { StaticEvaluationRuntimeHost } from '../src/evaluation/evaluator.js';
+import {
+  StaticInvocationKind,
+  StaticInvocationNotApplicable,
+  staticInvocationValue,
+} from '../src/evaluation/invocation.js';
 import { StaticModuleGraphEvaluator } from '../src/evaluation/module-evaluator.js';
 import { buildEvaluationModuleGraph } from '../src/evaluation/module-host.js';
-import { EvaluationOpenSeamKind } from '../src/evaluation/seams.js';
-import { EvaluationValueKind } from '../src/evaluation/values.js';
+import {
+  EvaluationOpenSeam,
+  EvaluationOpenSeamKind,
+} from '../src/evaluation/seams.js';
+import {
+  EvaluationBoundaryKind,
+  EvaluationBoundaryValue,
+  EvaluationValueKind,
+} from '../src/evaluation/values.js';
 
 const temporaryRoots: string[] = [];
 
@@ -532,22 +544,31 @@ function evaluateModuleGraph(
 }
 
 const pressureRuntimeHost: StaticEvaluationRuntimeHost = {
-  evaluateCallExpression: (call, environment, moduleKey, depth, host) => {
-    if (!ts.isIdentifier(call.expression) || call.expression.text !== 'pressure') {
-      return null;
+  resolveIdentifier: (identifier) => identifier.text === 'pressure'
+    ? new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, 'test:pressure', identifier)
+    : null,
+  evaluateInvocation: (frame) => {
+    if (
+      frame.kind !== StaticInvocationKind.Call
+      || !ts.isCallExpression(frame.node)
+      || frame.thisValue !== null
+      || frame.callee.openSeams.length > 0
+      || frame.callee.value.kind !== EvaluationValueKind.BoundaryValue
+      || frame.callee.value.boundaryKind !== EvaluationBoundaryKind.HostEnvironment
+      || frame.callee.value.path !== 'test:pressure'
+    ) {
+      return StaticInvocationNotApplicable;
     }
-    const argument = call.arguments[0];
+    const argument = frame.argumentList.exactEvidence()?.[0];
     if (argument == null) {
       throw new Error('The pressure test intrinsic requires one argument.');
     }
-    const value = host.evaluateExpression(argument, environment, moduleKey, depth + 1);
-    host.open(
+    return staticInvocationValue(argument.value, [new EvaluationOpenSeam(
       EvaluationOpenSeamKind.DynamicCall,
-      `${call.getText(call.getSourceFile())} retained a best-known value.`,
-      call,
-      moduleKey,
+      `${frame.node.getText(frame.node.getSourceFile())} retained a best-known value.`,
+      frame.node,
+      frame.moduleKey,
       [],
-    );
-    return value;
+    )]);
   },
 };

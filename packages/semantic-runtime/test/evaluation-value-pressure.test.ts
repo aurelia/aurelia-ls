@@ -9,8 +9,13 @@ import {
 } from '../src/evaluation/evaluator.js';
 import { StaticEvaluationExpressionReader } from '../src/evaluation/expression-reader.js';
 import {
+  StaticInvocationKind,
+  StaticInvocationNotApplicable,
+  staticInvocationValue,
+} from '../src/evaluation/invocation.js';
+import {
+  EvaluationOpenSeam,
   EvaluationOpenSeamKind,
-  type EvaluationOpenSeam,
 } from '../src/evaluation/seams.js';
 import {
   EvaluationBoundaryKind,
@@ -111,11 +116,8 @@ describe('static evaluator value pressure', () => {
 
     expect(seamSummaries(evaluation.openSeams)).toEqual([
       'pressure(2) retained a best-known value.',
-      'pressure(2) retained a best-known value.',
       'pressure(4) retained a best-known value.',
       'pressure(6) retained a best-known value.',
-      'pressure(6) retained a best-known value.',
-      'pressure(7) retained a best-known value.',
       'pressure(7) retained a best-known value.',
     ]);
   });
@@ -557,27 +559,45 @@ const pressureRuntimeHost = runtimeHost({});
 function runtimeHost(
   calls: Readonly<Record<string, (call: ts.CallExpression) => EvaluationValue>>,
 ): StaticEvaluationRuntimeHost {
+  const callPathPrefix = 'test:';
   return {
-    evaluateCallExpression: (call, environment, moduleKey, depth, host) => {
-      if (!ts.isIdentifier(call.expression)) {
-        return null;
+    resolveIdentifier: (identifier) => identifier.text === 'pressure' || calls[identifier.text] != null
+      ? new EvaluationBoundaryValue(
+          EvaluationBoundaryKind.HostEnvironment,
+          `${callPathPrefix}${identifier.text}`,
+          identifier,
+        )
+      : null,
+    evaluateInvocation: (frame) => {
+      if (
+        frame.kind !== StaticInvocationKind.Call
+        || !ts.isCallExpression(frame.node)
+        || frame.thisValue !== null
+        || frame.callee.openSeams.length > 0
+        || frame.callee.value.kind !== EvaluationValueKind.BoundaryValue
+        || frame.callee.value.boundaryKind !== EvaluationBoundaryKind.HostEnvironment
+        || !frame.callee.value.path.startsWith(callPathPrefix)
+      ) {
+        return StaticInvocationNotApplicable;
       }
-      if (call.expression.text === 'pressure') {
-        const argument = call.arguments[0];
+      const callName = frame.callee.value.path.slice(callPathPrefix.length);
+      if (callName === 'pressure') {
+        const argument = frame.argumentList.exactEvidence()?.[0];
         if (argument == null) {
           throw new Error('The pressure test intrinsic requires one argument.');
         }
-        const value = host.evaluateExpression(argument, environment, moduleKey, depth + 1);
-        host.open(
+        return staticInvocationValue(argument.value, [new EvaluationOpenSeam(
           EvaluationOpenSeamKind.DynamicCall,
-          `${call.getText(call.getSourceFile())} retained a best-known value.`,
-          call,
-          moduleKey,
+          `${frame.node.getText(frame.node.getSourceFile())} retained a best-known value.`,
+          frame.node,
+          frame.moduleKey,
           [],
-        );
-        return value;
+        )]);
       }
-      return calls[call.expression.text]?.(call) ?? null;
+      const evaluateCall = calls[callName];
+      return evaluateCall == null
+        ? StaticInvocationNotApplicable
+        : staticInvocationValue(evaluateCall(frame.node));
     },
   };
 }

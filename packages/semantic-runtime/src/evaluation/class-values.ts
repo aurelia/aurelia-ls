@@ -37,6 +37,8 @@ import { hasModifier, isParameterProperty } from './ts-syntax.js';
 export interface StaticClassEvaluationHost {
   readonly bindingHost: StaticBindingPatternHost;
 
+  retainProduced<TValue extends EvaluationValue>(value: TValue): TValue;
+
   raise(completion: EvaluationExpressionAbruptCompletion): never;
 
   evaluateExpression(
@@ -130,8 +132,8 @@ export function evaluateStaticClassInstantiation(
   depth: number,
   host: StaticClassEvaluationHost,
 ): EvaluationValue {
-  const instance = new EvaluationInstanceValue(callee, new Map(), false, expression);
-  const instanceEnvironment = callee.environment.clone(`${moduleKey}:new:${expression.getStart()}`) as ModuleEnvironmentRecord;
+  const instance = host.retainProduced(new EvaluationInstanceValue(callee, new Map(), false, expression));
+  const instanceEnvironment = callee.environment.createChild(`${moduleKey}:new:${expression.getStart()}`);
   instanceEnvironment.initializeBinding('this', instance, EvaluationBindingKind.Parameter, false, expression, []);
 
   const constructor = callee.declaration.members.find(ts.isConstructorDeclaration) ?? null;

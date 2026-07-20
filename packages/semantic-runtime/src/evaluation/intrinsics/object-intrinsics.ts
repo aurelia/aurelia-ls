@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import type { ModuleEnvironmentRecord } from '../environment.js';
+import type { StaticInvocationFrame } from '../invocation.js';
 import { readEvaluationEnumerableOwnEntries } from '../enumerable-own-properties.js';
 import {
   evaluationArrayHasExactPositions,
@@ -18,40 +18,56 @@ import {
   EvaluationObjectValue,
   EvaluationStringValue,
   EvaluationUndefined,
+  EvaluationUnknownValue,
   EvaluationValueKind,
   openEvaluationObjectProperties,
   type EvaluationValue,
 } from '../values.js';
-import { unretainedEvaluationOpenSeams } from '../value-pressure.js';
+import { EvaluationValueEvidence } from '../value-pressure.js';
 import type { StaticIntrinsicEvaluationHost } from './contracts.js';
 import {
   boundaryIntrinsicCallValue,
+  evaluatePositionalIntrinsicArguments,
   isBoundaryEvaluationValue,
   stringCoercionText,
 } from './shared.js';
 
 export function evaluateObjectAssign(
-  call: ts.CallExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
+  const { node: call, moduleKey } = frame;
+  const argumentRead = evaluatePositionalIntrinsicArguments(
+    frame.argumentList,
+    call,
+    moduleKey,
+    host,
+    'Object.assign argument list did not close.',
+  );
+  if (argumentRead.kind === 'open') {
+    return argumentRead.value;
+  }
   const properties = new Map<string, EvaluationObjectProperty>();
   let mayHaveUnknownProperties = false;
   const shapeOpenSeams: EvaluationOpenSeam[] = [];
-  for (const argument of call.arguments) {
-    const checkpoint = host.checkpoint();
-    const value = host.evaluateExpression(argument, environment, moduleKey, depth + 1);
+  for (let index = 0; index < argumentRead.evidence.length; index += 1) {
+    const evidence = argumentRead.evidence[index]!;
+    const argument = argumentRead.argumentList.elements[index]?.expression ?? call;
+    const value = evidence.value;
+    host.replayOpenSeams(evidence.openSeams);
     if (value.kind !== EvaluationValueKind.Object) {
       mayHaveUnknownProperties = true;
+      const checkpoint = host.checkpoint();
       host.open(EvaluationOpenSeamKind.DynamicMutation, 'Object.assign argument did not reduce to a known object.', argument, moduleKey, []);
-      const pressure = host.openSeamsSince(checkpoint);
+      const pressure = compactEvaluationOpenSeams([
+        ...evidence.openSeams,
+        ...host.openSeamsSince(checkpoint),
+      ]);
       openEvaluationObjectProperties(properties, pressure);
       shapeOpenSeams.push(...pressure);
       continue;
     }
-    const directPressure = unretainedEvaluationOpenSeams(value, host.openSeamsSince(checkpoint));
+    const directPressure = evidence.openSeams;
     if (value.mayHaveUnknownProperties) {
       const shapePressure = compactEvaluationOpenSeams([
         ...value.shapeOpenSeams,
@@ -75,15 +91,15 @@ export function evaluateObjectAssign(
 }
 
 export function evaluateObjectValues(
-  call: ts.CallExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const source = call.arguments[0] == null
-    ? EvaluationUndefined
-    : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
+  const { node: call, moduleKey } = frame;
+  const sourceRead = objectInvocationSource(frame, host, 'Object.values source retained open pressure.');
+  if (sourceRead.kind === 'open') {
+    return sourceRead.value;
+  }
+  const source = sourceRead.value;
   if (isBoundaryEvaluationValue(source)) {
     return boundaryIntrinsicCallValue(source, 'Object.values', call);
   }
@@ -101,15 +117,15 @@ export function evaluateObjectValues(
 }
 
 export function evaluateObjectKeys(
-  call: ts.CallExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const source = call.arguments[0] == null
-    ? EvaluationUndefined
-    : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
+  const { node: call, moduleKey } = frame;
+  const sourceRead = objectInvocationSource(frame, host, 'Object.keys source retained open pressure.');
+  if (sourceRead.kind === 'open') {
+    return sourceRead.value;
+  }
+  const source = sourceRead.value;
   if (isBoundaryEvaluationValue(source)) {
     return boundaryIntrinsicCallValue(source, 'Object.keys', call);
   }
@@ -127,15 +143,15 @@ export function evaluateObjectKeys(
 }
 
 export function evaluateObjectEntries(
-  call: ts.CallExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const source = call.arguments[0] == null
-    ? EvaluationUndefined
-    : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
+  const { node: call, moduleKey } = frame;
+  const sourceRead = objectInvocationSource(frame, host, 'Object.entries source retained open pressure.');
+  if (sourceRead.kind === 'open') {
+    return sourceRead.value;
+  }
+  const source = sourceRead.value;
   if (isBoundaryEvaluationValue(source)) {
     return boundaryIntrinsicCallValue(source, 'Object.entries', call);
   }
@@ -159,15 +175,15 @@ export function evaluateObjectEntries(
 }
 
 export function evaluateObjectFromEntries(
-  call: ts.CallExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const source = call.arguments[0] == null
-    ? EvaluationUndefined
-    : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
+  const { node: call, moduleKey } = frame;
+  const sourceRead = objectInvocationSource(frame, host, 'Object.fromEntries source retained open pressure.');
+  if (sourceRead.kind === 'open') {
+    return sourceRead.value;
+  }
+  const source = sourceRead.value;
   if (isBoundaryEvaluationValue(source)) {
     return boundaryIntrinsicCallValue(source, 'Object.fromEntries', call);
   }
@@ -303,4 +319,33 @@ export function objectFromEntriesEntry(
     }
   }
   return null;
+}
+
+function objectInvocationSource(
+  frame: StaticInvocationFrame<ts.CallExpression>,
+  host: StaticIntrinsicEvaluationHost,
+  openReason: string,
+): { readonly kind: 'known'; readonly value: EvaluationValue }
+  | { readonly kind: 'open'; readonly value: EvaluationUnknownValue } {
+  const argumentRead = evaluatePositionalIntrinsicArguments(
+    frame.argumentList,
+    frame.node,
+    frame.moduleKey,
+    host,
+    `${openReason} Argument list did not close.`,
+  );
+  if (argumentRead.kind === 'open') {
+    return argumentRead;
+  }
+  for (const evidence of argumentRead.evidence) {
+    host.replayOpenSeams(evidence.openSeams);
+  }
+  const source = argumentRead.evidence[0]
+    ?? new EvaluationValueEvidence(EvaluationUndefined, []);
+  return source.openSeams.length === 0
+    ? { kind: 'known', value: source.value }
+    : {
+        kind: 'open',
+        value: new EvaluationUnknownValue(openReason, frame.node, true),
+      };
 }

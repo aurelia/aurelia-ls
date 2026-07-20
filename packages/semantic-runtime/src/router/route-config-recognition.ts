@@ -744,16 +744,23 @@ function recognizeRouteConfigs(
   context: RouteConfigRecognitionContext,
 ): readonly RouteConfigObservation[] {
   const bindings = readRouterImportedBindings(context.sourceFile);
-  const executedCalls = new Map(
-    context.evaluation.evaluation.executedCalls.map((call, index) => [call.expression, index] as const),
-  );
+  const executionOrderByCall = new Map<ts.CallExpression, number | null>();
+  for (const invocation of context.evaluation.evaluation.invocations) {
+    if (!ts.isCallExpression(invocation.node)) {
+      continue;
+    }
+    executionOrderByCall.set(
+      invocation.node,
+      executionOrderByCall.has(invocation.node) ? null : invocation.ordinal,
+    );
+  }
   const observations: RouteConfigObservation[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
       observations.push(...recognizeRouteDecorators(context, bindings, node));
     }
     if (ts.isCallExpression(node)) {
-      const configured = recognizeRouteConfigureCall(context, bindings, node, executedCalls.get(node) ?? null);
+      const configured = recognizeRouteConfigureCall(context, bindings, node, executionOrderByCall.get(node) ?? null);
       if (configured != null) {
         observations.push(configured);
       }

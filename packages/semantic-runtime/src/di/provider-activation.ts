@@ -5,6 +5,9 @@ import {
   AureliaInterfaceDefaultRegistrationState,
   aureliaContainerEvaluationForValue,
   aureliaInterfaceEvaluationForValue,
+  aureliaResolverEvaluationForValue,
+  isAureliaResolveEvaluationFunction,
+  type AureliaResolverEvaluation,
   type AureliaInterfaceDefaultRegistrationEffect,
 } from '../configuration/aurelia-evaluation-runtime.js';
 import type { ModuleEnvironmentRecord } from '../evaluation/environment.js';
@@ -14,11 +17,18 @@ import {
 } from '../evaluation/completion.js';
 import {
   StaticEvaluator,
-  type StaticExecutedCall,
   type StaticEvaluationRuntimeHost,
 } from '../evaluation/evaluator.js';
 import { EvaluationRead } from '../evaluation/expression-reader.js';
 import type { StaticIntrinsicEvaluationHost } from '../evaluation/intrinsics.js';
+import {
+  isStaticCallInvocationOccurrence,
+  staticInvocationEvidenceForExpression,
+  StaticInvocationKind,
+  StaticInvocationNotApplicable,
+  staticInvocationValue,
+  type StaticInvocationOccurrence,
+} from '../evaluation/invocation.js';
 import { normalizeModuleKey } from '../evaluation/module-graph.js';
 import {
   isEvaluatedProjectSource,
@@ -52,6 +62,7 @@ import {
 } from '../kernel/address.js';
 import {
   ConstructableDiKeyIdentity,
+  DiResolverKeyKind,
   TypeScriptDeclarationIdentity,
 } from '../kernel/identity.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
@@ -96,22 +107,16 @@ import {
 } from './di-key-identity-emitter.js';
 import type { DiDependencyCycleStep } from './di-issue.js';
 import { InstanceProvider, InstanceProviderResolutionKind } from './instance-provider.js';
-import { isAureliaResolveExpression } from './resolve-expression.js';
 import {
   Resolver,
   ResolverResolutionKind,
   ResolverStrategy,
 } from './resolver.js';
-import {
-  isAureliaIgnoreResolverExpression,
-  readAureliaResolverWrapperCall,
-  type DiAureliaResolverWrapperCall,
-  type DiAureliaResolverWrapperKind,
-} from './resolver-wrapper-recognition.js';
 import { DiContainerKeyExpressionIdentityKind } from './source-key-expression.js';
 import type { DiWorldConstructionEmission } from './world-construction.js';
 import { executeDiRegistryFunction } from './registry-execution.js';
 import { delegateStaticEvaluationRuntimeHost } from '../evaluation/runtime-host.js';
+import { EvaluationValueEvidence } from '../evaluation/value-pressure.js';
 
 export const enum DiProviderActivationState {
   /** A source-visible value was produced. */
@@ -201,7 +206,7 @@ interface DiProviderActivationFunctionAnswer {
 }
 
 interface DiProviderActivationExecutionEvent {
-  readonly call: StaticExecutedCall;
+  readonly invocation: StaticInvocationOccurrence<ts.CallExpression>;
   readonly sourceFile: ts.SourceFile;
   readonly start: number;
   readonly end: number;
@@ -210,7 +215,7 @@ interface DiProviderActivationExecutionEvent {
 
 interface DiContainerApiActivationContext {
   readonly requestor: Container;
-  readonly call: StaticExecutedCall;
+  readonly invocation: StaticInvocationOccurrence<ts.CallExpression>;
   readonly openSeams: readonly EvaluationOpenSeam[];
 }
 
@@ -258,8 +263,8 @@ export class DiProviderActivationView {
   private readonly sourcePathsByFileName = new Map<string, string>();
   private readonly sourceAddressHandlesByFileName = new Map<string, AddressHandle>();
   private readonly containersByProductHandle = new Map<string, Container>();
-  private readonly executedCallsByExpression = new Map<ts.CallExpression, StaticExecutedCall>();
-  private readonly executionOrdinalsByCall = new Map<StaticExecutedCall, number>();
+  private readonly invocationsByExpression = new Map<ts.CallExpression, StaticInvocationOccurrence<ts.CallExpression>[]>();
+  private readonly executionOrdinalsByInvocation = new Map<StaticInvocationOccurrence<ts.CallExpression>, number>();
   private readonly executionEventsBySourceKey = new Map<string, DiProviderActivationExecutionEvent[]>();
   private readonly resolverSlotExecutionOrdinals = new WeakMap<ContainerResolverLikeSlot, number | null>();
   private readonly factorySlotExecutionOrdinals = new WeakMap<ContainerFactorySlot, number | null>();
@@ -289,8 +294,16 @@ export class DiProviderActivationView {
         normalizeModuleKey(source.sourceFile.fileName),
         source.admission.addressHandle,
       );
-      for (const call of source.evaluation.executedCalls) {
-        this.executedCallsByExpression.set(call.expression, call);
+      for (const invocation of source.evaluation.invocations) {
+        if (!isStaticCallInvocationOccurrence(invocation)) {
+          continue;
+        }
+        const invocations = this.invocationsByExpression.get(invocation.node);
+        if (invocations == null) {
+          this.invocationsByExpression.set(invocation.node, [invocation]);
+        } else {
+          invocations.push(invocation);
+        }
       }
     }
     this.indexExecutionOrder();
@@ -312,8 +325,8 @@ export class DiProviderActivationView {
     return new DiProviderActivationSession(this);
   }
 
-  executionOrdinalForCall(call: StaticExecutedCall): number | null {
-    return this.executionOrdinalsByCall.get(call) ?? null;
+  executionOrdinalForInvocation(invocation: StaticInvocationOccurrence<ts.CallExpression>): number | null {
+    return this.executionOrdinalsByInvocation.get(invocation) ?? null;
   }
 
   executionOrdinalForResolverSlot(slot: ContainerResolverLikeSlot): number | null | undefined {
@@ -338,10 +351,10 @@ export class DiProviderActivationView {
       const failureKind = this.receiverIndependentResolutionFailure(site);
       return failureKind == null ? null : new DiContainerApiFailure(failureKind, null);
     }
-    const failureKind = this.createSession().resolutionFailureForExecutedContainerApiCall(
+    const failureKind = this.createSession().resolutionFailureForContainerApiInvocation(
       context.requestor,
       site,
-      context.call,
+      context.invocation,
     );
     return failureKind == null
       ? null
@@ -392,10 +405,10 @@ export class DiProviderActivationView {
       return null;
     }
     return activationWithAdditionalPressure(
-      this.createSession().activateExecutedEntryExpression(
+      this.createSession().activateInvocationArgument(
         context.requestor,
         site.keyExpression,
-        context.call,
+        context.invocation,
         site.sourceNode,
       ),
       context.openSeams,
@@ -405,33 +418,25 @@ export class DiProviderActivationView {
   private containerApiActivationContext(
     site: DiContainerApiCallSite,
   ): DiContainerApiActivationContext | null {
-    const executedCall = this.executedCallsByExpression.get(site.sourceNode) ?? null;
-    if (executedCall == null) {
+    const invocations = this.invocationsByExpression.get(site.sourceNode) ?? [];
+    const invocation = invocations.length === 1 ? invocations[0]! : null;
+    const receiverEvidence = invocation?.thisValue ?? null;
+    if (invocation == null || receiverEvidence == null) {
       return null;
     }
-    const source = this.sourceForNode(site.sourceNode);
-    if (source == null) {
-      return null;
-    }
-    const evaluator = new StaticEvaluator(source.evaluation.policy, source.evaluation.runtimeHost);
-    const receiverRead = evaluator.evaluateExpressionInEnvironment(
-      site.receiverExpression,
-      executedCall.environment,
-      executedCall.moduleKey,
-    );
-    const receiverValue = receiverRead.value;
+    const receiverValue = receiverEvidence.value;
     const containerEvaluation = aureliaContainerEvaluationForValue(receiverValue);
     const requestor = containerEvaluation == null
       ? null
       : this.configuration.evaluationBindings.containersByEvaluation.get(containerEvaluation) ?? null;
-    if (requestor == null || receiverValue == null) {
+    if (requestor == null) {
       return null;
     }
     this.evaluationValuesByContainer.set(requestor, receiverValue);
     return {
       requestor,
-      call: executedCall,
-      openSeams: receiverRead.openSeams,
+      invocation,
+      openSeams: receiverEvidence.openSeams,
     };
   }
 
@@ -502,16 +507,6 @@ export class DiProviderActivationView {
       classValue: evaluatedValue?.kind === EvaluationValueKind.Class ? evaluatedValue : null,
       sourceValue: evaluatedValue,
     };
-  }
-
-  wrapperForExpression(expression: ts.Expression): DiAureliaResolverWrapperCall | null {
-    const programExpression = this.typeSystem.readProgramExpression(expression) ?? expression;
-    return readAureliaResolverWrapperCall(this.typeSystem.checker, programExpression);
-  }
-
-  isIgnoreResolverExpression(expression: ts.Expression): boolean {
-    const programExpression = this.typeSystem.readProgramExpression(expression) ?? expression;
-    return isAureliaIgnoreResolverExpression(this.typeSystem.checker, programExpression);
   }
 
   classValueForReference(reference: RegistrationValueReference | null): EvaluationClassValue | null {
@@ -586,13 +581,13 @@ export class DiProviderActivationView {
     );
   }
 
-  executedCallForNode(node: ts.Node): StaticExecutedCall | null {
+  invocationForNode(node: ts.Node): StaticInvocationOccurrence<ts.CallExpression> | null {
     let current: ts.Node | undefined = node;
     while (current != null && !ts.isSourceFile(current)) {
       if (ts.isCallExpression(current)) {
-        const call = this.executedCallsByExpression.get(current);
-        if (call != null) {
-          return call;
+        const invocations = this.invocationsByExpression.get(current) ?? [];
+        if (invocations.length === 1) {
+          return invocations[0]!;
         }
       }
       current = current.parent;
@@ -609,15 +604,18 @@ export class DiProviderActivationView {
         continue;
       }
       indexedSources.add(source);
-      for (const call of source.evaluation.executedCalls) {
+      for (const invocation of source.evaluation.invocations) {
+        if (!isStaticCallInvocationOccurrence(invocation)) {
+          continue;
+        }
         const event: DiProviderActivationExecutionEvent = {
-          call,
+          invocation,
           sourceFile: source.sourceFile,
-          start: call.expression.getStart(source.sourceFile),
-          end: call.expression.end,
+          start: invocation.node.getStart(source.sourceFile),
+          end: invocation.node.end,
           ordinal: ordinal++,
         };
-        this.executionOrdinalsByCall.set(call, event.ordinal);
+        this.executionOrdinalsByInvocation.set(invocation, event.ordinal);
         this.appendExecutionEvent(source.admission.path, event);
         this.appendExecutionEvent(source.moduleKey, event);
         this.appendExecutionEvent(source.sourceFile.fileName, event);
@@ -701,58 +699,41 @@ export class DiProviderActivationSession {
     ));
   }
 
-  activateExecutedEntryExpression(
+  activateInvocationArgument(
     requestor: Container,
     expression: ts.Expression,
-    call: StaticExecutedCall,
+    invocation: StaticInvocationOccurrence<ts.CallExpression>,
     entryNode: ts.Node,
   ): DiProviderActivationResult {
-    const ordinal = this.view.executionOrdinalForCall(call);
-    return ordinal == null
-      ? activationOpen('Aurelia DI lookup execution order was not retained for this authored call.')
-      : this.withExecutionOrdinal(ordinal, () => this.activateEntryExpression(
-          requestor,
-          expression,
-          call.environment,
-          call.moduleKey,
-          entryNode,
+    const ordinal = this.view.executionOrdinalForInvocation(invocation);
+    if (ordinal == null) {
+      return activationOpen('Aurelia DI lookup execution order was not retained for this authored call.');
+    }
+    const evidence = staticInvocationEvidenceForExpression(invocation, expression);
+    return evidence == null
+      ? activationOpen('Aurelia DI lookup argument evidence was not retained for this authored call.')
+      : this.withExecutionOrdinal(ordinal, () => this.withActivation(() =>
+          this.activatePreparedExpression(requestor, expression, evidence, entryNode, null, 0)
         ));
   }
 
-  resolutionFailureForExecutedContainerApiCall(
+  resolutionFailureForContainerApiInvocation(
     requestor: Container,
     site: DiContainerApiCallSite,
-    call: StaticExecutedCall,
+    invocation: StaticInvocationOccurrence<ts.CallExpression>,
   ): ContainerResolutionFailureKind | null {
     const expression = site.keyExpression;
-    const ordinal = this.view.executionOrdinalForCall(call);
+    const ordinal = this.view.executionOrdinalForInvocation(invocation);
     if (expression == null || ordinal == null) {
       return null;
     }
     return this.withExecutionOrdinal(ordinal, () => {
-      const wrapper = this.view.wrapperForExpression(expression);
-      if (site.methodKind === DiContainerApiMethodKind.Get && wrapper != null) {
-        return this.activateEntryExpressionCore(
-          requestor,
-          expression,
-          call.environment,
-          call.moduleKey,
-          site.sourceNode,
-        ).failureKind;
-      }
-
-      const read = this.evaluateExpressionRead(
-        requestor,
-        expression,
-        call.environment,
-        call.moduleKey,
-        null,
-        0,
-      );
-      const value = read.value;
-      if (value == null) {
+      const evidence = staticInvocationEvidenceForExpression(invocation, expression);
+      if (evidence == null) {
         return null;
       }
+      const value = evidence.value;
+      const resolver = aureliaResolverEvaluationForValue(value);
       if (containerApiMethodValidatesKey(site.methodKind)
         && (value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined)) {
         return ContainerResolutionFailureKind.NullUndefinedKey;
@@ -761,16 +742,9 @@ export class DiProviderActivationSession {
       const key = this.view.keyForExpression(expression, value);
       switch (site.methodKind) {
         case DiContainerApiMethodKind.Get:
-          return this.activateExpressionWithValue(
-            requestor,
-            expression,
-            value,
-            site.sourceNode,
-            null,
-            0,
-          ).failureKind;
+          return this.activatePreparedExpression(requestor, expression, evidence, site.sourceNode, null, 0).failureKind;
         case DiContainerApiMethodKind.GetResolver:
-          if (site.autoRegister !== true || wrapper != null) {
+          if (site.autoRegister !== true || resolver != null) {
             return null;
           }
           return this.activateExpressionWithValue(
@@ -790,38 +764,6 @@ export class DiProviderActivationSession {
           return containerInvocationFailureKind(key.key);
       }
     });
-  }
-
-  activateExpression(
-    requestor: Container,
-    expression: ts.Expression,
-    environment: ModuleEnvironmentRecord,
-    moduleKey: string,
-    depth: number,
-    host: StaticIntrinsicEvaluationHost,
-    dependencyNode: ts.Node,
-  ): DiProviderActivationResult {
-    if (this.view.isIgnoreResolverExpression(expression)) {
-      return activationUndefined();
-    }
-    const wrapper = this.view.wrapperForExpression(expression);
-    if (wrapper != null) {
-      return this.activateWrapper(
-        requestor,
-        wrapper,
-        environment,
-        moduleKey,
-        dependencyNode,
-        (argument) => new EvaluationRead(
-          host.evaluateExpression(argument, environment, moduleKey, depth + 1),
-          argument,
-        ),
-        host,
-        depth,
-      );
-    }
-    const value = host.evaluateExpression(expression, environment, moduleKey, depth + 1);
-    return this.activateExpressionWithValue(requestor, expression, value, dependencyNode, host, depth);
   }
 
   valueForRuntimeHost(
@@ -857,29 +799,32 @@ export class DiProviderActivationSession {
     moduleKey: string,
     entryNode: ts.Node,
   ): DiProviderActivationResult {
-    if (this.view.isIgnoreResolverExpression(expression)) {
-      return activationUndefined();
-    }
-    const wrapper = this.view.wrapperForExpression(expression);
-    if (wrapper != null) {
-      return this.activateWrapper(
-        requestor,
-        wrapper,
-        environment,
-        moduleKey,
-        entryNode,
-        (argument) => this.evaluateExpressionRead(requestor, argument, environment, moduleKey, null, 0),
-        null,
-        0,
-      );
-    }
     const read = this.evaluateExpressionRead(requestor, expression, environment, moduleKey, null, 0);
     return read.value == null
       ? activationOpenForExpressionRead(read)
-      : activationWithAdditionalPressure(
-          this.activateExpressionWithValue(requestor, expression, read.value, entryNode, null, 0),
-          read.openSeams,
+      : this.activatePreparedExpression(
+          requestor,
+          expression,
+          new EvaluationValueEvidence(read.value, read.openSeams),
+          entryNode,
+          null,
+          0,
         );
+  }
+
+  private activatePreparedExpression(
+    requestor: Container,
+    expression: ts.Expression,
+    evidence: EvaluationValueEvidence,
+    dependencyNode: ts.Node,
+    host: StaticIntrinsicEvaluationHost | null,
+    depth: number,
+  ): DiProviderActivationResult {
+    const resolver = aureliaResolverEvaluationForValue(evidence.value);
+    const result = resolver == null
+      ? this.activateExpressionWithValue(requestor, expression, evidence.value, dependencyNode, host, depth)
+      : this.activateResolver(requestor, resolver, dependencyNode, host, depth);
+    return activationWithAdditionalPressure(result, evidence.openSeams);
   }
 
   private activateExpressionWithValue(
@@ -893,32 +838,37 @@ export class DiProviderActivationSession {
     return this.activateKey(requestor, this.view.keyForExpression(expression, value), dependencyNode, host, depth);
   }
 
-  private activateWrapper(
+  private activateResolver(
     requestor: Container,
-    wrapper: DiAureliaResolverWrapperCall,
-    environment: ModuleEnvironmentRecord,
-    moduleKey: string,
+    resolver: AureliaResolverEvaluation,
     dependencyNode: ts.Node,
-    evaluate: (expression: ts.Expression) => EvaluationRead<EvaluationValue>,
     host: StaticIntrinsicEvaluationHost | null,
     depth: number,
   ): DiProviderActivationResult {
-    const { wrapperKind, innerExpression } = wrapper;
-    if (wrapper.hasSpreadArgument || (innerExpression != null && ts.isSpreadElement(innerExpression))) {
-      return activationOpen(`Aurelia ${wrapperKind}(...) contains a spread argument whose DI key set is not closed.`);
+    if (resolver.resolverKind === DiResolverKeyKind.Ignore) {
+      return activationUndefined();
     }
-    if (innerExpression == null) {
-      return activationOpen(`Aurelia ${wrapperKind}(...) did not expose an inner DI key.`);
+    const argumentList = resolver.argumentList;
+    const arguments_ = argumentList?.exactEvidence() ?? null;
+    const innerExpression = argumentList?.elements[0]?.expression ?? null;
+    const inner = arguments_?.[0] ?? null;
+    if (argumentList == null || arguments_ == null) {
+      return activationWithAdditionalPressure(
+        activationOpen(`Aurelia ${resolver.resolverKind}(...) argument positions did not close.`),
+        argumentList?.shape.aggregateOpenSeams ?? [],
+      );
     }
+    const openSeams = arguments_.flatMap((argument) => argument.openSeams);
+    if (innerExpression == null || inner == null) {
+      return activationWithAdditionalPressure(
+        activationOpen(`Aurelia ${resolver.resolverKind}(...) did not expose an inner DI key.`),
+        openSeams,
+      );
+    }
+
     let searchAncestors = false;
-    const openSeams: EvaluationOpenSeam[] = [];
-    if (wrapperKind === 'all' && wrapper.call.arguments[1] != null) {
-      const searchRead = evaluate(wrapper.call.arguments[1]);
-      if (searchRead.value == null) {
-        return activationOpenForExpressionRead(searchRead);
-      }
-      openSeams.push(...searchRead.openSeams);
-      const searchValue = searchRead.value;
+    if (resolver.resolverKind === DiResolverKeyKind.All && arguments_[1] != null) {
+      const searchValue = arguments_[1].value;
       if (searchValue.kind !== EvaluationValueKind.Boolean) {
         return activationWithAdditionalPressure(
           activationOpen('Aurelia all(...) searchAncestors did not reduce to one boolean value.'),
@@ -927,19 +877,11 @@ export class DiProviderActivationSession {
       }
       searchAncestors = searchValue.value;
     }
-    const innerRead = evaluate(innerExpression);
-    if (innerRead.value == null) {
-      return activationWithAdditionalPressure(
-        activationOpenForExpressionRead(innerRead),
-        openSeams,
-      );
-    }
-    openSeams.push(...innerRead.openSeams);
     return activationWithAdditionalPressure(
-      this.activateKnownWrapper(
+      this.activateKnownResolver(
         requestor,
-        wrapperKind,
-        this.view.keyForExpression(innerExpression, innerRead.value),
+        resolver.resolverKind,
+        this.view.keyForExpression(innerExpression, inner.value),
         searchAncestors,
         dependencyNode,
         host,
@@ -949,17 +891,17 @@ export class DiProviderActivationSession {
     );
   }
 
-  private activateKnownWrapper(
+  private activateKnownResolver(
     requestor: Container,
-    wrapperKind: DiAureliaResolverWrapperKind,
+    resolverKind: DiResolverKeyKind,
     inner: DiProviderActivationKey,
     searchAncestors: boolean,
     dependencyNode: ts.Node,
     host: StaticIntrinsicEvaluationHost | null,
     depth: number,
   ): DiProviderActivationResult {
-    switch (wrapperKind) {
-      case 'optional': {
+    switch (resolverKind) {
+      case DiResolverKeyKind.Optional: {
         const answer = this.lookup(requestor, inner.key);
         return answer.closure === DiProviderActivationLookupClosure.Open
           ? activationLookupOrderOpen()
@@ -967,7 +909,7 @@ export class DiProviderActivationSession {
           ? activationUndefined()
           : this.activateLookup(requestor, answer.lookup, inner, dependencyNode, host, depth);
       }
-      case 'own': {
+      case DiResolverKeyKind.Own: {
         const answer = this.lookupLocal(requestor, inner.key);
         return answer.closure === DiProviderActivationLookupClosure.Open
           ? activationLookupOrderOpen()
@@ -975,7 +917,7 @@ export class DiProviderActivationSession {
           ? activationUndefined()
           : this.activateLookup(requestor, answer.lookup, inner, dependencyNode, host, depth);
       }
-      case 'resource': {
+      case DiResolverKeyKind.Resource: {
         const local = this.lookupLocal(requestor, inner.key);
         return local.closure === DiProviderActivationLookupClosure.Open
           ? activationLookupOrderOpen()
@@ -983,7 +925,7 @@ export class DiProviderActivationSession {
           ? this.activateKey(requestor.root, inner, dependencyNode, host, depth)
           : this.activateLookup(requestor, local.lookup, inner, dependencyNode, host, depth);
       }
-      case 'optionalResource': {
+      case DiResolverKeyKind.OptionalResource: {
         const local = this.lookupLocal(requestor, inner.key);
         if (local.closure === DiProviderActivationLookupClosure.Open) {
           return activationLookupOrderOpen();
@@ -997,7 +939,7 @@ export class DiProviderActivationSession {
               ? this.activateLookup(requestor, root.lookup, inner, dependencyNode, host, depth)
             : activationUndefined();
       }
-      case 'all':
+      case DiResolverKeyKind.All:
         return this.activateAll(
           requestor,
           this.lookupAll(requestor, inner.key, searchAncestors),
@@ -1006,7 +948,7 @@ export class DiProviderActivationSession {
           host,
           depth,
         );
-      case 'last': {
+      case DiResolverKeyKind.Last: {
         const answer = this.lookup(requestor, inner.key);
         const slot = answer.lookup?.slots[answer.lookup.slots.length - 1] ?? null;
         return answer.closure === DiProviderActivationLookupClosure.Open
@@ -1015,7 +957,7 @@ export class DiProviderActivationSession {
           ? activationUndefined()
           : this.activateSlot(requestor, slot, answer.lookup.handler, inner, dependencyNode, host, depth);
       }
-      case 'allResources':
+      case DiResolverKeyKind.AllResources:
         return this.activateAll(
           requestor,
           this.lookupAllResources(requestor, inner.key),
@@ -1024,26 +966,31 @@ export class DiProviderActivationSession {
           host,
           depth,
         );
-      case 'lazy':
-      case 'factory':
+      case DiResolverKeyKind.Lazy:
+      case DiResolverKeyKind.Factory:
         return new DiProviderActivationResult(
           DiProviderActivationState.Deferred,
           null,
-          `Aurelia ${wrapperKind}(...) defers the inner DI lookup until a returned function is invoked.`,
+          `Aurelia ${resolverKind}(...) defers the inner DI lookup until a returned function is invoked.`,
           null,
           null,
           [],
           null,
         );
-      case 'newInstanceForScope': {
+      case DiResolverKeyKind.NewInstanceForScope: {
         const result = this.activateFresh(requestor, inner, dependencyNode, host, depth);
         if (result.state === DiProviderActivationState.Value && result.value != null) {
           this.appendOverlaySlot(requestor, inner.key.identityHandle, new DiScopedInstanceProvider(result));
         }
         return result;
       }
-      case 'newInstanceOf':
+      case DiResolverKeyKind.NewInstanceOf:
         return this.activateFresh(requestor, inner, dependencyNode, host, depth);
+      case DiResolverKeyKind.Ignore:
+        return activationUndefined();
+      case DiResolverKeyKind.FromHydrationContext:
+      case DiResolverKeyKind.Custom:
+        return activationOpen(`DI resolver '${resolverKind}' does not expose a built-in static activation rule.`);
     }
   }
 
@@ -1375,10 +1322,10 @@ export class DiProviderActivationSession {
       dependencyNode,
       source?.evaluation.policy ?? DefaultStaticEvaluationPolicy,
       this.internalRuntimeHost(source?.evaluation.runtimeHost ?? {}),
-      (event, runtimeHost) => runtimeHost.unknown(
-        `Aurelia registry body called container.${event.methodName}(...); provider activation does not own ordered registration spending.`,
-        event.call,
-        event.callTimeEnvironment.moduleKey,
+      (frame, runtimeHost) => runtimeHost.unknown(
+        `Aurelia registry body called container.${frame.propertyKey ?? '<computed>'}(...); provider activation does not own ordered registration spending.`,
+        frame.node,
+        frame.moduleKey,
         EvaluationOpenSeamKind.DynamicCall,
       ),
     );
@@ -1436,14 +1383,27 @@ export class DiProviderActivationSession {
         ? activationOpen('Aurelia instance resolver value did not retain an evaluable source expression.')
         : activationValue(declarationValue);
     }
-    const call = this.view.executedCallForNode(expression);
+    const invocation = this.view.invocationForNode(expression);
     const source = this.view.sourceForNode(expression);
     if (source == null) {
       return activationOpen('Aurelia resolver value expression is outside the admitted static-evaluation graph.');
     }
-    const environment = call?.environment ?? source.evaluation.environment;
-    const moduleKey = call?.moduleKey ?? source.moduleKey;
-    const read = this.evaluateExpressionRead(requestor, expression, environment, moduleKey, host, depth + 1);
+    const invocationEvidence = invocation == null
+      ? null
+      : staticInvocationEvidenceForExpression(invocation, expression);
+    if (invocation != null && invocationEvidence == null) {
+      return activationOpen('Aurelia resolver value expression did not retain immutable evidence at its invocation edge.');
+    }
+    const read = invocationEvidence == null
+      ? this.evaluateExpressionRead(
+          requestor,
+          expression,
+          source.evaluation.environment,
+          source.moduleKey,
+          host,
+          depth + 1,
+        )
+      : new EvaluationRead(invocationEvidence.value, expression, invocationEvidence.openSeams);
     if (read.value == null) {
       return activationOpenForExpressionRead(read);
     }
@@ -1986,41 +1946,54 @@ export class DiProviderActivationSession {
     baseHost: StaticEvaluationRuntimeHost,
     readActiveContainer: () => Container | null,
   ): StaticEvaluationRuntimeHost {
-    return delegateStaticEvaluationRuntimeHost(baseHost, (call, environment, moduleKey, depth, host) => {
-      if (!isAureliaResolveExpression(call.expression)) {
-        return null;
+    return delegateStaticEvaluationRuntimeHost(baseHost, (frame, host) => {
+      if (
+        frame.kind !== StaticInvocationKind.Call
+        || !isAureliaResolveEvaluationFunction(frame.callee.value)
+      ) {
+        return StaticInvocationNotApplicable;
       }
-      return this.withActivation(() => {
+      return staticInvocationValue(this.withActivation(() => {
         const requestor = readActiveContainer();
         if (requestor == null) {
           return host.unknown(
             'Aurelia resolve(...) has no active DI container (AUR0016).',
-            call,
-            moduleKey,
+            frame.node,
+            frame.moduleKey,
             EvaluationOpenSeamKind.DynamicCall,
           );
         }
-        if (call.arguments.some(ts.isSpreadElement)) {
+        const arguments_ = frame.argumentList.exactEvidence();
+        if (arguments_ == null) {
           return host.unknown(
-            'Aurelia resolve(...) contains a spread key set whose membership is not closed.',
-            call,
-            moduleKey,
+            'Aurelia resolve(...) argument positions did not close.',
+            frame.node,
+            frame.moduleKey,
             EvaluationOpenSeamKind.DynamicCall,
           );
         }
-        const values = call.arguments.map((keyExpression) => this.valueForRuntimeHost(
-          this.activateExpression(requestor, keyExpression, environment, moduleKey, depth, host, call),
-          keyExpression,
-          moduleKey,
-          host,
-        ));
+        const values = arguments_.map((evidence, index) => {
+          const keyExpression = frame.argumentList.elements[index]?.expression ?? frame.node;
+          return this.valueForRuntimeHost(
+            this.activatePreparedExpression(requestor, keyExpression, evidence, frame.node, host, frame.depth),
+            keyExpression,
+            frame.moduleKey,
+            host,
+          );
+        });
         return values.length === 1
           ? values[0]!
           : new EvaluationArrayValue(
-              values.map((value, index) => new EvaluationArrayElement(value, call.arguments[index] ?? call)),
-              call,
+              values.map((value, index) => new EvaluationArrayElement(
+                value,
+                frame.argumentList.elements[index]?.expression ?? frame.node,
+                [],
+                index,
+              )),
+              frame.node,
+              EvaluationArrayShape.exact(values.length),
             );
-      });
+      }));
     });
   }
 
@@ -2111,6 +2084,7 @@ function registryResolverReturnState(
       return DiRegistryResolverReturnState.Invalid;
   }
 }
+
 
 function containerApiMethodValidatesKey(
   methodKind: DiContainerApiMethodKind,

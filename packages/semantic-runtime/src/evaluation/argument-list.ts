@@ -15,7 +15,10 @@ import {
   type EvaluationArrayUncertainty,
   type EvaluationValue,
 } from './values.js';
-import type { EvaluationOpenSeam } from './seams.js';
+import {
+  compactEvaluationOpenSeams,
+  type EvaluationOpenSeam,
+} from './seams.js';
 import {
   EvaluationValueEvidence,
 } from './value-pressure.js';
@@ -37,12 +40,43 @@ export interface StaticArgumentListEvaluationHost {
   ): readonly EvaluationOpenSeam[];
 }
 
+export const enum EvaluationArgumentListOutcome {
+  /** Argument evaluation and spread iteration definitely reach the invocation operation. */
+  ReachedInvocation = 'reached-invocation',
+  /** An open spread prevents proving that control reaches the invocation operation. */
+  OpenBeforeInvocation = 'open-before-invocation',
+}
+
+/** One authored argument expression and the evidence produced before spread expansion. */
+export class EvaluationAuthoredArgument {
+  constructor(
+    /** Full authored argument node, including `...` for a spread argument. */
+    readonly node: ts.Expression,
+    /** Expression whose value was evaluated for this argument. */
+    readonly valueExpression: ts.Expression,
+    readonly evidence: EvaluationValueEvidence,
+  ) {}
+}
+
 /** One reached ECMAScript argument-list phase, including iterator-based spread expansion and its closure state. */
 export class EvaluationArgumentList {
   constructor(
+    /** Authored argument values before any spread expansion. */
+    readonly authoredArguments: readonly EvaluationAuthoredArgument[],
+    /** Runtime positional values after spread expansion. */
     readonly elements: readonly EvaluationArrayElement[],
     readonly shape: EvaluationArrayShape,
+    readonly outcome: EvaluationArgumentListOutcome,
   ) {}
+
+  /** Pressure from both argument evaluation and positional/iterator uncertainty. */
+  get aggregateOpenSeams(): readonly EvaluationOpenSeam[] {
+    return compactEvaluationOpenSeams([
+      ...this.authoredArguments.flatMap((argument) => argument.evidence.openSeams),
+      ...this.elements.flatMap((element) => element.openSeams),
+      ...this.shape.aggregateOpenSeams,
+    ]);
+  }
 
   /** Exact positional arguments, or null when arity/order cannot safely drive a call. */
   exactEvidence(): readonly EvaluationValueEvidence[] | null {
@@ -67,10 +101,12 @@ export function evaluateStaticArgumentList(
   depth: number,
   host: StaticArgumentListEvaluationHost,
 ): EvaluationArgumentList {
+  const authoredArguments: EvaluationAuthoredArgument[] = [];
   const elements: EvaluationArrayElement[] = [];
   let exactLength: number | null = 0;
   let hasExactElements = true;
   let hasExactOrder = true;
+  let outcome = EvaluationArgumentListOutcome.ReachedInvocation;
   const uncertainties: EvaluationArrayUncertainty[] = [];
   const extentOpenSeams: EvaluationOpenSeam[] = [];
   const elementOpenSeams: EvaluationOpenSeam[] = [];
@@ -79,6 +115,7 @@ export function evaluateStaticArgumentList(
   for (const argument of args) {
     const expression = ts.isSpreadElement(argument) ? argument.expression : argument;
     const evidence = host.evaluateExpressionEvidence(expression, environment, moduleKey, depth + 1);
+    authoredArguments.push(new EvaluationAuthoredArgument(argument, expression, evidence));
     if (!ts.isSpreadElement(argument)) {
       elements.push(new EvaluationArrayElement(evidence.value, argument, evidence.openSeams, exactLength));
       exactLength = exactLength == null ? null : exactLength + 1;
@@ -90,6 +127,7 @@ export function evaluateStaticArgumentList(
       hasExactElements = false;
       extentOpenSeams.push(...evidence.openSeams);
       elementOpenSeams.push(...evidence.openSeams);
+      outcome = EvaluationArgumentListOutcome.OpenBeforeInvocation;
       break;
     }
 
@@ -125,6 +163,7 @@ export function evaluateStaticArgumentList(
         orderOpenSeams.push(...openSeams);
       }
       if (!spread.canContinueArguments) {
+        outcome = EvaluationArgumentListOutcome.OpenBeforeInvocation;
         break;
       }
       continue;
@@ -146,6 +185,7 @@ export function evaluateStaticArgumentList(
   }
 
   return new EvaluationArgumentList(
+    authoredArguments,
     elements,
     EvaluationArrayShape.from({
       exactLength,
@@ -156,6 +196,7 @@ export function evaluateStaticArgumentList(
       elementOpenSeams,
       orderOpenSeams,
     }),
+    outcome,
   );
 }
 

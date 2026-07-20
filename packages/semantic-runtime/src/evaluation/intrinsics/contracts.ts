@@ -88,19 +88,12 @@ export interface StaticIntrinsicEvaluationHost {
     moduleSpecifier: string,
     node: ts.CallExpression,
   ): EvaluationValue | null;
-
-  evaluateCallExpression(
-    call: ts.CallExpression,
-    environment: ModuleEnvironmentRecord,
-    moduleKey: string,
-    depth: number,
-    host: StaticIntrinsicEvaluationHost,
-  ): EvaluationValue | null;
 }
 
 export interface StaticIntrinsicEvaluationCheckpoint {
   readonly auditOpenSeamCount: number;
   readonly openSeamCount: number;
-  readonly executedCallCount: number;
+  readonly invocationCount: number;
+  readonly nextInvocationOrdinal: number;
   readonly statementCount: number;
 }

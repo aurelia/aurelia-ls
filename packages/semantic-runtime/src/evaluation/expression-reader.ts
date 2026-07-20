@@ -1,5 +1,8 @@
 import ts from 'typescript';
-import type { EvaluationExpressionAbruptCompletion } from './completion.js';
+import {
+  EvaluationCompletionKind,
+  type EvaluationExpressionAbruptCompletion,
+} from './completion.js';
 import { openSeamReasonKindsForEvaluationRead } from './boundary-open-reason.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
@@ -18,8 +21,14 @@ import {
 } from './policy.js';
 import {
   compactEvaluationOpenSeams,
-  type EvaluationOpenSeam,
+  EvaluationOpenSeam,
+  EvaluationOpenSeamKind,
 } from './seams.js';
+import {
+  isStaticInvocationOccurrence,
+  type StaticInvocationEvaluation,
+  type StaticInvocationOccurrence,
+} from './invocation.js';
 import {
   readStaticOwnProperty,
 } from './property-access.js';
@@ -28,6 +37,7 @@ import {
   type EvaluationInstanceValue,
   type EvaluationValue,
 } from './values.js';
+import { EvaluationValueEvidence } from './value-pressure.js';
 
 export class EvaluationRead<TValue> {
   readonly openSeams: readonly EvaluationOpenSeam[];
@@ -155,56 +165,198 @@ export class StaticEvaluationExpressionReader implements StaticExpressionEvaluat
   }
 }
 
-/**
- * Expression reader that spends the call-time environment of an executed call when one owns the queried expression.
- *
- * A module's final environment is still the honest fallback for declaration-oriented source inspection. Replaying an
- * executed call against that final environment is not: a later assignment can change the receiver, key, or option
- * value. Static module evaluation retains those lexical snapshots, and this reader keeps the selection in one place.
- */
+/** Expression reader over immutable invocation evidence plus the module's final declaration environment. */
 export class StaticModuleEvaluationExpressionReader implements StaticExpressionEvaluationReader {
-  private readonly environmentsByCall = new Map<ts.CallExpression, ModuleEnvironmentRecord>();
-  private readonly readersByEnvironment = new WeakMap<ModuleEnvironmentRecord, StaticEvaluationExpressionReader>();
+  private readonly invocationsByExpression = new Map<ts.Expression, StaticInvocationOccurrence[]>();
+  private readonly invocationEvaluationsByExpression = new Map<ts.Expression, StaticInvocationEvaluation[]>();
+  private readonly evidenceByExpression = new Map<ts.Expression, EvaluationValueEvidence[]>();
+  private readonly finalEnvironmentReader: StaticEvaluationExpressionReader;
 
   constructor(
     private readonly evaluation: StaticModuleEvaluationResult,
   ) {
-    for (const call of evaluation.executedCalls) {
-      this.environmentsByCall.set(call.expression, call.environment);
+    this.finalEnvironmentReader = new StaticEvaluationExpressionReader(
+      evaluation.environment,
+      evaluation.moduleKey,
+      evaluation.policy,
+      evaluation.runtimeHost,
+    );
+    for (const invocation of evaluation.invocationEvaluations) {
+      appendMapValue(this.invocationEvaluationsByExpression, invocation.node, invocation);
+      if (isStaticInvocationOccurrence(invocation)) {
+        appendMapValue(this.invocationsByExpression, invocation.node, invocation);
+      }
+      this.indexExpressionEvidence(invocation.reference.calleeNode, invocation.reference.callee);
+      if (invocation.reference.receiverNode != null && invocation.reference.thisValue != null) {
+        this.indexExpressionEvidence(invocation.reference.receiverNode, invocation.reference.thisValue);
+      }
+      if (invocation.reference.propertyKeyNode != null
+        && ts.isExpression(invocation.reference.propertyKeyNode)
+        && invocation.reference.propertyKeyEvidence != null) {
+        this.indexExpressionEvidence(invocation.reference.propertyKeyNode, invocation.reference.propertyKeyEvidence);
+      }
+      for (const argument of invocation.argumentList.authoredArguments) {
+        this.indexExpressionEvidence(argument.valueExpression, argument.evidence);
+        if (argument.node !== argument.valueExpression) {
+          this.indexExpressionEvidence(argument.node, argument.evidence);
+        }
+      }
     }
   }
 
   evaluateExpression(expression: ts.Expression): EvaluationRead<EvaluationValue> {
-    return this.readerFor(expression).evaluateExpression(expression);
-  }
-
-  private readerFor(node: ts.Node): StaticEvaluationExpressionReader {
-    const environment = this.callEnvironmentFor(node) ?? this.evaluation.environment;
-    let reader = this.readersByEnvironment.get(environment);
-    if (reader == null) {
-      reader = new StaticEvaluationExpressionReader(
-        environment,
-        this.evaluation.moduleKey,
-        this.evaluation.policy,
-        this.evaluation.runtimeHost,
-      );
-      this.readersByEnvironment.set(environment, reader);
+    const invocations = this.invocationsByExpression.get(expression) ?? [];
+    if (invocations.length === 1) {
+      return readInvocationCompletion(invocations[0]!, expression);
     }
-    return reader;
+    if (invocations.length > 1) {
+      return this.openInvocationRead(
+        expression,
+        `Source expression was reached by ${invocations.length} invocation occurrences; no single result owns this read.`,
+      );
+    }
+
+    const evidence = this.evidenceByExpression.get(expression) ?? [];
+    if (evidence.length === 1) {
+      return new EvaluationRead(evidence[0]!.value, expression, evidence[0]!.openSeams);
+    }
+    if (evidence.length > 1) {
+      return this.openInvocationRead(
+        expression,
+        `Source expression produced evidence in ${evidence.length} invocation occurrences; no single value owns this read.`,
+      );
+    }
+
+    if (this.enclosingInvocationEvaluation(expression) != null) {
+      return this.openInvocationRead(
+        expression,
+        'Invocation evaluation did not retain immutable evidence for this nested source expression.',
+      );
+    }
+    return this.finalEnvironmentReader.evaluateExpression(expression);
   }
 
-  private callEnvironmentFor(node: ts.Node): ModuleEnvironmentRecord | null {
+  private indexExpressionEvidence(
+    expression: ts.Expression,
+    evidence: EvaluationValueEvidence,
+  ): void {
+    appendMapValue(this.evidenceByExpression, expression, evidence);
+    this.indexRetainedChildEvidence(evidence.value, expression, new Set());
+  }
+
+  private indexRetainedChildEvidence(
+    value: EvaluationValue,
+    owner: ts.Expression,
+    seen: Set<EvaluationValue>,
+  ): void {
+    if (seen.has(value)) {
+      return;
+    }
+    seen.add(value);
+
+    switch (value.kind) {
+      case EvaluationValueKind.Array:
+      case EvaluationValueKind.Set:
+        for (const element of value.elements) {
+          if (element.expression == null || !nodeBelongsTo(element.expression, owner)) {
+            continue;
+          }
+          const evidence = new EvaluationValueEvidence(element.value, element.openSeams);
+          appendMapValue(this.evidenceByExpression, element.expression, evidence);
+          this.indexRetainedChildEvidence(element.value, owner, seen);
+        }
+        return;
+      case EvaluationValueKind.Object:
+      case EvaluationValueKind.BoundaryObject:
+      case EvaluationValueKind.Function:
+      case EvaluationValueKind.Class:
+      case EvaluationValueKind.Instance:
+        for (const property of value.properties.values()) {
+          const expression = propertyValueExpression(property.node);
+          if (expression == null || !nodeBelongsTo(expression, owner)) {
+            continue;
+          }
+          const evidence = new EvaluationValueEvidence(property.value, property.openSeams);
+          appendMapValue(this.evidenceByExpression, expression, evidence);
+          this.indexRetainedChildEvidence(property.value, owner, seen);
+        }
+        return;
+      case EvaluationValueKind.Promise:
+        this.indexRetainedChildEvidence(value.fulfilledValue, owner, seen);
+        return;
+      case EvaluationValueKind.Map:
+      case EvaluationValueKind.ModuleNamespace:
+      case EvaluationValueKind.Unknown:
+      case EvaluationValueKind.Undefined:
+      case EvaluationValueKind.Null:
+      case EvaluationValueKind.Boolean:
+      case EvaluationValueKind.Number:
+      case EvaluationValueKind.BigInt:
+      case EvaluationValueKind.String:
+      case EvaluationValueKind.RegularExpression:
+      case EvaluationValueKind.Date:
+      case EvaluationValueKind.BoundaryValue:
+      case EvaluationValueKind.StringPattern:
+        return;
+    }
+  }
+
+  private enclosingInvocationEvaluation(node: ts.Node): StaticInvocationEvaluation | null {
     let current: ts.Node | undefined = node;
     while (current != null && !ts.isSourceFile(current)) {
-      if (ts.isCallExpression(current)) {
-        const environment = this.environmentsByCall.get(current);
-        if (environment != null) {
-          return environment;
+      if (ts.isCallExpression(current) || ts.isNewExpression(current)) {
+        const evaluations = this.invocationEvaluationsByExpression.get(current);
+        if (evaluations != null && evaluations.length > 0) {
+          return evaluations[0]!;
         }
       }
       current = current.parent;
     }
     return null;
+  }
+
+  private openInvocationRead(
+    expression: ts.Expression,
+    summary: string,
+  ): EvaluationRead<EvaluationValue> {
+    return new EvaluationRead<EvaluationValue>(null, expression, [new EvaluationOpenSeam(
+      EvaluationOpenSeamKind.InvocationSourceRead,
+      summary,
+      expression,
+      this.evaluation.moduleKey,
+    )]);
+  }
+}
+
+function readInvocationCompletion(
+  invocation: StaticInvocationOccurrence,
+  expression: ts.Expression,
+): EvaluationRead<EvaluationValue> {
+  return invocation.completion.kind === EvaluationCompletionKind.Normal
+    ? new EvaluationRead(invocation.completion.value, expression, invocation.openSeams)
+    : new EvaluationRead<EvaluationValue>(null, expression, invocation.openSeams, invocation.completion);
+}
+
+function propertyValueExpression(node: ts.Node | null): ts.Expression | null {
+  if (node == null) {
+    return null;
+  }
+  if (ts.isPropertyAssignment(node) || ts.isPropertyDeclaration(node)) {
+    return node.initializer ?? null;
+  }
+  return ts.isShorthandPropertyAssignment(node) ? node.name : null;
+}
+
+function appendMapValue<TKey, TValue>(
+  map: Map<TKey, TValue[]>,
+  key: TKey,
+  value: TValue,
+): void {
+  const values = map.get(key);
+  if (values == null) {
+    map.set(key, [value]);
+  } else if (!values.includes(value)) {
+    values.push(value);
   }
 }
 

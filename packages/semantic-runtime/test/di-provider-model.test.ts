@@ -233,9 +233,11 @@ describe('DI provider model', () => {
 
     const multi = arrayMarkers(activateNamedSite(fixture, session, 'allMultiRead', child).value);
     const multiAncestors = arrayMarkers(activateNamedSite(fixture, session, 'allMultiAncestorsRead', child).value);
+    const multiSpread = arrayMarkers(activateNamedSite(fixture, session, 'allMultiSpreadRead', child).value);
     const multiResources = arrayMarkers(activateNamedSite(fixture, session, 'allMultiResourcesRead', child).value);
     expect(multi).toEqual(['multi-first', 'multi-second']);
     expect(multiAncestors).toEqual(['multi-first', 'multi-second']);
+    expect(multiSpread).toEqual(['multi-first', 'multi-second']);
     expect(multiResources).toEqual(['multi-first', 'multi-second']);
     expect(marker(activateNamedSite(fixture, session, 'lastMultiRead', child).value)).toBe('multi-second');
 
@@ -260,6 +262,16 @@ describe('DI provider model', () => {
       expect.objectContaining({ kind: EvaluationValueKind.Object }),
       scoped.value,
     ]);
+
+    const identityConsumer = activateNamedSite(fixture, session, 'resolverIdentityConsumerRead', child);
+    expect(identityConsumer.state).toBe(DiProviderActivationState.Value);
+    expect(instanceProperty(identityConsumer.value, 'missing')?.kind).toBe(EvaluationValueKind.Undefined);
+    expect(marker(instanceProperty(identityConsumer.value, 'last'))).toBe('multi-second');
+    expect(arrayMarkers(instanceProperty(identityConsumer.value, 'pair'))).toEqual([
+      'root-only',
+      'exact-instance',
+    ]);
+    expect(arrayValues(instanceProperty(identityConsumer.value, 'empty'))).toEqual([]);
   });
 
   test('respects authored lookup order instead of consulting the completed container retroactively', async () => {
@@ -1006,14 +1018,14 @@ function activateNamedSite(
   if (source == null || !isEvaluatedProjectSource(source)) {
     throw new Error(`Expected an evaluated source for ${name}.`);
   }
-  const call = source.evaluation.executedCalls.find((candidate) => candidate.expression === site.sourceNode);
-  if (call == null) {
-    throw new Error(`Expected an executed-call witness for ${name}.`);
+  const invocation = source.evaluation.invocations.find((candidate) => candidate.node === site.sourceNode);
+  if (invocation == null) {
+    throw new Error(`Expected an invocation occurrence for ${name}.`);
   }
-  return session.activateExecutedEntryExpression(
+  return session.activateInvocationArgument(
     requestor,
     site.keyExpression,
-    call,
+    invocation,
     site.sourceNode,
   );
 }

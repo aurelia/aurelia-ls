@@ -34,6 +34,8 @@ export const enum OpenSeamReasonKind {
   StaticEvaluationDynamicMutation = 'static-evaluation-dynamic-mutation',
   /** Static evaluation reached a dynamic import or non-literal import edge. */
   StaticEvaluationDynamicImport = 'static-evaluation-dynamic-import',
+  /** A source-oriented read could not select complete immutable evidence from reached invocation occurrences. */
+  StaticEvaluationInvocationSourceReadOpen = 'static-evaluation-invocation-source-read-open',
   /** Static evaluation reached a classic loop statement that is not in the modeled finite-loop subset. */
   StaticEvaluationUnsupportedLoopStatement = 'static-evaluation-unsupported-loop-statement',
   /** Static evaluation reached a compound assignment before compound mutation semantics were modeled. */

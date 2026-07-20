@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import type { ModuleEnvironmentRecord } from '../environment.js';
+import type { StaticInvocationFrame } from '../invocation.js';
 import { EvaluationOpenSeamKind } from '../seams.js';
 import {
   evaluationArrayHasExactPositions,
@@ -12,24 +12,39 @@ import {
   EvaluationMapValue,
   EvaluationSetValue,
   EvaluationUndefined,
+  EvaluationUnknownValue,
   EvaluationValueKind,
   evaluationValuesSameValueZero,
   type EvaluationValue,
 } from '../values.js';
 import type { StaticIntrinsicEvaluationHost } from './contracts.js';
+import { EvaluationValueEvidence } from '../value-pressure.js';
+import { evaluatePositionalIntrinsicArguments } from './shared.js';
 
 export function evaluateSetConstructor(
-  expression: ts.NewExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.NewExpression>,
   host: StaticIntrinsicEvaluationHost,
   weak: boolean,
 ): EvaluationValue {
-  const iterable = expression.arguments?.[0] == null
-    ? null
-    : host.evaluateExpression(expression.arguments[0], environment, moduleKey, depth + 1);
-  if (iterable == null) {
+  const { node: expression, moduleKey } = frame;
+  const argumentRead = collectionInvocationArguments(
+    frame,
+    host,
+    `${weak ? 'WeakSet' : 'Set'} constructor argument list did not close.`,
+  );
+  if (argumentRead.kind === 'open') {
+    return argumentRead.value;
+  }
+  const iterableEvidence = argumentRead.evidence[0]
+    ?? new EvaluationValueEvidence(EvaluationUndefined, []);
+  if (iterableEvidence.openSeams.length > 0) {
+    return openCollectionInput(
+      `${weak ? 'WeakSet' : 'Set'} constructor iterable retained open pressure.`,
+      expression,
+    );
+  }
+  const iterable = iterableEvidence.value;
+  if (iterable.kind === EvaluationValueKind.Undefined) {
     return new EvaluationSetValue([], weak, expression, weak);
   }
   if (iterable.kind === EvaluationValueKind.Array) {
@@ -58,17 +73,29 @@ export function evaluateSetConstructor(
 }
 
 export function evaluateMapConstructor(
-  expression: ts.NewExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.NewExpression>,
   host: StaticIntrinsicEvaluationHost,
   weak: boolean,
 ): EvaluationValue {
-  const iterable = expression.arguments?.[0] == null
-    ? null
-    : host.evaluateExpression(expression.arguments[0], environment, moduleKey, depth + 1);
-  if (iterable == null) {
+  const { node: expression, moduleKey } = frame;
+  const argumentRead = collectionInvocationArguments(
+    frame,
+    host,
+    `${weak ? 'WeakMap' : 'Map'} constructor argument list did not close.`,
+  );
+  if (argumentRead.kind === 'open') {
+    return argumentRead.value;
+  }
+  const iterableEvidence = argumentRead.evidence[0]
+    ?? new EvaluationValueEvidence(EvaluationUndefined, []);
+  if (iterableEvidence.openSeams.length > 0) {
+    return openCollectionInput(
+      `${weak ? 'WeakMap' : 'Map'} constructor iterable retained open pressure.`,
+      expression,
+    );
+  }
+  const iterable = iterableEvidence.value;
+  if (iterable.kind === EvaluationValueKind.Undefined) {
     return new EvaluationMapValue([], weak, expression, weak);
   }
   if (iterable.kind !== EvaluationValueKind.Array) {
@@ -102,6 +129,16 @@ export function evaluateMapConstructor(
     }
     const key = value.elementAtRuntimeIndex(0);
     const entryValue = value.elementAtRuntimeIndex(1);
+    const entryOpenSeams = [
+      ...element.openSeams,
+      ...(key?.openSeams ?? []),
+      ...(entryValue?.openSeams ?? []),
+    ];
+    if (entryOpenSeams.length > 0) {
+      host.replayOpenSeams(entryOpenSeams);
+      mayHaveUnknownEntries = true;
+      continue;
+    }
     entries.push(new EvaluationMapEntry(
       key?.value ?? EvaluationUndefined,
       entryValue?.value ?? EvaluationUndefined,
@@ -112,25 +149,28 @@ export function evaluateMapConstructor(
 }
 
 export function evaluateMapGet(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue | null {
-  const checkpoint = host.checkpoint();
-  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  const { node: call, moduleKey } = frame;
+  const receiverRead = collectionInvocationReceiver(frame, host, 'Map.get receiver retained open pressure.');
+  if (receiverRead.kind === 'open') {
+    return receiverRead.value;
+  }
+  const receiver = receiverRead.value;
   if (receiver.kind !== EvaluationValueKind.Map) {
-    host.restore(checkpoint);
     return null;
   }
-  const key = call.arguments[0] == null
-    ? EvaluationUndefined
-    : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
-  if (key.kind === EvaluationValueKind.Unknown) {
-    return key;
+  const argumentRead = collectionInvocationArguments(frame, host, 'Map.get argument list did not close.');
+  if (argumentRead.kind === 'open') {
+    return argumentRead.value;
   }
+  const keyEvidence = argumentRead.evidence[0]
+    ?? new EvaluationValueEvidence(EvaluationUndefined, []);
+  if (keyEvidence.openSeams.length > 0) {
+    return openCollectionInput('Map.get key retained open pressure.', call);
+  }
+  const key = keyEvidence.value;
   const entry = receiver.entries.find((candidate) => evaluationValuesSameValueZero(candidate.key, key)) ?? null;
   if (entry != null) {
     return entry.value;
@@ -141,31 +181,34 @@ export function evaluateMapGet(
 }
 
 export function evaluateMapSet(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue | null {
-  const checkpoint = host.checkpoint();
-  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  const { node: call } = frame;
+  const receiverRead = collectionInvocationReceiver(frame, host, 'Map.set receiver retained open pressure.');
+  if (receiverRead.kind === 'open') {
+    return receiverRead.value;
+  }
+  const receiver = receiverRead.value;
   if (receiver.kind !== EvaluationValueKind.Map) {
-    host.restore(checkpoint);
     return null;
   }
-  const key = call.arguments[0] == null
-    ? EvaluationUndefined
-    : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
-  const value = call.arguments[1] == null
-    ? EvaluationUndefined
-    : host.evaluateExpression(call.arguments[1], environment, moduleKey, depth + 1);
-  if (key.kind === EvaluationValueKind.Unknown) {
-    return key;
+  const argumentRead = collectionInvocationArguments(frame, host, 'Map.set argument list did not close.');
+  if (argumentRead.kind === 'open') {
+    return argumentRead.value;
   }
-  if (value.kind === EvaluationValueKind.Unknown) {
-    return value;
+  const keyEvidence = argumentRead.evidence[0]
+    ?? new EvaluationValueEvidence(EvaluationUndefined, []);
+  const valueEvidence = argumentRead.evidence[1]
+    ?? new EvaluationValueEvidence(EvaluationUndefined, []);
+  if (keyEvidence.openSeams.length > 0) {
+    return openCollectionInput('Map.set key retained open pressure.', call);
   }
+  if (valueEvidence.openSeams.length > 0) {
+    return openCollectionInput('Map.set value retained open pressure.', call);
+  }
+  const key = keyEvidence.value;
+  const value = valueEvidence.value;
   const existing = receiver.entries.find((candidate) => evaluationValuesSameValueZero(candidate.key, key)) ?? null;
   if (existing == null) {
     receiver.entries.push(new EvaluationMapEntry(key, value, call));
@@ -176,25 +219,28 @@ export function evaluateMapSet(
 }
 
 export function evaluateCollectionHas(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue | null {
-  const checkpoint = host.checkpoint();
-  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  const { node: call, moduleKey } = frame;
+  const receiverRead = collectionInvocationReceiver(frame, host, 'Collection.has receiver retained open pressure.');
+  if (receiverRead.kind === 'open') {
+    return receiverRead.value;
+  }
+  const receiver = receiverRead.value;
   if (receiver.kind !== EvaluationValueKind.Map && receiver.kind !== EvaluationValueKind.Set) {
-    host.restore(checkpoint);
     return null;
   }
-  const key = call.arguments[0] == null
-    ? EvaluationUndefined
-    : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
-  if (key.kind === EvaluationValueKind.Unknown) {
-    return key;
+  const argumentRead = collectionInvocationArguments(frame, host, 'Collection.has argument list did not close.');
+  if (argumentRead.kind === 'open') {
+    return argumentRead.value;
   }
+  const keyEvidence = argumentRead.evidence[0]
+    ?? new EvaluationValueEvidence(EvaluationUndefined, []);
+  if (keyEvidence.openSeams.length > 0) {
+    return openCollectionInput('Collection.has key retained open pressure.', call);
+  }
+  const key = keyEvidence.value;
   const known = receiver.kind === EvaluationValueKind.Map
     ? receiver.entries.some((candidate) => evaluationValuesSameValueZero(candidate.key, key))
     : receiver.elements.some((candidate) => evaluationValuesSameValueZero(candidate.value, key));
@@ -207,51 +253,60 @@ export function evaluateCollectionHas(
 }
 
 export function evaluateSetAdd(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue | null {
-  const checkpoint = host.checkpoint();
-  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  const { node: call } = frame;
+  const receiverRead = collectionInvocationReceiver(frame, host, 'Set.add receiver retained open pressure.');
+  if (receiverRead.kind === 'open') {
+    return receiverRead.value;
+  }
+  const receiver = receiverRead.value;
   if (receiver.kind !== EvaluationValueKind.Set) {
-    host.restore(checkpoint);
     return null;
   }
-  const value = call.arguments[0] == null
-    ? EvaluationUndefined
-    : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
-  if (value.kind === EvaluationValueKind.Unknown) {
-    return value;
+  const argumentRead = collectionInvocationArguments(frame, host, 'Set.add argument list did not close.');
+  if (argumentRead.kind === 'open') {
+    return argumentRead.value;
   }
+  const valueEvidence = argumentRead.evidence[0]
+    ?? new EvaluationValueEvidence(EvaluationUndefined, []);
+  if (valueEvidence.openSeams.length > 0) {
+    return openCollectionInput('Set.add value retained open pressure.', call);
+  }
+  const value = valueEvidence.value;
   if (!receiver.elements.some((candidate) => evaluationValuesSameValueZero(candidate.value, value))) {
-    receiver.elements.push(new EvaluationArrayElement(value, call.arguments[0] ?? null));
+    receiver.elements.push(new EvaluationArrayElement(
+      value,
+      argumentRead.argumentList.elements[0]?.expression ?? null,
+    ));
   }
   return receiver;
 }
 
 export function evaluateCollectionDelete(
-  call: ts.CallExpression,
-  receiverExpression: ts.Expression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue | null {
-  const checkpoint = host.checkpoint();
-  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  const { node: call } = frame;
+  const receiverRead = collectionInvocationReceiver(frame, host, 'Collection.delete receiver retained open pressure.');
+  if (receiverRead.kind === 'open') {
+    return receiverRead.value;
+  }
+  const receiver = receiverRead.value;
   if (receiver.kind !== EvaluationValueKind.Map && receiver.kind !== EvaluationValueKind.Set) {
-    host.restore(checkpoint);
     return null;
   }
-  const key = call.arguments[0] == null
-    ? EvaluationUndefined
-    : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
-  if (key.kind === EvaluationValueKind.Unknown) {
-    return key;
+  const argumentRead = collectionInvocationArguments(frame, host, 'Collection.delete argument list did not close.');
+  if (argumentRead.kind === 'open') {
+    return argumentRead.value;
   }
+  const keyEvidence = argumentRead.evidence[0]
+    ?? new EvaluationValueEvidence(EvaluationUndefined, []);
+  if (keyEvidence.openSeams.length > 0) {
+    return openCollectionInput('Collection.delete key retained open pressure.', call);
+  }
+  const key = keyEvidence.value;
   if (receiver.kind === EvaluationValueKind.Map) {
     const index = receiver.entries.findIndex((candidate) => evaluationValuesSameValueZero(candidate.key, key));
     if (index >= 0) {
@@ -266,4 +321,46 @@ export function evaluateCollectionDelete(
     return new EvaluationBooleanValue(true, call);
   }
   return new EvaluationBooleanValue(false, call);
+}
+
+function collectionInvocationArguments(
+  frame: StaticInvocationFrame<ts.CallExpression | ts.NewExpression>,
+  host: StaticIntrinsicEvaluationHost,
+  openReason: string,
+) {
+  const read = evaluatePositionalIntrinsicArguments(
+    frame.argumentList,
+    frame.node,
+    frame.moduleKey,
+    host,
+    openReason,
+  );
+  if (read.kind === 'known') {
+    for (const evidence of read.evidence) {
+      host.replayOpenSeams(evidence.openSeams);
+    }
+  }
+  return read;
+}
+
+function collectionInvocationReceiver(
+  frame: StaticInvocationFrame<ts.CallExpression>,
+  host: StaticIntrinsicEvaluationHost,
+  openReason: string,
+): { readonly kind: 'known'; readonly value: EvaluationValue }
+  | { readonly kind: 'open'; readonly value: EvaluationUnknownValue } {
+  const evidence = frame.thisValue
+    ?? new EvaluationValueEvidence(EvaluationUndefined, []);
+  if (evidence.openSeams.length === 0) {
+    return { kind: 'known', value: evidence.value };
+  }
+  host.replayOpenSeams(evidence.openSeams);
+  return { kind: 'open', value: openCollectionInput(openReason, frame.calleeNode) };
+}
+
+function openCollectionInput(
+  reason: string,
+  node: ts.Node,
+): EvaluationUnknownValue {
+  return new EvaluationUnknownValue(reason, node, true);
 }

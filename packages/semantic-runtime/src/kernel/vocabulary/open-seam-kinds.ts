@@ -101,6 +101,14 @@ export const KernelOpenSeamKinds = {
       KernelVocabularySlot.OpenSeamKind,
       'Static evaluation reached a dynamic import or non-literal module edge that could not be linked statically.',
     ),
+
+    /** A source-oriented read could not select complete immutable evidence from reached invocation occurrences. */
+    InvocationSourceRead: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'invocation-source-read',
+      KernelVocabularySlot.OpenSeamKind,
+      'Static evaluation could not select complete immutable evidence for a source expression inside a reached invocation.',
+    ),
   },
   TypeSystem: {
     /** TypeChecker projection could not close the type or member surface. */

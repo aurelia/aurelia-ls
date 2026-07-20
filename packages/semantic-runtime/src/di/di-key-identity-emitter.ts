@@ -49,9 +49,9 @@ import {
   containerLookupKeyKindForExpression,
 } from './source-key-expression.js';
 import {
+  aureliaResolverKeyKindForWrapper,
   isAureliaIgnoreResolverExpression,
   readAureliaResolverWrapperCall,
-  type DiAureliaResolverWrapperKind,
 } from './resolver-wrapper-recognition.js';
 
 /** Evaluator-owned declaration source used when no TypeChecker epoch is available. */
@@ -323,7 +323,7 @@ export class DiKeyIdentityEmitter {
         this.records.handles.identity(`di-key:resolver-inner:${localKeyPart(inner.address.handle)}`),
         inner.address.handle,
       ));
-    const resolverKind = resolverKeyKindForWrapper(wrapper.wrapperKind);
+    const resolverKind = aureliaResolverKeyKindForWrapper(wrapper.wrapperKind);
     const semanticPart = innerIdentity == null
       ? localKeyPart(request.fallbackIdentityHandle)
       : localKeyPart(innerIdentity.identityHandle);
@@ -832,33 +832,6 @@ function evaluationValueCanBeObjectKey(value: EvaluationValue): boolean {
     case EvaluationValueKind.BoundaryObject:
     case EvaluationValueKind.BoundaryValue:
       return false;
-  }
-}
-
-function resolverKeyKindForWrapper(kind: DiAureliaResolverWrapperKind): DiResolverKeyKind {
-  switch (kind) {
-    case 'lazy':
-      return DiResolverKeyKind.Lazy;
-    case 'all':
-      return DiResolverKeyKind.All;
-    case 'last':
-      return DiResolverKeyKind.Last;
-    case 'optional':
-      return DiResolverKeyKind.Optional;
-    case 'factory':
-      return DiResolverKeyKind.Factory;
-    case 'own':
-      return DiResolverKeyKind.Own;
-    case 'resource':
-      return DiResolverKeyKind.Resource;
-    case 'optionalResource':
-      return DiResolverKeyKind.OptionalResource;
-    case 'allResources':
-      return DiResolverKeyKind.AllResources;
-    case 'newInstanceOf':
-      return DiResolverKeyKind.NewInstanceOf;
-    case 'newInstanceForScope':
-      return DiResolverKeyKind.NewInstanceForScope;
   }
 }
 

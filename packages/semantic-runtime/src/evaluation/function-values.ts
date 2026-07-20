@@ -82,7 +82,7 @@ export function evaluateStaticFunctionWithArguments(
     );
   }
 
-  const callEnvironment = callee.environment.clone(`${moduleKey}:call:${call.getStart()}`) as ModuleEnvironmentRecord;
+  const callEnvironment = callee.environment.createChild(`${moduleKey}:call:${call.getStart()}`);
   if (!ts.isArrowFunction(callee.declaration)) {
     const callThis = thisValue ?? new EvaluationValueEvidence(EvaluationUndefined, []);
     callEnvironment.initializeBinding(

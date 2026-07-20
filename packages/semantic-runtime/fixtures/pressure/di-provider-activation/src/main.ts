@@ -15,6 +15,11 @@ import {
   resolve,
   resource,
 } from '@aurelia/kernel';
+import {
+  optional as aliasedOptional,
+  resolve as aliasedResolve,
+} from '@aurelia/kernel';
+import * as Kernel from '@aurelia/kernel';
 import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';
 
 export class ScopedService {
@@ -40,6 +45,16 @@ export class OpenSingleton {
 
 export class OpenSingletonConsumer {
   readonly service = resolve(OpenSingleton);
+}
+
+const resolverSpreadKeys = ['root-only', 'exact-instance'] as const;
+const allSpreadArguments = ['multi', true] as const;
+
+export class ResolverIdentityConsumer {
+  readonly missing = aliasedResolve(aliasedOptional('missing'));
+  readonly last = Kernel.resolve(Kernel.last('multi'));
+  readonly pair = aliasedResolve(...resolverSpreadKeys);
+  readonly empty = aliasedResolve();
 }
 
 class DefaultSingletonService {
@@ -128,6 +143,7 @@ container.register(
   Registration.singleton(SingletonConsumer, SingletonConsumer),
   Registration.singleton(OpenSingleton, OpenSingleton),
   Registration.singleton(OpenSingletonConsumer, OpenSingletonConsumer),
+  Registration.singleton(ResolverIdentityConsumer, ResolverIdentityConsumer),
   Registration.transient(TransientConsumer, TransientConsumer),
   Registration.aliasTo('exact-instance', 'exact-alias'),
   Registration.aliasTo('exact-alias', 'alias-chain'),
@@ -160,12 +176,14 @@ export const resourceRootRead = container.get(resource('root-only'));
 export const optionalResourceMissingRead = container.get(optionalResource('missing'));
 export const allMultiRead = container.get(all('multi'));
 export const allMultiAncestorsRead = container.get(all('multi', true));
+export const allMultiSpreadRead = container.get(all(...allSpreadArguments));
 export const allMultiResourcesRead = container.get(allResources('multi'));
 export const partialMultiRead = container.get(all('partial-multi'));
 export const lastMultiRead = container.get(last('multi'));
 export const lazyRead = container.get(lazy('exact-instance'));
 export const factoryRead = container.get(factory(TransientConsumer));
 export const ignoredRead = container.get(ignore);
+export const resolverIdentityConsumerRead = container.get(ResolverIdentityConsumer);
 export const newInstanceReadOne = container.get(newInstanceOf(ScopedService));
 export const newInstanceReadTwo = container.get(newInstanceOf(ScopedService));
 export const scopedInstanceRead = container.get(newInstanceForScope(ScopedService));

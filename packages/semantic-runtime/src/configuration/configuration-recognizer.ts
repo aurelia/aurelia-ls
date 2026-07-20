@@ -616,9 +616,7 @@ function recognizeAureliaAppCall(
   call: ts.CallExpression,
   _bindings: ImportedBindings,
 ): ConfigurationStepObservation | null {
-  const evaluation = aureliaFacadeEvaluationForValue(
-    context.expressionReader.evaluateExpression(call).value,
-  );
+  const evaluation = aureliaFacadeEvaluationForCallReceiver(context, call);
   return evaluation == null
     ? null
     : new ConfigurationStepObservation(
@@ -645,9 +643,7 @@ function recognizeRegisterCall(
   bindings: ImportedBindings,
   insideRegistryRegisterMethod: boolean,
 ): ConfigurationStepObservation | null {
-  const aureliaEvaluation = aureliaFacadeEvaluationForValue(
-    context.expressionReader.evaluateExpression(call).value,
-  );
+  const aureliaEvaluation = aureliaFacadeEvaluationForCallReceiver(context, call);
   const aureliaReceiver = aureliaEvaluation != null;
   const containerEvaluation = containerEvaluationForCallReceiver(context, call);
   const containerReceiver = containerEvaluation != null || isContainerReceiver(call, bindings);
@@ -735,6 +731,19 @@ function containerEvaluationForCallReceiver(
     return null;
   }
   return aureliaContainerEvaluationForValue(
+    context.expressionReader.evaluateExpression(expression.expression).value,
+  );
+}
+
+function aureliaFacadeEvaluationForCallReceiver(
+  context: ConfigurationRecognitionContext,
+  call: ts.CallExpression,
+): AureliaFacadeEvaluation | null {
+  const expression = unwrapExpression(call.expression);
+  if (!ts.isPropertyAccessExpression(expression)) {
+    return null;
+  }
+  return aureliaFacadeEvaluationForValue(
     context.expressionReader.evaluateExpression(expression.expression).value,
   );
 }
@@ -1297,7 +1306,7 @@ function registrationAdmissionForEvaluatedFactory(
       ? null
       : context.registrationKeyObservationForValue(
           keyArgument,
-          evaluation.argumentValues[evaluation.shape.keyArgumentIndex] ?? null,
+          exactRegistrationFactoryArgument(evaluation, evaluation.shape.keyArgumentIndex),
         ),
     valueArgument == null || evaluation.shape.value == null
       ? null
@@ -1305,7 +1314,7 @@ function registrationAdmissionForEvaluatedFactory(
           context,
           evaluation.shape.value.valueKind,
           valueArgument,
-          evaluation.argumentValues[evaluation.shape.value.argumentIndex] ?? null,
+          exactRegistrationFactoryArgument(evaluation, evaluation.shape.value.argumentIndex),
         ),
     evaluation.factoryName === 'defer'
       ? evaluatedDeferredRegistryParameters(context, evaluation)
@@ -1385,8 +1394,18 @@ function evaluatedDeferredRegistryParameters(
     null,
     null,
     null,
-    evaluation.argumentValues[index + 1] ?? null,
+    exactRegistrationFactoryArgument(evaluation, index + 1),
   ));
+}
+
+function exactRegistrationFactoryArgument(
+  evaluation: AureliaRegistrationFactoryEvaluation,
+  index: number,
+): EvaluationValue | null {
+  const evidence = evaluation.argumentList.exactEvidence()?.[index] ?? null;
+  return evidence == null || evidence.openSeams.length > 0
+    ? null
+    : evidence.value;
 }
 
 function interfaceDefaultRegistrationArgument(

@@ -17,6 +17,7 @@ import {
   isClassMemberWithExpressionChildren,
   type ClassMemberWithExpressionChildren,
 } from '../type-system/ts-class-member.js';
+import { AURELIA_RESOLVER_WRAPPER_KINDS } from './resolver-wrapper-recognition.js';
 import {
   readNullishKeyArguments,
   type DiNullishKeyArgument,
@@ -28,18 +29,7 @@ const AURELIA_RESOLVE_MODULES = new Set([
   '@aurelia/kernel',
 ]);
 
-const AURELIA_RESOLVE_KEY_WRAPPER_EXPORTS = new Set([
-  'all',
-  'lazy',
-  'optional',
-  'factory',
-  'own',
-  'resource',
-  'optionalResource',
-  'allResources',
-  'newInstanceForScope',
-  'newInstanceOf',
-]);
+const AURELIA_RESOLVE_KEY_WRAPPER_EXPORTS = new Set<string>(AURELIA_RESOLVER_WRAPPER_KINDS);
 
 /** Import-aware source site for Aurelia's ambient `resolve(...)` DI API. */
 export class DiResolveCallSite {

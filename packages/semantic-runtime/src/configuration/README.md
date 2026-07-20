@@ -165,6 +165,10 @@ Configuration recognition admits method receivers it can identify from evaluated
 admission; direct `container.register(...)`-shaped calls are treated as container registration. Other `.app(...)` and
 `.register(...)` methods stay invisible until evaluation or DI context can prove what they are. False positives here
 would pollute the app map and later DI world.
+Method ownership joins on the evaluated receiver, not the fluent call result. The result does not exist when an open
+spread stops before invocation, while the receiver and authored argument evidence have already been evaluated. In that
+case configuration recognition may publish a receiver-scoped registration open seam, but it must not publish definite
+registration effects or treat the blocked preparation as an executed call.
 
 Known framework configuration registries such as `StandardConfiguration`, `I18nConfiguration`,
 `ValidationI18nConfiguration`, `RouterConfiguration.customize(...)`,

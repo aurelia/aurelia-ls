@@ -7,7 +7,6 @@ import type {
   ProjectBootFrame,
   SourceFileAdmission,
 } from '../boot/frames.js';
-import type { ModuleEnvironmentRecord } from '../evaluation/environment.js';
 import {
   StaticEvaluationRuntimeValueResult,
   type StaticEvaluationRuntimeHost,
@@ -15,6 +14,13 @@ import {
 } from '../evaluation/evaluator.js';
 import { readStaticCommonJsExportValue } from '../evaluation/commonjs.js';
 import type { StaticIntrinsicEvaluationHost } from '../evaluation/intrinsics/contracts.js';
+import {
+  StaticInvocationKind,
+  StaticInvocationNotApplicable,
+  staticInvocationValue,
+  type StaticInvocationDispatch,
+  type StaticInvocationFrame,
+} from '../evaluation/invocation.js';
 import type { StaticModuleExternalValueResolver } from '../evaluation/module-evaluator.js';
 import {
   EvaluationImportKind,
@@ -22,13 +28,13 @@ import {
 } from '../evaluation/module-graph.js';
 import { DefaultEvaluationModuleResolutionPolicy } from '../evaluation/module-host.js';
 import { DefaultStaticEvaluationPolicy } from '../evaluation/policy.js';
+import { EvaluationOpenSeamKind } from '../evaluation/seams.js';
 import { openSeamReasonKindsForEvaluationValue } from '../evaluation/boundary-open-reason.js';
 import {
   closedStaticValueMemberValue,
   readStaticValueProperty,
   StaticValueMemberReadKind,
 } from '../evaluation/property-access.js';
-import { unwrapExpression } from '../evaluation/ts-syntax.js';
 import { EvaluationValueEvidence } from '../evaluation/value-pressure.js';
 import {
   isEvaluatedProjectSource,
@@ -151,7 +157,7 @@ class ConventionPluginOptionsRead {
 class ConventionPluginEvaluation {
   constructor(
     readonly call: ts.CallExpression,
-    readonly options: EvaluationValue,
+    readonly options: EvaluationValueEvidence,
   ) {}
 }
 
@@ -179,8 +185,7 @@ export class ResourceConventionToolingEvaluationContext {
   readonly runtimeHost: StaticEvaluationRuntimeHost = {
     transferValueMetadata: (source, target, transfer) =>
       this.transferValueMetadata(source, target, transfer),
-    evaluateCallExpression: (call, environment, moduleKey, depth, host) =>
-      this.evaluateCallExpression(call, environment, moduleKey, depth, host),
+    evaluateInvocation: (frame, host) => this.evaluateInvocation(frame, host),
     resolveCommonJsRequire: (_moduleKey, moduleSpecifier, node) => {
       const value = this.resolveCommonJsRequire(moduleSpecifier, node);
       return value == null ? null : new StaticEvaluationRuntimeValueResult(value, null);
@@ -211,7 +216,10 @@ export class ResourceConventionToolingEvaluationContext {
       if (plugin != null) {
         this.plugins.set(target, new ConventionPluginEvaluation(
           plugin.call,
-          transfer.forkValue(plugin.options),
+          new EvaluationValueEvidence(
+            transfer.forkValue(plugin.options.value),
+            plugin.options.openSeams,
+          ),
         ));
       }
     }
@@ -225,29 +233,40 @@ export class ResourceConventionToolingEvaluationContext {
     }
   }
 
-  private evaluateCallExpression(
-    call: ts.CallExpression,
-    environment: ModuleEnvironmentRecord,
-    moduleKey: string,
-    depth: number,
+  private evaluateInvocation(
+    frame: StaticInvocationFrame,
     host: StaticIntrinsicEvaluationHost,
-  ): EvaluationValue | null {
-    if (this.isFactoryCall(call, environment, this.aureliaPluginFactories)) {
+  ): StaticInvocationDispatch {
+    if (frame.kind !== StaticInvocationKind.Call || !ts.isCallExpression(frame.node)) {
+      return StaticInvocationNotApplicable;
+    }
+    const call = frame.node;
+    const callee = frame.callee.value;
+    if (!isConventionToolingFactoryValue(callee)) {
+      return StaticInvocationNotApplicable;
+    }
+    const arguments_ = frame.argumentList.exactEvidence();
+    if (arguments_ == null) {
+      return staticInvocationValue(host.unknown(
+        'Convention tooling factory argument positions did not close.',
+        call,
+        frame.moduleKey,
+        EvaluationOpenSeamKind.DynamicCall,
+      ));
+    }
+    const firstArgument = arguments_[0]
+      ?? new EvaluationValueEvidence(EvaluationUndefined, []);
+    if (this.aureliaPluginFactories.has(callee)) {
       this.executedAureliaPluginCalls.add(call);
-      const options = call.arguments[0] == null
-        ? EvaluationUndefined
-        : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
       const marker = new EvaluationObjectValue(new Map(), false, call);
-      this.plugins.set(marker, new ConventionPluginEvaluation(call, options));
-      return marker;
+      this.plugins.set(marker, new ConventionPluginEvaluation(call, firstArgument));
+      return staticInvocationValue(marker, firstArgument.openSeams);
     }
-    if (!this.isFactoryCall(call, environment, this.defineConfigFactories)) {
-      return null;
+    if (!this.defineConfigFactories.has(callee)) {
+      return StaticInvocationNotApplicable;
     }
-    const config = call.arguments[0] == null
-      ? new EvaluationUndefinedValue(call)
-      : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
-    return config.kind === EvaluationValueKind.Function
+    const config = firstArgument.value;
+    const result = config.kind === EvaluationValueKind.Function
       ? host.evaluateFunctionWithArguments(
           config,
           call,
@@ -260,46 +279,12 @@ export class ResourceConventionToolingEvaluationContext {
             ),
             [],
           )],
-          moduleKey,
-          depth + 1,
+          frame.moduleKey,
+          frame.depth + 1,
           null,
         )
       : config;
-  }
-
-  private isFactoryCall(
-    call: ts.CallExpression,
-    environment: ModuleEnvironmentRecord,
-    factories: WeakSet<ConventionToolingFactoryValue>,
-  ): boolean {
-    const expression = unwrapExpression(call.expression);
-    const value = ts.isIdentifier(expression)
-      ? environment.readValue(expression.text)
-      : ts.isPropertyAccessExpression(expression)
-        ? this.readEnvironmentProperty(environment, expression)
-        : null;
-    return value != null
-      && (
-        value.kind === EvaluationValueKind.BoundaryValue
-        || value.kind === EvaluationValueKind.Object
-      )
-      && factories.has(value);
-  }
-
-  private readEnvironmentProperty(
-    environment: ModuleEnvironmentRecord,
-    expression: ts.PropertyAccessExpression,
-  ): EvaluationValue | null {
-    const receiver = unwrapExpression(expression.expression);
-    if (!ts.isIdentifier(receiver)) {
-      return null;
-    }
-    const value = environment.readValue(receiver.text);
-    if (value?.kind !== EvaluationValueKind.Object) {
-      return null;
-    }
-    const read = readStaticValueProperty(value, expression.name.text, expression);
-    return closedStaticValueMemberValue(read);
+    return staticInvocationValue(result, firstArgument.openSeams);
   }
 
   private resolveCommonJsRequire(
@@ -433,8 +418,9 @@ export class ResourceConventionTransformAdmissionMaterializer {
       }
       const environment = source.evaluation.environment;
       const result = readConventionTransforms(
-        source.evaluation.executedCalls
-          .map((call) => call.expression)
+        source.evaluation.invocations
+          .map((invocation) => invocation.node)
+          .filter(ts.isCallExpression)
           .filter((call) => toolingHost.isAureliaPluginCall(call)),
         environment.readValue('default') ?? readStaticCommonJsExportValue(environment, 'default'),
         toolingHost,
@@ -542,7 +528,9 @@ function readConventionTransforms(
   const handledCalls = new Set<ts.CallExpression>();
   for (const plugin of list.plugins) {
     handledCalls.add(plugin.call);
-    const options = readConventionPluginOptions(plugin.options);
+    const options = plugin.options.openSeams.length === 0
+      ? readConventionPluginOptions(plugin.options.value)
+      : new ConventionPluginOptionsRead(ConventionPluginOptionsState.Open);
     switch (options.state) {
       case ConventionPluginOptionsState.Enabled:
         admissions.push(new ResourceConventionTransformRead(plugin.call, options.include, options.exclude));
@@ -553,7 +541,7 @@ function readConventionTransforms(
         opens.push(new ResourceConventionTransformOpen(
           plugin.call,
           'The Aurelia Vite conventions plugin uses transform options or source filters that could not be closed statically.',
-          conventionTransformOpenReasonKinds(plugin.options),
+          conventionTransformEvidenceOpenReasonKinds(plugin.options),
         ));
         break;
     }
@@ -593,6 +581,18 @@ function conventionTransformOpenReasonKinds(
   return reasonKinds.length === 0
     ? [OpenSeamReasonKind.FeatureNotYetModeled]
     : reasonKinds;
+}
+
+function conventionTransformEvidenceOpenReasonKinds(
+  evidence: EvaluationValueEvidence,
+): readonly OpenSeamReasonKind[] {
+  const reasonKinds = [
+    ...evidence.openSeams.flatMap((seam) => seam.reasonKinds),
+    ...openSeamReasonKindsForEvaluationValue(evidence.value),
+  ];
+  return reasonKinds.length === 0
+    ? [OpenSeamReasonKind.FeatureNotYetModeled]
+    : [...new Set(reasonKinds)];
 }
 
 function readConventionPluginList(

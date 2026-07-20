@@ -47,7 +47,7 @@
         "EvaluationArgumentList is the positional call-phase product. It evaluates authored arguments left-to-right, expands closed Array/Set/Map/String iterators, and keeps unclosed arity/order separate from pressure on exact slots. A spread whose continuation stays open stops later effects from becoming definite; conditional continuation needs its own future carrier. Local calls, global intrinsics, and array intrinsics consume the list; syntax-only module recognition must not substitute for value evaluation.",
         "Retained evaluator candidates are projection evidence, not executable values. They must not choose branches, invoke getters or functions, or participate in scalar operations. Binding-source consumers may address an open aggregate only when its pressure is wholly owned by the aggregate shape and canonical member readers can select an exact child.",
         "Global intrinsic dispatch must admit the direct callee or namespace receiver path before evaluating arguments. Eager probe-time argument evaluation duplicates calls, seams, and abrupt completion before ordinary local-function dispatch.",
-        "Aurelia runtime-host intrinsics may ask StaticIntrinsicEvaluationHost for generic class instantiation, but product-specific calls such as ambient resolve(ClassKey) should stay at the host boundary and only close in activation-like frames with `this`; `evaluateAureliaResolveCall(...)` owns direct class-key closure. Registered/interface keys join through the shared DiProviderActivationView, and RuntimeBindingSourceEvaluationFrame binds one activation session to the active modeled container rather than maintaining a second binding-source DI resolver.",
+        "Aurelia's runtime host gives imported ambient resolve(...) an exact evaluator function identity but leaves the generic call open because resolution requires an active container. DiProviderActivationSession claims that evaluated identity when a concrete requestor is active; do not restore source-import scans or a second direct-class-key host path. RuntimeBindingSourceEvaluationFrame binds one activation session to the active modeled container rather than maintaining a second binding-source DI resolver.",
         "Browser ambient globals such as document, window, self, customElements, and console are Aurelia host-runtime boundary values during app admission. Keep them in aureliaStaticEvaluationRuntimeHost so app setup expressions remain host-dependent boundaries instead of unresolved-identifier seams, and keep ordinary host-boundary method calls/property writes such as animation-frame, storage, keyboard event, WebGL, and AudioContext usage as boundary propagation rather than generic dynamic-call/dynamic-mutation seam sites.",
         "Effective TypeScript lib ambient value declarations and project-local `.d.ts` ambient `declare const/let/var` globals, including `declare global` module declarations, are host-environment boundary values for static evaluation. Keep this in StaticProjectEvaluationPass via ambient-globals.ts so browser/stdlib names and Vite/build-time injected variables stop producing unresolved-identifier seams without pretending their literal values are statically known.",
         "`import.meta` is a host-environment boundary object. `import.meta.env.*` should be legal evaluator syntax that carries host/bundler dependency forward to consumers such as resource convergence without becoming an evaluator unsupported-expression seam.",
@@ -223,19 +223,19 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
           "symbolName": "evaluateAureliaResolveCall",
-          "summary": "Host-bound ambient resolve(...) evaluator path for activation-like direct class-key calls."
+          "summary": "Generic Aurelia host boundary that keeps ambient resolve(...) open until DI supplies an active container."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
-          "symbolName": "aureliaResolveDirectKey",
-          "summary": "Direct-key admission for evaluator-local ambient resolve(...), leaving wrappers and non-direct key shapes open."
+          "symbolName": "isAureliaResolveEvaluationFunction",
+          "summary": "Exact evaluated identity predicate for Aurelia's imported ambient resolve API."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
-          "symbolName": "evaluateAureliaResolveDirectClassKey",
-          "summary": "Evaluator-local class-key instantiation path for direct ambient resolve(ClassKey)."
+          "filePath": "packages/semantic-runtime/src/di/provider-activation.ts",
+          "symbolName": "internalRuntimeHost",
+          "summary": "Container-bound DI activation host that spends the evaluated resolve identity."
         },
         {
           "kind": "source",
@@ -479,7 +479,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-06-10"
+      "updatedAt": "2026-07-20"
     },
     {
       "id": "frontier:static-project-evaluation-frame",
@@ -816,6 +816,95 @@
       ],
       "createdAt": "2026-05-12",
       "updatedAt": "2026-07-17"
+    },
+    {
+      "id": "decision:static-invocation-evidence-and-value-graph",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "evaluation",
+        "configuration",
+        "di",
+        "provenance"
+      ],
+      "summary": "Static invocation semantics retain one evaluated reference and argument phase, distinguish reached occurrences from preparation boundaries, and keep mutable values inside explicit graph ownership.",
+      "rationale": "The old evaluator dispatched through several syntax probes and retained cloned call environments, so receiver and arguments could execute repeatedly, later readers replayed source against stale state, and short-circuited or argument-blocked calls masqueraded as executed. StaticInvocationFrame now owns one live preparation and immutable invocation evaluations retain exact edge evidence afterward. StaticEvaluationValueGraph makes evaluator-produced ownership and runtime-host reconciliation explicit instead of inferring a realm from captured environments.",
+      "guidance": [
+        "Resolve the callee reference, receiver/this, computed property key, and one EvaluationArgumentList before any runtime-host or intrinsic dispatcher decides applicability. Dispatch from evaluated value identity, not source spelling or import rescans.",
+        "StaticInvocationOccurrence means the ECMAScript invocation operation was reached. StaticInvocationPreparationBoundary retains evaluated receiver and authored argument evidence when an open argument list blocks that operation; it must not enter the derived invocations view or publish definite callee effects.",
+        "Keep authored arguments separate from expanded runtime positions. Spread-source provenance belongs to EvaluationAuthoredArgument while local functions and intrinsics consume exact positional evidence.",
+        "StaticModuleEvaluationExpressionReader spends immutable invocation edges and completions. Missing or repeated evidence returns evaluation.invocation-source-read; never recover old values by replaying an invocation AST against the final module environment.",
+        "Use StaticEvaluationValueGraph.retainProduced for evaluator-created mutable values and reconcileEnvironmentAfterExternal after a runtime host may insert foreign values into an owned environment. These are opposite lifecycle crossings and must not collapse into environment-owner inference.",
+        "Configuration method ownership joins on the evaluated receiver. A fluent result is downstream of invocation and therefore cannot identify a register/app operation whose argument preparation remained open."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/invocation.ts",
+          "symbolName": "StaticInvocationFrame",
+          "summary": "Transient single-owner invocation preparation passed to runtime hosts and intrinsics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/invocation.ts",
+          "symbolName": "StaticInvocationOccurrence",
+          "summary": "Immutable evidence and completion for an invocation operation that was actually reached."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/invocation.ts",
+          "symbolName": "StaticInvocationPreparationBoundary",
+          "summary": "Pre-invocation evidence retained when argument-list control remains open."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/expression-reader.ts",
+          "symbolName": "StaticModuleEvaluationExpressionReader",
+          "summary": "Immutable invocation-edge reader with explicit ambiguity and missing-evidence seams."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluation-graph.ts",
+          "symbolName": "StaticEvaluationValueGraph",
+          "summary": "Explicit mutable-value and environment ownership capability."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-recognizer.ts",
+          "symbolName": "aureliaFacadeEvaluationForCallReceiver",
+          "summary": "Receiver-identity join for fluent Aurelia operations, including blocked open-spread preparations."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm exec vitest run packages/semantic-runtime/test/evaluation-invocation-semantics.test.ts",
+          "summary": "Focused one-time evaluation, optional-chain, receiver, spread, completion, and no-replay conformance tests."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:service-root-admission-chain",
+          "summary": "Contract proving open registration spreads retain app-local uncertainty without cross-root suppression."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/evaluation/invocation.ts",
+          "symbolName": "StaticInvocationFrame"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/evaluation/invocation.ts",
+          "symbolName": "StaticInvocationPreparationBoundary"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluation-graph.ts",
+          "symbolName": "StaticEvaluationValueGraph"
+        }
+      ],
+      "createdAt": "2026-07-20",
+      "updatedAt": "2026-07-20"
     },
     {
       "id": "decision:evaluator-abrupt-completion-boundary",

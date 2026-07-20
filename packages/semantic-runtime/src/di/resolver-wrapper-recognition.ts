@@ -3,26 +3,49 @@ import ts from 'typescript';
 import {
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
+import { DiResolverKeyKind } from '../kernel/identity.js';
 import { symbolForExpression } from '../type-system/checker-node-helpers.js';
 
-export const AURELIA_RESOLVER_WRAPPER_KINDS = [
-  'all',
-  'last',
-  'lazy',
-  'optional',
-  'factory',
-  'own',
-  'resource',
-  'optionalResource',
-  'allResources',
-  'newInstanceForScope',
-  'newInstanceOf',
-] as const;
+export const AURELIA_RESOLVER_KEY_KIND_BY_EXPORT = {
+  lazy: DiResolverKeyKind.Lazy,
+  all: DiResolverKeyKind.All,
+  last: DiResolverKeyKind.Last,
+  optional: DiResolverKeyKind.Optional,
+  factory: DiResolverKeyKind.Factory,
+  own: DiResolverKeyKind.Own,
+  resource: DiResolverKeyKind.Resource,
+  optionalResource: DiResolverKeyKind.OptionalResource,
+  allResources: DiResolverKeyKind.AllResources,
+  newInstanceOf: DiResolverKeyKind.NewInstanceOf,
+  newInstanceForScope: DiResolverKeyKind.NewInstanceForScope,
+  ignore: DiResolverKeyKind.Ignore,
+} as const;
+
+export type DiAureliaResolverExportName = keyof typeof AURELIA_RESOLVER_KEY_KIND_BY_EXPORT;
 
 export type DiAureliaResolverWrapperKind =
-  typeof AURELIA_RESOLVER_WRAPPER_KINDS[number];
+  Exclude<DiAureliaResolverExportName, 'ignore'>;
+
+export const AURELIA_RESOLVER_WRAPPER_KINDS = Object.freeze(
+  Object.keys(AURELIA_RESOLVER_KEY_KIND_BY_EXPORT)
+    .filter((name): name is DiAureliaResolverWrapperKind => name !== 'ignore'),
+);
 
 const AURELIA_RESOLVER_WRAPPER_KIND_SET = new Set<string>(AURELIA_RESOLVER_WRAPPER_KINDS);
+
+export function aureliaResolverKeyKindForExportName(
+  name: string,
+): DiResolverKeyKind | null {
+  return Object.hasOwn(AURELIA_RESOLVER_KEY_KIND_BY_EXPORT, name)
+    ? AURELIA_RESOLVER_KEY_KIND_BY_EXPORT[name as DiAureliaResolverExportName]
+    : null;
+}
+
+export function aureliaResolverKeyKindForWrapper(
+  kind: DiAureliaResolverWrapperKind,
+): DiResolverKeyKind {
+  return AURELIA_RESOLVER_KEY_KIND_BY_EXPORT[kind];
+}
 
 export interface DiAureliaResolverWrapperCall {
   readonly call: ts.CallExpression;

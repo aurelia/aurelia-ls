@@ -28,6 +28,8 @@ export const EvaluationOpenSeamKind = {
   DynamicMutation: KernelVocabulary.Evaluation.DynamicMutation.key,
   /** A dynamic import or non-literal module edge could not be linked statically. */
   DynamicImport: KernelVocabulary.Evaluation.DynamicImport.key,
+  /** A source-oriented read could not select complete immutable evidence from reached invocation occurrences. */
+  InvocationSourceRead: KernelVocabulary.Evaluation.InvocationSourceRead.key,
 } as const satisfies Record<string, OpenSeamKindKey>;
 
 export type EvaluationOpenSeamKind =
@@ -61,6 +63,8 @@ export function evaluationOpenSeamDefaultReasonKinds(
       return [OpenSeamReasonKind.StaticEvaluationDynamicMutation];
     case EvaluationOpenSeamKind.DynamicImport:
       return [OpenSeamReasonKind.StaticEvaluationDynamicImport];
+    case EvaluationOpenSeamKind.InvocationSourceRead:
+      return [OpenSeamReasonKind.StaticEvaluationInvocationSourceReadOpen];
     default:
       return [];
   }

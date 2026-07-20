@@ -12,6 +12,13 @@ import {
 } from '../src/evaluation/evaluator.js';
 import { StaticEvaluationSessionFork } from '../src/evaluation/evaluation-session.js';
 import {
+  StaticInvocationHandled,
+  StaticInvocationKind,
+  StaticInvocationNotApplicable,
+} from '../src/evaluation/invocation.js';
+import {
+  EvaluationBoundaryKind,
+  EvaluationBoundaryValue,
   EvaluationObjectProperty,
   EvaluationObjectPropertyState,
   EvaluationObjectValue,
@@ -124,14 +131,7 @@ describe('static evaluator abrupt completion', () => {
   });
 
   test('lets a runtime host raise through the same completion channel', () => {
-    const runtimeHost: StaticEvaluationRuntimeHost = {
-      evaluateCallExpression: (call, _environment, _moduleKey, _depth, host) => {
-        if (!ts.isIdentifier(call.expression) || call.expression.text !== 'hostFail') {
-          return null;
-        }
-        return host.raise(new ThrowEvaluationCompletion(new EvaluationStringValue('host failed', call)));
-      },
-    };
+    const runtimeHost = throwingRuntimeHost((node) => new EvaluationStringValue('host failed', node));
     const result = evaluate([
       "let observed = 'before';",
       'try {',
@@ -174,14 +174,7 @@ describe('static evaluator abrupt completion', () => {
   });
 
   test('preserves host-raised completion through a speculative evaluation session', () => {
-    const runtimeHost: StaticEvaluationRuntimeHost = {
-      evaluateCallExpression: (call, _environment, _moduleKey, _depth, host) => {
-        if (!ts.isIdentifier(call.expression) || call.expression.text !== 'hostFail') {
-          return null;
-        }
-        return host.raise(new ThrowEvaluationCompletion(new EvaluationStringValue('session failure', call)));
-      },
-    };
+    const runtimeHost = throwingRuntimeHost((node) => new EvaluationStringValue('session failure', node));
     const source = sourceFile(['function fail() { hostFail(); }']);
     const baseline = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
     const session = new StaticEvaluationSessionFork(baseline.runtimeHost).forkModuleEvaluation(baseline);
@@ -213,14 +206,7 @@ describe('static evaluator abrupt completion', () => {
         EvaluationObjectPropertyState.Closed,
       )],
     ]), false, source);
-    const runtimeHost: StaticEvaluationRuntimeHost = {
-      evaluateCallExpression: (call, _environment, _moduleKey, _depth, host) => {
-        if (!ts.isIdentifier(call.expression) || call.expression.text !== 'hostFail') {
-          return null;
-        }
-        return host.raise(new ThrowEvaluationCompletion(sharedThrown));
-      },
-    };
+    const runtimeHost = throwingRuntimeHost(() => sharedThrown);
     const baseline = new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(source);
     const session = new StaticEvaluationSessionFork(baseline.runtimeHost).forkModuleEvaluation(baseline);
     const fail = session.environment.readValue('fail');
@@ -630,6 +616,26 @@ function evaluate(
   runtimeHost: StaticEvaluationRuntimeHost = {},
 ) {
   return new StaticEvaluator(undefined, runtimeHost).evaluateSourceFile(sourceFile(lines));
+}
+
+function throwingRuntimeHost(
+  thrownValue: (node: ts.Node) => EvaluationValue,
+): StaticEvaluationRuntimeHost {
+  const hostFail = new EvaluationBoundaryValue(
+    EvaluationBoundaryKind.HostEnvironment,
+    'hostFail',
+  );
+  return {
+    resolveIdentifier: (identifier) => identifier.text === 'hostFail' ? hostFail : null,
+    evaluateInvocation: (frame) => {
+      if (frame.kind !== StaticInvocationKind.Call || frame.callee.value !== hostFail) {
+        return StaticInvocationNotApplicable;
+      }
+      return new StaticInvocationHandled(
+        new ThrowEvaluationCompletion(thrownValue(frame.node)),
+      );
+    },
+  };
 }
 
 function sourceFile(lines: readonly string[]): ts.SourceFile {

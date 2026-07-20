@@ -1,56 +1,63 @@
 import ts from 'typescript';
-import type { ModuleEnvironmentRecord } from '../environment.js';
+import type { StaticInvocationFrame } from '../invocation.js';
 import { EvaluationOpenSeamKind } from '../seams.js';
 import {
   EvaluationRegularExpressionValue,
   EvaluationUndefined,
+  EvaluationUnknownValue,
   EvaluationValueKind,
   type EvaluationValue,
 } from '../values.js';
 import type { StaticIntrinsicEvaluationHost } from './contracts.js';
-import { stringCoercionText } from './shared.js';
+import {
+  evaluatePositionalIntrinsicArguments,
+  stringCoercionText,
+} from './shared.js';
 
 export function evaluateRegExpConstructor(
-  expression: ts.NewExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.NewExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  return evaluateRegExpArguments(
-    expression,
-    expression.arguments ?? [],
-    environment,
-    moduleKey,
-    depth + 1,
-    host,
-  );
+  return evaluateRegExpArguments(frame, host);
 }
 
 export function evaluateRegExpCall(
-  call: ts.CallExpression,
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  return evaluateRegExpArguments(call, call.arguments, environment, moduleKey, depth + 1, host);
+  return evaluateRegExpArguments(frame, host);
 }
 
 export function evaluateRegExpArguments(
-  node: ts.Expression,
-  args: readonly ts.Expression[],
-  environment: ModuleEnvironmentRecord,
-  moduleKey: string,
-  depth: number,
+  frame: StaticInvocationFrame<ts.CallExpression | ts.NewExpression>,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue {
-  const patternValue = args[0] == null
-    ? EvaluationUndefined
-    : host.evaluateExpression(args[0], environment, moduleKey, depth + 1);
-  const flagsValue = args[1] == null
-    ? null
-    : host.evaluateExpression(args[1], environment, moduleKey, depth + 1);
+  const { node, moduleKey } = frame;
+  const argumentRead = evaluatePositionalIntrinsicArguments(
+    frame.argumentList,
+    node,
+    moduleKey,
+    host,
+    'RegExp argument list did not close.',
+  );
+  if (argumentRead.kind === 'open') {
+    return argumentRead.value;
+  }
+  for (const evidence of argumentRead.evidence) {
+    host.replayOpenSeams(evidence.openSeams);
+  }
+  if (
+    (argumentRead.evidence[0]?.openSeams.length ?? 0) > 0
+    || (argumentRead.evidence[1]?.openSeams.length ?? 0) > 0
+  ) {
+    return new EvaluationUnknownValue(
+      'RegExp pattern or flags retained open pressure.',
+      node,
+      true,
+    );
+  }
+  const patternValue = argumentRead.evidence[0]?.value ?? EvaluationUndefined;
+  const flagsValue = argumentRead.evidence[1]?.value ?? null;
   const pattern = regularExpressionPatternText(patternValue);
   const flags = flagsValue == null || flagsValue.kind === EvaluationValueKind.Undefined
     ? patternValue.kind === EvaluationValueKind.RegularExpression ? patternValue.flags : ''

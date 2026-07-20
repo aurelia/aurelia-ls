@@ -152,6 +152,12 @@ identities, breaking joins such as two app roots that intentionally share one ro
 inside a complete app-analysis candidate and its post-template binding/router evaluation each own an explicit forked
 session, separate from the admitted project-evaluation graph and from one another, so rejected work cannot mutate the
 incumbent or leak mutable evaluator state across lifecycle phases.
+`StaticEvaluationValueGraph` is the ownership capability for those mutable values and environments. Evaluator-created
+values enter through `retainProduced(...)`, including an instance before its field initializers execute so recursive
+`this` references keep one identity. A runtime host may mutate an already-owned environment with foreign values;
+`reconcileEnvironmentAfterExternal(...)` forks those values into the owning graph after the host returns. Do not merge
+these lifecycles or infer graph ownership from a value's environment: produced values and externally inserted values
+cross the boundary in opposite directions.
 The reusable computation records the profile, structural project boot frame, compiler/toolchain environment, and exact
 positive and negative host reads. Consumer-local read scopes share one immutable memoized project-input value view but
 retain separate manifests for app and tooling profiles. Exact reads validate candidate commits; admitted generation
@@ -289,6 +295,18 @@ intrinsics consume this product instead of re-reading `CallExpression.arguments`
 unused parameter without contaminating the return, but an unclosed spread prevents speculative callee effects.
 Syntax-only recognition such as module-specifier validation may still inspect authored arguments, but it must not
 masquerade as value evaluation.
+
+`StaticInvocationFrame` is the transient dispatch product after one reference evaluation and one argument-list phase.
+It carries callee, receiver/`this`, computed property-key, authored-argument, and expanded positional evidence; runtime
+hosts and intrinsic families decide applicability from those values without re-evaluating source. The retained
+`invocationEvaluations` stream keeps the same evidence after the live frame is gone. `StaticInvocationOccurrence`
+means the ECMAScript invocation operation was actually reached and owns its normal or abrupt completion.
+`StaticInvocationPreparationBoundary` means reference and argument preparation ran but an open argument list prevented
+proving that invocation occurred. It is deliberately absent from the derived `invocations` view, while remaining
+available to domain recognizers that must project a scoped uncertainty from the evaluated receiver and authored spread.
+`StaticModuleEvaluationExpressionReader` spends these immutable edges and completions; it must return an explicit
+`evaluation.invocation-source-read` seam when no unique retained edge exists, never replay an invocation AST against a
+later lexical environment.
 
 Statement completion is the authoritative control-flow result. Local functions, constructors, accessors, and runtime
 hosts tunnel abrupt completion through the evaluator's value-shaped recursive internals, then restore it at the nearest
