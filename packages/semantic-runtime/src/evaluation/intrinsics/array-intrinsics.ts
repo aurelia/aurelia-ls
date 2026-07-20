@@ -860,12 +860,19 @@ export function evaluateArrayIncludesFromReceiver(
   }
   const included = evaluationArrayIncludes(receiver, searchEvidence.value, startIndex);
   if (included.value == null) {
-    return unknownFromEvidence(
-      new EvaluationValueEvidence(EvaluationUndefined, included.openSeams),
-      'Array.includes encountered a pressure-qualified element.',
-      call,
-      host,
-    );
+    return included.openSeams.length > 0
+      ? unknownFromEvidence(
+          new EvaluationValueEvidence(EvaluationUndefined, included.openSeams),
+          'Array.includes encountered a pressure-qualified element.',
+          call,
+          host,
+        )
+      : host.unknown(
+          'Array.includes could not decide open element identity.',
+          call,
+          moduleKey,
+          EvaluationOpenSeamKind.DynamicCall,
+        );
   }
   return new EvaluationBooleanValue(included.value, call);
 }
@@ -937,12 +944,19 @@ export function evaluateArrayIndexOf(
   }
   const index = evaluationArrayIndexOf(receiver, search, start, rightToLeft);
   if (index.value == null) {
-    return unknownFromEvidence(
-      new EvaluationValueEvidence(EvaluationUndefined, index.openSeams),
-      `Array.${intrinsicName} encountered a pressure-qualified element.`,
-      call,
-      host,
-    );
+    return index.openSeams.length > 0
+      ? unknownFromEvidence(
+          new EvaluationValueEvidence(EvaluationUndefined, index.openSeams),
+          `Array.${intrinsicName} encountered a pressure-qualified element.`,
+          call,
+          host,
+        )
+      : host.unknown(
+          `Array.${intrinsicName} could not decide open element identity.`,
+          call,
+          moduleKey,
+          EvaluationOpenSeamKind.DynamicCall,
+        );
   }
   return new EvaluationNumberValue(index.value, call);
 }

@@ -19,14 +19,17 @@ import {
   EvaluationArrayValue,
   EvaluationBigIntValue,
   EvaluationBoundaryKind,
+  EvaluationBoundaryObjectValue,
   EvaluationBoundaryValue,
   EvaluationBooleanValue,
   EvaluationNumberValue,
   EvaluationUndefined,
   EvaluationValueKind,
+} from '../src/evaluation/values.js';
+import {
   evaluationValuesSameValueZero,
   evaluationValuesStrictlyEqual,
-} from '../src/evaluation/values.js';
+} from '../src/evaluation/value-relation.js';
 import { EvaluationValueEvidence } from '../src/evaluation/value-pressure.js';
 
 describe('evaluation array semantics', () => {
@@ -65,6 +68,28 @@ describe('evaluation array semantics', () => {
       kind: EvaluationValueKind.Number,
       value: -1,
     }));
+  });
+
+  test('keeps independent host-boundary identities open across equality and array search', () => {
+    const runtimeHost: StaticEvaluationRuntimeHost = {
+      resolveIdentifier: (identifier) => identifier.text === 'external'
+        ? new EvaluationBoundaryObjectValue(
+            EvaluationBoundaryKind.HostEnvironment,
+            'external',
+            new Map(),
+            identifier,
+          )
+        : null,
+    };
+    const result = evaluate([
+      'const equal = external === external;',
+      'const includes = [external].includes(external);',
+      'const index = [external].indexOf(external);',
+    ], runtimeHost);
+
+    expect(result.environment.readValue('equal')?.kind).toBe(EvaluationValueKind.Unknown);
+    expect(result.environment.readValue('includes')?.kind).toBe(EvaluationValueKind.Unknown);
+    expect(result.environment.readValue('index')?.kind).toBe(EvaluationValueKind.Unknown);
   });
 
   test('does not manufacture positions or length across an unknown spread', () => {

@@ -14,10 +14,10 @@ import {
   EvaluationStringPatternValue,
   EvaluationStringValue,
   EvaluationValueKind,
-  evaluationValuesStrictlyEqual,
   mergeEvaluationArrayUncertainties,
   type EvaluationValue,
 } from './values.js';
+import { evaluationValuesStrictlyEqual } from './value-relation.js';
 
 /**
  * Summarize several possible evaluator values into one conservative representative.

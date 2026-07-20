@@ -340,11 +340,15 @@ describe('project static evaluation', () => {
   test('assembles module namespaces with re-export identity, ambiguity, closure, and namespace ordering', () => {
     const root = temporaryProject({
       'entry.ts': [
+        "import * as sourceFirst from './source';",
+        "import * as sourceSecond from './source';",
         "import * as duplicate from './duplicate';",
         "import * as ambiguous from './ambiguous';",
         "import * as sameValueConflict from './same-value-conflict';",
         "import * as cycle from './cycle-a';",
         'export const duplicateNamespace = duplicate;',
+        'export const sameSourceNamespace = sourceFirst === sourceSecond;',
+        'export const sameReExportedNamespace = sourceFirst === ambiguous.sourceNamespace;',
         'export const ambiguousNamespace = ambiguous;',
         'export const sameValueConflictNamespace = sameValueConflict;',
         'export const cycleNamespace = cycle;',
@@ -419,12 +423,16 @@ describe('project static evaluation', () => {
 
     const evaluation = new StaticProjectEvaluationPass().evaluate(project);
     const duplicate = evaluatedBinding(evaluation, 'entry.ts', 'duplicateNamespace');
+    const sameSourceNamespace = evaluatedBinding(evaluation, 'entry.ts', 'sameSourceNamespace');
+    const sameReExportedNamespace = evaluatedBinding(evaluation, 'entry.ts', 'sameReExportedNamespace');
     const ambiguous = evaluatedBinding(evaluation, 'entry.ts', 'ambiguousNamespace');
     const sameValueConflict = evaluatedBinding(evaluation, 'entry.ts', 'sameValueConflictNamespace');
     const cycle = evaluatedBinding(evaluation, 'entry.ts', 'cycleNamespace');
     const shared = evaluatedBinding(evaluation, 'source.ts', 'shared');
 
     expect(duplicate.kind).toBe(EvaluationValueKind.ModuleNamespace);
+    expect(sameSourceNamespace.kind === EvaluationValueKind.Boolean ? sameSourceNamespace.value : null).toBe(true);
+    expect(sameReExportedNamespace.kind === EvaluationValueKind.Boolean ? sameReExportedNamespace.value : null).toBe(true);
     expect(duplicate.kind === EvaluationValueKind.ModuleNamespace
       ? [...duplicate.exportEntries.keys()]
       : []).toEqual(['shared']);

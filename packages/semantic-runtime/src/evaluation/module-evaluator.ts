@@ -40,6 +40,7 @@ import {
   evaluationAbruptCompletionSummary,
   type EvaluationAbruptCompletion,
 } from './completion.js';
+import { bindEvaluationValueLineage } from './value-relation.js';
 import { EvaluationValueEvidence } from './value-pressure.js';
 
 /** Result of evaluating a graph of local ECMAScript modules. */
@@ -62,6 +63,7 @@ export interface StaticModuleExternalValueResolver {
 /** Evaluates module records with import/export linkage over an already-built module graph. */
 export class StaticModuleGraphEvaluator {
   private readonly moduleResults = new Map<string, StaticModuleEvaluationResult>();
+  private readonly moduleNamespaceLineageRoots = new Map<string, EvaluationModuleNamespaceValue>();
   private readonly openValues: EvaluationUnknownValue[] = [];
   private readonly evaluatingModules = new Set<string>();
   private readonly resolvingExports = new Set<string>();
@@ -636,7 +638,14 @@ export class StaticModuleGraphEvaluator {
         evidence.openSeams,
       ));
     }
-    return new EvaluationModuleNamespaceValue(moduleKey, exportEntries, mayHaveUnknownExports, node);
+    const namespace = new EvaluationModuleNamespaceValue(moduleKey, exportEntries, mayHaveUnknownExports, node);
+    const lineageRoot = this.moduleNamespaceLineageRoots.get(moduleKey);
+    if (lineageRoot == null) {
+      this.moduleNamespaceLineageRoots.set(moduleKey, namespace);
+    } else {
+      bindEvaluationValueLineage(lineageRoot, namespace);
+    }
+    return namespace;
   }
 
   private readModuleNamespaceExportNames(

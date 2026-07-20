@@ -44,6 +44,7 @@ import {
   ownEvaluationValue,
   type StaticEvaluationValueGraph,
 } from './evaluation-graph.js';
+import { bindEvaluationValueLineage } from './value-relation.js';
 import {
   EvaluationArrayElement,
   EvaluationArrayValue,
@@ -403,6 +404,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
 
   private bindValue(source: EvaluationValue, target: EvaluationValue): void {
     this.values.set(source, target);
+    bindEvaluationValueLineage(source, target);
     ownEvaluationValue(target, this);
     this.transferRuntimeHostMetadata(source, target);
   }

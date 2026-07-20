@@ -8,15 +8,17 @@ import {
   EvaluationKeyedCollectionEntryState,
   EvaluationKeyedCollectionShape,
   EvaluationMapEntry,
-  EvaluationSameValueZeroDecisionKind,
   EvaluationSetElement,
   EvaluationUndefined,
   canonicalEvaluationKeyedCollectionKey,
-  evaluationSameValueZeroDecision,
   type EvaluationMapValue,
   type EvaluationSetValue,
   type EvaluationValue,
 } from './values.js';
+import {
+  EvaluationValueRelationKind,
+  evaluationSameValueZeroDecision,
+} from './value-relation.js';
 import { EvaluationValueEvidence } from './value-pressure.js';
 
 export const enum EvaluationKeyedCollectionLookupKind {
@@ -81,7 +83,7 @@ export function evaluationSetLookup(
       continue;
     }
     const decision = evaluationSameValueZeroDecision(element.value, key.value);
-    if (decision === EvaluationSameValueZeroDecisionKind.Match) {
+    if (decision === EvaluationValueRelationKind.Match) {
       if (element.state === EvaluationKeyedCollectionEntryState.Deleted) {
         return openSeams.length === 0
           ? new EvaluationSetLookup(EvaluationKeyedCollectionLookupKind.Miss, element)
@@ -95,7 +97,7 @@ export function evaluationSetLookup(
             element.presenceOpenSeams,
           );
     }
-    if (decision === EvaluationSameValueZeroDecisionKind.Open) {
+    if (decision === EvaluationValueRelationKind.Open) {
       openSeams.push(...element.openSeams, ...element.presenceOpenSeams);
     }
   }
@@ -137,7 +139,7 @@ export function evaluationMapLookup(
       continue;
     }
     const decision = evaluationSameValueZeroDecision(entry.key, key.value);
-    if (decision === EvaluationSameValueZeroDecisionKind.Match) {
+    if (decision === EvaluationValueRelationKind.Match) {
       if (entry.state === EvaluationKeyedCollectionEntryState.Deleted) {
         return openSeams.length === 0
           ? new EvaluationMapLookup(EvaluationKeyedCollectionLookupKind.Miss, entry)
@@ -151,7 +153,7 @@ export function evaluationMapLookup(
             entry.presenceOpenSeams,
           );
     }
-    if (decision === EvaluationSameValueZeroDecisionKind.Open) {
+    if (decision === EvaluationValueRelationKind.Open) {
       openSeams.push(...entry.keyOpenSeams, ...entry.presenceOpenSeams);
     }
   }
@@ -410,7 +412,7 @@ export function clearEvaluationMap(receiver: EvaluationMapValue): void {
 }
 
 export function canDriveKeyedCollectionIdentity(value: EvaluationValue): boolean {
-  return evaluationSameValueZeroDecision(value, value) !== EvaluationSameValueZeroDecisionKind.Open;
+  return evaluationSameValueZeroDecision(value, value) !== EvaluationValueRelationKind.Open;
 }
 
 function collectionMutationOpenSeams(

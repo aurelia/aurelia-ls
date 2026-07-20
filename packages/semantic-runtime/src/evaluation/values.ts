@@ -53,7 +53,7 @@ export const enum EvaluationValueKind {
   Instance = 'instance',
   /** Module namespace value assembled from a linked module record. */
   ModuleNamespace = 'module-namespace',
-  /** Promise-like value with a statically known fulfillment lane. */
+  /** Promise-like value with explicit fulfilled, rejected, or open settlement evidence. */
   Promise = 'promise',
 }
 
@@ -1629,78 +1629,9 @@ export function readEvaluationPrimitive(value: EvaluationPrimitiveValue): string
   }
 }
 
-/** Compare evaluator values with ECMAScript strict-equality semantics. */
-export function evaluationValuesStrictlyEqual(left: EvaluationValue, right: EvaluationValue): boolean {
-  if (left.kind === EvaluationValueKind.BigInt && right.kind === EvaluationValueKind.BigInt) {
-    return evaluationBigIntTextEqual(left.text, right.text);
-  }
-  if (isEvaluationPrimitiveValue(left) && isEvaluationPrimitiveValue(right)) {
-    return readEvaluationPrimitive(left) === readEvaluationPrimitive(right);
-  }
-  return left === right;
-}
-
-export const enum EvaluationSameValueZeroDecisionKind {
-  /** Both evaluator values denote the same runtime SameValueZero key. */
-  Match = 'match',
-  /** Both evaluator values are closed and denote different runtime keys. */
-  Miss = 'miss',
-  /** At least one value does not carry enough runtime identity to decide safely. */
-  Open = 'open',
-}
-
-/** Decide SameValueZero without turning a boundary or retained candidate into a false miss. */
-export function evaluationSameValueZeroDecision(
-  left: EvaluationValue,
-  right: EvaluationValue,
-): EvaluationSameValueZeroDecisionKind {
-  if (left === right) {
-    return left.kind === EvaluationValueKind.Unknown
-      || left.kind === EvaluationValueKind.BoundaryValue
-      || left.kind === EvaluationValueKind.StringPattern
-      ? EvaluationSameValueZeroDecisionKind.Open
-      : EvaluationSameValueZeroDecisionKind.Match;
-  }
-  if (
-    left.kind === EvaluationValueKind.Unknown
-    || right.kind === EvaluationValueKind.Unknown
-    || left.kind === EvaluationValueKind.BoundaryValue
-    || right.kind === EvaluationValueKind.BoundaryValue
-    || left.kind === EvaluationValueKind.BoundaryObject
-    || right.kind === EvaluationValueKind.BoundaryObject
-    || left.kind === EvaluationValueKind.StringPattern
-    || right.kind === EvaluationValueKind.StringPattern
-  ) {
-    return EvaluationSameValueZeroDecisionKind.Open;
-  }
-  return evaluationValuesSameValueZeroClosed(left, right)
-    ? EvaluationSameValueZeroDecisionKind.Match
-    : EvaluationSameValueZeroDecisionKind.Miss;
-}
-
-/** Compare closed evaluator values with ECMAScript SameValueZero semantics used by Array.includes, Map, and Set. */
-export function evaluationValuesSameValueZero(left: EvaluationValue, right: EvaluationValue): boolean {
-  return evaluationSameValueZeroDecision(left, right) === EvaluationSameValueZeroDecisionKind.Match;
-}
-
 /** Canonicalize the only keyed-collection key whose retained representation differs from SameValueZero identity. */
 export function canonicalEvaluationKeyedCollectionKey(value: EvaluationValue): EvaluationValue {
   return value.kind === EvaluationValueKind.Number && Object.is(value.value, -0)
     ? new EvaluationNumberValue(0, value.node)
     : value;
-}
-
-function evaluationValuesSameValueZeroClosed(left: EvaluationValue, right: EvaluationValue): boolean {
-  if (left.kind === EvaluationValueKind.Number && right.kind === EvaluationValueKind.Number) {
-    return left.value === right.value || Number.isNaN(left.value) && Number.isNaN(right.value);
-  }
-  return evaluationValuesStrictlyEqual(left, right);
-}
-
-function evaluationBigIntTextEqual(left: string, right: string): boolean {
-  try {
-    return BigInt(left.slice(0, -1)) === BigInt(right.slice(0, -1));
-  } catch {
-    return left === right;
-  }
 }

@@ -58,8 +58,8 @@ projects static type and member surfaces from the checker for template/expressio
   (`AUR0020`), and `Metadata.define(...)` calls with no metadata key through exact raw framework Error authority.
   Resource-definition materialization still belongs to downstream resource/registration lanes.
 - Keep generic TypeScript syntax and evaluator-value operations, such as expression unwrapping, modifier checks, and
-  evaluator value equality, in `ts-syntax.ts` and `values.ts` rather than reintroducing local copies inside recognizers
-  or intrinsic handlers.
+  value relations, in `ts-syntax.ts`, `values.ts`, and `value-relation.ts` rather than reintroducing local copies inside
+  recognizers or intrinsic handlers.
 - Provide a project-level evaluation envelope that boot-admitted Aurelia passes can share, so resource recognition,
   configuration recognition, and later DI/template materializers do not each invent their own source-evaluation loop.
 - Resolve local TypeScript-authored module specifiers faithfully enough for source analysis, including emitted `.js`
@@ -279,6 +279,13 @@ consumed into edge carriers and replayed only when that edge is read. A retained
 must not select a branch, invoke a getter/function, perform arithmetic, or otherwise execute as a closed value.
 Moving already-audited pressure into an array shape, property, or other child carrier is not another encounter and must
 not append a duplicate audit row; reading that carrier later is the point at which causal pressure is replayed.
+
+`value-relation.ts` is the authority for ECMAScript strict equality, SameValue, and SameValueZero over evaluator
+carriers. Object identity belongs to one evaluator-local lineage, not to source spelling, paths, or structural shape.
+Session forks and repeated module-namespace projections preserve that lineage while retaining independent state and
+source-node snapshots. Independent host-boundary objects remain an open identity relation unless the host or session
+proves an alias. Consumers must spend the tri-state relation and keep `open` distinct from a confident miss; only
+consumers whose contract deliberately retains exact matches may use the boolean views.
 
 Array closure is multi-axis. `EvaluationArrayShape` retains runtime extent, exact present-element/hole positions, and
 order independently, together with the exact seams that open each axis. Authored elisions are exact holes, so

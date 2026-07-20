@@ -119,11 +119,14 @@ import {
   EvaluationValueKind,
   appendEvaluationStringLikePart,
   evaluationStringPatternFromConcatenation,
-  evaluationValuesStrictlyEqual,
   openEvaluationObjectProperties,
   readEvaluationTruthiness,
   type EvaluationValue,
 } from './values.js';
+import {
+  EvaluationValueRelationKind,
+  evaluationStrictEqualityDecision,
+} from './value-relation.js';
 import { hasModifier, isAssignmentOperator } from './ts-syntax.js';
 import { openSeamReasonKindForEvaluationBoundary } from './boundary-open-reason.js';
 import {
@@ -787,8 +790,18 @@ export class StaticEvaluator {
         this.materializeUnknownUse(caseValue, clause.expression, moduleKey, 'Switch case expression depended on an open value.', EvaluationOpenSeamKind.DynamicBranch);
         return null;
       }
-      if (evaluationValuesStrictlyEqual(expressionValue, caseValue)) {
+      const decision = evaluationStrictEqualityDecision(expressionValue, caseValue);
+      if (decision === EvaluationValueRelationKind.Match) {
         return index;
+      }
+      if (decision === EvaluationValueRelationKind.Open) {
+        this.open(
+          EvaluationOpenSeamKind.DynamicBranch,
+          'Switch case selection depended on open value identity.',
+          clause.expression,
+          moduleKey,
+        );
+        return null;
       }
     }
     return defaultClauseIndex;

@@ -5,12 +5,16 @@ import {
   EvaluationArrayShape,
   EvaluationArrayValue,
   EvaluationUndefined,
-  evaluationValuesSameValueZero,
-  evaluationValuesStrictlyEqual,
   mergeEvaluationArrayUncertainties,
   type EvaluationArrayUncertainty,
   type EvaluationValue,
 } from './values.js';
+import {
+  EvaluationValueRelationKind,
+  evaluationSameValueZeroDecision,
+  evaluationStrictEqualityDecision,
+  evaluationValuesSameValueZero,
+} from './value-relation.js';
 import { stringCoercionText } from './value-coercion.js';
 import type { EvaluationOpenSeam } from './seams.js';
 
@@ -110,6 +114,7 @@ export function evaluationArrayIncludes(
   start: number,
 ): EvaluationArraySearchRead<boolean> {
   const openSeams: EvaluationOpenSeam[] = [];
+  let relationOpen = false;
   for (const element of receiver.elements) {
     if (element.runtimeIndex == null || element.runtimeIndex < start) {
       continue;
@@ -118,9 +123,11 @@ export function evaluationArrayIncludes(
       openSeams.push(...element.openSeams);
       continue;
     }
-    if (evaluationValuesSameValueZero(element.value, search)) {
+    const decision = evaluationSameValueZeroDecision(element.value, search);
+    if (decision === EvaluationValueRelationKind.Match) {
       return new EvaluationArraySearchRead(true);
     }
+    relationOpen ||= decision === EvaluationValueRelationKind.Open;
   }
   if (
     evaluationValuesSameValueZero(EvaluationUndefined, search)
@@ -131,7 +138,7 @@ export function evaluationArrayIncludes(
   ) {
     return new EvaluationArraySearchRead(true);
   }
-  return openSeams.length > 0
+  return openSeams.length > 0 || relationOpen
     ? new EvaluationArraySearchRead<boolean>(null, openSeams)
     : new EvaluationArraySearchRead(false);
 }
@@ -152,7 +159,11 @@ export function evaluationArrayIndexOf(
     if (element.openSeams.length > 0) {
       return new EvaluationArraySearchRead<number>(null, element.openSeams);
     }
-    if (evaluationValuesStrictlyEqual(element.value, search)) {
+    const decision = evaluationStrictEqualityDecision(element.value, search);
+    if (decision === EvaluationValueRelationKind.Open) {
+      return new EvaluationArraySearchRead<number>(null);
+    }
+    if (decision === EvaluationValueRelationKind.Match) {
       return new EvaluationArraySearchRead(index);
     }
   }

@@ -8,12 +8,15 @@ import {
   EvaluationStringValue,
   EvaluationUndefined,
   EvaluationUndefinedValue,
-  evaluationValuesStrictlyEqual,
   isEvaluationPrimitiveValue,
   readEvaluationPrimitive,
   readEvaluationTruthiness,
   type EvaluationValue,
 } from './values.js';
+import {
+  EvaluationValueRelationKind,
+  evaluationStrictEqualityDecision,
+} from './value-relation.js';
 
 export type StaticBinaryOperation =
   | '=='
@@ -58,14 +61,18 @@ export function evaluateStaticBinaryOperation(
   node: ts.Node | null,
 ): EvaluationValue | null {
   switch (operation) {
-    case '==':
-      return new EvaluationBooleanValue(evaluationValuesLooselyEqual(left, right), node);
+    case '==': {
+      const equal = evaluationValuesLooselyEqual(left, right);
+      return equal == null ? null : new EvaluationBooleanValue(equal, node);
+    }
     case '===':
-      return new EvaluationBooleanValue(evaluationValuesStrictlyEqual(left, right), node);
-    case '!=':
-      return new EvaluationBooleanValue(!evaluationValuesLooselyEqual(left, right), node);
+      return evaluationBooleanForRelation(evaluationStrictEqualityDecision(left, right), false, node);
+    case '!=': {
+      const equal = evaluationValuesLooselyEqual(left, right);
+      return equal == null ? null : new EvaluationBooleanValue(!equal, node);
+    }
     case '!==':
-      return new EvaluationBooleanValue(!evaluationValuesStrictlyEqual(left, right), node);
+      return evaluationBooleanForRelation(evaluationStrictEqualityDecision(left, right), true, node);
     case 'in':
       return evaluateStaticInOperation(left, right, node);
     case 'instanceof':
@@ -349,7 +356,7 @@ function evaluateStaticTypeOfValue(
 function evaluationValuesLooselyEqual(
   left: EvaluationValue,
   right: EvaluationValue,
-): boolean {
+): boolean | null {
   if (left.kind === EvaluationValueKind.Null || left.kind === EvaluationValueKind.Undefined) {
     return right.kind === EvaluationValueKind.Null || right.kind === EvaluationValueKind.Undefined;
   }
@@ -368,7 +375,22 @@ function evaluationValuesLooselyEqual(
   if (left.kind === EvaluationValueKind.Number && right.kind === EvaluationValueKind.String) {
     return left.value === Number(right.value);
   }
-  return evaluationValuesStrictlyEqual(left, right);
+  const decision = evaluationStrictEqualityDecision(left, right);
+  return decision === EvaluationValueRelationKind.Open
+    ? null
+    : decision === EvaluationValueRelationKind.Match;
+}
+
+function evaluationBooleanForRelation(
+  decision: EvaluationValueRelationKind,
+  negate: boolean,
+  node: ts.Node | null,
+): EvaluationBooleanValue | null {
+  if (decision === EvaluationValueRelationKind.Open) {
+    return null;
+  }
+  const equal = decision === EvaluationValueRelationKind.Match;
+  return new EvaluationBooleanValue(negate ? !equal : equal, node);
 }
 
 function staticBinaryOperationForToken(operator: ts.SyntaxKind): StaticBinaryOperation | null {
