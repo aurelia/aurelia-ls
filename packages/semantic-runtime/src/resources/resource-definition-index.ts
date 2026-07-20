@@ -4,6 +4,7 @@ import {
   readDeclarationLocalName,
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import {
   EvaluationValueKind,
   type EvaluationValue,
@@ -116,6 +117,30 @@ export class ResourceDefinitionIndex {
 
   lookupByModuleLocal(moduleKey: string, localName: string): FullResourceDefinition | null {
     return this.byModuleLocal.get(resourceDefinitionIndexKey(moduleKey, localName))?.definition ?? null;
+  }
+
+  /** Resolve an authored TS expression through its alias-normalized declaration identity. */
+  lookupByTypeScriptExpression(
+    typeSystem: TypeSystemProject,
+    expression: ts.Expression,
+  ): FullResourceDefinition | null {
+    const symbol = typeSystem.readProgramAliasedSymbolAtLocation(unwrapExpression(expression));
+    if (symbol == null) {
+      return null;
+    }
+    const matching = new Set<FullResourceDefinition>();
+    for (const declaration of symbol.declarations ?? []) {
+      const localName = readDeclarationLocalName(declaration);
+      if (localName == null) {
+        continue;
+      }
+      const moduleKey = typeSystem.readModuleKeyForSourceFile(declaration.getSourceFile());
+      const definition = moduleKey == null ? null : this.lookupByModuleLocal(moduleKey, localName);
+      if (definition != null) {
+        matching.add(definition);
+      }
+    }
+    return matching.size === 1 ? matching.values().next().value ?? null : null;
   }
 
   lookupByProduct(productHandle: ProductHandle | null): FullResourceDefinition | null {

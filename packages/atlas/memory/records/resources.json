@@ -442,6 +442,7 @@
         "Start here when a materializer needs to resolve a resource from product handle, target identity, module/local name, dependency reference, resource name, or evaluated class/function value.",
         "Resource-name lookup includes primary resource names and converged alias names; use it for template/compiler-world lookup instead of rebuilding consumer-local alias maps.",
         "Router string routeables should use ResourceDefinitionIndex custom-element-only lookup and dependency-scoped custom-element lookup so parent component dependencies can disambiguate same-named resources without router-local maps.",
+        "For an authored TypeScript expression, remap the node into the current Program, resolve aliases to declarations, and spend each declaration source file's module key plus local name. Never treat an imported identifier as a declaration in the consumer module or build a consumer-local symbol map.",
         "Keep ambiguous local-name/resource-name lookups explicit; do not pick a definition by name when multiple definitions are visible.",
         "If a new lookup path appears, add it to the index rather than adding local resource-definition maps inside DI, configuration, or template code."
       ],
@@ -469,7 +470,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-07-20"
     },
     {
       "id": "frontier:resource-definition-api-issues",

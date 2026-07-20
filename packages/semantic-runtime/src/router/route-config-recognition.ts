@@ -1,11 +1,21 @@
 import ts from 'typescript';
-import { readClassTarget, readStaticStringArrayValue, StaticEvaluationExpressionReader } from '../evaluation/expression-reader.js';
+import {
+  readClassTarget,
+  readStaticStringArrayValue,
+  StaticInvocationEvidenceExpressionReader,
+  StaticSourceLiteralExpressionReader,
+  type StaticExpressionEvaluationReader,
+} from '../evaluation/expression-reader.js';
 import {
   EvaluationValueKind,
   closedEvaluationPromiseFulfillment,
   type EvaluationPromiseValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
+import {
+  isStaticCallInvocationOccurrence,
+  type StaticInvocationOccurrence,
+} from '../evaluation/invocation.js';
 import {
   hasStaticModifier,
   readObjectPropertyExpression,
@@ -48,6 +58,7 @@ import type { ProjectBootFrame, SourceFileAdmission } from '../boot/frames.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { RouterFrameworkErrorCode } from './framework-error-code.js';
 import {
@@ -82,8 +93,6 @@ class RouterImportedBindings {
 }
 
 class RouteConfigRecognitionContext {
-  readonly expressionReader: StaticEvaluationExpressionReader;
-
   constructor(
     readonly sourceFile: ts.SourceFile,
     readonly moduleKey: string,
@@ -91,12 +100,20 @@ class RouteConfigRecognitionContext {
     readonly projectKey: string,
     readonly evaluation: EvaluatedProjectSource,
     readonly resourceIndex: ResourceDefinitionIndex,
-  ) {
-    this.expressionReader = new StaticEvaluationExpressionReader(
-      evaluation.evaluation.environment,
-      moduleKey,
-      evaluation.evaluation.policy,
-      evaluation.evaluation.runtimeHost,
+    readonly typeSystem: TypeSystemProject,
+    readonly expressionReader: StaticExpressionEvaluationReader,
+  ) {}
+
+  withExpressionReader(expressionReader: StaticExpressionEvaluationReader): RouteConfigRecognitionContext {
+    return new RouteConfigRecognitionContext(
+      this.sourceFile,
+      this.moduleKey,
+      this.sourceFileAddressHandle,
+      this.projectKey,
+      this.evaluation,
+      this.resourceIndex,
+      this.typeSystem,
+      expressionReader,
     );
   }
 }
@@ -310,11 +327,12 @@ export class RouteConfigRecognitionProjectPass {
     project: ProjectBootFrame,
     evaluation: StaticProjectEvaluationResult,
     resourceIndex: ResourceDefinitionIndex,
+    typeSystem: TypeSystemProject,
   ): RouteConfigRecognitionProjectResult {
     return new RouteConfigRecognitionProjectResult(
       project,
       evaluation.sources.map((source) =>
-        this.recognizeSource(publication, project, source, resourceIndex)
+        this.recognizeSource(publication, project, source, resourceIndex, typeSystem)
       ),
     );
   }
@@ -324,6 +342,7 @@ export class RouteConfigRecognitionProjectPass {
     project: ProjectBootFrame,
     source: StaticProjectEvaluationResult['sources'][number],
     resourceIndex: ResourceDefinitionIndex,
+    typeSystem: TypeSystemProject,
   ): RouteConfigRecognitionSourceResult {
     if (!isEvaluatedProjectSource(source)) {
       return new RouteConfigRecognitionSourceResult(source.admission, source.moduleKey, [], []);
@@ -336,6 +355,8 @@ export class RouteConfigRecognitionProjectPass {
       project.projectKey,
       source,
       resourceIndex,
+      typeSystem,
+      new StaticSourceLiteralExpressionReader(),
     );
     const observations = recognizeRouteConfigs(context);
     const emittedSubtrees = new RouteConfigKernelEmitter(publication).emit(context, observations);
@@ -745,15 +766,17 @@ function recognizeRouteConfigs(
   context: RouteConfigRecognitionContext,
 ): readonly RouteConfigObservation[] {
   const bindings = readRouterImportedBindings(context.sourceFile);
-  const executionOrderByCall = new Map<ts.CallExpression, number | null>();
+  const executionsByCall = new Map<ts.CallExpression, StaticInvocationOccurrence<ts.CallExpression>[]>();
   for (const invocation of context.evaluation.evaluation.invocations) {
-    if (!ts.isCallExpression(invocation.node)) {
+    if (!isStaticCallInvocationOccurrence(invocation)) {
       continue;
     }
-    executionOrderByCall.set(
-      invocation.node,
-      executionOrderByCall.has(invocation.node) ? null : invocation.ordinal,
-    );
+    const executions = executionsByCall.get(invocation.node);
+    if (executions == null) {
+      executionsByCall.set(invocation.node, [invocation]);
+    } else {
+      executions.push(invocation);
+    }
   }
   const observations: RouteConfigObservation[] = [];
   const visit = (node: ts.Node): void => {
@@ -761,17 +784,47 @@ function recognizeRouteConfigs(
       observations.push(...recognizeRouteDecorators(context, bindings, node));
     }
     if (ts.isCallExpression(node)) {
-      const configured = recognizeRouteConfigureCall(context, bindings, node, executionOrderByCall.get(node) ?? null);
-      if (configured != null) {
-        observations.push(configured);
+      const executions = executionsByCall.get(node) ?? [];
+      if (executions.length === 0) {
+        const configured = recognizeRouteConfigureCall(context, bindings, node, null);
+        if (configured != null) {
+          observations.push(configured);
+        }
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(context.sourceFile);
+  for (const executions of executionsByCall.values()) {
+    for (const execution of executions) {
+      const configured = recognizeRouteConfigureCall(
+        context.withExpressionReader(new StaticInvocationEvidenceExpressionReader(
+          execution.moduleKey,
+          [execution],
+        )),
+        bindings,
+        execution.node,
+        execution.ordinal,
+      );
+      if (configured != null) {
+        observations.push(configured);
+      }
+    }
+  }
   return observations.sort((left, right) =>
-    left.sourceNode.getStart(context.sourceFile) - right.sourceNode.getStart(context.sourceFile)
+    compareRouteConfigObservations(context.sourceFile, left, right)
   );
+}
+
+function compareRouteConfigObservations(
+  sourceFile: ts.SourceFile,
+  left: RouteConfigObservation,
+  right: RouteConfigObservation,
+): number {
+  if (left.executionOrder != null && right.executionOrder != null) {
+    return left.executionOrder - right.executionOrder;
+  }
+  return left.sourceNode.getStart(sourceFile) - right.sourceNode.getStart(sourceFile);
 }
 
 function executionKindForOrigin(originKind: RouteConfigOriginKind): RouteConfigExecutionKind {
@@ -1823,7 +1876,10 @@ function evaluatedRouteableComponent(
   expression: ts.Expression,
   value: EvaluationValue | null,
 ): RouteableComponentObservation {
-  const resourceDefinition = context.resourceIndex.lookupValue(value);
+  const localName = readReferenceName(expression);
+  const resourceDefinition = context.resourceIndex.lookupValue(value)
+    ?? context.resourceIndex.lookupByTypeScriptExpression(context.typeSystem, expression)
+    ?? (localName == null ? null : context.resourceIndex.lookupByModuleLocal(context.moduleKey, localName));
   const componentKind = resourceDefinition != null
     ? RouteableComponentKind.ResourceDefinition
     : value?.kind === EvaluationValueKind.Class || value?.kind === EvaluationValueKind.Function
@@ -1831,7 +1887,7 @@ function evaluatedRouteableComponent(
       : RouteableComponentKind.Open;
   return {
     componentKind,
-    localName: readReferenceName(expression),
+    localName,
     sourceNode: expression,
     resourceDefinition,
     invalidLazyImport: false,

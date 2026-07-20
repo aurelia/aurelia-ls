@@ -17,6 +17,17 @@ export const enum AppTaskSlot {
   Deactivated = 'deactivated',
 }
 
+/** Framework-defined lifecycle order vocabulary shared by evaluation and configuration recognition. */
+export const APP_TASK_SLOTS = [
+  AppTaskSlot.Creating,
+  AppTaskSlot.Hydrating,
+  AppTaskSlot.Hydrated,
+  AppTaskSlot.Activating,
+  AppTaskSlot.Activated,
+  AppTaskSlot.Deactivating,
+  AppTaskSlot.Deactivated,
+] as const;
+
 export const enum AppTaskCallbackKind {
   /** Callback is invoked with no resolved DI value. */
   NoArgument = 'no-argument',

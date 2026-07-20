@@ -3,6 +3,7 @@ import { SourceSpanAddress, type SourceFileAddress } from '../kernel/address.js'
 import type { ProductHandle } from '../kernel/handles.js';
 import type { KernelStoreReadView } from '../kernel/store.js';
 import { StaticEvaluationSessionFork } from '../evaluation/evaluation-session.js';
+import { StaticInvocationEvidenceExpressionReader } from '../evaluation/expression-reader.js';
 import type {
   EvaluatedProjectSource,
   StaticProjectEvaluationResult,
@@ -29,23 +30,87 @@ import {
   type ConfigurationStep,
 } from './configuration-sequence.js';
 
-/** Source-owned index from a registry admission to the `register(container)` body steps it can safely spend. */
-export class RegistryBodyStepIndex {
+/** One path-proven execution of a source-owned registry-body step. */
+export class RegistryBodyStepExecution {
   constructor(
-    private readonly stepsByAdmissionProduct = new Map<ProductHandle, readonly ConfigurationStep[]>(),
-    private readonly interpretedAdmissionProducts = new Set<ProductHandle>(),
+    readonly step: ConfigurationStep,
+    private readonly runtimeValuesByAdmissionProduct: ReadonlyMap<ProductHandle, EvaluationValue>,
   ) {}
 
-  stepsForAdmission(admission: RegistrationAdmissionProduct): readonly ConfigurationStep[] {
-    return this.stepsByAdmissionProduct.get(admission.productHandle) ?? [];
+  runtimeValueForAdmission(admission: RegistrationAdmissionProduct): EvaluationValue | null {
+    return this.runtimeValuesByAdmissionProduct.get(admission.productHandle) ?? null;
   }
+}
 
-  bodyInterpretedForAdmission(admission: RegistrationAdmissionProduct): boolean {
-    return this.interpretedAdmissionProducts.has(admission.productHandle);
-  }
+/** Candidate-local result of executing one exact registry value. */
+export class RegistryAdmissionBodyExecution {
+  constructor(
+    readonly steps: readonly RegistryBodyStepExecution[],
+    readonly interpreted: boolean,
+  ) {}
+}
 
-  admissionProductHandlesForAdmission(admission: RegistrationAdmissionProduct): readonly ProductHandle[] {
-    return this.stepsForAdmission(admission).flatMap((step) => step.registrationAdmissionProductHandles);
+/** Source-owned registry inventory joined to exact candidate-local execution evidence. */
+export class RegistryBodyStepIndex {
+  constructor(
+    private readonly records: KernelStoreReadView | null = null,
+    private readonly configuration: ConfigurationKernelEmission | null = null,
+    private readonly evaluation: StaticProjectEvaluationResult | null = null,
+    private readonly registrySequences: readonly RegistrySequenceSpan[] = [],
+    private readonly admissionsByProduct: ReadonlyMap<ProductHandle, RegistrationAdmissionProduct> = new Map(),
+  ) {}
+
+  executeAdmission(
+    admission: RegistrationAdmissionProduct,
+    runtimeValue: EvaluationValue | null,
+  ): RegistryAdmissionBodyExecution {
+    if (
+      !(admission instanceof RegistryRegistrationAdmission)
+      || this.records == null
+      || this.configuration == null
+      || this.evaluation == null
+    ) {
+      return new RegistryAdmissionBodyExecution([], false);
+    }
+    const valueSpan = runtimeValue == null
+      ? null
+      : registryRuntimeValueSpan(runtimeValue, this.evaluation);
+    const ownedValueSpan = valueSpan ?? readSourceSpan(
+      this.records,
+      admission.registryValue?.addressHandle ?? admission.sourceAddressHandle,
+    );
+    if (ownedValueSpan == null) {
+      return new RegistryAdmissionBodyExecution([], false);
+    }
+    const ownedSequences = this.registrySequences.filter((sequence) => sourceSpansEqual(ownedValueSpan, sequence.span));
+    if (ownedSequences.length === 0) {
+      return new RegistryAdmissionBodyExecution([], false);
+    }
+    const originalValue = runtimeValue
+      ?? this.configuration.evaluationBindings.registrationValueForAdmission(admission.productHandle);
+    const execution = executeRegistryAdmission(originalValue, this.evaluation);
+    if (execution == null) {
+      return new RegistryAdmissionBodyExecution([], false);
+    }
+    const matched = matchReachedRegisterCalls(
+      this.records,
+      this.evaluation,
+      ownedSequences.flatMap((sequence) => sequence.steps),
+      execution.registerCalls,
+    );
+    return new RegistryAdmissionBodyExecution(
+      matched.steps.map(({ step, invocation }) => new RegistryBodyStepExecution(
+        step,
+        runtimeValuesForStepAdmissions(
+          this.records!,
+          this.evaluation!,
+          this.admissionsByProduct,
+          step,
+          invocation,
+        ),
+      )),
+      execution.closed && matched.complete,
+    );
   }
 }
 
@@ -55,44 +120,13 @@ export function buildRegistryBodyStepIndex(
   evaluation: StaticProjectEvaluationResult,
 ): RegistryBodyStepIndex {
   const registrySequences = registrySequenceSpans(records, configuration);
-  if (registrySequences.length === 0) {
-    return new RegistryBodyStepIndex();
-  }
-
-  const stepsByAdmission = new Map<ProductHandle, readonly ConfigurationStep[]>();
-  const interpretedAdmissions = new Set<ProductHandle>();
-  for (const admission of configuration.registrationAdmissions) {
-    if (!(admission instanceof RegistryRegistrationAdmission)) {
-      continue;
-    }
-    const valueSpan = readSourceSpan(records, admission.registryValue?.addressHandle ?? admission.sourceAddressHandle);
-    if (valueSpan == null) {
-      continue;
-    }
-    const ownedSequences = registrySequences.filter((sequence) => sourceSpansEqual(valueSpan, sequence.span));
-    if (ownedSequences.length === 0) {
-      continue;
-    }
-    const execution = executeRegistryAdmission(
-      configuration.evaluationBindings.registrationValueForAdmission(admission.productHandle),
-      admission,
-      evaluation,
-    );
-    if (execution == null) {
-      continue;
-    }
-    const matched = matchReachedRegisterCalls(
-      records,
-      evaluation,
-      ownedSequences.flatMap((sequence) => sequence.steps),
-      execution.registerCalls,
-    );
-    stepsByAdmission.set(admission.productHandle, matched.steps);
-    if (execution.closed && matched.complete) {
-      interpretedAdmissions.add(admission.productHandle);
-    }
-  }
-  return new RegistryBodyStepIndex(stepsByAdmission, interpretedAdmissions);
+  return new RegistryBodyStepIndex(
+    records,
+    configuration,
+    evaluation,
+    registrySequences,
+    new Map(configuration.registrationAdmissions.map((admission) => [admission.productHandle, admission])),
+  );
 }
 
 interface RegistryAdmissionExecution {
@@ -102,7 +136,6 @@ interface RegistryAdmissionExecution {
 
 function executeRegistryAdmission(
   originalValue: EvaluationValue | null,
-  admission: RegistryRegistrationAdmission,
   evaluation: StaticProjectEvaluationResult,
 ): RegistryAdmissionExecution | null {
   const originalRegister = registryRegisterFunction(originalValue);
@@ -171,35 +204,99 @@ function evaluatedSourceForFunction(
   ) ?? null;
 }
 
+function registryRuntimeValueSpan(
+  value: EvaluationValue,
+  evaluation: StaticProjectEvaluationResult,
+): SourceSpanLocus | null {
+  const node = value.kind === EvaluationValueKind.Instance
+    ? value.classValue.declaration
+    : value.kind === EvaluationValueKind.Object
+      || value.kind === EvaluationValueKind.Class
+      || value.kind === EvaluationValueKind.Function
+      ? value.node
+      : null;
+  if (node == null) {
+    return null;
+  }
+  const sourceFile = node.getSourceFile();
+  const fileHandle = evaluatedSourceFileHandles(evaluation).get(normalizeModuleKey(sourceFile.fileName)) ?? null;
+  return fileHandle == null
+    ? null
+    : { fileHandle, start: node.getStart(sourceFile), end: node.end };
+}
+
 function matchReachedRegisterCalls(
   records: KernelStoreReadView,
   evaluation: StaticProjectEvaluationResult,
   inventory: readonly ConfigurationStep[],
   calls: readonly import('../evaluation/invocation.js').StaticInvocationOccurrence<ts.CallExpression>[],
-): { readonly steps: readonly ConfigurationStep[]; readonly complete: boolean } {
+): { readonly steps: readonly ReachedRegistryBodyStep[]; readonly complete: boolean } {
   const sourceFileHandles = evaluatedSourceFileHandles(evaluation);
-  const remainingBySource = new Map<string, number>();
-  for (const event of calls) {
-    const key = sourceNodeKey(event.node, sourceFileHandles);
-    if (key != null) {
-      remainingBySource.set(key, (remainingBySource.get(key) ?? 0) + 1);
-    }
-  }
-  const steps: ConfigurationStep[] = [];
+  const inventoryBySource = new Map<string, ConfigurationStep[]>();
   for (const step of inventory) {
     const key = sourceAddressKey(records, step.sourceAddressHandle);
-    const remaining = key == null ? 0 : remainingBySource.get(key) ?? 0;
-    if (key == null || remaining === 0) {
+    if (key == null) {
       continue;
     }
-    steps.push(step);
-    if (remaining === 1) {
-      remainingBySource.delete(key);
+    const existing = inventoryBySource.get(key);
+    if (existing == null) {
+      inventoryBySource.set(key, [step]);
     } else {
-      remainingBySource.set(key, remaining - 1);
+      existing.push(step);
     }
   }
-  return { steps, complete: remainingBySource.size === 0 };
+
+  const steps: ReachedRegistryBodyStep[] = [];
+  let complete = true;
+  for (const event of calls) {
+    const key = sourceNodeKey(event.node, sourceFileHandles);
+    const candidates = key == null ? null : inventoryBySource.get(key) ?? null;
+    if (candidates == null || candidates.length !== 1) {
+      complete = false;
+      continue;
+    }
+    steps.push({ step: candidates[0]!, invocation: event });
+  }
+  return { steps, complete };
+}
+
+interface ReachedRegistryBodyStep {
+  readonly step: ConfigurationStep;
+  readonly invocation: import('../evaluation/invocation.js').StaticInvocationOccurrence<ts.CallExpression>;
+}
+
+function runtimeValuesForStepAdmissions(
+  records: KernelStoreReadView,
+  evaluation: StaticProjectEvaluationResult,
+  admissionsByProduct: ReadonlyMap<ProductHandle, RegistrationAdmissionProduct>,
+  step: ConfigurationStep,
+  invocation: import('../evaluation/invocation.js').StaticInvocationOccurrence<ts.CallExpression>,
+): ReadonlyMap<ProductHandle, EvaluationValue> {
+  const sourceFileHandles = evaluatedSourceFileHandles(evaluation);
+  const reader = new StaticInvocationEvidenceExpressionReader(invocation.moduleKey, [invocation]);
+  const valuesBySource = new Map<string, EvaluationValue>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isExpression(node)) {
+      const key = sourceNodeKey(node, sourceFileHandles);
+      const value = reader.evaluateExpression(node).value;
+      if (key != null && value != null) {
+        valuesBySource.set(key, value);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  invocation.node.arguments.forEach(visit);
+
+  const result = new Map<ProductHandle, EvaluationValue>();
+  for (const productHandle of step.registrationAdmissionProductHandles) {
+    const admission = admissionsByProduct.get(productHandle) ?? null;
+    const key = admission == null ? null : sourceAddressKey(records, admission.sourceAddressHandle);
+    const value = key == null ? null : valuesBySource.get(key) ?? null;
+    if (value != null) {
+      result.set(productHandle, value);
+    }
+  }
+  return result;
 }
 
 function evaluatedSourceFileHandles(
@@ -232,20 +329,28 @@ function sourceAddressKey(
   return span == null ? null : `${span.fileHandle}:${span.start}:${span.end}`;
 }
 
-function sourceSpansEqual(left: SourceSpanAddress, right: SourceSpanAddress): boolean {
+interface SourceSpanLocus {
+  readonly fileHandle: SourceFileAddress['handle'];
+  readonly start: number;
+  readonly end: number;
+}
+
+function sourceSpansEqual(left: SourceSpanLocus, right: SourceSpanLocus): boolean {
   return left.fileHandle === right.fileHandle
     && left.start === right.start
     && left.end === right.end;
 }
 
-function registrySequenceSpans(
-  records: KernelStoreReadView,
-  configuration: ConfigurationKernelEmission,
-): readonly {
+interface RegistrySequenceSpan {
   readonly sequence: ConfigurationSequence;
   readonly span: SourceSpanAddress;
   readonly steps: readonly ConfigurationStep[];
-}[] {
+}
+
+function registrySequenceSpans(
+  records: KernelStoreReadView,
+  configuration: ConfigurationKernelEmission,
+): readonly RegistrySequenceSpan[] {
   const stepsBySequence = stepsBySequenceProduct(configuration.steps);
   const result: {
     readonly sequence: ConfigurationSequence;

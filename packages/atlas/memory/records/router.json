@@ -131,7 +131,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-11"
+      "updatedAt": "2026-07-20"
     },
     {
       "id": "frontier:route-recognizer-state-graph-builder",
@@ -653,6 +653,7 @@
         "RouteConfigModel means a framework-shaped effective product. Definition-stage identity is owned by the target custom-element identity; applied-stage identity is owned by the parent effective config plus the authored child use.",
         "RouteConfigConvergenceProjectPass is the only owner of _create and _applyChildRouteConfig precedence, framework defaults, convention-derived path/id, parent transition/fallback inheritance, repeated-use cloning, and route-config openness. Topology, recognizer, route tree, completion, and API code consume its output without local reconstruction.",
         "Only positively executed Route.configure calls may become winners. Same-module execution order selects the final call; cross-module calls without a proven global order and conditionally unproven calls remain named open evidence rather than using source-file order.",
+        "Executed Route.configure contributions read occurrence-local invocation evidence. Unproven source sites may close syntax-owned literals but never replay against final module state. Declarative component references join through ResourceDefinitionIndex: locals use module/local identity, while imports use Program-remapped alias-resolved declaration-module identity.",
         "Instance getRouteConfig declarations preserve the pre-hook effective facts and open every field the runtime hook may override. Do not execute the hook or flatten the whole definition to unknown.",
         "Recursive child application is finite in the static product graph: stop at the repeated authored contribution and publish router-route-config-recursive-application on children instead of silently omitting the recursion or constructing an infinite use tree.",
         "The public Routes query remains one row per source contribution and joins effective fields through contribution-to-config links. Use effectiveUseCount, effectiveVariantCount, and effectiveFieldsStable when one source contribution influences multiple applied products.",

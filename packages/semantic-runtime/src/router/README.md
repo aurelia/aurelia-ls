@@ -41,6 +41,12 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   `Route.configure(...)`, class static defaults, or a child `routes` property, and whether the read value closed as an
   object literal, path expression, routeable component, class static defaults, or open expression. Authoring taste should
   consume those two dimensions instead of guessing decorator/static/dynamic policy from route presence alone.
+  Each retained `Route.configure(...)` occurrence reads its historical evaluator arguments and execution ordinal. A
+  source-only unproven site closes only syntax-owned literals; it must not replay against final module state. Declarative
+  local and imported component references resolve through `ResourceDefinitionIndex`: local references may use
+  module/local identity, while imported references spend the current TypeScript Program's alias-normalized declaration
+  and declaration-module identity. Neither path requires an executable expression read or guesses from the authored
+  identifier in the route-config carrier's module.
   Multiple normalized route fields can legitimately share one authored source node: for example a string routeable
   component can supply both the fallback `id` and `path` lane. Recognition should group shared fields under one
   combined source record and map each field to that record instead of emitting duplicate kernel records or choosing one

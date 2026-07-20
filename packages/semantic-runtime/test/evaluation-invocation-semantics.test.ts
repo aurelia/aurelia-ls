@@ -385,6 +385,33 @@ describe('static evaluator invocation semantics', () => {
     ]);
   });
 
+  test('does not replay a source-only invocation against the final module environment', () => {
+    const source = ts.createSourceFile(
+      'src/evaluation-source-only-invocation.ts',
+      [
+        'const events = [];',
+        'let target = undefined;',
+        "target?.(events.push('replayed'));",
+        "target = () => events.push('body');",
+      ].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const statement = source.statements[2];
+    if (statement == null || !ts.isExpressionStatement(statement) || !ts.isCallExpression(statement.expression)) {
+      throw new Error('Expected the source-only optional call expression.');
+    }
+    const result = new StaticEvaluator().evaluateSourceFile(source);
+    const read = new StaticModuleEvaluationExpressionReader(result).evaluateExpression(statement.expression);
+
+    expect(read.value).toBeNull();
+    expect(read.openSeams).toEqual([
+      expect.objectContaining({ seamKind: EvaluationOpenSeamKind.InvocationSourceRead }),
+    ]);
+    expect(arrayPrimitiveValues(result.environment.readValue('events'))).toEqual([]);
+  });
+
   test('does not execute an open-qualified call or constructor candidate', () => {
     const result = evaluate([
       'const events = [];',

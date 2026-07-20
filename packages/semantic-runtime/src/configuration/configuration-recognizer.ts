@@ -1,7 +1,17 @@
 import ts from 'typescript';
 import { openSeamReasonKindsForEvaluationRead } from '../evaluation/boundary-open-reason.js';
 import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own-properties.js';
-import { readStaticStringArrayValue } from '../evaluation/expression-reader.js';
+import {
+  readStaticSourceLiteralValue,
+  readStaticStringArrayValue,
+  StaticInvocationEvidenceExpressionReader,
+} from '../evaluation/expression-reader.js';
+import {
+  isStaticInvocationOccurrence,
+  StaticInvocationPreparationBoundaryKind,
+  type StaticInvocationPreparationBoundary,
+} from '../evaluation/invocation.js';
+import { evaluationOpenSeamDefaultReasonKinds } from '../evaluation/seams.js';
 import {
   closedStaticValueMemberValue,
   readStaticValueProperty,
@@ -48,6 +58,8 @@ import {
   RegistrationValueKind,
 } from '../registration/registration-reference.js';
 import {
+  frameworkRegistrationKindForExportName,
+  frameworkRegistrationKindsForModule,
   traceNameForFrameworkRegistrationKind,
 } from '../registration/framework-registration-manifest.js';
 import {
@@ -57,6 +69,7 @@ import {
   aureliaFrameworkRegistrationFactoryEvaluationForValue,
   aureliaFrameworkRegistrationEvaluationForValue,
   aureliaFrameworkRegistrationKindForEvaluationValue,
+  aureliaFrameworkRegistrationValueForKind,
   aureliaInterfaceEvaluationForValue,
   aureliaRegistrationFactoryEvaluationForValue,
   aureliaRegistryBodyForEvaluationValue,
@@ -68,6 +81,7 @@ import {
   type AureliaRegistrationFactoryEvaluation,
 } from './aurelia-evaluation-runtime.js';
 import {
+  APP_TASK_SLOTS,
   AppTaskCallbackKind,
   AppTaskSlot,
 } from './app-task.js';
@@ -120,15 +134,7 @@ const APP_TASK_MODULES = new Set([
   '@aurelia/runtime-html',
 ]);
 
-const APP_TASK_SLOT_NAMES = new Set<string>([
-  AppTaskSlot.Creating,
-  AppTaskSlot.Hydrating,
-  AppTaskSlot.Hydrated,
-  AppTaskSlot.Activating,
-  AppTaskSlot.Activated,
-  AppTaskSlot.Deactivating,
-  AppTaskSlot.Deactivated,
-]);
+const APP_TASK_SLOT_NAMES = new Set<string>(APP_TASK_SLOTS);
 
 class ImportedBindings {
   readonly appTaskIdentifiers = new Set<string>();
@@ -141,6 +147,8 @@ class ImportedBindings {
   readonly containerDiIdentifiers = new Set<string>();
   readonly containerTypeIdentifiers = new Set<string>();
   readonly registryTypeIdentifiers = new Set<string>();
+  readonly frameworkRegistrationIdentifiers = new Map<string, FrameworkRegistrationKind>();
+  readonly frameworkRegistrationNamespaces = new Map<string, readonly FrameworkRegistrationKind[]>();
 }
 
 interface RegisterArgumentObservationSet {
@@ -161,6 +169,30 @@ class RegistrationFactoryCallMatch {
   ) {}
 }
 
+type ConfigurationSequenceEvaluation = AureliaFacadeEvaluation | AureliaContainerEvaluation;
+
+class ConfigurationPreparationObservation {
+  constructor(
+    readonly owner: ConfigurationSequenceEvaluation,
+    readonly sequenceKind: ConfigurationSequenceKind,
+    readonly sourceNode: ts.CallExpression,
+    readonly receiverLocalName: string | null,
+    readonly openSeams: readonly ConfigurationRecognitionOpen[],
+  ) {}
+}
+
+class GlobalConfigurationSequenceGroup {
+  readonly steps: ConfigurationStepObservation[] = [];
+  readonly openSeams: ConfigurationRecognitionOpen[] = [];
+
+  constructor(
+    readonly owner: ConfigurationSequenceEvaluation | ConfigurationStepObservation,
+    readonly sourceNode: ts.Node,
+    readonly localName: string | null,
+    readonly sequenceKindHint: ConfigurationSequenceKind = ConfigurationSequenceKind.Unknown,
+  ) {}
+}
+
 /** Recognizes Aurelia app/configuration flow over one evaluated source module. */
 export class ConfigurationRecognizer {
   recognize(context: ConfigurationRecognitionContext): readonly ConfigurationSequenceObservation[] {
@@ -173,7 +205,6 @@ function readConfigurationSequences(
   context: ConfigurationRecognitionContext,
   bindings: ImportedBindings,
 ): readonly ConfigurationSequenceObservation[] {
-  const globalSteps: ConfigurationStepObservation[] = [];
   const registrySequences: ConfigurationSequenceObservation[] = [];
 
   const visit = (node: ts.Node): void => {
@@ -189,158 +220,153 @@ function readConfigurationSequences(
       return;
     }
 
-    if (ts.isNewExpression(node)) {
-      const step = recognizeAureliaConstructor(context, node);
-      if (step != null) {
-        globalSteps.push(step);
-      }
-    }
-
-    if (ts.isCallExpression(node)) {
-      const step = recognizeCall(context, node, bindings, false);
-      if (step != null) {
-        globalSteps.push(step);
-      }
-    }
-
     ts.forEachChild(node, visit);
   };
 
   visit(context.sourceFile);
-  const sequences = [
-    ...globalSequenceForSteps(context, globalSteps),
-    ...registrySequences,
+  const global = readGlobalConfigurationObservations(context, bindings);
+  return [
+    ...globalSequenceForObservations(context, global.steps, global.preparations),
+    ...registrySequences.sort((left, right) => compareNodes(
+      context.sourceFile,
+      left.sourceNode,
+      right.sourceNode,
+    )),
   ];
-  return sequences.sort((left, right) => compareNodes(context.sourceFile, left.sourceNode, right.sourceNode));
 }
 
-function globalSequenceForSteps(
+function readGlobalConfigurationObservations(
   context: ConfigurationRecognitionContext,
-  steps: readonly ConfigurationStepObservation[],
-): readonly ConfigurationSequenceObservation[] {
-  const sorted = [...steps].sort((left, right) => compareNodes(context.sourceFile, left.sourceNode, right.sourceNode));
-  if (sorted.length === 0) {
-    return [];
+  bindings: ImportedBindings,
+): {
+  readonly steps: readonly ConfigurationStepObservation[];
+  readonly preparations: readonly ConfigurationPreparationObservation[];
+} {
+  const steps: ConfigurationStepObservation[] = [];
+  const preparations: ConfigurationPreparationObservation[] = [];
+  for (const invocation of context.evaluation.invocationEvaluations) {
+    const invocationContext = context.withExpressionReader(new StaticInvocationEvidenceExpressionReader(
+      invocation.moduleKey,
+      [invocation],
+    ));
+    if (!isStaticInvocationOccurrence(invocation)) {
+      const preparation = recognizeConfigurationPreparationBoundary(invocationContext, invocation);
+      if (preparation != null) {
+        preparations.push(preparation);
+      }
+      continue;
+    }
+    const step = ts.isNewExpression(invocation.node)
+      ? recognizeAureliaConstructor(invocationContext, invocation.node)
+      : recognizeCall(invocationContext, invocation.node, bindings, false);
+    if (step != null) {
+      steps.push(step);
+    }
   }
-  const receiverGroups = splitGlobalStepsByReceiver(sorted);
-  if (receiverGroups == null) {
-    return [
-      new ConfigurationSequenceObservation(
-        sequenceKindForSteps(sorted),
-        context.sourceFile,
-        context.moduleKey,
-        sorted,
-      ),
-    ];
+  return { steps, preparations };
+}
+
+function recognizeConfigurationPreparationBoundary(
+  context: ConfigurationRecognitionContext,
+  boundary: StaticInvocationPreparationBoundary,
+): ConfigurationPreparationObservation | null {
+  if (
+    boundary.boundaryKind !== StaticInvocationPreparationBoundaryKind.ArgumentListOpen
+    || !ts.isCallExpression(boundary.node)
+    || readCallMemberName(boundary.node) !== 'register'
+  ) {
+    return null;
   }
-  return receiverGroups.map((group, index) =>
-    new ConfigurationSequenceObservation(
-      sequenceKindForSteps(group.steps),
-      group.steps[0]?.sourceNode ?? context.sourceFile,
-      group.localName ?? `${context.moduleKey}:${index}`,
-      group.steps,
-    )
+  const aureliaEvaluation = aureliaFacadeEvaluationForCallReceiver(context, boundary.node);
+  const containerEvaluation = aureliaEvaluation == null
+    ? containerEvaluationForCallReceiver(context, boundary.node)
+    : null;
+  const owner = aureliaEvaluation ?? containerEvaluation;
+  if (owner == null) {
+    return null;
+  }
+  const fallbackNode = boundary.node.arguments.find(ts.isSpreadElement) ?? boundary.node;
+  const openSeams = boundary.openSeams.length === 0
+    ? [new ConfigurationRecognitionOpen(
+        KernelVocabulary.Registration.OpenSpread.key,
+        'Configuration register invocation did not reach dispatch because its argument list stayed open.',
+        fallbackNode,
+      )]
+    : boundary.openSeams.map((seam) => new ConfigurationRecognitionOpen(
+        KernelVocabulary.Registration.OpenSpread.key,
+        seam.summary,
+        seam.node,
+        seam.reasonKinds.length === 0
+          ? evaluationOpenSeamDefaultReasonKinds(seam.seamKind)
+          : seam.reasonKinds,
+      ));
+  return new ConfigurationPreparationObservation(
+    owner,
+    aureliaEvaluation == null ? ConfigurationSequenceKind.Container : ConfigurationSequenceKind.App,
+    boundary.node,
+    readCallReceiverName(boundary.node),
+    openSeams,
   );
 }
 
-interface GlobalConfigurationStepGroup {
-  readonly localName: string | null;
-  readonly steps: readonly ConfigurationStepObservation[];
-}
-
-type GlobalConfigurationStepGroupKey = string | AureliaContainerEvaluation | AureliaFacadeEvaluation;
-
-function splitGlobalStepsByReceiver(
+function globalSequenceForObservations(
+  context: ConfigurationRecognitionContext,
   steps: readonly ConfigurationStepObservation[],
-): readonly GlobalConfigurationStepGroup[] | null {
-  if (!steps.some((step) =>
-    step.aureliaEvaluation != null
-    || step.containerEvaluation != null
-    || aureliaStepReceiverName(step) != null
-    || containerStepReceiverName(step) != null
-  )) {
-    return null;
+  preparations: readonly ConfigurationPreparationObservation[],
+): readonly ConfigurationSequenceObservation[] {
+  if (steps.length === 0 && preparations.length === 0) {
+    return [];
+  }
+  if (
+    preparations.length === 0
+    && !steps.some((step) => step.aureliaEvaluation != null || step.containerEvaluation != null)
+  ) {
+    return [new ConfigurationSequenceObservation(
+      sequenceKindForSteps(steps),
+      context.sourceFile,
+      context.moduleKey,
+      steps,
+    )];
   }
 
-  const groups = new Map<GlobalConfigurationStepGroupKey, ConfigurationStepObservation[]>();
-  const groupOrder: GlobalConfigurationStepGroupKey[] = [];
-  const append = (key: GlobalConfigurationStepGroupKey, step: ConfigurationStepObservation): void => {
-    const existing = groups.get(key);
+  const groups = new Map<ConfigurationSequenceEvaluation | ConfigurationStepObservation, GlobalConfigurationSequenceGroup>();
+  for (const step of steps) {
+    const owner: ConfigurationSequenceEvaluation | ConfigurationStepObservation =
+      step.aureliaEvaluation ?? step.containerEvaluation ?? step;
+    const existing = groups.get(owner);
     if (existing == null) {
-      groups.set(key, [step]);
-      groupOrder.push(key);
+      const group = new GlobalConfigurationSequenceGroup(owner, step.sourceNode, step.receiverLocalName);
+      group.steps.push(step);
+      groups.set(owner, group);
     } else {
-      existing.push(step);
+      existing.steps.push(step);
     }
-  };
-
-  steps.forEach((step, index) => {
-    const key = configurationStepGroupKey(step)
-      ?? `global:${index}`;
-    append(key, step);
+  }
+  for (const preparation of preparations) {
+    const existing = groups.get(preparation.owner);
+    if (existing == null) {
+      const group = new GlobalConfigurationSequenceGroup(
+        preparation.owner,
+        preparation.sourceNode,
+        preparation.receiverLocalName,
+        preparation.sequenceKind,
+      );
+      group.openSeams.push(...preparation.openSeams);
+      groups.set(preparation.owner, group);
+    } else {
+      existing.openSeams.push(...preparation.openSeams);
+    }
+  }
+  return [...groups.values()].map((group) => {
+    const stepKind = sequenceKindForSteps(group.steps);
+    return new ConfigurationSequenceObservation(
+      stepKind === ConfigurationSequenceKind.Unknown ? group.sequenceKindHint : stepKind,
+      group.sourceNode,
+      group.steps.find((step) => step.receiverLocalName != null)?.receiverLocalName ?? group.localName,
+      group.steps,
+      group.openSeams,
+    );
   });
-
-  return groupOrder.map((key) => ({
-    localName: typeof key === 'string'
-      ? configurationStepGroupLocalName(key)
-      : groups.get(key)?.find((step) => step.receiverLocalName != null)?.receiverLocalName ?? null,
-    steps: groups.get(key) ?? [],
-  }));
-}
-
-function configurationStepGroupKey(
-  step: ConfigurationStepObservation,
-): GlobalConfigurationStepGroupKey | null {
-  if (step.aureliaEvaluation != null) {
-    return step.aureliaEvaluation;
-  }
-  if (step.containerEvaluation != null) {
-    return step.containerEvaluation;
-  }
-  const containerReceiver = containerStepReceiverName(step);
-  if (containerReceiver != null) {
-    return `container:${containerReceiver}`;
-  }
-  const aureliaReceiver = aureliaStepReceiverName(step);
-  return aureliaReceiver == null ? null : `aurelia:${aureliaReceiver}`;
-}
-
-function configurationStepGroupLocalName(key: string): string | null {
-  if (key.startsWith('container:')) {
-    const localName = key.slice('container:'.length);
-    return localName.startsWith('container-factory:') ? null : localName;
-  }
-  if (key.startsWith('aurelia:')) {
-    const localName = key.slice('aurelia:'.length);
-    return localName.startsWith('aurelia-constructor:') ? null : localName;
-  }
-  return null;
-}
-
-function aureliaStepReceiverName(
-  step: ConfigurationStepObservation,
-): string | null {
-  switch (step.stepKind) {
-    case ConfigurationStepKind.CreateAurelia:
-    case ConfigurationStepKind.AureliaRegister:
-    case ConfigurationStepKind.AureliaApp:
-      return step.receiverLocalName;
-    default:
-      return null;
-  }
-}
-
-function containerStepReceiverName(
-  step: ConfigurationStepObservation,
-): string | null {
-  switch (step.stepKind) {
-    case ConfigurationStepKind.CreateContainer:
-    case ConfigurationStepKind.CreateChildContainer:
-    case ConfigurationStepKind.ContainerRegister:
-      return step.receiverLocalName;
-    default:
-      return null;
-  }
 }
 
 function readRegistryFunctionSteps(
@@ -353,7 +379,8 @@ function readRegistryFunctionSteps(
     return [];
   }
   const steps = readRegistryBodySteps(context, bindings, body, new Set());
-  return steps.sort((left, right) => compareNodes(context.sourceFile, left.sourceNode, right.sourceNode));
+  return [...new Map(steps.map((step) => [step.sourceNode, step])).values()]
+    .sort((left, right) => compareNodes(context.sourceFile, left.sourceNode, right.sourceNode));
 }
 
 function readRegistryBodySteps(
@@ -605,9 +632,9 @@ function recognizeMemberCall(
     case 'register':
       return recognizeRegisterCall(context, call, bindings, insideRegistryRegisterMethod);
     case 'customize':
-      return recognizeCustomizeCall(context, call);
+      return recognizeCustomizeCall(context, call, bindings, insideRegistryRegisterMethod);
     default:
-      return recognizeBuilderMutationCall(context, call, memberName);
+      return recognizeBuilderMutationCall(context, call, memberName, bindings, insideRegistryRegisterMethod);
   }
 }
 
@@ -751,8 +778,15 @@ function aureliaFacadeEvaluationForCallReceiver(
 function recognizeCustomizeCall(
   context: ConfigurationRecognitionContext,
   call: ts.CallExpression,
+  bindings: ImportedBindings,
+  insideRegistryRegisterMethod: boolean,
 ): ConfigurationStepObservation | null {
-  const frameworkKind = readEvaluatedFrameworkRegistryKind(context, call);
+  const frameworkKind = readFrameworkRegistryKind(
+    context,
+    call,
+    bindings,
+    insideRegistryRegisterMethod,
+  );
   return frameworkKind == null
     ? null
     : new ConfigurationStepObservation(
@@ -772,8 +806,15 @@ function recognizeBuilderMutationCall(
   context: ConfigurationRecognitionContext,
   call: ts.CallExpression,
   memberName: string | null,
+  bindings: ImportedBindings,
+  insideRegistryRegisterMethod: boolean,
 ): ConfigurationStepObservation | null {
-  const frameworkKind = readEvaluatedFrameworkRegistryKind(context, call);
+  const frameworkKind = readFrameworkRegistryKind(
+    context,
+    call,
+    bindings,
+    insideRegistryRegisterMethod,
+  );
   return memberName == null
     || frameworkKind == null
     ? null
@@ -796,11 +837,15 @@ function readImportedBindings(sourceFile: ts.SourceFile): ImportedBindings {
     }
 
     const moduleName = statement.moduleSpecifier.text;
+    const frameworkRegistrationKinds = frameworkRegistrationKindsForModule(moduleName);
     const namedBindings = statement.importClause?.namedBindings;
     if (namedBindings == null) {
       continue;
     }
     if (ts.isNamespaceImport(namedBindings)) {
+      if (frameworkRegistrationKinds != null) {
+        bindings.frameworkRegistrationNamespaces.set(namedBindings.name.text, frameworkRegistrationKinds);
+      }
       if (APP_TASK_MODULES.has(moduleName)) {
         bindings.appTaskNamespaces.add(namedBindings.name.text);
       }
@@ -815,6 +860,15 @@ function readImportedBindings(sourceFile: ts.SourceFile): ImportedBindings {
 
     for (const element of namedBindings.elements) {
       const importedName = (element.propertyName ?? element.name).text;
+      if (frameworkRegistrationKinds != null) {
+        const frameworkRegistrationKind = frameworkRegistrationKindForExportName(
+          importedName,
+          frameworkRegistrationKinds,
+        );
+        if (frameworkRegistrationKind != null) {
+          bindings.frameworkRegistrationIdentifiers.set(element.name.text, frameworkRegistrationKind);
+        }
+      }
       if (APP_TASK_MODULES.has(moduleName) && importedName === 'AppTask') {
         bindings.appTaskIdentifiers.add(element.name.text);
       }
@@ -1041,14 +1095,35 @@ function recognizeRegisterArgumentExpression(
   admissionKind: RegistrationAdmissionKind,
   carrierKind: RegistrationCarrierKind,
 ): readonly RegisterArgumentObservation[] {
+  const evaluated = recognizeEvaluatedRegisterArgument(context, argument, bindings, admissionKind, carrierKind);
+  if (evaluated != null) {
+    return evaluated;
+  }
+
   const factory = recognizeRegistrationFactoryArgument(context, argument, bindings, admissionKind, carrierKind);
   if (factory != null) {
     return [registerArgumentObservation(factory)];
   }
 
-  const evaluated = recognizeEvaluatedRegisterArgument(context, argument, bindings, admissionKind, carrierKind);
-  if (evaluated != null) {
-    return evaluated;
+  if (carrierKind === RegistrationCarrierKind.RegistryRegisterMethod) {
+    const frameworkKind = sourceFrameworkRegistrationKind(argument, bindings);
+    if (frameworkKind != null) {
+      const frameworkValue = aureliaFrameworkRegistrationValueForKind(frameworkKind, argument);
+      const frameworkRegistration = recognizeEvaluatedRegistrationValue(
+        context,
+        argument,
+        frameworkValue,
+        [],
+        bindings,
+        admissionKind,
+        carrierKind,
+        null,
+        new Set(),
+      );
+      if (frameworkRegistration != null) {
+        return frameworkRegistration;
+      }
+    }
   }
 
   const checkerRegistry = recognizeCheckerRegistryArgument(context, argument, admissionKind, carrierKind);
@@ -1972,14 +2047,41 @@ function registrationValueObservation(
   );
 }
 
-function readEvaluatedFrameworkRegistryKind(
+function readFrameworkRegistryKind(
   context: ConfigurationRecognitionContext,
   expression: ts.Expression,
+  bindings: ImportedBindings,
+  allowSourceInventory: boolean,
 ): FrameworkRegistrationKind | null {
   const value = context.expressionReader.evaluateExpression(expression).value;
-  return !hasEvaluationRegisterFunction(value)
+  const evaluated = !hasEvaluationRegisterFunction(value)
     ? null
     : aureliaFrameworkRegistrationKindForEvaluationValue(value);
+  return evaluated ?? (allowSourceInventory
+    ? sourceFrameworkRegistrationKind(expression, bindings)
+    : null);
+}
+
+function sourceFrameworkRegistrationKind(
+  expression: ts.Expression,
+  bindings: ImportedBindings,
+): FrameworkRegistrationKind | null {
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) {
+    return bindings.frameworkRegistrationIdentifiers.get(current.text) ?? null;
+  }
+  if (ts.isCallExpression(current)) {
+    return sourceFrameworkRegistrationKind(current.expression, bindings);
+  }
+  if (!ts.isPropertyAccessExpression(current)) {
+    return null;
+  }
+  const namespaceKinds = ts.isIdentifier(current.expression)
+    ? bindings.frameworkRegistrationNamespaces.get(current.expression.text) ?? null
+    : null;
+  return namespaceKinds == null
+    ? sourceFrameworkRegistrationKind(current.expression, bindings)
+    : frameworkRegistrationKindForExportName(current.name.text, namespaceKinds);
 }
 
 function recognizeCheckerRegistryArgument(
@@ -2047,12 +2149,26 @@ function checkerRegistryDeclarationSource(
   if (sourceFileAddressHandle == null) {
     return checkerRegistryExpressionSource(expression);
   }
+  const valueNode = registryDeclarationValueNode(declaration);
   return {
-    node: declaration,
+    node: valueNode,
     localName: readDeclarationLocalName(declaration) ?? readReferenceName(expression) ?? 'IRegistry',
-    sourceFileAddressHandle,
+    sourceFileAddressHandle: context.sourceFileAddressHandleForNode(valueNode) ?? sourceFileAddressHandle,
     moduleKey: context.typeSystem?.readModuleKeyForSourceFile(declaration.getSourceFile()) ?? null,
   };
+}
+
+function registryDeclarationValueNode(declaration: ts.Declaration): ts.Node {
+  if (
+    (ts.isVariableDeclaration(declaration) || ts.isPropertyDeclaration(declaration))
+    && declaration.initializer != null
+  ) {
+    const initializer = unwrapExpression(declaration.initializer);
+    if (ts.isObjectLiteralExpression(initializer) || ts.isClassExpression(initializer)) {
+      return initializer;
+    }
+  }
+  return declaration;
 }
 
 function checkerRegistryExpressionSource(expression: ts.Expression): NamedRegistryValueSource {
@@ -2206,7 +2322,7 @@ function readCustomizeObjectContributions(
       [propertyName],
       readOptionValue(context, property.initializer),
       property,
-      evaluationOpenSeams(context, property.initializer),
+      optionValueOpenSeams(context, property.initializer),
     )];
   });
 }
@@ -2232,7 +2348,7 @@ function readCustomizeAssignmentContributions(
     assignment.optionPath,
     readOptionValue(context, assignment.valueExpression),
     assignment.sourceNode,
-    evaluationOpenSeams(context, assignment.valueExpression),
+    optionValueOpenSeams(context, assignment.valueExpression),
   ));
 }
 
@@ -2330,7 +2446,7 @@ function readBuilderContributions(
       [methodName ?? 'builder', `${index}`],
       readOptionValue(context, argument),
       argument,
-      evaluationOpenSeams(context, argument),
+      optionValueOpenSeams(context, argument),
     ));
   });
   return contributions;
@@ -2341,7 +2457,7 @@ function readOptionValue(
   expression: ts.Expression,
 ): ConfigurationOptionValueObservation {
   const read = context.expressionReader.evaluateExpression(expression);
-  const value = read.value;
+  const value = read.value ?? readStaticSourceLiteralValue(expression);
   const traceName = readReferenceName(expression);
   return value == null
     ? optionValueObservation(expression, ConfigurationOptionValueKind.Unknown, traceName)
@@ -2840,6 +2956,21 @@ function evaluationOpenSeams(
     'Configuration expression retained open or abrupt static-evaluation pressure.',
     expression,
   );
+}
+
+function optionValueOpenSeams(
+  context: ConfigurationRecognitionContext,
+  expression: ts.Expression,
+): readonly ConfigurationRecognitionOpen[] {
+  const read = context.expressionReader.evaluateExpression(expression);
+  return read.value == null && readStaticSourceLiteralValue(expression) != null
+    ? []
+    : configurationRecognitionOpensForEvaluationRead(
+        read,
+        KernelVocabulary.Configuration.OpenConfigurationOption.key,
+        'Configuration option retained open or abrupt static-evaluation pressure.',
+        expression,
+      );
 }
 
 function sequenceKindForSteps(

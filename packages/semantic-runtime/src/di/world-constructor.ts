@@ -32,10 +32,14 @@ import {
 } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
+import type { EvaluationValue } from '../evaluation/values.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   AppTaskDefinition,
 } from '../configuration/app-task.js';
+import {
+  aureliaAppTaskEvaluationForValue,
+} from '../configuration/aurelia-evaluation-runtime.js';
 import {
   ConfigurationSequenceKind,
   type ConfigurationStep,
@@ -97,6 +101,7 @@ import {
 } from './registry.js';
 import {
   DiWorldConstructionEmission,
+  RegisteredAppTask,
   type DiResolverProduct,
 } from './world-construction.js';
 import {
@@ -123,7 +128,7 @@ interface DiRegistrationSpendingEmission {
   readonly resolverSlots: readonly ContainerResolverSlot[];
   readonly factorySlots: readonly ContainerFactorySlot[];
   readonly resourceSlots: readonly ContainerResourceSlot[];
-  readonly appTasks: readonly AppTaskDefinition[];
+  readonly registeredAppTasks: readonly RegisteredAppTask[];
   readonly openSeams: readonly OpenSeam[];
   readonly issues: readonly DiIssue[];
   readonly resourceIssues: readonly ResourceIssue[];
@@ -138,7 +143,7 @@ interface DiRegistrationSpendingCascadeEmission {
   readonly resolverSlots: readonly ContainerResolverSlot[];
   readonly factorySlots: readonly ContainerFactorySlot[];
   readonly resourceSlots: readonly ContainerResourceSlot[];
-  readonly appTasks: readonly AppTaskDefinition[];
+  readonly registeredAppTasks: readonly RegisteredAppTask[];
   readonly openSeams: readonly OpenSeam[];
   readonly issues: readonly DiIssue[];
   readonly resourceIssues: readonly ResourceIssue[];
@@ -156,6 +161,8 @@ type DiRegistrationDirectSpender = (
   container: Container,
   step: ConfigurationStep,
   admission: RegistrationAdmissionProduct,
+  ordinal: number,
+  runtimeValue: EvaluationValue | null,
   registryBodyInterpreted: boolean,
   inheritedOpenSeams: readonly OpenSeam[],
 ) => DiRegistrationSpendingEmission;
@@ -176,7 +183,7 @@ class DiRegistrationSpendingFrame {
   readonly resolverSlots: ContainerResolverSlot[] = [];
   readonly factorySlots: ContainerFactorySlot[] = [];
   readonly resourceSlots: ContainerResourceSlot[] = [];
-  readonly appTasks: AppTaskDefinition[] = [];
+  readonly registeredAppTasks: RegisteredAppTask[] = [];
   readonly openSeams: OpenSeam[] = [];
   readonly issues: DiIssue[] = [];
   readonly resourceIssues: ResourceIssue[] = [];
@@ -277,7 +284,7 @@ class DiRegistrationSpendingFrame {
     this.resolverSlots.push(...effects.resolverSlots);
     this.factorySlots.push(...effects.factorySlots);
     this.resourceSlots.push(...effects.resourceSlots);
-    this.appTasks.push(...effects.appTasks);
+    this.registeredAppTasks.push(...effects.appTasks.map((task) => new RegisteredAppTask(task, null)));
     this.openSeams.push(...effects.openSeams);
     this.issues.push(...effects.issues);
     this.resourceIssues.push(...effects.resourceIssues);
@@ -292,9 +299,9 @@ class DiRegistrationSpendingFrame {
     }
   }
 
-  recordAppTask(task: AppTaskDefinition | null): void {
+  recordAppTask(task: AppTaskDefinition | null, runtimeValue: EvaluationValue | null): void {
     if (task != null) {
-      this.appTasks.push(task);
+      this.registeredAppTasks.push(new RegisteredAppTask(task, aureliaAppTaskEvaluationForValue(runtimeValue)));
     }
   }
 
@@ -308,7 +315,7 @@ class DiRegistrationSpendingFrame {
       resolverSlots: this.resolverSlots,
       factorySlots: this.factorySlots,
       resourceSlots: this.resourceSlots,
-      appTasks: this.appTasks,
+      registeredAppTasks: this.registeredAppTasks,
       openSeams: this.openSeams,
       issues: this.issues,
       resourceIssues: this.resourceIssues,
@@ -325,7 +332,7 @@ class DiRegistrationSpendingCascadeFrame {
   private readonly resolverSlots: ContainerResolverSlot[] = [];
   private readonly factorySlots: ContainerFactorySlot[] = [];
   private readonly resourceSlots: ContainerResourceSlot[] = [];
-  private readonly appTasks: AppTaskDefinition[] = [];
+  private readonly registeredAppTasks: RegisteredAppTask[] = [];
   private readonly openSeams: OpenSeam[] = [];
   private readonly issues: DiIssue[] = [];
   private readonly resourceIssues: ResourceIssue[] = [];
@@ -344,7 +351,7 @@ class DiRegistrationSpendingCascadeFrame {
     this.resolverSlots.push(...spent.resolverSlots);
     this.factorySlots.push(...spent.factorySlots);
     this.resourceSlots.push(...spent.resourceSlots);
-    this.appTasks.push(...spent.appTasks);
+    this.registeredAppTasks.push(...spent.registeredAppTasks);
     this.openSeams.push(...spent.openSeams);
     this.issues.push(...spent.issues);
     this.resourceIssues.push(...spent.resourceIssues);
@@ -359,7 +366,7 @@ class DiRegistrationSpendingCascadeFrame {
     this.resolverSlots.push(...spent.resolverSlots);
     this.factorySlots.push(...spent.factorySlots);
     this.resourceSlots.push(...spent.resourceSlots);
-    this.appTasks.push(...spent.appTasks);
+    this.registeredAppTasks.push(...spent.registeredAppTasks);
     this.openSeams.push(...spent.openSeams);
     this.issues.push(...spent.issues);
     this.resourceIssues.push(...spent.resourceIssues);
@@ -378,7 +385,7 @@ class DiRegistrationSpendingCascadeFrame {
       resolverSlots: this.resolverSlots,
       factorySlots: this.factorySlots,
       resourceSlots: this.resourceSlots,
-      appTasks: this.appTasks,
+      registeredAppTasks: this.registeredAppTasks,
       openSeams: this.openSeams,
       issues: this.issues,
       resourceIssues: this.resourceIssues,
@@ -389,6 +396,7 @@ class DiRegistrationSpendingCascadeFrame {
 
 class DiRegistrationSpendingCascade {
   private readonly activeAdmissionKeys = new Set<string>();
+  private nextOperationOrdinal = 0;
 
   constructor(private readonly services: DiRegistrationSpendingCascadeServices) {}
 
@@ -400,6 +408,7 @@ class DiRegistrationSpendingCascade {
     container: Container,
     step: ConfigurationStep,
     admission: RegistrationAdmissionProduct,
+    runtimeValue: EvaluationValue | null,
   ): DiRegistrationSpendingCascadeEmission {
     const spentKey = `${container.productHandle}:${step.productHandle}:${admission.productHandle}`;
     if (this.activeAdmissionKeys.has(spentKey)) {
@@ -407,13 +416,20 @@ class DiRegistrationSpendingCascade {
     }
     this.activeAdmissionKeys.add(spentKey);
     try {
-      const bodySteps = this.services.registryBodyIndex.stepsForAdmission(admission);
-      const registryBodyInterpreted = this.services.registryBodyIndex.bodyInterpretedForAdmission(admission);
+      const body = this.services.registryBodyIndex.executeAdmission(admission, runtimeValue);
       const inheritedOpenSeams = this.services.openSeamsByAdmissionProduct.get(admission.productHandle) ?? [];
       const frame = new DiRegistrationSpendingCascadeFrame(
-        this.services.spendDirect(container, step, admission, registryBodyInterpreted, inheritedOpenSeams),
+        this.services.spendDirect(
+          container,
+          step,
+          admission,
+          this.nextOperationOrdinal++,
+          runtimeValue,
+          body.interpreted,
+          inheritedOpenSeams,
+        ),
       );
-      for (const bodyStep of bodySteps) {
+      for (const bodyStep of body.steps) {
         if (!this.recordBodyStep(frame, container, bodyStep)) {
           break;
         }
@@ -427,12 +443,13 @@ class DiRegistrationSpendingCascade {
   private recordBodyStep(
     frame: DiRegistrationSpendingCascadeFrame,
     container: Container,
-    bodyStep: ConfigurationStep,
+    execution: import('../configuration/registry-body-index.js').RegistryBodyStepExecution,
   ): boolean {
+    const bodyStep = execution.step;
     for (const admissionHandle of bodyStep.registrationAdmissionProductHandles) {
       const admission = this.admissionForProduct(admissionHandle);
       if (admission != null) {
-        const spent = this.spend(container, bodyStep, admission);
+        const spent = this.spend(container, bodyStep, admission, execution.runtimeValueForAdmission(admission));
         frame.recordCascade(spent);
         if (spent.completion === DiRegistrationCascadeCompletion.Fatal) {
           return false;
@@ -467,7 +484,7 @@ class DiRegistrationSpendingCascade {
       resolverSlots: [],
       factorySlots: [],
       resourceSlots: [],
-      appTasks: [],
+      registeredAppTasks: [],
       openSeams: [],
       issues: [publication.issue],
       resourceIssues: [],
@@ -502,7 +519,7 @@ class DiWorldConstructionFrame {
   readonly factorySlots: ContainerFactorySlot[] = [];
   readonly selfResolverSlots: ContainerSelfResolverSlot[] = [];
   readonly resourceSlots: ContainerResourceSlot[] = [];
-  readonly appTasks: AppTaskDefinition[] = [];
+  readonly registeredAppTasks: RegisteredAppTask[] = [];
   readonly openSeams: OpenSeam[] = [];
   readonly issues: DiIssue[] = [];
   readonly resourceIssues: ResourceIssue[] = [];
@@ -541,7 +558,7 @@ class DiWorldConstructionFrame {
     readonly resolverSlots: readonly ContainerResolverSlot[];
     readonly factorySlots: readonly ContainerFactorySlot[];
     readonly resourceSlots: readonly ContainerResourceSlot[];
-    readonly appTasks: readonly AppTaskDefinition[];
+    readonly registeredAppTasks: readonly RegisteredAppTask[];
     readonly openSeams: readonly OpenSeam[];
     readonly issues: readonly DiIssue[];
     readonly resourceIssues: readonly ResourceIssue[];
@@ -554,7 +571,7 @@ class DiWorldConstructionFrame {
     this.resolverSlots.push(...spent.resolverSlots);
     this.factorySlots.push(...spent.factorySlots);
     this.resourceSlots.push(...spent.resourceSlots);
-    this.appTasks.push(...spent.appTasks);
+    this.registeredAppTasks.push(...spent.registeredAppTasks);
     this.openSeams.push(...spent.openSeams);
     this.issues.push(...spent.issues);
     this.resourceIssues.push(...spent.resourceIssues);
@@ -571,7 +588,7 @@ class DiWorldConstructionFrame {
       this.factorySlots,
       this.selfResolverSlots,
       this.resourceSlots,
-      this.appTasks,
+      this.registeredAppTasks,
       this.openSeams,
       this.issues,
       this.resourceIssues,
@@ -661,11 +678,13 @@ export class DiWorldConstructor {
       openSeamsByAdmissionProduct: registrationAdmissionOpenSeamIndex(configuration),
       registryBodyIndex: buildRegistryBodyStepIndex(this.publication, configuration, evaluation),
       issuePublisher: new DiIssuePublisher(this.store),
-      spendDirect: (container, step, admission, registryBodyInterpreted, inheritedOpenSeams) =>
+      spendDirect: (container, step, admission, ordinal, runtimeValue, registryBodyInterpreted, inheritedOpenSeams) =>
         this.recordsForRegistrationSpending(
           container,
           step,
           admission,
+          ordinal,
+          runtimeValue,
           typeSystem,
           configuredResources,
           resourceDefinitions,
@@ -767,7 +786,12 @@ export class DiWorldConstructor {
           continue;
         }
 
-        const spent = registrationCascade.spend(container, step, admission);
+        const spent = registrationCascade.spend(
+          container,
+          step,
+          admission,
+          configuration.evaluationBindings.registrationValueForAdmission(admission.productHandle),
+        );
         frame.recordSpending(spent);
         if (spent.completion === DiRegistrationCascadeCompletion.Fatal) {
           if (sequenceProductHandle != null) {
@@ -824,6 +848,8 @@ export class DiWorldConstructor {
     container: Container,
     step: ConfigurationStep,
     admission: RegistrationAdmissionProduct,
+    ordinal: number,
+    runtimeValue: EvaluationValue | null,
     typeSystem: TypeSystemProject,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     resourceDefinitions: ResourceDefinitionIndex | null,
@@ -832,13 +858,13 @@ export class DiWorldConstructor {
     registryBodyInterpreted: boolean,
     inheritedOpenSeams: readonly OpenSeam[],
   ): DiRegistrationSpendingEmission {
-    const local = `di-registration:${container.productHandle}:${step.productHandle}:${admission.productHandle}`;
+    const local = `di-registration:${ordinal}:${container.productHandle}:${step.productHandle}:${admission.productHandle}`;
     const source = recordsForDiSource(this.store,
       `${local}:source`,
       'Configuration-owned registration admission spent into DI world construction.',
       step.sourceAddressHandle ?? admission.sourceAddressHandle,
     );
-    const operation = this.operationForAdmission(container, admission, local, source.provenanceHandle);
+    const operation = this.operationForAdmission(container, admission, ordinal, local, source.provenanceHandle);
     container.register(operation.product);
     const frame = new DiRegistrationSpendingFrame(source, operation);
     frame.retainOpenSeams(inheritedOpenSeams);
@@ -847,6 +873,7 @@ export class DiWorldConstructor {
       frame,
       container,
       admission,
+      runtimeValue,
       typeSystem,
       configuredResources,
       resourceDefinitions,
@@ -871,6 +898,7 @@ export class DiWorldConstructor {
     frame: DiRegistrationSpendingFrame,
     container: Container,
     admission: RegistrationAdmissionProduct,
+    runtimeValue: EvaluationValue | null,
     typeSystem: TypeSystemProject,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     resourceDefinitions: ResourceDefinitionIndex | null,
@@ -897,6 +925,7 @@ export class DiWorldConstructor {
         frame,
         container,
         admission,
+        runtimeValue,
         typeSystem,
         configuredResources,
         projectKey,
@@ -993,6 +1022,7 @@ export class DiWorldConstructor {
     frame: DiRegistrationSpendingFrame,
     container: Container,
     admission: RegistryRegistrationAdmission,
+    runtimeValue: EvaluationValue | null,
     typeSystem: TypeSystemProject,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     projectKey: string | null,
@@ -1010,7 +1040,7 @@ export class DiWorldConstructor {
     );
     frame.recordRegistry(emission);
     const registeredAppTask = appTaskForRegistryAdmission(admission, appTasksByProduct);
-    frame.recordAppTask(registeredAppTask);
+    frame.recordAppTask(registeredAppTask, runtimeValue);
 
     const frameworkEffects = this.recordsForFrameworkRegistrationEffects(
       container,
@@ -1115,11 +1145,12 @@ export class DiWorldConstructor {
   private operationForAdmission(
     container: Container,
     admission: RegistrationAdmissionProduct,
+    ordinal: number,
     local: string,
     provenanceHandle: ProvenanceHandle,
   ): DiRegistrationOperationEmission {
     const handles = this.registrationOperationHandles(local);
-    const operation = this.registrationOperationForAdmission(container, admission, handles);
+    const operation = this.registrationOperationForAdmission(container, admission, ordinal, handles);
     const records = this.recordsForRegistrationOperation(container, admission, operation, handles, provenanceHandle);
     return new DiRegistrationOperationEmission(
       records,
@@ -1141,11 +1172,13 @@ export class DiWorldConstructor {
   private registrationOperationForAdmission(
     container: Container,
     admission: RegistrationAdmissionProduct,
+    ordinal: number,
     handles: DiRegistrationOperationHandles,
   ): ContainerRegistrationOperation {
     const operation = new ContainerRegistrationOperation(
       handles.productHandle,
       handles.identityHandle,
+      ordinal,
       container.toReference(),
       admission.productHandle,
       admission.sourceAddressHandle,
@@ -1619,7 +1652,7 @@ function emptyRegistrationSpendingCascade(): DiRegistrationSpendingCascadeEmissi
     resolverSlots: [],
     factorySlots: [],
     resourceSlots: [],
-    appTasks: [],
+    registeredAppTasks: [],
     openSeams: [],
     issues: [],
     resourceIssues: [],

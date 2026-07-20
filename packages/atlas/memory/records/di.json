@@ -132,8 +132,9 @@
       "rationale": "The constructor remains a broad coordination point, but evaluator execution, key identity, provider activation, and publication now have separate owners. Future cleanup should preserve that boundary: this class orders app/container spending and aggregates emissions; it must not become another source parser, evaluator, key authority, or world-global provider index.",
       "guidance": [
         "Check framework.di and framework.admission before extending this constructor from app pressure alone.",
-        "Spend evaluator-known registry functions only through DiRegistrationSpendingCascade and the shared registry executor when an executed configuration path proves the call. Unresolved bodies remain open.",
+        "Spend evaluator-known registry functions only through DiRegistrationSpendingCascade when an executed configuration path supplies the exact occurrence-local registry value. RegistryBodyStepIndex is a declaration-inventory join: candidate-local execution must reach and match each register call before DI spends its historical argument values; unresolved or unmatched bodies remain open.",
         "Use an active recursion stack for unable_auto_register authority; completed repeated registry calls are distinct ordered effects, not a global visited-set duplicate.",
+        "ContainerRegistrationOperation.ordinal records DI traversal order independently of materialization order. AppTask effects join to that traversal as RegisteredAppTask evidence only when their admission is spent; do not infer registration from a source definition or factory site.",
         "Derive compiler-world visibility from canonical ITemplateCompiler provider identity on the app container's consulting chain, not from manifest capability presence.",
         "Framework registration effects can emit resolver slots, resource slots, app tasks, and root-shared factory slots; keep registerFactory effects as ContainerFactorySlot products instead of resolver shortcuts.",
         "Use DiKeyIdentityEmitter for all key publication and DiProviderActivationView for provider/default/activation reads rather than adding constructor-local identity or source graphs.",
@@ -151,6 +152,18 @@
           "filePath": "packages/semantic-runtime/src/di/world-constructor.ts",
           "symbolName": "DiRegistrationSpendingCascade",
           "summary": "Path-proven recursive registry spending with active recursion detection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/registry-body-index.ts",
+          "symbolName": "RegistryBodyStepIndex",
+          "summary": "Registry declaration inventory joined to exact candidate-local execution and occurrence values."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/world-construction.ts",
+          "symbolName": "RegisteredAppTask",
+          "summary": "Spent AppTask evidence retaining exact source evaluator metadata without lifecycle execution."
         },
         {
           "kind": "source",
@@ -188,7 +201,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-19"
+      "updatedAt": "2026-07-20"
     },
     {
       "id": "frontier:resolver",

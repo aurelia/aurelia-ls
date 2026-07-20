@@ -217,6 +217,9 @@ template/resource completions should ask this index rather than rebuilding name 
 hits stay unresolved until the owning scope model can disambiguate them. For router string routeables, the index exposes
 custom-element-only lookup plus dependency-scoped custom-element lookup so a parent component's `dependencies` array can
 disambiguate same-named resources without making the router maintain its own resource map.
+TypeScript expression lookup remaps evaluator/source AST nodes into the current Program, resolves import aliases to the
+declaration, and then spends the declaration source file's module key plus local name. Consumers must not interpret an
+imported identifier as though its declaration belonged to the consuming module, or build a second symbol-to-resource map.
 
 Open seams are part of the product here. A carrier with an open kind, name, alias, pattern, or target should still
 produce kernel pressure rather than disappearing or pretending to be complete.

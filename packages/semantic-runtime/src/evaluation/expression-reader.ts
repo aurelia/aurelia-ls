@@ -34,6 +34,13 @@ import {
   readStaticOwnProperty,
 } from './property-access.js';
 import {
+  EvaluationArrayElement,
+  EvaluationArrayValue,
+  EvaluationBooleanValue,
+  EvaluationNullValue,
+  EvaluationNumberValue,
+  EvaluationStringValue,
+  EvaluationUndefinedValue,
   EvaluationValueKind,
   type EvaluationInstanceValue,
   type EvaluationValue,
@@ -84,6 +91,13 @@ export class EvaluationTargetRead {
 /** Minimal evaluator-backed expression read surface accepted by semantic indexes. */
 export interface StaticExpressionEvaluationReader {
   evaluateExpression(expression: ts.Expression): EvaluationRead<EvaluationValue>;
+}
+
+/** Source-only literal reader for declarative inventories that must not replay code. */
+export class StaticSourceLiteralExpressionReader implements StaticExpressionEvaluationReader {
+  evaluateExpression(expression: ts.Expression): EvaluationRead<EvaluationValue> {
+    return new EvaluationRead(readStaticSourceLiteralValue(expression), expression);
+  }
 }
 
 /** Generic expression reader over an already-built module environment. */
@@ -166,23 +180,17 @@ export class StaticEvaluationExpressionReader implements StaticExpressionEvaluat
   }
 }
 
-/** Expression reader over immutable invocation evidence plus the module's final declaration environment. */
-export class StaticModuleEvaluationExpressionReader implements StaticExpressionEvaluationReader {
+/** Expression reader over a selected invocation-evidence lane without source replay. */
+export class StaticInvocationEvidenceExpressionReader implements StaticExpressionEvaluationReader {
   private readonly invocationsByExpression = new Map<ts.Expression, StaticInvocationOccurrence[]>();
   private readonly invocationEvaluationsByExpression = new Map<ts.Expression, StaticInvocationEvaluation[]>();
   private readonly evidenceByExpression = new Map<ts.Expression, EvaluationValueEvidence[]>();
-  private readonly finalEnvironmentReader: StaticEvaluationExpressionReader;
 
   constructor(
-    private readonly evaluation: StaticModuleEvaluationResult,
+    private readonly moduleKey: string,
+    invocationEvaluations: readonly StaticInvocationEvaluation[],
   ) {
-    this.finalEnvironmentReader = new StaticEvaluationExpressionReader(
-      evaluation.environment,
-      evaluation.moduleKey,
-      evaluation.policy,
-      evaluation.runtimeHost,
-    );
-    for (const invocation of evaluation.invocationEvaluations) {
+    for (const invocation of invocationEvaluations) {
       appendMapValue(this.invocationEvaluationsByExpression, invocation.node, invocation);
       if (isStaticInvocationOccurrence(invocation)) {
         appendMapValue(this.invocationsByExpression, invocation.node, invocation);
@@ -234,7 +242,10 @@ export class StaticModuleEvaluationExpressionReader implements StaticExpressionE
         'Invocation evaluation did not retain immutable evidence for this nested source expression.',
       );
     }
-    return this.finalEnvironmentReader.evaluateExpression(expression);
+    return this.openInvocationRead(
+      expression,
+      'Source expression has no retained definite execution evidence; static evaluation will not replay it against the final module environment.',
+    );
   }
 
   private indexExpressionEvidence(
@@ -361,8 +372,15 @@ export class StaticModuleEvaluationExpressionReader implements StaticExpressionE
       EvaluationOpenSeamKind.InvocationSourceRead,
       summary,
       expression,
-      this.evaluation.moduleKey,
+      this.moduleKey,
     )]);
+  }
+}
+
+/** Expression reader over every definite invocation retained by one evaluated module. */
+export class StaticModuleEvaluationExpressionReader extends StaticInvocationEvidenceExpressionReader {
+  constructor(evaluation: StaticModuleEvaluationResult) {
+    super(evaluation.moduleKey, evaluation.invocationEvaluations);
   }
 }
 
@@ -463,6 +481,53 @@ export function readStaticStringValue(
     case EvaluationValueKind.Promise:
       return null;
   }
+}
+
+/** Read only syntax-owned literal values; this never consults an environment or executes source. */
+export function readStaticSourceLiteralValue(expression: ts.Expression): EvaluationValue | null {
+  const current = unwrapExpression(expression);
+  if (ts.isStringLiteralLike(current)) {
+    return new EvaluationStringValue(current.text, current);
+  }
+  if (ts.isNumericLiteral(current)) {
+    return new EvaluationNumberValue(Number(current.text), current);
+  }
+  if (current.kind === ts.SyntaxKind.TrueKeyword || current.kind === ts.SyntaxKind.FalseKeyword) {
+    return new EvaluationBooleanValue(current.kind === ts.SyntaxKind.TrueKeyword, current);
+  }
+  if (current.kind === ts.SyntaxKind.NullKeyword) {
+    return new EvaluationNullValue(current);
+  }
+  if (ts.isIdentifier(current) && current.text === 'undefined') {
+    return new EvaluationUndefinedValue(current);
+  }
+  if (
+    ts.isPrefixUnaryExpression(current)
+    && (current.operator === ts.SyntaxKind.PlusToken || current.operator === ts.SyntaxKind.MinusToken)
+  ) {
+    const operand = readStaticSourceLiteralValue(current.operand);
+    return operand?.kind === EvaluationValueKind.Number
+      ? new EvaluationNumberValue(
+          current.operator === ts.SyntaxKind.MinusToken ? -operand.value : operand.value,
+          current,
+        )
+      : null;
+  }
+  if (ts.isArrayLiteralExpression(current)) {
+    const elements: EvaluationArrayElement[] = [];
+    for (const [index, element] of current.elements.entries()) {
+      if (ts.isOmittedExpression(element) || ts.isSpreadElement(element)) {
+        return null;
+      }
+      const value = readStaticSourceLiteralValue(element);
+      if (value == null) {
+        return null;
+      }
+      elements.push(new EvaluationArrayElement(value, element, [], index));
+    }
+    return new EvaluationArrayValue(elements, current);
+  }
+  return null;
 }
 
 export interface StaticStringArrayEntryRead {

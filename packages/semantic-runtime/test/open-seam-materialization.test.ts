@@ -39,7 +39,7 @@ describe('open seam materialization ownership', () => {
       kind: 'source-span-address',
     });
 
-    const di = await analyzeFixture('di-registry-path-honesty');
+    const di = await analyzeFixture('di-open-registration-container');
     const targetlessDiSeams = seamsOfKind(di, KernelVocabulary.Di.OpenRegistrationSpending.key)
       .filter((seam) => seam.summary.includes('receiving container'));
     expect(targetlessDiSeams.length).toBeGreaterThan(0);

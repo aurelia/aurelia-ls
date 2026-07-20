@@ -404,13 +404,14 @@ span cannot be rebased, the caller has lost the parser/source ownership chain an
 selection, suppressed-hole promotion, and strict/runtime projection pressure stay separate from boundary extraction.
 Unresolved globals and async/generator bodies in non-app-root resource libraries remain evaluator boundary pressure,
 not app authoring API pressure.
-The dialog configuration registry pressure also exposed a lower-level evaluator leak: configuration recognition was
-re-reading expressions through a fresh default evaluator, losing the Aurelia runtime host used during module evaluation.
-`StaticModuleEvaluationResult` now carries the policy/runtime host into `StaticEvaluationExpressionReader`, and dialog
-configuration chains preserve a framework registration kind through `.customize(...)`/`.withChild(...)`. AppTask factory
-calls are configuration-owned lifecycle products, not registry bodies for DI to spend. DI world construction now threads
-registered AppTask products into its lifecycle task list and closes the AppTask registry admission without executing the
-callback body. Remaining seams in that lane should mean evaluator/global-boundary pressure or a genuinely unrecognized
+The dialog configuration registry pressure exposed a lower-level evaluator leak: configuration recognition used to
+re-read expressions through a fresh evaluator and later through final module state. Configuration now projects retained
+invocation evidence from the original Aurelia runtime host, while dialog configuration chains preserve a framework
+registration kind through `.customize(...)`/`.withChild(...)`. AppTask factory calls are configuration-owned lifecycle
+products, and DI retains them only when their exact registry occurrence is spent. Source-created tasks keep their
+call-time key/callback evidence and captured environment without executing the lifecycle callback. Registry definitions
+likewise remain inventories until candidate-local evaluator execution reaches their register calls. Remaining seams in
+that lane should mean evaluator/global-boundary pressure, an unmatched registry invocation, or a genuinely unrecognized
 registry body.
 Public plugin pressure also clarified the registration/activation boundary for callback resolvers: a
 `Registration.callback(...)` or `Registration.cachedCallback(...)` call is a closed resolver admission once its key and

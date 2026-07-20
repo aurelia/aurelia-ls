@@ -17,11 +17,21 @@ import type {
   RegistryValue,
 } from './registry.js';
 import type { AppTaskDefinition } from '../configuration/app-task.js';
+import type { AureliaAppTaskEvaluation } from '../configuration/aurelia-evaluation-runtime.js';
 import type { DiIssue } from './di-issue.js';
 import type { ResourceIssue } from '../resources/resource-issue.js';
 
 /** Runtime resolver objects that can occupy a container resolver slot. */
 export type DiResolverProduct = Resolver | InstanceProvider;
+
+/** One AppTask registry value that was actually spent into a modeled container. */
+export class RegisteredAppTask {
+  constructor(
+    readonly task: AppTaskDefinition,
+    /** Exact call-time evaluator evidence, absent for framework-minted tasks. */
+    readonly evaluation: AureliaAppTaskEvaluation | null,
+  ) {}
+}
 
 /** Result of spending configuration-owned registrations into abstract DI container state. */
 export class DiWorldConstructionEmission {
@@ -44,8 +54,8 @@ export class DiWorldConstructionEmission {
     readonly selfResolverSlots: readonly ContainerSelfResolverSlot[],
     /** Container-owned resource slots produced during spending. */
     readonly resourceSlots: readonly ContainerResourceSlot[],
-    /** Framework-owned lifecycle AppTasks surfaced while spending framework registrations. */
-    readonly appTasks: readonly AppTaskDefinition[],
+    /** AppTask registry values actually spent into modeled containers, in registration order. */
+    readonly registeredAppTasks: readonly RegisteredAppTask[],
     /** Open seams left by registration spending. */
     readonly openSeams: readonly OpenSeam[],
     /** Source-backed DI/container issues discovered while spending registrations. */
@@ -55,4 +65,9 @@ export class DiWorldConstructionEmission {
     /** Kernel records committed for these DI products and seams. */
     readonly records: readonly KernelStoreRecord[],
   ) {}
+
+  /** Definition projection retained for existing query and summary consumers. */
+  get appTasks(): readonly AppTaskDefinition[] {
+    return this.registeredAppTasks.map((registration) => registration.task);
+  }
 }

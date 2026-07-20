@@ -494,7 +494,7 @@ class AureliaAppWorldProjectConstructionFrame {
     const resourceIndex = this.indexResources(resources);
     this.materializeResourceDefinitionApiIssues(typeSystem, resources);
     this.materializeScopeApiIssues(typeSystem);
-    const routeConfigContributions = this.recognizeRouteConfigs(evaluation, resourceIndex);
+    const routeConfigContributions = this.recognizeRouteConfigs(evaluation, typeSystem, resourceIndex);
     const configuration = this.recognizeConfiguration(evaluation, typeSystem, resourceIndex);
     const routes = this.convergeRouteConfigs(routeConfigContributions, resourceIndex, configuration);
     this.materializeConfigurationOptionShapeIssues(configuration);
@@ -749,6 +749,7 @@ class AureliaAppWorldProjectConstructionFrame {
 
   private recognizeRouteConfigs(
     evaluation: StaticProjectEvaluationResult,
+    typeSystem: TypeSystemProject,
     resourceIndex: ResourceDefinitionIndex,
   ): RouteConfigRecognitionProjectResult {
     return this.measure('route-config-recognition', () =>
@@ -757,6 +758,7 @@ class AureliaAppWorldProjectConstructionFrame {
         this.project,
         evaluation,
         resourceIndex,
+        typeSystem,
       )
     );
   }

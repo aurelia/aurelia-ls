@@ -13,12 +13,10 @@ import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own
 import {
   EvaluationObjectPropertyState,
   EvaluationValueKind,
+  type EvaluationFunctionValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
 import type { EvaluationOpenSeam } from '../evaluation/seams.js';
-import {
-  isEvaluatedProjectSource,
-} from '../evaluation/project-evaluation.js';
 import {
   projectModuleSourceNodeOrdinalLocalKey,
 } from '../kernel/local-key.js';
@@ -62,9 +60,11 @@ import {
 import {
   configurationRecognitionOpensForEvaluationRead,
   ConfigurationRecognitionOpen,
-  type AppTaskObservation,
-  type ConfigurationCallbackObservation,
 } from './configuration-observation.js';
+import {
+  aureliaInterfaceEvaluationForValue,
+  type AureliaAppTaskEvaluation,
+} from './aurelia-evaluation-runtime.js';
 import { ConfigurationKernelPublication } from './configuration-publication.js';
 import {
   ConfigurationRecognitionContext,
@@ -80,6 +80,8 @@ import {
   ConfigurationFrameworkErrorCode,
 } from './framework-error-code.js';
 import { ConfigurationProductDetails } from './product-details.js';
+import { normalizeConfigurationSourceFileName } from './source-file-names.js';
+import type { DiWorldConstructionEmission } from '../di/world-construction.js';
 
 const enum FrameworkServiceKind {
   AttrMapper = 'attr-mapper',
@@ -382,48 +384,54 @@ export class FrameworkServiceCustomizationRecognitionPass {
     private readonly publication: KernelPublicationContext,
   ) {}
 
-  recognize(configuration: ConfigurationRecognitionProjectResult): FrameworkServiceCustomizationProjectResult {
+  recognize(
+    configuration: ConfigurationRecognitionProjectResult,
+    diWorld: DiWorldConstructionEmission,
+  ): FrameworkServiceCustomizationProjectResult {
     const draft = new FrameworkServiceCustomizationDraft(
       new ConfigurationIssuePublisher(this.store),
       new ConfigurationKernelPublication(this.store),
     );
-    const evaluatedByAdmission = new Map(
-      configuration.evaluation.readEvaluatedSources().map((source) => [source.admission.addressHandle, source]),
-    );
     const sourceFileAddressHandlesByFileName = readSourceFileAddressHandlesByFileName(configuration.evaluation);
-    for (const source of configuration.sources) {
-      const evaluated = evaluatedByAdmission.get(source.admission.addressHandle);
-      if (evaluated == null) {
+    const evaluatedSourcesByFileName = new Map(configuration.evaluation.readEvaluatedSources().map((source) => [
+      normalizeConfigurationSourceFileName(source.sourceFile.fileName),
+      source,
+    ]));
+    for (const registration of diWorld.registeredAppTasks) {
+      const evaluation = registration.evaluation;
+      const callback = evaluation?.callback?.value;
+      if (evaluation == null || callback?.kind !== EvaluationValueKind.Function) {
         continue;
       }
-      const evaluationSource = configuration.evaluation.sources.find((candidate) =>
-        candidate.admission.addressHandle === source.admission.addressHandle
+      const evaluationSource = evaluatedSourcesByFileName.get(
+        normalizeConfigurationSourceFileName(callback.declaration.getSourceFile().fileName),
       ) ?? null;
-      if (evaluationSource == null || !isEvaluatedProjectSource(evaluationSource)) {
+      if (evaluationSource == null) {
         continue;
       }
+      const reader = new StaticEvaluationExpressionReader(
+        callback.environment,
+        callback.environment.moduleKey,
+        evaluationSource.evaluation.policy,
+        evaluationSource.evaluation.runtimeHost,
+      );
       const context = new ConfigurationRecognitionContext(
         evaluationSource.sourceFile,
         evaluationSource.moduleKey,
         evaluationSource.admission.projectKey,
         evaluationSource.admission.addressHandle,
         evaluationSource.evaluation,
+        reader,
         null,
         sourceFileAddressHandlesByFileName,
       );
-      const reader = new StaticEvaluationExpressionReader(
-        evaluated.evaluation.environment,
-        evaluated.evaluation.moduleKey,
-        evaluated.evaluation.policy,
-        evaluated.evaluation.runtimeHost,
+      recognizeAppTaskServiceCustomizations(
+        context,
+        evaluation,
+        callback,
+        reader,
+        draft,
       );
-      for (const observation of source.observations) {
-        for (const step of observation.steps) {
-          for (const appTask of step.appTasks) {
-            recognizeAppTaskServiceCustomizations(context, appTask, reader, draft);
-          }
-        }
-      }
     }
     const result = draft.toResult();
     this.publication.publish(new KernelPublicationPlan(
@@ -439,22 +447,16 @@ export class FrameworkServiceCustomizationRecognitionPass {
 
 function recognizeAppTaskServiceCustomizations(
   context: ConfigurationRecognitionContext,
-  appTask: AppTaskObservation,
+  appTask: AureliaAppTaskEvaluation,
+  callback: EvaluationFunctionValue,
   reader: StaticEvaluationExpressionReader,
   draft: FrameworkServiceCustomizationDraft,
 ): void {
-  const callback = callbackFunction(appTask.callback, reader);
-  if (callback == null) {
-    return;
-  }
-
   const serviceLocals = new Map<string, FrameworkServiceKind>();
   const containerLocals = new Set<string>();
-  const firstParameter = callback.parameters[0]?.name;
+  const firstParameter = callback.declaration.parameters[0]?.name;
   if (firstParameter != null && ts.isIdentifier(firstParameter)) {
-    const callbackTarget = appTask.keyExpression == null
-      ? null
-      : appTaskCallbackTargetForKeyExpression(appTask.keyExpression);
+    const callbackTarget = appTaskCallbackTarget(appTask);
     if (callbackTarget?.kind === AppTaskCallbackTargetKind.Container) {
       containerLocals.add(firstParameter.text);
     } else if (callbackTarget?.kind === AppTaskCallbackTargetKind.FrameworkService) {
@@ -464,7 +466,7 @@ function recognizeAppTaskServiceCustomizations(
 
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer != null) {
-      const service = serviceKindForContainerGet(node.initializer, containerLocals);
+      const service = serviceKindForContainerGet(node.initializer, reader, containerLocals);
       if (service != null) {
         serviceLocals.set(node.name.text, service);
       }
@@ -480,7 +482,7 @@ function recognizeAppTaskServiceCustomizations(
     ts.forEachChild(node, visit);
   };
 
-  const body = callback.body;
+  const body = callback.declaration.body;
   if (body != null) {
     visit(body);
   }
@@ -498,7 +500,7 @@ function recognizeServiceAssignment(
   if (!ts.isPropertyAccessExpression(left) || left.name.text !== 'allowDirtyCheck') {
     return;
   }
-  const service = serviceKindForExpression(left.expression, serviceLocals, containerLocals);
+  const service = serviceKindForExpression(left.expression, reader, serviceLocals, containerLocals);
   if (service !== FrameworkServiceKind.NodeObserverLocator) {
     return;
   }
@@ -521,32 +523,6 @@ function recognizeServiceAssignment(
   }
 }
 
-function callbackFunction(
-  callback: ConfigurationCallbackObservation | null,
-  reader: StaticEvaluationExpressionReader,
-): ts.FunctionLikeDeclaration | null {
-  if (callback == null) {
-    return null;
-  }
-  const node = unwrapCallbackNode(callback.node);
-  if (ts.isFunctionExpression(node) || ts.isArrowFunction(node) || ts.isFunctionDeclaration(node)) {
-    return node;
-  }
-  if (!ts.isIdentifier(node)) {
-    return null;
-  }
-  const value = reader.environment.readValue(node.text);
-  return value?.kind === EvaluationValueKind.Function
-    ? value.declaration
-    : null;
-}
-
-function unwrapCallbackNode(node: ts.Node): ts.Node {
-  return ts.isExpression(node)
-    ? unwrapExpression(node)
-    : node;
-}
-
 function recognizeServiceMethodCall(
   context: ConfigurationRecognitionContext,
   call: ts.CallExpression,
@@ -559,7 +535,7 @@ function recognizeServiceMethodCall(
   if (!ts.isPropertyAccessExpression(expression)) {
     return;
   }
-  const service = serviceKindForExpression(expression.expression, serviceLocals, containerLocals);
+  const service = serviceKindForExpression(expression.expression, reader, serviceLocals, containerLocals);
   if (service == null) {
     return;
   }
@@ -738,6 +714,7 @@ function publishNodeObserverReadPressure(
 
 function serviceKindForExpression(
   expression: ts.Expression,
+  reader: StaticEvaluationExpressionReader,
   serviceLocals: ReadonlyMap<string, FrameworkServiceKind>,
   containerLocals: ReadonlySet<string>,
 ): FrameworkServiceKind | null {
@@ -745,11 +722,12 @@ function serviceKindForExpression(
   if (ts.isIdentifier(current)) {
     return serviceLocals.get(current.text) ?? null;
   }
-  return serviceKindForContainerGet(current, containerLocals);
+  return serviceKindForContainerGet(current, reader, containerLocals);
 }
 
 function serviceKindForContainerGet(
   expression: ts.Expression,
+  reader: StaticEvaluationExpressionReader,
   containerLocals: ReadonlySet<string>,
 ): FrameworkServiceKind | null {
   const current = unwrapExpression(expression);
@@ -767,24 +745,31 @@ function serviceKindForContainerGet(
   const key = current.arguments[0];
   return key == null || ts.isSpreadElement(key)
     ? null
-    : serviceKindForKeyExpression(key);
+    : serviceKindForKeyValue(reader.evaluateExpression(key).value, key);
 }
 
-function appTaskCallbackTargetForKeyExpression(expression: ts.Expression): AppTaskCallbackTarget | null {
-  const service = serviceKindForKeyExpression(expression);
+function appTaskCallbackTarget(appTask: AureliaAppTaskEvaluation): AppTaskCallbackTarget | null {
+  const keyExpression = appTask.keyExpression;
+  if (keyExpression == null) {
+    return null;
+  }
+  const service = serviceKindForKeyValue(appTask.key?.value ?? null, keyExpression);
   if (service != null) {
     return {
       kind: AppTaskCallbackTargetKind.FrameworkService,
       service,
     };
   }
-  return isContainerKeyExpression(expression)
+  return keyNameForValue(appTask.key?.value ?? null, keyExpression) === 'IContainer'
     ? { kind: AppTaskCallbackTargetKind.Container }
     : null;
 }
 
-function serviceKindForKeyExpression(expression: ts.Expression): FrameworkServiceKind | null {
-  const name = readReferenceName(expression);
+function serviceKindForKeyValue(
+  value: EvaluationValue | null,
+  expression: ts.Expression,
+): FrameworkServiceKind | null {
+  const name = keyNameForValue(value, expression);
   switch (name) {
     case 'IAttrMapper':
     case 'AttrMapper':
@@ -797,8 +782,27 @@ function serviceKindForKeyExpression(expression: ts.Expression): FrameworkServic
   }
 }
 
-function isContainerKeyExpression(expression: ts.Expression): boolean {
-  return readReferenceName(expression) === 'IContainer';
+function keyNameForValue(value: EvaluationValue | null, expression: ts.Expression): string | null {
+  const interfaceEvaluation = aureliaInterfaceEvaluationForValue(value);
+  if (interfaceEvaluation != null) {
+    return interfaceEvaluation.friendlyName;
+  }
+  const sourceNode = value?.node ?? null;
+  if (sourceNode != null) {
+    if (ts.isImportSpecifier(sourceNode)) {
+      return (sourceNode.propertyName ?? sourceNode.name).text;
+    }
+    if (ts.isImportClause(sourceNode) && sourceNode.name != null) {
+      return sourceNode.name.text;
+    }
+    if (ts.isExpression(sourceNode)) {
+      const sourceName = readReferenceName(sourceNode);
+      if (sourceName != null) {
+        return sourceName;
+      }
+    }
+  }
+  return readReferenceName(expression);
 }
 
 function readAttributeMappings(

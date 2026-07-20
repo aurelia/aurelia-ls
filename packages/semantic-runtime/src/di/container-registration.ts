@@ -9,6 +9,7 @@ import type { ContainerReference } from './container-reference.js';
 export type ContainerRegistrationField =
   | 'container'
   | 'admission'
+  | 'ordinal'
   | 'source';
 
 /** A registration admission being applied to one concrete abstract container. */
@@ -18,6 +19,8 @@ export class ContainerRegistrationOperation {
     readonly productHandle: ProductHandle,
     /** Identity for this container-registration operation. */
     readonly identityHandle: IdentityHandle,
+    /** Execution order within the app DI-spending traversal. */
+    readonly ordinal: number,
     /** Container receiving the registration admission. */
     readonly container: ContainerReference,
     /** Product handle for the registration admission being spent, when already materialized. */

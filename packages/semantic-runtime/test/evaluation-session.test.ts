@@ -47,6 +47,7 @@ import {
   aureliaStaticEvaluationRuntimeHost,
   isAureliaResolveEvaluationFunction,
 } from '../src/configuration/aurelia-evaluation-runtime.js';
+import { aureliaConfigurationEvaluationPolicy } from '../src/configuration/evaluation-policy.js';
 import {
   ModuleLoader,
   ModuleLoaderTransformStatus,
@@ -117,6 +118,58 @@ describe('static evaluation sessions', () => {
     expect(aureliaFacadeEvaluationForValue(result.environment.readValue('browserStatic'))?.includesBrowserDefaults).toBe(true);
     expect(aureliaFacadeEvaluationForValue(result.environment.readValue('namespaceRuntime'))?.includesBrowserDefaults).toBe(false);
     expect(aureliaFacadeEvaluationForValue(result.environment.readValue('local'))).toBeNull();
+  });
+
+  test('keeps repeated construction at one source site as distinct facade and container identities', () => {
+    const source = ts.createSourceFile(
+      'src/aurelia-facade-occurrences.ts',
+      [
+        "import { Aurelia } from '@aurelia/runtime-html';",
+        'function createApp() { return new Aurelia(); }',
+        'const first = createApp();',
+        'const second = createApp();',
+      ].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const result = new StaticEvaluator(
+      aureliaConfigurationEvaluationPolicy,
+      aureliaStaticEvaluationRuntimeHost,
+    ).evaluateSourceFile(source, source.fileName, aureliaImportValues(source));
+    const first = aureliaFacadeEvaluationForValue(result.environment.readValue('first'));
+    const second = aureliaFacadeEvaluationForValue(result.environment.readValue('second'));
+
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    expect(first).not.toBe(second);
+    expect(first?.sourceNode).toBe(second?.sourceNode);
+    expect(first?.containerEvaluation).not.toBe(second?.containerEvaluation);
+  });
+
+  test('retains definite Aurelia facade setup instead of delegating it to source replay', () => {
+    const source = ts.createSourceFile(
+      'src/aurelia-facade-execution.ts',
+      [
+        "import { Aurelia } from 'aurelia';",
+        'new Aurelia().register({}).app({}).start();',
+      ].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const result = new StaticEvaluator(
+      aureliaConfigurationEvaluationPolicy,
+      aureliaStaticEvaluationRuntimeHost,
+    ).evaluateSourceFile(source, source.fileName, aureliaImportValues(source));
+
+    expect(result.invocations.map((invocation) => invocation.node.getText(source))).toEqual([
+      'new Aurelia()',
+      'new Aurelia().register({})',
+      'new Aurelia().register({}).app({})',
+      'new Aurelia().register({}).app({}).start()',
+    ]);
+    expect(result.openSeams).toEqual([]);
   });
 
   test('preserves partial module membership through ModuleLoader analysis', () => {

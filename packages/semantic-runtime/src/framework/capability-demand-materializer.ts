@@ -1318,6 +1318,13 @@ function registrationHidingOpenSeamContainerScopes(
         : [[appRoot.productHandle, appRoot.container.productHandle] as const]
     ),
   );
+  const containerProductsByAureliaProduct = new Map(
+    (configuration?.aurelias ?? []).flatMap((aurelia) =>
+      aurelia.container.productHandle == null
+        ? []
+        : [[aurelia.productHandle, aurelia.container.productHandle] as const]
+    ),
+  );
   const result = new Map<OpenSeamHandle, IdentityHandle[]>();
   for (const materialization of publication.readMaterializations()) {
     if (materialization.openSeamHandles.length === 0) {
@@ -1330,6 +1337,7 @@ function registrationHidingOpenSeamContainerScopes(
         stepsByRegistrationAdmissionProduct,
         sequencesByProduct,
         appRootContainerProductsByAppRootProduct,
+        containerProductsByAureliaProduct,
         chainFacts,
       )
     ));
@@ -1349,6 +1357,7 @@ function scopedContainerIdentityHandlesForProduct(
   stepsByRegistrationAdmissionProduct: ReadonlyMap<ProductHandle, readonly ConfigurationStep[]>,
   sequencesByProduct: ReadonlyMap<ProductHandle, ConfigurationSequence>,
   appRootContainerProductsByAppRootProduct: ReadonlyMap<ProductHandle, ProductHandle>,
+  containerProductsByAureliaProduct: ReadonlyMap<ProductHandle, ProductHandle>,
   chainFacts: DiContainerChainFacts,
 ): readonly IdentityHandle[] {
   const containers: IdentityHandle[] = [];
@@ -1360,9 +1369,28 @@ function scopedContainerIdentityHandlesForProduct(
   const step = stepsByProduct.get(productHandle) ?? null;
   const stepContainer = step == null
     ? null
-    : containerIdentityHandleForConfigurationStep(step, sequencesByProduct, appRootContainerProductsByAppRootProduct, chainFacts);
+    : containerIdentityHandleForConfigurationStep(
+        step,
+        sequencesByProduct,
+        appRootContainerProductsByAppRootProduct,
+        containerProductsByAureliaProduct,
+        chainFacts,
+      );
   if (stepContainer != null) {
     containers.push(stepContainer);
+  }
+
+  const sequence = sequencesByProduct.get(productHandle) ?? null;
+  const sequenceContainer = sequence == null
+    ? null
+    : containerIdentityHandleForConfigurationSequence(
+        sequence,
+        appRootContainerProductsByAppRootProduct,
+        containerProductsByAureliaProduct,
+        chainFacts,
+      );
+  if (sequenceContainer != null) {
+    containers.push(sequenceContainer);
   }
 
   for (const admissionStep of stepsByRegistrationAdmissionProduct.get(productHandle) ?? []) {
@@ -1370,6 +1398,7 @@ function scopedContainerIdentityHandlesForProduct(
       admissionStep,
       sequencesByProduct,
       appRootContainerProductsByAppRootProduct,
+      containerProductsByAureliaProduct,
       chainFacts,
     );
     if (admissionStepContainer != null) {
@@ -1401,17 +1430,37 @@ function containerIdentityHandleForConfigurationStep(
   step: ConfigurationStep,
   sequencesByProduct: ReadonlyMap<ProductHandle, ConfigurationSequence>,
   appRootContainerProductsByAppRootProduct: ReadonlyMap<ProductHandle, ProductHandle>,
+  containerProductsByAureliaProduct: ReadonlyMap<ProductHandle, ProductHandle>,
   chainFacts: DiContainerChainFacts,
 ): IdentityHandle | null {
   const sequenceProductHandle = step.sequence?.productHandle ?? null;
   const sequence = sequenceProductHandle == null
     ? null
     : sequencesByProduct.get(sequenceProductHandle) ?? null;
-  const appRootProductHandle = sequence?.appRoot?.productHandle ?? null;
+  return sequence == null
+    ? null
+    : containerIdentityHandleForConfigurationSequence(
+        sequence,
+        appRootContainerProductsByAppRootProduct,
+        containerProductsByAureliaProduct,
+        chainFacts,
+      );
+}
+
+function containerIdentityHandleForConfigurationSequence(
+  sequence: ConfigurationSequence,
+  appRootContainerProductsByAppRootProduct: ReadonlyMap<ProductHandle, ProductHandle>,
+  containerProductsByAureliaProduct: ReadonlyMap<ProductHandle, ProductHandle>,
+  chainFacts: DiContainerChainFacts,
+): IdentityHandle | null {
+  const appRootProductHandle = sequence.appRoot?.productHandle ?? null;
+  const aureliaProductHandle = sequence.aurelia?.productHandle ?? null;
   return chainFacts.containerIdentityHandleForProduct(
-    appRootProductHandle == null
-      ? null
-      : appRootContainerProductsByAppRootProduct.get(appRootProductHandle) ?? null,
+    appRootProductHandle != null
+      ? appRootContainerProductsByAppRootProduct.get(appRootProductHandle) ?? null
+      : aureliaProductHandle == null
+        ? null
+        : containerProductsByAureliaProduct.get(aureliaProductHandle) ?? null,
   );
 }
 

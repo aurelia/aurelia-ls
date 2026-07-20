@@ -134,10 +134,6 @@ export class AureliaAppWorldComposer {
     project: ProjectBootFrame,
   ): AureliaAppWorldEmission {
     const kernelConfiguration = configuration.readConfiguration();
-    const frameworkServiceCustomizations = new FrameworkServiceCustomizationRecognitionPass(
-      this.store,
-      this.publication,
-    ).recognize(configuration);
     const configuredSyntax = this.configuredSyntaxMaterializer.materialize(kernelConfiguration);
     const configuredResources = this.configuredResourceMaterializer.materialize(kernelConfiguration, typeSystem);
     const configuredRenderers = this.configuredRendererMaterializer.materialize(kernelConfiguration);
@@ -149,6 +145,10 @@ export class AureliaAppWorldComposer {
       typeSystem,
       configuration.evaluation,
     );
+    const frameworkServiceCustomizations = new FrameworkServiceCustomizationRecognitionPass(
+      this.store,
+      this.publication,
+    ).recognize(configuration, diWorld);
     const compilerWorlds = this.constructCompilerWorlds(
       kernelConfiguration,
       diWorld,
@@ -253,7 +253,7 @@ function appendDiSourceIssues(
     diWorld.factorySlots,
     diWorld.selfResolverSlots,
     diWorld.resourceSlots,
-    diWorld.appTasks,
+    diWorld.registeredAppTasks,
     diWorld.openSeams,
     [...diWorld.issues, ...issues],
     diWorld.resourceIssues,

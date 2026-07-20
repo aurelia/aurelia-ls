@@ -225,10 +225,12 @@ Recursive registry-body spending is owned by `DiRegistrationSpendingCascade`. Th
 traversal object that owns the active-admission stack and admission lookup while each per-admission
 `DiRegistrationSpendingCascadeFrame` gathers the direct registration operation, any recursively spent registry-body
 operations, their emitted resolvers/registries/slots/tasks, and open seams before handing the aggregate back to the
-world construction frame. This keeps recursive spending as one DI-owned traversal instead of scattering local
-accumulator arrays through the materializer. Re-entering the same admission inside the same cascade models Aurelia's
-registration-depth guard and publishes `unable_auto_register` (`AUR0006`) instead of silently dropping the recursive
-branch.
+world construction frame. Each cascade entry receives the exact evaluator value admitted at that occurrence. Registry
+execution then supplies occurrence-local nested values and preserves execution order through monotonically ordered
+`ContainerRegistrationOperation` products. This keeps recursive spending as one DI-owned traversal instead of
+scattering local accumulator arrays or reconstructing arguments from final module state through the materializer.
+Re-entering the same admission inside the same cascade models Aurelia's registration-depth guard and publishes
+`unable_auto_register` (`AUR0006`) instead of silently dropping the recursive branch.
 
 The current spending path is intentionally narrow but end-to-end:
 
@@ -252,6 +254,9 @@ The current spending path is intentionally narrow but end-to-end:
   `state` package materialization layer separately publishes `StateDefaultConfiguration` store-configuration products
   from builder contributions so plugin-backed state is queryable before the deferred task executes;
 - every spent admission produces a `ContainerRegistrationOperation` product and a `di.accepts-registration` claim;
+- AppTask admissions additionally retain `RegisteredAppTask` evidence only when spent. Source-created tasks preserve
+  the exact evaluator slot/key/callback value for that occurrence; framework-minted tasks remain explicit definitions
+  without fabricated source evaluation. Neither form executes the lifecycle callback during world construction;
 - registration operations point at their emitted resolver, registry, AppTask, and slot products through `di.produces-product`
   claims;
 - resolver products, resolver slots, and resource slots produce `di.provides-key` claims;

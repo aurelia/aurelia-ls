@@ -56,6 +56,7 @@ import {
 } from '../src/kernel/address.js';
 import {
   DiKeyIdentityKind,
+  StringDiKeyIdentity,
   TypeScriptDeclarationIdentity,
 } from '../src/kernel/identity.js';
 import { OpenSeamReasonKind } from '../src/kernel/open-seam.js';
@@ -583,7 +584,7 @@ describe('DI provider model', () => {
     expect(configuration.aurelias).toHaveLength(8);
     expect(app.emission.configuration.readObservations().flatMap((observation) =>
       observation.steps.flatMap((step) => step.openSeams)
-    ).some((seam) => seam.summary.includes('explicit container whose runtime identity did not close'))).toBe(true);
+    ).some((seam) => seam.summary.includes('explicit container whose runtime identity did not close'))).toBe(false);
     expect(primaryContainer).not.toBeNull();
     expect(secondaryContainer).not.toBeNull();
     expect(childParentContainer).not.toBeNull();
@@ -701,6 +702,51 @@ describe('DI provider model', () => {
     expect(operationOpenSeams).toHaveLength(1);
     expect(operationOpenSeams[0]?.reasonKinds).toContain(OpenSeamReasonKind.DiRegistryBodyOpen);
     expect(world.compilerWorlds).toHaveLength(1);
+  });
+
+  test('spends registry helpers in call-time order with occurrence-local values', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'di-registry-execution-order'),
+      storeKey: 'test:di-provider-model:registry-execution-order',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const world = app.emission.appWorld;
+    const orderedResolverNames = world.diWorld.resolverSlots
+      .map(resolverKeyName)
+      .filter((name) => name?.startsWith('execution-source-'));
+
+    expect(orderedResolverNames).toEqual([
+      'execution-source-second',
+      'execution-source-first',
+    ]);
+    expect(world.diWorld.registrationOperations.map((operation) => operation.ordinal))
+      .toEqual(world.diWorld.registrationOperations.map((_, index) => index));
+    expect(new Set(world.diWorld.registrationOperations.map((operation) => operation.productHandle)).size)
+      .toBe(world.diWorld.registrationOperations.length);
+    expect(world.compilerWorlds).toHaveLength(1);
+  });
+
+  test('spends repeated global configuration calls from definite occurrence evidence', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'configuration-execution-order'),
+      storeKey: 'test:di-provider-model:configuration-execution-order',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const world = app.emission.appWorld;
+    const orderedResolverNames = world.diWorld.resolverSlots.flatMap((slot) => {
+      const identity = runtime.workspace.store.read(slot.keyIdentityHandle);
+      return identity instanceof StringDiKeyIdentity && identity.value.startsWith('global-')
+        ? [identity.value]
+        : [];
+    });
+
+    expect(orderedResolverNames).toEqual([
+      'global-called-second-in-source',
+      'global-called-first-in-source',
+    ]);
+    expect(orderedResolverNames).not.toContain('global-never-executed');
+    expect(world.diWorld.registrationOperations.map((operation) => operation.ordinal))
+      .toEqual(world.diWorld.registrationOperations.map((_, index) => index));
   });
 
   test('retains registration-owned seam identity when DI spends an open admission', async () => {

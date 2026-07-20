@@ -8,6 +8,7 @@ import {
 import type {
   ClaimHandle,
   IdentityHandle,
+  OpenSeamHandle,
   ProductHandle,
 } from '../kernel/handles.js';
 import {
@@ -233,7 +234,21 @@ export class ConfigurationKernelEmitter {
     const stepSet = this.steps.recordsForSequenceSteps(context, observation, local, stepReferences, resources);
     records.push(...stepSet.records);
 
-    const sequenceEmission = this.recordsForSequenceProduct(observation, local, stepSet, stepReferences, source);
+    const openSeams = this.publication.recordsForOpenSeams(
+      context,
+      observation.openSeams,
+      `configuration-sequence:${local}`,
+    );
+    records.push(...openSeams.records);
+
+    const sequenceEmission = this.recordsForSequenceProduct(
+      observation,
+      local,
+      stepSet,
+      stepReferences,
+      source,
+      openSeams.handles,
+    );
     records.push(...sequenceEmission.records);
 
     return {
@@ -255,6 +270,7 @@ export class ConfigurationKernelEmitter {
     stepSet: ConfigurationStepEmissionSet,
     stepReferences: readonly ConfigurationStepReferenceSeed[],
     source: ConfigurationSourceRecordSet,
+    openSeamHandles: readonly OpenSeamHandle[],
   ): ConfigurationSequenceProductEmission {
     const handles = this.publication.configurationProductHandles(`configuration-sequence:${local}`);
     const sequenceClaims = this.publication.recordsForSequenceClaims(
@@ -271,7 +287,16 @@ export class ConfigurationKernelEmitter {
       stepReferences,
       source,
     );
-    return this.sequenceProductEmission(local, observation, stepSet, source, handles, sequenceClaims, sequence);
+    return this.sequenceProductEmission(
+      local,
+      observation,
+      stepSet,
+      source,
+      handles,
+      sequenceClaims,
+      sequence,
+      openSeamHandles,
+    );
   }
 
   private sequenceProductEmission(
@@ -282,6 +307,7 @@ export class ConfigurationKernelEmitter {
     handles: ConfigurationProductHandles,
     sequenceClaims: ConfigurationClaimSet,
     sequence: ConfigurationSequence,
+    openSeamHandles: readonly OpenSeamHandle[],
   ): ConfigurationSequenceProductEmission {
     return new ConfigurationSequenceProductEmission(
       [
@@ -294,6 +320,7 @@ export class ConfigurationKernelEmitter {
           handles.productHandle,
           handles.identityHandle,
           sequenceClaims.handles,
+          openSeamHandles,
         ),
       ],
       sequence,
@@ -340,6 +367,7 @@ export class ConfigurationKernelEmitter {
     productHandle: ProductHandle,
     identityHandle: IdentityHandle,
     claimHandles: readonly ClaimHandle[],
+    openSeamHandles: readonly OpenSeamHandle[],
   ): readonly KernelStoreRecord[] {
     return this.publication.configurationProductRecords({
       local: `configuration-sequence:${local}`,
@@ -351,7 +379,7 @@ export class ConfigurationKernelEmitter {
       provenanceHandle: source.provenanceHandle,
       localName: observation.localName,
       claimHandles,
-      openSeamHandles: [],
+      openSeamHandles,
     });
   }
 

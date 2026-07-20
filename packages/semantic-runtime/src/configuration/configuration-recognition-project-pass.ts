@@ -9,6 +9,7 @@ import {
   isEvaluatedProjectSource,
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
+import { StaticModuleEvaluationExpressionReader } from '../evaluation/expression-reader.js';
 import type { EvaluationModuleResolutionOpen } from '../evaluation/module-host.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
@@ -183,6 +184,7 @@ export class ConfigurationRecognitionProjectPass {
       source.admission.projectKey,
       source.admission.addressHandle,
       source.evaluation,
+      new StaticModuleEvaluationExpressionReader(source.evaluation),
       typeSystem,
       sourceFileAddressHandlesByFileName,
     );

@@ -1,6 +1,6 @@
 import ts from 'typescript';
 import { EvaluatedDiKeyDeclarationSource } from '../di/di-key-identity-emitter.js';
-import { StaticModuleEvaluationExpressionReader } from '../evaluation/expression-reader.js';
+import type { StaticExpressionEvaluationReader } from '../evaluation/expression-reader.js';
 import { readReferenceName } from '../evaluation/ts-syntax.js';
 import {
   EvaluationValueKind,
@@ -17,9 +17,6 @@ import { normalizeConfigurationSourceFileName } from './source-file-names.js';
 
 /** Inputs shared by configuration recognizers for one evaluated source module. */
 export class ConfigurationRecognitionContext {
-  /** Generic TypeScript expression reader for this module evaluation. */
-  readonly expressionReader: StaticModuleEvaluationExpressionReader;
-
   constructor(
     /** Parsed source file being inspected. */
     readonly sourceFile: ts.SourceFile,
@@ -31,14 +28,27 @@ export class ConfigurationRecognitionContext {
     readonly sourceFileAddressHandle: AddressHandle,
     /** Static evaluator result for the same source file. */
     readonly evaluation: StaticModuleEvaluationResult,
+    /** Exact evaluator evidence lane authorized for this recognition pass. */
+    readonly expressionReader: StaticExpressionEvaluationReader,
     /** Shared TypeChecker epoch for source-level shape checks that evaluation cannot close. */
     readonly typeSystem: TypeSystemProject | null = null,
     /** Source-file addresses for other project modules reachable through the evaluator. */
     private readonly sourceFileAddressHandlesByFileName: ReadonlyMap<string, AddressHandle> = new Map([
       [normalizeConfigurationSourceFileName(sourceFile.fileName), sourceFileAddressHandle],
     ]),
-  ) {
-    this.expressionReader = new StaticModuleEvaluationExpressionReader(evaluation);
+  ) {}
+
+  withExpressionReader(expressionReader: StaticExpressionEvaluationReader): ConfigurationRecognitionContext {
+    return new ConfigurationRecognitionContext(
+      this.sourceFile,
+      this.moduleKey,
+      this.projectKey,
+      this.sourceFileAddressHandle,
+      this.evaluation,
+      expressionReader,
+      this.typeSystem,
+      this.sourceFileAddressHandlesByFileName,
+    );
   }
 
   sourceFileAddressHandleForNode(node: ts.Node): AddressHandle | null {

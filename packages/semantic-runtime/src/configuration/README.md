@@ -115,9 +115,10 @@ The tooling model should keep that split:
 - `IRegistry.register(container, ...)` bodies are recognized as registry-owned configuration sequences. Their
   `container.register(...)` calls keep `RegistryMethod` admission provenance instead of being flattened into ordinary
   container-register calls, and static array spreads such as `...DefaultComponents` are expanded through the shared
-  evaluator before registration admission materialization. Registry-body sequences are definitions: DI spends their
-  steps only when a concrete registry admission supplies the receiving container; it must not replay them as top-level
-  application configuration.
+  evaluator before registration admission materialization. Registry-body sequences are declaration inventories: DI
+  executes the exact evaluator value admitted at one concrete registration occurrence, matches only the inventory calls
+  reached by that execution, and spends their call-time argument values against the receiving container. It must not
+  replay those definitions as top-level application configuration or infer execution from source containment alone.
 - Configuration option contributions currently describe object-literal customize options, user customization callbacks,
   and builder method mutations before convergence decides final precedence.
 - Direct object-literal options passed to `.customize(...)` and direct assignments inside simple customization
@@ -128,9 +129,9 @@ The tooling model should keep that split:
   `initOptions.resources`, so a top-level `resources` contribution should stay visible as a configuration issue rather
   than being accepted by the i18n catalog.
 - AppTask factory calls are value creation. They become configuration AppTask records only when a registration path
-  admits that registry value; a standalone `AppTask.*(...)` expression should not produce app-world effects. Their
-  callback bodies may be inspected later, but they are not spent into container state merely because the task was
-  registered.
+  admits that registry value; a standalone `AppTask.*(...)` expression should not produce app-world effects. DI retains
+  an AppTask as registered lifecycle evidence only when its admission is actually spent, preserving that occurrence's
+  evaluator key/callback value and registration order. Registering the task still does not execute its callback.
 - `app-task-source.ts` owns product-free source serialization for `AppTask.*(...)` registry expressions. App-builder
   can spend that helper when it needs a TypeScript expression fragment, but semantic effects still require the
   configuration admission path above.
@@ -169,6 +170,9 @@ Method ownership joins on the evaluated receiver, not the fluent call result. Th
 spread stops before invocation, while the receiver and authored argument evidence have already been evaluated. In that
 case configuration recognition may publish a receiver-scoped registration open seam, but it must not publish definite
 registration effects or treat the blocked preparation as an executed call.
+Preparation-boundary uncertainty belongs to the exact evaluator-owned facade or container sequence. The sequence
+publishes the open seam without inventing a configuration step or registration admission, and capability-demand
+projection scopes that seam through the sequence's concrete app/container identity rather than through source proximity.
 
 Known framework configuration registries such as `StandardConfiguration`, `I18nConfiguration`,
 `ValidationI18nConfiguration`, `RouterConfiguration.customize(...)`,
@@ -201,9 +205,10 @@ class or supply the container explicitly. An explicit container is nevertheless 
 container identity, child ancestry, registrations, and the facade that receives `.app(...)` are linked before kernel
 emission. Separate constructor/static facades remain separate app identities, including across module aliases.
 
-Static evaluation treats facade setup chains as configuration-owned expression statements for both `new Aurelia()...`
-and static browser-facade chains such as `Aurelia.register(...).app(...).start()`. That keeps evaluator seams focused
-on ECMAScript substrate gaps while configuration recognition owns the Aurelia facts.
+Static evaluation executes supported facade setup chains for both `new Aurelia()...` and static browser-facade chains
+such as `Aurelia.register(...).app(...).start()`, retaining each reached constructor/call occurrence and its historical
+argument evidence. Configuration recognition projects those events; it does not rescan the source and replay them
+against the final module environment. A source expression with no retained occurrence is not executable evidence.
 
 Closed i18n `translationAttributeAliases` contributions are already consumed by built-in syntax materialization when they
 can be source-associated with the `I18nConfiguration.customize(...)` admission. That mirrors the runtime
@@ -212,14 +217,17 @@ can be source-associated with the `I18nConfiguration.customize(...)` admission. 
 Some AppTask callbacks do intentionally mutate framework service state before compilation or hydration. Those are not
 generic lifecycle execution: `framework-service-customization.ts` recognizes framework-shaped mutations of services
 such as `IAttrMapper`/`AttrMapper` and `NodeObserverLocator`/`INodeObserverLocator`, closes static callback values
-through the shared evaluator where possible, and publishes explicit service configuration for app-root compiler worlds
-and bind-time observer lookup. `AttrMapper.useTwoWay(...)` therefore affects compiler-world binding mode decisions,
+from the exact spent AppTask value and its captured evaluator environment, and publishes explicit service configuration
+for app-root compiler worlds and bind-time observer lookup. Unregistered task definitions do not participate.
+`AttrMapper.useTwoWay(...)` therefore affects compiler-world binding mode decisions,
 and `NodeObserverLocator.useConfig(...)`, accessor overrides, and closed `allowDirtyCheck` assignments affect the per-world observer locator used by
 `Controller.bind` analysis. The callback argument is treated as a framework service only when the `AppTask` key is that
 service, and as a container only when the key is `IContainer`; no-key tasks and arbitrary DI keys must not masquerade as
-containers merely because their parameter is later used with `.get(...)`. If a new callback shape needs more expression closure, improve the ECMAScript evaluator or
-expression reader first; do not hide one-off callback parsing inside compiler-world, renderer, or observation
-materializers.
+containers merely because their parameter is later used with `.get(...)`. Supported callback-body syntax is still a
+bounded classifier, not proof that every internal branch executed; dead/internal-branch precision belongs in an
+evaluator-backed framework-service execution host, not another source scanner. If a new callback shape needs more
+expression closure, improve the ECMAScript evaluator or expression reader first; do not hide one-off callback parsing
+inside compiler-world, renderer, or observation materializers.
 `AttrMapper` configuration keys remain exact, as they do in the framework service. Template compilation projects
 authored HTML/SVG/MathML names into the browser's runtime `nodeName` and attribute spelling before lookup; it does not
 case-fold the app's `useMapping(...)`, `useGlobalMapping(...)`, or `useTwoWay(...)` constants into aliases that would be
@@ -274,10 +282,11 @@ Evaluated object values that expose a `register` method are classified as IRegis
 declaration-only values can also be admitted through the TypeChecker when their static type exposes a callable
 `register` member. That checker lane mirrors Aurelia's runtime `isRegistry` branch without executing arbitrary package
 code: it classifies the argument as a registry but does not claim the body has been interpreted. Spending a specific
-registry admission into a specific app container is a DI/app-world join. Registry bodies are joined by source
-containment: when the registry value's source span owns a recognized `register(container)` method in an admitted module,
-that body can be replayed into the receiving container. If the owning module is not admitted or the evaluator cannot
-carry its source-file address, the registry body stays open. Avoid matching registries by local names.
+registry admission into a specific app container is a DI/app-world join. Source spans associate an admitted evaluator
+value with its registry declaration inventory; they do not prove that any body call ran. DI invokes the exact registry
+value in a candidate-local evaluator session and spends only inventory steps matched to retained invocation evidence.
+If the owning module is not admitted, the evaluator value is unavailable, or reached calls cannot be matched exactly,
+the registry body stays open. Avoid matching registries by local names or replaying arguments from final module state.
 An interpreted registry body may legitimately produce zero registration steps. Keep the "body was recognized for this
 admission" bit separate from the list of emitted steps so no-effect registries do not look unresolved.
 
