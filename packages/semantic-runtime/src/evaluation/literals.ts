@@ -31,7 +31,7 @@ import {
   type EvaluationUnknownValue,
   type EvaluationValue,
 } from './values.js';
-import { evaluationArrayIteratorElements } from './array-value-operations.js';
+import { evaluationIteratorProjection } from './iterator-projection.js';
 
 export interface StaticLiteralEvaluationHost {
   maxArrayIterations(): number;
@@ -117,42 +117,66 @@ export function evaluateStaticArrayLiteral(
         elementOpenSeams.push(...spreadOpenSeams);
         continue;
       }
-      if (spread.kind === EvaluationValueKind.Array) {
-        const directPressure = unretainedEvaluationOpenSeams(spread, host.openSeamsSince(checkpoint));
-        const spreadElements = directPressure.length === 0
-          && spread.exactLength != null
-          && spread.exactLength <= host.maxArrayIterations()
-          ? evaluationArrayIteratorElements(spread)
-          : null;
-        if (spreadElements == null) {
-          if (
-            directPressure.length === 0
-            && spread.aggregateOpenSeams.length === 0
-            && spread.uncertainties.length === 0
-          ) {
-            host.open(
-              EvaluationOpenSeamKind.DynamicMutation,
-              'Array literal spread exceeded the static iteration guardrail or retained unexplained open positions.',
-              element,
-              moduleKey,
-            );
-          }
-          const spreadOpenSeams = compactEvaluationOpenSeams([
-            ...directPressure,
-            ...spread.aggregateOpenSeams,
-            ...host.openSeamsSince(checkpoint),
-          ]);
-          exactLength = null;
-          hasExactElements = false;
-          hasExactOrder &&= !spread.mayHaveUnknownOrder;
-          uncertainties.push(...spread.uncertainties);
-          extentOpenSeams.push(...spreadOpenSeams);
-          elementOpenSeams.push(...spreadOpenSeams);
-          orderOpenSeams.push(...spread.orderOpenSeams);
-          continue;
-        }
+      const directPressure = unretainedEvaluationOpenSeams(spread, host.openSeamsSince(checkpoint));
+      const projection = evaluationIteratorProjection(spread, element);
+      if (projection == null) {
+        exactLength = null;
+        hasExactElements = false;
+        uncertainties.push({
+          kind: EvaluationArrayUncertaintyKind.NonArraySpread,
+          node: element,
+        });
+        host.open(EvaluationOpenSeamKind.DynamicMutation, 'Array spread did not reduce to a modeled iterable.', element, moduleKey);
+        const spreadOpenSeams = compactEvaluationOpenSeams([
+          ...directPressure,
+          ...host.openSeamsSince(checkpoint),
+        ]);
+        extentOpenSeams.push(...spreadOpenSeams);
+        elementOpenSeams.push(...spreadOpenSeams);
+        continue;
+      }
+      const withinGuardrail = projection.elements.length <= host.maxArrayIterations()
+        && (
+          projection.shape.exactLength == null
+          || projection.shape.exactLength <= host.maxArrayIterations()
+        );
+      if (
+        directPressure.length === 0
+        && projection.shape.hasExactPositions
+        && projection.shape.exactLength != null
+        && withinGuardrail
+      ) {
         const offset = exactLength;
-        elements.push(...spreadElements.map((entry) => new EvaluationArrayElement(
+        elements.push(...projection.elements.map((entry) => new EvaluationArrayElement(
+          entry.value,
+          entry.expression,
+          entry.openSeams,
+          offset == null || entry.runtimeIndex == null ? null : offset + entry.runtimeIndex,
+        )));
+        exactLength = exactLength == null
+          ? null
+          : exactLength + projection.shape.exactLength;
+        continue;
+      }
+      let guardrailOpenSeams: readonly EvaluationOpenSeam[] = [];
+      if (
+        directPressure.length === 0
+        && projection.shape.aggregateOpenSeams.length === 0
+        && projection.shape.uncertainties.length === 0
+        && !withinGuardrail
+      ) {
+        const guardrailCheckpoint = host.openSeamCheckpoint();
+        host.open(
+          EvaluationOpenSeamKind.DynamicMutation,
+          'Array literal spread exceeds the static iteration guardrail.',
+          element,
+          moduleKey,
+        );
+        guardrailOpenSeams = host.openSeamsSince(guardrailCheckpoint);
+      }
+      const offset = exactLength;
+      if (withinGuardrail) {
+        elements.push(...projection.elements.map((entry) => new EvaluationArrayElement(
           entry.value,
           entry.expression,
           compactEvaluationOpenSeams([...entry.openSeams, ...directPressure]),
@@ -160,27 +184,24 @@ export function evaluateStaticArrayLiteral(
             ? null
             : offset + entry.runtimeIndex,
         )));
-        exactLength = exactLength == null || spread.exactLength == null || directPressure.length > 0
-          ? null
-          : exactLength + spread.exactLength;
-        hasExactElements &&= !spread.mayHaveUnknownElements && directPressure.length === 0;
-        hasExactOrder &&= !spread.mayHaveUnknownOrder && directPressure.length === 0;
-        uncertainties.push(...spread.uncertainties);
-        extentOpenSeams.push(...spread.extentOpenSeams, ...directPressure);
-        elementOpenSeams.push(...spread.elementOpenSeams, ...directPressure);
-        orderOpenSeams.push(...spread.orderOpenSeams, ...directPressure);
-        continue;
       }
-      exactLength = null;
-      hasExactElements = false;
-      uncertainties.push({
-        kind: EvaluationArrayUncertaintyKind.NonArraySpread,
-        node: element,
-      });
-      host.open(EvaluationOpenSeamKind.DynamicMutation, 'Array spread did not reduce to a known array.', element, moduleKey);
-      const spreadOpenSeams = host.openSeamsSince(checkpoint);
-      extentOpenSeams.push(...spreadOpenSeams);
-      elementOpenSeams.push(...spreadOpenSeams);
+      exactLength = exactLength == null
+        || projection.shape.exactLength == null
+        || directPressure.length > 0
+        ? null
+        : exactLength + projection.shape.exactLength;
+      hasExactElements &&= projection.shape.hasExactElements
+        && directPressure.length === 0
+        && withinGuardrail;
+      hasExactOrder &&= projection.shape.hasExactOrder && directPressure.length === 0;
+      uncertainties.push(...projection.shape.uncertainties);
+      extentOpenSeams.push(...projection.shape.extentOpenSeams, ...directPressure);
+      elementOpenSeams.push(
+        ...projection.shape.elementOpenSeams,
+        ...directPressure,
+        ...guardrailOpenSeams,
+      );
+      orderOpenSeams.push(...projection.shape.orderOpenSeams, ...directPressure);
       continue;
     }
     const value = host.evaluateExpression(element, environment, moduleKey, depth + 1);

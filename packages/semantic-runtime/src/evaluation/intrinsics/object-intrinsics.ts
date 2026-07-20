@@ -3,8 +3,8 @@ import type { StaticInvocationFrame } from '../invocation.js';
 import { readEvaluationEnumerableOwnEntries } from '../enumerable-own-properties.js';
 import {
   evaluationArrayHasExactPositions,
-  evaluationArrayIteratorElements,
 } from '../array-value-operations.js';
+import { evaluationIteratorProjection } from '../iterator-projection.js';
 import {
   compactEvaluationOpenSeams,
   EvaluationOpenSeamKind,
@@ -195,6 +195,13 @@ export function evaluateObjectFromEntries(
   let mayHaveUnknownProperties = entries.mayHaveUnknownEntries;
   const shapeOpenSeams: EvaluationOpenSeam[] = [];
   for (const entry of entries.entries) {
+    if (entry.keyOpenSeams.length > 0) {
+      host.replayOpenSeams(entry.keyOpenSeams);
+      mayHaveUnknownProperties = true;
+      openEvaluationObjectProperties(properties, entry.keyOpenSeams);
+      shapeOpenSeams.push(...entry.keyOpenSeams);
+      continue;
+    }
     const key = stringCoercionText(entry.key);
     if (key == null) {
       mayHaveUnknownProperties = true;
@@ -210,7 +217,7 @@ export function evaluateObjectFromEntries(
       entry.value,
       entry.node,
       EvaluationObjectPropertyState.Closed,
-      entry.openSeams,
+      entry.valueOpenSeams,
     ));
   }
   if (entries.mayHaveUnknownEntries) {
@@ -223,7 +230,7 @@ export function evaluateObjectFromEntries(
       [],
     );
     const pressure = compactEvaluationOpenSeams([
-      ...(source.kind === EvaluationValueKind.Array ? source.aggregateOpenSeams : []),
+      ...entries.openSeams,
       ...host.openSeamsSince(checkpoint),
     ]);
     openEvaluationObjectProperties(properties, pressure);
@@ -242,7 +249,8 @@ export interface ObjectFromEntriesEntry {
   readonly key: EvaluationValue;
   readonly value: EvaluationValue;
   readonly node: ts.Node;
-  readonly openSeams: readonly EvaluationOpenSeam[];
+  readonly keyOpenSeams: readonly EvaluationOpenSeam[];
+  readonly valueOpenSeams: readonly EvaluationOpenSeam[];
 }
 
 export function iterableEntriesForObjectFromEntries(
@@ -250,25 +258,18 @@ export function iterableEntriesForObjectFromEntries(
   call: ts.CallExpression,
   moduleKey: string,
   host: StaticIntrinsicEvaluationHost,
-): { readonly entries: readonly ObjectFromEntriesEntry[]; readonly mayHaveUnknownEntries: boolean } | null {
-  if (source.kind === EvaluationValueKind.Map) {
-    return {
-      entries: source.entries.map((entry) => ({
-        key: entry.key,
-        value: entry.value,
-        node: entry.expression ?? call,
-        openSeams: [],
-      })),
-      mayHaveUnknownEntries: source.mayHaveUnknownEntries,
-    };
-  }
-  if (source.kind !== EvaluationValueKind.Array) {
+): {
+  readonly entries: readonly ObjectFromEntriesEntry[];
+  readonly mayHaveUnknownEntries: boolean;
+  readonly openSeams: readonly EvaluationOpenSeam[];
+} | null {
+  const projection = evaluationIteratorProjection(source, call);
+  if (projection == null) {
     return null;
   }
   const entries: ObjectFromEntriesEntry[] = [];
-  let mayHaveUnknownEntries = source.mayHaveUnknownElements || source.mayHaveUnknownOrder;
-  const iterableElements = evaluationArrayIteratorElements(source) ?? source.elements;
-  for (const element of iterableElements) {
+  let mayHaveUnknownEntries = !projection.shape.hasExactPositions;
+  for (const element of projection.elements) {
     const entry = objectFromEntriesEntry(element.value, element.expression ?? call, element.openSeams);
     if (entry == null) {
       mayHaveUnknownEntries = true;
@@ -277,7 +278,11 @@ export function iterableEntriesForObjectFromEntries(
     }
     entries.push(entry);
   }
-  return { entries, mayHaveUnknownEntries };
+  return {
+    entries,
+    mayHaveUnknownEntries,
+    openSeams: projection.shape.aggregateOpenSeams,
+  };
 }
 
 export function objectFromEntriesEntry(
@@ -295,9 +300,12 @@ export function objectFromEntriesEntry(
       key: keyElement?.value ?? EvaluationUndefined,
       value: valueElement?.value ?? EvaluationUndefined,
       node,
-      openSeams: compactEvaluationOpenSeams([
+      keyOpenSeams: compactEvaluationOpenSeams([
         ...openSeams,
         ...(keyElement?.openSeams ?? []),
+      ]),
+      valueOpenSeams: compactEvaluationOpenSeams([
+        ...openSeams,
         ...(valueElement?.openSeams ?? []),
       ]),
     };
@@ -310,9 +318,12 @@ export function objectFromEntriesEntry(
         key,
         value: entryValue,
         node,
-        openSeams: compactEvaluationOpenSeams([
+        keyOpenSeams: compactEvaluationOpenSeams([
           ...openSeams,
           ...(value.properties.get('0')?.openSeams ?? []),
+        ]),
+        valueOpenSeams: compactEvaluationOpenSeams([
+          ...openSeams,
           ...(value.properties.get('1')?.openSeams ?? []),
         ]),
       };

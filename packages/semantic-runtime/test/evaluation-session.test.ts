@@ -33,6 +33,7 @@ import {
   EvaluationObjectPropertyState,
   EvaluationObjectValue,
   EvaluationPromiseValue,
+  EvaluationSetElement,
   EvaluationSetValue,
   EvaluationValueKind,
   type EvaluationValue,
@@ -414,11 +415,11 @@ describe('static evaluation sessions', () => {
       new EvaluationArrayElement(shared, null),
     ], declaration);
     const set = new EvaluationSetValue([
-      new EvaluationArrayElement(shared, null),
-    ], false, declaration);
+      new EvaluationSetElement(shared, null),
+    ], declaration);
     const map = new EvaluationMapValue([
-      new EvaluationMapEntry(shared, instance, null),
-    ], false, declaration);
+      new EvaluationMapEntry(shared, instance, null, null),
+    ], declaration);
     const namespace = new EvaluationModuleNamespaceValue(
       'src/dependency.ts',
       new Map([

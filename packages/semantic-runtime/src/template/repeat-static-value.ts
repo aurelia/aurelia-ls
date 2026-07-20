@@ -18,6 +18,7 @@ import type { RuntimeExpressionBinding } from '../observation/runtime-binding-ex
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import {
   EvaluationArrayValue,
+  EvaluationKeyedCollectionEntryState,
   EvaluationValueKind,
   type EvaluationValue,
 } from '../evaluation/values.js';
@@ -100,8 +101,21 @@ function repeatItemRepresentativeValue(
     return representativeFromArray(value, path, sourceLabel);
   }
   if (value.kind === EvaluationValueKind.Set && !value.weak) {
+    if (
+      value.mayHaveUnknownElements
+      || value.mayHaveUnknownOrder
+      || value.elements.some((element) =>
+        element.state !== EvaluationKeyedCollectionEntryState.Present
+        || element.openSeams.length > 0
+        || element.presenceOpenSeams.length > 0
+      )
+    ) {
+      return null;
+    }
     return representativeEvaluationValues(
-      value.elements.map((element) => element.value),
+      value.elements
+        .filter((element) => element.state === EvaluationKeyedCollectionEntryState.Present)
+        .map((element) => element.value),
       path,
       sourceLabel,
     );

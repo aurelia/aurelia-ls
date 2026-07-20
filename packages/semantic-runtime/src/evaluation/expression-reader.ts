@@ -256,7 +256,6 @@ export class StaticModuleEvaluationExpressionReader implements StaticExpressionE
 
     switch (value.kind) {
       case EvaluationValueKind.Array:
-      case EvaluationValueKind.Set:
         for (const element of value.elements) {
           if (element.expression == null || !nodeBelongsTo(element.expression, owner)) {
             continue;
@@ -264,6 +263,45 @@ export class StaticModuleEvaluationExpressionReader implements StaticExpressionE
           const evidence = new EvaluationValueEvidence(element.value, element.openSeams);
           appendMapValue(this.evidenceByExpression, element.expression, evidence);
           this.indexRetainedChildEvidence(element.value, owner, seen);
+        }
+        return;
+      case EvaluationValueKind.Set:
+        for (const element of value.elements) {
+          if (element.expression == null || !nodeBelongsTo(element.expression, owner)) {
+            continue;
+          }
+          const evidence = new EvaluationValueEvidence(
+            element.value,
+            [...element.openSeams, ...element.presenceOpenSeams],
+          );
+          appendMapValue(this.evidenceByExpression, element.expression, evidence);
+          this.indexRetainedChildEvidence(element.value, owner, seen);
+        }
+        return;
+      case EvaluationValueKind.Map:
+        for (const entry of value.entries) {
+          if (entry.keyExpression != null && nodeBelongsTo(entry.keyExpression, owner)) {
+            appendMapValue(
+              this.evidenceByExpression,
+              entry.keyExpression,
+              new EvaluationValueEvidence(
+                entry.key,
+                [...entry.keyOpenSeams, ...entry.presenceOpenSeams],
+              ),
+            );
+            this.indexRetainedChildEvidence(entry.key, owner, seen);
+          }
+          if (entry.valueExpression != null && nodeBelongsTo(entry.valueExpression, owner)) {
+            appendMapValue(
+              this.evidenceByExpression,
+              entry.valueExpression,
+              new EvaluationValueEvidence(
+                entry.value,
+                [...entry.valueOpenSeams, ...entry.presenceOpenSeams],
+              ),
+            );
+            this.indexRetainedChildEvidence(entry.value, owner, seen);
+          }
         }
         return;
       case EvaluationValueKind.Object:
@@ -284,7 +322,6 @@ export class StaticModuleEvaluationExpressionReader implements StaticExpressionE
       case EvaluationValueKind.Promise:
         this.indexRetainedChildEvidence(value.fulfilledValue, owner, seen);
         return;
-      case EvaluationValueKind.Map:
       case EvaluationValueKind.ModuleNamespace:
       case EvaluationValueKind.Unknown:
       case EvaluationValueKind.Undefined:

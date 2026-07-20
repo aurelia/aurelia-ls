@@ -69,6 +69,11 @@ import {
 import { readArrayAtIndex, readArrayLastIndexStart } from '../value-coercion.js';
 import { evaluateStringPredicateFromReceiver } from './string-intrinsics.js';
 import {
+  EvaluationBuiltinIterator,
+  EvaluationIteratorStepKind,
+  evaluationIteratorProjection,
+} from '../iterator-projection.js';
+import {
   EvaluationValueEvidence,
 } from '../value-pressure.js';
 
@@ -384,15 +389,10 @@ export function evaluateArrayFrom(
   if (sourceElements.shape.exactLength > host.guardrails.maxLoopIterations) {
     return host.unknown('Array.from source exceeds the static iteration guardrail.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
-  const denseSource = denseEvaluationArrayElements(new EvaluationArrayValue(
-    sourceElements.elements,
-    call,
-    sourceElements.shape,
-  ))!;
   const mapperEvidence = arguments_[1] ?? null;
   if (mapperEvidence == null) {
     return new EvaluationArrayValue(
-      denseSource,
+      sourceElements.elements,
       call,
     );
   }
@@ -402,14 +402,44 @@ export function evaluateArrayFrom(
   }
   const mapper = mapperEvidence.value;
   const thisValue = arguments_[2] ?? new EvaluationValueEvidence(EvaluationUndefined, []);
-  const preparedFrame = prepareStaticArrayCallbackFrame(denseSource.length, 'Array.from mapper', call, moduleKey, depth + 1, host, thisValue);
+  const preparedFrame = prepareStaticArrayCallbackFrame(
+    host.guardrails.maxLoopIterations,
+    'Array.from mapper',
+    call,
+    moduleKey,
+    depth + 1,
+    host,
+    thisValue,
+  );
   if (preparedFrame.kind === 'open') {
     return preparedFrame.value;
   }
   const callbackFrame = preparedFrame.frame;
   const elements: EvaluationArrayElement[] = [];
-  for (let index = 0; index < denseSource.length; index++) {
-    const element = denseSource[index]!;
+  const iterator = new EvaluationBuiltinIterator(source, call);
+  for (let index = 0; ; index += 1) {
+    const step = iterator.next();
+    if (step.kind === EvaluationIteratorStepKind.Done) {
+      return new EvaluationArrayValue(elements, call);
+    }
+    if (step.kind === EvaluationIteratorStepKind.Open || step.element == null) {
+      host.replayOpenSeams(step.openSeams);
+      return host.unknown(
+        'Array.from source iterator became open during mapper traversal.',
+        call,
+        moduleKey,
+        EvaluationOpenSeamKind.DynamicCall,
+      );
+    }
+    if (index >= host.guardrails.maxLoopIterations) {
+      return host.unknown(
+        'Array.from source grew beyond the static iteration guardrail.',
+        call,
+        moduleKey,
+        EvaluationOpenSeamKind.DynamicCall,
+      );
+    }
+    const element = step.element;
     const mapped = callbackFrame.evaluate(
       mapper,
       [
@@ -427,10 +457,6 @@ export function evaluateArrayFrom(
       index,
     ));
   }
-  return new EvaluationArrayValue(
-    elements,
-    call,
-  );
 }
 
 export function arrayFromSourceElements(
@@ -440,54 +466,7 @@ export function arrayFromSourceElements(
   readonly elements: readonly EvaluationArrayElement[];
   readonly shape: EvaluationArrayShape;
 } | null {
-  switch (source.kind) {
-    case EvaluationValueKind.Array:
-      return {
-        elements: source.elements,
-        shape: source.shape,
-      };
-    case EvaluationValueKind.Set:
-      return {
-        elements: source.elements,
-        shape: iterableArrayShape(source.elements.length, source.mayHaveUnknownElements),
-      };
-    case EvaluationValueKind.Map:
-      return {
-        elements: source.entries.map((entry) =>
-          new EvaluationArrayElement(
-            new EvaluationArrayValue([
-              new EvaluationArrayElement(entry.key, entry.expression),
-              new EvaluationArrayElement(entry.value, entry.expression),
-            ], node),
-            entry.expression,
-          )
-        ),
-        shape: iterableArrayShape(source.entries.length, source.mayHaveUnknownEntries),
-      };
-    case EvaluationValueKind.String:
-      return {
-        elements: [...source.value].map((character) =>
-          new EvaluationArrayElement(new EvaluationStringValue(character, node), null)
-        ),
-        shape: EvaluationArrayShape.exact([...source.value].length),
-      };
-    default:
-      return null;
-  }
-}
-
-function iterableArrayShape(knownLength: number, open: boolean): EvaluationArrayShape {
-  return open
-    ? EvaluationArrayShape.from({
-        exactLength: null,
-        hasExactElements: false,
-        hasExactOrder: true,
-        uncertainties: [],
-        extentOpenSeams: [],
-        elementOpenSeams: [],
-        orderOpenSeams: [],
-      })
-    : EvaluationArrayShape.exact(knownLength);
+  return evaluationIteratorProjection(source, node);
 }
 
 export function evaluateArrayMap(

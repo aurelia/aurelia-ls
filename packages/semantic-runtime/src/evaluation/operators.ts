@@ -215,9 +215,13 @@ function evaluateStaticInstanceOfOperation(
     case 'Array':
       return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Array, node);
     case 'Map':
-      return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Map, node);
+      return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Map && !left.weak, node);
+    case 'WeakMap':
+      return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Map && left.weak, node);
     case 'Set':
-      return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Set, node);
+      return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Set && !left.weak, node);
+    case 'WeakSet':
+      return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Set && left.weak, node);
     case 'RegExp':
       return new EvaluationBooleanValue(left.kind === EvaluationValueKind.RegularExpression, node);
     case 'Date':
@@ -323,12 +327,13 @@ function evaluateStaticTypeOfValue(
     case EvaluationValueKind.Function:
     case EvaluationValueKind.Class:
       return new EvaluationStringValue('function', node);
+    case EvaluationValueKind.BoundaryObject:
+      return new EvaluationStringValue(operand.callable ? 'function' : 'object', node);
     case EvaluationValueKind.Null:
     case EvaluationValueKind.Array:
     case EvaluationValueKind.Set:
     case EvaluationValueKind.Map:
     case EvaluationValueKind.Object:
-    case EvaluationValueKind.BoundaryObject:
     case EvaluationValueKind.RegularExpression:
     case EvaluationValueKind.Date:
     case EvaluationValueKind.Instance:

@@ -58,6 +58,7 @@ import {
   EvaluationObjectProperty,
   EvaluationObjectValue,
   EvaluationPromiseValue,
+  EvaluationSetElement,
   EvaluationSetValue,
   EvaluationUnknownValue,
   EvaluationValueKind,
@@ -194,20 +195,31 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
         return target;
       }
       case EvaluationValueKind.Set: {
-        const target = new EvaluationSetValue([], source.mayHaveUnknownElements, source.node, source.weak);
+        const target = new EvaluationSetValue([], source.node, source.shape, source.weak);
         this.bindValue(source, target);
         target.elements.push(...source.elements.map((element) =>
-          new EvaluationArrayElement(this.forkValue(element.value), element.expression, element.openSeams, element.runtimeIndex)
+          new EvaluationSetElement(
+            this.forkValue(element.value),
+            element.expression,
+            element.openSeams,
+            element.state,
+            element.presenceOpenSeams,
+          )
         ));
         return target;
       }
       case EvaluationValueKind.Map: {
-        const target = new EvaluationMapValue([], source.mayHaveUnknownEntries, source.node, source.weak);
+        const target = new EvaluationMapValue([], source.node, source.shape, source.weak);
         this.bindValue(source, target);
         target.entries.push(...source.entries.map((entry) => new EvaluationMapEntry(
           this.forkValue(entry.key),
           this.forkValue(entry.value),
-          entry.expression,
+          entry.keyExpression,
+          entry.valueExpression,
+          entry.keyOpenSeams,
+          entry.valueOpenSeams,
+          entry.state,
+          entry.presenceOpenSeams,
         )));
         return target;
       }
@@ -229,6 +241,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
           source.path,
           new Map(),
           source.node,
+          source.callable,
         );
         this.bindValue(source, target);
         this.forkProperties(source.properties, target.properties);
@@ -580,7 +593,6 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
         }
         break;
       case EvaluationValueKind.Array:
-      case EvaluationValueKind.Set:
         for (let index = 0; index < value.elements.length; index += 1) {
           const element = value.elements[index]!;
           const retained = this.normalizeRetainedValue(element.value, retention, values, environments);
@@ -594,13 +606,37 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
           }
         }
         break;
+      case EvaluationValueKind.Set:
+        for (let index = 0; index < value.elements.length; index += 1) {
+          const element = value.elements[index]!;
+          const retained = this.normalizeRetainedValue(element.value, retention, values, environments);
+          if (retained !== element.value) {
+            value.elements[index] = new EvaluationSetElement(
+              retained,
+              element.expression,
+              element.openSeams,
+              element.state,
+              element.presenceOpenSeams,
+            );
+          }
+        }
+        break;
       case EvaluationValueKind.Map:
         for (let index = 0; index < value.entries.length; index += 1) {
           const entry = value.entries[index]!;
           const key = this.normalizeRetainedValue(entry.key, retention, values, environments);
           const entryValue = this.normalizeRetainedValue(entry.value, retention, values, environments);
           if (key !== entry.key || entryValue !== entry.value) {
-            value.entries[index] = new EvaluationMapEntry(key, entryValue, entry.expression);
+            value.entries[index] = new EvaluationMapEntry(
+              key,
+              entryValue,
+              entry.keyExpression,
+              entry.valueExpression,
+              entry.keyOpenSeams,
+              entry.valueOpenSeams,
+              entry.state,
+              entry.presenceOpenSeams,
+            );
           }
         }
         break;

@@ -1,17 +1,11 @@
 import ts from 'typescript';
 
 import type { ModuleEnvironmentRecord } from './environment.js';
-import {
-  evaluationArrayIteratorElements,
-} from './array-value-operations.js';
+import { evaluationIteratorProjection } from './iterator-projection.js';
 import {
   EvaluationArrayElement,
   EvaluationArrayShape,
   EvaluationArrayUncertaintyKind,
-  EvaluationArrayValue,
-  EvaluationStringValue,
-  EvaluationUnknownValue,
-  EvaluationValueKind,
   type EvaluationArrayUncertainty,
   type EvaluationValue,
 } from './values.js';
@@ -134,7 +128,6 @@ export function evaluateStaticArgumentList(
     const spread = spreadArgumentElements(
       evidence.value,
       argument,
-      moduleKey,
       host,
     );
     if (spread.kind === 'open') {
@@ -150,14 +143,17 @@ export function evaluateStaticArgumentList(
       exactLength = exactLength == null || spread.exactLength == null
         ? null
         : exactLength + spread.exactLength;
-      hasExactElements = false;
+      hasExactElements &&= spread.hasExactElements;
       hasExactOrder &&= spread.hasExactOrder;
       uncertainties.push(...spread.uncertainties);
       extentOpenSeams.push(...spread.extentOpenSeams);
-      elementOpenSeams.push(...spread.elementOpenSeams, ...openSeams);
+      elementOpenSeams.push(...spread.elementOpenSeams);
       orderOpenSeams.push(...spread.orderOpenSeams);
       if (spread.exactLength == null) {
         extentOpenSeams.push(...openSeams);
+      }
+      if (!spread.hasExactElements) {
+        elementOpenSeams.push(...openSeams);
       }
       if (!spread.hasExactOrder) {
         orderOpenSeams.push(...openSeams);
@@ -203,7 +199,6 @@ export function evaluateStaticArgumentList(
 function spreadArgumentElements(
   value: EvaluationValue,
   node: ts.Node,
-  moduleKey: string,
   host: StaticArgumentListEvaluationHost,
 ): {
   readonly kind: 'known';
@@ -214,6 +209,7 @@ function spreadArgumentElements(
   readonly reason: string;
   readonly elements: readonly EvaluationArrayElement[];
   readonly exactLength: number | null;
+  readonly hasExactElements: boolean;
   readonly hasExactOrder: boolean;
   readonly uncertainties: readonly EvaluationArrayUncertainty[];
   readonly extentOpenSeams: readonly EvaluationOpenSeam[];
@@ -222,154 +218,51 @@ function spreadArgumentElements(
   /** Whether ECMAScript is known to continue with later authored arguments. */
   readonly canContinueArguments: boolean;
 } {
-  if (value.kind === EvaluationValueKind.Array) {
-    if (value.exactLength == null || value.exactLength > host.maxSpreadIterations) {
-      return openSpreadProjection(
-        value.elements,
-        value.exactLength,
-        value.shape.hasExactOrder,
-        value.shape.uncertainties,
-        value.shape.extentOpenSeams,
-        value.shape.elementOpenSeams,
-        value.shape.orderOpenSeams,
-        value.exactLength == null
-          ? 'Argument spread array extent did not close statically.'
-          : 'Argument spread exceeds the static iteration guardrail.',
-        true,
-      );
-    }
-    const elements = evaluationArrayIteratorElements(value);
-    if (elements != null && value.shape.hasExactPositions) {
-      return { kind: 'known', elements, shape: EvaluationArrayShape.exact(value.exactLength) };
-    }
-    const openSeams = value.aggregateOpenSeams.length > 0
-      ? value.aggregateOpenSeams
-      : host.openSpread('Argument spread array positions did not close statically.', node, moduleKey);
+  const projection = evaluationIteratorProjection(value, node);
+  if (projection == null) {
     return {
-      kind: 'known',
-      elements: openArgumentSlots(value.exactLength, node, openSeams),
-      shape: EvaluationArrayShape.exact(value.exactLength),
+      kind: 'open',
+      reason: 'Argument spread did not reduce to a modeled iterable value.',
+      elements: [],
+      exactLength: null,
+      hasExactElements: false,
+      hasExactOrder: true,
+      uncertainties: [{ kind: EvaluationArrayUncertaintyKind.NonArraySpread, node }],
+      extentOpenSeams: [],
+      elementOpenSeams: [],
+      orderOpenSeams: [],
+      canContinueArguments: false,
     };
   }
-  if (value.kind === EvaluationValueKind.Set) {
-    if (value.weak || value.mayHaveUnknownElements || value.elements.length > host.maxSpreadIterations) {
-      return openSpreadProjection(
-        value.elements,
-        value.mayHaveUnknownElements || value.weak ? null : value.elements.length,
-        true,
-        [],
-        [],
-        [],
-        [],
-        value.weak
-          ? 'WeakSet values are not iterable.'
-          : value.mayHaveUnknownElements
-            ? 'Argument spread Set membership did not close statically.'
-            : 'Argument Set spread exceeds the static iteration guardrail.',
-        !value.weak,
-      );
-    }
-    return {
-      kind: 'known',
-      elements: value.elements.map((element, runtimeIndex) => element.withRuntimeIndex(runtimeIndex)),
-      shape: EvaluationArrayShape.exact(value.elements.length),
-    };
+  if (
+    projection.shape.hasExactPositions
+    && projection.shape.exactLength != null
+    && projection.shape.exactLength <= host.maxSpreadIterations
+  ) {
+    return { kind: 'known', elements: projection.elements, shape: projection.shape };
   }
-  if (value.kind === EvaluationValueKind.Map) {
-    const elements = value.entries.map((entry, runtimeIndex) =>
-      new EvaluationArrayElement(
-        new EvaluationArrayValue([
-          new EvaluationArrayElement(entry.key, entry.expression, [], 0),
-          new EvaluationArrayElement(entry.value, entry.expression, [], 1),
-        ], entry.expression, EvaluationArrayShape.exact(2)),
-        entry.expression,
-        [],
-        runtimeIndex,
-      )
-    );
-    if (value.weak || value.mayHaveUnknownEntries || elements.length > host.maxSpreadIterations) {
-      return openSpreadProjection(
-        elements,
-        value.mayHaveUnknownEntries || value.weak ? null : elements.length,
-        true,
-        [],
-        [],
-        [],
-        [],
-        value.weak
-          ? 'WeakMap entries are not iterable.'
-          : value.mayHaveUnknownEntries
-            ? 'Argument spread Map membership did not close statically.'
-            : 'Argument Map spread exceeds the static iteration guardrail.',
-        !value.weak,
-      );
-    }
-    return {
-      kind: 'known',
-      elements,
-      shape: EvaluationArrayShape.exact(elements.length),
-    };
-  }
-  if (value.kind === EvaluationValueKind.String) {
-    const characters = [...value.value];
-    if (characters.length > host.maxSpreadIterations) {
-      return {
-        kind: 'open',
-        reason: 'Argument string spread exceeds the static iteration guardrail.',
-        elements: [],
-        exactLength: characters.length,
-        hasExactOrder: true,
-        uncertainties: [],
-        extentOpenSeams: [],
-        elementOpenSeams: [],
-        orderOpenSeams: [],
-        canContinueArguments: true,
-      };
-    }
-    return {
-      kind: 'known',
-      elements: characters.map((character, runtimeIndex) =>
-        new EvaluationArrayElement(new EvaluationStringValue(character, node), null, [], runtimeIndex)
-      ),
-      shape: EvaluationArrayShape.exact(characters.length),
-    };
-  }
-  return {
-    kind: 'open',
-    reason: 'Argument spread did not reduce to a statically iterable value.',
-    elements: [],
-    exactLength: null,
-    hasExactOrder: true,
-    uncertainties: [{ kind: EvaluationArrayUncertaintyKind.NonArraySpread, node }],
-    extentOpenSeams: [],
-    elementOpenSeams: [],
-    orderOpenSeams: [],
-    canContinueArguments: false,
-  };
-}
-
-function openArgumentSlots(
-  length: number,
-  node: ts.Node,
-  openSeams: readonly EvaluationOpenSeam[],
-): readonly EvaluationArrayElement[] {
-  return Array.from({ length }, (_, runtimeIndex) =>
-    new EvaluationArrayElement(
-      new EvaluationUnknownValue(
-        'Argument spread element position retained open pressure.',
-        node,
-        true,
-      ),
-      ts.isExpression(node) ? node : null,
-      openSeams,
-      runtimeIndex,
-    )
+  const guardrailExceeded = projection.shape.exactLength != null
+    && projection.shape.exactLength > host.maxSpreadIterations;
+  return openSpreadProjection(
+    projection.elements,
+    projection.shape.exactLength,
+    guardrailExceeded ? false : projection.shape.hasExactElements,
+    projection.shape.hasExactOrder,
+    projection.shape.uncertainties,
+    projection.shape.extentOpenSeams,
+    projection.shape.elementOpenSeams,
+    projection.shape.orderOpenSeams,
+    guardrailExceeded
+      ? 'Argument spread exceeds the static iteration guardrail.'
+      : 'Argument spread iterator membership or order did not close statically.',
+    true,
   );
 }
 
 function openSpreadProjection(
   elements: readonly EvaluationArrayElement[],
   exactLength: number | null,
+  hasExactElements: boolean,
   hasExactOrder: boolean,
   uncertainties: readonly EvaluationArrayUncertainty[],
   extentOpenSeams: readonly EvaluationOpenSeam[],
@@ -382,6 +275,7 @@ function openSpreadProjection(
   readonly reason: string;
   readonly elements: readonly EvaluationArrayElement[];
   readonly exactLength: number | null;
+  readonly hasExactElements: boolean;
   readonly hasExactOrder: boolean;
   readonly uncertainties: readonly EvaluationArrayUncertainty[];
   readonly extentOpenSeams: readonly EvaluationOpenSeam[];
@@ -394,6 +288,7 @@ function openSpreadProjection(
     reason,
     elements: elements.map((element) => element.withRuntimeIndex(null)),
     exactLength,
+    hasExactElements,
     hasExactOrder,
     uncertainties,
     extentOpenSeams,

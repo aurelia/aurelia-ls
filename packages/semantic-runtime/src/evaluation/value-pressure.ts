@@ -40,6 +40,9 @@ export function evaluationValueOwnOpenSeams(
   switch (value.kind) {
     case EvaluationValueKind.Array:
       return value.aggregateOpenSeams;
+    case EvaluationValueKind.Set:
+    case EvaluationValueKind.Map:
+      return value.aggregateOpenSeams;
     case EvaluationValueKind.Object:
       return value.shapeOpenSeams;
     case EvaluationValueKind.Instance:
@@ -86,15 +89,34 @@ function collectRetainedEvaluationOpenSeams(
 
   switch (value.kind) {
     case EvaluationValueKind.Array:
-    case EvaluationValueKind.Set:
       for (const element of value.elements) {
         addSlotPressure(element.openSeams, element.value, target, seen);
       }
       return;
+    case EvaluationValueKind.Set:
+      for (const element of value.elements) {
+        addSlotPressure(
+          [...element.openSeams, ...element.presenceOpenSeams],
+          element.value,
+          target,
+          seen,
+        );
+      }
+      return;
     case EvaluationValueKind.Map:
       for (const entry of value.entries) {
-        collectRetainedEvaluationOpenSeams(entry.key, target, seen);
-        collectRetainedEvaluationOpenSeams(entry.value, target, seen);
+        addSlotPressure(
+          [...entry.keyOpenSeams, ...entry.presenceOpenSeams],
+          entry.key,
+          target,
+          seen,
+        );
+        addSlotPressure(
+          [...entry.valueOpenSeams, ...entry.presenceOpenSeams],
+          entry.value,
+          target,
+          seen,
+        );
       }
       return;
     case EvaluationValueKind.Object:

@@ -98,8 +98,8 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/global-intrinsics.ts",
-          "symbolName": "evaluateAureliaExpressionGlobalCall",
-          "summary": "Shared value-level host-global intrinsic substrate used beside TypeChecker global projection."
+          "symbolName": "evaluateStaticGlobalCall",
+          "summary": "Shared static-global intrinsic substrate used beside TypeChecker global projection; Aurelia expressions consume its parser-admitted subset."
         },
         {
           "kind": "source",
@@ -324,7 +324,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-18"
+      "updatedAt": "2026-07-20"
     },
     {
       "id": "frontier:completed-input-companion-builder",

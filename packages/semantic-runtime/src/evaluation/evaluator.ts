@@ -68,7 +68,11 @@ import {
   type StaticInvocationDispatch,
   type StaticInvocationEvaluation,
 } from './invocation.js';
-import { evaluateAureliaExpressionGlobalAccess } from './global-intrinsics.js';
+import {
+  EvaluationBuiltinIterator,
+  EvaluationIteratorStepKind,
+} from './iterator-projection.js';
+import { evaluateStaticGlobalAccess } from './global-intrinsics.js';
 import {
   compactEvaluationOpenSeams,
   EvaluationOpenSeam,
@@ -1176,6 +1180,15 @@ export class StaticEvaluator {
     labels: ReadonlySet<string>,
   ): EvaluationCompletion {
     const iterable = this.evaluateExpression(statement.expression, environment, moduleKey, depth + 1);
+    if (statement.awaitModifier != null) {
+      this.open(
+        EvaluationOpenSeamKind.DynamicLoop,
+        'For-await-of requires async iterator advancement and Promise settlement.',
+        statement,
+        moduleKey,
+      );
+      return new OpenEvaluationCompletion('For-await-of continuation is not reduced synchronously.');
+    }
     if (iterable.kind === EvaluationValueKind.BoundaryValue) {
       this.openPathBoundary(
         'For-of statement depended on a boundary iterable.',
@@ -1189,22 +1202,43 @@ export class StaticEvaluator {
       this.materializeUnknownUse(iterable, statement.expression, moduleKey, 'For-of statement depended on an open iterable.', EvaluationOpenSeamKind.DynamicLoop);
       return new NormalEvaluationCompletion();
     }
-    if (iterable.kind !== EvaluationValueKind.Array) {
-      this.open(EvaluationOpenSeamKind.DynamicLoop, 'For-of iterable did not reduce to a known array value.', statement.expression, moduleKey);
+    if (
+      iterable.kind !== EvaluationValueKind.Array
+      && iterable.kind !== EvaluationValueKind.Set
+      && iterable.kind !== EvaluationValueKind.Map
+      && iterable.kind !== EvaluationValueKind.String
+    ) {
+      this.open(EvaluationOpenSeamKind.DynamicLoop, 'For-of iterable did not reduce to a modeled iterable value.', statement.expression, moduleKey);
       return new NormalEvaluationCompletion();
     }
     if (
-      iterable.exactLength == null
-      || iterable.exactLength > this.policy.guardrails.maxLoopIterations
-      || iterable.mayHaveUnknownElements
-      || iterable.mayHaveUnknownOrder
+      (iterable.kind === EvaluationValueKind.Set || iterable.kind === EvaluationValueKind.Map)
+      && iterable.weak
     ) {
-      this.open(EvaluationOpenSeamKind.DynamicLoop, 'For-of iterable has unknown or excessive iteration shape.', statement.expression, moduleKey);
+      this.open(EvaluationOpenSeamKind.DynamicLoop, 'For-of source is a non-iterable weak collection.', statement.expression, moduleKey);
       return new NormalEvaluationCompletion();
     }
 
-    for (let index = 0; index < iterable.exactLength; index += 1) {
-      if (index >= this.policy.guardrails.maxLoopIterations) {
+    const iterator = new EvaluationBuiltinIterator(iterable, statement.expression);
+    for (let iteration = 0; ; iteration += 1) {
+      const step = iterator.next();
+      if (step.kind === EvaluationIteratorStepKind.Done) {
+        return new NormalEvaluationCompletion();
+      }
+      if (step.kind === EvaluationIteratorStepKind.Open || step.element == null) {
+        if (step.openSeams.length > 0) {
+          this.replayOpenSeams(step.openSeams);
+        } else {
+          this.open(
+            EvaluationOpenSeamKind.DynamicLoop,
+            'For-of iterator membership or order did not close statically.',
+            statement.expression,
+            moduleKey,
+          );
+        }
+        return new NormalEvaluationCompletion();
+      }
+      if (iteration >= this.policy.guardrails.maxLoopIterations) {
         this.open(
           EvaluationOpenSeamKind.DynamicLoop,
           'For-of iterable grew beyond the static iteration guardrail.',
@@ -1213,12 +1247,12 @@ export class StaticEvaluator {
         );
         return new NormalEvaluationCompletion();
       }
-      const element = iterable.elementAtRuntimeIndex(index);
+      const element = step.element;
       this.bindLoopInitializer(
         statement.initializer,
         new EvaluationValueEvidence(
-          element?.value ?? EvaluationUndefined,
-          element?.openSeams ?? [],
+          element.value,
+          element.openSeams,
         ),
         environment,
         moduleKey,
@@ -1239,7 +1273,6 @@ export class StaticEvaluator {
         return completion;
       }
     }
-    return new NormalEvaluationCompletion();
   }
 
   private evaluateForInStatement(
@@ -1563,7 +1596,7 @@ export class StaticEvaluator {
         this.runtimeHost.evaluationValueGraph?.reconcileEnvironmentAfterExternal(environment);
         return this.adoptExternalValue(hostValue);
       }
-      const globalValue = evaluateAureliaExpressionGlobalAccess(identifier.text, identifier);
+      const globalValue = evaluateStaticGlobalAccess(identifier.text, identifier);
       if (globalValue != null) {
         return globalValue;
       }
@@ -2569,7 +2602,7 @@ export class StaticEvaluator {
     }
     const value = environment.readValue(identifier.text)
       ?? this.runtimeHost.resolveIdentifier?.(identifier, environment, moduleKey)
-      ?? evaluateAureliaExpressionGlobalAccess(identifier.text, identifier)
+      ?? evaluateStaticGlobalAccess(identifier.text, identifier)
       ?? null;
     return value ?? EvaluationUndefined;
   }

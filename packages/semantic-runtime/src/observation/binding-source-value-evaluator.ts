@@ -47,12 +47,12 @@ import {
   type StaticBinaryOperation,
 } from '../evaluation/operators.js';
 import {
-  AureliaGlobalIntrinsicEvaluationKind,
-  evaluateAureliaExpressionGlobalAccess,
-  evaluateAureliaExpressionGlobalCall,
-  evaluateAureliaExpressionGlobalConstructor,
-  evaluateAureliaExpressionGlobalMemberCall,
-  type AureliaGlobalIntrinsicEvaluation,
+  StaticGlobalIntrinsicEvaluationKind,
+  evaluateStaticGlobalAccess,
+  evaluateStaticGlobalCall,
+  evaluateStaticGlobalConstructor,
+  evaluateStaticGlobalMemberCall,
+  type StaticGlobalIntrinsicEvaluation,
 } from '../evaluation/global-intrinsics.js';
 import { representativeEvaluationValues } from '../evaluation/representative-values.js';
 import {
@@ -835,7 +835,7 @@ export class RuntimeBindingSourceValueEvaluator {
   private evaluateAccessGlobal(
     expression: AccessGlobalExpression,
   ): RuntimeBindingSourceValueEvaluation {
-    const value = evaluateAureliaExpressionGlobalAccess(expression.name.name);
+    const value = evaluateStaticGlobalAccess(expression.name.name);
     return value == null
       ? openBindingSourceUnsupportedExpression(`Global '${expression.name.name}' is not in Aurelia's admitted global intrinsic set.`)
       : RuntimeBindingSourceValueEvaluation.value(value);
@@ -1231,7 +1231,7 @@ export class RuntimeBindingSourceValueEvaluator {
     }
     return bindingSourceValueEvaluationWithPressure(
       runtimeBindingSourceValueFromGlobalIntrinsic(
-        evaluateAureliaExpressionGlobalCall(expression.name.name, argumentsRead.values),
+        evaluateStaticGlobalCall(expression.name.name, argumentsRead.values),
       ),
       argumentsRead.pressure,
     );
@@ -1246,7 +1246,7 @@ export class RuntimeBindingSourceValueEvaluator {
     if (argumentsRead.blocking != null) {
       return argumentsRead.blocking;
     }
-    const result = evaluateAureliaExpressionGlobalMemberCall(
+    const result = evaluateStaticGlobalMemberCall(
       receiver,
       expression.name.name,
       argumentsRead.values,
@@ -1295,7 +1295,7 @@ export class RuntimeBindingSourceValueEvaluator {
       }
       return bindingSourceValueEvaluationWithPressure(
         runtimeBindingSourceValueFromGlobalIntrinsic(
-          evaluateAureliaExpressionGlobalConstructor(globalConstructorName, argumentsRead.values),
+          evaluateStaticGlobalConstructor(globalConstructorName, argumentsRead.values),
         ),
         argumentsRead.pressure,
       );
@@ -2254,14 +2254,14 @@ function accessGlobalName(
 }
 
 function runtimeBindingSourceValueFromGlobalIntrinsic(
-  result: AureliaGlobalIntrinsicEvaluation,
+  result: StaticGlobalIntrinsicEvaluation,
 ): RuntimeBindingSourceValueEvaluation {
   switch (result.kind) {
-    case AureliaGlobalIntrinsicEvaluationKind.Value:
+    case StaticGlobalIntrinsicEvaluationKind.Value:
       return RuntimeBindingSourceValueEvaluation.value(result.value);
-    case AureliaGlobalIntrinsicEvaluationKind.RuntimeOpen:
+    case StaticGlobalIntrinsicEvaluationKind.RuntimeOpen:
       return openBindingSourceNeedsRuntimeValue(result.reason);
-    case AureliaGlobalIntrinsicEvaluationKind.Unsupported:
+    case StaticGlobalIntrinsicEvaluationKind.Unsupported:
       return openBindingSourceUnsupportedExpression(result.reason);
   }
 }

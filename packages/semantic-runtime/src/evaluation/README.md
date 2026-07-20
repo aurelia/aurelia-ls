@@ -287,6 +287,20 @@ without inventing a reorder; sort can open order without contaminating length. `
 the corresponding membership/order projection for `Object.keys`/`values`/`entries`, so those consumers do not
 reconstruct shape from lossy booleans.
 
+Keyed collections retain the same distinction without pretending that keys are array positions.
+`EvaluationKeyedCollectionShape` keeps exact size, membership, and iteration order as independent axes.
+`EvaluationSetElement` carries value and identity evidence; `EvaluationMapEntry` carries key and value evidence
+independently, plus presence state for conditional writes and exact tombstones. The shared keyed-collection operation
+algebra owns SameValueZero lookup, overwrite-in-place, insertion order, delete, and clear semantics. Exact later writes
+may repair their own key after an open mutation, but must not close unrelated membership. Weak collection capability is
+orthogonal to membership precision: weak collections deliberately do not expose size, clear, or iteration.
+
+`iterator-projection.ts` is the authority for modeled built-in iteration. Drained projections serve spread and
+constructor-style consumers; live iterators serve loops and callback-bearing consumers whose bodies may mutate the
+source. Array holes yield `undefined`, strings advance by Unicode code point, Set/Map iteration follows the append-only
+collection row log, and Map pair iteration preserves key and value evidence independently. Do not substitute own-property
+enumeration for iterable order or reconstruct live iteration from a precomputed array.
+
 `EvaluationArgumentList` is the evaluator's positional call-phase product. It evaluates authored arguments left-to-right,
 expands Array/Set/Map/String spreads with iterator semantics, and separates unclosed arity/order from pressure on one
 exact runtime slot. An open spread that may fail stops definite evaluation of later arguments; those later effects need a
@@ -332,13 +346,17 @@ can close over evaluator-modeled objects, arrays, namespaces, classes, or admitt
 numeric `+`/`-`, `typeof`, and `void` share that same table; TypeScript-only `~` also stays there for the static
 evaluator while Aurelia parser admission continues to reject it.
 
-`global-intrinsics.ts` owns value-level semantics for Aurelia expression-parser globals such as `parseInt`, `Math`,
-`JSON`, `Array`, and `Object`. This is shared by the TS-shaped static evaluator and Aurelia binding-source value
-evaluation: parser admission stays in `expression/global-names.ts`, TypeChecker projection stays in the type-system
-lane, and host-dependent globals remain boundary/runtime-open values instead of becoming observed binding dependencies.
-Intrinsic dispatch must establish that a callee or receiver path belongs to this modeled global set before evaluating
-arguments. Probe-time argument evaluation is observable evaluator work and would otherwise duplicate calls, pressure,
-and abrupt completion before ordinary local-function dispatch.
+`global-intrinsics.ts` owns value-level semantics for ECMAScript globals modeled by static evaluation, such as
+`parseInt`, `Math`, `JSON`, `Array`, `Object`, `WeakMap`, `WeakSet`, and `Promise`. Aurelia binding expressions admit the
+exact `aureliaExpressionGlobalNames` subset; TypeScript-shaped static evaluation spends the broader
+`staticEvaluationGlobalNames` vocabulary. Both sets live in `expression/global-names.ts`, but widening evaluator support
+must never silently widen Aurelia parser admission. TypeChecker projection stays in the type-system lane, and
+host-dependent globals remain boundary/runtime-open values instead of becoming observed binding dependencies. Intrinsic
+dispatch must establish that a callee or receiver path belongs to the relevant modeled set before evaluating arguments.
+Probe-time argument evaluation is observable evaluator work and would otherwise duplicate calls, pressure, and abrupt
+completion before ordinary local-function dispatch. Host boundary objects retain callable capability explicitly, so
+`typeof` spends the value carrier instead of rebuilding constructor/function lists from source spelling. Keyed carriers
+likewise retain weak capability explicitly; `instanceof` and host tags must not collapse WeakMap/WeakSet into Map/Set.
 
 `representative-values.ts` owns conservative value summaries for places where semantic-runtime intentionally does not
 materialize every possible runtime instance. Repeated template views and speculative conditional branches can keep exact
@@ -394,8 +412,10 @@ TypeScript-authored.
   `array.reduce`, `array.reduceRight`, `array.fill`, `array.flat`, `array.includes`, `array.indexOf`, `array.join`,
   `array.slice`, `array.sort`, `array.toSpliced`, `array.with`, `array.push`, `array.pop`, `array.shift`, `array.unshift`, `array.splice`,
   `array.reverse`, string `slice`, `localeCompare`, `startsWith`, `endsWith`, `includes`, `indexOf`,
-  `split`, `replace`, `replaceAll`, `trim`, case transforms, `Map.get`, `Map.set`, `Map.has`, `Map.delete`,
-  `Set.has`, `Set.add`, `Set.delete`, and `Promise.resolve` over evaluator-known values.
+  `split`, `replace`, `replaceAll`, `trim`, case transforms, `new Map`, `new WeakMap`, `Map.get`, `Map.set`, `Map.has`,
+  `Map.delete`, `Map.clear`, `new Set`, `new WeakSet`, `Set.has`, `Set.add`, `Set.delete`, `Set.clear`, and
+  `Promise.resolve` over evaluator-known values. Map and Set operations spend the shared keyed-collection algebra rather
+  than maintaining intrinsic-local membership rules.
 - Function and class values are callable/constructable carriers plus ordinary JavaScript property carriers. Static
   evaluator-local assignments such as `factory.someKey = value` should update the function/class value instead of
   opening a dynamic-mutation seam. Class construction and local getter reads are guarded static interpretation lanes;
@@ -423,6 +443,9 @@ TypeScript-authored.
   `then`/`catch`/`finally` intrinsics preserve the fulfillment lane without running callbacks; deeper async
   scheduling, rejection state, and callback execution remain future evaluator substrate rather than product-level
   guesswork.
+- `for await...of` does not execute its body synchronously. Until promise outcome and continuation scheduling have an
+  explicit evaluator carrier, it returns an open completion after evaluating the iterable expression. Do not recover
+  apparent progress by publishing body or post-loop effects as definite facts.
 - Boundary objects are not ordinary evaluator objects with a missing-property fallback. Known boundary object properties
   can be read or written inside the current evaluator pass, while unknown boundary property reads produce
   `EvaluationBoundaryValue`. Expression-level operations over boundary values return another boundary value instead of

@@ -102,7 +102,7 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/binding-source-value-evaluation.ts",
+          "filePath": "packages/semantic-runtime/src/configuration/binding-source-value-evaluation.ts",
           "symbolName": "RuntimeBindingSourceValueEvaluation",
           "summary": "Shared source-value closed/open result envelope for binding, router, template, and composition consumers."
         },
@@ -133,8 +133,8 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/global-intrinsics.ts",
-          "symbolName": "evaluateAureliaExpressionGlobalCall",
-          "summary": "Shared host-global intrinsic value substrate for Aurelia AccessGlobal/CallGlobal and TS-shaped static evaluation."
+          "symbolName": "evaluateStaticGlobalCall",
+          "summary": "Shared static-global intrinsic value substrate; binding-source AccessGlobal/CallGlobal consumes the exact Aurelia parser-admitted subset."
         },
         {
           "kind": "source",
@@ -151,8 +151,7 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/array-callback-values.ts",
-          "symbolName": "evaluationArrayElementsInIterationOrder",
-          "summary": "Shared forward/reverse native array element order for static TS and binding-source callback evaluation."
+          "summary": "Shared native array callback decision algebra, including forward/reverse iteration order, for static TS and binding-source evaluation."
         },
         {
           "kind": "source",
@@ -200,8 +199,22 @@
         },
         {
           "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/observation/binding-source-value-evaluation.ts",
+          "filePath": "packages/semantic-runtime/src/configuration/binding-source-value-evaluation.ts",
           "symbolName": "RuntimeBindingSourceValueEvaluation"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "RuntimeBindingSourceMemberValueReader",
+          "filePath": "packages/semantic-runtime/src/observation/binding-source-member-value.ts",
+          "minLineCount": 80,
+          "minMethodCount": 2
+        },
+        {
+          "kind": "product-large-class",
+          "className": "RuntimeBindingSourceValueEvaluation",
+          "filePath": "packages/semantic-runtime/src/configuration/binding-source-value-evaluation.ts",
+          "minLineCount": 80,
+          "minMethodCount": 4
         },
         {
           "kind": "source-declaration-exists",
@@ -230,11 +243,11 @@
         {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/evaluation/global-intrinsics.ts",
-          "symbolName": "evaluateAureliaExpressionGlobalCall"
+          "symbolName": "evaluateStaticGlobalCall"
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-25"
+      "updatedAt": "2026-07-20"
     },
     {
       "id": "frontier:runtime-effect-lifecycle",

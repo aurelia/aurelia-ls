@@ -35,6 +35,7 @@ import {
   evaluateArrayWith,
 } from './intrinsics/array-intrinsics.js';
 import {
+  evaluateCollectionClear,
   evaluateCollectionDelete,
   evaluateCollectionHas,
   evaluateMapConstructor,
@@ -45,13 +46,13 @@ import {
 } from './intrinsics/collection-intrinsics.js';
 import type { StaticIntrinsicEvaluationHost } from './intrinsics/contracts.js';
 import {
-  AureliaGlobalIntrinsicEvaluationKind,
-  evaluateAureliaExpressionGlobalCall,
-  evaluateAureliaExpressionGlobalConstructor,
-  evaluateAureliaExpressionGlobalMemberCallFromPath,
-  isAureliaExpressionGlobalMemberCallReceiverPath,
+  StaticGlobalIntrinsicEvaluationKind,
+  evaluateStaticGlobalCall,
+  evaluateStaticGlobalConstructor,
+  evaluateStaticGlobalMemberCallFromPath,
+  isStaticGlobalMemberCallReceiverPath,
 } from './global-intrinsics.js';
-import { isAureliaExpressionGlobalName } from '../expression/global-names.js';
+import { isStaticEvaluationGlobalName } from '../expression/global-names.js';
 import { evaluateDynamicImport, evaluateCommonJsRequire } from './intrinsics/module-intrinsics.js';
 import {
   evaluateObjectAssign,
@@ -116,7 +117,7 @@ function evaluateGlobalIntrinsicConstructor(
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue | null {
   const expression = frame.node;
-  if (constructorName == null || !isAureliaExpressionGlobalName(constructorName)) {
+  if (constructorName == null || !isStaticEvaluationGlobalName(constructorName)) {
     return null;
   }
   const argumentRead = evaluatePositionalIntrinsicArguments(
@@ -136,13 +137,13 @@ function evaluateGlobalIntrinsicConstructor(
     return new EvaluationUnknownValue('Global constructor arguments retained open pressure.', expression, true);
   }
   const argumentValues = argumentEvidence.map((argument) => argument.value);
-  const result = evaluateAureliaExpressionGlobalConstructor(constructorName, argumentValues, expression);
+  const result = evaluateStaticGlobalConstructor(constructorName, argumentValues, expression);
   switch (result.kind) {
-    case AureliaGlobalIntrinsicEvaluationKind.Value:
+    case StaticGlobalIntrinsicEvaluationKind.Value:
       return result.value;
-    case AureliaGlobalIntrinsicEvaluationKind.RuntimeOpen:
+    case StaticGlobalIntrinsicEvaluationKind.RuntimeOpen:
       return host.unknown(result.reason, expression, frame.moduleKey, EvaluationOpenSeamKind.DynamicCall);
-    case AureliaGlobalIntrinsicEvaluationKind.Unsupported:
+    case StaticGlobalIntrinsicEvaluationKind.Unsupported:
       return host.unknown(result.reason, expression, frame.moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
   }
 }
@@ -187,8 +188,8 @@ function evaluateGlobalIntrinsicCall(
   const receiverPath = memberDot < 0 ? null : calleeText.slice(0, memberDot);
   if (
     memberDot < 0
-      ? !isAureliaExpressionGlobalName(calleeText)
-      : receiverPath == null || !isAureliaExpressionGlobalMemberCallReceiverPath(receiverPath)
+      ? !isStaticEvaluationGlobalName(calleeText)
+      : receiverPath == null || !isStaticGlobalMemberCallReceiverPath(receiverPath)
   ) {
     return null;
   }
@@ -210,8 +211,8 @@ function evaluateGlobalIntrinsicCall(
   }
   const argumentValues = argumentEvidence.map((argument) => argument.value);
   const result = memberDot < 0
-    ? evaluateAureliaExpressionGlobalCall(calleeText, argumentValues, call)
-    : evaluateAureliaExpressionGlobalMemberCallFromPath(
+    ? evaluateStaticGlobalCall(calleeText, argumentValues, call)
+    : evaluateStaticGlobalMemberCallFromPath(
       receiverPath!,
       calleeText.slice(memberDot + 1),
       argumentValues,
@@ -221,11 +222,11 @@ function evaluateGlobalIntrinsicCall(
     return null;
   }
   switch (result.kind) {
-    case AureliaGlobalIntrinsicEvaluationKind.Value:
+    case StaticGlobalIntrinsicEvaluationKind.Value:
       return result.value;
-    case AureliaGlobalIntrinsicEvaluationKind.RuntimeOpen:
+    case StaticGlobalIntrinsicEvaluationKind.RuntimeOpen:
       return host.unknown(result.reason, call, frame.moduleKey, EvaluationOpenSeamKind.DynamicCall);
-    case AureliaGlobalIntrinsicEvaluationKind.Unsupported:
+    case StaticGlobalIntrinsicEvaluationKind.Unsupported:
       return host.unknown(result.reason, call, frame.moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
   }
 }
@@ -391,6 +392,8 @@ function evaluatePrototypeIntrinsicCall(
       return evaluateSetAdd(frame, host);
     case 'delete':
       return evaluateCollectionDelete(frame, host);
+    case 'clear':
+      return evaluateCollectionClear(frame, host);
     case 'then':
       return evaluatePromiseThen(frame, host);
     case 'catch':

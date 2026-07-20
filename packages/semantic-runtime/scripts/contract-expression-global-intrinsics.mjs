@@ -4,11 +4,11 @@ import { ExpressionParser } from '../out/expression/expression-parser.js';
 import { ExpressionParseResultKind } from '../out/expression/parse-result-algebra.js';
 import { StaticEvaluator } from '../out/evaluation/evaluator.js';
 import {
-  AureliaGlobalIntrinsicEvaluationKind,
-  evaluateAureliaExpressionGlobalAccess,
-  evaluateAureliaExpressionGlobalCall,
-  evaluateAureliaExpressionGlobalConstructor,
-  evaluateAureliaExpressionGlobalMemberCall,
+  StaticGlobalIntrinsicEvaluationKind,
+  evaluateStaticGlobalAccess,
+  evaluateStaticGlobalCall,
+  evaluateStaticGlobalConstructor,
+  evaluateStaticGlobalMemberCall,
 } from '../out/evaluation/global-intrinsics.js';
 import {
   EvaluationArrayElement,
@@ -18,6 +18,8 @@ import {
   EvaluationNumberValue,
   EvaluationObjectProperty,
   EvaluationObjectValue,
+  EvaluationSetElement,
+  EvaluationSetValue,
   EvaluationStringValue,
 } from '../out/evaluation/values.js';
 
@@ -54,6 +56,12 @@ for (const name of admittedGlobalNames) {
   assert.equal(result.ast.$kind, 'AccessGlobal', name);
 }
 
+for (const name of ['WeakMap', 'WeakSet', 'Promise']) {
+  const result = parser.parse(name, 'IsProperty');
+  assert.equal(result.kind, ExpressionParseResultKind.ExpressionSuccess, name);
+  assert.equal(result.ast.$kind, 'AccessScope', name);
+}
+
 assertGlobalCallParses('parseInt("42", 10)', 'parseInt');
 assertGlobalCallValue('parseInt', [
   new EvaluationStringValue('42'),
@@ -70,7 +78,7 @@ assertGlobalConstructorValue('RegExp', [new EvaluationStringValue('x'), new Eval
 assertGlobalConstructorValue('Array', [new EvaluationStringValue('x')], ['x']);
 assertGlobalConstructorValue('Object', [], objectValue([]));
 
-const math = evaluateAureliaExpressionGlobalAccess('Math');
+const math = evaluateStaticGlobalAccess('Math');
 assert.equal(math?.kind, 'boundary-object');
 assertGlobalMemberCallValue(math, 'max', [
   new EvaluationNumberValue(2),
@@ -78,7 +86,7 @@ assertGlobalMemberCallValue(math, 'max', [
 ], 5);
 assert.equal(math.properties.get('PI')?.value.kind, 'number');
 
-const json = evaluateAureliaExpressionGlobalAccess('JSON');
+const json = evaluateStaticGlobalAccess('JSON');
 assertGlobalMemberCallValue(json, 'parse', [new EvaluationStringValue('{"a":1}')], objectValue([
   ['a', new EvaluationNumberValue(1)],
 ]));
@@ -86,23 +94,29 @@ assertGlobalMemberCallValue(json, 'stringify', [objectValue([
   ['a', new EvaluationNumberValue(1)],
 ])], '{"a":1}');
 
-const objectGlobal = evaluateAureliaExpressionGlobalAccess('Object');
+const objectGlobal = evaluateStaticGlobalAccess('Object');
 assertGlobalMemberCallValue(objectGlobal, 'keys', [objectValue([
   ['a', new EvaluationNumberValue(1)],
   ['b', new EvaluationStringValue('two')],
 ])], ['a', 'b']);
 
-const arrayGlobal = evaluateAureliaExpressionGlobalAccess('Array');
+const arrayGlobal = evaluateStaticGlobalAccess('Array');
 assertGlobalMemberCallValue(arrayGlobal, 'isArray', [
   new EvaluationArrayValue([], false),
 ], true);
+assertGlobalMemberCallValue(arrayGlobal, 'from', [
+  new EvaluationSetValue([
+    new EvaluationSetElement(new EvaluationNumberValue(3), null),
+    new EvaluationSetElement(new EvaluationNumberValue(4), null),
+  ]),
+], [3, 4]);
 
-const objectToString = evaluateAureliaExpressionGlobalMemberCall(
+const objectToString = evaluateStaticGlobalMemberCall(
   new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, 'Object.prototype.toString'),
   'call',
   [new EvaluationArrayValue([], false)],
 );
-assert.equal(objectToString?.kind, AureliaGlobalIntrinsicEvaluationKind.Value);
+assert.equal(objectToString?.kind, StaticGlobalIntrinsicEvaluationKind.Value);
 assert.equal(objectToString.value.kind, 'string');
 assert.equal(objectToString.value.value, '[object Array]');
 
@@ -118,8 +132,8 @@ function assertGlobalCallParses(source, name) {
 }
 
 function assertGlobalCallValue(name, args, expected) {
-  const result = evaluateAureliaExpressionGlobalCall(name, args);
-  assert.equal(result.kind, AureliaGlobalIntrinsicEvaluationKind.Value, name);
+  const result = evaluateStaticGlobalCall(name, args);
+  assert.equal(result.kind, StaticGlobalIntrinsicEvaluationKind.Value, name);
   assertEvaluationValue(result.value, expected, name);
 }
 
@@ -132,15 +146,15 @@ function assertGlobalConstructorParses(source, name) {
 }
 
 function assertGlobalConstructorValue(name, args, expected) {
-  const result = evaluateAureliaExpressionGlobalConstructor(name, args);
-  assert.equal(result.kind, AureliaGlobalIntrinsicEvaluationKind.Value, name);
+  const result = evaluateStaticGlobalConstructor(name, args);
+  assert.equal(result.kind, StaticGlobalIntrinsicEvaluationKind.Value, name);
   assertEvaluationValue(result.value, expected, name);
 }
 
 function assertGlobalMemberCallValue(receiver, memberName, args, expected) {
   assert.notEqual(receiver, null, memberName);
-  const result = evaluateAureliaExpressionGlobalMemberCall(receiver, memberName, args);
-  assert.equal(result?.kind, AureliaGlobalIntrinsicEvaluationKind.Value, memberName);
+  const result = evaluateStaticGlobalMemberCall(receiver, memberName, args);
+  assert.equal(result?.kind, StaticGlobalIntrinsicEvaluationKind.Value, memberName);
   assertEvaluationValue(result.value, expected, memberName);
 }
 
@@ -205,6 +219,9 @@ function assertStaticEvaluatorSharesGlobalIntrinsics() {
       const numeric = +"4";
       const inverted = !0;
       const globalKind = typeof Math;
+      const constructorKind = typeof Map;
+      const weakConstructorKind = typeof WeakMap;
+      const globalFunctionKind = typeof parseInt;
       const voided = void parsed;
       const objectCheck = object instanceof Object;
       const arrayCheck = [] instanceof Array;
@@ -239,6 +256,9 @@ function assertStaticEvaluatorSharesGlobalIntrinsics() {
   assert.equal(result.environment.readValue('numeric')?.value, 4);
   assert.equal(result.environment.readValue('inverted')?.value, true);
   assert.equal(result.environment.readValue('globalKind')?.value, 'object');
+  assert.equal(result.environment.readValue('constructorKind')?.value, 'function');
+  assert.equal(result.environment.readValue('weakConstructorKind')?.value, 'function');
+  assert.equal(result.environment.readValue('globalFunctionKind')?.value, 'function');
   assert.equal(result.environment.readValue('voided')?.kind, 'undefined');
   assert.equal(result.environment.readValue('objectCheck')?.value, true);
   assert.equal(result.environment.readValue('arrayCheck')?.value, true);

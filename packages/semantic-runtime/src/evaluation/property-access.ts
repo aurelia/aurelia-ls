@@ -404,11 +404,11 @@ export function readStaticValueProperty(
   if (receiver.kind === EvaluationValueKind.String && isKnownStringPrototypeFunction(propertyName)) {
     return staticValueMemberValue(new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `String.prototype.${propertyName}`, node));
   }
-  if (receiver.kind === EvaluationValueKind.Set && isKnownSetPrototypeFunction(propertyName)) {
+  if (receiver.kind === EvaluationValueKind.Set && isKnownSetPrototypeFunction(propertyName, receiver.weak)) {
     const collectionName = receiver.weak ? 'WeakSet' : 'Set';
     return staticValueMemberValue(new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `${collectionName}.prototype.${propertyName}`, node));
   }
-  if (receiver.kind === EvaluationValueKind.Map && isKnownMapPrototypeFunction(propertyName)) {
+  if (receiver.kind === EvaluationValueKind.Map && isKnownMapPrototypeFunction(propertyName, receiver.weak)) {
     const collectionName = receiver.weak ? 'WeakMap' : 'Map';
     return staticValueMemberValue(new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `${collectionName}.prototype.${propertyName}`, node));
   }
@@ -426,10 +426,24 @@ export function readStaticValueProperty(
       : staticValueMemberValue(new EvaluationNumberValue(receiver.exactLength, node));
   }
   if (receiver.kind === EvaluationValueKind.Set && propertyName === 'size' && !receiver.weak) {
-    return staticValueMemberValue(new EvaluationNumberValue(receiver.elements.length, node));
+    return receiver.exactSize == null
+      ? staticValueMemberOpen(
+          'Set size depends on open keyed membership.',
+          EvaluationOpenSeamKind.UnresolvedIdentifier,
+          [],
+          receiver.shape.sizeOpenSeams,
+        )
+      : staticValueMemberValue(new EvaluationNumberValue(receiver.exactSize, node));
   }
   if (receiver.kind === EvaluationValueKind.Map && propertyName === 'size' && !receiver.weak) {
-    return staticValueMemberValue(new EvaluationNumberValue(receiver.entries.length, node));
+    return receiver.exactSize == null
+      ? staticValueMemberOpen(
+          'Map size depends on open keyed membership.',
+          EvaluationOpenSeamKind.UnresolvedIdentifier,
+          [],
+          receiver.shape.sizeOpenSeams,
+        )
+      : staticValueMemberValue(new EvaluationNumberValue(receiver.exactSize, node));
   }
   if (receiver.kind === EvaluationValueKind.String && propertyName === 'length') {
     return staticValueMemberValue(new EvaluationNumberValue(receiver.value.length, node));
@@ -640,12 +654,12 @@ function isKnownStringPrototypeFunction(name: string): boolean {
   return staticStringPrototypeBoundaryMethods.has(name);
 }
 
-function isKnownSetPrototypeFunction(name: string): boolean {
-  return name === 'add' || name === 'has' || name === 'delete';
+function isKnownSetPrototypeFunction(name: string, weak: boolean): boolean {
+  return name === 'add' || name === 'has' || name === 'delete' || (!weak && name === 'clear');
 }
 
-function isKnownMapPrototypeFunction(name: string): boolean {
-  return name === 'get' || name === 'set' || name === 'has' || name === 'delete';
+function isKnownMapPrototypeFunction(name: string, weak: boolean): boolean {
+  return name === 'get' || name === 'set' || name === 'has' || name === 'delete' || (!weak && name === 'clear');
 }
 
 function isKnownPromisePrototypeFunction(name: string): boolean {
