@@ -62,12 +62,12 @@ export function computationRecordReadKey(handle: KernelRecordHandle): string {
   return `kernel-record:${handle}`;
 }
 
-export function computationProductDetailReadKey(detailKind: string, productHandle: ProductHandle): string {
-  return `kernel-product-detail:${detailKind}:${productHandle}`;
+export function computationProductDetailReadKey(productHandle: ProductHandle): string {
+  return `kernel-product-detail:${productHandle}`;
 }
 
-export function computationHotDetailReadKey(detailKind: string, handle: HotDetailHandle): string {
-  return `kernel-hot-detail:${detailKind}:${handle}`;
+export function computationHotDetailReadKey(handle: HotDetailHandle): string {
+  return `kernel-hot-detail:${handle}`;
 }
 
 /** Exact positive or negative read of one normalized kernel record. */
@@ -118,7 +118,7 @@ export class ComputationProductDetailRead implements ComputationRead {
     private readonly revision: number | null,
     readonly lifetimeOrdinal: number | null,
   ) {
-    this.readKey = computationProductDetailReadKey(detailKind, productHandle);
+    this.readKey = computationProductDetailReadKey(productHandle);
     this.observedRevision = detailRevisionLabel(actualKind, revision, lifetimeOrdinal);
   }
 
@@ -149,7 +149,7 @@ export class ComputationHotDetailRead implements ComputationRead {
     private readonly revision: number | null,
     readonly lifetimeOrdinal: number | null,
   ) {
-    this.readKey = computationHotDetailReadKey(detailKind, handle);
+    this.readKey = computationHotDetailReadKey(handle);
     this.observedRevision = detailRevisionLabel(actualKind, revision, lifetimeOrdinal);
   }
 
@@ -864,9 +864,9 @@ function computationOutputReadKey(
     case KernelPublicationSurface.Record:
       return computationRecordReadKey(handle as KernelRecordHandle);
     case KernelPublicationSurface.ProductDetail:
-      return computationProductDetailReadKey(detailKind, handle as ProductHandle);
+      return computationProductDetailReadKey(handle as ProductHandle);
     case KernelPublicationSurface.HotDetail:
-      return computationHotDetailReadKey(detailKind, handle as HotDetailHandle);
+      return computationHotDetailReadKey(handle as HotDetailHandle);
   }
 }
 

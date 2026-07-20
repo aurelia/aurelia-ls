@@ -185,7 +185,9 @@ Exact `ComputationRun` record, product-detail, and hot-detail reads capture the 
 construction. Candidate writes and the hidden prior owned closure never masquerade as inputs; a positive foreign
 `IfAbsent` admission is a dependency even when no later lookup expands it. The registry indexes each committed output
 through the same exact read key, so producer ownership and reverse readers join without a semantic claim or handle-name
-heuristic. Exact reads whose keys become outputs of the same admitted generation are removed only after the store has
+heuristic. Detail dependency keys identify catalog occupancy by handle; the requested/actual detail kinds are revision
+facets, because one handle cannot host independent slots. Exact reads whose keys become outputs of the same admitted
+generation are removed only after the store has
 computed the authoritative publication decisions; borrowed `IfAbsent` rows have no output decision and remain reads.
 Replacement and retirement preflight producer ownership before store mutation, then update the index infallibly after
 admission. Lifetime disposal clears it with the reclaimed publication.

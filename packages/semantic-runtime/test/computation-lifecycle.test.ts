@@ -214,8 +214,8 @@ describe("computation lifecycle", () => {
 
     const producer0 = produce(0);
     const recordKey = computationRecordReadKey(productHandle);
-    const productDetailKey = computationProductDetailReadKey(productSlot.detailKind, productHandle);
-    const hotDetailKey = computationHotDetailReadKey(hotSlot.detailKind, hotHandle);
+    const productDetailKey = computationProductDetailReadKey(productHandle);
+    const hotDetailKey = computationHotDetailReadKey(hotHandle);
     expect(lifecycle.producerFor(recordKey)).toBe(producer0.computationId);
     expect(lifecycle.producerFor(productDetailKey)).toBe(producer0.computationId);
     expect(lifecycle.producerFor(hotDetailKey)).toBe(producer0.computationId);
@@ -249,6 +249,73 @@ describe("computation lifecycle", () => {
     expect(lifecycle.producerFor(recordKey)).toBeNull();
     expect(lifecycle.producerFor(productDetailKey)).toBeNull();
     expect(lifecycle.producerFor(hotDetailKey)).toBeNull();
+  });
+
+  test("joins a mismatched detail-slot read to the handle's actual producer", () => {
+    const store = new KernelStore("computation-detail-slot-occupancy");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("detail-slot-occupancy:product");
+    const provenanceHandle = store.handles.provenance("detail-slot-occupancy:provenance");
+    const hotHandle = store.handles.hotDetail("detail-slot-occupancy:hot");
+    const productSlotA = defineProductDetailSlot<{ readonly version: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.detail-slot-occupancy-product-a",
+      "First product-detail slot occupying one product handle.",
+    );
+    const productSlotB = defineProductDetailSlot<{ readonly version: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.detail-slot-occupancy-product-b",
+      "Second product-detail slot requested at the same product handle.",
+    );
+    const hotSlotA = defineHotDetailSlot<{ readonly version: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.detail-slot-occupancy-hot-a",
+      "First hot-detail slot occupying one hot handle.",
+    );
+    const hotSlotB = defineHotDetailSlot<{ readonly version: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.detail-slot-occupancy-hot-b",
+      "Second hot-detail slot requested at the same hot handle.",
+    );
+    const product = () => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      null,
+      provenanceHandle,
+    );
+    const produce = (
+      productSlot: typeof productSlotA | typeof productSlotB,
+      hotSlot: typeof hotSlotA | typeof hotSlotB,
+      version: number,
+    ) => {
+      const run = lifecycle.begin(locus("detail-slot-occupancy-producer"));
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(provenanceHandle),
+          product(),
+        ], `detail-slot-occupancy:${version}`),
+        [publishProductDetail(productSlot, productHandle, { version })],
+        [publishHotDetail(hotSlot, productHandle, hotHandle, { version })],
+      ));
+      expect(run.commit().state).toBe(ComputationCommitState.Committed);
+      return run;
+    };
+
+    const producer = produce(productSlotA, hotSlotA, 0);
+    const consumer = lifecycle.begin(locus("detail-slot-occupancy-consumer"));
+    expect(consumer.readProductDetail(productSlotB, productHandle)).toBeNull();
+    expect(consumer.readHotDetail(hotSlotB, hotHandle)).toBeNull();
+    expect(consumer.commit().state).toBe(ComputationCommitState.Committed);
+    const productDetailKey = computationProductDetailReadKey(productHandle);
+    const hotDetailKey = computationHotDetailReadKey(hotHandle);
+    expect(lifecycle.producerFor(productDetailKey)).toBe(producer.computationId);
+    expect(lifecycle.producerFor(hotDetailKey)).toBe(producer.computationId);
+    expect(lifecycle.readersFor(productDetailKey)).toEqual([consumer.computationId]);
+    expect(lifecycle.readersFor(hotDetailKey)).toEqual([consumer.computationId]);
+
+    produce(productSlotB, hotSlotB, 1);
+    expect(lifecycle.readState(consumer.computationId)?.reads.every((read) => !read.validate().isCurrent)).toBe(true);
   });
 
   test("tracks negative exact reads and borrowed if-absent details without self-dependencies", () => {
@@ -314,8 +381,8 @@ describe("computation lifecycle", () => {
       )],
     ));
     expect(borrower.commit().state).toBe(ComputationCommitState.Committed);
-    const productDetailKey = computationProductDetailReadKey(productSlot.detailKind, productHandle);
-    const hotDetailKey = computationHotDetailReadKey(hotSlot.detailKind, hotHandle);
+    const productDetailKey = computationProductDetailReadKey(productHandle);
+    const hotDetailKey = computationHotDetailReadKey(hotHandle);
     expect(lifecycle.readState(borrower.computationId)?.reads.map((read) => read.readKey).sort()).toEqual([
       hotDetailKey,
       productDetailKey,
@@ -363,8 +430,8 @@ describe("computation lifecycle", () => {
 
     expect(run.commit().state).toBe(ComputationCommitState.Committed);
     const recordKey = computationRecordReadKey(productHandle);
-    const productDetailKey = computationProductDetailReadKey(productSlot.detailKind, productHandle);
-    const hotDetailKey = computationHotDetailReadKey(hotSlot.detailKind, hotHandle);
+    const productDetailKey = computationProductDetailReadKey(productHandle);
+    const hotDetailKey = computationHotDetailReadKey(hotHandle);
     expect(lifecycle.readState(run.computationId)?.reads).toEqual([]);
     expect(lifecycle.readersFor(recordKey)).toEqual([]);
     expect(lifecycle.readersFor(productDetailKey)).toEqual([]);
@@ -438,7 +505,7 @@ describe("computation lifecycle", () => {
       [publishProductDetail(productSlot, productHandle, { owner: "first" })],
     ));
     expect(owner.commit().state).toBe(ComputationCommitState.Committed);
-    const productDetailKey = computationProductDetailReadKey(productSlot.detailKind, productHandle);
+    const productDetailKey = computationProductDetailReadKey(productHandle);
 
     // Simulate a violated low-level catalog invariant while retaining the lifecycle's ownership proof.
     store.productDetails.remove(productHandle);
