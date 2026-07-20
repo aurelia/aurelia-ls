@@ -241,6 +241,7 @@ export function evaluateStaticObjectLiteral(
   let mayHaveUnknownProperties = false;
   const uncertainties: EvaluationObjectUncertainty[] = [];
   const shapeOpenSeams: EvaluationOpenSeam[] = [];
+  const propertyOrderOpenSeams: EvaluationOpenSeam[] = [];
   for (const property of literal.properties) {
     const checkpoint = host.openSeamCheckpoint();
     if (ts.isPropertyAssignment(property)) {
@@ -304,6 +305,7 @@ export function evaluateStaticObjectLiteral(
       }
       if (spread.kind === EvaluationValueKind.Object) {
         const directPressure = unretainedEvaluationOpenSeams(spread, host.openSeamsSince(checkpoint));
+        propertyOrderOpenSeams.push(...spread.propertyOrderOpenSeams, ...directPressure);
         let pressure = compactEvaluationOpenSeams([
           ...spread.shapeOpenSeams,
           ...directPressure,
@@ -378,5 +380,6 @@ export function evaluateStaticObjectLiteral(
     literal,
     mergeEvaluationObjectUncertainties(uncertainties),
     compactEvaluationOpenSeams(shapeOpenSeams),
+    compactEvaluationOpenSeams(propertyOrderOpenSeams),
   );
 }

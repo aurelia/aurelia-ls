@@ -13,7 +13,7 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
-import type { StaticModuleEvaluationResult } from './evaluator.js';
+import type { StaticModuleEvaluationResult } from './module-evaluation-result.js';
 import type { EvaluationOpenSeam } from './seams.js';
 
 export interface EvaluationOpenSeamSource {

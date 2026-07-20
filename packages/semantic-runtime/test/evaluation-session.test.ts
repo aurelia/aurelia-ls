@@ -54,6 +54,38 @@ import {
 import { FrameworkRegistrationKind } from '../src/registration/registration-reference.js';
 
 describe('static evaluation sessions', () => {
+  test('maps fork snapshots to their immediate parent graph', () => {
+    const source = ts.createSourceFile(
+      'src/fork-lineage.ts',
+      'const state = { count: 0 };',
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const original = new StaticEvaluator().evaluateSourceFile(source);
+    const originalState = original.environment.readValue('state');
+    if (originalState == null) {
+      throw new Error('Expected state to be evaluated.');
+    }
+
+    const firstGraph = new StaticEvaluationSessionFork(original.runtimeHost);
+    const first = firstGraph.forkModuleEvaluation(original);
+    const firstState = first.environment.readValue('state');
+    if (firstState == null) {
+      throw new Error('Expected state to survive the first fork.');
+    }
+    const secondGraph = new StaticEvaluationSessionFork(first.runtimeHost);
+    const second = secondGraph.forkModuleEvaluation(first);
+    const secondState = second.environment.readValue('state');
+    const produced = new EvaluationObjectValue(new Map(), false);
+
+    expect(firstGraph.sourceEnvironment(first.environment)).toBe(original.environment);
+    expect(firstGraph.sourceValue(firstState)).toBe(originalState);
+    expect(secondGraph.sourceEnvironment(second.environment)).toBe(first.environment);
+    expect(secondGraph.sourceValue(secondState!)).toBe(firstState);
+    expect(secondGraph.sourceValue(produced)).toBeNull();
+  });
+
   test('dispatches Aurelia facades from imported value identity across aliases and namespaces', () => {
     const source = ts.createSourceFile(
       'src/aurelia-facade-identity.ts',

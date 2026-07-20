@@ -6,6 +6,7 @@ import {
 } from './environment.js';
 import {
   EvaluationObjectProperty,
+  EvaluationObjectPropertyPresence,
   EvaluationObjectPropertyState,
   EvaluationObjectValue,
   EvaluationValueKind,
@@ -168,10 +169,11 @@ function readObjectPropertyEvidence(
     return null;
   }
   const property = owner.value.properties.get(propertyName);
-  return property == null
+  return property == null || property.presence === EvaluationObjectPropertyPresence.Conditional
     ? null
     : new EvaluationValueEvidence(property.value, [
         ...owner.openSeams,
         ...property.openSeams,
+        ...property.presenceOpenSeams,
       ]);
 }

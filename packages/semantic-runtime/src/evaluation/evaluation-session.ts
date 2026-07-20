@@ -19,11 +19,10 @@ import {
   EvaluationAuthoredArgument,
 } from './argument-list.js';
 import {
-  StaticEvaluationRuntimeValueResult,
-  StaticModuleEvaluationResult,
   type StaticEvaluationRuntimeHost,
   type StaticEvaluationValueMetadataTransfer,
 } from './evaluator.js';
+import { StaticModuleEvaluationResult } from './module-evaluation-result.js';
 import type { StaticIntrinsicEvaluationHost } from './intrinsics/contracts.js';
 import {
   StaticInvocationDispatchKind,
@@ -42,7 +41,7 @@ import {
   evaluationValueGraphOwner,
   evaluationValueHasMutableGraph,
   ownEvaluationValue,
-  type StaticEvaluationValueGraph,
+  type StaticEvaluationForkLineage,
 } from './evaluation-graph.js';
 import { bindEvaluationValueLineage } from './value-relation.js';
 import {
@@ -76,11 +75,13 @@ const enum StaticEvaluationGraphRetentionKind {
   Produced,
 }
 
-export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
+export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage {
   private readonly environments = new WeakMap<ModuleEnvironmentRecord, ModuleEnvironmentRecord>();
+  private readonly sourceEnvironments = new WeakMap<ModuleEnvironmentRecord, ModuleEnvironmentRecord>();
   private readonly populatedEnvironments = new WeakSet<ModuleEnvironmentRecord>();
   private readonly populatingEnvironments = new WeakSet<ModuleEnvironmentRecord>();
   private readonly values = new WeakMap<object, EvaluationValue>();
+  private readonly sourceValues = new WeakMap<object, EvaluationValue>();
   private readonly populatedClasses = new WeakSet<EvaluationClassValue>();
   private readonly populatingClasses = new WeakSet<EvaluationClassValue>();
   private readonly transferredMetadata = new WeakSet<object>();
@@ -153,6 +154,10 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
     return target;
   }
 
+  sourceEnvironment(environment: ModuleEnvironmentRecord): ModuleEnvironmentRecord | null {
+    return this.sourceEnvironments.get(environment) ?? null;
+  }
+
   forkValue<TValue extends EvaluationValue>(source: TValue): TValue {
     if (!evaluationValueHasMutableGraph(source)) {
       return source;
@@ -167,6 +172,12 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
     }
 
     return this.forkMutableValue(source) as TValue;
+  }
+
+  sourceValue(value: EvaluationValue): EvaluationValue | null {
+    return evaluationValueHasMutableGraph(value)
+      ? this.sourceValues.get(value) ?? null
+      : null;
   }
 
   private forkMutableValue(source: EvaluationValue): EvaluationValue {
@@ -191,7 +202,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
           source.shape,
         );
         this.bindValue(source, target);
-        target.elements.push(...source.elements.map((element) =>
+        target.replaceElements(source.elements.map((element) =>
           new EvaluationArrayElement(this.forkValue(element.value), element.expression, element.openSeams, element.runtimeIndex)
         ));
         return target;
@@ -199,7 +210,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
       case EvaluationValueKind.Set: {
         const target = new EvaluationSetValue([], source.node, source.shape, source.weak);
         this.bindValue(source, target);
-        target.elements.push(...source.elements.map((element) =>
+        target.replaceElements(source.elements.map((element) =>
           new EvaluationSetElement(
             this.forkValue(element.value),
             element.expression,
@@ -213,7 +224,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
       case EvaluationValueKind.Map: {
         const target = new EvaluationMapValue([], source.node, source.shape, source.weak);
         this.bindValue(source, target);
-        target.entries.push(...source.entries.map((entry) => new EvaluationMapEntry(
+        target.replaceEntries(source.entries.map((entry) => new EvaluationMapEntry(
           this.forkValue(entry.key),
           this.forkValue(entry.value),
           entry.keyExpression,
@@ -232,6 +243,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
           source.node,
           source.uncertainties,
           source.shapeOpenSeams,
+          source.propertyOrderOpenSeams,
         );
         this.bindValue(source, target);
         this.forkProperties(source.properties, target.properties);
@@ -251,7 +263,15 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
       }
       case EvaluationValueKind.Function: {
         const environment = this.environmentShell(this.moduleEnvironment(source.environment));
-        const target = new EvaluationFunctionValue(source.declaration, environment, source.node);
+        const target = new EvaluationFunctionValue(
+          source.declaration,
+          environment,
+          source.node,
+          new Map(),
+          source.mayHaveUnknownProperties,
+          source.shapeOpenSeams,
+          source.propertyOrderOpenSeams,
+        );
         this.bindValue(source, target);
         this.populateEnvironment(this.moduleEnvironment(source.environment), environment);
         this.forkProperties(source.properties, target.properties);
@@ -271,6 +291,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
           source.node,
           source.constructionOpenSeams,
           source.shapeOpenSeams,
+          source.propertyOrderOpenSeams,
         );
         this.bindValue(source, target);
         this.populateClass(source.classValue, classValue);
@@ -324,6 +345,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
         source.outer == null ? null : this.environmentShell(source.outer),
       );
       this.environments.set(source, target);
+      this.sourceEnvironments.set(target, source);
       target.adoptGraphOwner(this);
     }
     return target;
@@ -367,6 +389,8 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
         property.node,
         property.state,
         property.openSeams,
+        property.presence,
+        property.presenceOpenSeams,
       ));
     }
   }
@@ -380,7 +404,15 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
       return existing;
     }
     const environment = this.environmentShell(this.moduleEnvironment(source.environment));
-    const target = new EvaluationClassValue(source.declaration, environment, source.node);
+    const target = new EvaluationClassValue(
+      source.declaration,
+      environment,
+      source.node,
+      new Map(),
+      source.mayHaveUnknownProperties,
+      source.shapeOpenSeams,
+      source.propertyOrderOpenSeams,
+    );
     this.bindValue(source, target);
     return target;
   }
@@ -404,6 +436,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
 
   private bindValue(source: EvaluationValue, target: EvaluationValue): void {
     this.values.set(source, target);
+    this.sourceValues.set(target, source);
     bindEvaluationValueLineage(source, target);
     ownEvaluationValue(target, this);
     this.transferRuntimeHostMetadata(source, target);
@@ -724,6 +757,8 @@ export class StaticEvaluationSessionFork implements StaticEvaluationValueGraph {
           property.node,
           property.state,
           property.openSeams,
+          property.presence,
+          property.presenceOpenSeams,
         ));
       }
     }

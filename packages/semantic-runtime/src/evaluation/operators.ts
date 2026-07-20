@@ -3,6 +3,7 @@ import ts from 'typescript';
 import {
   EvaluationBooleanValue,
   EvaluationBoundaryKind,
+  EvaluationObjectPropertyPresence,
   EvaluationValueKind,
   EvaluationNumberValue,
   EvaluationStringValue,
@@ -174,9 +175,14 @@ function evaluateStaticInOperation(
   }
   switch (right.kind) {
     case EvaluationValueKind.Object:
-      return right.properties.has(key)
-        ? new EvaluationBooleanValue(true, node)
-        : right.mayHaveUnknownProperties ? null : new EvaluationBooleanValue(false, node);
+      {
+        const property = right.properties.get(key);
+        return property?.presence === EvaluationObjectPropertyPresence.Conditional
+          ? null
+          : property != null
+            ? new EvaluationBooleanValue(true, node)
+            : right.mayHaveUnknownProperties ? null : new EvaluationBooleanValue(false, node);
+      }
     case EvaluationValueKind.Array:
       if (key === 'length') {
         return new EvaluationBooleanValue(true, node);
@@ -184,9 +190,9 @@ function evaluateStaticInOperation(
       if (!isArrayIndexKey(key)) {
         return null;
       }
-      return right.mayHaveUnknownElements || right.mayHaveUnknownOrder
+      return !right.hasExactElementPositions
         ? null
-        : new EvaluationBooleanValue(Number(key) >= 0 && Number(key) < right.elements.length, node);
+        : new EvaluationBooleanValue(right.elementAtRuntimeIndex(Number(key)) != null, node);
     case EvaluationValueKind.ModuleNamespace:
       return right.exportEntries.has(key)
         ? new EvaluationBooleanValue(true, node)

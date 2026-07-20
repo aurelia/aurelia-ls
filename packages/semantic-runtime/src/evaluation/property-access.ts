@@ -27,6 +27,7 @@ import {
   EvaluationFunctionValue,
   EvaluationNumberValue,
   EvaluationObjectProperty,
+  EvaluationObjectPropertyPresence,
   EvaluationObjectPropertyState,
   EvaluationRegularExpressionValue,
   EvaluationStringValue,
@@ -331,16 +332,23 @@ export function readStaticValueProperty(
     const openSeams = compactEvaluationOpenSeams([
       ...(receiver.kind === EvaluationValueKind.Instance ? receiver.constructionOpenSeams : []),
       ...ownProperty.openSeams,
+      ...ownProperty.presenceOpenSeams,
     ]);
-    if (ownProperty.state === EvaluationObjectPropertyState.Open && openSeams.length === 0) {
+    if ((ownProperty.state === EvaluationObjectPropertyState.Open
+      || ownProperty.presence === EvaluationObjectPropertyPresence.Conditional)
+      && openSeams.length === 0) {
       return staticValueMemberOpen(
-        `Object property '${propertyName}' may be replaced by an unknown computed key or spread.`,
+        ownProperty.presence === EvaluationObjectPropertyPresence.Conditional
+          ? `Object property '${propertyName}' is present only on some execution lanes.`
+          : `Object property '${propertyName}' may be replaced by an unknown computed key or spread.`,
         EvaluationOpenSeamKind.UnresolvedIdentifier,
         openSeamReasonKindsForEvaluationValue(receiver),
       );
     }
     if (ownProperty.node != null && ts.isGetAccessorDeclaration(ownProperty.node) && ownProperty.value.kind === EvaluationValueKind.Function) {
-      return openSeams.length === 0 && ownProperty.state === EvaluationObjectPropertyState.Closed
+      return openSeams.length === 0
+        && ownProperty.state === EvaluationObjectPropertyState.Closed
+        && ownProperty.presence === EvaluationObjectPropertyPresence.Present
         ? staticValueMemberGetter(ownProperty.value, receiver)
         : staticValueMemberOpen(
             `Getter '${propertyName}' is qualified by open property pressure and cannot be invoked speculatively.`,
@@ -349,7 +357,9 @@ export function readStaticValueProperty(
             openSeams,
           );
     }
-    return openSeams.length > 0 || ownProperty.state === EvaluationObjectPropertyState.Open
+    return openSeams.length > 0
+      || ownProperty.state === EvaluationObjectPropertyState.Open
+      || ownProperty.presence === EvaluationObjectPropertyPresence.Conditional
       ? staticValueMemberCandidate(ownProperty.value, openSeams)
       : staticValueMemberValue(ownProperty.value);
   }

@@ -6,7 +6,7 @@ import {
   EvaluationValueKind,
   type EvaluationValue,
 } from '../evaluation/values.js';
-import type { StaticModuleEvaluationResult } from '../evaluation/evaluator.js';
+import type { StaticModuleEvaluationResult } from '../evaluation/module-evaluation-result.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import {
   RegistrationKeyObservation,

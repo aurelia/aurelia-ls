@@ -50,6 +50,8 @@ import {
 import {
   type StaticEvaluationValueGraph,
 } from './evaluation-graph.js';
+import { StaticEvaluationSessionFork } from './evaluation-session.js';
+import { joinStaticEvaluationBranches } from './branch-state.js';
 import {
   evaluateKnownConstructor,
   evaluateKnownIntrinsic,
@@ -68,6 +70,7 @@ import {
   type StaticInvocationDispatch,
   type StaticInvocationEvaluation,
 } from './invocation.js';
+import { StaticModuleEvaluationResult } from './module-evaluation-result.js';
 import {
   EvaluationBuiltinIterator,
   EvaluationIteratorStepKind,
@@ -96,7 +99,6 @@ import {
   staticUnaryOperationForToken,
   staticTokenName,
 } from './operators.js';
-import { representativeEvaluationValues } from './representative-values.js';
 import {
   EvaluationBigIntValue,
   EvaluationBoundaryKind,
@@ -119,7 +121,8 @@ import {
   EvaluationValueKind,
   appendEvaluationStringLikePart,
   evaluationStringPatternFromConcatenation,
-  openEvaluationObjectProperties,
+  isEvaluationLocalPropertyCarrier,
+  openEvaluationLocalPropertyMembership,
   readEvaluationTruthiness,
   type EvaluationValue,
 } from './values.js';
@@ -129,6 +132,10 @@ import {
 } from './value-relation.js';
 import { hasModifier, isAssignmentOperator } from './ts-syntax.js';
 import { openSeamReasonKindForEvaluationBoundary } from './boundary-open-reason.js';
+import {
+  DefaultStaticEvaluationRuntimeHost,
+  graphIsolatedStaticEvaluationRuntimeHost,
+} from './runtime-host.js';
 import {
   evaluateStaticArrayLiteral,
   evaluateStaticObjectLiteral,
@@ -181,6 +188,31 @@ type StaticExpressionOptionalFlow =
   | StaticExpressionOptionalShortCircuit
   | StaticExpressionOptionalIndeterminate;
 
+class StaticEvaluationExecutionBudget {
+  private depth = 0;
+  private branchEvaluations = 0;
+
+  run<TResult>(evaluate: () => TResult): TResult {
+    if (this.depth === 0) {
+      this.branchEvaluations = 0;
+    }
+    this.depth++;
+    try {
+      return evaluate();
+    } finally {
+      this.depth--;
+    }
+  }
+
+  spendBranches(count: number, limit: number): boolean {
+    if (this.branchEvaluations + count > limit) {
+      return false;
+    }
+    this.branchEvaluations += count;
+    return true;
+  }
+}
+
 interface StaticInvocationTarget {
   readonly kind: StaticExpressionFlowKind.Value;
   readonly callee: EvaluationValueEvidence;
@@ -211,10 +243,7 @@ export class StaticEvaluationRuntimeValueResult {
   }
 }
 
-export interface StaticEvaluationRuntimeHost {
-  /** Mutable value-graph boundary shared by evaluators executing inside one speculative session. */
-  readonly evaluationValueGraph?: StaticEvaluationValueGraph;
-
+export interface StaticEvaluationRuntimeHostOperations {
   /** Transfer host-owned semantic identity when a speculative session clones an evaluator value. */
   transferValueMetadata?(
     source: EvaluationValue,
@@ -246,34 +275,17 @@ export interface StaticEvaluationRuntimeHost {
   ): StaticInvocationDispatch;
 }
 
-/** Result of evaluating one source module. */
-export class StaticModuleEvaluationResult {
-  /** Calls and constructions that reached the modeled invocation operation. */
-  readonly invocations: readonly StaticInvocationOccurrence[];
-
-  constructor(
-    /** Module key whose source file was evaluated. */
-    readonly moduleKey: string,
-    /** Environment record after the evaluator's module-body pass. */
-    readonly environment: ModuleEnvironmentRecord,
-    /** Final module-body completion. */
-    readonly completion: EvaluationCompletion,
-    /** Explicit open seams produced while evaluating this module. */
-    readonly openSeams: readonly EvaluationOpenSeam[],
-    /** Reached invocations and pre-invocation boundaries, in ECMAScript evaluation order. */
-    readonly invocationEvaluations: readonly StaticInvocationEvaluation[],
-    /** Policy used by follow-up expression reads against this module environment. */
-    readonly policy: StaticEvaluationPolicy = DefaultStaticEvaluationPolicy,
-    /** Runtime host used by follow-up expression reads against this module environment. */
-    readonly runtimeHost: StaticEvaluationRuntimeHost = {},
-  ) {
-    this.invocations = invocationEvaluations.filter(isStaticInvocationOccurrence);
-  }
+export interface StaticEvaluationRuntimeHost extends StaticEvaluationRuntimeHostOperations {
+  /** Mutable value-graph boundary shared by evaluators executing inside one speculative session. */
+  readonly evaluationValueGraph?: StaticEvaluationValueGraph;
+  /** Complete host operation set permitted inside graph-isolated unresolved sibling branches. */
+  readonly graphIsolatedBranchOperations?: StaticEvaluationRuntimeHostOperations;
 }
 
 /** Result of evaluating one expression against an existing module environment. */
 export class StaticExpressionEvaluationResult {
   readonly openSeams: readonly EvaluationOpenSeam[];
+  readonly auditOpenSeams: readonly EvaluationOpenSeam[];
   /** Calls and constructions that reached the modeled invocation operation. */
   readonly invocations: readonly StaticInvocationOccurrence[];
 
@@ -284,8 +296,11 @@ export class StaticExpressionEvaluationResult {
     openSeams: readonly EvaluationOpenSeam[],
     /** Reached invocations and pre-invocation boundaries, in ECMAScript evaluation order. */
     readonly invocationEvaluations: readonly StaticInvocationEvaluation[],
+    /** Every seam observed while evaluating the expression, including non-causal nested pressure. */
+    auditOpenSeams: readonly EvaluationOpenSeam[] = openSeams,
   ) {
     this.openSeams = compactEvaluationOpenSeams(openSeams);
+    this.auditOpenSeams = compactEvaluationOpenSeams(auditOpenSeams);
     this.invocations = invocationEvaluations.filter(isStaticInvocationOccurrence);
   }
 
@@ -389,10 +404,11 @@ export class StaticEvaluator {
   private readonly invocationEvaluations: StaticInvocationEvaluation[] = [];
   private nextInvocationOrdinal = 0;
   private statementCount = 0;
+  private executionBudget = new StaticEvaluationExecutionBudget();
 
   constructor(
     readonly policy: StaticEvaluationPolicy = DefaultStaticEvaluationPolicy,
-    readonly runtimeHost: StaticEvaluationRuntimeHost = {},
+    readonly runtimeHost: StaticEvaluationRuntimeHost = DefaultStaticEvaluationRuntimeHost,
   ) {}
 
   /** Evaluate one TypeScript source file as an ECMAScript module body. */
@@ -401,7 +417,9 @@ export class StaticEvaluator {
     moduleKey: string = sourceFile.fileName,
     imports: StaticEvaluationImportValues = new Map<string, EvaluationValueEvidence>(),
   ): StaticModuleEvaluationResult {
-    return this.evaluateSourceFileCore(sourceFile, moduleKey, imports, null);
+    return this.executionBudget.run(() =>
+      this.evaluateSourceFileCore(sourceFile, moduleKey, imports, null)
+    );
   }
 
   /** Instantiate a linked module without executing its body after a dependency stopped evaluation. */
@@ -411,7 +429,9 @@ export class StaticEvaluator {
     imports: StaticEvaluationImportValues,
     dependencyCompletion: EvaluationAbruptCompletion,
   ): StaticModuleEvaluationResult {
-    return this.evaluateSourceFileCore(sourceFile, moduleKey, imports, dependencyCompletion);
+    return this.executionBudget.run(() =>
+      this.evaluateSourceFileCore(sourceFile, moduleKey, imports, dependencyCompletion)
+    );
   }
 
   private evaluateSourceFileCore(
@@ -576,25 +596,29 @@ export class StaticEvaluator {
     evaluate: () => EvaluationValue,
     checkpoint: StaticIntrinsicEvaluationCheckpoint,
   ): StaticExpressionEvaluationResult {
-    try {
-      const value = this.ownProducedValue(evaluate());
-      return new StaticExpressionEvaluationResult(
-        new NormalEvaluationCompletion(value),
-        this.causalOpenSeams.slice(checkpoint.openSeamCount),
-        this.orderedInvocationEvaluationsSince(checkpoint.invocationCount),
-      );
-    } catch (error) {
-      if (!(error instanceof EvaluationAbruptCompletionSignal)) {
-        throw error;
+    return this.executionBudget.run(() => {
+      try {
+        const value = this.ownProducedValue(evaluate());
+        return new StaticExpressionEvaluationResult(
+          new NormalEvaluationCompletion(value),
+          this.causalOpenSeams.slice(checkpoint.openSeamCount),
+          this.orderedInvocationEvaluationsSince(checkpoint.invocationCount),
+          this.auditOpenSeams.slice(checkpoint.auditOpenSeamCount),
+        );
+      } catch (error) {
+        if (!(error instanceof EvaluationAbruptCompletionSignal)) {
+          throw error;
+        }
+        return new StaticExpressionEvaluationResult(
+          error.completion,
+          this.causalOpenSeams.slice(checkpoint.openSeamCount),
+          this.orderedInvocationEvaluationsSince(checkpoint.invocationCount),
+          this.auditOpenSeams.slice(checkpoint.auditOpenSeamCount),
+        );
+      } finally {
+        this.restoreEvaluationCheckpoint(checkpoint);
       }
-      return new StaticExpressionEvaluationResult(
-        error.completion,
-        this.causalOpenSeams.slice(checkpoint.openSeamCount),
-        this.orderedInvocationEvaluationsSince(checkpoint.invocationCount),
-      );
-    } finally {
-      this.restoreEvaluationCheckpoint(checkpoint);
-    }
+    });
   }
 
   private evaluateStatement(
@@ -1007,18 +1031,36 @@ export class StaticEvaluator {
       localName,
       hasModifier(declaration, ts.SyntaxKind.DeclareKeyword)
         ? new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, localName, declaration)
-        : new EvaluationClassValue(
-            declaration,
-            environment,
-            declaration,
-            readStaticClassProperties(declaration, environment, moduleKey, depth + 1, this.classHost),
-          ),
+        : this.evaluateClassCarrier(declaration, environment, moduleKey, depth + 1),
       EvaluationBindingKind.Class,
       false,
       declaration,
       [],
     );
     return new NormalEvaluationCompletion();
+  }
+
+  private evaluateClassCarrier(
+    declaration: ts.ClassLikeDeclaration,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+  ): EvaluationClassValue {
+    const propertyEvaluation = readStaticClassProperties(
+      declaration,
+      environment,
+      moduleKey,
+      depth,
+      this.classHost,
+    );
+    return new EvaluationClassValue(
+      declaration,
+      environment,
+      declaration,
+      propertyEvaluation.properties,
+      propertyEvaluation.mayHaveUnknownProperties,
+      propertyEvaluation.shapeOpenSeams,
+    );
   }
 
   private evaluateEnumDeclaration(
@@ -1560,12 +1602,7 @@ export class StaticEvaluator {
       case ts.SyntaxKind.FunctionExpression:
         return new EvaluationFunctionValue(current as ts.FunctionLikeDeclaration, environment, current);
       case ts.SyntaxKind.ClassExpression:
-        return new EvaluationClassValue(
-          current as ts.ClassExpression,
-          environment,
-          current,
-          readStaticClassProperties(current as ts.ClassExpression, environment, moduleKey, depth + 1, this.classHost),
-        );
+        return this.evaluateClassCarrier(current as ts.ClassExpression, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.TemplateExpression:
         return this.evaluateTemplateExpression(current as ts.TemplateExpression, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.BinaryExpression:
@@ -1600,18 +1637,9 @@ export class StaticEvaluator {
     }
     const binding = environment.readBinding(identifier.text);
     if (binding == null) {
-      const commonJsCarrier = this.evaluateCommonJsCarrierIdentifier(identifier, environment);
-      if (commonJsCarrier != null) {
-        return commonJsCarrier;
-      }
-      const hostValue = this.runtimeHost.resolveIdentifier?.(identifier, environment, moduleKey) ?? null;
-      if (hostValue != null) {
-        this.runtimeHost.evaluationValueGraph?.reconcileEnvironmentAfterExternal(environment);
-        return this.adoptExternalValue(hostValue);
-      }
-      const globalValue = evaluateStaticGlobalAccess(identifier.text, identifier);
-      if (globalValue != null) {
-        return globalValue;
+      const resolved = this.resolveUnboundIdentifier(identifier, environment, moduleKey);
+      if (resolved != null) {
+        return resolved;
       }
       return this.unknown(`Identifier '${identifier.text}' is not available in the current environment.`, identifier, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
     }
@@ -2614,10 +2642,25 @@ export class StaticEvaluator {
       return EvaluationUndefined;
     }
     const value = environment.readValue(identifier.text)
-      ?? this.runtimeHost.resolveIdentifier?.(identifier, environment, moduleKey)
-      ?? evaluateStaticGlobalAccess(identifier.text, identifier)
-      ?? null;
+      ?? this.resolveUnboundIdentifier(identifier, environment, moduleKey);
     return value ?? EvaluationUndefined;
+  }
+
+  private resolveUnboundIdentifier(
+    identifier: ts.Identifier,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+  ): EvaluationValue | null {
+    const commonJsCarrier = this.evaluateCommonJsCarrierIdentifier(identifier, environment);
+    if (commonJsCarrier != null) {
+      return commonJsCarrier;
+    }
+    const hostValue = this.runtimeHost.resolveIdentifier?.(identifier, environment, moduleKey) ?? null;
+    if (hostValue != null) {
+      this.runtimeHost.evaluationValueGraph?.reconcileEnvironmentAfterExternal(environment);
+      return this.adoptExternalValue(hostValue);
+    }
+    return evaluateStaticGlobalAccess(identifier.text, identifier);
   }
 
   private evaluateVoidExpression(
@@ -2703,30 +2746,97 @@ export class StaticEvaluator {
     moduleKey: string,
     depth: number,
   ): EvaluationValue | null {
-    const checkpoint = this.pressureCheckpoint();
-    const invocationStart = this.invocationEvaluations.length;
-    const statementStart = this.statementCount;
-    const whenTrue = this.evaluateExpression(expression.whenTrue, environment, moduleKey, depth + 1);
-    const whenFalse = this.evaluateExpression(expression.whenFalse, environment, moduleKey, depth + 1);
-    const representative = whenTrue.kind === EvaluationValueKind.Unknown || whenFalse.kind === EvaluationValueKind.Unknown
-      ? null
-      : representativeEvaluationValues(
-          [whenTrue, whenFalse],
-          `conditional.${expression.getStart(expression.getSourceFile())}`,
-          condition.kind === EvaluationValueKind.BoundaryValue ? condition.path : null,
-          condition.kind === EvaluationValueKind.BoundaryValue ? condition.boundaryKind : null,
-        );
-    if (representative == null) {
-      this.restorePressureCheckpoint(checkpoint);
-      this.invocationEvaluations.splice(invocationStart);
-      this.nextInvocationOrdinal = checkpoint.nextInvocationOrdinal;
-      this.statementCount = statementStart;
+    const branchSeam = new EvaluationOpenSeam(
+      EvaluationOpenSeamKind.DynamicBranch,
+      'Conditional expression depends on two mutually exclusive execution lanes.',
+      expression.condition,
+      moduleKey,
+      evaluationOpenSeamDefaultReasonKinds(EvaluationOpenSeamKind.DynamicBranch),
+    );
+    const isolatedHost = graphIsolatedStaticEvaluationRuntimeHost(this.runtimeHost);
+    if (isolatedHost == null) {
+      this.auditOpenSeamsOnly([branchSeam]);
       return null;
     }
-    this.restorePressureCheckpoint(checkpoint);
-    this.invocationEvaluations.splice(invocationStart);
-    this.nextInvocationOrdinal = checkpoint.nextInvocationOrdinal;
-    return representative;
+    if (isolatedHost.transferValueMetadata != null) {
+      this.auditOpenSeamsOnly([branchSeam]);
+      return null;
+    }
+    if (!this.executionBudget.spendBranches(2, this.policy.guardrails.maxBranchEvaluations)) {
+      this.open(
+        EvaluationOpenSeamKind.DynamicBranch,
+        'Conditional expression exceeded the finite sibling-branch evaluation budget.',
+        expression.condition,
+        moduleKey,
+      );
+      return null;
+    }
+
+    const leftGraph = new StaticEvaluationSessionFork(isolatedHost);
+    const rightGraph = new StaticEvaluationSessionFork(isolatedHost);
+    const leftEnvironment = leftGraph.forkEnvironment(environment);
+    const rightEnvironment = rightGraph.forkEnvironment(environment);
+    const leftHost: StaticEvaluationRuntimeHost = {
+      ...isolatedHost,
+      evaluationValueGraph: leftGraph,
+    };
+    const rightHost: StaticEvaluationRuntimeHost = {
+      ...isolatedHost,
+      evaluationValueGraph: rightGraph,
+    };
+    const leftEvaluator = this.branchEvaluator(leftHost);
+    const rightEvaluator = this.branchEvaluator(rightHost);
+    const whenTrue = leftEvaluator.evaluateExpressionInEnvironment(
+      expression.whenTrue,
+      leftEnvironment,
+      moduleKey,
+    );
+    const whenFalse = rightEvaluator.evaluateExpressionInEnvironment(
+      expression.whenFalse,
+      rightEnvironment,
+      moduleKey,
+    );
+    this.auditOpenSeamsOnly([
+      branchSeam,
+      ...whenTrue.auditOpenSeams,
+      ...whenFalse.auditOpenSeams,
+    ]);
+    if (
+      whenTrue.value == null
+      || whenFalse.value == null
+      || whenTrue.invocationEvaluations.length > 0
+      || whenFalse.invocationEvaluations.length > 0
+    ) {
+      return null;
+    }
+    const path = `conditional.${expression.getStart(expression.getSourceFile())}`;
+    const joined = joinStaticEvaluationBranches({
+      environment,
+      leftEnvironment,
+      rightEnvironment,
+      leftGraph,
+      rightGraph,
+      leftValue: whenTrue.value,
+      rightValue: whenFalse.value,
+      leftOpenSeams: whenTrue.openSeams,
+      rightOpenSeams: whenFalse.openSeams,
+      branchSeam,
+      path,
+      sourceLabel: condition.kind === EvaluationValueKind.BoundaryValue ? condition.path : null,
+      sourceBoundaryKind: condition.kind === EvaluationValueKind.BoundaryValue ? condition.boundaryKind : null,
+      targetGraph: environment.readGraphOwner(),
+    });
+    if (joined == null) {
+      return null;
+    }
+    this.replayOpenSeams(joined.openSeams);
+    return joined.value;
+  }
+
+  private branchEvaluator(runtimeHost: StaticEvaluationRuntimeHost): StaticEvaluator {
+    const evaluator = new StaticEvaluator(this.policy, runtimeHost);
+    evaluator.executionBudget = this.executionBudget;
+    return evaluator;
   }
 
   private applyAssignment(
@@ -2895,7 +3005,7 @@ export class StaticEvaluator {
       const argument = target.argumentExpression == null
         ? null
         : this.evaluateExpression(target.argumentExpression, environment, moduleKey, depth + 1);
-      if (receiver.kind === EvaluationValueKind.BoundaryValue || argument?.kind === EvaluationValueKind.BoundaryValue) {
+      if (receiver.kind === EvaluationValueKind.BoundaryValue) {
         return;
       }
       const name = argument == null ? null : evaluationPropertyKeyString(argument);
@@ -2904,18 +3014,19 @@ export class StaticEvaluator {
           return;
         }
       }
-      if (receiver.kind === EvaluationValueKind.Object || receiver.kind === EvaluationValueKind.Instance) {
+      if (isEvaluationLocalPropertyCarrier(receiver)) {
         const checkpoint = this.causalOpenSeams.length;
         this.open(
           EvaluationOpenSeamKind.DynamicMutation,
           'Element assignment key did not close to a known property name.',
           target,
           moduleKey,
+          argument?.kind === EvaluationValueKind.BoundaryValue
+            ? [openSeamReasonKindForEvaluationBoundary(argument.boundaryKind)]
+            : [],
         );
         const pressure = this.consumeOpenSeamsSince(checkpoint);
-        receiver.mayHaveUnknownProperties = true;
-        receiver.retainShapeOpenSeams(pressure);
-        openEvaluationObjectProperties(receiver.properties, pressure);
+        openEvaluationLocalPropertyMembership(receiver, pressure);
         this.replayOpenSeams(pressure);
         return;
       }
@@ -2995,13 +3106,17 @@ export class StaticEvaluator {
   }
 
   private replayOpenSeams(openSeams: readonly EvaluationOpenSeam[]): void {
+    this.auditOpenSeamsOnly(openSeams);
+    this.causalOpenSeams.push(...openSeams);
+  }
+
+  private auditOpenSeamsOnly(openSeams: readonly EvaluationOpenSeam[]): void {
     for (const seam of openSeams) {
       if (!this.auditedOpenSeams.has(seam)) {
         this.auditOpenSeams.push(seam);
         this.auditedOpenSeams.add(seam);
       }
     }
-    this.causalOpenSeams.push(...openSeams);
   }
 
   /** Rejoin evidence consumed from this evaluator without publishing the same observation twice. */
@@ -3091,7 +3206,17 @@ export class StaticEvaluator {
       if (propertyKey != null) {
         return propertyKey;
       }
-      this.open(EvaluationOpenSeamKind.UnsupportedExpression, 'Computed property name did not reduce to a primitive property key.', name, moduleKey);
+      this.open(
+        evidence.value.kind === EvaluationValueKind.BoundaryValue
+          ? EvaluationOpenSeamKind.DynamicMutation
+          : EvaluationOpenSeamKind.UnsupportedExpression,
+        'Computed property name did not reduce to a primitive property key.',
+        name,
+        moduleKey,
+        evidence.value.kind === EvaluationValueKind.BoundaryValue
+          ? [openSeamReasonKindForEvaluationBoundary(evidence.value.boundaryKind)]
+          : [],
+      );
     }
     return null;
   }

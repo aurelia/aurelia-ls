@@ -6,6 +6,7 @@ import type {
   EvaluationValue,
 } from './values.js';
 import {
+  EvaluationObjectPropertyPresence,
   EvaluationPromiseSettlementKind,
   EvaluationValueKind,
 } from './values.js';
@@ -191,7 +192,10 @@ function moduleItemForProperty(
 function hasRegisterFunction(
   properties: ReadonlyMap<string, EvaluationObjectProperty>,
 ): boolean {
-  const register = properties.get('register')?.value ?? null;
+  const property = properties.get('register');
+  const register = property?.presence === EvaluationObjectPropertyPresence.Present
+    ? property.value
+    : null;
   return register?.kind === EvaluationValueKind.Function;
 }
 

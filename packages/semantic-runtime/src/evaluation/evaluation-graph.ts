@@ -15,6 +15,14 @@ export interface StaticEvaluationValueGraph {
   reconcileEnvironmentAfterExternal(environment: ModuleEnvironmentRecord): void;
 }
 
+/** One graph fork that can map its snapshots back to their immediate parent carriers. */
+export interface StaticEvaluationForkLineage extends StaticEvaluationValueGraph {
+  /** Immediate parent value for one forked snapshot; null for values produced inside the fork. */
+  sourceValue(value: EvaluationValue): EvaluationValue | null;
+  /** Immediate parent environment for one forked snapshot; null for environments produced inside the fork. */
+  sourceEnvironment(environment: ModuleEnvironmentRecord): ModuleEnvironmentRecord | null;
+}
+
 const evaluationValueGraphOwners = new WeakMap<object, StaticEvaluationValueGraph>();
 
 /** Return the mutable evaluation graph that owns one value, when one has been established. */

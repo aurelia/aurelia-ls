@@ -60,6 +60,17 @@ export class EvaluationBinding {
   ) {
     this.openSeams = compactEvaluationOpenSeams(openSeams);
   }
+
+  /** Replace only the mutable cell state while preserving declaration and mutability identity. */
+  replaceState(
+    state: EvaluationBindingState,
+    value: EvaluationValue,
+    openSeams: readonly EvaluationOpenSeam[],
+  ): void {
+    this.state = state;
+    this.value = value;
+    this.openSeams = compactEvaluationOpenSeams(openSeams);
+  }
 }
 
 /** ECMAScript-like environment record for one module or evaluator-local function call. */
@@ -105,11 +116,10 @@ export class ModuleEnvironmentRecord {
   ): EvaluationBinding {
     const binding = this.bindings.get(name)
       ?? this.declareBinding(name, bindingKind, mutable, declaration);
-    binding.value = value;
-    binding.openSeams = compactEvaluationOpenSeams(openSeams);
-    binding.state = value.kind === 'unknown' || binding.openSeams.length > 0
+    const compactOpenSeams = compactEvaluationOpenSeams(openSeams);
+    binding.replaceState(value.kind === 'unknown' || compactOpenSeams.length > 0
       ? EvaluationBindingState.Open
-      : EvaluationBindingState.Initialized;
+      : EvaluationBindingState.Initialized, value, compactOpenSeams);
     return binding;
   }
 
@@ -126,11 +136,10 @@ export class ModuleEnvironmentRecord {
     if (!binding.mutable) {
       return false;
     }
-    binding.value = value;
-    binding.openSeams = compactEvaluationOpenSeams(openSeams);
-    binding.state = value.kind === 'unknown' || binding.openSeams.length > 0
+    const compactOpenSeams = compactEvaluationOpenSeams(openSeams);
+    binding.replaceState(value.kind === 'unknown' || compactOpenSeams.length > 0
       ? EvaluationBindingState.Open
-      : EvaluationBindingState.Initialized;
+      : EvaluationBindingState.Initialized, value, compactOpenSeams);
     return true;
   }
 
@@ -142,6 +151,11 @@ export class ModuleEnvironmentRecord {
   /** Read a binding cell by lexical name. */
   readBinding(name: string): EvaluationBinding | null {
     return this.bindings.get(name) ?? this.outer?.readBinding(name) ?? null;
+  }
+
+  /** Read only this lexical record's own binding cell. */
+  readOwnBinding(name: string): EvaluationBinding | null {
+    return this.bindings.get(name) ?? null;
   }
 
   /** Read a binding value by lexical name. */

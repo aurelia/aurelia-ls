@@ -50,6 +50,9 @@ const dynamicMutationSites = app.ask({
 const failures = [];
 const unresolvedText = JSON.stringify(allUnresolved);
 const summaryText = JSON.stringify(summary);
+const deferredPromiseReactionSites = dynamicCallSites.rows.filter((row) =>
+  row.sampleSummary === 'Promise reaction callback requires deferred graph-isolated execution.'
+);
 
 if (unresolvedText.includes('__APP_VERSION__')) {
   failures.push('Expected project-local ambient declare const __APP_VERSION__ to resolve as a host boundary, not an unresolved identifier.');
@@ -69,8 +72,12 @@ if (!unresolvedText.includes('__MISSING_BUILD_VALUE__')) {
 if (allUnresolved.rows.length !== 1) {
   failures.push(`Expected exactly one unresolved-identifier seam after ambient globals are admitted, observed ${allUnresolved.rows.length}.`);
 }
-if (dynamicCallSites.totalOpenSeamSites !== 0 || dynamicCallSites.totalOpenSeamRows !== 0) {
-  failures.push(`Expected host/browser boundary calls to stay boundary values, observed ${dynamicCallSites.totalOpenSeamSites} dynamic-call sites covering ${dynamicCallSites.totalOpenSeamRows} raw rows.`);
+if (
+  dynamicCallSites.totalOpenSeamSites !== 1
+  || dynamicCallSites.totalOpenSeamRows !== 1
+  || deferredPromiseReactionSites.length !== 1
+) {
+  failures.push(`Expected only the deferred Promise reaction to remain a dynamic-call boundary, observed ${dynamicCallSites.totalOpenSeamSites} sites covering ${dynamicCallSites.totalOpenSeamRows} raw rows.`);
 }
 if (dynamicMutationSites.totalOpenSeamSites !== 0 || dynamicMutationSites.totalOpenSeamRows !== 0) {
   failures.push(`Expected host/browser boundary writes to stay boundary values, observed ${dynamicMutationSites.totalOpenSeamSites} dynamic-mutation sites covering ${dynamicMutationSites.totalOpenSeamRows} raw rows.`);
@@ -119,7 +126,7 @@ if (failures.length > 0) {
   console.log(JSON.stringify({
     ok: true,
     unresolvedIdentifierRows: allUnresolved.rows.length,
-    dynamicCallSites: dynamicCallSites.totalOpenSeamSites,
+    deferredPromiseReactionSites: deferredPromiseReactionSites.length,
     dynamicMutationSites: dynamicMutationSites.totalOpenSeamSites,
     summaryDisplayText: summary.displayText,
     overviewDisplayText: overview.displayText,

@@ -5,6 +5,9 @@ import {
 import {
   EvaluationValueKind,
 } from '../out/evaluation/values.js';
+import {
+  EvaluationOpenSeamKind,
+} from '../out/evaluation/seams.js';
 
 const source = `
 export class CoreResource {}
@@ -28,11 +31,20 @@ const sourceFile = ts.createSourceFile(
 const result = new StaticEvaluator().evaluateSourceFile(sourceFile, '/virtual/evaluation-import-meta-boundary.ts');
 const mode = result.environment.readValue('mode');
 const dependencies = result.environment.readValue('dependencies');
+const unsupportedExpressionSeams = result.openSeams.filter((seam) =>
+  seam.seamKind === EvaluationOpenSeamKind.UnsupportedExpression
+);
+const dynamicBranchSeams = result.openSeams.filter((seam) =>
+  seam.seamKind === EvaluationOpenSeamKind.DynamicBranch
+);
 
 const failures = [
-  result.openSeams.length === 0
+  unsupportedExpressionSeams.length === 0
     ? null
     : 'Expected import.meta host boundaries to avoid unsupported-expression evaluator seams.',
+  dynamicBranchSeams.length === 1
+    ? null
+    : 'Expected the import.meta-dependent dependency choice to retain one explicit dynamic-branch seam.',
   mode?.kind === EvaluationValueKind.BoundaryValue && mode.path === 'import.meta.env.MODE'
     ? null
     : 'Expected import.meta.env.MODE to reduce to a host-environment boundary value.',

@@ -32,6 +32,8 @@ export interface StaticEvaluationGuardrails {
   readonly maxLoopIterations: number;
   /** Maximum callback executions a collection intrinsic may spend before returning an imprecise value. */
   readonly maxIntrinsicCallbackEvaluations: number;
+  /** Maximum sibling branch evaluations shared by one root evaluator operation. */
+  readonly maxBranchEvaluations: number;
 }
 
 export const DefaultStaticEvaluationGuardrails: StaticEvaluationGuardrails = {
@@ -39,6 +41,7 @@ export const DefaultStaticEvaluationGuardrails: StaticEvaluationGuardrails = {
   maxStatements: 5000,
   maxLoopIterations: 200,
   maxIntrinsicCallbackEvaluations: 500,
+  maxBranchEvaluations: 64,
 };
 
 export class StaticEvaluationPolicy {

@@ -64,8 +64,17 @@ export function withStaticEvaluationAmbientGlobals(
   runtimeHost: StaticEvaluationRuntimeHost,
   ambientGlobals: StaticEvaluationAmbientGlobalDeclarations,
 ): StaticEvaluationRuntimeHost {
+  const baseBranchOperations = runtimeHost.graphIsolatedBranchOperations;
   return {
     ...runtimeHost,
+    graphIsolatedBranchOperations: baseBranchOperations == null
+      ? undefined
+      : {
+          ...baseBranchOperations,
+          resolveIdentifier: (identifier, environment, moduleKey) =>
+            baseBranchOperations.resolveIdentifier?.(identifier, environment, moduleKey)
+            ?? ambientGlobals.resolveIdentifier(identifier),
+        },
     resolveIdentifier: (identifier, environment, moduleKey) =>
       runtimeHost.resolveIdentifier?.(identifier, environment, moduleKey)
       ?? ambientGlobals.resolveIdentifier(identifier),

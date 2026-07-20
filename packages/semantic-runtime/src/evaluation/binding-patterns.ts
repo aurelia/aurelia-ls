@@ -532,6 +532,7 @@ function readObjectBindingRest(
       node,
       value.kind === EvaluationValueKind.Object ? value.uncertainties : [],
       value.kind === EvaluationValueKind.Object ? value.shapeOpenSeams : [],
+      value.kind === EvaluationValueKind.Object ? value.propertyOrderOpenSeams : [],
     );
     return new EvaluationValueEvidence(rest, source.openSeams);
   }

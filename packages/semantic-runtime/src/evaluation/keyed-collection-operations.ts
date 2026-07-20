@@ -182,27 +182,31 @@ export function addEvaluationSetElement(
     return lookup;
   }
   if (lookup.kind === EvaluationKeyedCollectionLookupKind.Miss && keyIsExact) {
-    receiver.elements.push(new EvaluationSetElement(canonical.value, expression));
-    receiver.replaceShape(receiver.shape.withExactSizeDelta(1));
+    const element = new EvaluationSetElement(canonical.value, expression);
+    receiver.replaceElements(
+      [...receiver.elements, element],
+      receiver.shape.withExactSizeDelta(1),
+    );
     return new EvaluationSetLookup(
       EvaluationKeyedCollectionLookupKind.Match,
-      receiver.elements.at(-1) ?? null,
+      element,
     );
   }
 
   const wasDefinitelyEmpty = receiver.exactSize === 0;
   const openSeams = collectionMutationOpenSeams(canonical.openSeams, lookup.openSeams);
   if (keyIsExact) {
+    const elements = [...receiver.elements];
     let presentElement: EvaluationSetElement;
     if (lookup.element != null) {
-      const index = receiver.elements.indexOf(lookup.element);
+      const index = elements.indexOf(lookup.element);
       presentElement = lookup.element.withState(EvaluationKeyedCollectionEntryState.Present);
-      receiver.elements[index] = presentElement;
+      elements[index] = presentElement;
     } else {
       presentElement = new EvaluationSetElement(canonical.value, expression);
-      receiver.elements.push(presentElement);
+      elements.push(presentElement);
     }
-    receiver.replaceShape(receiver.shape.withOpenMembership(openSeams, null, false));
+    receiver.replaceElements(elements, receiver.shape.withOpenMembership(openSeams, null, false));
     return new EvaluationSetLookup(
       EvaluationKeyedCollectionLookupKind.Match,
       presentElement,
@@ -217,12 +221,14 @@ export function addEvaluationSetElement(
       : EvaluationKeyedCollectionEntryState.Conditional,
     wasDefinitelyEmpty ? [] : openSeams,
   );
-  receiver.elements.push(element);
-  receiver.replaceShape(receiver.shape.withOpenMembership(
-    openSeams,
-    wasDefinitelyEmpty ? 1 : null,
-    wasDefinitelyEmpty,
-  ));
+  receiver.replaceElements(
+    [...receiver.elements, element],
+    receiver.shape.withOpenMembership(
+      openSeams,
+      wasDefinitelyEmpty ? 1 : null,
+      wasDefinitelyEmpty,
+    ),
+  );
   return new EvaluationSetLookup(EvaluationKeyedCollectionLookupKind.Open, element, openSeams);
 }
 
@@ -241,8 +247,12 @@ export function setEvaluationMapEntry(
     && canDriveKeyedCollectionIdentity(canonicalKey.value);
   const lookup = evaluationMapLookup(receiver, canonicalKey);
   if (lookup.kind === EvaluationKeyedCollectionLookupKind.Match) {
-    lookup.entry!.replaceValue(valueEvidence.value, valueExpression, valueEvidence.openSeams);
-    return lookup;
+    const index = receiver.entries.indexOf(lookup.entry!);
+    const entry = lookup.entry!.withValue(valueEvidence.value, valueExpression, valueEvidence.openSeams);
+    const entries = [...receiver.entries];
+    entries[index] = entry;
+    receiver.replaceEntries(entries);
+    return new EvaluationMapLookup(EvaluationKeyedCollectionLookupKind.Match, entry);
   }
   if (lookup.kind === EvaluationKeyedCollectionLookupKind.Miss && keyIsExact) {
     const entry = new EvaluationMapEntry(
@@ -253,38 +263,44 @@ export function setEvaluationMapEntry(
       [],
       valueEvidence.openSeams,
     );
-    receiver.entries.push(entry);
-    receiver.replaceShape(receiver.shape.withExactSizeDelta(1));
+    receiver.replaceEntries(
+      [...receiver.entries, entry],
+      receiver.shape.withExactSizeDelta(1),
+    );
     return new EvaluationMapLookup(EvaluationKeyedCollectionLookupKind.Match, entry);
   }
 
   const wasDefinitelyEmpty = receiver.exactSize === 0;
   const openSeams = collectionMutationOpenSeams(canonicalKey.openSeams, lookup.openSeams);
   if (keyIsExact) {
+    const entries = [...receiver.entries];
+    let entry: EvaluationMapEntry;
     if (lookup.entry != null) {
-      lookup.entry.replaceValue(valueEvidence.value, valueExpression, valueEvidence.openSeams);
+      const index = entries.indexOf(lookup.entry);
+      entry = lookup.entry.withValue(valueEvidence.value, valueExpression, valueEvidence.openSeams);
+      entries[index] = entry;
     } else {
-      receiver.entries.push(new EvaluationMapEntry(
+      entry = new EvaluationMapEntry(
         canonicalKey.value,
         valueEvidence.value,
         keyExpression,
         valueExpression,
         [],
         valueEvidence.openSeams,
-      ));
+      );
+      entries.push(entry);
     }
-    receiver.replaceShape(receiver.shape.withOpenMembership(openSeams, null, false));
+    receiver.replaceEntries(entries, receiver.shape.withOpenMembership(openSeams, null, false));
     return new EvaluationMapLookup(
       EvaluationKeyedCollectionLookupKind.Match,
-      lookup.entry ?? receiver.entries.at(-1) ?? null,
+      entry,
     );
   }
+  let entries = receiver.entries;
   if (!wasDefinitelyEmpty) {
-    for (const entry of receiver.entries) {
-      if (entry.state === EvaluationKeyedCollectionEntryState.Present) {
-        entry.retainValueOpenSeams(openSeams);
-      }
-    }
+    entries = entries.map((entry) => entry.state === EvaluationKeyedCollectionEntryState.Present
+      ? entry.withValueOpenSeams(openSeams)
+      : entry);
   }
   const entry = new EvaluationMapEntry(
     canonicalKey.value,
@@ -298,12 +314,14 @@ export function setEvaluationMapEntry(
       : EvaluationKeyedCollectionEntryState.Conditional,
     wasDefinitelyEmpty ? [] : openSeams,
   );
-  receiver.entries.push(entry);
-  receiver.replaceShape(receiver.shape.withOpenMembership(
-    openSeams,
-    wasDefinitelyEmpty ? 1 : null,
-    wasDefinitelyEmpty,
-  ));
+  receiver.replaceEntries(
+    [...entries, entry],
+    receiver.shape.withOpenMembership(
+      openSeams,
+      wasDefinitelyEmpty ? 1 : null,
+      wasDefinitelyEmpty,
+    ),
+  );
   return new EvaluationMapLookup(EvaluationKeyedCollectionLookupKind.Open, entry, openSeams);
 }
 
@@ -314,38 +332,38 @@ export function deleteEvaluationSetElement(
 ): EvaluationSetLookup {
   const lookup = evaluationSetLookup(receiver, key);
   if (lookup.kind === EvaluationKeyedCollectionLookupKind.Match) {
-    const index = receiver.elements.indexOf(lookup.element!);
-    receiver.elements[index] = lookup.element!.withState(EvaluationKeyedCollectionEntryState.Deleted);
-    receiver.elements.push(new EvaluationSetElement(
+    const elements = [...receiver.elements];
+    const index = elements.indexOf(lookup.element!);
+    elements[index] = lookup.element!.withState(EvaluationKeyedCollectionEntryState.Deleted);
+    elements.push(new EvaluationSetElement(
       canonicalEvaluationKeyedCollectionKey(key.value),
       expression,
       key.openSeams,
       EvaluationKeyedCollectionEntryState.Deleted,
     ));
-    receiver.replaceShape(receiver.shape.withExactSizeDelta(-1));
+    receiver.replaceElements(elements, receiver.shape.withExactSizeDelta(-1));
     return lookup;
   }
   if (lookup.kind === EvaluationKeyedCollectionLookupKind.Open) {
     const openSeams = collectionMutationOpenSeams(key.openSeams, lookup.openSeams);
-    for (let index = 0; index < receiver.elements.length; index += 1) {
-      const element = receiver.elements[index]!;
-      if (element.state !== EvaluationKeyedCollectionEntryState.Deleted) {
-        receiver.elements[index] = element.withState(EvaluationKeyedCollectionEntryState.Conditional, openSeams);
-      }
-    }
-    receiver.replaceShape(receiver.shape.withOpenMembership(
-      openSeams,
-      receiver.exactSize === 0 ? 0 : null,
-      false,
-    ));
+    const elements = receiver.elements.map((element) =>
+      element.state === EvaluationKeyedCollectionEntryState.Deleted
+        ? element
+        : element.withState(EvaluationKeyedCollectionEntryState.Conditional, openSeams)
+    );
     if (key.openSeams.length === 0 && canDriveKeyedCollectionIdentity(key.value)) {
-      receiver.elements.push(new EvaluationSetElement(
+      elements.push(new EvaluationSetElement(
         canonicalEvaluationKeyedCollectionKey(key.value),
         expression,
         [],
         EvaluationKeyedCollectionEntryState.Deleted,
       ));
     }
+    receiver.replaceElements(elements, receiver.shape.withOpenMembership(
+      openSeams,
+      receiver.exactSize === 0 ? 0 : null,
+      false,
+    ));
   }
   return lookup;
 }
@@ -357,8 +375,10 @@ export function deleteEvaluationMapEntry(
 ): EvaluationMapLookup {
   const lookup = evaluationMapLookup(receiver, key);
   if (lookup.kind === EvaluationKeyedCollectionLookupKind.Match) {
-    lookup.entry!.setState(EvaluationKeyedCollectionEntryState.Deleted);
-    receiver.entries.push(new EvaluationMapEntry(
+    const entries = [...receiver.entries];
+    const index = entries.indexOf(lookup.entry!);
+    entries[index] = lookup.entry!.withState(EvaluationKeyedCollectionEntryState.Deleted);
+    entries.push(new EvaluationMapEntry(
       canonicalEvaluationKeyedCollectionKey(key.value),
       EvaluationUndefined,
       expression,
@@ -367,23 +387,18 @@ export function deleteEvaluationMapEntry(
       [],
       EvaluationKeyedCollectionEntryState.Deleted,
     ));
-    receiver.replaceShape(receiver.shape.withExactSizeDelta(-1));
+    receiver.replaceEntries(entries, receiver.shape.withExactSizeDelta(-1));
     return lookup;
   }
   if (lookup.kind === EvaluationKeyedCollectionLookupKind.Open) {
     const openSeams = collectionMutationOpenSeams(key.openSeams, lookup.openSeams);
-    for (const entry of receiver.entries) {
-      if (entry.state !== EvaluationKeyedCollectionEntryState.Deleted) {
-        entry.setState(EvaluationKeyedCollectionEntryState.Conditional, openSeams);
-      }
-    }
-    receiver.replaceShape(receiver.shape.withOpenMembership(
-      openSeams,
-      receiver.exactSize === 0 ? 0 : null,
-      false,
-    ));
+    const entries = receiver.entries.map((entry) =>
+      entry.state === EvaluationKeyedCollectionEntryState.Deleted
+        ? entry
+        : entry.withState(EvaluationKeyedCollectionEntryState.Conditional, openSeams)
+    );
     if (key.openSeams.length === 0 && canDriveKeyedCollectionIdentity(key.value)) {
-      receiver.entries.push(new EvaluationMapEntry(
+      entries.push(new EvaluationMapEntry(
         canonicalEvaluationKeyedCollectionKey(key.value),
         EvaluationUndefined,
         expression,
@@ -393,22 +408,27 @@ export function deleteEvaluationMapEntry(
         EvaluationKeyedCollectionEntryState.Deleted,
       ));
     }
+    receiver.replaceEntries(entries, receiver.shape.withOpenMembership(
+      openSeams,
+      receiver.exactSize === 0 ? 0 : null,
+      false,
+    ));
   }
   return lookup;
 }
 
 export function clearEvaluationSet(receiver: EvaluationSetValue): void {
-  for (let index = 0; index < receiver.elements.length; index += 1) {
-    receiver.elements[index] = receiver.elements[index]!.withState(EvaluationKeyedCollectionEntryState.Deleted);
-  }
-  receiver.replaceShape(EvaluationKeyedCollectionShape.exact(0));
+  receiver.replaceElements(
+    receiver.elements.map((element) => element.withState(EvaluationKeyedCollectionEntryState.Deleted)),
+    EvaluationKeyedCollectionShape.exact(0),
+  );
 }
 
 export function clearEvaluationMap(receiver: EvaluationMapValue): void {
-  for (const entry of receiver.entries) {
-    entry.setState(EvaluationKeyedCollectionEntryState.Deleted);
-  }
-  receiver.replaceShape(EvaluationKeyedCollectionShape.exact(0));
+  receiver.replaceEntries(
+    receiver.entries.map((entry) => entry.withState(EvaluationKeyedCollectionEntryState.Deleted)),
+    EvaluationKeyedCollectionShape.exact(0),
+  );
 }
 
 export function canDriveKeyedCollectionIdentity(value: EvaluationValue): boolean {

@@ -105,6 +105,17 @@ export function compactEvaluationOpenSeams(
   return compact;
 }
 
+/** Compare two compact epistemic pressure sets without depending on publication order. */
+export function evaluationOpenSeamSetsEqual(
+  left: readonly EvaluationOpenSeam[],
+  right: readonly EvaluationOpenSeam[],
+): boolean {
+  const compactLeft = compactEvaluationOpenSeams(left);
+  const compactRight = compactEvaluationOpenSeams(right);
+  return compactLeft.length === compactRight.length
+    && compactLeft.every((seam) => compactRight.some((candidate) => sameEvaluationOpenSeam(seam, candidate)));
+}
+
 function sameEvaluationOpenSeam(
   left: EvaluationOpenSeam,
   right: EvaluationOpenSeam,

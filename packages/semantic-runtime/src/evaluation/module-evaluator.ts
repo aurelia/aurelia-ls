@@ -4,8 +4,8 @@ import {
   StaticEvaluationRuntimeValueResult,
   type StaticEvaluationRuntimeHost,
   type StaticEvaluationImportValues,
-  type StaticModuleEvaluationResult,
 } from './evaluator.js';
+import type { StaticModuleEvaluationResult } from './module-evaluation-result.js';
 import {
   readStaticCommonJsExportMap,
   readStaticCommonJsExportEvidence,
@@ -42,6 +42,7 @@ import {
 } from './completion.js';
 import { bindEvaluationValueLineage } from './value-relation.js';
 import { EvaluationValueEvidence } from './value-pressure.js';
+import { DefaultStaticEvaluationRuntimeHost } from './runtime-host.js';
 
 /** Result of evaluating a graph of local ECMAScript modules. */
 export class StaticModuleGraphEvaluationResult {
@@ -75,12 +76,13 @@ export class StaticModuleGraphEvaluator {
     /** Product-specific ownership hooks for expression statements whose effects are modeled elsewhere. */
     readonly policy: StaticEvaluationPolicy = DefaultStaticEvaluationPolicy,
     /** Product-specific call intrinsics layered on top of generic ECMAScript evaluation. */
-    readonly runtimeHost: StaticEvaluationRuntimeHost = {},
+    readonly runtimeHost: StaticEvaluationRuntimeHost = DefaultStaticEvaluationRuntimeHost,
     /** Product-specific values for declaration/external imports that remain outside the local graph. */
     readonly externalValueResolver: StaticModuleExternalValueResolver | null = null,
   ) {
     this.evaluatorRuntimeHost = {
       ...runtimeHost,
+      graphIsolatedBranchOperations: runtimeHost.graphIsolatedBranchOperations,
       resolveCommonJsRequire: (currentModuleKey, moduleSpecifier, node) =>
         runtimeHost.resolveCommonJsRequire?.(currentModuleKey, moduleSpecifier, node)
         ?? this.resolveCommonJsRequireValue(currentModuleKey, moduleSpecifier, node),

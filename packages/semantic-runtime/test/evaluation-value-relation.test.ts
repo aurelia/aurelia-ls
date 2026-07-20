@@ -3,6 +3,8 @@ import { describe, expect, test } from 'vitest';
 import { StaticEvaluationSessionFork } from '../src/evaluation/evaluation-session.js';
 import {
   EvaluationValueRelationKind,
+  bindEvaluationValueJoin,
+  bindEvaluationValueLineage,
   evaluationSameValueDecision,
   evaluationSameValueZeroDecision,
   evaluationStrictEqualityDecision,
@@ -60,6 +62,35 @@ describe('evaluator value relation', () => {
 
     expect(evaluationValuesShareLineage(left, right)).toBe(false);
     expect(evaluationStrictEqualityDecision(left, right)).toBe(EvaluationValueRelationKind.Miss);
+  });
+
+  test('preserves a common branch identity on its joined carrier', () => {
+    const source = new EvaluationObjectValue(new Map(), false);
+    const left = new StaticEvaluationSessionFork({}).forkValue(source);
+    const right = new StaticEvaluationSessionFork({}).forkValue(source);
+    const joined = new EvaluationObjectValue(new Map(), false);
+
+    bindEvaluationValueJoin(left, right, joined);
+
+    expect(evaluationValuesShareLineage(source, joined)).toBe(true);
+    expect(evaluationStrictEqualityDecision(source, joined)).toBe(EvaluationValueRelationKind.Match);
+  });
+
+  test('keeps branch-dependent identity open without losing identity across later forks', () => {
+    const left = new EvaluationObjectValue(new Map(), false);
+    const right = new EvaluationObjectValue(new Map(), false);
+    const joined = new EvaluationObjectValue(new Map(), false);
+
+    bindEvaluationValueJoin(left, right, joined);
+    const fork = new StaticEvaluationSessionFork({}).forkValue(joined);
+
+    expect(evaluationStrictEqualityDecision(joined, left)).toBe(EvaluationValueRelationKind.Open);
+    expect(evaluationStrictEqualityDecision(joined, right)).toBe(EvaluationValueRelationKind.Open);
+    expect(evaluationStrictEqualityDecision(joined, joined)).toBe(EvaluationValueRelationKind.Match);
+    expect(evaluationStrictEqualityDecision(joined, fork)).toBe(EvaluationValueRelationKind.Match);
+    expect(() => bindEvaluationValueLineage(left, joined)).toThrow(
+      'Cannot replace branch-dependent evaluator identity with a definite lineage.',
+    );
   });
 
   test('keeps distinct host-boundary object identities open while matching a forked snapshot', () => {

@@ -14,6 +14,7 @@ import {
   EvaluationArrayElement,
   EvaluationArrayValue,
   EvaluationObjectProperty,
+  EvaluationObjectPropertyPresence,
   EvaluationObjectPropertyState,
   EvaluationObjectValue,
   EvaluationStringValue,
@@ -50,6 +51,7 @@ export function evaluateObjectAssign(
   const properties = new Map<string, EvaluationObjectProperty>();
   let mayHaveUnknownProperties = false;
   const shapeOpenSeams: EvaluationOpenSeam[] = [];
+  const propertyOrderOpenSeams: EvaluationOpenSeam[] = [];
   for (let index = 0; index < argumentRead.evidence.length; index += 1) {
     const evidence = argumentRead.evidence[index]!;
     const argument = argumentRead.argumentList.elements[index]?.expression ?? call;
@@ -68,6 +70,7 @@ export function evaluateObjectAssign(
       continue;
     }
     const directPressure = evidence.openSeams;
+    propertyOrderOpenSeams.push(...value.propertyOrderOpenSeams, ...directPressure);
     if (value.mayHaveUnknownProperties) {
       const shapePressure = compactEvaluationOpenSeams([
         ...value.shapeOpenSeams,
@@ -87,6 +90,7 @@ export function evaluateObjectAssign(
     call,
     [],
     compactEvaluationOpenSeams(shapeOpenSeams),
+    compactEvaluationOpenSeams(propertyOrderOpenSeams),
   );
 }
 
@@ -242,6 +246,7 @@ export function evaluateObjectFromEntries(
     call,
     [],
     compactEvaluationOpenSeams(shapeOpenSeams),
+    entries.orderOpenSeams,
   );
 }
 
@@ -262,6 +267,7 @@ export function iterableEntriesForObjectFromEntries(
   readonly entries: readonly ObjectFromEntriesEntry[];
   readonly mayHaveUnknownEntries: boolean;
   readonly openSeams: readonly EvaluationOpenSeam[];
+  readonly orderOpenSeams: readonly EvaluationOpenSeam[];
 } | null {
   const projection = evaluationIteratorProjection(source, call);
   if (projection == null) {
@@ -282,6 +288,7 @@ export function iterableEntriesForObjectFromEntries(
     entries,
     mayHaveUnknownEntries,
     openSeams: projection.shape.aggregateOpenSeams,
+    orderOpenSeams: projection.shape.orderOpenSeams,
   };
 }
 
@@ -311,20 +318,28 @@ export function objectFromEntriesEntry(
     };
   }
   if (value.kind === EvaluationValueKind.Object) {
-    const key = value.properties.get('0')?.value;
-    const entryValue = value.properties.get('1')?.value;
-    if (key != null && entryValue != null) {
+    const keyProperty = value.properties.get('0');
+    const valueProperty = value.properties.get('1');
+    const key = keyProperty?.presence === EvaluationObjectPropertyPresence.Present
+      ? keyProperty.value
+      : null;
+    const entryValue = valueProperty?.presence === EvaluationObjectPropertyPresence.Present
+      ? valueProperty.value
+      : null;
+    if (keyProperty != null && valueProperty != null && key != null && entryValue != null) {
       return {
         key,
         value: entryValue,
         node,
         keyOpenSeams: compactEvaluationOpenSeams([
           ...openSeams,
-          ...(value.properties.get('0')?.openSeams ?? []),
+          ...keyProperty.openSeams,
+          ...keyProperty.presenceOpenSeams,
         ]),
         valueOpenSeams: compactEvaluationOpenSeams([
           ...openSeams,
-          ...(value.properties.get('1')?.openSeams ?? []),
+          ...valueProperty.openSeams,
+          ...valueProperty.presenceOpenSeams,
         ]),
       };
     }

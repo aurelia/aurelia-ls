@@ -5,7 +5,7 @@ import {
 } from './seams.js';
 
 import {
-  EvaluationObjectPropertyState,
+  EvaluationObjectPropertyPresence,
   EvaluationArrayShape,
   EvaluationStringValue,
   EvaluationValueKind,
@@ -81,15 +81,15 @@ export function readEvaluationEnumerableOwnEntries(
   }
   switch (source.kind) {
     case EvaluationValueKind.Object:
+    case EvaluationValueKind.Function:
+    case EvaluationValueKind.Class:
     case EvaluationValueKind.Instance:
       return entriesFromProperties(
         source.properties,
         source.mayHaveUnknownProperties,
         source.shapeOpenSeams,
+        source.propertyOrderOpenSeams,
       );
-    case EvaluationValueKind.Function:
-    case EvaluationValueKind.Class:
-      return entriesFromProperties(source.properties, false);
     case EvaluationValueKind.BoundaryObject:
       return entriesFromProperties(source.properties, true);
     case EvaluationValueKind.Array:
@@ -163,6 +163,7 @@ function entriesFromProperties(
   properties: ReadonlyMap<string, EvaluationObjectProperty>,
   mayHaveUnknownProperties: boolean,
   shapeOpenSeams: readonly EvaluationOpenSeam[] = [],
+  propertyOrderOpenSeams: readonly EvaluationOpenSeam[] = [],
 ): EvaluationEnumerableOwnEntries {
   const entries = [...properties.values()]
     .map((property) => new EvaluationEnumerableOwnEntry(
@@ -171,25 +172,41 @@ function entriesFromProperties(
       property.node,
       propertyValueExpression(property.node),
       property,
-      property.openSeams,
+      compactEvaluationOpenSeams([...property.openSeams, ...property.presenceOpenSeams]),
     ));
-  entries.sort(compareEnumerablePropertyKeys);
-  const hasOpenProperty = entries.some((entry) => entry.property?.state === EvaluationObjectPropertyState.Open);
-  const open = mayHaveUnknownProperties || hasOpenProperty;
-  const openSeams = compactEvaluationOpenSeams([
+  entries.sort((left, right) => compareEnumerablePropertyNames(left.name, right.name));
+  const hasConditionalProperty = entries.some((entry) =>
+    entry.property?.presence === EvaluationObjectPropertyPresence.Conditional
+  );
+  const membershipIsOpen = mayHaveUnknownProperties || hasConditionalProperty;
+  const membershipOpenSeams = compactEvaluationOpenSeams([
     ...shapeOpenSeams,
     ...entries.flatMap((entry) =>
-      entry.property?.state === EvaluationObjectPropertyState.Open ? entry.openSeams : []
+      entry.property?.presence === EvaluationObjectPropertyPresence.Conditional
+        ? entry.property.presenceOpenSeams
+        : []
     ),
+  ]);
+  const orderIsOpen = membershipIsOpen || propertyOrderOpenSeams.length > 0;
+  const orderOpenSeams = compactEvaluationOpenSeams([
+    ...membershipOpenSeams,
+    ...propertyOrderOpenSeams,
   ]);
   return new EvaluationEnumerableOwnEntries(
     entries,
-    open ? null : entries.length,
-    open,
-    open,
-    openSeams,
-    openSeams,
+    membershipIsOpen ? null : entries.length,
+    membershipIsOpen,
+    orderIsOpen,
+    membershipOpenSeams,
+    orderOpenSeams,
   );
+}
+
+/** Return known string keys in ECMAScript enumerable-own-property order. */
+export function evaluationEnumerableOwnPropertyNames(
+  properties: ReadonlyMap<string, EvaluationObjectProperty>,
+): readonly string[] {
+  return [...properties.keys()].sort(compareEnumerablePropertyNames);
 }
 
 function propertyValueExpression(node: ts.Node | null): ts.Expression | null {
@@ -208,12 +225,9 @@ function propertyValueExpression(node: ts.Node | null): ts.Expression | null {
   return ts.isExpression(node) ? node : null;
 }
 
-function compareEnumerablePropertyKeys(
-  left: EvaluationEnumerableOwnEntry,
-  right: EvaluationEnumerableOwnEntry,
-): number {
-  const leftIndex = arrayIndexForPropertyKey(left.name);
-  const rightIndex = arrayIndexForPropertyKey(right.name);
+function compareEnumerablePropertyNames(left: string, right: string): number {
+  const leftIndex = arrayIndexForPropertyKey(left);
+  const rightIndex = arrayIndexForPropertyKey(right);
   if (leftIndex == null) {
     return rightIndex == null ? 0 : 1;
   }

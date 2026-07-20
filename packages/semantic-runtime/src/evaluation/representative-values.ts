@@ -57,7 +57,7 @@ export function representativeEvaluationValues(
     return representativeArrayValue(arrayValues, path, sourceLabel, sourceBoundaryKind);
   }
   return new EvaluationBoundaryValue(
-    EvaluationBoundaryKind.BindingScope,
+    sourceBoundaryKind ?? EvaluationBoundaryKind.BindingScope,
     sourceLabel == null ? path : `${path}:${sourceLabel}`,
     values[0]?.node ?? null,
   );
@@ -76,7 +76,7 @@ function exactSamePrimitive(
         ? new EvaluationBooleanValue(first.value, first.node)
         : null;
     case EvaluationValueKind.Number:
-      return values.every((value) => value.kind === first.kind && value.value === first.value)
+      return values.every((value) => value.kind === first.kind && Object.is(value.value, first.value))
         ? new EvaluationNumberValue(first.value, first.node)
         : null;
     case EvaluationValueKind.String:
@@ -132,8 +132,6 @@ function stringLikeRange(
         prefix: value.parts[0] ?? '',
         suffix: value.parts[value.parts.length - 1] ?? '',
       };
-    case EvaluationValueKind.BoundaryValue:
-      return { prefix: '', suffix: '' };
     default:
       return null;
   }
@@ -149,7 +147,11 @@ function representativeObjectValue(
   for (const name of commonPropertyNames(propertyMaps)) {
     const values = propertyMaps.map((propertyMap) => propertyMap.get(name)!.value);
     const propertyValue = representativeEvaluationValues(values, `${path}.${name}`, sourceLabel, sourceBoundaryKind)
-      ?? new EvaluationBoundaryValue(EvaluationBoundaryKind.BindingScope, `${path}.${name}`, propertyMaps[0]?.get(name)?.node ?? null);
+      ?? new EvaluationBoundaryValue(
+        sourceBoundaryKind ?? EvaluationBoundaryKind.BindingScope,
+        `${path}.${name}`,
+        propertyMaps[0]?.get(name)?.node ?? null,
+      );
     const node = propertyMaps[0]?.get(name)?.node ?? values[0]?.node ?? null;
     if (node == null) {
       continue;
@@ -157,7 +159,7 @@ function representativeObjectValue(
     properties.set(name, new EvaluationObjectProperty(name, propertyValue, node, EvaluationObjectPropertyState.Closed));
   }
   return new EvaluationBoundaryObjectValue(
-    EvaluationBoundaryKind.BindingScope,
+    sourceBoundaryKind ?? EvaluationBoundaryKind.BindingScope,
     sourceLabel == null ? path : `${path}:${sourceLabel}`,
     properties,
     null,

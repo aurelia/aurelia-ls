@@ -5,6 +5,7 @@ import {
 } from '../evaluation/environment.js';
 import type {
   StaticEvaluationRuntimeHost,
+  StaticEvaluationRuntimeHostOperations,
   StaticEvaluationValueMetadataTransfer,
 } from '../evaluation/evaluator.js';
 import type { StaticIntrinsicEvaluationHost } from '../evaluation/intrinsics.js';
@@ -174,6 +175,7 @@ const resolverBuilderEffectsByObject = new WeakMap<EvaluationObjectValue, Aureli
 const resolverBuilderEffectsByResult = new WeakMap<EvaluationObjectValue, AureliaInterfaceDefaultRegistrationEffect>();
 const interfaceEvaluationsByObject = new WeakMap<EvaluationObjectValue, AureliaInterfaceEvaluation>();
 const containerEvaluationsByObject = new WeakMap<EvaluationObjectValue, AureliaContainerEvaluation>();
+// Recognition still replays zero-evidence source expressions. Remove these source-keyed identities with that fallback.
 const containerEvaluationsByExpression = new WeakMap<ts.Expression, AureliaContainerEvaluation>();
 const aureliaFacadeEvaluationsByObject = new WeakMap<EvaluationObjectValue, AureliaFacadeEvaluation>();
 const aureliaFacadeEvaluationsByExpression = new WeakMap<ts.Expression, AureliaFacadeEvaluation>();
@@ -303,7 +305,7 @@ for (const statement of syntheticSource.statements) {
   }
 }
 
-export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
+const aureliaStaticEvaluationRuntimeHostOperations: StaticEvaluationRuntimeHostOperations = {
   transferValueMetadata(source, target, transfer): void {
     const frameworkRegistration = frameworkRegistrationEvaluationsByValue.get(source);
     if (frameworkRegistration != null) {
@@ -427,6 +429,10 @@ export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
 
     return StaticInvocationNotApplicable;
   },
+};
+
+export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
+  ...aureliaStaticEvaluationRuntimeHostOperations,
 };
 
 function forkAureliaInterfaceEvaluation(

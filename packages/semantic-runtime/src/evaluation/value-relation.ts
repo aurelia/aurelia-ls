@@ -17,13 +17,54 @@ export const enum EvaluationValueRelationKind {
 
 /** Root runtime identities retained across graph-isolated evaluator snapshots without changing hot value shapes. */
 const evaluationValueLineageRoots = new WeakMap<object, object>();
+const evaluationValuesWithIndeterminateIdentity = new WeakSet<object>();
 
 /** Preserve runtime identity when a session forks one identity-bearing evaluator value into another snapshot. */
 export function bindEvaluationValueLineage(source: EvaluationValue, target: EvaluationValue): void {
   if (!evaluationValueHasRuntimeIdentity(source) || !evaluationValueHasRuntimeIdentity(target)) {
     return;
   }
-  evaluationValueLineageRoots.set(target, evaluationValueLineageRoots.get(source) ?? source);
+  if (source.kind !== target.kind) {
+    throw new Error(`Cannot preserve evaluator identity across ${source.kind} and ${target.kind} carriers.`);
+  }
+  if (source === target) {
+    return;
+  }
+  const sourceRoot = evaluationValueLineageRoot(source);
+  const targetRoot = evaluationValueLineageRoots.get(target);
+  if (targetRoot != null && targetRoot !== sourceRoot) {
+    throw new Error('Evaluator value already belongs to another runtime identity lineage.');
+  }
+  if (evaluationValuesWithIndeterminateIdentity.has(target)
+    && !evaluationValuesWithIndeterminateIdentity.has(source)) {
+    throw new Error('Cannot replace branch-dependent evaluator identity with a definite lineage.');
+  }
+  evaluationValueLineageRoots.set(target, sourceRoot);
+  if (evaluationValuesWithIndeterminateIdentity.has(source)) {
+    evaluationValuesWithIndeterminateIdentity.add(target);
+  }
+}
+
+/** Bind one joined carrier to common runtime identity or mark its identity as branch-dependent. */
+export function bindEvaluationValueJoin(
+  left: EvaluationValue,
+  right: EvaluationValue,
+  target: EvaluationValue,
+): void {
+  if (!evaluationValueHasRuntimeIdentity(target)) {
+    return;
+  }
+  if (left.kind !== target.kind || right.kind !== target.kind) {
+    throw new Error(`Cannot join ${left.kind} and ${right.kind} identities into ${target.kind}.`);
+  }
+  if (evaluationValuesShareLineage(left, right)) {
+    bindEvaluationValueLineage(left, target);
+    return;
+  }
+  if (evaluationValueLineageRoots.has(target)) {
+    throw new Error('Cannot make an already-bound evaluator lineage branch-dependent.');
+  }
+  evaluationValuesWithIndeterminateIdentity.add(target);
 }
 
 /** Return whether two identity-bearing snapshots are proven to represent the same runtime object. */
@@ -57,6 +98,9 @@ export function evaluationStrictEqualityDecision(
   }
   if (evaluationValuesShareLineage(left, right)) {
     return EvaluationValueRelationKind.Match;
+  }
+  if (evaluationValueIdentityIsIndeterminate(left) || evaluationValueIdentityIsIndeterminate(right)) {
+    return EvaluationValueRelationKind.Open;
   }
   if (evaluationValueHasRuntimeIdentity(left) && evaluationValueHasRuntimeIdentity(right)) {
     return left.kind === EvaluationValueKind.BoundaryObject
@@ -105,6 +149,11 @@ export function evaluationValuesSameValueZero(left: EvaluationValue, right: Eval
 
 function evaluationValueLineageRoot(value: EvaluationValue): object {
   return evaluationValueLineageRoots.get(value) ?? value;
+}
+
+function evaluationValueIdentityIsIndeterminate(value: EvaluationValue): boolean {
+  return evaluationValueHasRuntimeIdentity(value)
+    && evaluationValuesWithIndeterminateIdentity.has(value);
 }
 
 function evaluationValueHasRuntimeIdentity(value: EvaluationValue): boolean {

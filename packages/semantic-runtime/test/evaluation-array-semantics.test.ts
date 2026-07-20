@@ -118,6 +118,8 @@ describe('evaluation array semantics', () => {
       'const length = sparse.length;',
       'const firstHole = sparse[0];',
       'const firstValue = sparse[1];',
+      "const hasFirstHole = '0' in sparse;",
+      "const hasFirstValue = '1' in sparse;",
       'const keys = Object.keys(sparse);',
       'const values = Object.values(sparse);',
       'const includesHole = sparse.includes(undefined);',
@@ -136,6 +138,14 @@ describe('evaluation array semantics', () => {
     expect(result.environment.readValue('firstValue')).toEqual(expect.objectContaining({
       kind: EvaluationValueKind.Number,
       value: 8,
+    }));
+    expect(result.environment.readValue('hasFirstHole')).toEqual(expect.objectContaining({
+      kind: EvaluationValueKind.Boolean,
+      value: false,
+    }));
+    expect(result.environment.readValue('hasFirstValue')).toEqual(expect.objectContaining({
+      kind: EvaluationValueKind.Boolean,
+      value: true,
     }));
     expect(arrayPrimitiveValues(requireArray(result, 'keys'))).toEqual(['1', '3']);
     expect(arrayPrimitiveValues(requireArray(result, 'values'))).toEqual([8, 10]);

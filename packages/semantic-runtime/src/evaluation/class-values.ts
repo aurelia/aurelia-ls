@@ -12,6 +12,7 @@ import {
 import type { ModuleEnvironmentRecord } from './environment.js';
 import { EvaluationBindingKind } from './environment.js';
 import {
+  compactEvaluationOpenSeams,
   EvaluationOpenSeamKind,
   type EvaluationOpenSeam,
 } from './seams.js';
@@ -28,6 +29,7 @@ import {
   EvaluationObjectPropertyState,
   EvaluationUndefined,
   EvaluationValueKind,
+  openEvaluationLocalPropertyMembership,
   openEvaluationObjectProperties,
   type EvaluationUnknownValue,
   type EvaluationValue,
@@ -78,14 +80,28 @@ export interface StaticClassEvaluationHost {
   replayOpenSeams(openSeams: readonly EvaluationOpenSeam[]): void;
 }
 
+export class StaticClassPropertyEvaluation {
+  readonly shapeOpenSeams: readonly EvaluationOpenSeam[];
+
+  constructor(
+    readonly properties: Map<string, EvaluationObjectProperty>,
+    readonly mayHaveUnknownProperties: boolean,
+    shapeOpenSeams: readonly EvaluationOpenSeam[],
+  ) {
+    this.shapeOpenSeams = compactEvaluationOpenSeams(shapeOpenSeams);
+  }
+}
+
 export function readStaticClassProperties(
   declaration: ts.ClassLikeDeclaration,
   environment: ModuleEnvironmentRecord,
   moduleKey: string,
   depth: number,
   host: StaticClassEvaluationHost,
-): Map<string, EvaluationObjectProperty> {
+): StaticClassPropertyEvaluation {
   const properties = new Map<string, EvaluationObjectProperty>();
+  let mayHaveUnknownProperties = false;
+  const shapeOpenSeams: EvaluationOpenSeam[] = [];
   for (const member of declaration.members) {
     if (!hasModifier(member, ts.SyntaxKind.StaticKeyword)) {
       continue;
@@ -96,7 +112,10 @@ export function readStaticClassProperties(
     const checkpoint = host.openSeamCheckpoint();
     const name = host.readPropertyName(member.name, environment, moduleKey, depth + 1);
     if (name == null) {
-      openEvaluationObjectProperties(properties, host.openSeamsSince(checkpoint));
+      const pressure = host.openSeamsSince(checkpoint);
+      mayHaveUnknownProperties = true;
+      shapeOpenSeams.push(...pressure);
+      openEvaluationObjectProperties(properties, pressure);
       continue;
     }
     if (ts.isMethodDeclaration(member) || ts.isGetAccessorDeclaration(member)) {
@@ -121,7 +140,7 @@ export function readStaticClassProperties(
       ));
     }
   }
-  return properties;
+  return new StaticClassPropertyEvaluation(properties, mayHaveUnknownProperties, shapeOpenSeams);
 }
 
 export function evaluateStaticClassInstantiation(
@@ -163,7 +182,9 @@ export function evaluateStaticClassInstantiation(
         host.consumeOpenSeamsSince(checkpoint),
       );
       instance.retainConstructionOpenSeams(constructorPressure);
-      instance.mayHaveUnknownProperties ||= constructorPressure.length > 0;
+      if (constructorPressure.length > 0) {
+        openEvaluationLocalPropertyMembership(instance, constructorPressure);
+      }
       host.replayOpenSeams(constructorPressure);
       if (completion.kind === EvaluationCompletionKind.Return && isObjectReturningConstructorValue(completion.value)) {
         host.replayOpenSeams(completion.openSeams);

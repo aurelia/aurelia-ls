@@ -1,8 +1,31 @@
-import type { StaticEvaluationRuntimeHost } from './evaluator.js';
+import type {
+  StaticEvaluationRuntimeHost,
+  StaticEvaluationRuntimeHostOperations,
+} from './evaluator.js';
 import {
   StaticInvocationDispatchKind,
   StaticInvocationNotApplicable,
 } from './invocation.js';
+
+const defaultGraphIsolatedBranchOperations: StaticEvaluationRuntimeHostOperations = {};
+
+/** Canonical host for generic ECMAScript evaluation, including unresolved sibling-branch isolation. */
+export const DefaultStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
+  graphIsolatedBranchOperations: defaultGraphIsolatedBranchOperations,
+};
+
+/** Materialize a complete host permitted inside one graph-isolated unresolved branch. */
+export function graphIsolatedStaticEvaluationRuntimeHost(
+  host: StaticEvaluationRuntimeHost,
+): StaticEvaluationRuntimeHost | null {
+  const operations = host.graphIsolatedBranchOperations;
+  return operations == null
+    ? null
+    : {
+        ...operations,
+        graphIsolatedBranchOperations: operations,
+      };
+}
 
 /** Layer one invocation dispatcher over an existing static-evaluation runtime host. */
 export function delegateStaticEvaluationRuntimeHost(

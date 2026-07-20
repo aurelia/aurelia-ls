@@ -260,6 +260,12 @@ unsupported member opens every property written before it because the runtime wr
 property write closes that property again. Object spread and `Object.assign(...)` preserve the same source order instead
 of using object-wide `mayHaveUnknownProperties` as a substitute for effective-value certainty. Property readers must
 spend that state: an open retained property is a useful candidate, not a closed runtime value.
+Object, function, class, and instance carriers retain property membership and enumerable order independently from
+per-property value state. Conditional presence or an unresolved computed name opens membership; different insertion
+orders can leave membership exact while opening only order. `enumerable-own-properties.ts` spends those axes directly,
+so an uncertain property value does not make `Object.keys(...)` structurally open and an order-dependent result cannot
+masquerade as exact. Forks, object spread/rest, `Object.assign(...)`, and `Object.fromEntries(...)` must conserve both
+axes.
 
 `class-values.ts` owns static class property materialization, instance property materialization, parameter properties, and
 guarded constructor execution over evaluator-local class values. Keep class lifecycle details there while preserving the
@@ -286,6 +292,14 @@ Session forks and repeated module-namespace projections preserve that lineage wh
 source-node snapshots. Independent host-boundary objects remain an open identity relation unless the host or session
 proves an alias. Consumers must spend the tri-state relation and keep `open` distinct from a confident miss; only
 consumers whose contract deliberately retains exact matches may use the boolean views.
+
+`branch-state.ts` owns finite state reconciliation for an unresolved conditional expression. Each arm evaluates in a
+separate session fork from one baseline; the join plans environment and aliased value-graph updates transactionally,
+then commits only after the complete graph closes. It preserves common lineage, marks branch-created identity
+indeterminate, retains conditional property/collection presence, and keeps extent, membership, order, and value
+pressure on their owning axes. The selector qualifies an axis only when the sibling evidence differs; a conditional
+that returns the same already-open carrier must not relabel inherited pressure as branch-dependent. Runtime hosts with side metadata remain ineligible until they provide an explicit
+metadata-join contract; cloning metadata into two lanes is not evidence that divergent metadata can be reconciled.
 
 Array closure is multi-axis. `EvaluationArrayShape` retains runtime extent, exact present-element/hole positions, and
 order independently, together with the exact seams that open each axis. Authored elisions are exact holes, so

@@ -13,12 +13,13 @@ import type { ModuleEnvironmentRecord } from './environment.js';
 import {
   StaticEvaluator,
   type StaticEvaluationRuntimeHost,
-  type StaticModuleEvaluationResult,
 } from './evaluator.js';
+import type { StaticModuleEvaluationResult } from './module-evaluation-result.js';
 import {
   DefaultStaticEvaluationPolicy,
   type StaticEvaluationPolicy,
 } from './policy.js';
+import { DefaultStaticEvaluationRuntimeHost } from './runtime-host.js';
 import {
   compactEvaluationOpenSeams,
   EvaluationOpenSeam,
@@ -93,7 +94,7 @@ export class StaticEvaluationExpressionReader implements StaticExpressionEvaluat
     readonly environment: ModuleEnvironmentRecord,
     readonly moduleKey: string,
     readonly policy: StaticEvaluationPolicy = DefaultStaticEvaluationPolicy,
-    readonly runtimeHost: StaticEvaluationRuntimeHost = {},
+    readonly runtimeHost: StaticEvaluationRuntimeHost = DefaultStaticEvaluationRuntimeHost,
   ) {}
 
   evaluateExpression(expression: ts.Expression): EvaluationRead<EvaluationValue> {

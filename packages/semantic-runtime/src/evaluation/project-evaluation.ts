@@ -28,8 +28,8 @@ import type {
   KernelStoreDisposalContext,
   KernelStoreSidecarIndex,
 } from '../kernel/store.js';
-import type { StaticModuleEvaluationResult } from './evaluator.js';
 import type { StaticEvaluationRuntimeHost } from './evaluator.js';
+import type { StaticModuleEvaluationResult } from './module-evaluation-result.js';
 import { EvaluationKernelEmitter } from './kernel-emitter.js';
 import type {
   EvaluationOpenSeamSource,
@@ -60,6 +60,7 @@ import {
   withStaticEvaluationAmbientGlobals,
 } from './ambient-globals.js';
 import { StaticEvaluationSessionFork } from './evaluation-session.js';
+import { DefaultStaticEvaluationRuntimeHost } from './runtime-host.js';
 import type { EvaluationUnknownValue } from './values.js';
 
 export type EvaluatedProjectSource = StaticProjectEvaluationSourceResult & {
@@ -175,7 +176,8 @@ export class StaticProjectEvaluationResult {
 
   /** Fork mutable evaluator values and environments for one speculative follow-up analysis session. */
   forkSession(): StaticProjectEvaluationResult {
-    const runtimeHost = this.readEvaluatedSources()[0]?.evaluation.runtimeHost ?? {};
+    const runtimeHost = this.readEvaluatedSources()[0]?.evaluation.runtimeHost
+      ?? DefaultStaticEvaluationRuntimeHost;
     const session = new StaticEvaluationSessionFork(runtimeHost);
     return new StaticProjectEvaluationResult(
       this.project,
@@ -203,7 +205,7 @@ export class StaticProjectEvaluationOptions {
     /** Product-specific ownership hooks for source effects that are intentionally modeled by later passes. */
     readonly policy: StaticEvaluationPolicy = DefaultStaticEvaluationPolicy,
     /** Product-specific call intrinsics layered on top of generic ECMAScript evaluation. */
-    readonly runtimeHost: StaticEvaluationRuntimeHost = {},
+    readonly runtimeHost: StaticEvaluationRuntimeHost = DefaultStaticEvaluationRuntimeHost,
     /** Product-specific values for declaration/external imports that remain outside the local graph. */
     readonly externalValueResolver: StaticModuleExternalValueResolver | null = null,
     /** Module-source resolution completeness/performance policy for project-level graph construction. */
