@@ -261,7 +261,7 @@ export class HotDetailCatalog {
     const entry = prepared.entry;
     const handle = entry.handle;
     admitHotDetailEntryBinding(prepared.binding);
-    this.catalog.add(entry as HotDetailEntry<unknown>, lifetimeOrdinal);
+    this.catalog.add(entry, lifetimeOrdinal);
     return entry;
   }
 
@@ -305,6 +305,11 @@ export class HotDetailCatalog {
   /** Lifetime shared by the committed publication that owns this entry. */
   readLifetimeOrdinal(handle: HotDetailHandle): number | null {
     return this.catalog.readLifetimeOrdinal(handle);
+  }
+
+  /** Exact catalog revision for one hot-detail handle. */
+  readMutationOrdinal(handle: HotDetailHandle): number | null {
+    return this.catalog.readMutationOrdinal(handle);
   }
 
   /** Advance an admitted detail with the complete publication closure that owns it. */

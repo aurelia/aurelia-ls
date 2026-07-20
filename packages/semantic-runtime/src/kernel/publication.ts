@@ -183,12 +183,30 @@ export class KernelPublicationPlan {
   }
 }
 
+/** Store revision captured when a staged operation consumes one exact committed entry. */
+export class KernelCommittedEntryRevision {
+  constructor(
+    readonly actualKind: string | null,
+    readonly mutationOrdinal: number | null,
+    readonly lifetimeOrdinal: number | null,
+  ) {}
+}
+
+/** Exact staged lookup plus the foreign committed revision that supplied it, when one did. */
+export class StagedKernelRead<TValue> {
+  constructor(
+    readonly value: TValue | null,
+    readonly committedRevision: KernelCommittedEntryRevision | null,
+  ) {}
+}
+
 /** Exact foreign product-detail entry, or absence, used by one staged admission decision. */
 export class KernelProductDetailAdmissionSnapshot {
   constructor(
     readonly productHandle: ProductHandle,
     readonly detailKind: string,
     readonly expectedEntry: ProductDetailEntry<unknown> | null,
+    readonly committedRevision: KernelCommittedEntryRevision,
   ) {}
 }
 
@@ -198,6 +216,7 @@ export class KernelHotDetailAdmissionSnapshot {
     readonly handle: HotDetailHandle,
     readonly detailKind: string,
     readonly expectedEntry: HotDetailEntry<unknown> | null,
+    readonly committedRevision: KernelCommittedEntryRevision,
   ) {}
 }
 
@@ -374,9 +393,28 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
   }
 
   read(handle: KernelRecordHandle): KernelStoreRecord | null {
+    return this.readRecordWithRevision(handle).value;
+  }
+
+  /** Read one staged-or-committed record without mistaking this computation's own output for an input. */
+  readRecordWithRevision(handle: KernelRecordHandle): StagedKernelRead<KernelStoreRecord> {
     this.requireCurrent();
-    return this.records.get(handle)
-      ?? (this.previousRecordHandles.has(handle) ? null : this.store.read(handle));
+    const staged = this.records.get(handle) ?? null;
+    if (staged != null) {
+      return new StagedKernelRead(staged, null);
+    }
+    if (this.previousRecordHandles.has(handle)) {
+      return new StagedKernelRead<KernelStoreRecord>(null, null);
+    }
+    const committed = this.store.read(handle);
+    return new StagedKernelRead(
+      committed,
+      new KernelCommittedEntryRevision(
+        committed?.kind ?? null,
+        this.store.readRecordRevision(handle),
+        this.store.readRecordLifetimeOrdinal(handle),
+      ),
+    );
   }
 
   readAllRecords(): readonly KernelStoreRecord[] {
@@ -418,6 +456,14 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
   }
 
   readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
+    return this.readProductDetailWithRevision(slot, productHandle).value;
+  }
+
+  /** Read one typed detail while preserving whether a foreign committed entry supplied the answer. */
+  readProductDetailWithRevision<TDetail>(
+    slot: ProductDetailSlot<TDetail>,
+    productHandle: ProductHandle,
+  ): StagedKernelRead<TDetail> {
     this.requireCurrent();
     const staged = this.productDetails.get(productHandle) ?? null;
     const admission = this.productDetailAdmissionSnapshots.get(productHandle) ?? null;
@@ -430,17 +476,32 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       ? existingEntry.detail as TDetail
       : null;
     if (staged == null) {
-      return existing;
+      const committedRevision = this.previousProductDetailHandles.has(productHandle)
+        ? null
+        : admission?.committedRevision ?? new KernelCommittedEntryRevision(
+            existingEntry?.slot.detailKind ?? null,
+            this.store.productDetails.readMutationOrdinal(productHandle),
+            this.store.productDetails.readLifetimeOrdinal(productHandle),
+          );
+      return new StagedKernelRead(existing, committedRevision);
     }
     if (staged.slot.detailKind !== slot.detailKind) {
-      return null;
+      return new StagedKernelRead<TDetail>(null, null);
     }
     return staged.admission === KernelDetailAdmission.IfAbsent && existing != null
-      ? existing
-      : staged.detail as TDetail;
+      ? new StagedKernelRead(existing, admission?.committedRevision ?? null)
+      : new StagedKernelRead(staged.detail as TDetail, null);
   }
 
   readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: HotDetailHandle): TDetail | null {
+    return this.readHotDetailWithRevision(slot, handle).value;
+  }
+
+  /** Read one typed hot detail while preserving whether a foreign committed entry supplied the answer. */
+  readHotDetailWithRevision<TDetail>(
+    slot: HotDetailSlot<TDetail>,
+    handle: HotDetailHandle,
+  ): StagedKernelRead<TDetail> {
     this.requireCurrent();
     const staged = this.hotDetails.get(handle) ?? null;
     const admission = this.hotDetailAdmissionSnapshots.get(handle) ?? null;
@@ -453,14 +514,21 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       ? existingEntry.detail as TDetail
       : null;
     if (staged == null) {
-      return existing;
+      const committedRevision = this.previousHotDetailHandles.has(handle)
+        ? null
+        : admission?.committedRevision ?? new KernelCommittedEntryRevision(
+            existingEntry?.slot.detailKind ?? null,
+            this.store.hotDetails.readMutationOrdinal(handle),
+            this.store.hotDetails.readLifetimeOrdinal(handle),
+          );
+      return new StagedKernelRead(existing, committedRevision);
     }
     if (staged.slot.detailKind !== slot.detailKind) {
-      return null;
+      return new StagedKernelRead<TDetail>(null, null);
     }
     return staged.admission === KernelDetailAdmission.IfAbsent && existing != null
-      ? existing
-      : staged.detail as TDetail;
+      ? new StagedKernelRead(existing, admission?.committedRevision ?? null)
+      : new StagedKernelRead(staged.detail as TDetail, null);
   }
 
   markObservation(): KernelStoreObservationMarker {
@@ -612,6 +680,16 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
     );
   }
 
+  /** Foreign catalog decisions made while staging; positive rows become persistent computation reads. */
+  readProductDetailAdmissionSnapshots(): readonly KernelProductDetailAdmissionSnapshot[] {
+    return [...this.productDetailAdmissionSnapshots.values()];
+  }
+
+  /** Foreign hot-catalog decisions made while staging; positive rows become persistent computation reads. */
+  readHotDetailAdmissionSnapshots(): readonly KernelHotDetailAdmissionSnapshot[] {
+    return [...this.hotDetailAdmissionSnapshots.values()];
+  }
+
   private stageProductDetail(
     publication: KernelProductDetailPublication<unknown>,
     productDetails: Map<ProductHandle, KernelProductDetailPublication<unknown>>,
@@ -718,6 +796,11 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
         publication.productHandle,
         publication.slot.detailKind,
         expectedEntry,
+        new KernelCommittedEntryRevision(
+          expectedEntry?.slot.detailKind ?? null,
+          this.store.productDetails.readMutationOrdinal(publication.productHandle),
+          this.store.productDetails.readLifetimeOrdinal(publication.productHandle),
+        ),
       );
       snapshots.set(publication.productHandle, snapshot);
     }
@@ -750,6 +833,11 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
         publication.handle,
         publication.slot.detailKind,
         expectedEntry,
+        new KernelCommittedEntryRevision(
+          expectedEntry?.slot.detailKind ?? null,
+          this.store.hotDetails.readMutationOrdinal(publication.handle),
+          this.store.hotDetails.readLifetimeOrdinal(publication.handle),
+        ),
       );
       snapshots.set(publication.handle, snapshot);
     }

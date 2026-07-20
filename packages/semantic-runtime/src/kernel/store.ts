@@ -7,13 +7,13 @@ import type { SemanticIdentity } from './identity.js';
 import type { MaterializationRecord, MaterializedProduct } from './materialization.js';
 import {
   HotDetailCatalog,
-  HotDetailEntry,
+  type HotDetailEntry,
   type PreparedHotDetailEntry,
   type HotDetailSlot,
 } from './hot-details.js';
 import {
   ProductDetailCatalog,
-  ProductDetailEntry,
+  type ProductDetailEntry,
   type PreparedProductDetailEntry,
   type ProductDetailSlot,
 } from './product-details.js';
@@ -158,6 +158,15 @@ export interface KernelStoreSidecarIndexRow {
 export interface KernelStoreComputationLifecycle {
   dispose(context: KernelStoreDisposalContext): void;
 }
+
+/** Fallible owner-specific checks that must run before a prepared publication mutates the store. */
+export interface KernelPublicationReplacementPreflight {
+  validate(decisions: readonly KernelPublicationDecision[]): void;
+}
+
+const storeOwnedPublicationPreflight: KernelPublicationReplacementPreflight = {
+  validate(): void {},
+};
 
 /** Any handle-bearing record admitted into the hot kernel store; not a semantic taxonomy. */
 export type KernelStoreRecord =
@@ -358,11 +367,11 @@ export class KernelStore {
     record: TRecord,
     lifetimeOrdinal: number,
   ): TRecord {
-    if (this.records.has(record.handle as KernelRecordHandle)) {
+    if (this.records.has(record.handle)) {
       throw new Error(`Duplicate kernel record handle in store: ${record.handle}`);
     }
-    this.records.set(record.handle as KernelRecordHandle, record);
-    this.recordOrder.push(record.handle as KernelRecordHandle);
+    this.records.set(record.handle, record);
+    this.recordOrder.push(record.handle);
     this.recordLifetimeOrdinalByHandle.set(record.handle, lifetimeOrdinal);
     this.recordMutationOrdinalByHandle.set(record.handle, this.allocateMutationOrdinal());
     this.handleCharacterCount += record.handle.length;
@@ -376,7 +385,7 @@ export class KernelStore {
     const batchHandles = new Set<KernelRecordHandle>();
     const pending = this.buildCommitIndex(batch.records);
     for (const record of batch.records) {
-      const handle = record.handle as KernelRecordHandle;
+      const handle = record.handle;
       if (batchHandles.has(handle)) {
         throw new Error(`Duplicate kernel record handle within ${batchLabel}: ${record.handle}`);
       }
@@ -395,7 +404,7 @@ export class KernelStore {
 
   /** Commit only the records from a batch whose handles are not already present in this store. */
   commitMissing(batch: KernelStoreBatch): void {
-    const missing = batch.records.filter((record) => !this.records.has(record.handle as KernelRecordHandle));
+    const missing = batch.records.filter((record) => !this.records.has(record.handle));
     if (missing.length === 0) {
       return;
     }
@@ -447,16 +456,40 @@ export class KernelStore {
 
   requireCurrent(): void {}
 
-  /**
-   * Prevalidate and synchronously replace one computation-owned publication across kernel and detail catalogs.
-   *
-   * JavaScript cannot interleave readers inside the mutation, and every operation that can fail is checked first.
-   * Sidecar reconciliation runs only after the complete post-state is visible.
-   */
+  /** Replace one store-owned publication without an external ownership index. */
   replacePublication(
     previous: KernelPublicationManifest,
     next: KernelPublicationPlan,
-    owner: object = this.directPublicationOwner,
+  ): KernelPublicationReplacement {
+    return this.replacePublicationForOwner(
+      previous,
+      next,
+      this.directPublicationOwner,
+      storeOwnedPublicationPreflight,
+    );
+  }
+
+  /** Replace one externally owned publication after its owner preflights the prepared decisions. */
+  replaceOwnedPublication(
+    previous: KernelPublicationManifest,
+    next: KernelPublicationPlan,
+    owner: object,
+    preflight: KernelPublicationReplacementPreflight,
+  ): KernelPublicationReplacement {
+    return this.replacePublicationForOwner(previous, next, owner, preflight);
+  }
+
+  /**
+   * Prevalidate and synchronously replace one publication across kernel and detail catalogs.
+   *
+   * JavaScript cannot interleave readers inside the mutation, and every operation that can fail is checked first.
+   * The mutation tail contains no callbacks; sidecar reconciliation runs only after the complete post-state is visible.
+   */
+  private replacePublicationForOwner(
+    previous: KernelPublicationManifest,
+    next: KernelPublicationPlan,
+    owner: object,
+    preflight: KernelPublicationReplacementPreflight,
   ): KernelPublicationReplacement {
     const label = next.batch.label ?? '(unnamed publication)';
     this.validatePublicationManifestAuthority(previous, owner, label);
@@ -542,6 +575,23 @@ export class KernelStore {
       dependencyLifetimeOrdinal ?? -1,
     );
 
+    const decisions = [
+      ...publicationDecisionRows(
+        recordDecisions,
+        KernelPublicationSurface.Record,
+        (handle) => recordKindsByHandle.get(handle) ?? 'kernel-record',
+      ),
+      ...productDetailPlan.decisions,
+      ...hotDetailPlan.decisions,
+    ];
+    const manifest = new KernelPublicationManifest(
+      [...recordsByHandle.keys()],
+      productDetailPlan.ownedHandles,
+      hotDetailPlan.ownedHandles,
+      lifetimeOrdinal,
+    );
+    preflight.validate(decisions);
+
     applyObjectFieldNormalizations([
       ...preparedDetails.productDetails.flatMap((entry) => entry.binding.normalizations),
       ...preparedDetails.hotDetails.flatMap((entry) => entry.binding.normalizations),
@@ -575,21 +625,6 @@ export class KernelStore {
       this.hotDetails.promoteLifetimeOrdinal(handle, lifetimeOrdinal);
     }
 
-    const decisions = [
-      ...publicationDecisionRows(
-        recordDecisions,
-        KernelPublicationSurface.Record,
-        (handle) => recordKindsByHandle.get(handle) ?? 'kernel-record',
-      ),
-      ...productDetailPlan.decisions,
-      ...hotDetailPlan.decisions,
-    ];
-    const manifest = new KernelPublicationManifest(
-      [...recordsByHandle.keys()],
-      productDetailPlan.ownedHandles,
-      hotDetailPlan.ownedHandles,
-      lifetimeOrdinal,
-    );
     if (previous !== KernelPublicationManifest.empty) {
       this.activePublicationOwners.delete(previous);
     }
@@ -672,7 +707,13 @@ export class KernelStore {
         throw new Error(`Publication ${label} has duplicate admission evidence for ${snapshot.productHandle}.`);
       }
       productHandles.add(snapshot.productHandle);
-      if (this.productDetails.readEntry(snapshot.productHandle) !== snapshot.expectedEntry) {
+      if (
+        this.productDetails.readEntry(snapshot.productHandle) !== snapshot.expectedEntry
+        || this.productDetails.readMutationOrdinal(snapshot.productHandle)
+          !== snapshot.committedRevision.mutationOrdinal
+        || this.productDetails.readLifetimeOrdinal(snapshot.productHandle)
+          !== snapshot.committedRevision.lifetimeOrdinal
+      ) {
         throw new Error(
           `Publication ${label} cannot commit product detail ${snapshot.productHandle}; `
           + 'catalog admission changed after staging.',
@@ -685,7 +726,13 @@ export class KernelStore {
         throw new Error(`Publication ${label} has duplicate admission evidence for ${snapshot.handle}.`);
       }
       hotHandles.add(snapshot.handle);
-      if (this.hotDetails.readEntry(snapshot.handle) !== snapshot.expectedEntry) {
+      if (
+        this.hotDetails.readEntry(snapshot.handle) !== snapshot.expectedEntry
+        || this.hotDetails.readMutationOrdinal(snapshot.handle)
+          !== snapshot.committedRevision.mutationOrdinal
+        || this.hotDetails.readLifetimeOrdinal(snapshot.handle)
+          !== snapshot.committedRevision.lifetimeOrdinal
+      ) {
         throw new Error(
           `Publication ${label} cannot commit hot detail ${snapshot.handle}; `
           + 'catalog admission changed after staging.',

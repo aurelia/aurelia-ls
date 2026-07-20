@@ -346,7 +346,7 @@ export class ProductDetailCatalog {
     const entry = prepared.entry;
     const productHandle = entry.productHandle;
     admitProductDetailEnvelopeBinding(prepared.binding);
-    this.catalog.add(entry as ProductDetailEntry<unknown>, lifetimeOrdinal);
+    this.catalog.add(entry, lifetimeOrdinal);
     return entry;
   }
 
@@ -412,6 +412,11 @@ export class ProductDetailCatalog {
   /** Lifetime shared by the committed publication that owns this entry. */
   readLifetimeOrdinal(productHandle: ProductHandle): number | null {
     return this.catalog.readLifetimeOrdinal(productHandle);
+  }
+
+  /** Exact catalog revision for one product-detail handle. */
+  readMutationOrdinal(productHandle: ProductHandle): number | null {
+    return this.catalog.readMutationOrdinal(productHandle);
   }
 
   /** Advance an admitted detail with the complete publication closure that owns it. */

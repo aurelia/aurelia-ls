@@ -3,8 +3,10 @@ import type { HotDetailSlot } from './hot-details.js';
 import type { MaterializationRecord } from './materialization.js';
 import type { ProductDetailSlot } from './product-details.js';
 import {
+  KernelPublicationDecisionKind,
   KernelPublicationManifest,
   KernelPublicationPlan,
+  KernelPublicationSurface,
   type KernelPublicationContext,
   StagedKernelPublicationContext,
   type KernelPublicationDecision,
@@ -56,6 +58,18 @@ export interface ComputationRead {
   validate(): ComputationReadValidation;
 }
 
+export function computationRecordReadKey(handle: KernelRecordHandle): string {
+  return `kernel-record:${handle}`;
+}
+
+export function computationProductDetailReadKey(detailKind: string, productHandle: ProductHandle): string {
+  return `kernel-product-detail:${detailKind}:${productHandle}`;
+}
+
+export function computationHotDetailReadKey(detailKind: string, handle: HotDetailHandle): string {
+  return `kernel-hot-detail:${detailKind}:${handle}`;
+}
+
 /** Exact positive or negative read of one normalized kernel record. */
 export class ComputationRecordRead implements ComputationRead {
   readonly domain = 'kernel-record';
@@ -68,7 +82,7 @@ export class ComputationRecordRead implements ComputationRead {
     private readonly revision: number | null,
     readonly lifetimeOrdinal: number | null,
   ) {
-    this.readKey = `kernel-record:${handle}`;
+    this.readKey = computationRecordReadKey(handle);
     this.observedRevision = recordRevisionLabel(revision, lifetimeOrdinal);
   }
 
@@ -87,6 +101,68 @@ export class ComputationRecordRead implements ComputationRead {
               ...(currentLifetimeOrdinal === this.lifetimeOrdinal ? [] : ['lifetime']),
             ],
     };
+  }
+}
+
+/** Exact positive or negative read of one typed product-detail slot. */
+export class ComputationProductDetailRead implements ComputationRead {
+  readonly domain = 'kernel-product-detail';
+  readonly readKey: string;
+  readonly observedRevision: string;
+
+  constructor(
+    private readonly store: KernelStore,
+    readonly productHandle: ProductHandle,
+    readonly detailKind: string,
+    private readonly actualKind: string | null,
+    private readonly revision: number | null,
+    readonly lifetimeOrdinal: number | null,
+  ) {
+    this.readKey = computationProductDetailReadKey(detailKind, productHandle);
+    this.observedRevision = detailRevisionLabel(actualKind, revision, lifetimeOrdinal);
+  }
+
+  validate(): ComputationReadValidation {
+    const currentEntry = this.store.productDetails.readEntry(this.productHandle);
+    return validateDetailRevision(
+      this.actualKind,
+      this.revision,
+      this.lifetimeOrdinal,
+      currentEntry?.slot.detailKind ?? null,
+      this.store.productDetails.readMutationOrdinal(this.productHandle),
+      this.store.productDetails.readLifetimeOrdinal(this.productHandle),
+    );
+  }
+}
+
+/** Exact positive or negative read of one typed hot-detail slot. */
+export class ComputationHotDetailRead implements ComputationRead {
+  readonly domain = 'kernel-hot-detail';
+  readonly readKey: string;
+  readonly observedRevision: string;
+
+  constructor(
+    private readonly store: KernelStore,
+    readonly handle: HotDetailHandle,
+    readonly detailKind: string,
+    private readonly actualKind: string | null,
+    private readonly revision: number | null,
+    readonly lifetimeOrdinal: number | null,
+  ) {
+    this.readKey = computationHotDetailReadKey(detailKind, handle);
+    this.observedRevision = detailRevisionLabel(actualKind, revision, lifetimeOrdinal);
+  }
+
+  validate(): ComputationReadValidation {
+    const currentEntry = this.store.hotDetails.readEntry(this.handle);
+    return validateDetailRevision(
+      this.actualKind,
+      this.revision,
+      this.lifetimeOrdinal,
+      currentEntry?.slot.detailKind ?? null,
+      this.store.hotDetails.readMutationOrdinal(this.handle),
+      this.store.hotDetails.readLifetimeOrdinal(this.handle),
+    );
   }
 }
 
@@ -178,8 +254,22 @@ export class ComputationState {
     readonly locus: ComputationLocus,
     readonly committedRunSequence: number,
     readonly reads: readonly ComputationRead[],
+    readonly outputs: readonly ComputationOutput[],
     readonly publication: KernelPublicationManifest,
   ) {}
+}
+
+/** Exact output key owned by one committed computation generation. */
+export class ComputationOutput {
+  readonly readKey: string;
+
+  constructor(
+    readonly surface: KernelPublicationSurface,
+    readonly handle: string,
+    readonly detailKind: string,
+  ) {
+    this.readKey = computationOutputReadKey(surface, handle, detailKind);
+  }
 }
 
 /** Revocable capability for one successfully committed computation generation. */
@@ -229,13 +319,13 @@ export class ComputationRun implements KernelPublicationContext {
 
   constructor(
     private readonly registry: ComputationLifecycleRegistry,
-    store: KernelStore,
+    private readonly store: KernelStore,
     readonly computationId: ComputationId,
     readonly locus: ComputationLocus,
     readonly runSequence: number,
     previousPublication: KernelPublicationManifest,
   ) {
-    this.publications = new StagedKernelPublicationContext(store, previousPublication);
+    this.publications = new StagedKernelPublicationContext(this.store, previousPublication);
   }
 
   get handles() {
@@ -257,11 +347,21 @@ export class ComputationRun implements KernelPublicationContext {
 
   read(handle: KernelRecordHandle): KernelStoreRecord | null {
     this.requireCurrent();
-    return this.publications.read(handle);
+    const result = this.publications.readRecordWithRevision(handle);
+    if (result.committedRevision != null) {
+      this.observe(new ComputationRecordRead(
+        this.store,
+        handle,
+        result.committedRevision.mutationOrdinal,
+        result.committedRevision.lifetimeOrdinal,
+      ));
+    }
+    return result.value;
   }
 
   readAllRecords(): readonly KernelStoreRecord[] {
     this.requireCurrent();
+    // Aggregate views require domain-owned membership and closure revisions; exact reads alone cannot make them honest.
     return this.publications.readAllRecords();
   }
 
@@ -277,12 +377,34 @@ export class ComputationRun implements KernelPublicationContext {
 
   readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
     this.requireCurrent();
-    return this.publications.readProductDetail(slot, productHandle);
+    const result = this.publications.readProductDetailWithRevision(slot, productHandle);
+    if (result.committedRevision != null) {
+      this.observe(new ComputationProductDetailRead(
+        this.store,
+        productHandle,
+        slot.detailKind,
+        result.committedRevision.actualKind,
+        result.committedRevision.mutationOrdinal,
+        result.committedRevision.lifetimeOrdinal,
+      ));
+    }
+    return result.value;
   }
 
   readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: HotDetailHandle): TDetail | null {
     this.requireCurrent();
-    return this.publications.readHotDetail(slot, handle);
+    const result = this.publications.readHotDetailWithRevision(slot, handle);
+    if (result.committedRevision != null) {
+      this.observe(new ComputationHotDetailRead(
+        this.store,
+        handle,
+        slot.detailKind,
+        result.committedRevision.actualKind,
+        result.committedRevision.mutationOrdinal,
+        result.committedRevision.lifetimeOrdinal,
+      ));
+    }
+    return result.value;
   }
 
   markObservation(): KernelStoreObservationMarker {
@@ -329,7 +451,7 @@ export class ComputationRun implements KernelPublicationContext {
     try {
       return this.registry.commitRun(
         this,
-        [...this.readsByKey.values()],
+        this.readsForCommit(),
         this.publications.toPlan(`computation:${this.computationId}:run:${this.runSequence}`),
       );
     } finally {
@@ -350,6 +472,39 @@ export class ComputationRun implements KernelPublicationContext {
       throw new Error(`Computation run ${this.computationId}@${this.runSequence} is already finished.`);
     }
   }
+
+  private readsForCommit(): readonly ComputationRead[] {
+    const readsByKey = new Map(this.readsByKey);
+    for (const snapshot of this.publications.readProductDetailAdmissionSnapshots()) {
+      if (snapshot.expectedEntry == null) {
+        continue;
+      }
+      const read = new ComputationProductDetailRead(
+        this.store,
+        snapshot.productHandle,
+        snapshot.detailKind,
+        snapshot.committedRevision.actualKind,
+        snapshot.committedRevision.mutationOrdinal,
+        snapshot.committedRevision.lifetimeOrdinal,
+      );
+      readsByKey.set(read.readKey, read);
+    }
+    for (const snapshot of this.publications.readHotDetailAdmissionSnapshots()) {
+      if (snapshot.expectedEntry == null) {
+        continue;
+      }
+      const read = new ComputationHotDetailRead(
+        this.store,
+        snapshot.handle,
+        snapshot.detailKind,
+        snapshot.committedRevision.actualKind,
+        snapshot.committedRevision.mutationOrdinal,
+        snapshot.committedRevision.lifetimeOrdinal,
+      );
+      readsByKey.set(read.readKey, read);
+    }
+    return [...readsByKey.values()];
+  }
 }
 
 /** Store-local registry for revision-validated computation runs and their complete committed closures. */
@@ -357,6 +512,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
   private readonly entriesByLocus = new Map<string, MutableComputationEntry>();
   private readonly entriesById = new Map<ComputationId, MutableComputationEntry>();
   private readonly readersByKey = new Map<string, Set<ComputationId>>();
+  private readonly producerByKey = new Map<string, ComputationId>();
   private nextComputationOrdinal = 1;
   private readonly publicationOwner = {};
 
@@ -420,12 +576,20 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     if (entry == null || state?.committedRunSequence !== runSequence) {
       return false;
     }
-    this.store.replacePublication(
+    this.store.replaceOwnedPublication(
       state.publication,
       new KernelPublicationPlan(new KernelStoreBatch([], `retire:${computationId}@${runSequence}`)),
       this.publicationOwner,
+      {
+        validate: (decisions) => this.validateProducerReplacement(
+          state.outputs,
+          computationOutputsFromDecisions(decisions),
+          computationId,
+        ),
+      },
     );
     this.replaceReadIndex(state.reads, [], computationId);
+    this.commitProducerReplacement(state.outputs, [], computationId);
     entry.state = null;
     entry.admittedGenerationDomains.clear();
     entry.latestRunSequence += 1;
@@ -441,6 +605,10 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
   readersFor(readKey: string): readonly ComputationId[] {
     return [...(this.readersByKey.get(readKey) ?? [])]
       .sort((left, right) => left.localeCompare(right));
+  }
+
+  producerFor(readKey: string): ComputationId | null {
+    return this.producerByKey.get(readKey) ?? null;
   }
 
   readTransitions(computationId: ComputationId): readonly ComputationTransition[] {
@@ -459,6 +627,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
         continue;
       }
       this.replaceReadIndex(state.reads, [], entry.computationId);
+      this.commitProducerReplacement(state.outputs, [], entry.computationId);
       this.store.retirePublicationManifest(state.publication, this.publicationOwner);
       entry.state = null;
       entry.admittedGenerationDomains.clear();
@@ -505,20 +674,32 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     }
 
     const previousState = entry.state;
-    const changedReads = compareReadSets(previousState?.reads ?? [], reads);
-    const replacement = this.store.replacePublication(
+    const replacement = this.store.replaceOwnedPublication(
       previousState?.publication ?? KernelPublicationManifest.empty,
       publication.withMinimumLifetimeOrdinal(computationReadLifetimeOrdinal(reads)),
       this.publicationOwner,
+      {
+        validate: (decisions) => this.validateProducerReplacement(
+          previousState?.outputs ?? [],
+          computationOutputsFromDecisions(decisions),
+          entry.computationId,
+        ),
+      },
     );
+    const outputs = computationOutputsFromDecisions(replacement.decisions);
+    const outputKeys = new Set(outputs.map((output) => output.readKey));
+    const committedReads = reads.filter((read) => !outputKeys.has(read.readKey));
+    const changedReads = compareReadSets(previousState?.reads ?? [], committedReads);
     const nextState = new ComputationState(
       entry.computationId,
       entry.locus,
       run.runSequence,
-      [...reads],
+      committedReads,
+      outputs,
       replacement.manifest,
     );
-    this.replaceReadIndex(previousState?.reads ?? [], reads, entry.computationId);
+    this.replaceReadIndex(previousState?.reads ?? [], committedReads, entry.computationId);
+    this.commitProducerReplacement(previousState?.outputs ?? [], outputs, entry.computationId);
     entry.state = nextState;
     entry.admittedGenerationDomains.clear();
     const transition = new ComputationTransition(
@@ -572,6 +753,40 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       readers.add(computationId);
     }
   }
+
+  private validateProducerReplacement(
+    previous: readonly ComputationOutput[],
+    next: readonly ComputationOutput[],
+    computationId: ComputationId,
+  ): void {
+    for (const output of previous) {
+      if (this.producerByKey.get(output.readKey) !== computationId) {
+        throw new Error(`Computation output ${output.readKey} lost producer ownership before replacement.`);
+      }
+    }
+    for (const output of next) {
+      const existing = this.producerByKey.get(output.readKey);
+      if (existing != null && existing !== computationId) {
+        throw new Error(`Computation output ${output.readKey} is already owned by ${existing}.`);
+      }
+    }
+  }
+
+  /** Apply the producer index after the store has admitted the preflighted replacement. */
+  private commitProducerReplacement(
+    previous: readonly ComputationOutput[],
+    next: readonly ComputationOutput[],
+    computationId: ComputationId,
+  ): void {
+    for (const output of previous) {
+      if (this.producerByKey.get(output.readKey) === computationId) {
+        this.producerByKey.delete(output.readKey);
+      }
+    }
+    for (const output of next) {
+      this.producerByKey.set(output.readKey, computationId);
+    }
+  }
 }
 
 function compareReadSets(
@@ -610,7 +825,14 @@ export function computationPublicationRecordHandles(
 function computationReadLifetimeOrdinal(reads: readonly ComputationRead[]): number | null {
   let lifetimeOrdinal: number | null = null;
   for (const read of reads) {
-    if (!(read instanceof ComputationRecordRead) || read.lifetimeOrdinal == null) {
+    if (
+      !(
+        read instanceof ComputationRecordRead
+        || read instanceof ComputationProductDetailRead
+        || read instanceof ComputationHotDetailRead
+      )
+      || read.lifetimeOrdinal == null
+    ) {
       continue;
     }
     lifetimeOrdinal = lifetimeOrdinal == null
@@ -618,6 +840,70 @@ function computationReadLifetimeOrdinal(reads: readonly ComputationRead[]): numb
       : Math.max(lifetimeOrdinal, read.lifetimeOrdinal);
   }
   return lifetimeOrdinal;
+}
+
+function computationOutputsFromDecisions(
+  decisions: readonly KernelPublicationDecision[],
+): readonly ComputationOutput[] {
+  return decisions
+    .filter((decision) => decision.decision !== KernelPublicationDecisionKind.Withdraw)
+    .map((decision) => new ComputationOutput(
+      decision.surface,
+      decision.handle,
+      decision.detailKind,
+    ))
+    .sort((left, right) => left.readKey.localeCompare(right.readKey));
+}
+
+function computationOutputReadKey(
+  surface: KernelPublicationSurface,
+  handle: string,
+  detailKind: string,
+): string {
+  switch (surface) {
+    case KernelPublicationSurface.Record:
+      return computationRecordReadKey(handle as KernelRecordHandle);
+    case KernelPublicationSurface.ProductDetail:
+      return computationProductDetailReadKey(detailKind, handle as ProductHandle);
+    case KernelPublicationSurface.HotDetail:
+      return computationHotDetailReadKey(detailKind, handle as HotDetailHandle);
+  }
+}
+
+function validateDetailRevision(
+  observedKind: string | null,
+  observedRevision: number | null,
+  observedLifetimeOrdinal: number | null,
+  currentKind: string | null,
+  currentRevision: number | null,
+  currentLifetimeOrdinal: number | null,
+): ComputationReadValidation {
+  const isCurrent = observedKind === currentKind
+    && observedRevision === currentRevision
+    && observedLifetimeOrdinal === currentLifetimeOrdinal;
+  return {
+    isCurrent,
+    currentRevision: detailRevisionLabel(currentKind, currentRevision, currentLifetimeOrdinal),
+    changedFacets: isCurrent
+      ? []
+      : [
+          ...(observedKind === currentKind
+            ? []
+            : observedKind == null || currentKind == null ? ['existence'] : ['slot']),
+          ...(observedRevision === currentRevision ? [] : ['detail']),
+          ...(observedLifetimeOrdinal === currentLifetimeOrdinal ? [] : ['lifetime']),
+        ],
+  };
+}
+
+function detailRevisionLabel(
+  actualKind: string | null,
+  revision: number | null,
+  lifetimeOrdinal: number | null,
+): string {
+  return revision == null
+    ? 'absent'
+    : `slot:${actualKind ?? 'unknown'}:revision:${revision}:lifetime:${lifetimeOrdinal ?? 'unknown'}`;
 }
 
 function recordRevisionLabel(revision: number | null, lifetimeOrdinal: number | null): string {

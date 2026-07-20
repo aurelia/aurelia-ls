@@ -165,9 +165,11 @@ committed store and reporting an atomic candidate as empty.
 stable computation ID; each run stages a complete read set and publication closure; commit revalidates every typed read
 before replacing the prior state. `publication.ts` is the required materializer write boundary for immediate and staged
 execution. `KernelStore.replacePublication(...)` prevalidates ownership, references, detail envelopes, and unsupported
-sidecar participation before one synchronous callback-free replacement. A failed or stale run leaves the previous
-records, details, read index, and manifest intact. Sidecar indexes remain acceleration structures; replacing a detail
-they index is rejected until that index registers an explicit lifecycle participant.
+sidecar participation before one synchronous callback-free replacement. Computation-owned replacement uses
+`replaceOwnedPublication(...)`, which admits the owner's fallible producer-index preflight before that callback-free
+mutation tail. A failed or stale run leaves the previous records, details, read index, producer index, and manifest
+intact. Sidecar indexes remain acceleration structures; replacing a detail they index is rejected until that index
+registers an explicit lifecycle participant.
 Manifest authority requires the exact frozen manifest object currently admitted by the store and the same owner that
 created its lineage; a copied handle list, an earlier manifest, or an exact lifecycle manifest presented through the
 store-owned lane is stale. The manifest's monotone lifetime then proves that every listed record and detail still belongs
@@ -179,6 +181,14 @@ catalog mutation; weak envelope ownership changes only during the callback-free 
 poisons the run so an accepted prefix can never become a commit payload.
 Committed domain object graphs are admitted once per computation run and domain through the lifecycle registry. Do not
 construct a second authority around the same committed publication or let a domain-local cache decide uniqueness.
+Exact `ComputationRun` record, product-detail, and hot-detail reads capture the committed catalog revision by
+construction. Candidate writes and the hidden prior owned closure never masquerade as inputs; a positive foreign
+`IfAbsent` admission is a dependency even when no later lookup expands it. The registry indexes each committed output
+through the same exact read key, so producer ownership and reverse readers join without a semantic claim or handle-name
+heuristic. Exact reads whose keys become outputs of the same admitted generation are removed only after the store has
+computed the authoritative publication decisions; borrowed `IfAbsent` rows have no output decision and remain reads.
+Replacement and retirement preflight producer ownership before store mutation, then update the index infallibly after
+admission. Lifetime disposal clears it with the reclaimed publication.
 The next run at a locus reads through a candidate view that hides every record and detail owned by the prior manifest.
 Still-current outputs must be restaged as part of the complete next closure; otherwise commit withdraws them. This
 prevents a materializer from mistaking its own old output for upstream truth and then publishing a partial replacement.
@@ -200,7 +210,9 @@ retaining cohort-specific compiler products under one publication replacement.
 `KernelPublicationContext.readProductDetail(...)` and `readHotDetail(...)` provide the corresponding typed
 read-your-writes view for a known handle. They deliberately do not expose staged whole-slot enumeration: combining a
 prior manifest's rows with candidate rows would manufacture a mixed generation. Aggregate phases must pass their
-complete candidate emissions explicitly, while exact links may follow a staged detail by handle.
+complete candidate emissions explicitly, while exact links may follow a staged detail by handle. Whole-store,
+whole-slot, source-file-index, and materialization scans need domain-owned membership/order/closure revisions; recording
+only their returned positive handles would make additions and authoritative absence invisible.
 
 A projector or expression world backed by a `ComputationRun` is a candidate-generation capability, not a retained
 query cache. It may be shared by every materializer in that generation and by follow-up work that runs before commit,

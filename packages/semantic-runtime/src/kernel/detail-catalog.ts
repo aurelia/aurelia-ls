@@ -64,6 +64,11 @@ export class DetailCatalog<
     return this.lifetimeOrdinalByHandle.get(handle) ?? null;
   }
 
+  /** Exact mutation revision for one positive or negative detail lookup. */
+  readMutationOrdinal(handle: THandle): number | null {
+    return this.mutationOrdinalByHandle.get(handle) ?? null;
+  }
+
   promoteLifetimeOrdinal(handle: THandle, lifetimeOrdinal: number): void {
     this.lifetimeOrdinalByHandle.set(handle, lifetimeOrdinal);
   }

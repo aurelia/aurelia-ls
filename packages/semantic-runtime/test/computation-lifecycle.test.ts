@@ -6,8 +6,11 @@ import { describe, expect, test } from "vitest";
 import { SourceFileAddress, SourceLanguage, SourceSpanAddress } from "../src/kernel/address.js";
 import {
   ComputationCommitState,
+  computationHotDetailReadKey,
   ComputationLifecycleRegistry,
+  computationProductDetailReadKey,
   ComputationRecordReadView,
+  computationRecordReadKey,
   type ComputationLocus,
   type ComputationRead,
   type ComputationReadValidation,
@@ -166,6 +169,291 @@ describe("computation lifecycle", () => {
     expect(store.read(ownedHandle)).toBe(owned1);
   });
 
+  test("tracks exact foreign records and details through their committed producer", () => {
+    const store = new KernelStore("computation-exact-kernel-inputs");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("exact-kernel-inputs:product");
+    const provenanceHandle = store.handles.provenance("exact-kernel-inputs:provenance");
+    const hotHandle = store.handles.hotDetail("exact-kernel-inputs:hot");
+    const productSlot = defineProductDetailSlot<{ readonly version: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.exact-kernel-product-detail",
+      "Exact product-detail computation input.",
+    );
+    const hotSlot = defineHotDetailSlot<{ readonly version: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.exact-kernel-hot-detail",
+      "Exact hot-detail computation input.",
+    );
+    const product = () => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      null,
+      provenanceHandle,
+    );
+    const produce = (version: number) => {
+      const run = lifecycle.begin(locus("exact-kernel-producer"));
+      const productDetail = { version };
+      const hotDetail = { version };
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(provenanceHandle),
+          product(),
+        ], `exact-kernel-producer:${version}`),
+        [publishProductDetail(productSlot, productHandle, productDetail)],
+        [publishHotDetail(hotSlot, productHandle, hotHandle, hotDetail)],
+      ));
+      expect(run.read(productHandle)).toEqual(product());
+      expect(run.readProductDetail(productSlot, productHandle)).toBe(productDetail);
+      expect(run.readHotDetail(hotSlot, hotHandle)).toBe(hotDetail);
+      expect(run.commit().state).toBe(ComputationCommitState.Committed);
+      expect(lifecycle.readState(run.computationId)?.reads).toEqual([]);
+      return run;
+    };
+
+    const producer0 = produce(0);
+    const recordKey = computationRecordReadKey(productHandle);
+    const productDetailKey = computationProductDetailReadKey(productSlot.detailKind, productHandle);
+    const hotDetailKey = computationHotDetailReadKey(hotSlot.detailKind, hotHandle);
+    expect(lifecycle.producerFor(recordKey)).toBe(producer0.computationId);
+    expect(lifecycle.producerFor(productDetailKey)).toBe(producer0.computationId);
+    expect(lifecycle.producerFor(hotDetailKey)).toBe(producer0.computationId);
+
+    const consumer0 = lifecycle.begin(locus("exact-kernel-consumer"));
+    expect(consumer0.read(productHandle)).not.toBeNull();
+    expect(consumer0.readProductDetail(productSlot, productHandle)).toEqual({ version: 0 });
+    expect(consumer0.readHotDetail(hotSlot, hotHandle)).toEqual({ version: 0 });
+    expect(consumer0.commit().state).toBe(ComputationCommitState.Committed);
+    expect(lifecycle.readState(consumer0.computationId)?.reads.map((read) => read.readKey).sort()).toEqual([
+      hotDetailKey,
+      productDetailKey,
+      recordKey,
+    ].sort());
+    expect(lifecycle.readersFor(productDetailKey)).toEqual([consumer0.computationId]);
+
+    const staleConsumer = lifecycle.begin(locus("exact-kernel-consumer"));
+    expect(staleConsumer.readProductDetail(productSlot, productHandle)).toEqual({ version: 0 });
+    expect(staleConsumer.readHotDetail(hotSlot, hotHandle)).toEqual({ version: 0 });
+    const producer1 = produce(1);
+    expect(producer1.computationId).toBe(producer0.computationId);
+    const rejected = staleConsumer.commit();
+    expect(rejected.state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(rejected.transition.invalidReads.map((read) => read.domain).sort()).toEqual([
+      "kernel-hot-detail",
+      "kernel-product-detail",
+    ]);
+    expect(lifecycle.producerFor(productDetailKey)).toBe(producer0.computationId);
+
+    expect(lifecycle.retireCommittedGeneration(producer1.computationId, producer1.runSequence)).toBe(true);
+    expect(lifecycle.producerFor(recordKey)).toBeNull();
+    expect(lifecycle.producerFor(productDetailKey)).toBeNull();
+    expect(lifecycle.producerFor(hotDetailKey)).toBeNull();
+  });
+
+  test("tracks negative exact reads and borrowed if-absent details without self-dependencies", () => {
+    const store = new KernelStore("computation-negative-and-borrowed-details");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("negative-and-borrowed:product");
+    const provenanceHandle = store.handles.provenance("negative-and-borrowed:provenance");
+    const missingRecordHandle = store.handles.address("negative-and-borrowed:missing-record");
+    const hotHandle = store.handles.hotDetail("negative-and-borrowed:hot");
+    const productSlot = defineProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.negative-and-borrowed-product-detail",
+      "Negative and borrowed product-detail input.",
+    );
+    const hotSlot = defineHotDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.negative-and-borrowed-hot-detail",
+      "Negative and borrowed hot-detail input.",
+    );
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(provenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        provenanceHandle,
+      ),
+    ], "negative-and-borrowed:product"));
+
+    const negative = lifecycle.begin(locus("negative-exact-inputs"));
+    expect(negative.read(missingRecordHandle)).toBeNull();
+    expect(negative.readProductDetail(productSlot, productHandle)).toBeNull();
+    expect(negative.readHotDetail(hotSlot, hotHandle)).toBeNull();
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(missingRecordHandle, "test", "src/now-present.html", SourceLanguage.Html),
+    ], "negative-and-borrowed:record"));
+    store.productDetails.add(productSlot, productHandle, { owner: "foreign" });
+    store.hotDetails.add(hotSlot, productHandle, hotHandle, { owner: "foreign" });
+    const rejected = negative.commit();
+    expect(rejected.state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(rejected.transition.invalidReads.map((read) => read.domain).sort()).toEqual([
+      "kernel-hot-detail",
+      "kernel-product-detail",
+      "kernel-record",
+    ]);
+
+    const borrower = lifecycle.begin(locus("borrowed-if-absent"));
+    borrower.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([], "borrowed-if-absent"),
+      [publishProductDetail(
+        productSlot,
+        productHandle,
+        { owner: "candidate" },
+        KernelDetailAdmission.IfAbsent,
+      )],
+      [publishHotDetail(
+        hotSlot,
+        productHandle,
+        hotHandle,
+        { owner: "candidate" },
+        KernelDetailAdmission.IfAbsent,
+      )],
+    ));
+    expect(borrower.commit().state).toBe(ComputationCommitState.Committed);
+    const productDetailKey = computationProductDetailReadKey(productSlot.detailKind, productHandle);
+    const hotDetailKey = computationHotDetailReadKey(hotSlot.detailKind, hotHandle);
+    expect(lifecycle.readState(borrower.computationId)?.reads.map((read) => read.readKey).sort()).toEqual([
+      hotDetailKey,
+      productDetailKey,
+    ].sort());
+    expect(lifecycle.readState(borrower.computationId)?.outputs).toEqual([]);
+    expect(lifecycle.producerFor(productDetailKey)).toBeNull();
+    expect(lifecycle.readersFor(productDetailKey)).toEqual([borrower.computationId]);
+  });
+
+  test("drops exact reads superseded by outputs from the same committed generation", () => {
+    const store = new KernelStore("computation-read-before-own-write");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("read-before-own-write:product");
+    const provenanceHandle = store.handles.provenance("read-before-own-write:provenance");
+    const hotHandle = store.handles.hotDetail("read-before-own-write:hot");
+    const productSlot = defineProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.read-before-own-write-product-detail",
+      "Product detail read before its owning write.",
+    );
+    const hotSlot = defineHotDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.read-before-own-write-hot-detail",
+      "Hot detail read before its owning write.",
+    );
+    const run = lifecycle.begin(locus("read-before-own-write"));
+
+    expect(run.read(productHandle)).toBeNull();
+    expect(run.readProductDetail(productSlot, productHandle)).toBeNull();
+    expect(run.readHotDetail(hotSlot, hotHandle)).toBeNull();
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "read-before-own-write"),
+      [publishProductDetail(productSlot, productHandle, { owner: "candidate" })],
+      [publishHotDetail(hotSlot, productHandle, hotHandle, { owner: "candidate" })],
+    ));
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const recordKey = computationRecordReadKey(productHandle);
+    const productDetailKey = computationProductDetailReadKey(productSlot.detailKind, productHandle);
+    const hotDetailKey = computationHotDetailReadKey(hotSlot.detailKind, hotHandle);
+    expect(lifecycle.readState(run.computationId)?.reads).toEqual([]);
+    expect(lifecycle.readersFor(recordKey)).toEqual([]);
+    expect(lifecycle.readersFor(productDetailKey)).toEqual([]);
+    expect(lifecycle.readersFor(hotDetailKey)).toEqual([]);
+    expect(lifecycle.producerFor(recordKey)).toBe(run.computationId);
+    expect(lifecycle.producerFor(productDetailKey)).toBe(run.computationId);
+    expect(lifecycle.producerFor(hotDetailKey)).toBe(run.computationId);
+  });
+
+  test("rejects a superseded borrowed if-absent run without importing its reads", () => {
+    const store = new KernelStore("computation-superseded-borrowed-detail");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("superseded-borrowed-detail:product");
+    const provenanceHandle = store.handles.provenance("superseded-borrowed-detail:provenance");
+    const productSlot = defineProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.superseded-borrowed-product-detail",
+      "Borrowed detail staged by a superseded run.",
+    );
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(provenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        provenanceHandle,
+      ),
+    ], "superseded-borrowed-detail:product"));
+    store.productDetails.add(productSlot, productHandle, { owner: "foreign" });
+
+    const stale = lifecycle.begin(locus("superseded-borrowed-detail"));
+    stale.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([], "superseded-borrowed-detail:stale"),
+      [publishProductDetail(
+        productSlot,
+        productHandle,
+        { owner: "candidate" },
+        KernelDetailAdmission.IfAbsent,
+      )],
+    ));
+    const current = lifecycle.begin(locus("superseded-borrowed-detail"));
+
+    expect(stale.commit().state).toBe(ComputationCommitState.RejectedSuperseded);
+    expect(lifecycle.readState(stale.computationId)).toBeNull();
+    current.abort();
+  });
+
+  test("preflights producer ownership before mutating an admitted publication", () => {
+    const store = new KernelStore("computation-producer-preflight");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("producer-preflight:product");
+    const provenanceHandle = store.handles.provenance("producer-preflight:provenance");
+    const productSlot = defineProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.producer-preflight-product-detail",
+      "Product detail used to verify producer preflight ordering.",
+    );
+    const owner = lifecycle.begin(locus("producer-preflight-owner"));
+    owner.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "producer-preflight:owner"),
+      [publishProductDetail(productSlot, productHandle, { owner: "first" })],
+    ));
+    expect(owner.commit().state).toBe(ComputationCommitState.Committed);
+    const productDetailKey = computationProductDetailReadKey(productSlot.detailKind, productHandle);
+
+    // Simulate a violated low-level catalog invariant while retaining the lifecycle's ownership proof.
+    store.productDetails.remove(productHandle);
+    const contender = lifecycle.begin(locus("producer-preflight-contender"));
+    contender.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([], "producer-preflight:contender"),
+      [publishProductDetail(productSlot, productHandle, { owner: "second" })],
+    ));
+
+    expect(() => contender.commit()).toThrow(/already owned by/);
+    expect(store.productDetails.read(productSlot, productHandle)).toBeNull();
+    expect(lifecycle.readState(contender.computationId)).toBeNull();
+    expect(lifecycle.producerFor(productDetailKey)).toBe(owner.computationId);
+  });
+
   test("retains an unrelated template publication while replacing another", () => {
     const store = new KernelStore("computation-unrelated-retention");
     const lifecycle = new ComputationLifecycleRegistry(store);
@@ -320,6 +608,8 @@ describe("computation lifecycle", () => {
     r1.publish(publication("race:r1", [
       new SourceFileAddress(outputHandle, "test", "src/r1.html", SourceLanguage.Html),
     ]));
+    const outputReadKey = computationRecordReadKey(outputHandle);
+    expect(lifecycle.producerFor(outputReadKey)).toBeNull();
 
     revisions.set(readKey, "r2");
     const r2 = lifecycle.begin(locus("race"));
@@ -327,11 +617,13 @@ describe("computation lifecycle", () => {
     const r2Output = new SourceFileAddress(outputHandle, "test", "src/r2.html", SourceLanguage.Html);
     r2.publish(publication("race:r2", [r2Output]));
     expect(r2.commit().state).toBe(ComputationCommitState.Committed);
+    expect(lifecycle.producerFor(outputReadKey)).toBe(r2.computationId);
 
     const stale = r1.commit();
     expect(stale.state).toBe(ComputationCommitState.RejectedSuperseded);
     expect(store.read(outputHandle)).toBe(r2Output);
     expect(lifecycle.readState(r2.computationId)?.reads.map((read) => read.observedRevision)).toEqual(["r2"]);
+    expect(lifecycle.producerFor(outputReadKey)).toBe(r2.computationId);
   });
 
   test("keeps the same definition distinct in two compiler cohorts", () => {
@@ -1373,6 +1665,8 @@ describe("computation lifecycle", () => {
     ]));
     expect(initial.commit().state).toBe(ComputationCommitState.Committed);
     expect(lifecycle.readersFor("source:disposed")).toEqual([initial.computationId]);
+    const outputReadKey = computationRecordReadKey(outputHandle);
+    expect(lifecycle.producerFor(outputReadKey)).toBe(initial.computationId);
 
     const preparedBeforeDisposal = lifecycle.begin(locus("disposed"));
     preparedBeforeDisposal.observe(revisions.observe("source:disposed"));
@@ -1384,6 +1678,7 @@ describe("computation lifecycle", () => {
     expect(store.read(outputHandle)).toBeNull();
     expect(lifecycle.readState(initial.computationId)).toBeNull();
     expect(lifecycle.readersFor("source:disposed")).toEqual([]);
+    expect(lifecycle.producerFor(outputReadKey)).toBeNull();
     expect(preparedBeforeDisposal.commit().state).toBe(ComputationCommitState.RejectedSuperseded);
     expect(store.read(outputHandle)).toBeNull();
 
