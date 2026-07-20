@@ -1,9 +1,9 @@
 import ts from 'typescript';
 
 import {
-  StaticEvaluator,
   type StaticEvaluationRuntimeHost,
 } from '../evaluation/evaluator.js';
+import { executeStaticFunctionEffects } from '../evaluation/function-execution.js';
 import type { StaticIntrinsicEvaluationHost } from '../evaluation/intrinsics.js';
 import {
   StaticInvocationKind,
@@ -13,8 +13,7 @@ import {
   type StaticInvocationOccurrence,
 } from '../evaluation/invocation.js';
 import {
-  StaticEvaluationBranchMode,
-  StaticEvaluationPolicy,
+  type StaticEvaluationPolicy,
 } from '../evaluation/policy.js';
 import { delegateStaticEvaluationRuntimeHost } from '../evaluation/runtime-host.js';
 import type { EvaluationOpenSeam } from '../evaluation/seams.js';
@@ -73,18 +72,11 @@ export function executeDiRegistryFunction(
       return staticInvocationValue(onContainerCall(frame, host));
     },
   );
-  const evaluator = new StaticEvaluator(
-    new StaticEvaluationPolicy(
-      basePolicy.expressionStatementPolicies,
-      basePolicy.guardrails,
-      StaticEvaluationBranchMode.PathProvenEffects,
-    ),
-    runtimeHost,
-  );
-  const result = evaluator.evaluateFunctionValue(
+  const result = executeStaticFunctionEffects(
     evaluationRegisterFunction,
     invocationNode,
-    evaluationRegisterFunction.environment.moduleKey,
+    basePolicy,
+    runtimeHost,
     [evaluationContainerValue],
     evaluationRegistryValue,
   );

@@ -8,7 +8,7 @@ import {
   EvaluationRead,
   readStaticStringArrayValue,
   readStaticStringValue,
-  StaticEvaluationExpressionReader,
+  type StaticExpressionEvaluationReader,
 } from '../evaluation/expression-reader.js';
 import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own-properties.js';
 import {
@@ -53,7 +53,7 @@ export class NodeObserverCustomizationRead<TValue> {
 
 export function nodeObserverNodeConfigsFromUseConfigCall(
   call: ts.CallExpression,
-  reader: StaticEvaluationExpressionReader,
+  reader: StaticExpressionEvaluationReader,
 ): NodeObserverCustomizationRead<NodeObserverLocatorNodeConfig> {
   const [first, second, third] = call.arguments;
   if (first == null || ts.isSpreadElement(first)) {
@@ -174,7 +174,7 @@ export function nodeObserverNodeConfigsFromUseConfigCall(
 
 export function nodeObserverGlobalConfigsFromUseConfigGlobalCall(
   call: ts.CallExpression,
-  reader: StaticEvaluationExpressionReader,
+  reader: StaticExpressionEvaluationReader,
 ): NodeObserverCustomizationRead<NodeObserverLocatorGlobalConfig> {
   const [first, second] = call.arguments;
   if (first == null || ts.isSpreadElement(first)) {
@@ -253,7 +253,7 @@ export function nodeObserverGlobalConfigsFromUseConfigGlobalCall(
 
 export function nodeObserverAccessorOverridesFromCall(
   call: ts.CallExpression,
-  reader: StaticEvaluationExpressionReader,
+  reader: StaticExpressionEvaluationReader,
 ): NodeObserverCustomizationRead<NodeObserverLocatorAccessorOverride> {
   const [first, second] = call.arguments;
   if (first == null || ts.isSpreadElement(first)) {
@@ -330,7 +330,7 @@ export function nodeObserverAccessorOverridesFromCall(
 
 export function nodeObserverGlobalAccessorOverridesFromCall(
   call: ts.CallExpression,
-  reader: StaticEvaluationExpressionReader,
+  reader: StaticExpressionEvaluationReader,
 ): NodeObserverCustomizationRead<string> {
   const values: string[] = [];
   const evaluations: EvaluationRead<EvaluationValue>[] = [];
@@ -365,7 +365,7 @@ export function nodeObserverGlobalAccessorOverridesFromCall(
 
 export function nodeObserverConfigFromExpression(
   expression: ts.Expression,
-  reader: StaticEvaluationExpressionReader,
+  reader: StaticExpressionEvaluationReader,
 ): NodeObserverExpressionRead<RuntimeNodeObserverConfig> {
   const evaluation = reader.evaluateExpression(expression);
   return new NodeObserverExpressionRead(
@@ -654,7 +654,7 @@ function nodeObserverDefaultFromConfig(config: EvaluationObjectValue): NodeObser
 
 function staticStringFromExpression(
   expression: ts.Expression,
-  reader: StaticEvaluationExpressionReader,
+  reader: StaticExpressionEvaluationReader,
 ): NodeObserverExpressionRead<string | null> {
   const evaluation = reader.evaluateExpression(expression);
   const value = evaluation.value == null ? null : readStaticStringValue(evaluation.value);

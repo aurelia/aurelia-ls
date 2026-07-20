@@ -7,16 +7,40 @@ import {
 import {
   EvaluationRead,
   readStaticStringValue,
-  StaticEvaluationExpressionReader,
+  StaticInvocationEvidenceExpressionReader,
+  StaticSourceLiteralExpressionReader,
+  type StaticExpressionEvaluationReader,
 } from '../evaluation/expression-reader.js';
+import type { StaticEvaluationRuntimeHost } from '../evaluation/evaluator.js';
+import { executeStaticFunctionEffects } from '../evaluation/function-execution.js';
+import type { StaticIntrinsicEvaluationHost } from '../evaluation/intrinsics.js';
+import {
+  StaticInvocationKind,
+  StaticInvocationNotApplicable,
+  staticInvocationValue,
+  type StaticInvocationDispatch,
+  type StaticInvocationFrame,
+} from '../evaluation/invocation.js';
+import { delegateStaticEvaluationRuntimeHost } from '../evaluation/runtime-host.js';
+import { StaticEvaluationSessionFork } from '../evaluation/evaluation-session.js';
 import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own-properties.js';
 import {
+  EvaluationBooleanValue,
+  EvaluationBoundaryKind,
+  EvaluationBoundaryObjectValue,
+  EvaluationObjectProperty,
   EvaluationObjectPropertyState,
+  EvaluationObjectValue,
+  EvaluationUndefined,
   EvaluationValueKind,
   type EvaluationFunctionValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
-import type { EvaluationOpenSeam } from '../evaluation/seams.js';
+import {
+  EvaluationOpenSeamKind,
+  type EvaluationOpenSeam,
+} from '../evaluation/seams.js';
+import { evaluationValuesShareLineage } from '../evaluation/value-relation.js';
 import {
   projectModuleSourceNodeOrdinalLocalKey,
 } from '../kernel/local-key.js';
@@ -375,8 +399,8 @@ class FrameworkServiceCustomizationDraft {
 /**
  * Recognizes AppTask-time mutations of framework compiler/observer services.
  *
- * This is intentionally source-shaped rather than an arbitrary callback interpreter: the framework service owns the
- * runtime state, while this recognizer admits only configuration calls whose arguments close through static evaluation.
+ * Only DI-spent callbacks execute, in isolated evaluator forks. Reached framework-service calls are decoded from their
+ * immutable invocation evidence; arbitrary callback effects remain explicit evaluator pressure.
  */
 export class FrameworkServiceCustomizationRecognitionPass {
   constructor(
@@ -409,27 +433,20 @@ export class FrameworkServiceCustomizationRecognitionPass {
       if (evaluationSource == null) {
         continue;
       }
-      const reader = new StaticEvaluationExpressionReader(
-        callback.environment,
-        callback.environment.moduleKey,
-        evaluationSource.evaluation.policy,
-        evaluationSource.evaluation.runtimeHost,
-      );
       const context = new ConfigurationRecognitionContext(
         evaluationSource.sourceFile,
         evaluationSource.moduleKey,
         evaluationSource.admission.projectKey,
         evaluationSource.admission.addressHandle,
         evaluationSource.evaluation,
-        reader,
+        new StaticSourceLiteralExpressionReader(),
         null,
         sourceFileAddressHandlesByFileName,
       );
-      recognizeAppTaskServiceCustomizations(
+      executeAppTaskServiceCustomizations(
         context,
         evaluation,
         callback,
-        reader,
         draft,
       );
     }
@@ -445,113 +462,76 @@ export class FrameworkServiceCustomizationRecognitionPass {
   }
 }
 
-function recognizeAppTaskServiceCustomizations(
+function executeAppTaskServiceCustomizations(
   context: ConfigurationRecognitionContext,
   appTask: AureliaAppTaskEvaluation,
   callback: EvaluationFunctionValue,
-  reader: StaticEvaluationExpressionReader,
   draft: FrameworkServiceCustomizationDraft,
 ): void {
-  const serviceLocals = new Map<string, FrameworkServiceKind>();
-  const containerLocals = new Set<string>();
-  const firstParameter = callback.declaration.parameters[0]?.name;
-  if (firstParameter != null && ts.isIdentifier(firstParameter)) {
-    const callbackTarget = appTaskCallbackTarget(appTask);
-    if (callbackTarget?.kind === AppTaskCallbackTargetKind.Container) {
-      containerLocals.add(firstParameter.text);
-    } else if (callbackTarget?.kind === AppTaskCallbackTargetKind.FrameworkService) {
-      serviceLocals.set(firstParameter.text, callbackTarget.service);
-    }
-  }
-
-  const visit = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer != null) {
-      const service = serviceKindForContainerGet(node.initializer, reader, containerLocals);
-      if (service != null) {
-        serviceLocals.set(node.name.text, service);
-      }
-    }
-
-    if (ts.isCallExpression(node)) {
-      recognizeServiceMethodCall(context, node, reader, serviceLocals, containerLocals, draft);
-    }
-    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-      recognizeServiceAssignment(context, node, reader, serviceLocals, containerLocals, draft);
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  const body = callback.declaration.body;
-  if (body != null) {
-    visit(body);
-  }
-}
-
-function recognizeServiceAssignment(
-  context: ConfigurationRecognitionContext,
-  assignment: ts.BinaryExpression,
-  reader: StaticEvaluationExpressionReader,
-  serviceLocals: ReadonlyMap<string, FrameworkServiceKind>,
-  containerLocals: ReadonlySet<string>,
-  draft: FrameworkServiceCustomizationDraft,
-): void {
-  const left = unwrapExpression(assignment.left);
-  if (!ts.isPropertyAccessExpression(left) || left.name.text !== 'allowDirtyCheck') {
+  const callbackTarget = appTaskCallbackTarget(appTask);
+  if (callbackTarget == null) {
     return;
   }
-  const service = serviceKindForExpression(left.expression, reader, serviceLocals, containerLocals);
-  if (service !== FrameworkServiceKind.NodeObserverLocator) {
-    return;
+  const session = new StaticEvaluationSessionFork(context.evaluation.runtimeHost);
+  const evaluation = session.forkModuleEvaluation(context.evaluation);
+  const executableCallback = session.forkValue(callback);
+  const services = new FrameworkServiceExecutionValues(
+    executableCallback.declaration,
+    evaluation.runtimeHost,
+    draft.nodeObserverLocatorAllowDirtyCheck ?? true,
+  );
+  const callbackArgument = services.callbackArgument(callbackTarget);
+  const handledServices = new Map<StaticInvocationFrame['identity'], FrameworkServiceKind>();
+  const runtimeHost = delegateStaticEvaluationRuntimeHost(
+    evaluation.runtimeHost,
+    (frame, host) => evaluateFrameworkServiceInvocation(frame, host, services, handledServices),
+  );
+  const execution = executeStaticFunctionEffects(
+    executableCallback,
+    executableCallback.declaration,
+    evaluation.policy,
+    runtimeHost,
+    [callbackArgument],
+  );
+
+  for (const invocation of execution.invocations) {
+    const service = handledServices.get(invocation.identity);
+    if (service == null || !ts.isCallExpression(invocation.node) || invocation.propertyKey == null) {
+      continue;
+    }
+    const reader = new StaticInvocationEvidenceExpressionReader(invocation.moduleKey, [invocation]);
+    if (service === FrameworkServiceKind.AttrMapper) {
+      recognizeAttrMapperCall(context, invocation.propertyKey, invocation.node, reader, draft);
+    } else {
+      recognizeNodeObserverLocatorCall(context, invocation.propertyKey, invocation.node, reader, draft);
+    }
   }
-  const read = reader.evaluateExpression(assignment.right);
+
+  const read = new EvaluationRead(
+    execution.value,
+    executableCallback.declaration,
+    execution.openSeams,
+    execution.abruptCompletion,
+  );
   draft.addEvaluationPressure(
     context,
     read,
-    assignment.right,
-    'Node-observer allowDirtyCheck assignment retained open or abrupt static-evaluation pressure.',
+    executableCallback.declaration,
+    'Framework-service AppTask execution retained open or abrupt static-evaluation pressure.',
   );
-  if (read.value?.kind === EvaluationValueKind.Boolean) {
-    draft.nodeObserverLocatorAllowDirtyCheck = read.value.value;
-  } else if (read.value != null) {
-    draft.addDomainPressure(
-      context,
-      assignment.right,
-      'Node-observer allowDirtyCheck assignment did not reduce to a boolean value.',
-      [],
-    );
-  }
-}
-
-function recognizeServiceMethodCall(
-  context: ConfigurationRecognitionContext,
-  call: ts.CallExpression,
-  reader: StaticEvaluationExpressionReader,
-  serviceLocals: ReadonlyMap<string, FrameworkServiceKind>,
-  containerLocals: ReadonlySet<string>,
-  draft: FrameworkServiceCustomizationDraft,
-): void {
-  const expression = unwrapExpression(call.expression);
-  if (!ts.isPropertyAccessExpression(expression)) {
-    return;
-  }
-  const service = serviceKindForExpression(expression.expression, reader, serviceLocals, containerLocals);
-  if (service == null) {
-    return;
-  }
-
-  if (service === FrameworkServiceKind.AttrMapper) {
-    recognizeAttrMapperCall(context, expression.name.text, call, reader, draft);
-    return;
-  }
-  recognizeNodeObserverLocatorCall(context, expression.name.text, call, reader, draft);
+  publishFrameworkServiceMutations(
+    context,
+    services,
+    execution.openSeams.length === 0 && execution.abruptCompletion == null,
+    draft,
+  );
 }
 
 function recognizeAttrMapperCall(
   context: ConfigurationRecognitionContext,
   methodName: string,
   call: ts.CallExpression,
-  reader: StaticEvaluationExpressionReader,
+  reader: StaticExpressionEvaluationReader,
   draft: FrameworkServiceCustomizationDraft,
 ): void {
   switch (methodName) {
@@ -651,7 +631,7 @@ function recognizeNodeObserverLocatorCall(
   context: ConfigurationRecognitionContext,
   methodName: string,
   call: ts.CallExpression,
-  reader: StaticEvaluationExpressionReader,
+  reader: StaticExpressionEvaluationReader,
   draft: FrameworkServiceCustomizationDraft,
 ): void {
   switch (methodName) {
@@ -712,40 +692,258 @@ function publishNodeObserverReadPressure(
   }
 }
 
-function serviceKindForExpression(
-  expression: ts.Expression,
-  reader: StaticEvaluationExpressionReader,
-  serviceLocals: ReadonlyMap<string, FrameworkServiceKind>,
-  containerLocals: ReadonlySet<string>,
-): FrameworkServiceKind | null {
-  const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current)) {
-    return serviceLocals.get(current.text) ?? null;
+const attrMapperMethodNames = new Set([
+  'useTwoWay',
+  'useMapping',
+  'useGlobalMapping',
+]);
+
+const nodeObserverLocatorMethodNames = new Set([
+  'useConfig',
+  'useConfigGlobal',
+  'overrideAccessor',
+  'overrideAccessorGlobal',
+]);
+
+class FrameworkServiceExecutionValues {
+  readonly attrMapper: EvaluationObjectValue;
+  readonly nodeObserverLocator: EvaluationObjectValue;
+  readonly container: EvaluationObjectValue;
+
+  constructor(
+    node: ts.Node,
+    runtimeHost: StaticEvaluationRuntimeHost,
+    allowDirtyCheck: boolean,
+  ) {
+    const graph = runtimeHost.evaluationValueGraph;
+    const attrMapper = frameworkServiceValue(
+      FrameworkServiceKind.AttrMapper,
+      node,
+      allowDirtyCheck,
+    );
+    const nodeObserverLocator = frameworkServiceValue(
+      FrameworkServiceKind.NodeObserverLocator,
+      node,
+      allowDirtyCheck,
+    );
+    const container = frameworkServiceContainerValue(node);
+    this.attrMapper = graph?.retainProduced(attrMapper) ?? attrMapper;
+    this.nodeObserverLocator = graph?.retainProduced(nodeObserverLocator) ?? nodeObserverLocator;
+    this.container = graph?.retainProduced(container) ?? container;
   }
-  return serviceKindForContainerGet(current, reader, containerLocals);
+
+  callbackArgument(target: AppTaskCallbackTarget): EvaluationValue {
+    return target.kind === AppTaskCallbackTargetKind.Container
+      ? this.container
+      : this.serviceValue(target.service);
+  }
+
+  serviceValue(kind: FrameworkServiceKind): EvaluationObjectValue {
+    return kind === FrameworkServiceKind.AttrMapper
+      ? this.attrMapper
+      : this.nodeObserverLocator;
+  }
+
+  serviceKindForReceiver(receiver: EvaluationValue): FrameworkServiceKind | null {
+    if (evaluationValuesShareLineage(receiver, this.attrMapper)) {
+      return FrameworkServiceKind.AttrMapper;
+    }
+    return evaluationValuesShareLineage(receiver, this.nodeObserverLocator)
+      ? FrameworkServiceKind.NodeObserverLocator
+      : null;
+  }
+
+  isContainer(receiver: EvaluationValue): boolean {
+    return evaluationValuesShareLineage(receiver, this.container);
+  }
 }
 
-function serviceKindForContainerGet(
-  expression: ts.Expression,
-  reader: StaticEvaluationExpressionReader,
-  containerLocals: ReadonlySet<string>,
-): FrameworkServiceKind | null {
-  const current = unwrapExpression(expression);
-  if (!ts.isCallExpression(current)) {
-    return null;
+function frameworkServiceValue(
+  kind: FrameworkServiceKind,
+  node: ts.Node,
+  allowDirtyCheck: boolean,
+): EvaluationObjectValue {
+  const methodNames = frameworkServiceMethodNames(kind);
+  const properties = new Map<string, EvaluationObjectProperty>();
+  for (const name of methodNames) {
+    properties.set(name, new EvaluationObjectProperty(
+      name,
+      new EvaluationBoundaryObjectValue(
+        EvaluationBoundaryKind.ExternalModule,
+        `${frameworkServiceLabel(kind)}.${name}`,
+        new Map(),
+        node,
+        true,
+      ),
+      null,
+      EvaluationObjectPropertyState.Closed,
+    ));
   }
-  const callee = unwrapExpression(current.expression);
-  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'get') {
-    return null;
+  if (kind === FrameworkServiceKind.NodeObserverLocator) {
+    properties.set('allowDirtyCheck', new EvaluationObjectProperty(
+      'allowDirtyCheck',
+      new EvaluationBooleanValue(allowDirtyCheck, node),
+      null,
+      EvaluationObjectPropertyState.Closed,
+    ));
   }
-  const receiver = unwrapExpression(callee.expression);
-  if (!ts.isIdentifier(receiver) || !containerLocals.has(receiver.text)) {
-    return null;
+  return new EvaluationObjectValue(properties, false, node);
+}
+
+function frameworkServiceContainerValue(node: ts.Node): EvaluationObjectValue {
+  return new EvaluationObjectValue(new Map([
+    ['get', new EvaluationObjectProperty(
+      'get',
+      new EvaluationBoundaryObjectValue(
+        EvaluationBoundaryKind.ExternalModule,
+        'IContainer.get',
+        new Map(),
+        node,
+        true,
+      ),
+      null,
+      EvaluationObjectPropertyState.Closed,
+    )],
+  ]), false, node);
+}
+
+function evaluateFrameworkServiceInvocation(
+  frame: StaticInvocationFrame,
+  host: StaticIntrinsicEvaluationHost,
+  services: FrameworkServiceExecutionValues,
+  handledServices: Map<StaticInvocationFrame['identity'], FrameworkServiceKind>,
+): StaticInvocationDispatch {
+  if (
+    frame.kind !== StaticInvocationKind.Call
+    || !ts.isCallExpression(frame.node)
+    || frame.thisValue == null
+    || frame.propertyKey == null
+  ) {
+    return StaticInvocationNotApplicable;
   }
-  const key = current.arguments[0];
-  return key == null || ts.isSpreadElement(key)
-    ? null
-    : serviceKindForKeyValue(reader.evaluateExpression(key).value, key);
+  const receiver = frame.thisValue.value;
+  if (services.isContainer(receiver)) {
+    if (frame.propertyKey !== 'get') {
+      return staticInvocationValue(host.unknown(
+        `Framework-service AppTask called unsupported IContainer.${frame.propertyKey}(...).`,
+        frame.node,
+        frame.moduleKey,
+        EvaluationOpenSeamKind.DynamicCall,
+      ));
+    }
+    if (host.checkpoint().openSeamCount > 0) {
+      return staticInvocationValue(EvaluationUndefined);
+    }
+    const argument = frame.argumentList.exactEvidence()?.[0] ?? null;
+    const argumentNode = frame.argumentList.authoredArguments[0]?.valueExpression ?? frame.node;
+    const service = argument == null
+      ? null
+      : serviceKindForKeyValue(argument.value, argumentNode);
+    return service == null
+      ? staticInvocationValue(host.unknown(
+          'Framework-service AppTask container.get(...) key did not resolve to a modeled framework service.',
+          frame.node,
+          frame.moduleKey,
+          EvaluationOpenSeamKind.DynamicCall,
+        ))
+      : staticInvocationValue(services.serviceValue(service));
+  }
+
+  const service = services.serviceKindForReceiver(receiver);
+  if (service == null) {
+    return StaticInvocationNotApplicable;
+  }
+  if (host.checkpoint().openSeamCount > 0) {
+    return staticInvocationValue(EvaluationUndefined);
+  }
+  if (!frameworkServiceMethodNames(service).has(frame.propertyKey)) {
+    return staticInvocationValue(host.unknown(
+      `Framework-service AppTask called unsupported ${frameworkServiceLabel(service)}.${frame.propertyKey}(...).`,
+      frame.node,
+      frame.moduleKey,
+      EvaluationOpenSeamKind.DynamicCall,
+    ));
+  }
+  handledServices.set(frame.identity, service);
+  return staticInvocationValue(EvaluationUndefined);
+}
+
+function publishFrameworkServiceMutations(
+  context: ConfigurationRecognitionContext,
+  services: FrameworkServiceExecutionValues,
+  executionClosed: boolean,
+  draft: FrameworkServiceCustomizationDraft,
+): void {
+  publishFrameworkServiceObjectMutations(
+    context,
+    FrameworkServiceKind.AttrMapper,
+    services.attrMapper,
+    executionClosed,
+    draft,
+  );
+  publishFrameworkServiceObjectMutations(
+    context,
+    FrameworkServiceKind.NodeObserverLocator,
+    services.nodeObserverLocator,
+    executionClosed,
+    draft,
+  );
+  for (const property of services.container.properties.values()) {
+    if (property.node != null) {
+      draft.addDomainPressure(
+        context,
+        property.node,
+        `Framework-service AppTask mutated unsupported IContainer.${property.name}.`,
+        frameworkServiceReasonKindsForValue(property.value, property.openSeams),
+      );
+    }
+  }
+}
+
+function publishFrameworkServiceObjectMutations(
+  context: ConfigurationRecognitionContext,
+  kind: FrameworkServiceKind,
+  service: EvaluationObjectValue,
+  executionClosed: boolean,
+  draft: FrameworkServiceCustomizationDraft,
+): void {
+  for (const property of service.properties.values()) {
+    if (property.node == null) {
+      continue;
+    }
+    if (kind === FrameworkServiceKind.NodeObserverLocator && property.name === 'allowDirtyCheck') {
+      if (!executionClosed) {
+        continue;
+      }
+      if (property.value.kind === EvaluationValueKind.Boolean) {
+        draft.nodeObserverLocatorAllowDirtyCheck = property.value.value;
+      } else {
+        draft.addDomainPressure(
+          context,
+          property.node,
+          'Node-observer allowDirtyCheck assignment did not reduce to a boolean value.',
+          frameworkServiceReasonKindsForValue(property.value, property.openSeams),
+        );
+      }
+      continue;
+    }
+    draft.addDomainPressure(
+      context,
+      property.node,
+      `Framework-service AppTask mutated unsupported ${frameworkServiceLabel(kind)}.${property.name}.`,
+      frameworkServiceReasonKindsForValue(property.value, property.openSeams),
+    );
+  }
+}
+
+function frameworkServiceMethodNames(kind: FrameworkServiceKind): ReadonlySet<string> {
+  return kind === FrameworkServiceKind.AttrMapper
+    ? attrMapperMethodNames
+    : nodeObserverLocatorMethodNames;
+}
+
+function frameworkServiceLabel(kind: FrameworkServiceKind): string {
+  return kind === FrameworkServiceKind.AttrMapper ? 'IAttrMapper' : 'NodeObserverLocator';
 }
 
 function appTaskCallbackTarget(appTask: AureliaAppTaskEvaluation): AppTaskCallbackTarget | null {
@@ -807,7 +1005,7 @@ function keyNameForValue(value: EvaluationValue | null, expression: ts.Expressio
 
 function readAttributeMappings(
   expression: ts.Expression,
-  reader: StaticEvaluationExpressionReader,
+  reader: StaticExpressionEvaluationReader,
   global: boolean,
 ): FrameworkAttributeMappingsRead {
   const evaluation = reader.evaluateExpression(expression);
@@ -972,7 +1170,7 @@ function frameworkServiceReasonKindsForValue(
 
 function readTwoWayRule(
   expression: ts.Expression,
-  reader: StaticEvaluationExpressionReader,
+  reader: StaticExpressionEvaluationReader,
 ): FrameworkTwoWayRuleRead {
   const evaluations: EvaluationRead<EvaluationValue>[] = [];
   const current = unwrapExpression(expression);
@@ -1026,7 +1224,7 @@ function functionReturnExpression(
 
 function readTwoWayPredicateFacts(
   expression: ts.Expression,
-  reader: StaticEvaluationExpressionReader,
+  reader: StaticExpressionEvaluationReader,
   elementParameter: string | null,
   propertyParameter: string | null,
   evaluations: EvaluationRead<EvaluationValue>[],
@@ -1059,7 +1257,7 @@ function readTwoWayPredicateFacts(
 function readTwoWayEqualityFact(
   subject: ts.Expression,
   value: ts.Expression,
-  reader: StaticEvaluationExpressionReader,
+  reader: StaticExpressionEvaluationReader,
   elementParameter: string | null,
   propertyParameter: string | null,
   evaluations: EvaluationRead<EvaluationValue>[],
@@ -1084,7 +1282,7 @@ function readTwoWayEqualityFact(
 
 function readStaticString(
   expression: ts.Expression,
-  reader: StaticEvaluationExpressionReader,
+  reader: StaticExpressionEvaluationReader,
   evaluations: EvaluationRead<EvaluationValue>[],
 ): string | null {
   const read = reader.evaluateExpression(expression);

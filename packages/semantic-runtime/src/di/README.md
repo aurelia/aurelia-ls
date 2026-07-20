@@ -60,6 +60,8 @@ The tooling model keeps those consequences distinct:
   to the constructor operation and must not be reconstructed during DI world spending.
 - `RegistryValue` and `ParameterizedRegistry` name runtime-shaped registry values. Their `register(...)` methods expose
   whether registration would delegate, admit parameters directly, or remain open for evaluator-driven body analysis.
+  Candidate-local registry execution uses evaluation-owned `executeStaticFunctionEffects(...)`; DI contributes exact
+  registry/container identities and container-call spending, not a separate branch interpreter.
 - `ContainerResolverSlot`, `ContainerSelfResolverSlot`, `ContainerResourceSlot`, and `ContainerFactorySlot` name the
   resulting container-owned rows. Resolver slots keep the modeled resolver object when one exists; this mirrors
   Aurelia's resolver map closely enough for `Container.getFactory(...)` to consult resolver state before deciding that a

@@ -6,9 +6,25 @@ import {
   customElement,
 } from '@aurelia/runtime-html';
 
+function applyMapping(
+  mapper: { useGlobalMapping(mapping: Record<string, string>): void },
+  mapping: Record<string, string>,
+): void {
+  mapper.useGlobalMapping(mapping);
+}
+
 function mapperTask(mapping: Record<string, string>) {
   return AppTask.creating(RuntimeAttrMapper, (mapper) => {
-    mapper.useGlobalMapping(mapping);
+    if (false) {
+      mapper.useGlobalMapping({ 'dead-branch': 'deadBranch' });
+    }
+    if (true) {
+      const mapperAlias = mapper;
+      applyMapping(mapperAlias, mapping);
+    }
+    if (document.documentElement.dataset.runtimeMapping === 'enabled') {
+      mapper.useGlobalMapping({ 'runtime-branch': 'runtimeBranch' });
+    }
   });
 }
 

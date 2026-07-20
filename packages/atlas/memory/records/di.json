@@ -133,6 +133,7 @@
       "guidance": [
         "Check framework.di and framework.admission before extending this constructor from app pressure alone.",
         "Spend evaluator-known registry functions only through DiRegistrationSpendingCascade when an executed configuration path supplies the exact occurrence-local registry value. RegistryBodyStepIndex is a declaration-inventory join: candidate-local execution must reach and match each register call before DI spends its historical argument values; unresolved or unmatched bodies remain open.",
+        "Registry bodies and bounded AppTask callbacks share evaluation-owned executeStaticFunctionEffects for PathProvenEffects semantics. DI owns exact registry/container receiver dispatch and ordered registration spending, not a private branch interpreter.",
         "Use an active recursion stack for unable_auto_register authority; completed repeated registry calls are distinct ordered effects, not a global visited-set duplicate.",
         "ContainerRegistrationOperation.ordinal records DI traversal order independently of materialization order. AppTask effects join to that traversal as RegisteredAppTask evidence only when their admission is spent; do not infer registration from a source definition or factory site.",
         "Derive compiler-world visibility from canonical ITemplateCompiler provider identity on the app container's consulting chain, not from manifest capability presence.",
@@ -169,7 +170,13 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/di/registry-execution.ts",
           "symbolName": "DiRegistryExecutionResult",
-          "summary": "Shared evaluator-backed registry execution result."
+          "summary": "DI-owned registry/container dispatch result over evaluation-owned path-proven function execution."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/function-execution.ts",
+          "symbolName": "executeStaticFunctionEffects",
+          "summary": "Canonical path-proven function-effect execution shared with bounded AppTask callbacks."
         },
         {
           "kind": "lens",

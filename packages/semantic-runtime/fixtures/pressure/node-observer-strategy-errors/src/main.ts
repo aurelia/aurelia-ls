@@ -10,7 +10,12 @@ new Aurelia()
   .register(
     StandardConfiguration,
     AppTask.creating(NodeObserverLocator, (locator) => {
-      locator.allowDirtyCheck = false;
+      if (true) {
+        locator.allowDirtyCheck = false;
+      }
+      if (false) {
+        locator.allowDirtyCheck = true;
+      }
     }),
   )
   .app({

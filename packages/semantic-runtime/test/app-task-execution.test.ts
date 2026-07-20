@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'vitest';
 
+import { SemanticAppQueryKind } from '../src/api/contracts.js';
 import { createSemanticRuntime } from '../src/api/runtime.js';
 
 describe('AppTask registration execution', () => {
@@ -19,6 +20,11 @@ describe('AppTask registration execution', () => {
     const factorySites = new Set(registrations.map((registration) =>
       `${registration.evaluation?.sourceNode.pos}:${registration.evaluation?.sourceNode.end}`
     ));
+    const callbackPressure = app.ask({
+      kind: SemanticAppQueryKind.OpenSeamSites,
+      openSeamKindKey: 'configuration.open-configuration-option',
+      page: { size: 100 },
+    }).value.rows;
 
     expect(registrations).toHaveLength(2);
     expect(factorySites.size).toBe(1);
@@ -29,6 +35,9 @@ describe('AppTask registration execution', () => {
       ['second-execution', 'secondExecution'],
     ]);
     expect(mappings.some((mapping) => mapping.attributeName === 'never-executed')).toBe(false);
+    expect(callbackPressure.some((row) =>
+      row.sampleSummary.includes('If statement depended on a boundary condition')
+    )).toBe(true);
   }, 30_000);
 });
 

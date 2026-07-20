@@ -17,6 +17,7 @@
         "StaticEvaluationExpressionReader is not an isolation boundary. A speculative or replaceable analysis owner should call StaticProjectEvaluationResult.forkSession() once and share that graph-preserving session across all of its readers; forking per reader destroys authored alias identity and breaks cross-reader joins.",
         "StaticModuleEvaluationExpressionReader and StaticInvocationEvidenceExpressionReader are evidence projections, not follow-up evaluators. A source expression with no retained occurrence returns invocation-source-read pressure and must never fall back to StaticEvaluationExpressionReader against final module state; source-only declaration inventories may close syntax-owned literals while keeping nonliteral fields open.",
         "StaticEvaluationSessionFork must clone every mutable evaluator carrier, captured environment, and completion while preserving aliases and cycles, including Promise back-edges and class/instance knots. Runtime-host call/new results are adopted into the active session realm so host-installed aliases and call-frame closures remain exact; metadata transfer must fork any mutable child values held outside the generic value graph. Template compilation inside a complete app-analysis candidate and later binding/router value evaluation use separate explicit sessions so rejected work cannot mutate the admitted project graph or leak mutable evaluator state across lifecycle phases.",
+        "Domain consumers that intentionally spend retained function effects must use executeStaticFunctionEffects, which preserves policy/guardrails while forcing PathProvenEffects. Callers still own candidate-local session forks, exact arguments, runtime-host operations, and domain projection; this helper is not a lifecycle scheduler.",
         "When a gap appears, also check whether Atlas needs better flow or capability projection to expose the evaluator route.",
         "Use `framework:evaluator` for targeted framework evaluator effects, open seams, and module summaries before expanding semantic-runtime evaluator/world-construction support.",
         "`framework:evaluator --memberName=...` narrows the traced root; `--calleeName=...` only filters returned effects. Use memberName when checking whether one framework method closes without open seams.",
@@ -70,6 +71,12 @@
           "symbolName": "StaticEvaluator",
           "line": 168,
           "summary": "Static ECMAScript evaluator implementation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/function-execution.ts",
+          "symbolName": "executeStaticFunctionEffects",
+          "summary": "Canonical path-proven retained-function effect boundary for domain-owned execution hosts."
         },
         {
           "kind": "source",

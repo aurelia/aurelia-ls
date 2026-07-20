@@ -215,19 +215,21 @@ can be source-associated with the `I18nConfiguration.customize(...)` admission. 
 `coreComponents(options)` path without executing the callback body generally.
 
 Some AppTask callbacks do intentionally mutate framework service state before compilation or hydration. Those are not
-generic lifecycle execution: `framework-service-customization.ts` recognizes framework-shaped mutations of services
-such as `IAttrMapper`/`AttrMapper` and `NodeObserverLocator`/`INodeObserverLocator`, closes static callback values
-from the exact spent AppTask value and its captured evaluator environment, and publishes explicit service configuration
-for app-root compiler worlds and bind-time observer lookup. Unregistered task definitions do not participate.
+generic lifecycle execution: `framework-service-customization.ts` executes the exact DI-spent callback in an isolated
+evaluator fork under the path-proven effect policy. Framework-service aliases, local helper calls, and
+`IContainer.get(...)` retain evaluator identity, while only reached `IAttrMapper`/`AttrMapper` and
+`NodeObserverLocator`/`INodeObserverLocator` invocation snapshots become explicit service configuration for app-root
+compiler worlds and bind-time observer lookup. Unregistered task definitions and dead callback branches do not
+participate; runtime-dependent branches publish evaluator pressure instead of guessed mutations.
 `AttrMapper.useTwoWay(...)` therefore affects compiler-world binding mode decisions,
 and `NodeObserverLocator.useConfig(...)`, accessor overrides, and closed `allowDirtyCheck` assignments affect the per-world observer locator used by
 `Controller.bind` analysis. The callback argument is treated as a framework service only when the `AppTask` key is that
 service, and as a container only when the key is `IContainer`; no-key tasks and arbitrary DI keys must not masquerade as
-containers merely because their parameter is later used with `.get(...)`. Supported callback-body syntax is still a
-bounded classifier, not proof that every internal branch executed; dead/internal-branch precision belongs in an
-evaluator-backed framework-service execution host, not another source scanner. If a new callback shape needs more
-expression closure, improve the ECMAScript evaluator or expression reader first; do not hide one-off callback parsing
-inside compiler-world, renderer, or observation materializers.
+containers merely because their parameter is later used with `.get(...)`. The execution host models only those two
+framework services and container lookup for them; unsupported calls, mutations, async continuations, and arbitrary
+lifecycle effects stay open. Invocation arguments are decoded through `StaticInvocationEvidenceExpressionReader`, so a
+new callback shape must improve the ECMAScript evaluator or the shared expression reader rather than add one-off source
+parsing inside compiler-world, renderer, or observation materializers.
 `AttrMapper` configuration keys remain exact, as they do in the framework service. Template compilation projects
 authored HTML/SVG/MathML names into the browser's runtime `nodeName` and attribute spelling before lookup; it does not
 case-fold the app's `useMapping(...)`, `useGlobalMapping(...)`, or `useTwoWay(...)` constants into aliases that would be

@@ -21,6 +21,9 @@ new Aurelia()
       locator.useConfigGlobal('textContent', appNodeObserverConfig);
       locator.useConfig('MY-ELEMENT', 'value', appNodeObserverConfig);
       locator.useConfig('MY-ELEMENT', 'value', appNodeObserverConfig);
+      if (false) {
+        locator.useConfig('MY-ELEMENT', 'value', appNodeObserverConfig);
+      }
     }),
     AppTask.creating(IContainer, (container) => {
       const locator = container.get(NodeObserverLocator);

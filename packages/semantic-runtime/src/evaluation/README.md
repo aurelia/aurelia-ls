@@ -351,6 +351,12 @@ available to domain recognizers that must project a scoped uncertainty from the 
 `evaluation.invocation-source-read` seam when no unique retained edge exists, never replay an invocation AST against a
 later lexical environment.
 
+`executeStaticFunctionEffects(...)` is the shared boundary for domain consumers that intentionally spend one retained
+function's side effects. It preserves the caller's policy and guardrails but forces `PathProvenEffects`, so DI registry
+execution and bounded AppTask service execution cannot drift into different branch semantics. It is not a lifecycle
+scheduler or permission to execute arbitrary callbacks; the caller still owns the exact arguments, runtime-host
+operations, candidate-local graph fork, and domain projection of reached invocation evidence.
+
 Statement completion is the authoritative control-flow result. Local functions, constructors, accessors, and runtime
 hosts tunnel abrupt completion through the evaluator's value-shaped recursive internals, then restore it at the nearest
 statement or direct-read boundary. Direct reads expose a nullable value plus the exact completion; DI, binding, and
