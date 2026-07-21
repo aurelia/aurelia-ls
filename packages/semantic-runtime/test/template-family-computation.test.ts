@@ -7,6 +7,8 @@ import { describe, expect, test } from 'vitest';
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import {
   ComputationCommitState,
+  computationProductDetailReadKey,
+  computationRecordReadKey,
 } from '../src/kernel/computation-lifecycle.js';
 import { KernelPublicationDecisionKind } from '../src/kernel/publication.js';
 import {
@@ -33,6 +35,7 @@ import { TemplateVisibleResource } from '../src/template/compiler-world-referenc
 import {
   TemplateCompilationCohort,
   TemplateCompilationCohortKind,
+  TemplateCompilationLocus,
   TemplateCompilationCohortSetAuthority,
 } from '../src/template/template-compilation-cohort.js';
 import {
@@ -170,6 +173,11 @@ describe('template family computation', () => {
     const localChip = firstFamily.get('local-chip')!;
     const localIcon = firstFamily.get('local-icon')!;
     const nestedLocal = firstFamily.get('nested-local')!;
+    const familyOwnerHandle = baseline.definition.identityHandle ?? baseline.definition.productHandle;
+    expect(familyOwnerHandle).not.toBeNull();
+    expect(familyAttempt.candidateCompilations.every(
+      (compilation) => compilation.familyOwnerHandle === familyOwnerHandle,
+    )).toBe(true);
     expect(store.read(localChip.definition.productHandle!)).toBeNull();
     expect(store.productDetails.read(ResourceProductDetails.Definition, localChip.definition.productHandle!)).toBeNull();
     const localReads = familyAttempt.candidateCompilations.flatMap((compilation) =>
@@ -185,6 +193,13 @@ describe('template family computation', () => {
       .toBe(true);
     const family = familyAttempt.commit();
     expect(family.commit.state).toBe(ComputationCommitState.Committed);
+    const familyLocus = new TemplateCompilationLocus(app.project.projectKey, familyOwnerHandle!);
+    const familyState = lifecycle.readState(familyAttempt.computationId)?.children.find((child) =>
+      child.locus.kind === familyLocus.kind
+      && child.locus.reconciliationKey === familyLocus.reconciliationKey
+    );
+    expect(familyState?.outputs.some((output) => output.handle === nestedLocal.unit.compilationUnit.productHandle))
+      .toBe(true);
     expect(store.read(localChip.definition.productHandle!)).not.toBeNull();
     expect(store.productDetails.read(ResourceProductDetails.Definition, localChip.definition.productHandle!))
       .toBe(localChip.definition);
@@ -400,12 +415,102 @@ describe('template family computation', () => {
     const parent = app.emission.templates.resources.find((resource) =>
       resource.compilation.definition.name === 'local-templates-app'
     );
-    const localResources = app.emission.templates.resources.filter((resource) =>
-      ['local-chip', 'local-icon', 'outer-local', 'nested-local'].includes(resource.compilation.definition.name)
-    );
-    if (parent == null || localResources.length === 0) {
+    if (parent == null) {
       throw new Error('Expected the local-template fixture family to be runtime analyzed.');
     }
+    const familyLocalKeyPrefix = `${parent.compilation.localKey}:local-template:`;
+    const localResources = app.emission.templates.resources.filter((resource) =>
+      resource.compilation.localKey.startsWith(familyLocalKeyPrefix)
+    );
+    expect(localResources.map((resource) => resource.compilation.definition.name).sort()).toEqual([
+      'local-chip',
+      'local-icon',
+      'nested-local',
+      'outer-local',
+    ]);
+    expect(localResources.every(
+      (resource) => resource.compilation.familyOwnerHandle === parent.compilation.familyOwnerHandle,
+    )).toBe(true);
+    const outerLocal = localResources.find((resource) => resource.compilation.definition.name === 'outer-local');
+    const nestedLocal = localResources.find((resource) => resource.compilation.definition.name === 'nested-local');
+    expect(nestedLocal?.compilation.localKey).toBe(
+      `${outerLocal?.compilation.localKey}:local-template:nested-local`,
+    );
+    const generation = runtime.appAnalysisComputations.authorityFor(app.project.projectKey).current();
+    const familyLocus = new TemplateCompilationLocus(
+      app.project.projectKey,
+      parent.compilation.familyOwnerHandle,
+    );
+    const family = generation == null
+      ? null
+      : runtime.computationLifecycle.readState(generation.computationId)?.children.find((child) =>
+          child.locus.kind === familyLocus.kind
+          && child.locus.reconciliationKey === familyLocus.reconciliationKey
+        ) ?? null;
+    expect(family).not.toBeNull();
+    expect(family?.outputs.map((output) => output.handle)).toEqual(expect.arrayContaining(
+      localResources.map((resource) => resource.compilation.unit.compilationUnit.productHandle),
+    ));
+    const remainder = generation == null
+      ? null
+      : runtime.computationLifecycle.readState(generation.computationId)?.children.find(
+          (child) => child.locus.kind === 'computation-remainder',
+        ) ?? null;
+    expect(remainder).not.toBeNull();
+    const familyOutputKeys = new Set(family?.outputs.map((output) => output.readKey));
+    const remainderReadKeys = new Set([
+      ...(remainder?.reads ?? []).map((read) => read.readKey),
+      ...(remainder?.candidateReads ?? []).map((read) => read.readKey),
+    ]);
+    const familyResources = [parent, ...localResources];
+    const runtimeInputHandles = familyResources.flatMap((resource) => [
+      ...(resource.compilation.definition.productHandle == null
+        ? []
+        : [resource.compilation.definition.productHandle]),
+      resource.compilation.compiledTemplate.compiledTemplate.productHandle,
+      ...resource.compilation.compiledTemplate.renderTargets.map((target) => target.productHandle),
+      ...resource.compilation.compiledTemplate.instructionSequences.map((sequence) => sequence.productHandle),
+      ...resource.compilation.compiledTemplate.instructions.map((instruction) => instruction.productHandle),
+      resource.compilation.compilerWorld.world.productHandle,
+      resource.compilation.compilerWorld.resourceScope.productHandle,
+      resource.compilation.compilerWorld.rendering.productHandle,
+      resource.compilation.compilerWorld.templateCompiler.productHandle,
+      resource.compilation.compilerWorld.resourceResolver.productHandle,
+      resource.compilation.compilerWorld.expressionParser.productHandle,
+      resource.compilation.compilerWorld.attributeMapper.productHandle,
+      resource.compilation.compilerWorld.bindingCommandResolver.productHandle,
+      ...resource.compilation.authoredAttributeSyntaxes.map((syntax) => syntax.productHandle),
+    ]);
+    const familyOwnedRuntimeInputKeys = runtimeInputHandles
+      .flatMap((handle) => [computationRecordReadKey(handle), computationProductDetailReadKey(handle)])
+      .filter((readKey) => familyOutputKeys.has(readKey));
+    expect(familyOwnedRuntimeInputKeys.length).toBeGreaterThan(0);
+    expect([...remainderReadKeys]).toEqual(expect.arrayContaining(familyOwnedRuntimeInputKeys));
+    for (const resource of localResources) {
+      expect(remainderReadKeys).toContain(computationRecordReadKey(resource.compilation.definition.productHandle!));
+      expect(remainderReadKeys).toContain(
+        computationProductDetailReadKey(resource.compilation.definition.productHandle!),
+      );
+    }
+    const familyOwnedInstructionKeys = familyResources
+      .flatMap((resource) => resource.compilation.compiledTemplate.instructions)
+      .map((instruction) => computationProductDetailReadKey(instruction.productHandle))
+      .filter((readKey) => familyOutputKeys.has(readKey));
+    expect(familyOwnedInstructionKeys.length).toBeGreaterThan(0);
+    expect([...remainderReadKeys]).toEqual(expect.arrayContaining(familyOwnedInstructionKeys));
+    const localWorld = localResources.find((resource) =>
+      resource.compilation.compilerWorld !== resource.compilation.parentCompilerWorld
+    )?.compilation.compilerWorld ?? null;
+    expect(localWorld).not.toBeNull();
+    if (localWorld == null) {
+      throw new Error('Expected a family-derived compiler world for local templates.');
+    }
+    expect([...remainderReadKeys]).toEqual(expect.arrayContaining([
+      computationRecordReadKey(localWorld.world.productHandle),
+      computationProductDetailReadKey(localWorld.world.productHandle),
+      computationRecordReadKey(localWorld.resourceScope.productHandle),
+      computationProductDetailReadKey(localWorld.resourceScope.productHandle),
+    ]));
     const parentBindingHandles = new Set(
       resourceLocalRuntimeBindings(store, parent).map((binding) => binding.productHandle),
     );
@@ -561,7 +666,6 @@ function compilerWorldWithDefinition(
     ),
     world.expressionParser,
     world.attributeMapper,
-    world.nodeObserverLocatorConfiguration,
     world.rendering,
     world.attributeParser,
     world.attributeParserMachine,

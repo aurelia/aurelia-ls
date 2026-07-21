@@ -30,11 +30,13 @@ import {
 } from '../resources/custom-element-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import { ResourceProductDetails } from '../resources/product-details.js';
 import type { KernelStore, KernelTelemetryReadView } from '../kernel/store.js';
-import type { KernelPublicationContext } from '../kernel/publication.js';
+import { MaterializedProduct } from '../kernel/materialization.js';
+import type { ProductDetailSlot } from '../kernel/product-details.js';
 import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 import type { GenerationAuthority } from '../kernel/generation-authority.js';
-import type { ComputationRead } from '../kernel/computation-lifecycle.js';
+import type { ComputationRead, ComputationRun } from '../kernel/computation-lifecycle.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { CheckerTypeProjector } from '../type-system/checker-projector.js';
@@ -63,7 +65,9 @@ import {
 } from './compiler-world-materializer.js';
 import {
   TemplateCompilerCompileRequest,
+  TemplateCompilerCompileState,
   TemplateCompilerWorldKind,
+  templateCompilerCompileState,
   type TemplateCompilerCompileHost,
   type TemplateCompilerService,
 } from './compiler-world.js';
@@ -129,6 +133,7 @@ import {
 } from './compiler-read-view.js';
 import {
   TemplateCompilationCohortKind,
+  TemplateCompilationLocus,
   type TemplateCompilationCohortProjectPlan,
   type TemplateCompilationCohortPlan,
   type TemplateCompilationOwnerPlan,
@@ -139,6 +144,7 @@ import {
   TemplateCompilationCohortPlanningPhase,
   TemplateCompilationCohortPlanningRequest,
 } from './template-compilation-cohort-planner.js';
+import { TemplateProductDetails } from './product-details.js';
 
 /** Front-door template products produced for one compiler-visible custom element definition. */
 export class TemplateResourceCompilationEmission {
@@ -148,6 +154,8 @@ export class TemplateResourceCompilationEmission {
   constructor(
     /** Store-local key shared by this resource's compiler and runtime phases. */
     readonly localKey: string,
+    /** Top-level authored family retained across recursive local-template compilation. */
+    readonly familyOwnerHandle: IdentityHandle | ProductHandle,
     /** Root compiler-world product that owns this runtime-analysis cohort. */
     readonly analysisContextProductHandle: ProductHandle,
     /** App-root component definition for this cohort; null when authoring/runtime ownership is not proven. */
@@ -186,6 +194,7 @@ export class TemplateResourceCompilationEmission {
 export class TemplateResourceCompilationRequest {
   constructor(
     readonly localKey: string,
+    readonly familyOwnerHandle: IdentityHandle | ProductHandle,
     readonly analysisContextProductHandle: ProductHandle,
     readonly appRootDefinitionProductHandle: ProductHandle | null,
     readonly parentCompilerWorld: TemplateCompilerWorldEmission,
@@ -202,6 +211,7 @@ export class TemplateResourceCompilationRequest {
 export class TemplateResourceFamilyCompilationRequest {
   constructor(
     readonly localKey: string,
+    readonly familyOwnerHandle: IdentityHandle | ProductHandle,
     readonly analysisContextProductHandle: ProductHandle,
     readonly appRootDefinitionProductHandle: ProductHandle | null,
     readonly compilerWorldAuthority: TemplateCompilerWorldAuthority,
@@ -345,7 +355,7 @@ export class TemplateCompilationProjectPass {
     /** Hot analysis store shared by child materializers. */
     readonly store: KernelStore,
     /** Publication context shared by the compiler-front-door phases. */
-    readonly publication: KernelPublicationContext,
+    readonly publication: ComputationRun,
     /** Stable framework support borrowed by standalone authoring compiler worlds. */
     readonly support: FrameworkSupportCatalogs,
   ) {
@@ -402,16 +412,8 @@ export class TemplateCompilationProjectPass {
       authoringTemplateLimit,
       phaseRecorder,
     ));
-    const appCompilations = this.compilePlannedCohorts(
+    const [appCompilations, authoringCompilations] = this.compilePlannedCohorts(
       cohortPlan,
-      TemplateCompilationCohortKind.App,
-      typeSystem,
-      phaseRecorder,
-    );
-    const authoringCompilations = this.compilePlannedCohorts(
-      cohortPlan,
-      TemplateCompilationCohortKind.Authoring,
-      typeSystem,
       phaseRecorder,
     );
     const expressionWorld = new CheckerExpressionTypeWorld(
@@ -462,34 +464,42 @@ export class TemplateCompilationProjectPass {
 
   private compilePlannedCohorts(
     plan: TemplateCompilationCohortProjectPlan,
-    kind: TemplateCompilationCohortKind,
-    typeSystem: TypeSystemProject | null,
     phases: TemplateCompilationPhaseRecorder,
-  ): readonly TemplateResourceCompilationEmission[] {
-    const compilations: TemplateResourceCompilationEmission[] = [];
+  ): readonly [
+    app: readonly TemplateResourceCompilationEmission[],
+    authoring: readonly TemplateResourceCompilationEmission[],
+  ] {
+    const app: TemplateResourceCompilationEmission[] = [];
+    const authoring: TemplateResourceCompilationEmission[] = [];
     for (const owner of plan.ownerPlans) {
-      for (const cohort of owner.cohorts) {
-        if (cohort.kind !== kind) {
-          continue;
-        }
-        const localKey = templateResourceCompilationLocalKey(plan.projectKey, owner, cohort);
-        const result = cohort.parentCompilerWorld.templateCompiler.compile(
-          new TemplateCompilerCompileRequest(localKey, owner.definition),
-          new ProjectTemplateCompilerHost(
-            this,
-            TemplateCompilerWorldAuthority.fixed(cohort.parentCompilerWorld),
-            cohort.analysisContextProductHandle,
-            cohort.appRootDefinitionProductHandle,
-            typeSystem,
-            phases,
-          ),
-        );
-        if (result.output != null) {
-          compilations.push(...result.output);
-        }
+      if (
+        owner.cohorts.length === 0
+        || templateCompilerCompileState(owner.definition) !== TemplateCompilerCompileState.Compiled
+      ) {
+        continue;
       }
+      this.publication.withChild(new TemplateCompilationLocus(plan.projectKey, owner.ownerHandle), () => {
+        for (const cohort of owner.cohorts) {
+          const localKey = templateResourceCompilationLocalKey(plan.projectKey, owner, cohort);
+          const result = cohort.parentCompilerWorld.templateCompiler.compile(
+            new TemplateCompilerCompileRequest(localKey, owner.definition),
+            new ProjectTemplateCompilerHost(
+              this,
+              owner.ownerHandle,
+              TemplateCompilerWorldAuthority.fixed(cohort.parentCompilerWorld),
+              cohort.analysisContextProductHandle,
+              cohort.appRootDefinitionProductHandle,
+              phases,
+            ),
+          );
+          if (result.output != null) {
+            const target = cohort.kind === TemplateCompilationCohortKind.App ? app : authoring;
+            target.push(...result.output);
+          }
+        }
+      });
     }
-    return compilations;
+    return [app, authoring];
   }
 
   private analyzeCompiledResources(
@@ -512,8 +522,9 @@ export class TemplateCompilationProjectPass {
           this.publication,
           cohortResources,
         );
-        const groupResources = group.map((compilation) =>
-          new TemplateResourceRuntimeAnalysisEmission(
+        const groupResources = group.map((compilation) => {
+          this.requireRuntimeAnalysisInputs(compilation);
+          return new TemplateResourceRuntimeAnalysisEmission(
             compilation,
             phases.measure(
               'runtime-analysis',
@@ -531,13 +542,88 @@ export class TemplateCompilationProjectPass {
                 boundControllerValues,
               ),
             ),
-          )
-        );
+          );
+        });
         cohortResources.push(...groupResources);
       }
       resources.push(...cohortResources);
     }
     return resources;
+  }
+
+  /** Spend the exact compiler products crossing from an authored family into project-wide runtime analysis. */
+  private requireRuntimeAnalysisInputs(compilation: TemplateResourceCompilationEmission): void {
+    for (const read of compilation.registeredReads) {
+      this.publication.observe(read);
+    }
+    if (compilation.definition.productHandle != null) {
+      this.requireRuntimeAnalysisInput(
+        ResourceProductDetails.Definition,
+        compilation.definition.productHandle,
+      );
+    }
+    this.requireRuntimeAnalysisInput(
+      TemplateProductDetails.CompiledTemplate,
+      compilation.compiledTemplate.compiledTemplate.productHandle,
+    );
+    for (const target of compilation.compiledTemplate.renderTargets) {
+      this.requireRuntimeAnalysisInput(TemplateProductDetails.RenderTarget, target.productHandle);
+    }
+    for (const sequence of compilation.compiledTemplate.instructionSequences) {
+      this.requireRuntimeAnalysisInput(TemplateProductDetails.InstructionSequence, sequence.productHandle);
+    }
+    for (const instruction of compilation.compiledTemplate.instructions) {
+      this.requireRuntimeAnalysisInput(TemplateProductDetails.Instruction, instruction.productHandle);
+    }
+    this.requireRuntimeAnalysisInput(
+      TemplateProductDetails.World,
+      compilation.compilerWorld.world.productHandle,
+    );
+    this.requireRuntimeAnalysisInput(
+      TemplateProductDetails.ResourceScope,
+      compilation.compilerWorld.resourceScope.productHandle,
+    );
+    this.requireRuntimeAnalysisInput(
+      TemplateProductDetails.RenderingService,
+      compilation.compilerWorld.rendering.productHandle,
+    );
+    this.requireRuntimeAnalysisInput(
+      TemplateProductDetails.TemplateCompilerService,
+      compilation.compilerWorld.templateCompiler.productHandle,
+    );
+    this.requireRuntimeAnalysisInput(
+      TemplateProductDetails.ResourceResolverService,
+      compilation.compilerWorld.resourceResolver.productHandle,
+    );
+    this.requireRuntimeAnalysisInput(
+      TemplateProductDetails.ExpressionParserService,
+      compilation.compilerWorld.expressionParser.productHandle,
+    );
+    this.requireRuntimeAnalysisInput(
+      TemplateProductDetails.AttributeMapperService,
+      compilation.compilerWorld.attributeMapper.productHandle,
+    );
+    this.requireRuntimeAnalysisInput(
+      TemplateProductDetails.BindingCommandResolver,
+      compilation.compilerWorld.bindingCommandResolver.productHandle,
+    );
+    for (const syntax of compilation.authoredAttributeSyntaxes) {
+      this.requireRuntimeAnalysisInput(TemplateProductDetails.AttributeSyntax, syntax.productHandle);
+    }
+  }
+
+  private requireRuntimeAnalysisInput<TDetail>(
+    slot: ProductDetailSlot<TDetail>,
+    productHandle: ProductHandle,
+  ): void {
+    const product = this.publication.read(productHandle);
+    if (!(product instanceof MaterializedProduct)) {
+      throw new Error(`Runtime analysis input ${slot.detailKind} has no materialized product ${productHandle}.`);
+    }
+    const detail = this.publication.readProductDetail(slot, productHandle);
+    if (detail == null) {
+      throw new Error(`Runtime analysis input ${slot.detailKind} has no typed detail for ${productHandle}.`);
+    }
   }
 
   private compilerWorldForLocalDefinitions(
@@ -636,18 +722,18 @@ export class TemplateCompilationProjectPass {
       TemplateResourceVisibilityKind.Configured,
       sourceAddressHandle,
       parentCompilerWorld.attributeMapper.configuration,
-      parentCompilerWorld.nodeObserverLocatorConfiguration,
+      parentCompilerWorld.world.nodeObserverLocatorConfiguration,
     );
   }
 
   compileResourceTree(
     compilerWorldAuthority: TemplateCompilerWorldAuthority,
+    familyOwnerHandle: IdentityHandle | ProductHandle,
     analysisContextProductHandle: ProductHandle,
     appRootDefinitionProductHandle: ProductHandle | null,
     definition: CustomElementDefinition,
     template: CustomElementTemplateDefinition,
     localKey: string,
-    typeSystem: TypeSystemProject | null,
     phases: TemplateCompilationPhaseRecorder,
   ): readonly TemplateResourceCompilationEmission[] {
     const localDefinitions = phases.measure(
@@ -676,6 +762,7 @@ export class TemplateCompilationProjectPass {
       : this.compileResource(
         new TemplateResourceCompilationRequest(
           localKey,
+          familyOwnerHandle,
           analysisContextProductHandle,
           appRootDefinitionProductHandle,
           parentCompilerWorld,
@@ -699,10 +786,10 @@ export class TemplateCompilationProjectPass {
         new TemplateCompilerCompileRequest(childLocalKey, localDefinition),
         new ProjectTemplateCompilerHost(
           this,
+          familyOwnerHandle,
           activeCompilerWorld.authority,
           analysisContextProductHandle,
           appRootDefinitionProductHandle,
-          typeSystem,
           phases,
         ),
       );
@@ -715,17 +802,16 @@ export class TemplateCompilationProjectPass {
 
   compileResourceFamilyFrontDoor(
     request: TemplateResourceFamilyCompilationRequest,
-    typeSystem: TypeSystemProject | null = null,
     telemetry: SemanticRuntimeTelemetryOptions | null = null,
   ): readonly TemplateResourceCompilationEmission[] {
     return this.compileResourceTree(
       request.compilerWorldAuthority,
+      request.familyOwnerHandle,
       request.analysisContextProductHandle,
       request.appRootDefinitionProductHandle,
       request.definition,
       request.template,
       request.localKey,
-      typeSystem,
       new TemplateCompilationPhaseRecorder(
         this.publication,
         normalizeSemanticRuntimeTelemetryOptions(
@@ -763,6 +849,7 @@ export class TemplateCompilationProjectPass {
       appRootDefinitionProductHandle,
       definition,
       localKey,
+      familyOwnerHandle,
       template,
       compilerReads,
       localElementNames,
@@ -834,8 +921,9 @@ export class TemplateCompilationProjectPass {
       bindingCommandLowering,
       phases,
     );
-    return new TemplateResourceCompilationEmission(
+    const emission = new TemplateResourceCompilationEmission(
       localKey,
+      familyOwnerHandle,
       analysisContextProductHandle,
       appRootDefinitionProductHandle,
       parentCompilerWorld,
@@ -850,6 +938,10 @@ export class TemplateCompilationProjectPass {
       compiledTemplate,
       compilerReads.readAll(),
     );
+    for (const read of emission.registeredReads) {
+      this.publication.observe(read);
+    }
+    return emission;
   }
 
   private constructCompilationUnit(
@@ -1063,10 +1155,10 @@ class TemplateCompilerWorldSelection {
 class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<readonly TemplateResourceCompilationEmission[]> {
   constructor(
     private readonly pass: TemplateCompilationProjectPass,
+    private readonly familyOwnerHandle: IdentityHandle | ProductHandle,
     private readonly compilerWorldAuthority: TemplateCompilerWorldAuthority,
     private readonly analysisContextProductHandle: ProductHandle,
     private readonly appRootDefinitionProductHandle: ProductHandle | null,
-    private readonly typeSystem: TypeSystemProject | null,
     private readonly phases: TemplateCompilationPhaseRecorder,
   ) {}
 
@@ -1080,12 +1172,12 @@ class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<readonl
     }
     return this.pass.compileResourceTree(
       this.compilerWorldAuthority,
+      this.familyOwnerHandle,
       this.analysisContextProductHandle,
       this.appRootDefinitionProductHandle,
       request.definition,
       template,
       request.localKey,
-      this.typeSystem,
       this.phases,
     );
   }

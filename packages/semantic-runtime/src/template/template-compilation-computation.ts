@@ -4,7 +4,6 @@ import { SourceSpanAddress, SourceSpanRole } from '../kernel/address.js';
 import {
   type ComputationCommitResult,
   type ComputationId,
-  type ComputationLocus,
   type ComputationRead,
   type ComputationReadValidation,
   ComputationRecordReadView,
@@ -27,11 +26,14 @@ import {
 } from '../resources/custom-element-definition.js';
 import type { SemanticRuntimeTelemetryOptions } from '../telemetry/options.js';
 import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
+import { TemplateCompilerReadView } from './compiler-read-view.js';
 import {
-  TemplateCompilerReadView,
-} from './compiler-read-view.js';
+  TemplateCompilerCompileState,
+  templateCompilerCompileState,
+} from './compiler-world.js';
 import {
   encodeTemplateCompilationKeyParts,
+  TemplateCompilationLocus,
   type TemplateCompilationCohort,
   type TemplateCompilationCohortSetAuthority,
 } from './template-compilation-cohort.js';
@@ -41,23 +43,7 @@ import {
   type TemplateResourceCompilationEmission,
 } from './template-compilation-project-pass.js';
 
-/** Stable domain locus for one top-level authored template family. */
-export class TemplateCompilationLocus implements ComputationLocus {
-  readonly kind = 'template-compilation';
-  readonly reconciliationKey: string;
-  readonly summary: string;
-
-  constructor(
-    readonly projectKey: string,
-    readonly ownerHandle: IdentityHandle | ProductHandle,
-  ) {
-    this.reconciliationKey = encodeTemplateCompilationKeyParts([
-      projectKey,
-      ownerHandle,
-    ]);
-    this.summary = `template family ${ownerHandle} in ${projectKey}`;
-  }
-}
+export { TemplateCompilationLocus } from './template-compilation-cohort.js';
 
 /** Inputs needed to run one external-HTML template family inside a computation lifecycle. */
 export class TemplateCompilationComputationRequest {
@@ -124,6 +110,7 @@ class ResolvedTemplateCompilationCohort {
     readonly cohort: TemplateCompilationCohort,
     readonly compilerReads: TemplateCompilerReadView,
     readonly definition: CustomElementDefinition | null,
+    readonly compileState: TemplateCompilerCompileState | null,
   ) {}
 }
 
@@ -174,85 +161,98 @@ export class TemplateCompilationComputationService {
       ownerHandle,
     );
     const run = this.lifecycle.begin(locus);
-    const cohortSet = new TemplateCompilationCohortSetRead(
-      request.cohortSetAuthority,
-      request.projectKey,
-      ownerHandle,
-      request.cohortSetAuthority.current(),
-    );
-    const recordReads = new ComputationRecordReadView(this.store);
-    const resolvedCohorts = cohortSet.cohorts.map((cohort) => {
-      const compilerReads = new TemplateCompilerReadView(run, cohort.compilerWorldAuthority);
-      const visibleOwner = compilerReads.templateOwnerResource(request.definition);
-      return new ResolvedTemplateCompilationCohort(
-        cohort,
-        compilerReads,
-        visibleOwner?.definition instanceof CustomElementDefinition
-          ? visibleOwner.definition
-          : null,
-      );
-    });
-    const sourceAdmissions = resolvedCohorts.flatMap((resolved) =>
-      resolved.definition?.template == null
-        ? []
-        : [this.captureTemplateSource(request, resolved.definition, resolved.definition.template, recordReads)]
-    );
-    if (
-      sourceAdmissions.length > 0
-      && resolvedCohorts.some((resolved) => resolved.definition != null && resolved.definition.template == null)
-    ) {
-      throw new Error(`Compiler cohorts disagree on whether template ${request.definition.name} has an authored source.`);
-    }
-    const sourceAdmission = coherentSourceAdmission(request.definition, sourceAdmissions);
-    const source = sourceAdmission?.snapshot ?? null;
-    const compilations: TemplateResourceCompilationEmission[] = [];
-    if (sourceAdmission != null && sourceAdmission.snapshot.state !== SourceTextSnapshotState.Absent) {
-      const familyLocalKey = `template-family:${run.computationId}`;
-      const admittedTemplate = externalMarkupTemplateFromSnapshot(
-        recordReads,
-        run,
-        familyLocalKey,
-        sourceAdmission.template,
-        sourceAdmission.sourceFileAddressHandle,
-        sourceAdmission.snapshot,
-      );
-      const pass = new TemplateCompilationProjectPass(this.store, run, this.support);
-      for (const resolved of resolvedCohorts) {
-        if (resolved.definition == null) {
-          continue;
+    try {
+      return run.withChild(locus, () => {
+        const cohortSet = new TemplateCompilationCohortSetRead(
+          request.cohortSetAuthority,
+          request.projectKey,
+          ownerHandle,
+          request.cohortSetAuthority.current(),
+        );
+        const recordReads = new ComputationRecordReadView(this.store);
+        const resolvedCohorts = cohortSet.cohorts.map((cohort) => {
+          const compilerReads = new TemplateCompilerReadView(run, cohort.compilerWorldAuthority);
+          const visibleOwner = compilerReads.templateOwnerResource(request.definition);
+          const definition = visibleOwner?.definition instanceof CustomElementDefinition
+            ? visibleOwner.definition
+            : null;
+          return new ResolvedTemplateCompilationCohort(
+            cohort,
+            compilerReads,
+            definition,
+            definition == null ? null : templateCompilerCompileState(definition),
+          );
+        });
+        const sourceAdmissions = resolvedCohorts.flatMap((resolved) =>
+          resolved.definition?.template == null
+            || resolved.compileState !== TemplateCompilerCompileState.Compiled
+            ? []
+            : [this.captureTemplateSource(request, resolved.definition, resolved.definition.template, recordReads)]
+        );
+        if (
+          sourceAdmissions.length > 0
+          && resolvedCohorts.some((resolved) =>
+            resolved.definition != null
+            && resolved.compileState !== TemplateCompilerCompileState.Compiled
+          )
+        ) {
+          throw new Error(
+            `Compiler cohorts disagree on whether template ${request.definition.name} enters TemplateCompiler.compile.`,
+          );
         }
-        compilations.push(...pass.compileResourceFamilyFrontDoor(
-          new TemplateResourceFamilyCompilationRequest(
-            `${familyLocalKey}:cohort:${resolved.cohort.key}`,
-            resolved.cohort.analysisContextProductHandle,
-            resolved.cohort.appRootDefinitionProductHandle,
-            resolved.cohort.compilerWorldAuthority,
-            resolved.definition,
-            admittedTemplate,
-          ),
-          null,
-          telemetry,
-        ));
-      }
+        const sourceAdmission = coherentSourceAdmission(request.definition, sourceAdmissions);
+        const source = sourceAdmission?.snapshot ?? null;
+        const compilations: TemplateResourceCompilationEmission[] = [];
+        if (sourceAdmission != null && sourceAdmission.snapshot.state !== SourceTextSnapshotState.Absent) {
+          const familyLocalKey = `template-family:${run.computationId}`;
+          const admittedTemplate = externalMarkupTemplateFromSnapshot(
+            recordReads,
+            run,
+            familyLocalKey,
+            sourceAdmission.template,
+            sourceAdmission.sourceFileAddressHandle,
+            sourceAdmission.snapshot,
+          );
+          const pass = new TemplateCompilationProjectPass(this.store, run, this.support);
+          for (const resolved of resolvedCohorts) {
+            if (
+              resolved.definition == null
+              || resolved.compileState !== TemplateCompilerCompileState.Compiled
+            ) {
+              continue;
+            }
+            compilations.push(...pass.compileResourceFamilyFrontDoor(
+              new TemplateResourceFamilyCompilationRequest(
+                `${familyLocalKey}:cohort:${resolved.cohort.key}`,
+                ownerHandle,
+                resolved.cohort.analysisContextProductHandle,
+                resolved.cohort.appRootDefinitionProductHandle,
+                resolved.cohort.compilerWorldAuthority,
+                resolved.definition,
+                admittedTemplate,
+              ),
+              telemetry,
+            ));
+          }
+        }
+        run.observe(cohortSet);
+        if (source != null) {
+          run.observe(source);
+        }
+        for (const resolved of resolvedCohorts) {
+          for (const read of resolved.compilerReads.readAll()) {
+            run.observe(read);
+          }
+        }
+        for (const read of recordReads.readAll()) {
+          run.observe(read);
+        }
+        return new TemplateCompilationComputationAttempt(run, locus, source, compilations);
+      });
+    } catch (error) {
+      run.abort();
+      throw error;
     }
-    run.observe(cohortSet);
-    if (source != null) {
-      run.observe(source);
-    }
-    for (const resolved of resolvedCohorts) {
-      for (const read of resolved.compilerReads.readAll()) {
-        run.observe(read);
-      }
-    }
-    for (const compilation of compilations) {
-      for (const read of compilation.registeredReads) {
-        run.observe(read);
-      }
-    }
-    for (const read of recordReads.readAll()) {
-      run.observe(read);
-    }
-    return new TemplateCompilationComputationAttempt(run, locus, source, compilations);
   }
 
   private captureTemplateSource(

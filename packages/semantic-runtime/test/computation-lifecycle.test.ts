@@ -3,21 +3,38 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
 
-import { SourceFileAddress, SourceLanguage, SourceSpanAddress } from "../src/kernel/address.js";
 import {
+  SourceFileAddress,
+  SourceLanguage,
+  SourceSpanAddress,
+  TemplateAddress,
+  TemplateNodeAddress,
+} from "../src/kernel/address.js";
+import {
+  ComputationOpenReadKind,
+  ComputationCandidateReadState,
   ComputationCommitState,
   computationHotDetailReadKey,
   ComputationLifecycleRegistry,
   computationProductDetailReadKey,
   ComputationRecordReadView,
   computationRecordReadKey,
+  type ComputationRun,
   type ComputationLocus,
   type ComputationRead,
   type ComputationReadValidation,
 } from "../src/kernel/computation-lifecycle.js";
 import { FrameworkIdentity, ObservationIdentity } from "../src/kernel/identity.js";
-import type { AddressHandle } from "../src/kernel/handles.js";
-import { defineHotDetailSlot } from "../src/kernel/hot-details.js";
+import type {
+  AddressHandle,
+  HotDetailHandle,
+  ProductHandle,
+} from "../src/kernel/handles.js";
+import { defineHotDetailSlot, readHotDetailEntry } from "../src/kernel/hot-details.js";
+import {
+  defineHotDetailDescriptor,
+  defineProductDetailDescriptor,
+} from "../src/kernel/detail-descriptors.js";
 import { MaterializedProduct } from "../src/kernel/materialization.js";
 import {
   defineProductDetailSlot,
@@ -42,7 +59,15 @@ import {
   type SemanticRuntimeSourceTextOverlay,
 } from "../src/kernel/project-input.js";
 import { KernelStore, KernelStoreBatch } from "../src/kernel/store.js";
-import { KernelVocabulary } from "../src/kernel/vocabulary.js";
+import {
+  kernelHotDetailReference,
+  kernelProductDetailReference,
+  kernelRecordReferences,
+  mergeKernelDetailReferences,
+  noKernelDetailReferences,
+  type KernelDetailReferenceProjector,
+} from "../src/kernel/detail-references.js";
+import { KernelVocabulary, type ProductKindKey } from "../src/kernel/vocabulary.js";
 
 class MutableRevisionAuthority {
   private readonly revisions = new Map<string, string>();
@@ -113,11 +138,43 @@ function locus(owner: string, cohort = "app-root:default"): ComputationLocus {
   };
 }
 
+function childLocus(owner: string): ComputationLocus {
+  return {
+    kind: "template-family",
+    reconciliationKey: `family:${owner}`,
+    summary: `template family ${owner}`,
+  };
+}
+
 function publication(
   label: string,
   records: ConstructorParameters<typeof KernelStoreBatch>[0],
 ): KernelPublicationPlan {
   return new KernelPublicationPlan(new KernelStoreBatch(records, label));
+}
+
+function defineTestProductDetailSlot<TDetail>(
+  productKindKey: ProductKindKey,
+  detailKind: string,
+  summary: string,
+  referenceProjector: KernelDetailReferenceProjector<TDetail> = noKernelDetailReferences,
+) {
+  return defineProductDetailSlot(
+    defineProductDetailDescriptor<TDetail>(productKindKey, detailKind, summary),
+    referenceProjector,
+  );
+}
+
+function defineTestHotDetailSlot<TDetail>(
+  ownerProductKindKey: ProductKindKey,
+  detailKind: string,
+  summary: string,
+  referenceProjector: KernelDetailReferenceProjector<TDetail> = noKernelDetailReferences,
+) {
+  return defineHotDetailSlot(
+    defineHotDetailDescriptor<TDetail>(ownerProductKindKey, detailKind, summary),
+    referenceProjector,
+  );
 }
 
 describe("computation lifecycle", () => {
@@ -175,12 +232,12 @@ describe("computation lifecycle", () => {
     const productHandle = store.handles.product("exact-kernel-inputs:product");
     const provenanceHandle = store.handles.provenance("exact-kernel-inputs:provenance");
     const hotHandle = store.handles.hotDetail("exact-kernel-inputs:hot");
-    const productSlot = defineProductDetailSlot<{ readonly version: number }>(
+    const productSlot = defineTestProductDetailSlot<{ readonly version: number }>(
       KernelVocabulary.Template.Source.key,
       "test.exact-kernel-product-detail",
       "Exact product-detail computation input.",
     );
-    const hotSlot = defineHotDetailSlot<{ readonly version: number }>(
+    const hotSlot = defineTestHotDetailSlot<{ readonly version: number }>(
       KernelVocabulary.Template.Source.key,
       "test.exact-kernel-hot-detail",
       "Exact hot-detail computation input.",
@@ -257,22 +314,22 @@ describe("computation lifecycle", () => {
     const productHandle = store.handles.product("detail-slot-occupancy:product");
     const provenanceHandle = store.handles.provenance("detail-slot-occupancy:provenance");
     const hotHandle = store.handles.hotDetail("detail-slot-occupancy:hot");
-    const productSlotA = defineProductDetailSlot<{ readonly version: number }>(
+    const productSlotA = defineTestProductDetailSlot<{ readonly version: number }>(
       KernelVocabulary.Template.Source.key,
       "test.detail-slot-occupancy-product-a",
       "First product-detail slot occupying one product handle.",
     );
-    const productSlotB = defineProductDetailSlot<{ readonly version: number }>(
+    const productSlotB = defineTestProductDetailSlot<{ readonly version: number }>(
       KernelVocabulary.Template.Source.key,
       "test.detail-slot-occupancy-product-b",
       "Second product-detail slot requested at the same product handle.",
     );
-    const hotSlotA = defineHotDetailSlot<{ readonly version: number }>(
+    const hotSlotA = defineTestHotDetailSlot<{ readonly version: number }>(
       KernelVocabulary.Template.Source.key,
       "test.detail-slot-occupancy-hot-a",
       "First hot-detail slot occupying one hot handle.",
     );
-    const hotSlotB = defineHotDetailSlot<{ readonly version: number }>(
+    const hotSlotB = defineTestHotDetailSlot<{ readonly version: number }>(
       KernelVocabulary.Template.Source.key,
       "test.detail-slot-occupancy-hot-b",
       "Second hot-detail slot requested at the same hot handle.",
@@ -325,12 +382,12 @@ describe("computation lifecycle", () => {
     const provenanceHandle = store.handles.provenance("negative-and-borrowed:provenance");
     const missingRecordHandle = store.handles.address("negative-and-borrowed:missing-record");
     const hotHandle = store.handles.hotDetail("negative-and-borrowed:hot");
-    const productSlot = defineProductDetailSlot<{ readonly owner: string }>(
+    const productSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
       KernelVocabulary.Template.Source.key,
       "test.negative-and-borrowed-product-detail",
       "Negative and borrowed product-detail input.",
     );
-    const hotSlot = defineHotDetailSlot<{ readonly owner: string }>(
+    const hotSlot = defineTestHotDetailSlot<{ readonly owner: string }>(
       KernelVocabulary.Template.Source.key,
       "test.negative-and-borrowed-hot-detail",
       "Negative and borrowed hot-detail input.",
@@ -398,12 +455,12 @@ describe("computation lifecycle", () => {
     const productHandle = store.handles.product("read-before-own-write:product");
     const provenanceHandle = store.handles.provenance("read-before-own-write:provenance");
     const hotHandle = store.handles.hotDetail("read-before-own-write:hot");
-    const productSlot = defineProductDetailSlot<{ readonly owner: string }>(
+    const productSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
       KernelVocabulary.Template.Source.key,
       "test.read-before-own-write-product-detail",
       "Product detail read before its owning write.",
     );
-    const hotSlot = defineHotDetailSlot<{ readonly owner: string }>(
+    const hotSlot = defineTestHotDetailSlot<{ readonly owner: string }>(
       KernelVocabulary.Template.Source.key,
       "test.read-before-own-write-hot-detail",
       "Hot detail read before its owning write.",
@@ -441,12 +498,2189 @@ describe("computation lifecycle", () => {
     expect(lifecycle.producerFor(hotDetailKey)).toBe(run.computationId);
   });
 
+  test("partitions one atomic publication into exact child manifests", () => {
+    const store = new KernelStore("computation-child-manifests");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const revisions = new MutableRevisionAuthority();
+    revisions.set("source:family-a", "1");
+    const familyAHandle = store.handles.address("child-manifest:family-a");
+    const familyBHandle = store.handles.address("child-manifest:family-b");
+    const remainderHandle = store.handles.address("child-manifest:remainder");
+    const run = lifecycle.begin(locus("child-manifests"));
+
+    run.withChild(childLocus("a"), () => {
+      run.observe(revisions.observe("source:family-a"));
+      run.publish(publication("child-manifest:a", [
+        new SourceFileAddress(familyAHandle, "test", "src/family-a.html", SourceLanguage.Html),
+      ]));
+    });
+    run.withChild(childLocus("b"), () => {
+      expect(run.read(familyAHandle)).not.toBeNull();
+      run.publish(publication("child-manifest:b", [
+        new SourceFileAddress(familyBHandle, "test", "src/family-b.html", SourceLanguage.Html),
+      ]));
+    });
+    run.withChild(childLocus("aggregate-reader"), () => {
+      expect(run.readAllRecords()).toHaveLength(2);
+    });
+    run.publish(publication("child-manifest:remainder", [
+      new SourceFileAddress(remainderHandle, "test", "src/remainder.html", SourceLanguage.Html),
+    ]));
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(run.computationId);
+    expect(state).not.toBeNull();
+    if (state == null) {
+      throw new Error("Expected a committed child-manifest computation.");
+    }
+    const familyA = state.children.find((child) => child.locus.reconciliationKey === "family:a");
+    const familyB = state.children.find((child) => child.locus.reconciliationKey === "family:b");
+    const aggregateReader = state.children.find(
+      (child) => child.locus.reconciliationKey === "family:aggregate-reader",
+    );
+    const remainder = state.children.find((child) => child.locus.kind === "computation-remainder");
+    expect(familyA).toBeDefined();
+    expect(familyB).toBeDefined();
+    expect(aggregateReader).toBeDefined();
+    expect(remainder).toBeDefined();
+    if (familyA == null || familyB == null || aggregateReader == null || remainder == null) {
+      throw new Error("Expected all logical child manifests.");
+    }
+
+    const familyAKey = computationRecordReadKey(familyAHandle);
+    const familyBKey = computationRecordReadKey(familyBHandle);
+    const remainderKey = computationRecordReadKey(remainderHandle);
+    expect(familyA.reads.map((read) => read.readKey)).toEqual(["source:family-a"]);
+    expect(familyA.hasOnlyRevisionedReads).toBe(true);
+    expect(familyA.outputs.map((output) => output.readKey)).toEqual([familyAKey]);
+    expect(familyB.reads).toEqual([]);
+    expect(familyB.candidateReads).toEqual([
+      expect.objectContaining({ readKey: familyAKey, producerChildId: familyA.childId }),
+    ]);
+    expect(familyB.outputs.map((output) => output.readKey)).toEqual([familyBKey]);
+    expect(aggregateReader.openReads).toEqual([
+      expect.objectContaining({ kind: ComputationOpenReadKind.AllRecords }),
+    ]);
+    expect(aggregateReader.hasOnlyRevisionedReads).toBe(false);
+    expect(remainder.outputs.map((output) => output.readKey)).toEqual([remainderKey]);
+    expect(lifecycle.childProducerFor(familyAKey)).toBe(familyA.childId);
+    expect(lifecycle.childReadersFor(familyAKey)).toEqual([familyB.childId]);
+    expect(lifecycle.childReadersFor("source:family-a")).toEqual([familyA.childId]);
+
+    expect(lifecycle.retireCommittedGeneration(run.computationId, run.runSequence)).toBe(true);
+    expect(lifecycle.childProducerFor(familyAKey)).toBeNull();
+    expect(lifecycle.childReadersFor(familyAKey)).toEqual([]);
+    expect(lifecycle.childReadersFor("source:family-a")).toEqual([]);
+  });
+
+  test("rejects a child read when a later child replaces its staged producer", () => {
+    const store = new KernelStore("computation-child-staged-read-replacement");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("child-staged-read:product");
+    const provenanceHandle = store.handles.provenance("child-staged-read:provenance");
+    const productSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-staged-read",
+      "Child-staged read replacement detail.",
+    );
+    const run = lifecycle.begin(locus("child-staged-read-replacement"));
+
+    run.withChild(childLocus("first-writer"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(provenanceHandle),
+          new MaterializedProduct(
+            productHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            provenanceHandle,
+          ),
+        ], "child-staged-read:first"),
+        [publishProductDetail(
+          productSlot,
+          productHandle,
+          { owner: "first" },
+          KernelDetailAdmission.IfAbsent,
+        )],
+      ));
+    });
+    run.withChild(childLocus("reader"), () => {
+      expect(run.readProductDetail(productSlot, productHandle)).toEqual({ owner: "first" });
+    });
+    run.withChild(childLocus("final-writer"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "child-staged-read:final"),
+        [publishProductDetail(productSlot, productHandle, { owner: "final" })],
+      ));
+    });
+
+    const result = run.commit();
+    expect(result.state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(result.transition.invalidReads).toHaveLength(2);
+    expect(result.transition.invalidReads).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        domain: "computation-child-staged-read",
+        changedFacets: expect.arrayContaining(["writer", "detail"]),
+      }),
+      expect.objectContaining({
+        domain: "computation-child-staged-read",
+        changedFacets: expect.arrayContaining(["writer", "detail"]),
+      }),
+    ]));
+    expect(store.read(productHandle)).toBeNull();
+    expect(store.productDetails.read(productSlot, productHandle)).toBeNull();
+    expect(lifecycle.readState(run.computationId)).toBeNull();
+  });
+
+  test("rejects a committed absence consumed by one child and filled by another", () => {
+    const store = new KernelStore("computation-child-negative-read");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const handle = store.handles.address("child-negative-read:address");
+    const run = lifecycle.begin(locus("child-negative-read"));
+
+    run.withChild(childLocus("reader"), () => {
+      expect(run.read(handle)).toBeNull();
+    });
+    run.withChild(childLocus("writer"), () => {
+      run.publish(publication("child-negative-read:writer", [
+        new SourceFileAddress(handle, "test", "src/now-present.html", SourceLanguage.Html),
+      ]));
+    });
+
+    const result = run.commit();
+    expect(result.state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(result.transition.invalidReads).toEqual([
+      expect.objectContaining({
+        readKey: computationRecordReadKey(handle),
+        domain: "computation-child-external-read",
+        changedFacets: ["candidate-writer"],
+      }),
+    ]);
+    expect(store.read(handle)).toBeNull();
+  });
+
+  test("rejects a hidden prior-generation absence filled by a later child", () => {
+    const store = new KernelStore("computation-child-hidden-prior-output");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("child-hidden-prior:product");
+    const provenanceHandle = store.handles.provenance("child-hidden-prior:provenance");
+    const hotHandle = store.handles.hotDetail("child-hidden-prior:hot");
+    const productSlot = defineTestProductDetailSlot<{ readonly version: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-hidden-prior-product",
+      "Prior-generation product detail hidden from its replacement.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly version: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-hidden-prior-hot",
+      "Prior-generation hot detail hidden from its replacement.",
+    );
+    const product = () => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      null,
+      provenanceHandle,
+    );
+    const initial = lifecycle.begin(locus("child-hidden-prior"));
+    initial.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        product(),
+      ], "child-hidden-prior:initial"),
+      [publishProductDetail(productSlot, productHandle, { version: 0 })],
+      [publishHotDetail(hotSlot, productHandle, hotHandle, { version: 0 })],
+    ));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    const lifetimeBeforeReplacement = store.markLifetime();
+    const observationBeforeReplacement = store.markObservation();
+
+    const replacement = lifecycle.begin(locus("child-hidden-prior"));
+    replacement.withChild(childLocus("reader"), () => {
+      expect(replacement.read(productHandle)).toBeNull();
+      expect(replacement.readProductDetail(productSlot, productHandle)).toBeNull();
+      expect(replacement.readHotDetail(hotSlot, hotHandle)).toBeNull();
+    });
+    replacement.withChild(childLocus("writer"), () => {
+      replacement.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(provenanceHandle),
+          product(),
+        ], "child-hidden-prior:replacement"),
+        [publishProductDetail(productSlot, productHandle, { version: 1 })],
+        [publishHotDetail(hotSlot, productHandle, hotHandle, { version: 1 })],
+      ));
+    });
+
+    const result = replacement.commit();
+    expect(result.state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(result.transition.invalidReads.map((read) => read.domain)).toEqual([
+      "computation-child-staged-read",
+      "computation-child-staged-read",
+      "computation-child-staged-read",
+    ]);
+    expect(store.read(productHandle)).not.toBeNull();
+    expect(store.productDetails.read(productSlot, productHandle)).toEqual({ version: 0 });
+    expect(store.hotDetails.read(hotSlot, hotHandle)).toEqual({ version: 0 });
+    expect(store.markLifetime()).toEqual(lifetimeBeforeReplacement);
+    expect(store.markObservation()).toEqual(observationBeforeReplacement);
+  });
+
+  test("preserves incumbent child indexes when a replacement fails child preflight", () => {
+    const store = new KernelStore("computation-child-index-rejected-replacement");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const handle = store.handles.address("child-index-rejected:address");
+    const initial = lifecycle.begin(locus("child-index-rejected"));
+    initial.withChild(childLocus("incumbent"), () => {
+      initial.publish(publication("child-index-rejected:initial", [
+        new SourceFileAddress(handle, "test", "src/initial.html", SourceLanguage.Html),
+      ]));
+    });
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    const incumbentState = lifecycle.readState(initial.computationId);
+    const incumbent = incumbentState?.children.find(
+      (child) => child.locus.reconciliationKey === "family:incumbent",
+    );
+    expect(incumbent).toBeDefined();
+    if (incumbent == null) {
+      throw new Error("Expected the incumbent child manifest.");
+    }
+    const readKey = computationRecordReadKey(handle);
+
+    const replacement = lifecycle.begin(locus("child-index-rejected"));
+    replacement.withChild(childLocus("reader"), () => {
+      expect(replacement.read(handle)).toBeNull();
+    });
+    replacement.withChild(childLocus("replacement"), () => {
+      replacement.publish(publication("child-index-rejected:replacement", [
+        new SourceFileAddress(handle, "test", "src/replacement.html", SourceLanguage.Html),
+      ]));
+    });
+    expect(replacement.commit().state).toBe(ComputationCommitState.RejectedInputsChanged);
+
+    expect(lifecycle.readState(initial.computationId)).toBe(incumbentState);
+    expect(lifecycle.childProducerFor(readKey)).toBe(incumbent.childId);
+    expect(lifecycle.childReadersFor(readKey)).toEqual([]);
+    expect(store.read(handle)).toEqual(
+      new SourceFileAddress(handle, "test", "src/initial.html", SourceLanguage.Html),
+    );
+  });
+
+  test("collapses a same-child read-before-write and clears child indexes on disposal", () => {
+    const store = new KernelStore("computation-child-self-output");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const marker = store.markLifetime();
+    const handle = store.handles.address("child-self-output:address");
+    const run = lifecycle.begin(locus("child-self-output"));
+
+    run.withChild(childLocus("self-writer"), () => {
+      expect(run.read(handle)).toBeNull();
+      run.publish(publication("child-self-output", [
+        new SourceFileAddress(handle, "test", "src/self-output.html", SourceLanguage.Html),
+      ]));
+    });
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(run.computationId);
+    const child = state?.children.find((candidate) => candidate.locus.reconciliationKey === "family:self-writer");
+    expect(child).toBeDefined();
+    if (child == null) {
+      throw new Error("Expected the self-writing child manifest.");
+    }
+    const readKey = computationRecordReadKey(handle);
+    expect(child.reads).toEqual([]);
+    expect(child.candidateReads).toEqual([]);
+    expect(child.outputs.map((output) => output.readKey)).toEqual([readKey]);
+    expect(lifecycle.childReadersFor(readKey)).toEqual([]);
+    expect(lifecycle.childProducerFor(readKey)).toBe(child.childId);
+
+    store.disposeSince(marker);
+    expect(lifecycle.childProducerFor(readKey)).toBeNull();
+    expect(lifecycle.childReadersFor(readKey)).toEqual([]);
+  });
+
+  test("attributes borrowed if-absent details to the child that attempted them", () => {
+    const store = new KernelStore("computation-child-borrowed-details");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("child-borrowed:product");
+    const provenanceHandle = store.handles.provenance("child-borrowed:provenance");
+    const hotHandle = store.handles.hotDetail("child-borrowed:hot");
+    const productSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-borrowed-product",
+      "Borrowed child product detail.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-borrowed-hot",
+      "Borrowed child hot detail.",
+    );
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(provenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        provenanceHandle,
+      ),
+    ], "child-borrowed:foreign-product"));
+    store.productDetails.add(productSlot, productHandle, { owner: "foreign" });
+    store.hotDetails.add(hotSlot, productHandle, hotHandle, { owner: "foreign" });
+    const run = lifecycle.begin(locus("child-borrowed-details"));
+
+    run.withChild(childLocus("borrower"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "child-borrowed:candidate"),
+        [publishProductDetail(
+          productSlot,
+          productHandle,
+          { owner: "candidate" },
+          KernelDetailAdmission.IfAbsent,
+        )],
+        [publishHotDetail(
+          hotSlot,
+          productHandle,
+          hotHandle,
+          { owner: "candidate" },
+          KernelDetailAdmission.IfAbsent,
+        )],
+      ));
+    });
+    run.withChild(childLocus("second-borrower"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "child-borrowed:second-candidate"),
+        [publishProductDetail(
+          productSlot,
+          productHandle,
+          { owner: "second-candidate" },
+          KernelDetailAdmission.IfAbsent,
+        )],
+        [publishHotDetail(
+          hotSlot,
+          productHandle,
+          hotHandle,
+          { owner: "second-candidate" },
+          KernelDetailAdmission.IfAbsent,
+        )],
+      ));
+    });
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(run.computationId);
+    const child = state?.children.find((candidate) => candidate.locus.reconciliationKey === "family:borrower");
+    const secondChild = state?.children.find(
+      (candidate) => candidate.locus.reconciliationKey === "family:second-borrower",
+    );
+    expect(child).toBeDefined();
+    expect(secondChild).toBeDefined();
+    if (child == null || secondChild == null) {
+      throw new Error("Expected both borrowing child manifests.");
+    }
+    const productReadKey = computationProductDetailReadKey(productHandle);
+    const hotReadKey = computationHotDetailReadKey(hotHandle);
+    expect(child.reads.map((read) => read.readKey).sort()).toEqual([hotReadKey, productReadKey].sort());
+    expect(secondChild.reads.map((read) => read.readKey).sort()).toEqual([hotReadKey, productReadKey].sort());
+    expect(child.outputs).toEqual([]);
+    expect(secondChild.outputs).toEqual([]);
+    expect(lifecycle.childReadersFor(productReadKey)).toEqual([child.childId, secondChild.childId].sort());
+    expect(lifecycle.childReadersFor(hotReadKey)).toEqual([child.childId, secondChild.childId].sort());
+    expect(lifecycle.childProducerFor(productReadKey)).toBeNull();
+    expect(lifecycle.childProducerFor(hotReadKey)).toBeNull();
+  });
+
+  test("resolves structural references to borrowed details as exact committed child reads", () => {
+    const store = new KernelStore("computation-child-borrowed-structural-reference");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const targetProductHandle = store.handles.product("child-borrowed-structural:target");
+    const targetProvenanceHandle = store.handles.provenance("child-borrowed-structural:target-provenance");
+    const targetHotHandle = store.handles.hotDetail("child-borrowed-structural:target-hot");
+    const sourceProductHandle = store.handles.product("child-borrowed-structural:source");
+    const sourceProvenanceHandle = store.handles.provenance("child-borrowed-structural:source-provenance");
+    const targetProductSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-borrowed-structural-product",
+      "Foreign product detail borrowed by one child and referenced by another.",
+    );
+    const targetHotSlot = defineTestHotDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-borrowed-structural-hot",
+      "Foreign hot detail borrowed by one child and referenced by another.",
+    );
+    const sourceSlot = defineTestProductDetailSlot<{
+      readonly productHandle: ProductHandle;
+      readonly hotHandle: HotDetailHandle;
+    }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-borrowed-structural-source",
+      "Source detail requiring both borrowed foreign occupancies.",
+      (detail) => mergeKernelDetailReferences(
+        [kernelProductDetailReference(targetProductSlot.descriptor, detail.productHandle)],
+        [kernelHotDetailReference(targetHotSlot.descriptor, detail.hotHandle)],
+      ),
+    );
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(targetProvenanceHandle),
+      new MaterializedProduct(
+        targetProductHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        targetProvenanceHandle,
+      ),
+    ], "child-borrowed-structural:foreign"));
+    store.productDetails.add(targetProductSlot, targetProductHandle, { owner: "foreign" });
+    store.hotDetails.add(targetHotSlot, targetProductHandle, targetHotHandle, { owner: "foreign" });
+
+    const run = lifecycle.begin(locus("child-borrowed-structural-reference"));
+    run.withChild(childLocus("borrower"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "child-borrowed-structural:borrower"),
+        [publishProductDetail(
+          targetProductSlot,
+          targetProductHandle,
+          { owner: "candidate" },
+          KernelDetailAdmission.IfAbsent,
+        )],
+        [publishHotDetail(
+          targetHotSlot,
+          targetProductHandle,
+          targetHotHandle,
+          { owner: "candidate" },
+          KernelDetailAdmission.IfAbsent,
+        )],
+      ));
+    });
+    run.withChild(childLocus("consumer"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(sourceProvenanceHandle),
+          new MaterializedProduct(
+            sourceProductHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            sourceProvenanceHandle,
+          ),
+        ], "child-borrowed-structural:consumer"),
+        [publishProductDetail(sourceSlot, sourceProductHandle, {
+          productHandle: targetProductHandle,
+          hotHandle: targetHotHandle,
+        })],
+      ));
+    });
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(run.computationId);
+    const borrower = state?.children.find((child) => child.locus.reconciliationKey === "family:borrower");
+    const consumer = state?.children.find((child) => child.locus.reconciliationKey === "family:consumer");
+    const productReadKey = computationProductDetailReadKey(targetProductHandle);
+    const hotReadKey = computationHotDetailReadKey(targetHotHandle);
+    const expectedReadKeys = [productReadKey, hotReadKey].sort();
+    expect(borrower?.reads.map((read) => read.readKey).sort()).toEqual(expectedReadKeys);
+    expect(borrower?.outputs).toEqual([]);
+    expect(consumer?.reads.map((read) => read.readKey).sort()).toEqual(expectedReadKeys);
+    expect(consumer?.candidateReads).toEqual([]);
+    expect(lifecycle.childProducerFor(productReadKey)).toBeNull();
+    expect(lifecycle.childProducerFor(hotReadKey)).toBeNull();
+  });
+
+  test("retains an earlier exact detail read when a sibling later borrows the changed catalog entry", () => {
+    const store = new KernelStore("computation-child-borrowed-stale-read");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("child-borrowed-stale:product");
+    const provenanceHandle = store.handles.provenance("child-borrowed-stale:provenance");
+    const hotHandle = store.handles.hotDetail("child-borrowed-stale:hot");
+    const productSlot = defineTestProductDetailSlot<{ readonly version: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-borrowed-stale-product",
+      "Product detail changed after an exact child read.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly version: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-borrowed-stale-hot",
+      "Hot detail changed after an exact child read.",
+    );
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(provenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        provenanceHandle,
+      ),
+    ], "child-borrowed-stale:product"));
+    store.productDetails.add(productSlot, productHandle, { version: 1 });
+    store.hotDetails.add(hotSlot, productHandle, hotHandle, { version: 1 });
+    const run = lifecycle.begin(locus("child-borrowed-stale"));
+
+    run.withChild(childLocus("early-reader"), () => {
+      expect(run.readProductDetail(productSlot, productHandle)).toEqual({ version: 1 });
+      expect(run.readHotDetail(hotSlot, hotHandle)).toEqual({ version: 1 });
+    });
+    store.productDetails.remove(productHandle);
+    store.productDetails.add(productSlot, productHandle, { version: 2 });
+    store.hotDetails.remove(hotHandle);
+    store.hotDetails.add(hotSlot, productHandle, hotHandle, { version: 2 });
+    run.withChild(childLocus("late-borrower"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "child-borrowed-stale:candidate"),
+        [publishProductDetail(
+          productSlot,
+          productHandle,
+          { version: 3 },
+          KernelDetailAdmission.IfAbsent,
+        )],
+        [publishHotDetail(
+          hotSlot,
+          productHandle,
+          hotHandle,
+          { version: 3 },
+          KernelDetailAdmission.IfAbsent,
+        )],
+      ));
+    });
+
+    const result = run.commit();
+    expect(result.state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(result.transition.invalidReads.map((read) => read.readKey).sort()).toEqual([
+      computationProductDetailReadKey(productHandle),
+      computationHotDetailReadKey(hotHandle),
+    ].sort());
+    expect(store.productDetails.read(productSlot, productHandle)).toEqual({ version: 2 });
+    expect(store.hotDetails.read(hotSlot, hotHandle)).toEqual({ version: 2 });
+  });
+
+  test("rejects a borrowed admission read that collides with another read domain", () => {
+    const store = new KernelStore("computation-borrowed-domain-conflict");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("borrowed-domain-conflict:product");
+    const provenanceHandle = store.handles.provenance("borrowed-domain-conflict:provenance");
+    const productSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.borrowed-domain-conflict-product",
+      "Borrowed detail read-key domain collision.",
+    );
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(provenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        provenanceHandle,
+      ),
+    ], "borrowed-domain-conflict:product"));
+    store.productDetails.add(productSlot, productHandle, { owner: "foreign" });
+    const run = lifecycle.begin(locus("borrowed-domain-conflict"));
+    run.withChild(childLocus("borrower"), () => {
+      run.observe({
+        readKey: computationProductDetailReadKey(productHandle),
+        domain: "synthetic-collision",
+        observedRevision: "synthetic",
+        validate: () => ({ isCurrent: true, currentRevision: "synthetic", changedFacets: [] }),
+      });
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "borrowed-domain-conflict:candidate"),
+        [publishProductDetail(
+          productSlot,
+          productHandle,
+          { owner: "candidate" },
+          KernelDetailAdmission.IfAbsent,
+        )],
+      ));
+    });
+
+    expect(() => run.commit()).toThrow(/conflicting domains/);
+    expect(lifecycle.readState(run.computationId)).toBeNull();
+    expect(store.productDetails.read(productSlot, productHandle)).toEqual({ owner: "foreign" });
+  });
+
+  test("keeps mismatched-slot reads of borrowed details on the committed producer", () => {
+    const store = new KernelStore("computation-child-borrowed-slot-mismatch");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("child-borrowed-slot:product");
+    const provenanceHandle = store.handles.provenance("child-borrowed-slot:provenance");
+    const hotHandle = store.handles.hotDetail("child-borrowed-slot:hot");
+    const productSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-borrowed-slot-product",
+      "Borrowed product detail.",
+    );
+    const otherProductSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-borrowed-slot-product-other",
+      "Non-matching product detail lookup.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-borrowed-slot-hot",
+      "Borrowed hot detail.",
+    );
+    const otherHotSlot = defineTestHotDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-borrowed-slot-hot-other",
+      "Non-matching hot detail lookup.",
+    );
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(provenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        provenanceHandle,
+      ),
+    ], "child-borrowed-slot:product"));
+    store.productDetails.add(productSlot, productHandle, { owner: "foreign" });
+    store.hotDetails.add(hotSlot, productHandle, hotHandle, { owner: "foreign" });
+    const run = lifecycle.begin(locus("child-borrowed-slot"));
+
+    run.withChild(childLocus("borrower"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "child-borrowed-slot:candidate"),
+        [publishProductDetail(
+          productSlot,
+          productHandle,
+          { owner: "candidate" },
+          KernelDetailAdmission.IfAbsent,
+        )],
+        [publishHotDetail(
+          hotSlot,
+          productHandle,
+          hotHandle,
+          { owner: "candidate" },
+          KernelDetailAdmission.IfAbsent,
+        )],
+      ));
+    });
+    run.withChild(childLocus("reader"), () => {
+      expect(run.readProductDetail(otherProductSlot, productHandle)).toBeNull();
+      expect(run.readHotDetail(otherHotSlot, hotHandle)).toBeNull();
+    });
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(run.computationId);
+    const borrower = state?.children.find((child) => child.locus.reconciliationKey === "family:borrower");
+    const reader = state?.children.find((child) => child.locus.reconciliationKey === "family:reader");
+    expect(borrower).toBeDefined();
+    expect(reader).toBeDefined();
+    expect(borrower?.outputs).toEqual([]);
+    expect(reader?.candidateReads).toEqual([]);
+    expect(reader?.reads.map((read) => read.readKey).sort()).toEqual([
+      computationProductDetailReadKey(productHandle),
+      computationHotDetailReadKey(hotHandle),
+    ].sort());
+    expect(state?.children.flatMap((child) => child.candidateReads)).toEqual([]);
+  });
+
+  test("keeps remainder staged-read validation independent of unrelated child scopes", () => {
+    const runCase = (includeUnrelatedChild: boolean): void => {
+      const store = new KernelStore(`computation-remainder-staged-read:${includeUnrelatedChild}`);
+      const lifecycle = new ComputationLifecycleRegistry(store);
+      const productHandle = store.handles.product("remainder-staged-read:product");
+      const provenanceHandle = store.handles.provenance("remainder-staged-read:provenance");
+      const productSlot = defineTestProductDetailSlot<{ readonly version: number }>(
+        KernelVocabulary.Template.Source.key,
+        "test.remainder-staged-read-product",
+        "Remainder-owned staged read.",
+      );
+      const run = lifecycle.begin(locus("remainder-staged-read"));
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(provenanceHandle),
+          new MaterializedProduct(
+            productHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            provenanceHandle,
+          ),
+        ], "remainder-staged-read:if-absent"),
+        [publishProductDetail(
+          productSlot,
+          productHandle,
+          { version: 1 },
+          KernelDetailAdmission.IfAbsent,
+        )],
+      ));
+      expect(run.readProductDetail(productSlot, productHandle)).toEqual({ version: 1 });
+      if (includeUnrelatedChild) {
+        run.withChild(childLocus("unrelated"), () => {});
+      }
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "remainder-staged-read:required"),
+        [publishProductDetail(productSlot, productHandle, { version: 2 })],
+      ));
+
+      expect(run.commit().state).toBe(ComputationCommitState.Committed);
+      expect(store.productDetails.read(productSlot, productHandle)).toEqual({ version: 2 });
+    };
+
+    runCase(false);
+    runCase(true);
+  });
+
+  test("seals preparation before input validation can mutate the candidate", () => {
+    const store = new KernelStore("computation-sealed-validation");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const handle = store.handles.address("sealed-validation:address");
+    const run = lifecycle.begin(locus("sealed-validation"));
+    run.withChild(childLocus("original"), () => {
+      run.publish(publication("sealed-validation:original", [
+        new SourceFileAddress(handle, "test", "src/original.html", SourceLanguage.Html),
+      ]));
+    });
+    run.observe({
+      readKey: "test:sealed-validation",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        run.withChild(childLocus("late-writer"), () => {
+          run.publish(publication("sealed-validation:late", [
+            new SourceFileAddress(handle, "test", "src/late.html", SourceLanguage.Html),
+          ]));
+        });
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+    });
+
+    expect(() => run.commit()).toThrow(/no longer preparing/);
+    expect(store.read(handle)).toBeNull();
+    expect(lifecycle.readState(run.computationId)).toBeNull();
+    expect(lifecycle.childProducerFor(computationRecordReadKey(handle))).toBeNull();
+  });
+
+  test("keeps input validation inside the atomic publication barrier", () => {
+    const store = new KernelStore("computation-input-validation-reentrancy");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const outputHandle = store.handles.address("input-validation:output");
+    const intruderHandle = store.handles.address("input-validation:intruder");
+    const lifetime = store.markLifetime();
+    const observation = store.markObservation();
+    const run = lifecycle.begin(locus("input-validation-reentrancy"));
+    run.observe({
+      readKey: "test:input-validation-reentrancy",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        store.commit(new KernelStoreBatch([
+          new SourceFileAddress(intruderHandle, "test", "src/intruder.html", SourceLanguage.Html),
+        ], "input-validation:intruder"));
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+    });
+    run.publish(publication("input-validation:output", [
+      new SourceFileAddress(outputHandle, "test", "src/output.html", SourceLanguage.Html),
+    ]));
+
+    expect(() => run.commit()).toThrow(/cannot commit a record batch during an atomic publication replacement/);
+    expect(store.read(outputHandle)).toBeNull();
+    expect(store.read(intruderHandle)).toBeNull();
+    expect(lifecycle.readState(run.computationId)).toBeNull();
+    expect(store.markLifetime()).toEqual(lifetime);
+    expect(store.markObservation()).toEqual(observation);
+  });
+
+  test("freezes structural records before input validation", () => {
+    const store = new KernelStore("computation-sealed-records");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const firstFileHandle = store.handles.address("sealed-records:first-file");
+    const secondFileHandle = store.handles.address("sealed-records:second-file");
+    const spanHandle = store.handles.address("sealed-records:span");
+    const span = new SourceSpanAddress(spanHandle, firstFileHandle, 0, 4);
+    const run = lifecycle.begin(locus("sealed-records"));
+    run.observe({
+      readKey: "test:sealed-records",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        Object.defineProperty(span, "fileHandle", { value: secondFileHandle });
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+    });
+    run.publish(publication("sealed-records", [
+      new SourceFileAddress(firstFileHandle, "test", "src/first.html", SourceLanguage.Html),
+      new SourceFileAddress(secondFileHandle, "test", "src/second.html", SourceLanguage.Html),
+      span,
+    ]));
+
+    expect(() => run.commit()).toThrow(/Cannot redefine property: fileHandle/);
+    expect(store.read(firstFileHandle)).toBeNull();
+    expect(store.read(secondFileHandle)).toBeNull();
+    expect(store.read(spanHandle)).toBeNull();
+  });
+
+  test("freezes nested structural record collections before input validation", () => {
+    const store = new KernelStore("computation-sealed-record-collections");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const templateHandle = store.handles.address("sealed-record-collections:template");
+    const nodeHandle = store.handles.address("sealed-record-collections:node");
+    const nodePath = [0];
+    const run = lifecycle.begin(locus("sealed-record-collections"));
+    run.observe({
+      readKey: "test:sealed-record-collections",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        nodePath.push(1);
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+    });
+    run.publish(publication("sealed-record-collections", [
+      new TemplateAddress(templateHandle, "sealed-record-collections"),
+      new TemplateNodeAddress(nodeHandle, templateHandle, nodePath),
+    ]));
+
+    expect(() => run.commit()).toThrow(/object is not extensible/);
+    expect(store.read(templateHandle)).toBeNull();
+    expect(store.read(nodeHandle)).toBeNull();
+  });
+
+  test("exposes normalized staged detail envelopes to sibling children", () => {
+    const store = new KernelStore("computation-staged-detail-envelopes");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("staged-envelope:product");
+    const provenanceHandle = store.handles.provenance("staged-envelope:provenance");
+    const hotHandle = store.handles.hotDetail("staged-envelope:hot");
+    const productSlot = defineTestProductDetailSlot<{ readonly productHandle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.staged-envelope-product",
+      "Staged product-detail envelope visibility.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly handle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.staged-envelope-hot",
+      "Staged hot-detail entry visibility.",
+    );
+    const productDetail = { productHandle };
+    const hotDetail = { handle: hotHandle };
+    const run = lifecycle.begin(locus("staged-detail-envelopes"));
+    run.withChild(childLocus("producer"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(provenanceHandle),
+          new MaterializedProduct(
+            productHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            provenanceHandle,
+          ),
+        ], "staged-envelope:producer"),
+        [publishProductDetail(productSlot, productHandle, productDetail)],
+        [publishHotDetail(hotSlot, productHandle, hotHandle, hotDetail)],
+      ));
+    });
+    run.withChild(childLocus("consumer"), () => {
+      const stagedProductDetail = run.readProductDetail(productSlot, productHandle);
+      const stagedHotDetail = run.readHotDetail(hotSlot, hotHandle);
+      expect(readProductDetailEnvelope(stagedProductDetail)?.handle).toBe(productHandle);
+      expect(readHotDetailEntry(stagedHotDetail)?.ownerProductHandle).toBe(productHandle);
+      expect(readHotDetailEntry(stagedHotDetail)?.handle).toBe(hotHandle);
+    });
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    expect(readProductDetailEnvelope(store.productDetails.read(productSlot, productHandle))?.handle).toBe(productHandle);
+    expect(readHotDetailEntry(store.hotDetails.read(hotSlot, hotHandle))?.handle).toBe(hotHandle);
+  });
+
+  test("restores fresh staged detail bindings when a computation aborts", () => {
+    const store = new KernelStore("computation-aborted-staged-detail-bindings");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("aborted-staged-bindings:product");
+    const provenanceHandle = store.handles.provenance("aborted-staged-bindings:provenance");
+    const hotHandle = store.handles.hotDetail("aborted-staged-bindings:hot");
+    const productSlot = defineTestProductDetailSlot<{ readonly productHandle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.aborted-staged-product-binding",
+      "Aborted staged product-detail binding.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly handle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.aborted-staged-hot-binding",
+      "Aborted staged hot-detail binding.",
+    );
+    const productDetail = { productHandle };
+    const hotDetail = { handle: hotHandle };
+    const productDescriptor = Object.getOwnPropertyDescriptor(productDetail, "productHandle");
+    const hotDescriptor = Object.getOwnPropertyDescriptor(hotDetail, "handle");
+    const run = lifecycle.begin(locus("aborted-staged-detail-bindings"));
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "aborted-staged-bindings"),
+      [publishProductDetail(productSlot, productHandle, productDetail)],
+      [publishHotDetail(hotSlot, productHandle, hotHandle, hotDetail)],
+    ));
+
+    expect(run.readProductDetail(productSlot, productHandle)).toBe(productDetail);
+    expect(run.readHotDetail(hotSlot, hotHandle)).toBe(hotDetail);
+    expect(readProductDetailEnvelope(productDetail)?.handle).toBe(productHandle);
+    expect(readHotDetailEntry(hotDetail)?.handle).toBe(hotHandle);
+
+    run.abort();
+
+    expect(readProductDetailEnvelope(productDetail)).toBeNull();
+    expect(readHotDetailEntry(hotDetail)).toBeNull();
+    expect(Object.getOwnPropertyDescriptor(productDetail, "productHandle")).toEqual(productDescriptor);
+    expect(Object.getOwnPropertyDescriptor(hotDetail, "handle")).toEqual(hotDescriptor);
+  });
+
+  test("restores fresh staged detail bindings when input validation rejects a computation", () => {
+    const store = new KernelStore("computation-rejected-staged-detail-bindings");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("rejected-staged-bindings:product");
+    const provenanceHandle = store.handles.provenance("rejected-staged-bindings:provenance");
+    const hotHandle = store.handles.hotDetail("rejected-staged-bindings:hot");
+    const productSlot = defineTestProductDetailSlot<{ readonly productHandle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rejected-staged-product-binding",
+      "Rejected staged product-detail binding.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly handle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rejected-staged-hot-binding",
+      "Rejected staged hot-detail binding.",
+    );
+    const productDetail = { productHandle };
+    const hotDetail = { handle: hotHandle };
+    const productDescriptor = Object.getOwnPropertyDescriptor(productDetail, "productHandle");
+    const hotDescriptor = Object.getOwnPropertyDescriptor(hotDetail, "handle");
+    const run = lifecycle.begin(locus("rejected-staged-detail-bindings"));
+    run.observe({
+      readKey: "test:rejected-staged-detail-bindings",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => ({ isCurrent: false, currentRevision: "2", changedFacets: ["revision"] }),
+    });
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "rejected-staged-bindings"),
+      [publishProductDetail(productSlot, productHandle, productDetail)],
+      [publishHotDetail(hotSlot, productHandle, hotHandle, hotDetail)],
+    ));
+
+    expect(run.readProductDetail(productSlot, productHandle)).toBe(productDetail);
+    expect(run.readHotDetail(hotSlot, hotHandle)).toBe(hotDetail);
+    expect(run.commit().state).toBe(ComputationCommitState.RejectedInputsChanged);
+
+    expect(readProductDetailEnvelope(productDetail)).toBeNull();
+    expect(readHotDetailEntry(hotDetail)).toBeNull();
+    expect(Object.getOwnPropertyDescriptor(productDetail, "productHandle")).toEqual(productDescriptor);
+    expect(Object.getOwnPropertyDescriptor(hotDetail, "handle")).toEqual(hotDescriptor);
+  });
+
+  test("does not rebind a committed product detail to a rejected candidate envelope", () => {
+    const store = new KernelStore("computation-rejected-product-detail-binding");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("rejected-binding:product");
+    const provenanceHandle = store.handles.provenance("rejected-binding:provenance");
+    const slot = defineTestProductDetailSlot<{ readonly productHandle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rejected-product-detail-binding",
+      "Committed product-detail binding must survive rejected candidates.",
+    );
+    const detail = { productHandle };
+    const originalProduct = new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      null,
+      provenanceHandle,
+    );
+    const initial = lifecycle.begin(locus("rejected-product-detail-binding"));
+    initial.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([new ProvenanceRecord(provenanceHandle), originalProduct], "binding:initial"),
+      [publishProductDetail(slot, productHandle, detail)],
+    ));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    const originalEnvelope = readProductDetailEnvelope(detail);
+
+    const replacement = lifecycle.begin(locus("rejected-product-detail-binding"));
+    replacement.observe({
+      readKey: "test:rejected-product-detail-binding",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => ({ isCurrent: false, currentRevision: "2", changedFacets: ["revision"] }),
+    });
+    replacement.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "binding:replacement"),
+      [publishProductDetail(slot, productHandle, detail)],
+    ));
+
+    expect(replacement.readProductDetail(slot, productHandle)).toBe(detail);
+    expect(readProductDetailEnvelope(detail)).toBe(originalEnvelope);
+    expect(replacement.commit().state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(store.read(productHandle)).toBe(originalProduct);
+    expect(store.productDetails.read(slot, productHandle)).toBe(detail);
+  });
+
+  test("requires a fresh product detail before a sibling reads a changed candidate envelope", () => {
+    const store = new KernelStore("computation-changed-product-detail-envelope");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("changed-product-envelope:product");
+    const provenanceHandle = store.handles.provenance("changed-product-envelope:provenance");
+    const initialAddressHandle = store.handles.address("changed-product-envelope:initial");
+    const replacementAddressHandle = store.handles.address("changed-product-envelope:replacement");
+    const slot = defineTestProductDetailSlot<{ readonly productHandle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.changed-product-detail-envelope",
+      "Generation-local product-detail envelope witness.",
+    );
+    const committedDetail = { productHandle };
+    const product = (addressHandle: AddressHandle) => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      addressHandle,
+      provenanceHandle,
+    );
+    const initialProduct = product(initialAddressHandle);
+    const initial = lifecycle.begin(locus("changed-product-detail-envelope"));
+    initial.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new SourceFileAddress(initialAddressHandle, "test", "src/initial.html", SourceLanguage.Html),
+        new ProvenanceRecord(provenanceHandle),
+        initialProduct,
+      ], "changed-product-envelope:initial"),
+      [publishProductDetail(slot, productHandle, committedDetail)],
+    ));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const rejected = lifecycle.begin(locus("changed-product-detail-envelope"));
+    rejected.withChild(childLocus("producer"), () => {
+      rejected.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new SourceFileAddress(replacementAddressHandle, "test", "src/replacement.html", SourceLanguage.Html),
+          new ProvenanceRecord(provenanceHandle),
+          product(replacementAddressHandle),
+        ], "changed-product-envelope:reused"),
+        [publishProductDetail(slot, productHandle, committedDetail)],
+      ));
+    });
+    expect(() => rejected.withChild(childLocus("consumer"), () => {
+      rejected.readProductDetail(slot, productHandle);
+    })).toThrow(/materialized-product envelope changed.*fresh detail object/);
+    rejected.abort();
+    expect(readProductDetailEnvelope(committedDetail)).toBe(initialProduct);
+
+    const freshDetail = { productHandle };
+    const freshProduct = product(replacementAddressHandle);
+    const admitted = lifecycle.begin(locus("changed-product-detail-envelope"));
+    admitted.withChild(childLocus("producer"), () => {
+      admitted.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new SourceFileAddress(replacementAddressHandle, "test", "src/replacement.html", SourceLanguage.Html),
+          new ProvenanceRecord(provenanceHandle),
+          freshProduct,
+        ], "changed-product-envelope:fresh"),
+        [publishProductDetail(slot, productHandle, freshDetail)],
+      ));
+    });
+    admitted.withChild(childLocus("consumer"), () => {
+      expect(admitted.readProductDetail(slot, productHandle)).toBe(freshDetail);
+      expect(readProductDetailEnvelope(freshDetail)).toBe(freshProduct);
+    });
+    expect(admitted.commit().state).toBe(ComputationCommitState.Committed);
+    expect(store.productDetails.read(slot, productHandle)).toBe(freshDetail);
+  });
+
+  test("does not rebind a committed hot detail to a rejected candidate owner", () => {
+    const store = new KernelStore("computation-rejected-hot-detail-binding");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("rejected-hot-binding:product");
+    const provenanceHandle = store.handles.provenance("rejected-hot-binding:provenance");
+    const hotHandle = store.handles.hotDetail("rejected-hot-binding:detail");
+    const slot = defineTestHotDetailSlot<{ readonly handle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rejected-hot-detail-binding",
+      "Committed hot-detail binding must survive rejected candidates.",
+    );
+    const detail = { handle: hotHandle };
+    const originalProduct = new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      null,
+      provenanceHandle,
+    );
+    const initial = lifecycle.begin(locus("rejected-hot-detail-binding"));
+    initial.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([new ProvenanceRecord(provenanceHandle), originalProduct], "hot-binding:initial"),
+      [],
+      [publishHotDetail(slot, productHandle, hotHandle, detail)],
+    ));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    const originalEntry = readHotDetailEntry(detail);
+
+    const replacement = lifecycle.begin(locus("rejected-hot-detail-binding"));
+    replacement.observe({
+      readKey: "test:rejected-hot-detail-binding",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => ({ isCurrent: false, currentRevision: "2", changedFacets: ["revision"] }),
+    });
+    replacement.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "hot-binding:replacement"),
+      [],
+      [publishHotDetail(slot, productHandle, hotHandle, detail)],
+    ));
+
+    expect(replacement.readHotDetail(slot, hotHandle)).toBe(detail);
+    expect(readHotDetailEntry(detail)).toBe(originalEntry);
+    expect(replacement.commit().state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(store.read(productHandle)).toBe(originalProduct);
+    expect(store.hotDetails.read(slot, hotHandle)).toBe(detail);
+  });
+
+  test("requires a fresh hot detail before a sibling reads a changed candidate owner", () => {
+    const store = new KernelStore("computation-changed-hot-detail-owner");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("changed-hot-owner:product");
+    const provenanceHandle = store.handles.provenance("changed-hot-owner:provenance");
+    const initialAddressHandle = store.handles.address("changed-hot-owner:initial");
+    const replacementAddressHandle = store.handles.address("changed-hot-owner:replacement");
+    const hotHandle = store.handles.hotDetail("changed-hot-owner:detail");
+    const slot = defineTestHotDetailSlot<{ readonly handle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.changed-hot-detail-owner",
+      "Generation-local hot-detail owner witness.",
+    );
+    const committedDetail = { handle: hotHandle };
+    const product = (addressHandle: AddressHandle) => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      addressHandle,
+      provenanceHandle,
+    );
+    const initialProduct = product(initialAddressHandle);
+    const initial = lifecycle.begin(locus("changed-hot-detail-owner"));
+    initial.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new SourceFileAddress(initialAddressHandle, "test", "src/initial.html", SourceLanguage.Html),
+        new ProvenanceRecord(provenanceHandle),
+        initialProduct,
+      ], "changed-hot-owner:initial"),
+      [],
+      [publishHotDetail(slot, productHandle, hotHandle, committedDetail)],
+    ));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const rejected = lifecycle.begin(locus("changed-hot-detail-owner"));
+    rejected.withChild(childLocus("producer"), () => {
+      rejected.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new SourceFileAddress(replacementAddressHandle, "test", "src/replacement.html", SourceLanguage.Html),
+          new ProvenanceRecord(provenanceHandle),
+          product(replacementAddressHandle),
+        ], "changed-hot-owner:reused"),
+        [],
+        [publishHotDetail(slot, productHandle, hotHandle, committedDetail)],
+      ));
+    });
+    expect(() => rejected.withChild(childLocus("consumer"), () => {
+      rejected.readHotDetail(slot, hotHandle);
+    })).toThrow(/owner product envelope changed.*fresh detail object/);
+    rejected.abort();
+    expect(readHotDetailEntry(committedDetail)?.owner).toBe(initialProduct);
+
+    const freshDetail = { handle: hotHandle };
+    const freshProduct = product(replacementAddressHandle);
+    const admitted = lifecycle.begin(locus("changed-hot-detail-owner"));
+    admitted.withChild(childLocus("producer"), () => {
+      admitted.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new SourceFileAddress(replacementAddressHandle, "test", "src/replacement.html", SourceLanguage.Html),
+          new ProvenanceRecord(provenanceHandle),
+          freshProduct,
+        ], "changed-hot-owner:fresh"),
+        [],
+        [publishHotDetail(slot, productHandle, hotHandle, freshDetail)],
+      ));
+    });
+    admitted.withChild(childLocus("consumer"), () => {
+      expect(admitted.readHotDetail(slot, hotHandle)).toBe(freshDetail);
+      expect(readHotDetailEntry(freshDetail)?.owner).toBe(freshProduct);
+    });
+    expect(admitted.commit().state).toBe(ComputationCommitState.Committed);
+    expect(store.hotDetails.read(slot, hotHandle)).toBe(freshDetail);
+  });
+
+  test("derives child dependencies from record references and detail envelopes", () => {
+    const store = new KernelStore("computation-structural-child-reads");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const fileHandle = store.handles.address("structural-child:file");
+    const spanHandle = store.handles.address("structural-child:span");
+    const productHandle = store.handles.product("structural-child:product");
+    const provenanceHandle = store.handles.provenance("structural-child:provenance");
+    const hotHandle = store.handles.hotDetail("structural-child:hot");
+    const productSlot = defineTestProductDetailSlot<{ readonly value: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.structural-child-product",
+      "Product detail with a structural envelope dependency.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly value: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.structural-child-hot",
+      "Hot detail with a structural owner dependency.",
+    );
+    const run = lifecycle.begin(locus("structural-child-reads"));
+    run.withChild(childLocus("envelopes"), () => {
+      run.publish(publication("structural-child:envelopes", [
+        new SourceFileAddress(fileHandle, "test", "src/structural.html", SourceLanguage.Html),
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ]));
+    });
+    run.withChild(childLocus("span"), () => {
+      run.publish(publication("structural-child:span", [
+        new SourceSpanAddress(spanHandle, fileHandle, 3, 7),
+      ]));
+    });
+    run.withChild(childLocus("product-detail"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "structural-child:product-detail"),
+        [publishProductDetail(productSlot, productHandle, { value: "product" })],
+      ));
+    });
+    run.withChild(childLocus("hot-detail"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "structural-child:hot-detail"),
+        [],
+        [publishHotDetail(hotSlot, productHandle, hotHandle, { value: "hot" })],
+      ));
+    });
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(run.computationId);
+    const envelopeOwner = state?.children.find((child) => child.locus.reconciliationKey === "family:envelopes");
+    const span = state?.children.find((child) => child.locus.reconciliationKey === "family:span");
+    const productDetailChild = state?.children.find(
+      (child) => child.locus.reconciliationKey === "family:product-detail",
+    );
+    const hotDetailChild = state?.children.find((child) => child.locus.reconciliationKey === "family:hot-detail");
+    expect(envelopeOwner).toBeDefined();
+    expect(span?.candidateReads).toContainEqual(expect.objectContaining({
+      readKey: computationRecordReadKey(fileHandle),
+      producerChildId: envelopeOwner?.childId,
+    }));
+    expect(productDetailChild?.candidateReads).toContainEqual(expect.objectContaining({
+      readKey: computationRecordReadKey(productHandle),
+      producerChildId: envelopeOwner?.childId,
+    }));
+    expect(hotDetailChild?.candidateReads).toContainEqual(expect.objectContaining({
+      readKey: computationRecordReadKey(productHandle),
+      producerChildId: envelopeOwner?.childId,
+    }));
+  });
+
+  test("retains foreign structural references as exact outer and child reads", () => {
+    const store = new KernelStore("computation-foreign-structural-reads");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const fileHandle = store.handles.address("foreign-structural:file");
+    const spanHandle = store.handles.address("foreign-structural:span");
+    const productHandle = store.handles.product("foreign-structural:product");
+    const provenanceHandle = store.handles.provenance("foreign-structural:provenance");
+    const productSlot = defineTestProductDetailSlot<{ readonly value: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.foreign-structural-product",
+      "Foreign product-envelope dependency.",
+    );
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(fileHandle, "test", "src/foreign.html", SourceLanguage.Html),
+      new ProvenanceRecord(provenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        provenanceHandle,
+      ),
+    ], "foreign-structural:upstream"));
+    const run = lifecycle.begin(locus("foreign-structural-reads"));
+    run.withChild(childLocus("consumer"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new SourceSpanAddress(spanHandle, fileHandle, 2, 6),
+        ], "foreign-structural:consumer"),
+        [publishProductDetail(productSlot, productHandle, { value: "detail" })],
+      ));
+    });
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(run.computationId);
+    const child = state?.children.find((candidate) => candidate.locus.reconciliationKey === "family:consumer");
+    const expectedReadKeys = [
+      computationRecordReadKey(fileHandle),
+      computationRecordReadKey(productHandle),
+    ].sort();
+    expect(state?.reads.map((read) => read.readKey).sort()).toEqual(expectedReadKeys);
+    expect(child?.reads.map((read) => read.readKey).sort()).toEqual(expectedReadKeys);
+    expect(child?.candidateReads).toEqual([]);
+  });
+
+  test("projects rich-detail dependencies into exact reads on all three kernel surfaces", () => {
+    const store = new KernelStore("computation-rich-detail-structural-reads");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const linkedRecordHandle = store.handles.address("rich-detail-reads:linked-record");
+    const targetProductHandle = store.handles.product("rich-detail-reads:target-product");
+    const targetProvenanceHandle = store.handles.provenance("rich-detail-reads:target-provenance");
+    const targetHotHandle = store.handles.hotDetail("rich-detail-reads:target-hot");
+    const sourceProductHandle = store.handles.product("rich-detail-reads:source-product");
+    const sourceProvenanceHandle = store.handles.provenance("rich-detail-reads:source-provenance");
+    const targetProductSlot = defineTestProductDetailSlot<{ readonly revision: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-reads-target-product",
+      "Product-detail dependency projected by another rich detail.",
+    );
+    const targetHotSlot = defineTestHotDetailSlot<{ readonly revision: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-reads-target-hot",
+      "Hot-detail dependency projected by another rich detail.",
+    );
+    const sourceSlot = defineTestProductDetailSlot<{
+      readonly recordHandle: AddressHandle;
+      readonly productHandle: ProductHandle;
+      readonly hotHandle: HotDetailHandle;
+    }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-reads-source",
+      "Rich detail with record, product-detail, and hot-detail dependencies.",
+      (detail) => mergeKernelDetailReferences(
+        kernelRecordReferences(detail.recordHandle),
+        [kernelProductDetailReference(targetProductSlot.descriptor, detail.productHandle)],
+        [kernelHotDetailReference(targetHotSlot.descriptor, detail.hotHandle)],
+      ),
+    );
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(linkedRecordHandle, "test", "src/linked.html", SourceLanguage.Html),
+      new ProvenanceRecord(targetProvenanceHandle),
+      new MaterializedProduct(
+        targetProductHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        targetProvenanceHandle,
+      ),
+    ], "rich-detail-reads:targets"));
+    store.productDetails.add(targetProductSlot, targetProductHandle, { revision: 1 });
+    store.hotDetails.add(targetHotSlot, targetProductHandle, targetHotHandle, { revision: 1 });
+
+    const run = lifecycle.begin(locus("rich-detail-structural-reads"));
+    run.withChild(childLocus("source"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(sourceProvenanceHandle),
+          new MaterializedProduct(
+            sourceProductHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            sourceProvenanceHandle,
+          ),
+        ], "rich-detail-reads:source"),
+        [publishProductDetail(sourceSlot, sourceProductHandle, {
+          recordHandle: linkedRecordHandle,
+          productHandle: targetProductHandle,
+          hotHandle: targetHotHandle,
+        })],
+      ));
+    });
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(run.computationId);
+    const expectedReadKeys = [
+      computationRecordReadKey(linkedRecordHandle),
+      computationProductDetailReadKey(targetProductHandle),
+      computationHotDetailReadKey(targetHotHandle),
+    ].sort();
+    expect(state?.reads.map((read) => read.readKey).sort()).toEqual(expectedReadKeys);
+    expect(state?.children[0]?.reads.map((read) => read.readKey).sort()).toEqual(expectedReadKeys);
+    expect(lifecycle.readersFor(computationProductDetailReadKey(targetProductHandle))).toEqual([run.computationId]);
+    expect(lifecycle.readersFor(computationHotDetailReadKey(targetHotHandle))).toEqual([run.computationId]);
+
+    store.productDetails.remove(targetProductHandle);
+    store.productDetails.add(targetProductSlot, targetProductHandle, { revision: 2 });
+    expect(state?.reads.find((read) => read.readKey === computationProductDetailReadKey(targetProductHandle))
+      ?.validate().isCurrent).toBe(false);
+  });
+
+  test("derives child edges from staged rich-detail dependencies on all three kernel surfaces", () => {
+    const store = new KernelStore("computation-rich-detail-child-edges");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const linkedRecordHandle = store.handles.address("rich-detail-child:record");
+    const targetProductHandle = store.handles.product("rich-detail-child:target");
+    const targetProvenanceHandle = store.handles.provenance("rich-detail-child:target-provenance");
+    const targetHotHandle = store.handles.hotDetail("rich-detail-child:hot");
+    const sourceProductHandle = store.handles.product("rich-detail-child:source");
+    const sourceProvenanceHandle = store.handles.provenance("rich-detail-child:source-provenance");
+    const targetProductSlot = defineTestProductDetailSlot<{ readonly value: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-child-target",
+      "Candidate-local product-detail dependency.",
+    );
+    const targetHotSlot = defineTestHotDetailSlot<{ readonly value: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-child-hot",
+      "Candidate-local hot-detail dependency.",
+    );
+    const sourceSlot = defineTestProductDetailSlot<{
+      readonly record: AddressHandle;
+      readonly product: ProductHandle;
+      readonly hot: HotDetailHandle;
+    }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-child-source",
+      "Candidate-local source with three-surface dependencies.",
+      (detail) => mergeKernelDetailReferences(
+        kernelRecordReferences(detail.record),
+        [kernelProductDetailReference(targetProductSlot.descriptor, detail.product)],
+        [kernelHotDetailReference(targetHotSlot.descriptor, detail.hot)],
+      ),
+    );
+    const run = lifecycle.begin(locus("rich-detail-child-edges"));
+    run.withChild(childLocus("target"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new SourceFileAddress(linkedRecordHandle, "test", "src/child.html", SourceLanguage.Html),
+          new ProvenanceRecord(targetProvenanceHandle),
+          new MaterializedProduct(
+            targetProductHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            targetProvenanceHandle,
+          ),
+        ], "rich-detail-child:target"),
+        [publishProductDetail(targetProductSlot, targetProductHandle, { value: "product" })],
+        [publishHotDetail(targetHotSlot, targetProductHandle, targetHotHandle, { value: "hot" })],
+      ));
+    });
+    run.withChild(childLocus("source"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(sourceProvenanceHandle),
+          new MaterializedProduct(
+            sourceProductHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            sourceProvenanceHandle,
+          ),
+        ], "rich-detail-child:source"),
+        [publishProductDetail(sourceSlot, sourceProductHandle, {
+          record: linkedRecordHandle,
+          product: targetProductHandle,
+          hot: targetHotHandle,
+        })],
+      ));
+    });
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(run.computationId);
+    const target = state?.children.find((child) => child.locus.reconciliationKey === "family:target");
+    const source = state?.children.find((child) => child.locus.reconciliationKey === "family:source");
+    expect(source?.candidateReads).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        readKey: computationRecordReadKey(linkedRecordHandle),
+        producerChildId: target?.childId,
+      }),
+      expect.objectContaining({
+        readKey: computationProductDetailReadKey(targetProductHandle),
+        producerChildId: target?.childId,
+      }),
+      expect.objectContaining({
+        readKey: computationHotDetailReadKey(targetHotHandle),
+        producerChildId: target?.childId,
+      }),
+    ]));
+  });
+
+  test("rejects rich-detail references whose target slot kind is unavailable", () => {
+    const store = new KernelStore("computation-rich-detail-reference-kind");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const targetProductHandle = store.handles.product("rich-detail-kind:target");
+    const targetProvenanceHandle = store.handles.provenance("rich-detail-kind:target-provenance");
+    const sourceProductHandle = store.handles.product("rich-detail-kind:source");
+    const sourceProvenanceHandle = store.handles.provenance("rich-detail-kind:source-provenance");
+    const actualSlot = defineTestProductDetailSlot<{ readonly value: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-kind-actual",
+      "Actually occupied target slot.",
+    );
+    const expectedSlot = defineTestProductDetailSlot<{ readonly value: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-kind-expected",
+      "Incorrectly expected target slot.",
+    );
+    const sourceSlot = defineTestProductDetailSlot<{ readonly target: ProductHandle }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-kind-source",
+      "Source detail with a typed target occupancy.",
+      (detail) => mergeKernelDetailReferences([
+        kernelProductDetailReference(expectedSlot.descriptor, detail.target),
+      ]),
+    );
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(targetProvenanceHandle),
+      new MaterializedProduct(
+        targetProductHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        targetProvenanceHandle,
+      ),
+    ], "rich-detail-kind:target"));
+    store.productDetails.add(actualSlot, targetProductHandle, { value: "actual" });
+    const run = lifecycle.begin(locus("rich-detail-reference-kind"));
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(sourceProvenanceHandle),
+        new MaterializedProduct(
+          sourceProductHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          sourceProvenanceHandle,
+        ),
+      ], "rich-detail-kind:source"),
+      [publishProductDetail(sourceSlot, sourceProductHandle, { target: targetProductHandle })],
+    ));
+
+    expect(() => run.commit()).toThrow(/referencing unavailable product-detail/);
+    expect(store.read(sourceProductHandle)).toBeNull();
+  });
+
+  test("blocks withdrawal while a foreign rich detail still references the target occupancy", () => {
+    const store = new KernelStore("rich-detail-withdrawal-safety");
+    const targetOwner = {};
+    const preflight = { validate(): void {}, validateCurrent(): void {} };
+    const targetProductHandle = store.handles.product("rich-detail-withdrawal:target");
+    const targetProvenanceHandle = store.handles.provenance("rich-detail-withdrawal:target-provenance");
+    const sourceProductHandle = store.handles.product("rich-detail-withdrawal:source");
+    const sourceProvenanceHandle = store.handles.provenance("rich-detail-withdrawal:source-provenance");
+    const targetSlot = defineTestProductDetailSlot<{ readonly value: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-withdrawal-target",
+      "Target occupancy protected from withdrawal.",
+    );
+    const replacementTargetSlot = defineTestProductDetailSlot<{ readonly value: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-withdrawal-replacement",
+      "Different target occupancy that cannot satisfy the surviving reference.",
+    );
+    const sourceSlot = defineTestProductDetailSlot<{ readonly target: ProductHandle }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-withdrawal-source",
+      "Foreign detail retaining a target occupancy.",
+      (detail) => mergeKernelDetailReferences([kernelProductDetailReference(targetSlot.descriptor, detail.target)]),
+    );
+    const target = store.replaceOwnedPublication(
+      KernelPublicationManifest.empty,
+      new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(targetProvenanceHandle),
+          new MaterializedProduct(
+            targetProductHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            targetProvenanceHandle,
+          ),
+        ], "rich-detail-withdrawal:target"),
+        [publishProductDetail(targetSlot, targetProductHandle, { value: "target" })],
+      ),
+      targetOwner,
+      preflight,
+    );
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(sourceProvenanceHandle),
+      new MaterializedProduct(
+        sourceProductHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        sourceProvenanceHandle,
+      ),
+    ], "rich-detail-withdrawal:source"));
+    store.productDetails.add(sourceSlot, sourceProductHandle, { target: targetProductHandle });
+
+    expect(() => store.replaceOwnedPublication(
+      target.manifest,
+      new KernelPublicationPlan(new KernelStoreBatch([], "rich-detail-withdrawal:empty")),
+      targetOwner,
+      preflight,
+    )).toThrow(/surviving product-detail .* still references it/);
+    expect(store.productDetails.read(targetSlot, targetProductHandle)).not.toBeNull();
+
+    expect(() => store.replaceOwnedPublication(
+      target.manifest,
+      new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(targetProvenanceHandle),
+          new MaterializedProduct(
+            targetProductHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            targetProvenanceHandle,
+          ),
+        ], "rich-detail-withdrawal:kind-change"),
+        [publishProductDetail(
+          replacementTargetSlot,
+          targetProductHandle,
+          { value: "replacement" },
+        )],
+      ),
+      targetOwner,
+      preflight,
+    )).toThrow(/surviving product-detail .* still references it/);
+    expect(store.productDetails.read(targetSlot, targetProductHandle)).not.toBeNull();
+    expect(store.productDetails.read(replacementTargetSlot, targetProductHandle)).toBeNull();
+  });
+
+  test("retains the transitive three-surface closure of an active rich-detail publication", () => {
+    const store = new KernelStore("rich-detail-selective-retention");
+    const marker = store.markLifetime();
+    const owner = {};
+    const preflight = { validate(): void {}, validateCurrent(): void {} };
+    const directRecordHandle = store.handles.address("rich-detail-retention:direct");
+    const nestedProductRecordHandle = store.handles.address("rich-detail-retention:nested-product");
+    const nestedHotRecordHandle = store.handles.address("rich-detail-retention:nested-hot");
+    const unrelatedRecordHandle = store.handles.address("rich-detail-retention:unrelated");
+    const targetProductHandle = store.handles.product("rich-detail-retention:target");
+    const targetProvenanceHandle = store.handles.provenance("rich-detail-retention:target-provenance");
+    const targetHotHandle = store.handles.hotDetail("rich-detail-retention:target-hot");
+    const sourceProductHandle = store.handles.product("rich-detail-retention:source");
+    const sourceProvenanceHandle = store.handles.provenance("rich-detail-retention:source-provenance");
+    const targetSlot = defineTestProductDetailSlot<{ readonly nested: AddressHandle }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-retention-target",
+      "Target detail with its own record dependency.",
+      (detail) => kernelRecordReferences(detail.nested),
+    );
+    const targetHotSlot = defineTestHotDetailSlot<{ readonly nested: AddressHandle }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-retention-hot",
+      "Target hot detail with its own record dependency.",
+      (detail) => kernelRecordReferences(detail.nested),
+    );
+    const sourceSlot = defineTestProductDetailSlot<{
+      readonly direct: AddressHandle;
+      readonly product: ProductHandle;
+      readonly hot: HotDetailHandle;
+    }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-retention-source",
+      "Active detail rooting a transitive three-surface closure.",
+      (detail) => mergeKernelDetailReferences(
+        kernelRecordReferences(detail.direct),
+        [kernelProductDetailReference(targetSlot.descriptor, detail.product)],
+        [kernelHotDetailReference(targetHotSlot.descriptor, detail.hot)],
+      ),
+    );
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(directRecordHandle, "test", "src/direct.html", SourceLanguage.Html),
+      new SourceFileAddress(nestedProductRecordHandle, "test", "src/nested-product.html", SourceLanguage.Html),
+      new SourceFileAddress(nestedHotRecordHandle, "test", "src/nested-hot.html", SourceLanguage.Html),
+      new SourceFileAddress(unrelatedRecordHandle, "test", "src/unrelated.html", SourceLanguage.Html),
+      new ProvenanceRecord(targetProvenanceHandle),
+      new MaterializedProduct(
+        targetProductHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        targetProvenanceHandle,
+      ),
+    ], "rich-detail-retention:foreign"));
+    store.productDetails.add(targetSlot, targetProductHandle, { nested: nestedProductRecordHandle });
+    store.hotDetails.add(targetHotSlot, targetProductHandle, targetHotHandle, { nested: nestedHotRecordHandle });
+
+    store.replaceOwnedPublication(
+      KernelPublicationManifest.empty,
+      new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(sourceProvenanceHandle),
+          new MaterializedProduct(
+            sourceProductHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            sourceProvenanceHandle,
+          ),
+        ], "rich-detail-retention:source"),
+        [publishProductDetail(sourceSlot, sourceProductHandle, {
+          direct: directRecordHandle,
+          product: targetProductHandle,
+          hot: targetHotHandle,
+        })],
+      ),
+      owner,
+      preflight,
+    );
+
+    const disposal = store.disposeUnownedSince(marker);
+    expect(disposal).toEqual(expect.objectContaining({ records: 1, productDetails: 0, hotDetails: 0 }));
+    expect(store.read(unrelatedRecordHandle)).toBeNull();
+    for (const handle of [
+      directRecordHandle,
+      nestedProductRecordHandle,
+      nestedHotRecordHandle,
+      targetProvenanceHandle,
+      targetProductHandle,
+      sourceProvenanceHandle,
+      sourceProductHandle,
+    ]) {
+      expect(store.read(handle)).not.toBeNull();
+    }
+    expect(store.productDetails.read(targetSlot, targetProductHandle)).not.toBeNull();
+    expect(store.hotDetails.read(targetHotSlot, targetHotHandle)).not.toBeNull();
+  });
+
+  test("replaces retained payloads when their projected dependency closure changes", () => {
+    const store = new KernelStore("rich-detail-reference-replacement");
+    const owner = {};
+    const preflight = { validate(): void {}, validateCurrent(): void {} };
+    const targetA = store.handles.product("rich-detail-replacement:target-a");
+    const targetB = store.handles.product("rich-detail-replacement:target-b");
+    const targetAProvenance = store.handles.provenance("rich-detail-replacement:target-a");
+    const targetBProvenance = store.handles.provenance("rich-detail-replacement:target-b");
+    const sourceProductHandle = store.handles.product("rich-detail-replacement:source");
+    const sourceProvenanceHandle = store.handles.provenance("rich-detail-replacement:source");
+    const targetSlot = defineTestProductDetailSlot<{ readonly value: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-replacement-target",
+      "Available replacement target.",
+    );
+    const sourceSlot = defineTestProductDetailSlot<{ target: ProductHandle }>(
+      KernelVocabulary.Template.Source.key,
+      "test.rich-detail-replacement-source",
+      "Detail whose target closure determines replacement.",
+      (detail) => mergeKernelDetailReferences([kernelProductDetailReference(targetSlot.descriptor, detail.target)]),
+    );
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(targetAProvenance),
+      new ProvenanceRecord(targetBProvenance),
+      new MaterializedProduct(
+        targetA,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        targetAProvenance,
+      ),
+      new MaterializedProduct(
+        targetB,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        targetBProvenance,
+      ),
+    ], "rich-detail-replacement:targets"));
+    store.productDetails.add(targetSlot, targetA, { value: "a" });
+    store.productDetails.add(targetSlot, targetB, { value: "b" });
+    const records = () => new KernelStoreBatch([
+      new ProvenanceRecord(sourceProvenanceHandle),
+      new MaterializedProduct(
+        sourceProductHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        sourceProvenanceHandle,
+      ),
+    ], "rich-detail-replacement:source");
+    const initialDetail = { target: targetA };
+    const initial = store.replaceOwnedPublication(
+      KernelPublicationManifest.empty,
+      new KernelPublicationPlan(records(), [publishProductDetail(sourceSlot, sourceProductHandle, initialDetail)]),
+      owner,
+      preflight,
+    );
+    const replacementDetail = { target: targetB };
+    const replacement = store.replaceOwnedPublication(
+      initial.manifest,
+      new KernelPublicationPlan(records(), [publishProductDetail(
+        sourceSlot,
+        sourceProductHandle,
+        replacementDetail,
+        KernelDetailAdmission.Required,
+        () => KernelPublicationDecisionKind.Retain,
+      )]),
+      owner,
+      preflight,
+    );
+
+    expect(replacement.decisions).toContainEqual(expect.objectContaining({
+      handle: sourceProductHandle,
+      detailKind: sourceSlot.detailKind,
+      decision: KernelPublicationDecisionKind.Replace,
+    }));
+    expect(store.productDetails.read(sourceSlot, sourceProductHandle)).toBe(replacementDetail);
+
+    const mutable = { target: targetA };
+    const projected = publishProductDetail(sourceSlot, sourceProductHandle, mutable);
+    mutable.target = targetB;
+    expect(Object.isFrozen(projected.references)).toBe(true);
+    expect(projected.references.map((reference) => reference.handle)).toEqual([targetA]);
+  });
+
+  test("retains coalesced if-absent attempts as candidate dependencies", () => {
+    const store = new KernelStore("computation-coalesced-if-absent");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("coalesced-if-absent:product");
+    const provenanceHandle = store.handles.provenance("coalesced-if-absent:provenance");
+    const hotHandle = store.handles.hotDetail("coalesced-if-absent:hot");
+    const productSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.coalesced-if-absent-product",
+      "Coalesced product detail.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.coalesced-if-absent-hot",
+      "Coalesced hot detail.",
+    );
+    const run = lifecycle.begin(locus("coalesced-if-absent"));
+    run.withChild(childLocus("first"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(provenanceHandle),
+          new MaterializedProduct(
+            productHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            provenanceHandle,
+          ),
+        ], "coalesced-if-absent:first"),
+        [publishProductDetail(productSlot, productHandle, { owner: "first" }, KernelDetailAdmission.IfAbsent)],
+        [publishHotDetail(hotSlot, productHandle, hotHandle, { owner: "first" }, KernelDetailAdmission.IfAbsent)],
+      ));
+    });
+    run.withChild(childLocus("second"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "coalesced-if-absent:second"),
+        [publishProductDetail(productSlot, productHandle, { owner: "second" }, KernelDetailAdmission.IfAbsent)],
+        [publishHotDetail(hotSlot, productHandle, hotHandle, { owner: "second" }, KernelDetailAdmission.IfAbsent)],
+      ));
+    });
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(run.computationId);
+    const first = state?.children.find((child) => child.locus.reconciliationKey === "family:first");
+    const second = state?.children.find((child) => child.locus.reconciliationKey === "family:second");
+    expect(second?.candidateReads).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        readKey: computationProductDetailReadKey(productHandle),
+        producerChildId: first?.childId,
+      }),
+      expect.objectContaining({
+        readKey: computationHotDetailReadKey(hotHandle),
+        producerChildId: first?.childId,
+      }),
+    ]));
+  });
+
+  test("rejects a candidate if a later required detail replaces an earlier if-absent occupancy", () => {
+    const store = new KernelStore("computation-replaced-if-absent");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("replaced-if-absent:product");
+    const provenanceHandle = store.handles.provenance("replaced-if-absent:provenance");
+    const hotHandle = store.handles.hotDetail("replaced-if-absent:hot");
+    const productSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.replaced-if-absent-product",
+      "Conditionally admitted product detail replaced later in the same candidate.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.replaced-if-absent-hot",
+      "Conditionally admitted hot detail replaced later in the same candidate.",
+    );
+    const run = lifecycle.begin(locus("replaced-if-absent"));
+    run.withChild(childLocus("conditional"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(provenanceHandle),
+          new MaterializedProduct(
+            productHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            provenanceHandle,
+          ),
+        ], "replaced-if-absent:conditional"),
+        [publishProductDetail(productSlot, productHandle, { owner: "conditional" }, KernelDetailAdmission.IfAbsent)],
+        [publishHotDetail(
+          hotSlot,
+          productHandle,
+          hotHandle,
+          { owner: "conditional" },
+          KernelDetailAdmission.IfAbsent,
+        )],
+      ));
+    });
+    run.withChild(childLocus("required"), () => {
+      run.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "replaced-if-absent:required"),
+        [publishProductDetail(productSlot, productHandle, { owner: "required" })],
+        [publishHotDetail(hotSlot, productHandle, hotHandle, { owner: "required" })],
+      ));
+    });
+
+    const result = run.commit();
+    expect(result.state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(result.transition.invalidReads.map((read) => read.readKey).sort()).toEqual([
+      computationProductDetailReadKey(productHandle),
+      computationHotDetailReadKey(hotHandle),
+    ].sort());
+    expect(store.read(productHandle)).toBeNull();
+    expect(store.productDetails.read(productSlot, productHandle)).toBeNull();
+    expect(store.hotDetails.read(hotSlot, hotHandle)).toBeNull();
+  });
+
+  test("retains final candidate-local absence as an exact negative dependency", () => {
+    const store = new KernelStore("computation-final-candidate-absence");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const withdrawnHandle = store.handles.address("candidate-absence:withdrawn");
+    const derivedHandle = store.handles.address("candidate-absence:derived");
+    const initial = lifecycle.begin(locus("final-candidate-absence"));
+    initial.publish(publication("candidate-absence:initial", [
+      new SourceFileAddress(withdrawnHandle, "test", "src/withdrawn.html", SourceLanguage.Html),
+    ]));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const replacement = lifecycle.begin(locus("final-candidate-absence"));
+    replacement.withChild(childLocus("absence-consumer"), () => {
+      expect(replacement.read(withdrawnHandle)).toBeNull();
+      replacement.publish(publication("candidate-absence:replacement", [
+        new SourceFileAddress(derivedHandle, "test", "src/derived.html", SourceLanguage.Html),
+      ]));
+    });
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+
+    const child = lifecycle.readState(replacement.computationId)?.children.find(
+      (candidate) => candidate.locus.reconciliationKey === "family:absence-consumer",
+    );
+    expect(child?.candidateReads).toContainEqual(expect.objectContaining({
+      readKey: computationRecordReadKey(withdrawnHandle),
+      state: ComputationCandidateReadState.Absent,
+      producerChildId: null,
+    }));
+    expect(lifecycle.childReadersFor(computationRecordReadKey(withdrawnHandle))).toEqual([child?.childId]);
+  });
+
+  test("retains honest blockers for child aggregate reads", () => {
+    const store = new KernelStore("computation-child-open-reads");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const run = lifecycle.begin(locus("child-open-reads"));
+
+    run.withChild(childLocus("aggregate-reader"), () => {
+      expect(run.readAllRecords()).toEqual([]);
+      expect(run.readSourceFileAddressesByFileName("src/app.html")).toEqual([]);
+      expect(run.readMaterializations()).toEqual([]);
+    });
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const child = lifecycle.readState(run.computationId)?.children.find(
+      (candidate) => candidate.locus.reconciliationKey === "family:aggregate-reader",
+    );
+    expect(child?.hasOnlyRevisionedReads).toBe(false);
+    expect(child?.openReads.map((read) => read.kind).sort()).toEqual([
+      ComputationOpenReadKind.AllRecords,
+      ComputationOpenReadKind.Materializations,
+      ComputationOpenReadKind.SourceFileIndex,
+    ].sort());
+  });
+
+  test("promotes aggregate-derived outputs to the youngest positive input lifetime", () => {
+    const store = new KernelStore("computation-child-open-read-lifetime");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const outputHandle = store.handles.address("open-read-lifetime:output");
+    const foreignHandle = store.handles.address("open-read-lifetime:foreign");
+    const initial = lifecycle.begin(locus("open-read-lifetime"));
+    initial.publish(publication("open-read-lifetime:initial", [
+      new SourceFileAddress(outputHandle, "test", "src/output.html", SourceLanguage.Html),
+    ]));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const marker = store.markLifetime();
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(foreignHandle, "test", "src/foreign.html", SourceLanguage.Html),
+    ], "open-read-lifetime:foreign"));
+
+    const replacement = lifecycle.begin(locus("open-read-lifetime"));
+    replacement.withChild(childLocus("aggregate"), () => {
+      expect(replacement.readAllRecords().map((record) => record.handle)).toEqual([foreignHandle]);
+      replacement.publish(publication("open-read-lifetime:replacement", [
+        new SourceFileAddress(outputHandle, "test", "src/output.html", SourceLanguage.Html),
+      ]));
+    });
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+
+    store.disposeSince(marker);
+    expect(store.read(foreignHandle)).toBeNull();
+    expect(store.read(outputHandle)).toBeNull();
+    expect(lifecycle.readState(replacement.computationId)).toBeNull();
+  });
+
+  test("rejects aggregate-derived output when a returned record changes before commit", () => {
+    const store = new KernelStore("computation-aggregate-positive-row-race");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const inputHandle = store.handles.address("aggregate-positive-row-race:input");
+    const outputHandle = store.handles.address("aggregate-positive-row-race:output");
+    const initial = store.replacePublication(
+      KernelPublicationManifest.empty,
+      new KernelPublicationPlan(new KernelStoreBatch([
+        new SourceFileAddress(inputHandle, "test", "src/initial.html", SourceLanguage.Html),
+      ], "aggregate-positive-row-race:initial")),
+    );
+    const run = lifecycle.begin(locus("aggregate-positive-row-race"));
+
+    expect(run.readAllRecords()).toEqual([
+      expect.objectContaining({ handle: inputHandle, path: "src/initial.html" }),
+    ]);
+    run.publish(publication("aggregate-positive-row-race:output", [
+      new SourceFileAddress(outputHandle, "test", "src/output.html", SourceLanguage.Html),
+    ]));
+
+    expect(store.replacePublication(
+      initial.manifest,
+      new KernelPublicationPlan(new KernelStoreBatch([
+        new SourceFileAddress(inputHandle, "test", "src/replaced.html", SourceLanguage.Html),
+      ], "aggregate-positive-row-race:replacement")),
+    ).decisions).toContainEqual(expect.objectContaining({
+      surface: "record",
+      handle: inputHandle,
+      decision: KernelPublicationDecisionKind.Replace,
+    }));
+
+    const result = run.commit();
+    expect(result.state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(result.transition.invalidReads).toContainEqual(expect.objectContaining({
+      readKey: computationRecordReadKey(inputHandle),
+    }));
+    expect(store.read(outputHandle)).toBeNull();
+  });
+
+  test("does not allow a failed child scope to commit its partial candidate", () => {
+    const store = new KernelStore("computation-child-failure");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const handle = store.handles.address("child-failure:address");
+    const run = lifecycle.begin(locus("child-failure"));
+
+    expect(() => run.withChild(childLocus("failing"), () => {
+      run.publish(publication("child-failure:partial", [
+        new SourceFileAddress(handle, "test", "src/partial.html", SourceLanguage.Html),
+      ]));
+      throw new Error("child preparation failed");
+    })).toThrow("child preparation failed");
+
+    expect(() => run.commit()).toThrow(/failed child preparation/);
+    expect(store.read(handle)).toBeNull();
+    expect(lifecycle.readState(run.computationId)).toBeNull();
+  });
+
+  test("keeps commit and abort outside child callbacks and poisons child-establishment failures", () => {
+    const store = new KernelStore("computation-child-scope-boundary");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const handle = store.handles.address("child-scope-boundary:address");
+    const committing = lifecycle.begin(locus("child-scope-commit"));
+
+    expect(() => committing.withChild(childLocus("committing"), () => {
+      committing.publish(publication("child-scope-boundary:partial", [
+        new SourceFileAddress(handle, "test", "src/partial.html", SourceLanguage.Html),
+      ]));
+      committing.commit();
+    })).toThrow(/cannot commit inside an active child scope/);
+    expect(() => committing.commit()).toThrow(/failed child preparation/);
+    expect(store.read(handle)).toBeNull();
+
+    const aborting = lifecycle.begin(locus("child-scope-abort"));
+    expect(() => aborting.withChild(childLocus("aborting"), () => aborting.abort())).toThrow(
+      /cannot abort inside an active child scope/,
+    );
+    aborting.abort();
+
+    const conflicting = lifecycle.begin(locus("child-scope-conflict"));
+    conflicting.withChild(childLocus("same-key"), () => {});
+    expect(() => conflicting.withChild({
+      ...childLocus("same-key"),
+      summary: "conflicting summary",
+    }, () => {})).toThrow(/conflicting summaries/);
+    expect(() => conflicting.commit()).toThrow(/failed child preparation/);
+  });
+
+  test("rejects asynchronous child callbacks without leaking their continuation", async () => {
+    const store = new KernelStore("computation-child-async-boundary");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const handle = store.handles.address("child-async-boundary:address");
+    const run = lifecycle.begin(locus("child-async-boundary"));
+    let continued = false;
+
+    expect(() => run.withChild(childLocus("async"), async () => {
+      await Promise.resolve();
+      continued = true;
+      run.publish(publication("child-async-boundary:late", [
+        new SourceFileAddress(handle, "test", "src/late.html", SourceLanguage.Html),
+      ]));
+    })).toThrow(/must finish synchronously/);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(continued).toBe(true);
+    expect(run.isCurrent()).toBe(false);
+    expect(() => run.commit()).toThrow(/failed child preparation/);
+    expect(store.read(handle)).toBeNull();
+  });
+
   test("rejects a superseded borrowed if-absent run without importing its reads", () => {
     const store = new KernelStore("computation-superseded-borrowed-detail");
     const lifecycle = new ComputationLifecycleRegistry(store);
     const productHandle = store.handles.product("superseded-borrowed-detail:product");
     const provenanceHandle = store.handles.provenance("superseded-borrowed-detail:provenance");
-    const productSlot = defineProductDetailSlot<{ readonly owner: string }>(
+    const productSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
       KernelVocabulary.Template.Source.key,
       "test.superseded-borrowed-product-detail",
       "Borrowed detail staged by a superseded run.",
@@ -485,7 +2719,7 @@ describe("computation lifecycle", () => {
     const lifecycle = new ComputationLifecycleRegistry(store);
     const productHandle = store.handles.product("producer-preflight:product");
     const provenanceHandle = store.handles.provenance("producer-preflight:provenance");
-    const productSlot = defineProductDetailSlot<{ readonly owner: string }>(
+    const productSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
       KernelVocabulary.Template.Source.key,
       "test.producer-preflight-product-detail",
       "Product detail used to verify producer preflight ordering.",
@@ -519,6 +2753,220 @@ describe("computation lifecycle", () => {
     expect(store.productDetails.read(productSlot, productHandle)).toBeNull();
     expect(lifecycle.readState(contender.computationId)).toBeNull();
     expect(lifecycle.producerFor(productDetailKey)).toBe(owner.computationId);
+  });
+
+  test("rejects reentrant store and detail mutations throughout publication preflight", () => {
+    const store = new KernelStore("publication-preflight-reentrancy");
+    const owner = {};
+    const firstHandle = store.handles.address("preflight-reentrancy:first");
+    const secondHandle = store.handles.address("preflight-reentrancy:second");
+    const intruderHandle = store.handles.address("preflight-reentrancy:intruder");
+    const productHandle = store.handles.product("preflight-reentrancy:product");
+    const hotHandle = store.handles.hotDetail("preflight-reentrancy:hot");
+    const provenanceHandle = store.handles.provenance("preflight-reentrancy:provenance");
+    const productSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.preflight-reentrancy-product",
+      "Product detail used to force direct catalog reentrancy.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.preflight-reentrancy-hot",
+      "Hot detail used to force direct catalog reentrancy.",
+    );
+    const records = (suffix: string) => [
+      new SourceFileAddress(firstHandle, "test", `src/first-${suffix}.html`, SourceLanguage.Html),
+      new SourceFileAddress(secondHandle, "test", `src/second-${suffix}.html`, SourceLanguage.Html),
+      new ProvenanceRecord(provenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        provenanceHandle,
+      ),
+    ];
+    const initial = store.replaceOwnedPublication(
+      KernelPublicationManifest.empty,
+      publication("preflight-reentrancy:initial", records("initial")),
+      owner,
+      {
+        validate: (decisions) => {
+          expect(Object.isFrozen(decisions)).toBe(true);
+          expect(() => (decisions as unknown as unknown[]).splice(0)).toThrow();
+        },
+        validateCurrent(): void {},
+      },
+    );
+    expect(initial.decisions).toHaveLength(4);
+    const first = store.read(firstHandle);
+    const second = store.read(secondHandle);
+    const lifetime = store.markLifetime();
+    const observation = store.markObservation();
+
+    expect(() => store.replaceOwnedPublication(
+      initial.manifest,
+      publication("preflight-reentrancy:nested-store", records("replacement")),
+      owner,
+      {
+        validate: () => store.commit(new KernelStoreBatch([
+          new SourceFileAddress(intruderHandle, "test", "src/intruder.html", SourceLanguage.Html),
+        ], "preflight-reentrancy:intruder")),
+        validateCurrent(): void {},
+      },
+    )).toThrow(/cannot commit a record batch during an atomic publication replacement/);
+    expect(store.read(firstHandle)).toBe(first);
+    expect(store.read(secondHandle)).toBe(second);
+    expect(store.read(intruderHandle)).toBeNull();
+    expect(store.markLifetime()).toEqual(lifetime);
+    expect(store.markObservation()).toEqual(observation);
+
+    expect(() => store.replaceOwnedPublication(
+      initial.manifest,
+      publication("preflight-reentrancy:detail", records("replacement")),
+      owner,
+      {
+        validate: () => {
+          store.productDetails.add(productSlot, productHandle, { owner: "intruder" });
+        },
+        validateCurrent(): void {},
+      },
+    )).toThrow(/detail catalogs cannot mutate/);
+    expect(store.read(firstHandle)).toBe(first);
+    expect(store.read(secondHandle)).toBe(second);
+    expect(store.productDetails.read(productSlot, productHandle)).toBeNull();
+    expect(store.markLifetime()).toEqual(lifetime);
+    expect(store.markObservation()).toEqual(observation);
+
+    expect(() => store.replaceOwnedPublication(
+      initial.manifest,
+      publication("preflight-reentrancy:hot-detail", records("replacement")),
+      owner,
+      {
+        validate: () => {
+          store.hotDetails.add(hotSlot, productHandle, hotHandle, { owner: "intruder" });
+        },
+        validateCurrent(): void {},
+      },
+    )).toThrow(/detail catalogs cannot mutate/);
+    expect(store.read(firstHandle)).toBe(first);
+    expect(store.read(secondHandle)).toBe(second);
+    expect(store.hotDetails.read(hotSlot, hotHandle)).toBeNull();
+    expect(store.markLifetime()).toEqual(lifetime);
+    expect(store.markObservation()).toEqual(observation);
+  });
+
+  test("keeps detail comparators inside the publication reentrancy barrier", () => {
+    const store = new KernelStore("publication-comparator-reentrancy");
+    const owner = {};
+    const productHandle = store.handles.product("comparator-reentrancy:product");
+    const provenanceHandle = store.handles.provenance("comparator-reentrancy:provenance");
+    const intruderHandle = store.handles.address("comparator-reentrancy:intruder");
+    const productSlot = defineTestProductDetailSlot<{ readonly version: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.comparator-reentrancy-product",
+      "Product detail with a hostile comparison callback.",
+    );
+    const product = () => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      null,
+      provenanceHandle,
+    );
+    const initial = store.replaceOwnedPublication(
+      KernelPublicationManifest.empty,
+      new KernelPublicationPlan(
+        new KernelStoreBatch([new ProvenanceRecord(provenanceHandle), product()], "comparator:initial"),
+        [publishProductDetail(productSlot, productHandle, { version: 1 })],
+      ),
+      owner,
+      { validate(): void {}, validateCurrent(): void {} },
+    );
+    const originalProduct = store.read(productHandle);
+    const originalDetail = store.productDetails.read(productSlot, productHandle);
+    const lifetime = store.markLifetime();
+    const observation = store.markObservation();
+
+    expect(() => store.replaceOwnedPublication(
+      initial.manifest,
+      new KernelPublicationPlan(
+        new KernelStoreBatch([new ProvenanceRecord(provenanceHandle), product()], "comparator:replacement"),
+        [publishProductDetail(
+          productSlot,
+          productHandle,
+          { version: 2 },
+          KernelDetailAdmission.Required,
+          () => {
+            store.commit(new KernelStoreBatch([
+              new SourceFileAddress(intruderHandle, "test", "src/intruder.html", SourceLanguage.Html),
+            ], "comparator:intruder"));
+            return KernelPublicationDecisionKind.Replace;
+          },
+        )],
+      ),
+      owner,
+      { validate(): void {}, validateCurrent(): void {} },
+    )).toThrow(/cannot commit a record batch during an atomic publication replacement/);
+    expect(store.read(productHandle)).toBe(originalProduct);
+    expect(store.productDetails.read(productSlot, productHandle)).toBe(originalDetail);
+    expect(store.read(intruderHandle)).toBeNull();
+    expect(store.markLifetime()).toEqual(lifetime);
+    expect(store.markObservation()).toEqual(observation);
+  });
+
+  test("validates computation inputs after every detail comparator has finished", () => {
+    const store = new KernelStore("computation-comparator-input-validation");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const revisions = new MutableRevisionAuthority();
+    const readKey = "source:comparator-input";
+    revisions.set(readKey, "1");
+    const productHandle = store.handles.product("comparator-input:product");
+    const provenanceHandle = store.handles.provenance("comparator-input:provenance");
+    const slot = defineTestProductDetailSlot<{ readonly version: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.comparator-input-validation",
+      "Detail comparator that invalidates a captured computation input.",
+    );
+    const product = () => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      null,
+      provenanceHandle,
+    );
+    const initialDetail = { version: 1 };
+    const initial = lifecycle.begin(locus("comparator-input-validation"));
+    initial.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([new ProvenanceRecord(provenanceHandle), product()], "comparator-input:initial"),
+      [publishProductDetail(slot, productHandle, initialDetail)],
+    ));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const replacement = lifecycle.begin(locus("comparator-input-validation"));
+    replacement.observe(revisions.observe(readKey));
+    replacement.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([new ProvenanceRecord(provenanceHandle), product()], "comparator-input:replacement"),
+      [publishProductDetail(
+        slot,
+        productHandle,
+        { version: 2 },
+        KernelDetailAdmission.Required,
+        () => {
+          revisions.set(readKey, "2");
+          return KernelPublicationDecisionKind.Replace;
+        },
+      )],
+    ));
+
+    const result = replacement.commit();
+    expect(result.state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(result.transition.invalidReads).toContainEqual(expect.objectContaining({
+      readKey,
+      observedRevision: "1",
+      currentRevision: "2",
+    }));
+    expect(store.productDetails.read(slot, productHandle)).toBe(initialDetail);
   });
 
   test("retains an unrelated template publication while replacing another", () => {
@@ -693,6 +3141,94 @@ describe("computation lifecycle", () => {
     expect(lifecycle.producerFor(outputReadKey)).toBe(r2.computationId);
   });
 
+  test("rejects a run superseded from inside its final input validator", () => {
+    const store = new KernelStore("computation-validator-supersession");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const outputHandle = store.handles.address("validator-supersession:output");
+    const newerRuns: ComputationRun[] = [];
+    const run = lifecycle.begin(locus("validator-supersession"));
+    run.observe({
+      readKey: "test:validator-supersession",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        newerRuns.push(lifecycle.begin(locus("validator-supersession")));
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+    });
+    run.publish(publication("validator-supersession", [
+      new SourceFileAddress(outputHandle, "test", "src/superseded.html", SourceLanguage.Html),
+    ]));
+
+    expect(run.commit().state).toBe(ComputationCommitState.RejectedSuperseded);
+    expect(store.read(outputHandle)).toBeNull();
+    expect(lifecycle.readState(run.computationId)).toBeNull();
+    expect(newerRuns).toHaveLength(1);
+    newerRuns[0]!.abort();
+  });
+
+  test("snapshots read metadata before admission and seals committed lifecycle state", () => {
+    const store = new KernelStore("computation-read-metadata-snapshot");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const outputHandle = store.handles.address("read-metadata-snapshot:output");
+    let metadataReadable = true;
+    const read: ComputationRead = {
+      get readKey() {
+        if (!metadataReadable) {
+          throw new Error("readKey escaped the preparation boundary");
+        }
+        return "test:read-metadata-snapshot";
+      },
+      get domain() {
+        if (!metadataReadable) {
+          throw new Error("domain escaped the preparation boundary");
+        }
+        return "test-input";
+      },
+      get observedRevision() {
+        if (!metadataReadable) {
+          throw new Error("revision escaped the preparation boundary");
+        }
+        return "1";
+      },
+      validate: () => {
+        metadataReadable = false;
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+    };
+    const mutableLocus = {
+      kind: "test",
+      reconciliationKey: "read-metadata-snapshot",
+      summary: "Test computation for read-metadata-snapshot.",
+      domainPayload: "caller-owned",
+    };
+    const run = lifecycle.begin(mutableLocus);
+    mutableLocus.kind = "mutated";
+    mutableLocus.reconciliationKey = "mutated";
+    mutableLocus.summary = "mutated";
+    run.observe(read);
+    run.publish(publication("read-metadata-snapshot", [
+      new SourceFileAddress(outputHandle, "test", "src/metadata.html", SourceLanguage.Html),
+    ]));
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(run.computationId);
+    expect(state).not.toBeNull();
+    expect(Object.isFrozen(state)).toBe(true);
+    expect(Object.isFrozen(state?.reads)).toBe(true);
+    expect(Object.isFrozen(state?.outputs)).toBe(true);
+    expect(Object.isFrozen(state?.children)).toBe(true);
+    expect(state?.locus).toEqual({
+      kind: "test",
+      reconciliationKey: "read-metadata-snapshot",
+      summary: "Test computation for read-metadata-snapshot.",
+    });
+    expect(Object.isFrozen(state?.locus)).toBe(true);
+    expect("domainPayload" in (state?.locus ?? {})).toBe(false);
+    expect(() => (state?.outputs as unknown as unknown[]).pop()).toThrow();
+    expect(store.read(outputHandle)).not.toBeNull();
+  });
+
   test("keeps the same definition distinct in two compiler cohorts", () => {
     const store = new KernelStore("computation-cohorts");
     const lifecycle = new ComputationLifecycleRegistry(store);
@@ -752,6 +3288,44 @@ describe("computation lifecycle", () => {
     expect(store.read(withdrawnHandle)).toBeNull();
   });
 
+  test("does not allocate a lifetime for an immediate publication that owns nothing", () => {
+    const store = new KernelStore("immediate-empty-publication");
+    const lifetime = store.markLifetime();
+    const observation = store.markObservation();
+
+    store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([], "immediate-publication:empty"),
+    ));
+
+    expect(store.markLifetime()).toEqual(lifetime);
+    expect(store.markObservation()).toEqual(observation);
+  });
+
+  test("publishes immediate records and details as one atomic unit", () => {
+    const store = new KernelStore("immediate-publication-atomicity");
+    const sourceHandle = store.handles.address("immediate-publication:source");
+    const missingProductHandle = store.handles.product("immediate-publication:missing-product");
+    const slot = defineTestProductDetailSlot<{ readonly value: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.immediate-publication-atomicity",
+      "Immediate publication detail used to force preflight failure.",
+    );
+    const lifetime = store.markLifetime();
+    const observation = store.markObservation();
+
+    expect(() => store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new SourceFileAddress(sourceHandle, "test", "src/immediate.html", SourceLanguage.Html),
+      ], "immediate-publication:invalid"),
+      [publishProductDetail(slot, missingProductHandle, { value: "unowned" })],
+    ))).toThrow(/product .* is absent from the post-state/);
+
+    expect(store.read(sourceHandle)).toBeNull();
+    expect(store.productDetails.read(slot, missingProductHandle)).toBeNull();
+    expect(store.markLifetime()).toEqual(lifetime);
+    expect(store.markObservation()).toEqual(observation);
+  });
+
   test("replaces record and detail products atomically and preserves the last complete state on failure", () => {
     const store = new KernelStore("computation-atomic-publication");
     const lifecycle = new ComputationLifecycleRegistry(store);
@@ -762,12 +3336,12 @@ describe("computation lifecycle", () => {
     const productHandle = store.handles.product("product:atomic");
     const hotHandle = store.handles.hotDetail("hot:atomic");
     const provenanceHandle = store.handles.provenance("product:atomic");
-    const detailSlot = defineProductDetailSlot<{ readonly revision: number }>(
+    const detailSlot = defineTestProductDetailSlot<{ readonly revision: number }>(
       KernelVocabulary.Template.Source.key,
       "test.atomic-product",
       "Computation publication product-detail transaction witness.",
     );
-    const hotSlot = defineHotDetailSlot<{ readonly revision: number }>(
+    const hotSlot = defineTestHotDetailSlot<{ readonly revision: number }>(
       KernelVocabulary.Template.Source.key,
       "test.atomic-hot",
       "Computation publication hot-detail transaction witness.",
@@ -879,7 +3453,7 @@ describe("computation lifecycle", () => {
   test("requires each hot detail to name a present owner product of the slot kind", () => {
     const store = new KernelStore("computation-hot-detail-owner-validation");
     const lifecycle = new ComputationLifecycleRegistry(store);
-    const slot = defineHotDetailSlot<{ readonly value: number }>(
+    const slot = defineTestHotDetailSlot<{ readonly value: number }>(
       KernelVocabulary.Template.Source.key,
       "test.hot-detail-owner-validation",
       "Hot-detail owner validation witness.",
@@ -926,7 +3500,7 @@ describe("computation lifecycle", () => {
     const productHandle = store.handles.product("hot-owner-refresh:product");
     const hotHandle = store.handles.hotDetail("hot-owner-refresh:member");
     const provenanceHandle = store.handles.provenance("hot-owner-refresh:product");
-    const slot = defineHotDetailSlot<{ readonly value: number }>(
+    const slot = defineTestHotDetailSlot<{ readonly value: number }>(
       KernelVocabulary.Template.Source.key,
       "test.hot-detail-owner-refresh",
       "Hot detail whose owner witness changes while its semantic value is retained.",
@@ -980,7 +3554,7 @@ describe("computation lifecycle", () => {
     const productHandle = store.handles.product("foreign-hot-owner:product");
     const hotHandle = store.handles.hotDetail("foreign-hot-owner:member");
     const provenanceHandle = store.handles.provenance("foreign-hot-owner:product");
-    const slot = defineHotDetailSlot<{ readonly value: number }>(
+    const slot = defineTestHotDetailSlot<{ readonly value: number }>(
       KernelVocabulary.Template.Source.key,
       "test.foreign-hot-detail-owner",
       "Hot child owned by a computation distinct from its product publisher.",
@@ -1025,12 +3599,12 @@ describe("computation lifecycle", () => {
       const lineageAddressHandle = store.handles.address(`${storeKey}:lineage`);
       const unrelatedAddressHandle = store.handles.address(`${storeKey}:unrelated`);
       const hotHandle = store.handles.hotDetail(`${storeKey}:hot`);
-      const detailSlot = defineProductDetailSlot<{ readonly ownerProductHandle: string }>(
+      const detailSlot = defineTestProductDetailSlot<{ readonly ownerProductHandle: string }>(
         KernelVocabulary.Template.Source.key,
         `${storeKey}.product-detail`,
         "Foreign-owner product-detail lifetime witness.",
       );
-      const hotSlot = defineHotDetailSlot<{ readonly ownerProductHandle: string }>(
+      const hotSlot = defineTestHotDetailSlot<{ readonly ownerProductHandle: string }>(
         KernelVocabulary.Template.Source.key,
         `${storeKey}.hot-detail`,
         "Foreign-owner hot-detail lifetime witness.",
@@ -1153,12 +3727,12 @@ describe("computation lifecycle", () => {
     const lifecycle = new ComputationLifecycleRegistry(store);
     const productHandle = store.handles.product("stable-admission:product");
     const provenanceHandle = store.handles.provenance("stable-admission:product");
-    const productSlot = defineProductDetailSlot<{ readonly owner: string }>(
+    const productSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
       KernelVocabulary.Template.Source.key,
       "test.stable-admission-product",
       "Stable staged product-detail admission witness.",
     );
-    const hotSlot = defineHotDetailSlot<{ readonly owner: string }>(
+    const hotSlot = defineTestHotDetailSlot<{ readonly owner: string }>(
       KernelVocabulary.Template.Source.key,
       "test.stable-admission-hot",
       "Stable staged hot-detail admission witness.",
@@ -1219,12 +3793,12 @@ describe("computation lifecycle", () => {
     const provenanceHandle = store.handles.provenance("detail-binding-preflight:product");
     const initialAddressHandle = store.handles.address("detail-binding-preflight:source:initial");
     const replacementAddressHandle = store.handles.address("detail-binding-preflight:source:replacement");
-    const productSlot = defineProductDetailSlot<{ readonly sourceAddressHandle: AddressHandle }>(
+    const productSlot = defineTestProductDetailSlot<{ readonly sourceAddressHandle: AddressHandle }>(
       KernelVocabulary.Template.Source.key,
       "test.detail-binding-preflight-product",
       "Product-detail weak-binding atomicity witness.",
     );
-    const hotSlot = defineHotDetailSlot<{ readonly handle?: string }>(
+    const hotSlot = defineTestHotDetailSlot<{ readonly handle?: string }>(
       KernelVocabulary.Template.Source.key,
       "test.detail-binding-preflight-hot",
       "Later failing hot-detail binding witness.",
@@ -1279,12 +3853,12 @@ describe("computation lifecycle", () => {
     const productHandle = store.handles.product("fresh-detail-normalization-rollback:product");
     const provenanceHandle = store.handles.provenance("fresh-detail-normalization-rollback:product");
     const addressHandle = store.handles.address("fresh-detail-normalization-rollback:source");
-    const productSlot = defineProductDetailSlot<{ readonly sourceAddressHandle: AddressHandle }>(
+    const productSlot = defineTestProductDetailSlot<{ readonly sourceAddressHandle: AddressHandle }>(
       KernelVocabulary.Template.Source.key,
       "test.fresh-detail-normalization-rollback-product",
       "Fresh product-detail descriptor rollback witness.",
     );
-    const hotSlot = defineHotDetailSlot<{ readonly handle?: string }>(
+    const hotSlot = defineTestHotDetailSlot<{ readonly handle?: string }>(
       KernelVocabulary.Template.Source.key,
       "test.fresh-detail-normalization-rollback-hot",
       "Later failing hot-detail descriptor rollback witness.",
@@ -1337,6 +3911,489 @@ describe("computation lifecycle", () => {
     expect(readProductDetailEnvelope(detail)?.handle).toBe(productHandle);
   });
 
+  test("restores superseded candidate leases before admitting their replacement", () => {
+    const store = new KernelStore("computation-superseded-candidate-lease");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("superseded-candidate-lease:product");
+    const provenanceHandle = store.handles.provenance("superseded-candidate-lease:provenance");
+    const hotHandle = store.handles.hotDetail("superseded-candidate-lease:hot");
+    const productSlot = defineTestProductDetailSlot<{ readonly productHandle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.superseded-candidate-lease-product",
+      "Product detail replaced after its candidate lease becomes visible.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly handle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.superseded-candidate-lease-hot",
+      "Hot detail replaced after its candidate lease becomes visible.",
+    );
+    const productDetail = { productHandle };
+    const hotDetail = { handle: hotHandle };
+    const run = lifecycle.begin(locus("superseded-candidate-lease"));
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "superseded-candidate-lease:initial"),
+      [publishProductDetail(
+        productSlot,
+        productHandle,
+        productDetail,
+        KernelDetailAdmission.IfAbsent,
+      )],
+      [publishHotDetail(
+        hotSlot,
+        productHandle,
+        hotHandle,
+        hotDetail,
+        KernelDetailAdmission.IfAbsent,
+      )],
+    ));
+    expect(run.readProductDetail(productSlot, productHandle)).toBe(productDetail);
+    expect(run.readHotDetail(hotSlot, hotHandle)).toBe(hotDetail);
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([], "superseded-candidate-lease:replacement"),
+      [publishProductDetail(productSlot, productHandle, productDetail)],
+      [publishHotDetail(hotSlot, productHandle, hotHandle, hotDetail)],
+    ));
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    expect(store.productDetails.read(productSlot, productHandle)).toBe(productDetail);
+    expect(store.hotDetails.read(hotSlot, hotHandle)).toBe(hotDetail);
+    expect(readProductDetailEnvelope(productDetail)?.handle).toBe(productHandle);
+    expect(readHotDetailEntry(hotDetail)?.handle).toBe(hotHandle);
+    expect(Object.getOwnPropertyDescriptor(productDetail, "productHandle")?.get).toBeTypeOf("function");
+    expect(Object.getOwnPropertyDescriptor(hotDetail, "handle")?.get).toBeTypeOf("function");
+  });
+
+  test("fails superseded candidate restoration before mutating an incumbent publication", () => {
+    const store = new KernelStore("computation-superseded-candidate-restoration-failure");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("superseded-candidate-restoration-failure:product");
+    const provenanceHandle = store.handles.provenance("superseded-candidate-restoration-failure:provenance");
+    const initialAddressHandle = store.handles.address("superseded-candidate-restoration-failure:initial");
+    const replacementAddressHandle = store.handles.address("superseded-candidate-restoration-failure:replacement");
+    const slot = defineTestProductDetailSlot<{ readonly sourceAddressHandle: AddressHandle }>(
+      KernelVocabulary.Template.Source.key,
+      "test.superseded-candidate-restoration-failure",
+      "Frozen superseded candidate whose descriptor cannot be restored.",
+    );
+    const incumbent = { sourceAddressHandle: initialAddressHandle };
+    const product = (addressHandle: AddressHandle) => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      addressHandle,
+      provenanceHandle,
+    );
+    const initial = lifecycle.begin(locus("superseded-candidate-restoration-failure"));
+    initial.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new SourceFileAddress(initialAddressHandle, "test", "src/incumbent.html", SourceLanguage.Html),
+        new ProvenanceRecord(provenanceHandle),
+        product(initialAddressHandle),
+      ], "superseded-candidate-restoration-failure:initial"),
+      [publishProductDetail(slot, productHandle, incumbent)],
+    ));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const abandoned = { sourceAddressHandle: replacementAddressHandle };
+    const replacement = lifecycle.begin(locus("superseded-candidate-restoration-failure"));
+    replacement.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new SourceFileAddress(replacementAddressHandle, "test", "src/replacement.html", SourceLanguage.Html),
+        new ProvenanceRecord(provenanceHandle),
+        product(replacementAddressHandle),
+      ], "superseded-candidate-restoration-failure:candidate"),
+      [publishProductDetail(slot, productHandle, abandoned, KernelDetailAdmission.IfAbsent)],
+    ));
+    expect(replacement.readProductDetail(slot, productHandle)).toBe(abandoned);
+    Object.freeze(abandoned);
+    replacement.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([], "superseded-candidate-restoration-failure:final"),
+      [publishProductDetail(slot, productHandle, { sourceAddressHandle: replacementAddressHandle })],
+    ));
+
+    expect(() => replacement.commit()).toThrow(/candidate detail bindings/);
+    expect(store.readAddress(initialAddressHandle)).toEqual(expect.objectContaining({
+      path: "src/incumbent.html",
+    }));
+    expect(store.read(replacementAddressHandle)).toBeNull();
+    expect(store.productDetails.read(slot, productHandle)).toBe(incumbent);
+    expect(readProductDetailEnvelope(incumbent)?.addressHandle).toBe(initialAddressHandle);
+  });
+
+  test("rejects product-detail dependency mutation after staging", () => {
+    const store = new KernelStore("computation-product-detail-reference-mutation");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const firstTargetHandle = store.handles.product("product-detail-reference-mutation:first-target");
+    const secondTargetHandle = store.handles.product("product-detail-reference-mutation:second-target");
+    const firstProvenanceHandle = store.handles.provenance("product-detail-reference-mutation:first-provenance");
+    const secondProvenanceHandle = store.handles.provenance("product-detail-reference-mutation:second-provenance");
+    const sourceProductHandle = store.handles.product("product-detail-reference-mutation:source");
+    const sourceProvenanceHandle = store.handles.provenance("product-detail-reference-mutation:source-provenance");
+    const targetSlot = defineTestProductDetailSlot<{ readonly value: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.product-detail-reference-mutation-target",
+      "Possible target of a mutable structural reference.",
+    );
+    const sourceSlot = defineTestProductDetailSlot<{ targetHandle: ProductHandle }>(
+      KernelVocabulary.Template.Source.key,
+      "test.product-detail-reference-mutation-source",
+      "Source detail whose dependency must stay equal to its staged closure.",
+      (detail) => mergeKernelDetailReferences([
+        kernelProductDetailReference(targetSlot.descriptor, detail.targetHandle),
+      ]),
+    );
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(firstProvenanceHandle),
+      new MaterializedProduct(
+        firstTargetHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        firstProvenanceHandle,
+      ),
+      new ProvenanceRecord(secondProvenanceHandle),
+      new MaterializedProduct(
+        secondTargetHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        secondProvenanceHandle,
+      ),
+    ], "product-detail-reference-mutation:targets"));
+    store.productDetails.add(targetSlot, firstTargetHandle, { value: "first" });
+    store.productDetails.add(targetSlot, secondTargetHandle, { value: "second" });
+
+    const detail = { targetHandle: firstTargetHandle };
+    const run = lifecycle.begin(locus("product-detail-reference-mutation"));
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(sourceProvenanceHandle),
+        new MaterializedProduct(
+          sourceProductHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          sourceProvenanceHandle,
+        ),
+      ], "product-detail-reference-mutation:source"),
+      [publishProductDetail(sourceSlot, sourceProductHandle, detail)],
+    ));
+    detail.targetHandle = secondTargetHandle;
+
+    expect(() => run.commit()).toThrow(/structural references after staging/);
+    expect(store.read(sourceProductHandle)).toBeNull();
+    expect(store.productDetails.read(sourceSlot, sourceProductHandle)).toBeNull();
+  });
+
+  test("rejects hot-detail dependency mutation by a final validator", () => {
+    const store = new KernelStore("computation-hot-detail-reference-mutation");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const firstAddressHandle = store.handles.address("hot-detail-reference-mutation:first");
+    const secondAddressHandle = store.handles.address("hot-detail-reference-mutation:second");
+    const productHandle = store.handles.product("hot-detail-reference-mutation:product");
+    const provenanceHandle = store.handles.provenance("hot-detail-reference-mutation:provenance");
+    const hotHandle = store.handles.hotDetail("hot-detail-reference-mutation:hot");
+    const slot = defineTestHotDetailSlot<{ addressHandle: AddressHandle }>(
+      KernelVocabulary.Template.Source.key,
+      "test.hot-detail-reference-mutation",
+      "Hot detail whose dependency must survive final validation unchanged.",
+      (detail) => kernelRecordReferences(detail.addressHandle),
+    );
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(firstAddressHandle, "test", "src/first.html", SourceLanguage.Html),
+      new SourceFileAddress(secondAddressHandle, "test", "src/second.html", SourceLanguage.Html),
+    ], "hot-detail-reference-mutation:targets"));
+    const detail = { addressHandle: firstAddressHandle };
+    const run = lifecycle.begin(locus("hot-detail-reference-mutation"));
+    run.observe({
+      readKey: "test:hot-detail-reference-mutation",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        detail.addressHandle = secondAddressHandle;
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+    });
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "hot-detail-reference-mutation:source"),
+      [],
+      [publishHotDetail(slot, productHandle, hotHandle, detail)],
+    ));
+
+    expect(() => run.commit()).toThrow(/structural references after staging/);
+    expect(store.read(productHandle)).toBeNull();
+    expect(store.hotDetails.read(slot, hotHandle)).toBeNull();
+  });
+
+  test("binds semantically retained candidate details before final read validation", () => {
+    const store = new KernelStore("computation-retained-detail-final-validation");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("retained-detail-final-validation:product");
+    const provenanceHandle = store.handles.provenance("retained-detail-final-validation:provenance");
+    const slot = defineTestProductDetailSlot<{ readonly productHandle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.retained-detail-final-validation",
+      "Fresh retained detail inspected by a final input validator.",
+    );
+    const product = () => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      null,
+      provenanceHandle,
+    );
+    const incumbentDetail = { productHandle };
+    const initial = lifecycle.begin(locus("retained-detail-final-validation"));
+    initial.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        product(),
+      ], "retained-detail-final-validation:initial"),
+      [publishProductDetail(slot, productHandle, incumbentDetail)],
+    ));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const candidateDetail = { productHandle };
+    let validatedEnvelope: MaterializedProduct | null = null;
+    const replacement = lifecycle.begin(locus("retained-detail-final-validation"));
+    replacement.observe({
+      readKey: "test:retained-detail-final-validation",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        validatedEnvelope = readProductDetailEnvelope(candidateDetail);
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+    });
+    replacement.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        product(),
+      ], "retained-detail-final-validation:replacement"),
+      [publishProductDetail(
+        slot,
+        productHandle,
+        candidateDetail,
+        KernelDetailAdmission.Required,
+        () => KernelPublicationDecisionKind.Retain,
+      )],
+    ));
+
+    const result = replacement.commit();
+    expect(result.state).toBe(ComputationCommitState.Committed);
+    expect(validatedEnvelope?.handle).toBe(productHandle);
+    expect(store.productDetails.read(slot, productHandle)).toBe(incumbentDetail);
+    expect(readProductDetailEnvelope(candidateDetail)?.handle).toBe(productHandle);
+  });
+
+  test("restores provisional detail bindings when final read validation rejects", () => {
+    const store = new KernelStore("computation-detail-validation-rollback");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("detail-validation-rollback:product");
+    const provenanceHandle = store.handles.provenance("detail-validation-rollback:provenance");
+    const slot = defineTestProductDetailSlot<{ readonly productHandle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.detail-validation-rollback",
+      "Candidate detail whose provisional final-validation binding must roll back.",
+    );
+    const detail = { productHandle };
+    let validatedEnvelope: MaterializedProduct | null = null;
+    const run = lifecycle.begin(locus("detail-validation-rollback"));
+    run.observe({
+      readKey: "test:detail-validation-rollback",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        validatedEnvelope = readProductDetailEnvelope(detail);
+        return { isCurrent: false, currentRevision: "2", changedFacets: ["revision"] };
+      },
+    });
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "detail-validation-rollback"),
+      [publishProductDetail(slot, productHandle, detail)],
+    ));
+
+    expect(run.commit().state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(validatedEnvelope?.handle).toBe(productHandle);
+    expect(readProductDetailEnvelope(detail)).toBeNull();
+    expect(Object.getOwnPropertyDescriptor(detail, "productHandle")).toEqual(expect.objectContaining({
+      value: productHandle,
+    }));
+    expect(store.read(productHandle)).toBeNull();
+  });
+
+  test("rejects normalized handle mutation by a final validator", () => {
+    const store = new KernelStore("computation-normalized-handle-validation");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("normalized-handle-validation:product");
+    const provenanceHandle = store.handles.provenance("normalized-handle-validation:provenance");
+    const slot = defineTestProductDetailSlot<{ readonly productHandle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.normalized-handle-validation",
+      "Normalized owner handle protected across final validation.",
+    );
+    const detail = { productHandle };
+    const run = lifecycle.begin(locus("normalized-handle-validation"));
+    run.observe({
+      readKey: "test:normalized-handle-validation",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        Object.defineProperty(detail, "productHandle", {
+          configurable: true,
+          enumerable: true,
+          value: "corrupted",
+        });
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+    });
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "normalized-handle-validation"),
+      [publishProductDetail(slot, productHandle, detail)],
+    ));
+
+    expect(() => run.commit()).toThrow(/changed after owner normalization/);
+    expect(readProductDetailEnvelope(detail)).toBeNull();
+    expect(detail.productHandle).toBe(productHandle);
+    expect(store.read(productHandle)).toBeNull();
+  });
+
+  test("seals provisionally visible hot-detail ownership metadata", () => {
+    const store = new KernelStore("computation-hot-detail-metadata-seal");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("hot-detail-metadata-seal:product");
+    const provenanceHandle = store.handles.provenance("hot-detail-metadata-seal:provenance");
+    const hotHandle = store.handles.hotDetail("hot-detail-metadata-seal:detail");
+    const slot = defineTestHotDetailSlot<{ readonly handle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.hot-detail-metadata-seal",
+      "Hot-detail owner metadata exposed to a final validator.",
+    );
+    const detail = { handle: hotHandle };
+    let entryWasFrozen = false;
+    let slotWasFrozen = false;
+    const run = lifecycle.begin(locus("hot-detail-metadata-seal"));
+    run.observe({
+      readKey: "test:hot-detail-metadata-seal",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        const entry = readHotDetailEntry(detail);
+        if (entry == null) {
+          throw new Error("Final validation could not read the provisional hot-detail owner.");
+        }
+        entryWasFrozen = Object.isFrozen(entry);
+        slotWasFrozen = Object.isFrozen(slot);
+        expect(Reflect.set(entry as object, "handle", "corrupted")).toBe(false);
+        expect(Reflect.set(slot as object, "detailKind", "corrupted")).toBe(false);
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+    });
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "hot-detail-metadata-seal"),
+      [],
+      [publishHotDetail(slot, productHandle, hotHandle, detail)],
+    ));
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    expect(entryWasFrozen).toBe(true);
+    expect(slotWasFrozen).toBe(true);
+    expect(readHotDetailEntry(detail)?.handle).toBe(hotHandle);
+    expect(store.hotDetails.read(slot, hotHandle)).toBe(detail);
+  });
+
+  test("rejects supersession from descriptor normalization and restores the candidate detail", () => {
+    const store = new KernelStore("computation-normalization-supersession");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("normalization-supersession:product");
+    const provenanceHandle = store.handles.provenance("normalization-supersession:provenance");
+    const slot = defineTestProductDetailSlot<{ readonly productHandle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.normalization-supersession",
+      "Descriptor trap that supersedes its publication before final preflight.",
+    );
+    const newerRuns: ComputationRun[] = [];
+    let triggered = false;
+    const target = { productHandle };
+    const detail = new Proxy(target, {
+      defineProperty: (object, property, descriptor) => {
+        if (!triggered && property === "productHandle") {
+          triggered = true;
+          newerRuns.push(lifecycle.begin(locus("normalization-supersession")));
+        }
+        return Reflect.defineProperty(object, property, descriptor);
+      },
+    });
+    const run = lifecycle.begin(locus("normalization-supersession"));
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "normalization-supersession"),
+      [publishProductDetail(slot, productHandle, detail)],
+    ));
+
+    expect(run.commit().state).toBe(ComputationCommitState.RejectedSuperseded);
+    expect(store.read(productHandle)).toBeNull();
+    expect(readProductDetailEnvelope(detail)).toBeNull();
+    expect(Object.getOwnPropertyDescriptor(detail, "productHandle")).toEqual(expect.objectContaining({
+      value: productHandle,
+    }));
+    expect(newerRuns).toHaveLength(1);
+    newerRuns[0]!.abort();
+  });
+
   test("completes fallible detail binding before replacing live records", () => {
     const store = new KernelStore("computation-detail-binding-atomicity");
     const lifecycle = new ComputationLifecycleRegistry(store);
@@ -1344,7 +4401,7 @@ describe("computation lifecycle", () => {
     const provenanceHandle = store.handles.provenance("detail-binding-atomicity:product");
     const initialAddressHandle = store.handles.address("detail-binding-atomicity:source:initial");
     const replacementAddressHandle = store.handles.address("detail-binding-atomicity:source:replacement");
-    const productSlot = defineProductDetailSlot<{ readonly sourceAddressHandle: AddressHandle }>(
+    const productSlot = defineTestProductDetailSlot<{ readonly sourceAddressHandle: AddressHandle }>(
       KernelVocabulary.Template.Source.key,
       "test.detail-binding-atomicity-product",
       "Stateful product-detail binding atomicity witness.",
@@ -1514,12 +4571,12 @@ describe("computation lifecycle", () => {
     const lifecycle = new ComputationLifecycleRegistry(store);
     const revisions = new MutableRevisionAuthority();
     revisions.set("source:lifetime", "1");
-    const detailSlot = defineProductDetailSlot<{ readonly revision: number }>(
+    const detailSlot = defineTestProductDetailSlot<{ readonly revision: number }>(
       KernelVocabulary.Template.Source.key,
       "test.lifetime-product",
       "Computation publication lifetime-lineage product detail.",
     );
-    const hotSlot = defineHotDetailSlot<{ readonly revision: number }>(
+    const hotSlot = defineTestHotDetailSlot<{ readonly revision: number }>(
       KernelVocabulary.Template.Source.key,
       "test.lifetime-hot",
       "Computation publication lifetime-lineage hot detail.",
@@ -1586,12 +4643,12 @@ describe("computation lifecycle", () => {
   test("reclaims unowned answer-local rows without crossing interleaved computation publications", () => {
     const store = new KernelStore("computation-selective-lifetime");
     const lifecycle = new ComputationLifecycleRegistry(store);
-    const detailSlot = defineProductDetailSlot<{ readonly owner: string }>(
+    const detailSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
       KernelVocabulary.Template.Source.key,
       "test.selective-lifetime-product",
       "Selective lifetime product detail.",
     );
-    const hotSlot = defineHotDetailSlot<{ readonly owner: string }>(
+    const hotSlot = defineTestHotDetailSlot<{ readonly owner: string }>(
       KernelVocabulary.Template.Source.key,
       "test.selective-lifetime-hot",
       "Selective lifetime hot detail.",
@@ -1653,6 +4710,68 @@ describe("computation lifecycle", () => {
       expect(lifecycle.readState(publication.run.computationId)?.committedRunSequence)
         .toBe(publication.run.runSequence);
     }
+  });
+
+  test("retains positive exact and aggregate inputs of active computations during selective disposal", () => {
+    const store = new KernelStore("computation-selective-input-retention");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const marker = store.markLifetime();
+    const exactHandle = store.handles.address("selective-input-retention:exact");
+    const indexedHandle = store.handles.address("selective-input-retention:indexed");
+    const unrelatedHandle = store.handles.address("selective-input-retention:unrelated");
+    const productHandle = store.handles.product("selective-input-retention:product");
+    const provenanceHandle = store.handles.provenance("selective-input-retention:provenance");
+    const outputHandle = store.handles.address("selective-input-retention:output");
+    const hotHandle = store.handles.hotDetail("selective-input-retention:hot");
+    const productSlot = defineTestProductDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.selective-input-retention-product",
+      "Foreign product detail consumed by an active computation.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly owner: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.selective-input-retention-hot",
+      "Foreign hot detail consumed by an active computation.",
+    );
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(exactHandle, "test", "src/exact.html", SourceLanguage.Html),
+      new SourceFileAddress(indexedHandle, "test", "src/indexed.html", SourceLanguage.Html),
+      new SourceFileAddress(unrelatedHandle, "test", "src/unrelated.html", SourceLanguage.Html),
+      new ProvenanceRecord(provenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        provenanceHandle,
+      ),
+    ], "selective-input-retention:foreign"));
+    const productDetail = { owner: "foreign" };
+    const hotDetail = { owner: "foreign" };
+    store.productDetails.add(productSlot, productHandle, productDetail);
+    store.hotDetails.add(hotSlot, productHandle, hotHandle, hotDetail);
+
+    const run = lifecycle.begin(locus("selective-input-retention"));
+    expect(run.read(exactHandle)).not.toBeNull();
+    expect(run.readProductDetail(productSlot, productHandle)).toBe(productDetail);
+    expect(run.readHotDetail(hotSlot, hotHandle)).toBe(hotDetail);
+    expect(run.readSourceFileAddressesByFileName("src/indexed.html").map((entry) => entry.handle))
+      .toEqual([indexedHandle]);
+    run.publish(publication("selective-input-retention:output", [
+      new SourceFileAddress(outputHandle, "test", "src/output.html", SourceLanguage.Html),
+    ]));
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+
+    const disposal = store.disposeUnownedSince(marker);
+
+    expect(disposal).toEqual(expect.objectContaining({ records: 1, productDetails: 0, hotDetails: 0 }));
+    expect(store.read(unrelatedHandle)).toBeNull();
+    for (const retainedHandle of [exactHandle, indexedHandle, provenanceHandle, productHandle, outputHandle]) {
+      expect(store.read(retainedHandle)).not.toBeNull();
+    }
+    expect(store.productDetails.read(productSlot, productHandle)).toBe(productDetail);
+    expect(store.hotDetails.read(hotSlot, hotHandle)).toBe(hotDetail);
+    expect(lifecycle.readState(run.computationId)?.committedRunSequence).toBe(run.runSequence);
   });
 
   test("promotes a replacement closure to the youngest foreign reference and registered record read", () => {

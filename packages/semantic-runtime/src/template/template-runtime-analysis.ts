@@ -52,7 +52,7 @@ import {
   RuntimeBindingBehaviorMaterializer,
 } from './runtime-binding-behavior-materializer.js';
 import {
-  RuntimeExpressionResourcePlan,
+  type RuntimeExpressionResourcePlan,
   RuntimeExpressionResourcePlanner,
   RuntimeExpressionResourcePlanningRequest,
 } from './runtime-expression-resource-plan.js';
@@ -527,7 +527,7 @@ class TemplateRuntimeAnalysisFrame {
     return this.services.expressionResourcePlan.plan(new RuntimeExpressionResourcePlanningRequest(
       runtimeRendering,
       this.request.compilerWorld.resourceScope,
-      this.request.compilerWorld.nodeObserverLocatorConfiguration,
+      this.request.compilerWorld.world.nodeObserverLocatorConfiguration,
       this.expressionWorld,
     ));
   }
@@ -566,7 +566,7 @@ class TemplateRuntimeAnalysisFrame {
       scopes,
       typeSystem: this.request.typeSystem,
       expressionWorld: this.expressionWorld,
-      nodeObserverLocatorConfiguration: this.request.compilerWorld.nodeObserverLocatorConfiguration,
+      nodeObserverLocatorConfiguration: this.request.compilerWorld.world.nodeObserverLocatorConfiguration,
       stateStores: this.expressionWorld.stateStores,
       isAppRootDefinition: this.request.definition.productHandle != null
         && this.request.definition.productHandle === this.request.appRootDefinitionProductHandle,
@@ -720,7 +720,7 @@ class TemplateRuntimeAnalysisFrame {
   private profilingSink(): SemanticRuntimePhaseSink | null {
     return this.telemetry.captureFineGrainedPhases
       ? {
-        phases: this.phases as SemanticRuntimePhaseTiming<string>[],
+        phases: this.phases,
         telemetry: this.telemetry,
         kernel: this.publication,
       }

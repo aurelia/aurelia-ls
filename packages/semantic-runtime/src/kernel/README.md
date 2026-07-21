@@ -135,8 +135,9 @@ must be declared as product-kind vocabulary, claim predicates must be declared a
 endpoints must match the predicate's directional signature.
 `KernelStore.markLifetime()` / `disposeSince(...)` is the app-session reclamation primitive for answer-local work. A
 lifetime marker tracks ownership lineage, not append position: replacing a computation publication preserves its
-lineage lifetime unless the candidate consumes a younger positive kernel dependency, in which case the complete owned
-record/detail closure advances to that dependency's lifetime. This monotone rule prevents an older publication from
+lineage lifetime unless the candidate consumes a younger positive kernel dependency, including a positive row returned
+by an unresolved aggregate read. In that case the complete owned record/detail closure advances to the dependency's
+lifetime even though aggregate membership remains honestly open. This monotone rule prevents an older publication from
 surviving disposal after it has incorporated answer-local truth. `markObservation()` is the
 separate mutation cursor for telemetry and phase-density reads, so replacement writes remain measurable without making
 them answer-local. Query boundaries such as `QueryClaimGraph` use lifetime markers; telemetry uses observation markers.
@@ -166,10 +167,12 @@ stable computation ID; each run stages a complete read set and publication closu
 before replacing the prior state. `publication.ts` is the required materializer write boundary for immediate and staged
 execution. `KernelStore.replacePublication(...)` prevalidates ownership, references, detail envelopes, and unsupported
 sidecar participation before one synchronous callback-free replacement. Computation-owned replacement uses
-`replaceOwnedPublication(...)`, which admits the owner's fallible producer-index preflight before that callback-free
-mutation tail. A failed or stale run leaves the previous records, details, read index, producer index, and manifest
-intact. Sidecar indexes remain acceleration structures; replacing a detail they index is rejected until that index
-registers an explicit lifecycle participant.
+`replaceOwnedPublication(...)`, which admits source/input validation and the owner's fallible producer-index preflight
+inside the same store mutation barrier before that callback-free mutation tail. Normalized records, publication plans,
+manifests, decisions, and their structural arrays are sealed before any external validator runs. A failed or stale run
+leaves the previous records, details, read index, producer index, and manifest intact. Sidecar indexes remain
+acceleration structures; replacing a detail they index is rejected until that index registers an explicit lifecycle
+participant.
 Manifest authority requires the exact frozen manifest object currently admitted by the store and the same owner that
 created its lineage; a copied handle list, an earlier manifest, or an exact lifecycle manifest presented through the
 store-owned lane is stale. The manifest's monotone lifetime then proves that every listed record and detail still belongs
@@ -177,8 +180,13 @@ to that lineage and cannot outlive a positive dependency it consumed. Successful
 final capability even when a store-owned or lifecycle-owned closure is empty. Detail admission captures the exact
 foreign catalog entry (including absence) seen during staging and revalidates it at commit. Fallible detail-field
 normalization is prepared without mutation, then applied as one reversible descriptor transaction before any live
-catalog mutation; weak envelope ownership changes only during the callback-free admission tail. A failed staged write
-poisons the run so an accepted prefix can never become a commit payload.
+catalog mutation. Fresh or exactly equivalent candidate details may receive provisional weak-envelope bindings so
+final validation sees the post-state graph; rejection restores those bindings and normalized descriptors. Reading a
+staged candidate never rebinds an already committed detail to a changed envelope. A reused detail may be read only when
+its candidate product envelope is exactly equivalent, otherwise the producer must emit a fresh generation-local
+detail. Retained committed bindings refresh only in the callback-free successful-admission tail. A failed staged write
+poisons the run so an accepted prefix can never become a commit payload. Rich typed detail payloads remain domain
+objects and are not recursively frozen by the kernel.
 Committed domain object graphs are admitted once per computation run and domain through the lifecycle registry. Do not
 construct a second authority around the same committed publication or let a domain-local cache decide uniqueness.
 Exact `ComputationRun` record, product-detail, and hot-detail reads capture the committed catalog revision by
@@ -197,10 +205,59 @@ prevents a materializer from mistaking its own old output for upstream truth and
 The staged record/detail maps are both the read-your-writes authority and the final commit payload, so duplicate
 `IfAbsent` admission cannot resolve one way during construction and reappear as duplicate rows at commit.
 
+`ComputationRun.withChild(...)` partitions one still-atomic outer candidate into logical read/output manifests. Child
+scopes are synchronous preparation scopes: they cannot commit or abort the run, and a thrown or asynchronous callback
+poisons the outer candidate. The staged publication retains the final child writer and a run-local mutation ordinal for
+every record, product detail, and hot detail. Exact reads of another child's candidate become child-to-child edges;
+reads of candidate absence are also revisioned so a later sibling cannot silently fill them. Positive foreign
+`IfAbsent` admissions remain committed reads of the child that attempted them, including mismatched-slot lookups, rather
+than dangling edges to a candidate that produced no output. Candidate-local `IfAbsent` admission observes the occupancy
+it establishes: an unchanged self-read disappears from the committed manifest, coalesced siblings retain a producer
+edge, and a later stronger writer rejects the prepared candidate instead of silently changing what an earlier child
+consumed. Record references plus product-detail and hot-detail envelopes add the same structural edges even when a
+materializer did not issue an explicit lookup.
+
+The outer computation remains the sole manifest owner and store transaction. Every admitted output has exactly one
+logical child owner, with an explicit remainder child retaining phases that have not earned a narrower boundary.
+Commit seals the publication graph before preparation enters the store replacement barrier. Record/detail comparison,
+binding preparation, and reversible descriptor normalization finish first; then one frozen decision set reaches the final input, child-read, and producer-
+ownership preflight immediately before the callback-free mutation tail. The store revalidates normalized descriptors
+and lifecycle currentness after external validation, so a validator cannot mutate provisional metadata or supersede the
+run unnoticed. Validators may re-read the frozen candidate through the run during the committing phase, but cannot
+observe new dependencies, enter children, publish, or mutate any store or detail-catalog surface. Rejection restores
+candidate descriptors and provisional weak bindings. Superseded candidate leases are restored before the store can
+admit the final publication, so abandoned cleanup cannot corrupt or throw after durable commit. After external
+validation, the store reprojects each rich detail's structural closure and rejects payload mutation rather than
+admitting an object whose exact reads, retention, and withdrawal guards describe an older shape. A validator,
+projector, or descriptor trap that starts a newer run supersedes the old candidate before admission.
+Replacement allocates a store lifetime only after this final preflight, then updates outer and child indexes only after
+successful admission. Rejection preserves the incumbent publication and both index layers.
+`ComputationChildState.hasOnlyRevisionedReads` means only that no
+unresolved aggregate read was recorded; it is not yet a scheduler-ready or cycle-free reuse claim. Whole-store,
+source-file-index, and materialization enumeration remain explicit open reads until their domain authorities expose
+membership revisions. Empty child scopes are omitted from committed manifests; an exact negative read or open aggregate
+read is real work and therefore keeps its child state.
+
+Lifecycle state snapshots read metadata, aggregate-row evidence, outputs, children, and normalized locus identity into
+kernel-owned frozen values before admission. A committed locus intentionally retains only `kind`,
+`reconciliationKey`, and `summary`; domain identity belongs in the reconciliation key rather than an `instanceof`
+contract or caller-owned payload. Selective lifetime disposal roots the positive exact record/product-detail/hot-detail
+inputs and positive committed rows retained by active aggregate reads, in addition to active outputs and structural
+references. It may reclaim unrelated young rows, but never the live input closure of a retained computation.
+
+The first production partition is the complete recursive authored-template compiler front door across all app and
+authoring cohorts for one stable owner. It owns source snapshots, compiler observations, and compilation/parsing/
+lowering products. Project-wide runtime and TypeChecker analysis deliberately remains in the outer remainder because
+its schedule, expression world, and bound-controller values currently cross family boundaries. Do not promote those
+products to family ownership until those aggregate and cross-family edges are explicit.
+
 `KernelStore.publish(...)` remains the immediate first-publication boundary used by eager producers. It is not a
 recomputation protocol: it has no prior manifest, cannot withdraw omitted output, and legacy nested producers may emit
-references before an outer owner batch exists. Do not use it to approximate replacement with cleanup calls. Migrate a
-logical owner to one staged closure when rollback, currentness, or same-runtime replacement becomes part of its contract.
+references before an outer owner batch exists. Records and typed details nevertheless enter through the same atomic
+replacement preflight, so a rejected detail cannot leave an accepted record prefix behind. An immediate publication
+that owns nothing does not consume a lifetime; replaceable store and computation generations still own explicit empty
+manifests. Do not use immediate publication to approximate replacement with cleanup calls. Migrate a logical owner to
+one staged closure when rollback, currentness, or same-runtime replacement becomes part of its contract.
 
 Materializers whose closure proof depends on records staged earlier in the same run consume the narrow candidate-aware
 read view they need, not the committed store directly. `KernelRecordCollectionReadView`, `KernelSourceFileReadView`,
@@ -238,18 +295,26 @@ materialization records, evidence, or provenance.
 
 The store indexes normalized kernel records first. A `MaterializedProduct` is an envelope that names kind, identity,
 address, and provenance. Claims are indexed by subject/object handles in the store instead of being duplicated on the
-product envelope. Rich domain objects can hydrate that envelope through `product-details.ts`, where
-typed slots validate the product kind before attaching current-run detail objects. Product details are for hot inquiry
-and materializer handoff; they are not kernel records, generic payloads, JSON storage, or a persistence schema. If a detail
-starts needing durable graph semantics, promote that semantics into named records, claims, identities, or addresses
-rather than widening the detail sidecar.
+product envelope. Rich domain objects can hydrate that envelope through `product-details.ts`, where typed descriptors
+name the admitted occupancy and executable slots attach its structural-reference projector. Keep descriptors in inert
+domain catalogs: cross-domain projectors import those identities, never another domain's executable slot graph. This
+prevents dependency topology from becoming JavaScript module-initialization topology while preserving one typed contract
+for reads and publication. Product details are for hot inquiry and materializer handoff; they are not kernel records,
+generic payloads, JSON storage, or a persistence schema. If a detail starts needing durable graph semantics, promote that
+semantics into named records, claims, identities, or addresses rather than widening the detail sidecar.
 `ProductDetailCatalog` also binds each detail object to its owning `MaterializedProduct` envelope through a weak
 association. Detail classes may expose `productHandle`, `identityHandle`, `sourceAddressHandle`, `addressHandle`, or
 `provenanceHandle` for ergonomic product-local navigation. Domain-specific aliases such as `hostAddressHandle` are
 also envelope-backed when they exactly equal the product address. Catalog admission normalizes own fields that exactly
 echo the envelope into non-enumerable shared getters. That keeps retained hot details from storing duplicate handle
 strings while preserving the public in-process shape. Cross-product handles such as instruction, syntax, declaration,
-or binding links remain explicit detail payload and should not be hidden as envelope facts.
+or binding links remain explicit detail payload and should not be hidden as envelope facts. Every executable slot
+projects those links into a frozen structural closure at publication. Record references, product-detail occupancies, and
+hot-detail occupancies are distinct surfaces: an envelope handle is not evidence that a particular sidecar exists or has
+the same revision. Validation, child-edge derivation, retention, and withdrawal safety all consume the same closure.
+`FieldProvenance` remains epistemic lineage for fields; it does not replace structural dependency edges. Likewise,
+compact logical references may be projected as exact occupancy only when their producer contract guarantees that
+sidecar is published in the same atomic plan.
 `ProductDetailCatalog` and `HotDetailCatalog` share one composed storage/lifetime core; their wrappers retain the
 different semantic admission contracts. `HotDetailCatalog` requires an explicit owning `MaterializedProduct` whose
 kind matches the slot, while the child keeps a branded `HotDetailHandle` rather than masquerading as a product. An

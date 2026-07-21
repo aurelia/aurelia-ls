@@ -1,12 +1,13 @@
+import { kernelRecordReferences } from '../kernel/detail-references.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
-import type { EvaluationIssue } from './evaluation-issue.js';
+import { EvaluationDetailDescriptors } from './detail-descriptors.js';
 
 /** Typed detail slots for evaluation and module-loader products. */
 export const EvaluationProductDetails = {
-  Issue: defineProductDetailSlot<EvaluationIssue>(
-    KernelVocabulary.Evaluation.Issue.key,
-    'evaluation.issue',
-    'Source-backed static evaluation or ModuleLoader issue with diagnostic authority.',
+  Issue: defineProductDetailSlot(
+    EvaluationDetailDescriptors.Issue,
+    (issue) => kernelRecordReferences(
+      ...issue.fieldProvenance.map((entry) => entry.provenanceHandle),
+    ),
   ),
 } as const;

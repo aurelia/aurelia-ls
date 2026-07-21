@@ -1,11 +1,10 @@
+import { kernelRecordReferences } from '../kernel/detail-references.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
-import type { FetchClientIssue } from './fetch-client-issue.js';
+import { FetchClientDetailDescriptors } from './detail-descriptors.js';
 
 export const FetchClientProductDetails = {
-  Issue: defineProductDetailSlot<FetchClientIssue>(
-    KernelVocabulary.FetchClient.Issue.key,
-    'fetch-client.issue',
-    '@aurelia/fetch-client source-backed issue where configuration or retry policy would throw.',
+  Issue: defineProductDetailSlot(
+    FetchClientDetailDescriptors.Issue,
+    (issue) => kernelRecordReferences(issue.ownerIdentityHandle),
   ),
 } as const;

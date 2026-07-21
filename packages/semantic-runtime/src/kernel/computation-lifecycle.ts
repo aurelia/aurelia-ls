@@ -3,14 +3,22 @@ import type { HotDetailSlot } from './hot-details.js';
 import type { MaterializationRecord } from './materialization.js';
 import type { ProductDetailSlot } from './product-details.js';
 import {
+  KernelDetailAdmission,
   KernelPublicationDecisionKind,
   KernelPublicationManifest,
   KernelPublicationPlan,
-  KernelPublicationSurface,
   type KernelPublicationContext,
+  type KernelPublicationReplacement,
+  type KernelPublicationWriterId,
+  type KernelStagedEntryRevision,
+  type SealedKernelPublicationCandidate,
   StagedKernelPublicationContext,
   type KernelPublicationDecision,
+  type KernelHotDetailAdmissionSnapshot,
+  type KernelProductDetailAdmissionSnapshot,
 } from './publication.js';
+import { KernelPublicationSurface } from './publication-surface.js';
+import type { KernelDetailReference } from './detail-references.js';
 import {
   KernelStoreBatch,
   type KernelStore,
@@ -21,7 +29,9 @@ import {
   type KernelStoreObservationMarker,
   type KernelStoreReadView,
   type KernelStoreRecord,
+  type KernelStoreRetentionCollector,
 } from './store.js';
+import { referencedKernelRecordHandles } from './record-comparison.js';
 import type { SemanticRuntimeKernelCountSnapshot } from '../telemetry/kernel-density.js';
 import type { GenerationAuthority } from './generation-authority.js';
 import type { SourceFileAddress } from './address.js';
@@ -31,11 +41,61 @@ declare const computationIdBrand: unique symbol;
 /** Opaque identity for one logical computation occurrence inside an active store. */
 export type ComputationId = string & { readonly [computationIdBrand]: true };
 
-/** Domain-owned stable locus used to reconcile a logical computation across runs. */
+/**
+ * Domain-owned stable locus used to reconcile a logical computation across runs.
+ * Committed state retains only this immutable kernel identity; domain payload must be encoded in the key.
+ */
 export interface ComputationLocus {
   readonly kind: string;
   readonly reconciliationKey: string;
   readonly summary: string;
+}
+
+/** Stable identity for one logical child computation beneath an outer atomic computation. */
+export type ComputationChildId = KernelPublicationWriterId;
+
+/** Aggregate operation whose membership/absence revision is not yet owned by a domain authority. */
+export const enum ComputationOpenReadKind {
+  AllRecords = 'all-records',
+  SourceFileIndex = 'source-file-index',
+  Materializations = 'materializations',
+}
+
+/** Honest blocker retained when a child consumed an unrevisioned aggregate view. */
+export class ComputationChildOpenRead {
+  readonly positiveRecordHandles: readonly KernelRecordHandle[];
+
+  constructor(
+    readonly key: string,
+    readonly kind: ComputationOpenReadKind,
+    readonly summary: string,
+    /** Youngest positive committed row returned by this otherwise unrevisioned aggregate read. */
+    readonly minimumLifetimeOrdinal: number | null,
+    positiveRecordHandles: readonly KernelRecordHandle[],
+  ) {
+    this.positiveRecordHandles = Object.freeze([...positiveRecordHandles]);
+    Object.freeze(this);
+  }
+}
+
+/** Presence state captured by one exact candidate-local read. */
+export const enum ComputationCandidateReadState {
+  /** Another child supplied the candidate entry. */
+  Present = 'present',
+  /** The outer candidate intentionally omits an entry owned by its prior generation. */
+  Absent = 'absent',
+}
+
+/** Exact candidate-local dependency, including negative reads that have no producer child. */
+export class ComputationCandidateRead {
+  constructor(
+    readonly readKey: string,
+    readonly state: ComputationCandidateReadState,
+    readonly producerChildId: ComputationChildId | null,
+    readonly observedMutationOrdinal: number | null,
+  ) {
+    Object.freeze(this);
+  }
 }
 
 /** Commit-time validation result for one typed, domain-owned input read. */
@@ -58,6 +118,23 @@ export interface ComputationRead {
   validate(): ComputationReadValidation;
 }
 
+const enum ComputationKernelInputKind {
+  Record,
+  ProductDetail,
+  HotDetail,
+}
+
+/** Immutable store-retention fact captured beside one exact positive read. */
+class ComputationKernelInput {
+  constructor(
+    readonly kind: ComputationKernelInputKind,
+    readonly handle: KernelRecordHandle | ProductHandle | HotDetailHandle,
+    readonly lifetimeOrdinal: number,
+  ) {
+    Object.freeze(this);
+  }
+}
+
 export function computationRecordReadKey(handle: KernelRecordHandle): string {
   return `kernel-record:${handle}`;
 }
@@ -75,6 +152,7 @@ export class ComputationRecordRead implements ComputationRead {
   readonly domain = 'kernel-record';
   readonly readKey: string;
   readonly observedRevision: string;
+  readonly retainedKernelInput: ComputationKernelInput | null;
 
   constructor(
     private readonly store: KernelStore,
@@ -84,6 +162,9 @@ export class ComputationRecordRead implements ComputationRead {
   ) {
     this.readKey = computationRecordReadKey(handle);
     this.observedRevision = recordRevisionLabel(revision, lifetimeOrdinal);
+    this.retainedKernelInput = revision == null || lifetimeOrdinal == null
+      ? null
+      : new ComputationKernelInput(ComputationKernelInputKind.Record, handle, lifetimeOrdinal);
   }
 
   validate(): ComputationReadValidation {
@@ -109,6 +190,7 @@ export class ComputationProductDetailRead implements ComputationRead {
   readonly domain = 'kernel-product-detail';
   readonly readKey: string;
   readonly observedRevision: string;
+  readonly retainedKernelInput: ComputationKernelInput | null;
 
   constructor(
     private readonly store: KernelStore,
@@ -120,6 +202,9 @@ export class ComputationProductDetailRead implements ComputationRead {
   ) {
     this.readKey = computationProductDetailReadKey(productHandle);
     this.observedRevision = detailRevisionLabel(actualKind, revision, lifetimeOrdinal);
+    this.retainedKernelInput = revision == null || lifetimeOrdinal == null
+      ? null
+      : new ComputationKernelInput(ComputationKernelInputKind.ProductDetail, productHandle, lifetimeOrdinal);
   }
 
   validate(): ComputationReadValidation {
@@ -140,6 +225,7 @@ export class ComputationHotDetailRead implements ComputationRead {
   readonly domain = 'kernel-hot-detail';
   readonly readKey: string;
   readonly observedRevision: string;
+  readonly retainedKernelInput: ComputationKernelInput | null;
 
   constructor(
     private readonly store: KernelStore,
@@ -151,6 +237,9 @@ export class ComputationHotDetailRead implements ComputationRead {
   ) {
     this.readKey = computationHotDetailReadKey(handle);
     this.observedRevision = detailRevisionLabel(actualKind, revision, lifetimeOrdinal);
+    this.retainedKernelInput = revision == null || lifetimeOrdinal == null
+      ? null
+      : new ComputationKernelInput(ComputationKernelInputKind.HotDetail, handle, lifetimeOrdinal);
   }
 
   validate(): ComputationReadValidation {
@@ -162,6 +251,70 @@ export class ComputationHotDetailRead implements ComputationRead {
       currentEntry?.slot.detailKind ?? null,
       this.store.hotDetails.readMutationOrdinal(this.handle),
       this.store.hotDetails.readLifetimeOrdinal(this.handle),
+    );
+  }
+}
+
+/** Immutable read metadata and callback captured before publication enters the store mutation barrier. */
+class SealedComputationRead implements ComputationRead {
+  private constructor(
+    readonly readKey: string,
+    readonly domain: string,
+    readonly observedRevision: string,
+    private readonly validateCurrent: () => ComputationReadValidation,
+    readonly retainedKernelInput: ComputationKernelInput | null,
+  ) {
+    Object.freeze(this);
+  }
+
+  validate(): ComputationReadValidation {
+    const current = this.validateCurrent();
+    const validation: ComputationReadValidation = {
+      isCurrent: current.isCurrent,
+      currentRevision: current.currentRevision,
+      changedFacets: Object.freeze([...current.changedFacets]),
+    };
+    return Object.freeze(validation);
+  }
+
+  retainKernelInput(retention: KernelStoreRetentionCollector): void {
+    const input = this.retainedKernelInput;
+    if (input == null) {
+      return;
+    }
+    switch (input.kind) {
+      case ComputationKernelInputKind.Record:
+        retention.retainRecord(input.handle as KernelRecordHandle);
+        break;
+      case ComputationKernelInputKind.ProductDetail:
+        retention.retainProductDetail(input.handle as ProductHandle);
+        break;
+      case ComputationKernelInputKind.HotDetail:
+        retention.retainHotDetail(input.handle as HotDetailHandle);
+        break;
+    }
+  }
+
+  static from(read: ComputationRead): SealedComputationRead {
+    if (read instanceof SealedComputationRead) {
+      return read;
+    }
+    const validate: unknown = Reflect.get(read, 'validate');
+    if (typeof validate !== 'function') {
+      throw new Error(`Computation read ${read.readKey} has no validation callback.`);
+    }
+    const validateCurrent = validate as (this: ComputationRead) => ComputationReadValidation;
+    const retainedKernelInput = (
+      read instanceof ComputationRecordRead
+      || read instanceof ComputationProductDetailRead
+      || read instanceof ComputationHotDetailRead
+    ) ? read.retainedKernelInput : null;
+    return new SealedComputationRead(
+      read.readKey,
+      read.domain,
+      read.observedRevision,
+      () => Reflect.apply(validateCurrent, read, []),
+      retainedKernelInput,
     );
   }
 }
@@ -213,30 +366,46 @@ export class ComputationReadChange {
     readonly domain: string,
     readonly previousRevision: string | null,
     readonly nextRevision: string | null,
-  ) {}
+  ) {
+    Object.freeze(this);
+  }
 }
 
 /** Why a run was rejected after validating one of its captured reads. */
 export class ComputationInvalidRead {
+  readonly changedFacets: readonly string[];
+
   constructor(
     readonly readKey: string,
     readonly domain: string,
     readonly observedRevision: string,
     readonly currentRevision: string,
-    readonly changedFacets: readonly string[],
-  ) {}
+    changedFacets: readonly string[],
+  ) {
+    this.changedFacets = Object.freeze([...changedFacets]);
+    Object.freeze(this);
+  }
 }
 
 /** Inspectable causal row for one admitted or rejected computation run. */
 export class ComputationTransition {
+  readonly changedReads: readonly ComputationReadChange[];
+  readonly invalidReads: readonly ComputationInvalidRead[];
+  readonly publications: readonly KernelPublicationDecision[];
+
   constructor(
     readonly computationId: ComputationId,
     readonly runSequence: number,
     readonly state: ComputationCommitState,
-    readonly changedReads: readonly ComputationReadChange[],
-    readonly invalidReads: readonly ComputationInvalidRead[],
-    readonly publications: readonly KernelPublicationDecision[],
-  ) {}
+    changedReads: readonly ComputationReadChange[],
+    invalidReads: readonly ComputationInvalidRead[],
+    publications: readonly KernelPublicationDecision[],
+  ) {
+    this.changedReads = Object.freeze([...changedReads]);
+    this.invalidReads = Object.freeze([...invalidReads]);
+    this.publications = Object.freeze([...publications]);
+    Object.freeze(this);
+  }
 }
 
 /** Result returned by every lifecycle commit attempt. */
@@ -244,19 +413,42 @@ export class ComputationCommitResult {
   constructor(
     readonly state: ComputationCommitState,
     readonly transition: ComputationTransition,
-  ) {}
+  ) {
+    Object.freeze(this);
+  }
 }
 
 /** Current complete read/output closure for one logical computation. */
 export class ComputationState {
+  readonly computationId: ComputationId;
+  readonly locus: ComputationLocus;
+  readonly committedRunSequence: number;
+  readonly reads: readonly ComputationRead[];
+  readonly openReads: readonly ComputationChildOpenRead[];
+  readonly outputs: readonly ComputationOutput[];
+  readonly children: readonly ComputationChildState[];
+  readonly publication: KernelPublicationManifest;
+
   constructor(
-    readonly computationId: ComputationId,
-    readonly locus: ComputationLocus,
-    readonly committedRunSequence: number,
-    readonly reads: readonly ComputationRead[],
-    readonly outputs: readonly ComputationOutput[],
-    readonly publication: KernelPublicationManifest,
-  ) {}
+    computationId: ComputationId,
+    locus: ComputationLocus,
+    committedRunSequence: number,
+    reads: readonly ComputationRead[],
+    openReads: readonly ComputationChildOpenRead[],
+    outputs: readonly ComputationOutput[],
+    children: readonly ComputationChildState[],
+    publication: KernelPublicationManifest,
+  ) {
+    this.computationId = computationId;
+    this.locus = locus;
+    this.committedRunSequence = committedRunSequence;
+    this.reads = Object.freeze([...reads]);
+    this.openReads = Object.freeze([...openReads]);
+    this.outputs = Object.freeze([...outputs]);
+    this.children = Object.freeze([...children]);
+    this.publication = publication;
+    Object.freeze(this);
+  }
 }
 
 /** Exact output key owned by one committed computation generation. */
@@ -268,7 +460,111 @@ export class ComputationOutput {
     readonly handle: string,
     readonly detailKind: string,
   ) {
-    this.readKey = computationOutputReadKey(surface, handle, detailKind);
+    this.readKey = computationOutputReadKey(surface, handle);
+    Object.freeze(this);
+  }
+}
+
+/** Current read/output manifest for one logical child admitted with its outer computation. */
+export class ComputationChildState {
+  readonly childId: ComputationChildId;
+  readonly locus: ComputationLocus;
+  readonly reads: readonly ComputationRead[];
+  readonly candidateReads: readonly ComputationCandidateRead[];
+  readonly openReads: readonly ComputationChildOpenRead[];
+  readonly outputs: readonly ComputationOutput[];
+
+  constructor(
+    childId: ComputationChildId,
+    locus: ComputationLocus,
+    reads: readonly ComputationRead[],
+    candidateReads: readonly ComputationCandidateRead[],
+    openReads: readonly ComputationChildOpenRead[],
+    outputs: readonly ComputationOutput[],
+  ) {
+    this.childId = childId;
+    this.locus = locus;
+    this.reads = Object.freeze([...reads]);
+    this.candidateReads = Object.freeze([...candidateReads]);
+    this.openReads = Object.freeze([...openReads]);
+    this.outputs = Object.freeze([...outputs]);
+    Object.freeze(this);
+  }
+
+  /** Whether every recorded input has an exact revision rather than an unresolved aggregate closure. */
+  get hasOnlyRevisionedReads(): boolean {
+    return this.openReads.length === 0;
+  }
+}
+
+class MutableComputationChild {
+  readonly readsByKey = new Map<string, ComputationRead>();
+  readonly stagedReadsByKey = new Map<string, KernelStagedEntryRevision>();
+  readonly openReadsByKey = new Map<string, ComputationChildOpenRead>();
+
+  constructor(
+    readonly childId: ComputationChildId,
+    readonly locus: ComputationLocus,
+  ) {}
+}
+
+class ComputationRemainderLocus implements ComputationLocus {
+  readonly kind = 'computation-remainder';
+  readonly reconciliationKey: string;
+  readonly summary: string;
+
+  constructor(parent: ComputationLocus) {
+    this.reconciliationKey = parent.reconciliationKey;
+    this.summary = `unmigrated remainder of ${parent.summary}`;
+    Object.freeze(this);
+  }
+}
+
+const enum ComputationRunPhase {
+  Preparing,
+  Committing,
+  Finished,
+}
+
+/** Preflighted child manifests or the candidate-local reads that made them stale. */
+export class ComputationChildPreparation {
+  readonly states: readonly ComputationChildState[];
+  readonly invalidReads: readonly ComputationInvalidRead[];
+
+  constructor(
+    states: readonly ComputationChildState[],
+    invalidReads: readonly ComputationInvalidRead[],
+  ) {
+    this.states = Object.freeze([...states]);
+    this.invalidReads = Object.freeze([...invalidReads]);
+    Object.freeze(this);
+  }
+}
+
+class ComputationChildReadValidationError extends Error {
+  constructor(readonly invalidReads: readonly ComputationInvalidRead[]) {
+    super('One or more child computation inputs changed before outer publication.');
+  }
+}
+
+class ComputationInputReadValidationError extends Error {
+  constructor(readonly invalidReads: readonly ComputationInvalidRead[]) {
+    super('One or more computation inputs changed before outer publication.');
+  }
+}
+
+class ComputationSupersededDuringCommitError extends Error {
+  constructor(computationId: ComputationId, runSequence: number) {
+    super(`Computation run ${computationId}@${runSequence} was superseded during publication preflight.`);
+  }
+}
+
+class ComputationChildPreparationFailure extends Error {
+  constructor(
+    readonly childId: ComputationChildId,
+    override readonly cause: unknown,
+  ) {
+    super(`Computation child ${childId} failed child preparation; its outer transaction cannot commit.`);
   }
 }
 
@@ -315,7 +611,13 @@ interface MutableComputationEntry {
 export class ComputationRun implements KernelPublicationContext {
   private readonly readsByKey = new Map<string, ComputationRead>();
   private readonly publications: StagedKernelPublicationContext;
-  private finished = false;
+  private readonly childrenById = new Map<ComputationChildId, MutableComputationChild>();
+  private readonly remainderChild: MutableComputationChild;
+  private activeChild: MutableComputationChild;
+  private activeChildScopeDepth = 0;
+  private hasExplicitChildren = false;
+  private childFailure: ComputationChildPreparationFailure | null = null;
+  private phase = ComputationRunPhase.Preparing;
 
   constructor(
     private readonly registry: ComputationLifecycleRegistry,
@@ -325,7 +627,44 @@ export class ComputationRun implements KernelPublicationContext {
     readonly runSequence: number,
     previousPublication: KernelPublicationManifest,
   ) {
-    this.publications = new StagedKernelPublicationContext(this.store, previousPublication);
+    this.remainderChild = this.childFor(new ComputationRemainderLocus(locus));
+    this.activeChild = this.remainderChild;
+    this.publications = new StagedKernelPublicationContext(
+      this.store,
+      previousPublication,
+      this.remainderChild.childId,
+    );
+  }
+
+  /** Run one synchronous preparation scope under a stable logical child identity. */
+  withChild<TValue>(locus: ComputationLocus, prepare: () => TValue): TValue {
+    this.requirePreparing();
+    const capturedLocus = snapshotComputationLocus(locus);
+    const childId = computationChildId(this.computationId, capturedLocus);
+    const previous = this.activeChild;
+    let entered = false;
+    try {
+      const child = this.childFor(capturedLocus);
+      this.hasExplicitChildren = true;
+      this.activeChild = child;
+      this.activeChildScopeDepth += 1;
+      entered = true;
+      const value = prepare();
+      if (isPromiseLike(value)) {
+        // Observe the continuation before poisoning the run so a later run touch cannot escape as an unhandled rejection.
+        void Promise.resolve(value).catch(() => {});
+        throw new Error(`Computation child ${child.childId} must finish synchronously inside its outer transaction.`);
+      }
+      return value;
+    } catch (error) {
+      this.childFailure ??= new ComputationChildPreparationFailure(childId, error);
+      throw error;
+    } finally {
+      if (entered) {
+        this.activeChildScopeDepth -= 1;
+        this.activeChild = previous;
+      }
+    }
   }
 
   get handles() {
@@ -334,11 +673,17 @@ export class ComputationRun implements KernelPublicationContext {
   }
 
   isCurrent(): boolean {
-    return !this.finished && this.registry.isLatestRun(this) && this.publications.isCurrent();
+    return this.childFailure == null
+      && this.phase !== ComputationRunPhase.Finished
+      && this.registry.isLatestRun(this)
+      && this.publications.isCurrent();
   }
 
   requireCurrent(): void {
-    this.assertOpen();
+    if (this.phase === ComputationRunPhase.Finished) {
+      throw new Error(`Computation run ${this.computationId}@${this.runSequence} has already finished.`);
+    }
+    this.requireHealthy();
     if (!this.registry.isLatestRun(this)) {
       throw new Error(`Computation run ${this.computationId}@${this.runSequence} has been superseded.`);
     }
@@ -348,37 +693,71 @@ export class ComputationRun implements KernelPublicationContext {
   read(handle: KernelRecordHandle): KernelStoreRecord | null {
     this.requireCurrent();
     const result = this.publications.readRecordWithRevision(handle);
-    if (result.committedRevision != null) {
+    if (this.phase === ComputationRunPhase.Preparing && result.committedRevision != null) {
       this.observe(new ComputationRecordRead(
         this.store,
         handle,
         result.committedRevision.mutationOrdinal,
         result.committedRevision.lifetimeOrdinal,
       ));
+    } else if (this.phase === ComputationRunPhase.Preparing && result.stagedRevision != null) {
+      this.observeStagedRevision(result.stagedRevision);
     }
     return result.value;
   }
 
   readAllRecords(): readonly KernelStoreRecord[] {
     this.requireCurrent();
-    // Aggregate views require domain-owned membership and closure revisions; exact reads alone cannot make them honest.
-    return this.publications.readAllRecords();
+    const records = this.publications.readAllRecords();
+    if (this.phase === ComputationRunPhase.Preparing) {
+      const inputs = this.committedRecordInputs(records);
+      this.observeOpenRead(new ComputationChildOpenRead(
+        ComputationOpenReadKind.AllRecords,
+        ComputationOpenReadKind.AllRecords,
+        'Whole-kernel record enumeration has no domain-owned membership revision.',
+        inputs.minimumLifetimeOrdinal,
+        inputs.handles,
+      ));
+    }
+    return records;
   }
 
   readSourceFileAddressesByFileName(fileName: string): readonly SourceFileAddress[] {
     this.requireCurrent();
-    return this.publications.readSourceFileAddressesByFileName(fileName);
+    const records = this.publications.readSourceFileAddressesByFileName(fileName);
+    if (this.phase === ComputationRunPhase.Preparing) {
+      const inputs = this.committedRecordInputs(records);
+      this.observeOpenRead(new ComputationChildOpenRead(
+        `${ComputationOpenReadKind.SourceFileIndex}:${fileName}`,
+        ComputationOpenReadKind.SourceFileIndex,
+        `Source-file address membership for ${fileName} has no path-owned revision.`,
+        inputs.minimumLifetimeOrdinal,
+        inputs.handles,
+      ));
+    }
+    return records;
   }
 
   readMaterializations(): readonly MaterializationRecord[] {
     this.requireCurrent();
-    return this.publications.readMaterializations();
+    const records = this.publications.readMaterializations();
+    if (this.phase === ComputationRunPhase.Preparing) {
+      const inputs = this.committedRecordInputs(records);
+      this.observeOpenRead(new ComputationChildOpenRead(
+        ComputationOpenReadKind.Materializations,
+        ComputationOpenReadKind.Materializations,
+        'Whole-kernel materialization enumeration has no domain-owned membership revision.',
+        inputs.minimumLifetimeOrdinal,
+        inputs.handles,
+      ));
+    }
+    return records;
   }
 
   readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
     this.requireCurrent();
     const result = this.publications.readProductDetailWithRevision(slot, productHandle);
-    if (result.committedRevision != null) {
+    if (this.phase === ComputationRunPhase.Preparing && result.committedRevision != null) {
       this.observe(new ComputationProductDetailRead(
         this.store,
         productHandle,
@@ -387,6 +766,8 @@ export class ComputationRun implements KernelPublicationContext {
         result.committedRevision.mutationOrdinal,
         result.committedRevision.lifetimeOrdinal,
       ));
+    } else if (this.phase === ComputationRunPhase.Preparing && result.stagedRevision != null) {
+      this.observeStagedRevision(result.stagedRevision);
     }
     return result.value;
   }
@@ -394,7 +775,7 @@ export class ComputationRun implements KernelPublicationContext {
   readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: HotDetailHandle): TDetail | null {
     this.requireCurrent();
     const result = this.publications.readHotDetailWithRevision(slot, handle);
-    if (result.committedRevision != null) {
+    if (this.phase === ComputationRunPhase.Preparing && result.committedRevision != null) {
       this.observe(new ComputationHotDetailRead(
         this.store,
         handle,
@@ -403,6 +784,8 @@ export class ComputationRun implements KernelPublicationContext {
         result.committedRevision.mutationOrdinal,
         result.committedRevision.lifetimeOrdinal,
       ));
+    } else if (this.phase === ComputationRunPhase.Preparing && result.stagedRevision != null) {
+      this.observeStagedRevision(result.stagedRevision);
     }
     return result.value;
   }
@@ -428,82 +811,500 @@ export class ComputationRun implements KernelPublicationContext {
   }
 
   observe(read: ComputationRead): void {
-    this.requireCurrent();
-    const existing = this.readsByKey.get(read.readKey);
-    if (existing != null && (
-      existing.domain !== read.domain
-      || existing.observedRevision !== read.observedRevision
-    )) {
-      throw new Error(
-        `Computation ${this.computationId} observed conflicting revisions for ${read.readKey}.`,
-      );
-    }
-    this.readsByKey.set(read.readKey, read);
+    this.requirePreparing();
+    const sealed = SealedComputationRead.from(read);
+    registerComputationRead(this.readsByKey, sealed, `Computation ${this.computationId}`);
+    registerComputationRead(
+      this.activeChild.readsByKey,
+      sealed,
+      `Computation child ${this.activeChild.childId}`,
+    );
   }
 
   publish(plan: KernelPublicationPlan): void {
-    this.requireCurrent();
-    this.publications.publish(plan);
+    this.requirePreparing();
+    for (const read of this.publications.publishFrom(this.activeChild.childId, plan)) {
+      this.observeStagedRevision(read);
+    }
   }
 
   commit(): ComputationCommitResult {
-    this.assertOpen();
+    this.assertPreparing();
+    this.requireNoActiveChildScope('commit');
+    this.requireHealthy();
+    this.phase = ComputationRunPhase.Committing;
+    let committed = false;
     try {
-      return this.registry.commitRun(
-        this,
-        this.readsForCommit(),
-        this.publications.toPlan(`computation:${this.computationId}:run:${this.runSequence}`),
+      const candidate = this.publications.seal(
+        `computation:${this.computationId}:run:${this.runSequence}`,
       );
+      this.publications.prepareCandidateBindingsForCommit();
+      this.registerPublicationStructuralReads(candidate);
+      const reads = this.readsForCommit(candidate);
+      const result = this.registry.commitRun(
+        this,
+        reads,
+        this.openReadsForCommit(),
+        this.minimumConsumedLifetimeOrdinal(reads),
+        candidate,
+      );
+      committed = result.state === ComputationCommitState.Committed;
+      return result;
     } finally {
-      this.finished = true;
-      this.registry.finishRun(this);
+      try {
+        this.publications.finishCandidateBindings(committed);
+      } finally {
+        this.phase = ComputationRunPhase.Finished;
+        this.registry.finishRun(this);
+      }
     }
   }
 
   /** Finish a prepared run without publishing when domain preparation cannot produce a complete candidate. */
   abort(): void {
-    this.assertOpen();
-    this.finished = true;
-    this.registry.finishRun(this);
-  }
-
-  private assertOpen(): void {
-    if (this.finished) {
-      throw new Error(`Computation run ${this.computationId}@${this.runSequence} is already finished.`);
+    this.assertPreparing();
+    this.requireNoActiveChildScope('abort');
+    try {
+      this.publications.finishCandidateBindings(false);
+    } finally {
+      this.phase = ComputationRunPhase.Finished;
+      this.registry.finishRun(this);
     }
   }
 
-  private readsForCommit(): readonly ComputationRead[] {
-    const readsByKey = new Map(this.readsByKey);
-    for (const snapshot of this.publications.readProductDetailAdmissionSnapshots()) {
-      if (snapshot.expectedEntry == null) {
+  private assertPreparing(): void {
+    if (this.phase !== ComputationRunPhase.Preparing) {
+      throw new Error(`Computation run ${this.computationId}@${this.runSequence} is no longer preparing.`);
+    }
+  }
+
+  private requirePreparing(): void {
+    this.assertPreparing();
+    this.requireCurrent();
+  }
+
+  private requireHealthy(): void {
+    if (this.childFailure != null) {
+      throw this.childFailure;
+    }
+  }
+
+  private requireNoActiveChildScope(operation: string): void {
+    if (this.activeChildScopeDepth > 0) {
+      throw new Error(
+        `Computation run ${this.computationId}@${this.runSequence} cannot ${operation} inside an active child scope.`,
+      );
+    }
+  }
+
+  /** Build final child manifests against the store's authoritative outer publication decisions. */
+  prepareChildCommit(
+    candidate: SealedKernelPublicationCandidate,
+    decisions: readonly KernelPublicationDecision[],
+  ): ComputationChildPreparation {
+    const outputsByChild = new Map<ComputationChildId, ComputationOutput[]>();
+    const outputOwnerByReadKey = new Map<string, ComputationChildId>();
+    for (const decision of decisions) {
+      if (decision.decision === KernelPublicationDecisionKind.Withdraw) {
         continue;
       }
-      const read = new ComputationProductDetailRead(
+      const revision = candidate.readStagedRevision(decision.surface, decision.handle);
+      if (revision?.writerId == null || revision.actualKind !== decision.detailKind) {
+        throw new Error(`Admitted output ${decision.handle} has no coherent staged writer revision.`);
+      }
+      const output = new ComputationOutput(decision.surface, decision.handle, decision.detailKind);
+      const child = this.childrenById.get(revision.writerId);
+      if (child == null) {
+        throw new Error(`Admitted output ${output.readKey} names unknown child writer ${revision.writerId}.`);
+      }
+      const existingOwner = outputOwnerByReadKey.get(output.readKey);
+      if (existingOwner != null && existingOwner !== child.childId) {
+        throw new Error(`Admitted output ${output.readKey} has multiple child writers.`);
+      }
+      outputOwnerByReadKey.set(output.readKey, child.childId);
+      const outputs = outputsByChild.get(child.childId) ?? [];
+      outputs.push(output);
+      outputsByChild.set(child.childId, outputs);
+    }
+
+    const invalidReads: ComputationInvalidRead[] = [];
+    const states = [...this.childrenById.values()].map((child) => {
+      const reads = [...child.readsByKey.values()].filter((read) => {
+        const outputOwner = outputOwnerByReadKey.get(read.readKey) ?? null;
+        if (outputOwner == null) {
+          return true;
+        }
+        if (outputOwner === child.childId) {
+          return false;
+        }
+        invalidReads.push(new ComputationInvalidRead(
+          read.readKey,
+          'computation-child-external-read',
+          read.observedRevision,
+          `candidate-output:${outputOwner}`,
+          ['candidate-writer'],
+        ));
+        return false;
+      });
+      const candidateReads = [...child.stagedReadsByKey.values()].flatMap((observed) => {
+        const current = candidate.readStagedRevision(observed.surface, observed.handle);
+        if (
+          current?.writerId === child.childId
+          && (observed.writerId == null || observed.writerId === child.childId)
+        ) {
+          return [];
+        }
+        if (!sameStagedEntryRevision(observed, current)) {
+          invalidReads.push(new ComputationInvalidRead(
+            computationStagedReadKey(observed),
+            'computation-child-staged-read',
+            stagedEntryRevisionLabel(observed),
+            stagedEntryRevisionLabel(current),
+            stagedEntryChangedFacets(observed, current),
+          ));
+          return [];
+        }
+        if (stagedEntryIsAbsent(observed)) {
+          return [new ComputationCandidateRead(
+            computationStagedReadKey(observed),
+            ComputationCandidateReadState.Absent,
+            null,
+            null,
+          )];
+        }
+        return observed.writerId === child.childId
+          ? []
+          : [new ComputationCandidateRead(
+              computationStagedReadKey(observed),
+              ComputationCandidateReadState.Present,
+              observed.writerId,
+              requiredStagedReadMutationOrdinal(observed),
+            )];
+      });
+      return new ComputationChildState(
+        child.childId,
+        child.locus,
+        reads.sort((left, right) => left.readKey.localeCompare(right.readKey)),
+        candidateReads.sort((left, right) => left.readKey.localeCompare(right.readKey)),
+        [...child.openReadsByKey.values()].sort((left, right) => left.key.localeCompare(right.key)),
+        (outputsByChild.get(child.childId) ?? []).sort((left, right) => left.readKey.localeCompare(right.readKey)),
+      );
+    }).sort((left, right) => left.childId.localeCompare(right.childId));
+    return new ComputationChildPreparation(
+      this.hasExplicitChildren
+        ? states.filter((state) =>
+            state.reads.length > 0
+            || state.candidateReads.length > 0
+            || state.openReads.length > 0
+            || state.outputs.length > 0
+          )
+        : [],
+      invalidReads,
+    );
+  }
+
+  private childFor(locus: ComputationLocus): MutableComputationChild {
+    const capturedLocus = snapshotComputationLocus(locus);
+    const childId = computationChildId(this.computationId, capturedLocus);
+    const existing = this.childrenById.get(childId);
+    if (existing != null) {
+      if (existing.locus.summary !== capturedLocus.summary) {
+        throw new Error(`Computation child ${childId} was reconciled with conflicting summaries.`);
+      }
+      return existing;
+    }
+    const child = new MutableComputationChild(childId, capturedLocus);
+    this.childrenById.set(childId, child);
+    return child;
+  }
+
+  private observeStagedRevision(revision: KernelStagedEntryRevision): void {
+    this.observeStagedRevisionForChild(this.activeChild, revision);
+  }
+
+  private observeStagedRevisionForChild(
+    child: MutableComputationChild,
+    revision: KernelStagedEntryRevision,
+  ): void {
+    const readKey = computationStagedReadKey(revision);
+    const existing = child.stagedReadsByKey.get(readKey);
+    if (existing != null && !sameStagedEntryRevision(existing, revision)) {
+      if (
+        revision.writerId === child.childId
+        && (existing.writerId == null || existing.writerId === child.childId)
+      ) {
+        child.stagedReadsByKey.set(readKey, revision);
+        return;
+      }
+      throw new Error(`Computation child ${child.childId} observed changing candidate output ${readKey}.`);
+    }
+    child.stagedReadsByKey.set(readKey, revision);
+  }
+
+  private observeOpenRead(read: ComputationChildOpenRead): void {
+    const existing = this.activeChild.openReadsByKey.get(read.key);
+    if (existing != null && (existing.kind !== read.kind || existing.summary !== read.summary)) {
+      throw new Error(`Computation child ${this.activeChild.childId} reused aggregate read ${read.key} inconsistently.`);
+    }
+    this.activeChild.openReadsByKey.set(
+      read.key,
+      existing == null ? read : mergeComputationOpenRead(existing, read),
+    );
+  }
+
+  private committedRecordInputs(records: readonly KernelStoreRecord[]): {
+    readonly handles: readonly KernelRecordHandle[];
+    readonly minimumLifetimeOrdinal: number | null;
+  } {
+    const handles: KernelRecordHandle[] = [];
+    let minimumLifetimeOrdinal: number | null = null;
+    for (const record of records) {
+      if (this.publications.readStagedRevision(KernelPublicationSurface.Record, record.handle) != null) {
+        continue;
+      }
+      const mutationOrdinal = this.store.readRecordRevision(record.handle);
+      const lifetimeOrdinal = this.store.readRecordLifetimeOrdinal(record.handle);
+      this.observe(new ComputationRecordRead(
+        this.store,
+        record.handle,
+        mutationOrdinal,
+        lifetimeOrdinal,
+      ));
+      handles.push(record.handle);
+      minimumLifetimeOrdinal = maxOptionalOrdinal(
+        minimumLifetimeOrdinal,
+        lifetimeOrdinal,
+      );
+    }
+    return { handles, minimumLifetimeOrdinal };
+  }
+
+  private minimumConsumedLifetimeOrdinal(reads: readonly ComputationRead[]): number | null {
+    let lifetimeOrdinal = computationReadLifetimeOrdinal(reads);
+    for (const child of this.childrenById.values()) {
+      for (const read of child.openReadsByKey.values()) {
+        lifetimeOrdinal = maxOptionalOrdinal(lifetimeOrdinal, read.minimumLifetimeOrdinal);
+      }
+    }
+    return lifetimeOrdinal;
+  }
+
+  private openReadsForCommit(): readonly ComputationChildOpenRead[] {
+    const readsByKey = new Map<string, ComputationChildOpenRead>();
+    for (const child of this.childrenById.values()) {
+      for (const read of child.openReadsByKey.values()) {
+        const existing = readsByKey.get(read.key);
+        readsByKey.set(read.key, existing == null ? read : mergeComputationOpenRead(existing, read));
+      }
+    }
+    return [...readsByKey.values()].sort((left, right) => left.key.localeCompare(right.key));
+  }
+
+  private registerPublicationStructuralReads(candidate: SealedKernelPublicationCandidate): void {
+    const productAdmissionByHandle = new Map(
+      candidate.plan.productDetailAdmissionSnapshots.map((snapshot) => [snapshot.productHandle, snapshot]),
+    );
+    const hotAdmissionByHandle = new Map(
+      candidate.plan.hotDetailAdmissionSnapshots.map((snapshot) => [snapshot.handle, snapshot]),
+    );
+    for (const record of candidate.plan.batch.records) {
+      const writerId = requiredCandidateWriter(candidate, KernelPublicationSurface.Record, record.handle);
+      for (const reference of referencedKernelRecordHandles(record)) {
+        this.registerStructuralRecordRead(candidate, writerId, reference);
+      }
+    }
+    for (const publication of candidate.plan.productDetails) {
+      if (
+        publication.admission === KernelDetailAdmission.IfAbsent
+        && productAdmissionByHandle.get(publication.productHandle)?.expectedEntry != null
+      ) {
+        continue;
+      }
+      const writerId = requiredCandidateWriter(
+        candidate,
+        KernelPublicationSurface.ProductDetail,
+        publication.productHandle,
+      );
+      this.registerStructuralRecordRead(candidate, writerId, publication.productHandle);
+      for (const reference of publication.references) {
+        this.registerStructuralDetailReference(
+          candidate,
+          writerId,
+          reference,
+          productAdmissionByHandle,
+          hotAdmissionByHandle,
+        );
+      }
+    }
+    for (const publication of candidate.plan.hotDetails) {
+      if (
+        publication.admission === KernelDetailAdmission.IfAbsent
+        && hotAdmissionByHandle.get(publication.handle)?.expectedEntry != null
+      ) {
+        continue;
+      }
+      const writerId = requiredCandidateWriter(candidate, KernelPublicationSurface.HotDetail, publication.handle);
+      this.registerStructuralRecordRead(candidate, writerId, publication.ownerProductHandle);
+      for (const reference of publication.references) {
+        this.registerStructuralDetailReference(
+          candidate,
+          writerId,
+          reference,
+          productAdmissionByHandle,
+          hotAdmissionByHandle,
+        );
+      }
+    }
+  }
+
+  private registerStructuralDetailReference(
+    candidate: SealedKernelPublicationCandidate,
+    writerId: ComputationChildId,
+    reference: KernelDetailReference,
+    productAdmissionByHandle: ReadonlyMap<ProductHandle, KernelProductDetailAdmissionSnapshot>,
+    hotAdmissionByHandle: ReadonlyMap<HotDetailHandle, KernelHotDetailAdmissionSnapshot>,
+  ): void {
+    switch (reference.surface) {
+      case KernelPublicationSurface.Record:
+        this.registerStructuralRecordRead(candidate, writerId, reference.handle);
+        return;
+      case KernelPublicationSurface.ProductDetail: {
+        const handle = reference.handle;
+        const borrowed = productAdmissionByHandle.get(handle) ?? null;
+        if (borrowed?.expectedEntry != null) {
+          this.registerStructuralDetailRead(writerId, new ComputationProductDetailRead(
+            this.store,
+            handle,
+            reference.detailKind,
+            borrowed.committedRevision.actualKind,
+            borrowed.committedRevision.mutationOrdinal,
+            borrowed.committedRevision.lifetimeOrdinal,
+          ));
+          return;
+        }
+        const child = this.requireChild(writerId);
+        const staged = candidate.readStagedRevision(KernelPublicationSurface.ProductDetail, handle);
+        if (staged != null) {
+          this.observeStagedRevisionForChild(child, staged);
+          return;
+        }
+        const entry = this.store.productDetails.readEntry(handle);
+        this.registerStructuralDetailRead(writerId, new ComputationProductDetailRead(
+          this.store,
+          handle,
+          reference.detailKind,
+          entry?.slot.detailKind ?? null,
+          this.store.productDetails.readMutationOrdinal(handle),
+          this.store.productDetails.readLifetimeOrdinal(handle),
+        ));
+        return;
+      }
+      case KernelPublicationSurface.HotDetail: {
+        const handle = reference.handle;
+        const borrowed = hotAdmissionByHandle.get(handle) ?? null;
+        if (borrowed?.expectedEntry != null) {
+          this.registerStructuralDetailRead(writerId, new ComputationHotDetailRead(
+            this.store,
+            handle,
+            reference.detailKind,
+            borrowed.committedRevision.actualKind,
+            borrowed.committedRevision.mutationOrdinal,
+            borrowed.committedRevision.lifetimeOrdinal,
+          ));
+          return;
+        }
+        const child = this.requireChild(writerId);
+        const staged = candidate.readStagedRevision(KernelPublicationSurface.HotDetail, handle);
+        if (staged != null) {
+          this.observeStagedRevisionForChild(child, staged);
+          return;
+        }
+        const entry = this.store.hotDetails.readEntry(handle);
+        this.registerStructuralDetailRead(writerId, new ComputationHotDetailRead(
+          this.store,
+          handle,
+          reference.detailKind,
+          entry?.slot.detailKind ?? null,
+          this.store.hotDetails.readMutationOrdinal(handle),
+          this.store.hotDetails.readLifetimeOrdinal(handle),
+        ));
+      }
+    }
+  }
+
+  private registerStructuralDetailRead(writerId: ComputationChildId, read: ComputationRead): void {
+    const child = this.requireChild(writerId);
+    const sealed = SealedComputationRead.from(read);
+    registerSupplementalRead(this.readsByKey, sealed, `Computation ${this.computationId}`);
+    registerSupplementalRead(child.readsByKey, sealed, `Computation child ${child.childId}`);
+  }
+
+  private registerStructuralRecordRead(
+    candidate: SealedKernelPublicationCandidate,
+    writerId: ComputationChildId,
+    handle: KernelRecordHandle,
+  ): void {
+    const child = this.requireChild(writerId);
+    const staged = candidate.readStagedRevision(KernelPublicationSurface.Record, handle);
+    if (staged != null) {
+      this.observeStagedRevisionForChild(child, staged);
+      return;
+    }
+    const read = SealedComputationRead.from(new ComputationRecordRead(
+      this.store,
+      handle,
+      this.store.readRecordRevision(handle),
+      this.store.readRecordLifetimeOrdinal(handle),
+    ));
+    registerSupplementalRead(this.readsByKey, read, `Computation ${this.computationId}`);
+    registerSupplementalRead(child.readsByKey, read, `Computation child ${child.childId}`);
+  }
+
+  private readsForCommit(candidate: SealedKernelPublicationCandidate): readonly ComputationRead[] {
+    const readsByKey = new Map(this.readsByKey);
+    for (const attempt of candidate.productDetailAdmissionAttempts) {
+      const snapshot = attempt.snapshot;
+      const read = SealedComputationRead.from(new ComputationProductDetailRead(
         this.store,
         snapshot.productHandle,
         snapshot.detailKind,
         snapshot.committedRevision.actualKind,
         snapshot.committedRevision.mutationOrdinal,
         snapshot.committedRevision.lifetimeOrdinal,
+      ));
+      registerSupplementalRead(readsByKey, read, `Computation ${this.computationId}`);
+      registerSupplementalRead(
+        this.requireChild(attempt.writerId).readsByKey,
+        read,
+        `Computation child ${attempt.writerId}`,
       );
-      readsByKey.set(read.readKey, read);
     }
-    for (const snapshot of this.publications.readHotDetailAdmissionSnapshots()) {
-      if (snapshot.expectedEntry == null) {
-        continue;
-      }
-      const read = new ComputationHotDetailRead(
+    for (const attempt of candidate.hotDetailAdmissionAttempts) {
+      const snapshot = attempt.snapshot;
+      const read = SealedComputationRead.from(new ComputationHotDetailRead(
         this.store,
         snapshot.handle,
         snapshot.detailKind,
         snapshot.committedRevision.actualKind,
         snapshot.committedRevision.mutationOrdinal,
         snapshot.committedRevision.lifetimeOrdinal,
+      ));
+      registerSupplementalRead(readsByKey, read, `Computation ${this.computationId}`);
+      registerSupplementalRead(
+        this.requireChild(attempt.writerId).readsByKey,
+        read,
+        `Computation child ${attempt.writerId}`,
       );
-      readsByKey.set(read.readKey, read);
     }
     return [...readsByKey.values()];
+  }
+
+  private requireChild(childId: ComputationChildId): MutableComputationChild {
+    const child = this.childrenById.get(childId) ?? null;
+    if (child == null) {
+      throw new Error(`Computation candidate names unknown child writer ${childId}.`);
+    }
+    return child;
   }
 }
 
@@ -513,6 +1314,8 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
   private readonly entriesById = new Map<ComputationId, MutableComputationEntry>();
   private readonly readersByKey = new Map<string, Set<ComputationId>>();
   private readonly producerByKey = new Map<string, ComputationId>();
+  private readonly childReadersByKey = new Map<string, Set<ComputationChildId>>();
+  private readonly childProducerByKey = new Map<string, ComputationChildId>();
   private nextComputationOrdinal = 1;
   private readonly publicationOwner = {};
 
@@ -521,13 +1324,14 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
   }
 
   begin(locus: ComputationLocus): ComputationRun {
-    const registryKey = `${locus.kind}\0${locus.reconciliationKey}`;
+    const capturedLocus = snapshotComputationLocus(locus);
+    const registryKey = `${capturedLocus.kind}\0${capturedLocus.reconciliationKey}`;
     let entry = this.entriesByLocus.get(registryKey);
     if (entry == null) {
       const computationId = `computation:${this.nextComputationOrdinal++}` as ComputationId;
       entry = {
         computationId,
-        locus,
+        locus: capturedLocus,
         latestRunSequence: 0,
         latestFinishedRunSequence: 0,
         state: null,
@@ -536,6 +1340,8 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       };
       this.entriesByLocus.set(registryKey, entry);
       this.entriesById.set(computationId, entry);
+    } else if (entry.locus.summary !== capturedLocus.summary) {
+      throw new Error(`Computation locus ${registryKey} was reconciled with conflicting summaries.`);
     }
     entry.latestRunSequence += 1;
     return new ComputationRun(
@@ -576,20 +1382,30 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     if (entry == null || state?.committedRunSequence !== runSequence) {
       return false;
     }
-    this.store.replaceOwnedPublication(
+    const replacement = this.store.replaceOwnedPublication(
       state.publication,
       new KernelPublicationPlan(new KernelStoreBatch([], `retire:${computationId}@${runSequence}`)),
       this.publicationOwner,
       {
-        validate: (decisions) => this.validateProducerReplacement(
-          state.outputs,
-          computationOutputsFromDecisions(decisions),
-          computationId,
-        ),
+        validate: (decisions) => {
+          this.validateProducerReplacement(
+            state.outputs,
+            computationOutputsFromDecisions(decisions),
+            computationId,
+          );
+          this.validateChildReplacement(state.children, []);
+        },
+        validateCurrent: () => {
+          if (entry.state !== state) {
+            throw new Error(`Computation generation ${computationId}@${runSequence} changed during retirement.`);
+          }
+        },
       },
     );
+    this.store.retirePublicationManifest(replacement.manifest, this.publicationOwner);
     this.replaceReadIndex(state.reads, [], computationId);
     this.commitProducerReplacement(state.outputs, [], computationId);
+    this.commitChildReplacement(state.children, []);
     entry.state = null;
     entry.admittedGenerationDomains.clear();
     entry.latestRunSequence += 1;
@@ -611,8 +1427,36 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     return this.producerByKey.get(readKey) ?? null;
   }
 
+  childReadersFor(readKey: string): readonly ComputationChildId[] {
+    return [...(this.childReadersByKey.get(readKey) ?? [])]
+      .sort((left, right) => left.localeCompare(right));
+  }
+
+  childProducerFor(readKey: string): ComputationChildId | null {
+    return this.childProducerByKey.get(readKey) ?? null;
+  }
+
   readTransitions(computationId: ComputationId): readonly ComputationTransition[] {
     return [...(this.entriesById.get(computationId)?.transitions ?? [])];
+  }
+
+  retainActiveDependencies(retention: KernelStoreRetentionCollector): void {
+    for (const entry of this.entriesById.values()) {
+      const state = entry.state;
+      if (state == null) {
+        continue;
+      }
+      for (const read of state.reads) {
+        if (read instanceof SealedComputationRead) {
+          read.retainKernelInput(retention);
+        }
+      }
+      for (const openRead of state.openReads) {
+        for (const handle of openRead.positiveRecordHandles) {
+          retention.retainRecord(handle);
+        }
+      }
+    }
   }
 
   dispose(context: KernelStoreDisposalContext): void {
@@ -628,6 +1472,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       }
       this.replaceReadIndex(state.reads, [], entry.computationId);
       this.commitProducerReplacement(state.outputs, [], entry.computationId);
+      this.commitChildReplacement(state.children, []);
       this.store.retirePublicationManifest(state.publication, this.publicationOwner);
       entry.state = null;
       entry.admittedGenerationDomains.clear();
@@ -647,7 +1492,9 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
   commitRun(
     run: ComputationRun,
     reads: readonly ComputationRead[],
-    publication: KernelPublicationPlan,
+    openReads: readonly ComputationChildOpenRead[],
+    minimumLifetimeOrdinal: number | null,
+    candidate: SealedKernelPublicationCandidate,
   ): ComputationCommitResult {
     const entry = this.entriesById.get(run.computationId);
     if (entry == null) {
@@ -657,35 +1504,62 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       return this.reject(entry, run, ComputationCommitState.RejectedSuperseded, []);
     }
 
-    const invalidReads = reads.flatMap((read) => {
-      const validation = read.validate();
-      return validation.isCurrent
-        ? []
-        : [new ComputationInvalidRead(
-          read.readKey,
-          read.domain,
-          read.observedRevision,
-          validation.currentRevision,
-          validation.changedFacets,
-        )];
-    });
-    if (invalidReads.length > 0) {
-      return this.reject(entry, run, ComputationCommitState.RejectedInputsChanged, invalidReads);
-    }
-
     const previousState = entry.state;
-    const replacement = this.store.replaceOwnedPublication(
-      previousState?.publication ?? KernelPublicationManifest.empty,
-      publication.withMinimumLifetimeOrdinal(computationReadLifetimeOrdinal(reads)),
-      this.publicationOwner,
-      {
-        validate: (decisions) => this.validateProducerReplacement(
-          previousState?.outputs ?? [],
-          computationOutputsFromDecisions(decisions),
-          entry.computationId,
-        ),
-      },
-    );
+    let childPreparation = new ComputationChildPreparation([], []);
+    let replacement: KernelPublicationReplacement;
+    try {
+      replacement = this.store.replaceOwnedPublication(
+        previousState?.publication ?? KernelPublicationManifest.empty,
+        candidate.plan.withMinimumLifetimeOrdinal(minimumLifetimeOrdinal),
+        this.publicationOwner,
+        {
+          validate: (decisions) => {
+            this.requireLatestRunForCommit(entry, run);
+            const invalidReads: ComputationInvalidRead[] = [];
+            for (const read of reads) {
+              const validation = read.validate();
+              this.requireLatestRunForCommit(entry, run);
+              if (!validation.isCurrent) {
+                invalidReads.push(new ComputationInvalidRead(
+                  read.readKey,
+                  read.domain,
+                  read.observedRevision,
+                  validation.currentRevision,
+                  validation.changedFacets,
+                ));
+              }
+            }
+            if (invalidReads.length > 0) {
+              throw new ComputationInputReadValidationError(invalidReads);
+            }
+            this.requireLatestRunForCommit(entry, run);
+            childPreparation = run.prepareChildCommit(candidate, decisions);
+            if (childPreparation.invalidReads.length > 0) {
+              throw new ComputationChildReadValidationError(childPreparation.invalidReads);
+            }
+            this.validateProducerReplacement(
+              previousState?.outputs ?? [],
+              computationOutputsFromDecisions(decisions),
+              entry.computationId,
+            );
+            this.validateChildReplacement(previousState?.children ?? [], childPreparation.states);
+            this.requireLatestRunForCommit(entry, run);
+          },
+          validateCurrent: () => this.requireLatestRunForCommit(entry, run),
+        },
+      );
+    } catch (error) {
+      if (
+        error instanceof ComputationInputReadValidationError
+        || error instanceof ComputationChildReadValidationError
+      ) {
+        return this.reject(entry, run, ComputationCommitState.RejectedInputsChanged, error.invalidReads);
+      }
+      if (error instanceof ComputationSupersededDuringCommitError) {
+        return this.reject(entry, run, ComputationCommitState.RejectedSuperseded, []);
+      }
+      throw error;
+    }
     const outputs = computationOutputsFromDecisions(replacement.decisions);
     const outputKeys = new Set(outputs.map((output) => output.readKey));
     const committedReads = reads.filter((read) => !outputKeys.has(read.readKey));
@@ -695,11 +1569,14 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       entry.locus,
       run.runSequence,
       committedReads,
+      openReads,
       outputs,
+      childPreparation.states,
       replacement.manifest,
     );
     this.replaceReadIndex(previousState?.reads ?? [], committedReads, entry.computationId);
     this.commitProducerReplacement(previousState?.outputs ?? [], outputs, entry.computationId);
+    this.commitChildReplacement(previousState?.children ?? [], childPreparation.states);
     entry.state = nextState;
     entry.admittedGenerationDomains.clear();
     const transition = new ComputationTransition(
@@ -712,6 +1589,15 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     );
     entry.transitions.push(transition);
     return new ComputationCommitResult(ComputationCommitState.Committed, transition);
+  }
+
+  private requireLatestRunForCommit(
+    entry: MutableComputationEntry,
+    run: ComputationRun,
+  ): void {
+    if (entry.latestRunSequence !== run.runSequence) {
+      throw new ComputationSupersededDuringCommitError(run.computationId, run.runSequence);
+    }
   }
 
   private reject(
@@ -787,6 +1673,197 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       this.producerByKey.set(output.readKey, computationId);
     }
   }
+
+  private validateChildReplacement(
+    previous: readonly ComputationChildState[],
+    next: readonly ComputationChildState[],
+  ): void {
+    const previousChildIds = new Set(previous.map((child) => child.childId));
+    for (const child of previous) {
+      for (const output of child.outputs) {
+        if (this.childProducerByKey.get(output.readKey) !== child.childId) {
+          throw new Error(`Child output ${output.readKey} lost producer ownership before replacement.`);
+        }
+      }
+    }
+    const nextOutputKeys = new Set<string>();
+    for (const child of next) {
+      for (const output of child.outputs) {
+        if (nextOutputKeys.has(output.readKey)) {
+          throw new Error(`Child output ${output.readKey} has multiple final owners.`);
+        }
+        nextOutputKeys.add(output.readKey);
+        const existing = this.childProducerByKey.get(output.readKey);
+        if (existing != null && !previousChildIds.has(existing)) {
+          throw new Error(`Child output ${output.readKey} is already owned by ${existing}.`);
+        }
+      }
+    }
+  }
+
+  /** Apply child read/producer indexes after their outer store publication commits. */
+  private commitChildReplacement(
+    previous: readonly ComputationChildState[],
+    next: readonly ComputationChildState[],
+  ): void {
+    for (const child of previous) {
+      for (const readKey of computationChildReadKeys(child)) {
+        const readers = this.childReadersByKey.get(readKey);
+        readers?.delete(child.childId);
+        if (readers?.size === 0) {
+          this.childReadersByKey.delete(readKey);
+        }
+      }
+      for (const output of child.outputs) {
+        if (this.childProducerByKey.get(output.readKey) === child.childId) {
+          this.childProducerByKey.delete(output.readKey);
+        }
+      }
+    }
+    for (const child of next) {
+      for (const readKey of computationChildReadKeys(child)) {
+        let readers = this.childReadersByKey.get(readKey);
+        if (readers == null) {
+          readers = new Set();
+          this.childReadersByKey.set(readKey, readers);
+        }
+        readers.add(child.childId);
+      }
+      for (const output of child.outputs) {
+        this.childProducerByKey.set(output.readKey, child.childId);
+      }
+    }
+  }
+}
+
+function registerComputationRead(
+  readsByKey: Map<string, ComputationRead>,
+  read: SealedComputationRead,
+  owner: string,
+): void {
+  const existing = readsByKey.get(read.readKey);
+  if (existing != null && (
+    existing.domain !== read.domain
+    || existing.observedRevision !== read.observedRevision
+  )) {
+    throw new Error(`${owner} observed conflicting revisions for ${read.readKey}.`);
+  }
+  readsByKey.set(read.readKey, read);
+}
+
+/** Add a late-derived dependency without replacing an earlier same-domain witness. */
+function registerSupplementalRead(
+  readsByKey: Map<string, ComputationRead>,
+  read: SealedComputationRead,
+  owner: string,
+): void {
+  const existing = readsByKey.get(read.readKey);
+  if (existing == null) {
+    readsByKey.set(read.readKey, read);
+    return;
+  }
+  if (existing.domain !== read.domain) {
+    throw new Error(
+      `${owner} observed conflicting domains ${existing.domain} and ${read.domain} for ${read.readKey}.`,
+    );
+  }
+}
+
+function requiredCandidateWriter(
+  candidate: SealedKernelPublicationCandidate,
+  surface: KernelPublicationSurface,
+  handle: string,
+): ComputationChildId {
+  const revision = candidate.readStagedRevision(surface, handle);
+  if (revision?.writerId == null) {
+    throw new Error(`Staged ${surface} ${handle} has no candidate writer.`);
+  }
+  return revision.writerId;
+}
+
+function computationChildId(parentId: ComputationId, locus: ComputationLocus): ComputationChildId {
+  return JSON.stringify([parentId, locus.kind, locus.reconciliationKey]) as ComputationChildId;
+}
+
+function snapshotComputationLocus(locus: ComputationLocus): ComputationLocus {
+  return Object.freeze({
+    kind: locus.kind,
+    reconciliationKey: locus.reconciliationKey,
+    summary: locus.summary,
+  });
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    (typeof value === 'object' && value != null) || typeof value === 'function'
+  ) && typeof (value as PromiseLike<unknown>).then === 'function';
+}
+
+function computationStagedReadKey(revision: KernelStagedEntryRevision): string {
+  return computationOutputReadKey(revision.surface, revision.handle);
+}
+
+function sameStagedEntryRevision(
+  left: KernelStagedEntryRevision,
+  right: KernelStagedEntryRevision | null,
+): boolean {
+  if (stagedEntryIsAbsent(left)) {
+    return right == null;
+  }
+  return right != null
+    && left.writerId === right.writerId
+    && left.surface === right.surface
+    && left.handle === right.handle
+    && left.actualKind === right.actualKind
+    && left.mutationOrdinal === right.mutationOrdinal;
+}
+
+function stagedEntryRevisionLabel(revision: KernelStagedEntryRevision | null): string {
+  return revision == null || stagedEntryIsAbsent(revision)
+    ? 'absent'
+    : presentStagedEntryRevisionLabel(revision);
+}
+
+function presentStagedEntryRevisionLabel(revision: KernelStagedEntryRevision): string {
+  const { writerId, actualKind, mutationOrdinal } = revision;
+  if (writerId == null || actualKind == null || mutationOrdinal == null) {
+    throw new Error(`Staged entry ${revision.surface}:${revision.handle} has a partial present revision.`);
+  }
+  return `writer:${writerId}:kind:${actualKind}:revision:${mutationOrdinal}`;
+}
+
+function stagedEntryChangedFacets(
+  observed: KernelStagedEntryRevision,
+  current: KernelStagedEntryRevision | null,
+): readonly string[] {
+  if (stagedEntryIsAbsent(observed) || current == null) {
+    return ['existence'];
+  }
+  return [
+    ...(observed.writerId === current.writerId ? [] : ['writer']),
+    ...(observed.actualKind === current.actualKind ? [] : ['slot']),
+    ...(observed.mutationOrdinal === current.mutationOrdinal ? [] : ['detail']),
+  ];
+}
+
+function stagedEntryIsAbsent(revision: KernelStagedEntryRevision): boolean {
+  return revision.writerId == null
+    && revision.actualKind == null
+    && revision.mutationOrdinal == null;
+}
+
+function requiredStagedReadMutationOrdinal(revision: KernelStagedEntryRevision): number {
+  if (revision.mutationOrdinal == null) {
+    throw new Error(`Staged read ${computationStagedReadKey(revision)} has no mutation revision.`);
+  }
+  return revision.mutationOrdinal;
+}
+
+function computationChildReadKeys(child: ComputationChildState): readonly string[] {
+  return [...new Set([
+    ...child.reads.map((read) => read.readKey),
+    ...child.candidateReads.map((read) => read.readKey),
+  ])];
 }
 
 function compareReadSets(
@@ -825,21 +1902,41 @@ export function computationPublicationRecordHandles(
 function computationReadLifetimeOrdinal(reads: readonly ComputationRead[]): number | null {
   let lifetimeOrdinal: number | null = null;
   for (const read of reads) {
-    if (
-      !(
-        read instanceof ComputationRecordRead
-        || read instanceof ComputationProductDetailRead
-        || read instanceof ComputationHotDetailRead
-      )
-      || read.lifetimeOrdinal == null
-    ) {
+    const retained = read instanceof SealedComputationRead
+      ? read.retainedKernelInput
+      : (
+          read instanceof ComputationRecordRead
+          || read instanceof ComputationProductDetailRead
+          || read instanceof ComputationHotDetailRead
+        ) ? read.retainedKernelInput : null;
+    if (retained == null) {
       continue;
     }
     lifetimeOrdinal = lifetimeOrdinal == null
-      ? read.lifetimeOrdinal
-      : Math.max(lifetimeOrdinal, read.lifetimeOrdinal);
+      ? retained.lifetimeOrdinal
+      : Math.max(lifetimeOrdinal, retained.lifetimeOrdinal);
   }
   return lifetimeOrdinal;
+}
+
+function maxOptionalOrdinal(left: number | null, right: number | null): number | null {
+  return left == null ? right : right == null ? left : Math.max(left, right);
+}
+
+function mergeComputationOpenRead(
+  left: ComputationChildOpenRead,
+  right: ComputationChildOpenRead,
+): ComputationChildOpenRead {
+  if (left.key !== right.key || left.kind !== right.kind || left.summary !== right.summary) {
+    throw new Error(`Aggregate computation read ${left.key} cannot merge incompatible observations.`);
+  }
+  return new ComputationChildOpenRead(
+    left.key,
+    left.kind,
+    left.summary,
+    maxOptionalOrdinal(left.minimumLifetimeOrdinal, right.minimumLifetimeOrdinal),
+    [...new Set([...left.positiveRecordHandles, ...right.positiveRecordHandles])].sort(),
+  );
 }
 
 function computationOutputsFromDecisions(
@@ -858,7 +1955,6 @@ function computationOutputsFromDecisions(
 function computationOutputReadKey(
   surface: KernelPublicationSurface,
   handle: string,
-  detailKind: string,
 ): string {
   switch (surface) {
     case KernelPublicationSurface.Record:

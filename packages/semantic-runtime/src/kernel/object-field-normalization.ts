@@ -14,6 +14,13 @@ export class PreparedObjectFieldNormalization {
   restore(): void {
     Object.defineProperty(this.target, this.field, this.previous);
   }
+
+  requireApplied(): void {
+    const current = Object.getOwnPropertyDescriptor(this.target, this.field);
+    if (current == null || !samePropertyDescriptor(current, this.next)) {
+      throw new Error(`Kernel detail field ${this.field} changed after owner normalization.`);
+    }
+  }
 }
 
 /** Describe an exact handle echo rewrite while leaving the candidate object untouched. */
@@ -28,7 +35,7 @@ export function prepareObjectFieldNormalization<TValue>(
   if (previous == null || previous.get === next.get) {
     return null;
   }
-  const currentValue = Object.prototype.hasOwnProperty.call(previous, 'value')
+  const currentValue: unknown = Object.prototype.hasOwnProperty.call(previous, 'value')
     ? previous.value
     : Reflect.get(target, field);
   if (currentValue !== expectedValue) {
@@ -67,4 +74,39 @@ export function applyObjectFieldNormalizations(
     }
     throw error;
   }
+}
+
+/** Restore a completely applied descriptor transaction when a later publication preflight rejects the candidate. */
+export function restoreObjectFieldNormalizations(
+  normalizations: readonly PreparedObjectFieldNormalization[],
+): void {
+  const errors: unknown[] = [];
+  for (const normalization of [...normalizations].reverse()) {
+    try {
+      normalization.restore();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length > 0) {
+    throw new AggregateError(errors, 'Kernel detail field normalization could not restore its candidate objects.');
+  }
+}
+
+/** Recheck the kernel-owned handle descriptors after external final validators have returned. */
+export function validateObjectFieldNormalizations(
+  normalizations: readonly PreparedObjectFieldNormalization[],
+): void {
+  for (const normalization of normalizations) {
+    normalization.requireApplied();
+  }
+}
+
+function samePropertyDescriptor(left: PropertyDescriptor, right: PropertyDescriptor): boolean {
+  return left.configurable === right.configurable
+    && left.enumerable === right.enumerable
+    && left.writable === right.writable
+    && left.value === right.value
+    && left.get === right.get
+    && left.set === right.set;
 }

@@ -10,6 +10,7 @@ import type { MaterializationOwnerHandle } from '../kernel/materialization.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { AppRootReference } from '../configuration/app-root.js';
 import type { ContainerReference } from '../di/container-reference.js';
+import type { NodeObserverLocatorConfiguration } from '../observation/observer-locator.js';
 import type { ExpressionType } from '../expression/ast.js';
 import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
 import { ExpressionParser } from '../expression/expression-parser.js';
@@ -32,11 +33,10 @@ import type {
 } from '../resources/resource-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
-  IteratorBindingInstruction,
   nestedInstructionProductHandlesForInstructions,
   SpreadElementPropBindingInstruction,
   type SpreadTransferedBindingInstruction,
-  TemplateInstructionKind,
+  type TemplateInstructionKind,
   type TemplateInstruction,
 } from './instruction-ir.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
@@ -53,10 +53,10 @@ import {
   type RuntimeTargetOperation,
 } from './runtime-binding.js';
 import {
-  RuntimeRendererAllocation,
-  RuntimeRendererInstructionOwner,
+  type RuntimeRendererAllocation,
+  type RuntimeRendererInstructionOwner,
   RuntimeRendererInvocation,
-  RuntimeRendererSpreadCompileResult,
+  type RuntimeRendererSpreadCompileResult,
   RuntimeRendererSpreadCompileState,
   type RuntimeRenderer,
   type RuntimeRendererSpreadCompileRequest,
@@ -82,8 +82,7 @@ import {
   TemplateBindableReference,
   TemplateCompilerServiceKind,
   TemplateCompilerServiceReference,
-  TemplateResourceVisibilityKind,
-  TemplateVisibleResource,
+  type TemplateVisibleResource,
 } from './compiler-world-reference.js';
 
 export const enum TemplateCompilerWorldKind {
@@ -348,6 +347,19 @@ export const enum TemplateCompilerCompileState {
   AlreadyCompiled = 'already-compiled',
   /** Runtime compile entered the compiler host. */
   Compiled = 'compiled',
+}
+
+/** Classify the runtime TemplateCompiler front door without invoking a host that may publish compiler products. */
+export function templateCompilerCompileState(
+  definition: CustomElementDefinition,
+): TemplateCompilerCompileState {
+  const template = definition.template;
+  if (template == null || template.kind === CustomElementTemplateKind.None) {
+    return TemplateCompilerCompileState.NoTemplate;
+  }
+  return definition.needsCompile === false
+    ? TemplateCompilerCompileState.AlreadyCompiled
+    : TemplateCompilerCompileState.Compiled;
 }
 
 /** Runtime-shaped TemplateCompiler.compile request. */
@@ -1006,17 +1018,10 @@ export class TemplateCompilerService {
     request: TemplateCompilerCompileRequest,
     host: TemplateCompilerCompileHost<TResult>,
   ): TemplateCompilerCompileResult<TResult> {
-    const template = request.definition.template;
-    if (template == null || template.kind === CustomElementTemplateKind.None) {
+    const state = templateCompilerCompileState(request.definition);
+    if (state !== TemplateCompilerCompileState.Compiled) {
       return new TemplateCompilerCompileResult<TResult>(
-        TemplateCompilerCompileState.NoTemplate,
-        request.definition,
-        null,
-      );
-    }
-    if (request.definition.needsCompile === false) {
-      return new TemplateCompilerCompileResult<TResult>(
-        TemplateCompilerCompileState.AlreadyCompiled,
+        state,
         request.definition,
         null,
       );
@@ -1064,6 +1069,8 @@ export class TemplateCompilerWorld {
     readonly container: ContainerReference,
     /** Resource/syntax scope visible to this compiler world. */
     readonly resourceScopeProductHandle: ProductHandle | null,
+    /** App-authored NodeObserverLocator service state visible to runtime binding analysis. */
+    readonly nodeObserverLocatorConfiguration: NodeObserverLocatorConfiguration | null,
     /** Compiler services visible to this compiler world. */
     readonly services: readonly TemplateCompilerServiceReference[],
     /** Source address for the world owner. */

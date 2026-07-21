@@ -38,6 +38,33 @@ export class MaterializedProduct {
   ) {}
 }
 
+/** Whether two product envelopes carry the same domain identity independently of witness movement. */
+export function sameMaterializedProductValue(
+  left: MaterializedProduct,
+  right: MaterializedProduct,
+): boolean {
+  return left.productKindKey === right.productKindKey
+    && left.identityHandle === right.identityHandle;
+}
+
+/** Whether two product envelopes point at the same source and provenance witnesses. */
+export function sameMaterializedProductWitness(
+  left: MaterializedProduct,
+  right: MaterializedProduct,
+): boolean {
+  return left.addressHandle === right.addressHandle
+    && left.provenanceHandle === right.provenanceHandle;
+}
+
+/** Whether a committed detail may expose either envelope without losing candidate-local truth. */
+export function sameMaterializedProductEnvelope(
+  left: MaterializedProduct,
+  right: MaterializedProduct,
+): boolean {
+  return sameMaterializedProductValue(left, right)
+    && sameMaterializedProductWitness(left, right);
+}
+
 /** Result of one materialization phase, including products and unresolved pressure. */
 export class MaterializationRecord {
   /** String discriminator for serialized materialization records. */

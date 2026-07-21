@@ -1,15 +1,12 @@
 import type { AureliaAppWorldEmission } from '../configuration/app-world-composer.js';
-import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
+import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import {
   sourceFileAddressForAddress,
   sourcePathMatchesFileName,
 } from '../kernel/source-address.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
 import type { KernelStore } from '../kernel/store.js';
-import {
-  CustomElementDefinition,
-  CustomElementTemplateKind,
-} from '../resources/custom-element-definition.js';
+import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import type { RouteConfigContextMaterializationProjectResult } from '../router/route-context-materialization.js';
@@ -19,7 +16,11 @@ import type {
   RouteableComponentReference,
 } from '../router/model.js';
 import type { TypeSystemProject } from '../type-system/project.js';
-import { TemplateCompilerWorldKind } from './compiler-world.js';
+import {
+  templateCompilerCompileState,
+  TemplateCompilerCompileState,
+  TemplateCompilerWorldKind,
+} from './compiler-world.js';
 import {
   sameTemplateVisibleResourceSet,
   TemplateResourceVisibilityKind,
@@ -276,7 +277,7 @@ export class TemplateCompilationCohortPlanner {
       TemplateResourceVisibilityKind.Configured,
       admission.definition.sourceAddressHandle,
       appRootWorld.attributeMapper.configuration,
-      appRootWorld.nodeObserverLocatorConfiguration,
+      appRootWorld.world.nodeObserverLocatorConfiguration,
     ));
   }
 }
@@ -374,7 +375,7 @@ function selectAuthoringTemplateDefinitions(
   for (const definition of definitions) {
     if (
       !(definition instanceof CustomElementDefinition)
-      || !hasCompilableAuthoredTemplate(definition)
+      || templateCompilerCompileState(definition) !== TemplateCompilerCompileState.Compiled
       || appOwnerHandles.has(stableOwnerHandle(definition))
       || (
         authoringTemplateSourceFiles.length > 0
@@ -389,12 +390,6 @@ function selectAuthoringTemplateDefinitions(
     selected.push(definition);
   }
   return selected;
-}
-
-function hasCompilableAuthoredTemplate(definition: CustomElementDefinition): boolean {
-  return definition.needsCompile !== false
-    && definition.template != null
-    && definition.template.kind !== CustomElementTemplateKind.None;
 }
 
 function definitionBelongsToAuthoringSourceFile(

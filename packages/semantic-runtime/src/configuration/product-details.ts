@@ -1,46 +1,296 @@
 import { defineProductDetailSlot } from '../kernel/product-details.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
+import type { ProductDetailDescriptor } from '../kernel/detail-descriptors.js';
+import {
+  kernelHotDetailReference,
+  kernelFieldProvenanceReferences,
+  kernelProductDetailReference,
+  kernelRecordReferences,
+  mergeKernelDetailReferences,
+  noKernelDetailReferences,
+  type KernelDetailReference,
+} from '../kernel/detail-references.js';
+import type { ProductHandle } from '../kernel/handles.js';
+import type { ContainerReference } from '../di/container-reference.js';
+import { ResourceDetailDescriptors } from '../resources/detail-descriptors.js';
+import type { ResourceTargetReference } from '../resources/resource-reference.js';
+import { TemplateDetailDescriptors } from '../template/detail-descriptors.js';
+import { TypeSystemHotDetailDescriptors } from '../type-system/detail-descriptors.js';
+import { checkerTypeReferenceKernelReferences } from '../type-system/structural-references.js';
 import type {
   BindingContext,
+  BindingContextSlot,
   BindingScope,
+  BindingScopeCreator,
   OverrideContext,
 } from './scope.js';
+import { BindingScopeCreatorKind } from './scope.js';
 import type {
+  ControllerReference,
   ControllerProduct,
   ViewFactory,
 } from './controller.js';
-import type { ConfigurationIssue } from './configuration-issue.js';
+import { ControllerPhase } from './controller.js';
+import { ConfigurationDetailDescriptors } from './detail-descriptors.js';
+import { bindingScopeReferenceKernelReferences } from './structural-references.js';
+
+function productDetailReferences(
+  descriptor: ProductDetailDescriptor<unknown>,
+  ...handles: readonly (ProductHandle | null | undefined)[]
+): readonly KernelDetailReference[] {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(...handles),
+    handles.map((handle) => kernelProductDetailReference(descriptor, handle)),
+  );
+}
+
+function containerReferenceReferences(
+  reference: ContainerReference,
+): readonly KernelDetailReference[] {
+  return kernelRecordReferences(
+    reference.productHandle,
+    reference.identityHandle,
+    reference.addressHandle,
+  );
+}
+
+function resourceTargetReferenceReferences(
+  reference: ResourceTargetReference | null,
+): readonly KernelDetailReference[] {
+  return reference == null
+    ? []
+    : mergeKernelDetailReferences(
+        kernelRecordReferences(
+          reference.identityHandle,
+          reference.addressHandle,
+          reference.declarationSourceAddressHandle,
+        ),
+        checkerTypeReferenceKernelReferences(reference.targetType),
+      );
+}
+
+function controllerReferenceReferences(
+  reference: ControllerReference | null,
+): readonly KernelDetailReference[] {
+  return reference == null
+    ? []
+    : mergeKernelDetailReferences(
+        productDetailReferences(ConfigurationDetailDescriptors.Controller, reference.productHandle),
+        kernelRecordReferences(reference.identityHandle, reference.addressHandle),
+      );
+}
+
+function bindingContextSlotReferences(
+  slot: BindingContextSlot,
+): readonly KernelDetailReference[] {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(slot.targetIdentityHandle, slot.sourceAddressHandle),
+    checkerTypeReferenceKernelReferences(slot.targetType),
+    slot.memberTypes.flatMap((member) => mergeKernelDetailReferences(
+      checkerTypeReferenceKernelReferences(member.targetType),
+      kernelRecordReferences(member.sourceAddressHandle),
+    )),
+    kernelFieldProvenanceReferences(slot.fieldProvenance),
+    [
+      kernelHotDetailReference(TypeSystemHotDetailDescriptors.TypeMember, slot.targetTypeMemberHandle),
+      kernelHotDetailReference(TypeSystemHotDetailDescriptors.TypeMember, slot.targetTypeSourceMemberHandle),
+    ],
+  );
+}
+
+function bindingContextReferences(
+  context: BindingContext | OverrideContext,
+): readonly KernelDetailReference[] {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(context.ownerProductHandle),
+    checkerTypeReferenceKernelReferences(context.contextType),
+    context.slots.flatMap(bindingContextSlotReferences),
+    kernelFieldProvenanceReferences(context.fieldProvenance),
+  );
+}
+
+function bindingScopeDetailReference(
+  scope: BindingScope | null,
+): readonly KernelDetailReference[] {
+  return scope == null
+    ? []
+    : mergeKernelDetailReferences(
+        productDetailReferences(ConfigurationDetailDescriptors.BindingScope, scope.productHandle),
+        kernelRecordReferences(scope.identityHandle, scope.sourceAddressHandle),
+      );
+}
+
+function bindingContextDetailReference(
+  context: BindingContext,
+): readonly KernelDetailReference[] {
+  return mergeKernelDetailReferences(
+    productDetailReferences(ConfigurationDetailDescriptors.BindingContext, context.productHandle),
+    kernelRecordReferences(context.identityHandle, context.sourceAddressHandle),
+  );
+}
+
+function overrideContextDetailReference(
+  context: OverrideContext,
+): readonly KernelDetailReference[] {
+  return mergeKernelDetailReferences(
+    productDetailReferences(ConfigurationDetailDescriptors.OverrideContext, context.productHandle),
+    kernelRecordReferences(context.identityHandle, context.sourceAddressHandle),
+  );
+}
+
+function scopeCreatorReferences(
+  creator: BindingScopeCreator,
+): readonly KernelDetailReference[] {
+  const detailSlot = (() => {
+    switch (creator.creatorKind) {
+      case BindingScopeCreatorKind.RuntimeBindingScopeEffect:
+        return TemplateDetailDescriptors.RuntimeBindingScopeEffect;
+      case BindingScopeCreatorKind.RuntimeAssignment:
+      case BindingScopeCreatorKind.ListenerEvent:
+      case BindingScopeCreatorKind.StateBinding:
+      case BindingScopeCreatorKind.TemplateControllerCondition:
+      case BindingScopeCreatorKind.TemplateControllerBranch:
+      case BindingScopeCreatorKind.TemplateControllerValueScope:
+        return TemplateDetailDescriptors.Instruction;
+    }
+  })();
+  return mergeKernelDetailReferences(
+    productDetailReferences(detailSlot, creator.productHandle),
+    kernelRecordReferences(creator.sourceAddressHandle),
+  );
+}
+
+function bindingScopeReferences(
+  scope: BindingScope,
+): readonly KernelDetailReference[] {
+  return mergeKernelDetailReferences(
+    bindingScopeDetailReference(scope.runtimeParent),
+    bindingContextDetailReference(scope.bindingContext),
+    overrideContextDetailReference(scope.overrideContext),
+    scope.scopeCreators.flatMap(scopeCreatorReferences),
+    bindingScopeDetailReference(scope.predecessor),
+    kernelFieldProvenanceReferences(scope.fieldProvenance),
+  );
+}
+
+function controllerReferences(
+  controller: ControllerProduct,
+): readonly KernelDetailReference[] {
+  const common = mergeKernelDetailReferences(
+    containerReferenceReferences(controller.container),
+    bindingScopeReferenceKernelReferences(controller.scope),
+    controllerReferenceReferences(controller.parent),
+    kernelRecordReferences(controller.hostAddressHandle),
+    kernelFieldProvenanceReferences(controller.fieldProvenance),
+  );
+
+  switch (controller.phase) {
+    case ControllerPhase.Base:
+      return mergeKernelDetailReferences(
+        common,
+        productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
+        productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
+      );
+    case ControllerPhase.Component:
+      return mergeKernelDetailReferences(
+        common,
+        productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
+        resourceTargetReferenceReferences(controller.viewModel),
+        productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
+      );
+    case ControllerPhase.Hydratable:
+      return mergeKernelDetailReferences(
+        common,
+        productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
+        controller.children.flatMap(controllerReferenceReferences),
+        productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
+      );
+    case ControllerPhase.SyntheticView:
+      return mergeKernelDetailReferences(
+        common,
+        controller.children.flatMap(controllerReferenceReferences),
+        productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
+        productDetailReferences(ConfigurationDetailDescriptors.ViewFactory, controller.viewFactoryProductHandle),
+        productDetailReferences(TemplateDetailDescriptors.InstructionSequence, controller.instructionSequenceProductHandle),
+        kernelRecordReferences(
+          controller.locationAddressHandle,
+          controller.shadowRootAddressHandle,
+          controller.nodeSequenceProductHandle,
+        ),
+      );
+    case ControllerPhase.CustomAttribute:
+      return mergeKernelDetailReferences(
+        common,
+        productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
+        resourceTargetReferenceReferences(controller.viewModel),
+      );
+    case ControllerPhase.DryCustomElement:
+    case ControllerPhase.ContextualCustomElement:
+      return mergeKernelDetailReferences(
+        common,
+        productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
+        resourceTargetReferenceReferences(controller.viewModel),
+        productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
+      );
+    case ControllerPhase.CompiledCustomElement:
+      return mergeKernelDetailReferences(
+        common,
+        productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
+        resourceTargetReferenceReferences(controller.viewModel),
+        productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
+        kernelRecordReferences(
+          controller.locationAddressHandle,
+          controller.shadowRootAddressHandle,
+          controller.nodeSequenceProductHandle,
+        ),
+      );
+    case ControllerPhase.HydratedCustomElement:
+      return mergeKernelDetailReferences(
+        common,
+        productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
+        resourceTargetReferenceReferences(controller.viewModel),
+        productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
+        kernelRecordReferences(controller.lifecycleHooksProductHandle),
+      );
+  }
+}
+
+function viewFactoryReferences(
+  viewFactory: ViewFactory,
+): readonly KernelDetailReference[] {
+  return mergeKernelDetailReferences(
+    containerReferenceReferences(viewFactory.container),
+    productDetailReferences(ResourceDetailDescriptors.Definition, viewFactory.definitionProductHandle),
+    productDetailReferences(TemplateDetailDescriptors.Instruction, viewFactory.instructionProductHandle),
+    productDetailReferences(TemplateDetailDescriptors.InstructionSequence, viewFactory.instructionSequenceProductHandle),
+    controllerReferenceReferences(viewFactory.parent),
+    kernelFieldProvenanceReferences(viewFactory.fieldProvenance),
+  );
+}
 
 /** Typed detail slots for configuration products used by later inquiry and compiler-world passes. */
 export const ConfigurationProductDetails = {
-  Controller: defineProductDetailSlot<ControllerProduct>(
-    KernelVocabulary.Configuration.Controller.key,
-    'configuration.controller',
-    'Runtime-shaped controller detail with children, bindings, scope, and resource/container links.',
+  Controller: defineProductDetailSlot(
+    ConfigurationDetailDescriptors.Controller,
+    controllerReferences,
   ),
-  ViewFactory: defineProductDetailSlot<ViewFactory>(
-    KernelVocabulary.Configuration.ViewFactory.key,
-    'configuration.view-factory',
-    'Runtime IViewFactory detail that creates synthetic views from nested instruction sequences.',
+  ViewFactory: defineProductDetailSlot(
+    ConfigurationDetailDescriptors.ViewFactory,
+    viewFactoryReferences,
   ),
-  BindingContext: defineProductDetailSlot<BindingContext>(
-    KernelVocabulary.Configuration.BindingContext.key,
-    'configuration.binding-context',
-    'Runtime-shaped binding context detail used by Scope lookup.',
+  BindingContext: defineProductDetailSlot(
+    ConfigurationDetailDescriptors.BindingContext,
+    bindingContextReferences,
   ),
-  OverrideContext: defineProductDetailSlot<OverrideContext>(
-    KernelVocabulary.Configuration.OverrideContext.key,
-    'configuration.override-context',
-    'Runtime-shaped override context detail used by Scope lookup.',
+  OverrideContext: defineProductDetailSlot(
+    ConfigurationDetailDescriptors.OverrideContext,
+    bindingContextReferences,
   ),
-  BindingScope: defineProductDetailSlot<BindingScope>(
-    KernelVocabulary.Configuration.BindingScope.key,
-    'configuration.binding-scope',
-    'Runtime-shaped Scope detail used by controller activation and binding expression lookup.',
+  BindingScope: defineProductDetailSlot(
+    ConfigurationDetailDescriptors.BindingScope,
+    bindingScopeReferences,
   ),
-  Issue: defineProductDetailSlot<ConfigurationIssue>(
-    KernelVocabulary.Configuration.Issue.key,
-    'configuration.issue',
-    'Source-backed configuration issue with diagnostic authority.',
+  Issue: defineProductDetailSlot(
+    ConfigurationDetailDescriptors.Issue,
+    noKernelDetailReferences,
   ),
 } as const;

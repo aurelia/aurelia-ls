@@ -5,7 +5,10 @@ import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import { AureliaAppWorldEmission } from '../src/configuration/app-world-composer.js';
-import { StagedKernelPublicationContext } from '../src/kernel/publication.js';
+import {
+  type KernelPublicationWriterId,
+  StagedKernelPublicationContext,
+} from '../src/kernel/publication.js';
 import { TemplateCompilerReadView } from '../src/template/compiler-read-view.js';
 import { TemplateResourceVisibilityKind } from '../src/template/compiler-world-reference.js';
 import {
@@ -115,7 +118,11 @@ describe('template compilation cohort planning', () => {
     }
     const reorderedPlan = new TemplateCompilationCohortPlanner(
       runtime.workspace.store,
-      new StagedKernelPublicationContext(runtime.workspace.store, currentComputation.publication),
+      new StagedKernelPublicationContext(
+        runtime.workspace.store,
+        currentComputation.publication,
+        'test:reordered-cohort-plan' as KernelPublicationWriterId,
+      ),
       runtime.frameworkSupport,
     ).plan(new TemplateCompilationCohortPlanningRequest(
       app.project.projectKey,

@@ -1,23 +1,53 @@
+import {
+  kernelProductDetailReference,
+  kernelRecordReferences,
+  mergeKernelDetailReferences,
+  type KernelDetailReference,
+} from '../kernel/detail-references.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
-import type { StateGetterBinding, StateStoreConfiguration } from './model.js';
-import type { StateIssue } from './state-issue.js';
+import { checkerTypeReferenceKernelReferences } from '../type-system/structural-references.js';
+import { StateDetailDescriptors } from './detail-descriptors.js';
+import type { StateGetterBinding } from './model.js';
+
+function stateGetterBindingReferences(
+  binding: StateGetterBinding,
+): readonly KernelDetailReference[] {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(
+      binding.selectorSourceAddressHandle,
+      binding.targetSourceAddressHandle,
+      binding.storeProductHandle,
+      binding.storeIdentityHandle,
+    ),
+    [kernelProductDetailReference(
+      StateDetailDescriptors.StoreConfiguration,
+      binding.storeProductHandle,
+    )],
+    checkerTypeReferenceKernelReferences(binding.selectorReturnType),
+    checkerTypeReferenceKernelReferences(binding.targetMemberType),
+  );
+}
 
 /** Typed detail slots for @aurelia/state products consumed by authoring inquiries. */
 export const StateProductDetails = {
-  StoreConfiguration: defineProductDetailSlot<StateStoreConfiguration>(
-    KernelVocabulary.State.StoreConfiguration.key,
-    'state.store-configuration',
-    '@aurelia/state store configuration admitted from StateDefaultConfiguration builder calls.',
+  StoreConfiguration: defineProductDetailSlot(
+    StateDetailDescriptors.StoreConfiguration,
+    (configuration) => mergeKernelDetailReferences(
+      kernelRecordReferences(
+        configuration.nameSourceAddressHandle,
+        configuration.initialStateSourceAddressHandle,
+        configuration.optionsOrHandlerSourceAddressHandle,
+        ...configuration.actionHandlerSourceAddressHandles,
+      ),
+      checkerTypeReferenceKernelReferences(configuration.initialStateType),
+    ),
   ),
-  GetterBinding: defineProductDetailSlot<StateGetterBinding>(
-    KernelVocabulary.State.GetterBinding.key,
-    'state.getter-binding',
-    '@aurelia/state StateGetterBinding created by @fromState(...) for field/setter targets.',
+  GetterBinding: defineProductDetailSlot(
+    StateDetailDescriptors.GetterBinding,
+    stateGetterBindingReferences,
   ),
-  Issue: defineProductDetailSlot<StateIssue>(
-    KernelVocabulary.State.Issue.key,
-    'state.issue',
-    '@aurelia/state issue discovered while materializing store configuration or registry registration semantics.',
+  Issue: defineProductDetailSlot(
+    StateDetailDescriptors.Issue,
+    (issue) => kernelRecordReferences(issue.ownerIdentityHandle),
   ),
 } as const;

@@ -1,16 +1,27 @@
 import {
   applyObjectFieldNormalizations,
   prepareObjectFieldNormalization,
+  restoreObjectFieldNormalizations,
   type PreparedObjectFieldNormalization,
 } from './object-field-normalization.js';
 import { DetailCatalog } from './detail-catalog.js';
 import type { HotDetailHandle, ProductHandle } from './handles.js';
-import type { MaterializedProduct } from './materialization.js';
+import {
+  sameMaterializedProductEnvelope,
+  type MaterializedProduct,
+} from './materialization.js';
 import type { ProductKindKey } from './vocabulary.js';
+import {
+  mergeKernelDetailReferences,
+  type KernelDetailReference,
+  type KernelDetailReferenceProjector,
+} from './detail-references.js';
+import type { HotDetailDescriptor } from './detail-descriptors.js';
 
 declare const hotDetailSlotBrand: unique symbol;
 
 type AllocateOrdinal = () => number;
+type AssertMutationAllowed = () => void;
 
 /**
  * Typed hot-sidecar slot for analysis-epoch details that should not be promoted into durable kernel products.
@@ -24,15 +35,38 @@ export class HotDetailSlot<
   TOwnerProductKind extends ProductKindKey = ProductKindKey,
 > {
   declare readonly [hotDetailSlotBrand]: TDetail;
+  private readonly referenceProjector: KernelDetailReferenceProjector<unknown>;
 
   constructor(
-    /** Product kind whose materialized envelope owns this child detail. */
-    readonly ownerProductKindKey: TOwnerProductKind,
-    /** Stable slot key for diagnostics, inquiry traces, and telemetry. */
-    readonly detailKind: string,
-    /** Human/AI-readable explanation of what this hot detail contains and why it is not a product. */
-    readonly summary: string,
-  ) {}
+    /** Inert occupancy identity safe to import without pulling in the executable projector graph. */
+    readonly descriptor: HotDetailDescriptor<TDetail, TOwnerProductKind>,
+    /** Exact non-owner kernel entries required by this child payload. */
+    referenceProjector: KernelDetailReferenceProjector<TDetail>,
+  ) {
+    this.referenceProjector = referenceProjector as KernelDetailReferenceProjector<unknown>;
+    Object.freeze(this);
+  }
+
+  get surface(): HotDetailDescriptor<TDetail, TOwnerProductKind>['surface'] {
+    return this.descriptor.surface;
+  }
+
+  get ownerProductKindKey(): TOwnerProductKind {
+    return this.descriptor.ownerProductKindKey;
+  }
+
+  get detailKind(): string {
+    return this.descriptor.detailKind;
+  }
+
+  get summary(): string {
+    return this.descriptor.summary;
+  }
+
+  /** Freeze the slot-owned structural closure before publication admits the detail. */
+  referencesFor(detail: TDetail): readonly KernelDetailReference[] {
+    return mergeKernelDetailReferences(this.referenceProjector(detail));
+  }
 }
 
 /** Typed exact-handle hot-detail read shared by committed and staged analysis views. */
@@ -51,7 +85,11 @@ export class HotDetailEntry<TDetail> {
     readonly slot: HotDetailSlot<TDetail>,
     /** Rich in-memory model for materializer and inquiry use. */
     readonly detail: TDetail,
-  ) {}
+    /** Frozen non-owner kernel closure projected by the typed slot. */
+    readonly references: readonly KernelDetailReference[],
+  ) {
+    Object.freeze(this);
+  }
 
   get ownerProductHandle(): ProductHandle {
     return this.owner.handle;
@@ -70,6 +108,7 @@ class HotDetailEntryBinding {
   constructor(
     readonly detail: object | null,
     readonly entry: HotDetailEntry<unknown>,
+    readonly previousEntry: HotDetailEntry<unknown> | null,
     readonly normalizations: readonly PreparedObjectFieldNormalization[],
   ) {}
 }
@@ -80,6 +119,34 @@ export class PreparedHotDetailEntry<TDetail> {
     readonly entry: HotDetailEntry<TDetail>,
     readonly binding: HotDetailEntryBinding,
   ) {}
+
+  /** Make the candidate owner visible to final validators without admitting the catalog entry. */
+  admitBinding(): void {
+    admitHotDetailEntryBinding(this.binding);
+  }
+
+  /** Apply the reversible descriptor and weak-owner lease needed by a staged candidate read. */
+  admitCandidateBinding(): void {
+    applyObjectFieldNormalizations(this.binding.normalizations);
+    this.admitBinding();
+  }
+
+  /** Whether provisional admission cannot change the owner observed through an already-committed detail object. */
+  get canAdmitBindingBeforeCommit(): boolean {
+    return this.binding.previousEntry == null
+      || sameMaterializedProductEnvelope(this.binding.previousEntry.owner, this.binding.entry.owner);
+  }
+
+  /** Restore the weak owner that preceded provisional final-validation admission. */
+  restoreBinding(): void {
+    restoreHotDetailEntryBinding(this.binding);
+  }
+
+  /** Restore the exact caller-owned object state that preceded a staged candidate read. */
+  restoreCandidateBinding(): void {
+    this.restoreBinding();
+    restoreObjectFieldNormalizations(this.binding.normalizations);
+  }
 }
 
 /**
@@ -105,12 +172,16 @@ function prepareHotDetailEntryBinding(
   entry: HotDetailEntry<unknown>,
 ): HotDetailEntryBinding {
   if (detail == null || typeof detail !== 'object') {
-    return new HotDetailEntryBinding(null, entry, []);
+    return new HotDetailEntryBinding(null, entry, null, []);
   }
   const existing = hotDetailEntryByDetail.get(detail);
   if (
     existing != null
-    && (existing.handle !== entry.handle || existing.ownerProductHandle !== entry.ownerProductHandle)
+    && (
+      existing.handle !== entry.handle
+      || existing.slot !== entry.slot
+      || existing.ownerProductHandle !== entry.ownerProductHandle
+    )
   ) {
     throw new Error(
       `Hot detail is already bound to ${existing.handle} under ${existing.ownerProductHandle}; cannot rebind to `
@@ -120,6 +191,7 @@ function prepareHotDetailEntryBinding(
   return new HotDetailEntryBinding(
     detail,
     entry,
+    existing ?? null,
     prepareHotDetailHandleEchoes(detail, entry),
   );
 }
@@ -127,6 +199,17 @@ function prepareHotDetailEntryBinding(
 function admitHotDetailEntryBinding(binding: HotDetailEntryBinding): void {
   if (binding.detail != null) {
     hotDetailEntryByDetail.set(binding.detail, binding.entry);
+  }
+}
+
+function restoreHotDetailEntryBinding(binding: HotDetailEntryBinding): void {
+  if (binding.detail == null) {
+    return;
+  }
+  if (binding.previousEntry == null) {
+    hotDetailEntryByDetail.delete(binding.detail);
+  } else {
+    hotDetailEntryByDetail.set(binding.detail, binding.previousEntry);
   }
 }
 
@@ -180,6 +263,7 @@ export class HotDetailCatalog {
     private readonly readProduct: (handle: ProductHandle) => MaterializedProduct | null,
     private readonly allocateLifetimeOrdinal: AllocateOrdinal,
     allocateMutationOrdinal: AllocateOrdinal,
+    private readonly assertMutationAllowed: AssertMutationAllowed,
   ) {
     this.catalog = new DetailCatalog(
       (entry) => entry.handle,
@@ -196,6 +280,7 @@ export class HotDetailCatalog {
     handle: HotDetailHandle,
     detail: TDetail,
   ): HotDetailEntry<TDetail> {
+    this.assertMutationAllowed();
     return this.addAtLifetime(slot, ownerProductHandle, handle, detail, this.allocateLifetimeOrdinal());
   }
 
@@ -207,6 +292,7 @@ export class HotDetailCatalog {
     detail: TDetail,
     lifetimeOrdinal: number,
   ): HotDetailEntry<TDetail> {
+    this.assertMutationAllowed();
     const owner = this.readProduct(ownerProductHandle);
     if (owner == null) {
       throw new Error(`Cannot attach hot detail ${slot.detailKind}; owner product ${ownerProductHandle} is not committed.`);
@@ -239,6 +325,7 @@ export class HotDetailCatalog {
     owner: MaterializedProduct,
     handle: HotDetailHandle,
     detail: TDetail,
+    references: readonly KernelDetailReference[] = slot.referencesFor(detail),
   ): PreparedHotDetailEntry<TDetail> {
     if (owner.productKindKey !== slot.ownerProductKindKey) {
       throw new Error(
@@ -246,7 +333,7 @@ export class HotDetailCatalog {
         + `${owner.productKindKey}, expected ${slot.ownerProductKindKey}.`,
       );
     }
-    const entry = new HotDetailEntry(owner, handle, slot, detail);
+    const entry = new HotDetailEntry(owner, handle, slot, detail, references);
     return new PreparedHotDetailEntry(
       entry,
       prepareHotDetailEntryBinding(detail, entry),
@@ -258,10 +345,10 @@ export class HotDetailCatalog {
     prepared: PreparedHotDetailEntry<TDetail>,
     lifetimeOrdinal: number,
   ): HotDetailEntry<TDetail> {
+    this.assertMutationAllowed();
     const entry = prepared.entry;
-    const handle = entry.handle;
-    admitHotDetailEntryBinding(prepared.binding);
     this.catalog.add(entry, lifetimeOrdinal);
+    prepared.admitBinding();
     return entry;
   }
 
@@ -271,6 +358,7 @@ export class HotDetailCatalog {
     handle: HotDetailHandle,
     detail: TDetail,
   ): HotDetailEntry<TDetail> {
+    this.assertMutationAllowed();
     const existing = this.catalog.read(handle);
     if (existing == null) {
       return this.add(slot, ownerProductHandle, handle, detail);
@@ -314,6 +402,7 @@ export class HotDetailCatalog {
 
   /** Advance an admitted detail with the complete publication closure that owns it. */
   promoteLifetimeOrdinal(handle: HotDetailHandle, lifetimeOrdinal: number): void {
+    this.assertMutationAllowed();
     this.catalog.promoteLifetimeOrdinal(handle, lifetimeOrdinal);
   }
 
@@ -347,10 +436,12 @@ export class HotDetailCatalog {
   }
 
   remove(handle: HotDetailHandle): HotDetailEntry<unknown> | null {
+    this.assertMutationAllowed();
     return this.catalog.remove(handle);
   }
 
   removeAtOrAfterLifetime(marker: number): number {
+    this.assertMutationAllowed();
     return this.catalog.removeAtOrAfterLifetime(marker);
   }
 
@@ -359,6 +450,7 @@ export class HotDetailCatalog {
     marker: number,
     retainedHandles: ReadonlySet<HotDetailHandle>,
   ): number {
+    this.assertMutationAllowed();
     return this.catalog.removeUnretainedAtOrAfterLifetime(marker, retainedHandles);
   }
 
@@ -390,9 +482,8 @@ export function defineHotDetailSlot<
   TDetail,
   TOwnerProductKind extends ProductKindKey = ProductKindKey,
 >(
-  ownerProductKindKey: TOwnerProductKind,
-  detailKind: string,
-  summary: string,
+  descriptor: HotDetailDescriptor<TDetail, TOwnerProductKind>,
+  referenceProjector: KernelDetailReferenceProjector<TDetail>,
 ): HotDetailSlot<TDetail, TOwnerProductKind> {
-  return new HotDetailSlot(ownerProductKindKey, detailKind, summary);
+  return new HotDetailSlot(descriptor, referenceProjector);
 }

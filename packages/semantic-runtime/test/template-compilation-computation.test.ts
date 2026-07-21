@@ -5,11 +5,14 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import { AureliaAppWorldEmission } from '../src/configuration/app-world-composer.js';
 import { SourceFileAddress, SourceLanguage, SourceSpanAddress } from '../src/kernel/address.js';
-import type { AddressHandle } from '../src/kernel/handles.js';
+import type { AddressHandle, ProductHandle } from '../src/kernel/handles.js';
 import { KernelStore, KernelStoreBatch } from '../src/kernel/store.js';
 import {
   ComputationCommitState,
+  computationProductDetailReadKey,
+  computationRecordReadKey,
 } from '../src/kernel/computation-lifecycle.js';
 import {
   KernelPublicationDecisionKind,
@@ -42,6 +45,7 @@ import { CompiledTemplate, CompiledTemplateState } from '../src/template/compile
 import {
   TemplateCompilationCohort,
   TemplateCompilationCohortKind,
+  TemplateCompilationLocus,
   TemplateCompilationCohortSetAuthority,
 } from '../src/template/template-compilation-cohort.js';
 import {
@@ -117,6 +121,27 @@ describe('template compilation computation', () => {
     expect(stagedPublicationPhase).toBeDefined();
     const store = runtime.workspace.store;
     const lifecycle = runtime.computationLifecycle;
+    const productionGeneration = runtime.appAnalysisComputations.authorityFor(app.project.projectKey).current();
+    const productionResource = app.emission.templates.resources.find((candidate) =>
+      candidate.runtimeAnalysis.runtimeRendering.bindings.length > 0
+    );
+    expect(productionGeneration).not.toBeNull();
+    expect(productionResource).toBeDefined();
+    if (productionGeneration == null || productionResource == null) {
+      throw new Error('Expected a committed production template family generation.');
+    }
+    const productionFamilyLocus = new TemplateCompilationLocus(
+      app.project.projectKey,
+      productionResource.compilation.familyOwnerHandle,
+    );
+    const productionFamily = lifecycle.readState(productionGeneration.computationId)?.children.find((child) =>
+      child.locus.kind === productionFamilyLocus.kind
+      && child.locus.reconciliationKey === productionFamilyLocus.reconciliationKey
+    );
+    expect(productionFamily?.reads).toContainEqual(expect.objectContaining({ domain: 'source-text' }));
+    expect(productionFamily?.outputs.some(
+      (output) => output.handle === productionResource.compilation.unit.templateSource.productHandle,
+    )).toBe(true);
     const run = lifecycle.begin({
       kind: 'template-analysis-project-generation-test',
       reconciliationKey: app.project.projectKey,
@@ -165,6 +190,70 @@ describe('template compilation computation', () => {
     expect(emission.expressionWorld.projector.publication).toBe(run);
 
     expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(run.computationId);
+    const familyLocus = new TemplateCompilationLocus(
+      `${app.project.projectKey}:staged-generation`,
+      resource.compilation.familyOwnerHandle,
+    );
+    const family = state?.children.find((child) =>
+      child.locus.kind === familyLocus.kind
+      && child.locus.reconciliationKey === familyLocus.reconciliationKey
+    );
+    expect(family).toBeDefined();
+    if (family == null) {
+      throw new Error('Expected the compiled resource family to own one child manifest.');
+    }
+    const remainder = state?.children.find((child) => child.locus.kind === 'computation-remainder');
+    expect(remainder).toBeDefined();
+    if (remainder == null) {
+      throw new Error('Expected project-wide runtime analysis to remain in the outer computation remainder.');
+    }
+    expect(family.outputs.map((output) => output.readKey)).toEqual(expect.arrayContaining([
+      computationRecordReadKey(source.productHandle),
+      computationProductDetailReadKey(source.productHandle),
+    ]));
+    expect(family.outputs.map((output) => output.readKey)).not.toEqual(expect.arrayContaining([
+      computationRecordReadKey(binding.productHandle),
+      computationProductDetailReadKey(binding.productHandle),
+      computationRecordReadKey(rootScope.productHandle),
+    ]));
+    expect(remainder.outputs.map((output) => output.readKey)).toEqual(expect.arrayContaining([
+      computationRecordReadKey(binding.productHandle),
+      computationProductDetailReadKey(binding.productHandle),
+      computationRecordReadKey(rootScope.productHandle),
+    ]));
+    const runtimeInputHandles = [
+      resource.compilation.definition.productHandle,
+      resource.compilation.compiledTemplate.compiledTemplate.productHandle,
+      ...resource.compilation.compiledTemplate.renderTargets.map((target) => target.productHandle),
+      ...resource.compilation.compiledTemplate.instructionSequences.map((sequence) => sequence.productHandle),
+      ...resource.compilation.compiledTemplate.instructions.map((instruction) => instruction.productHandle),
+      resource.compilation.compilerWorld.world.productHandle,
+      resource.compilation.compilerWorld.resourceScope.productHandle,
+      resource.compilation.compilerWorld.rendering.productHandle,
+      resource.compilation.compilerWorld.templateCompiler.productHandle,
+      resource.compilation.compilerWorld.resourceResolver.productHandle,
+      resource.compilation.compilerWorld.expressionParser.productHandle,
+      resource.compilation.compilerWorld.attributeMapper.productHandle,
+      resource.compilation.compilerWorld.bindingCommandResolver.productHandle,
+      ...resource.compilation.authoredAttributeSyntaxes.map((syntax) => syntax.productHandle),
+    ].filter((handle): handle is ProductHandle => handle != null);
+    const remainderReadKeys = [
+      ...remainder.reads.map((read) => read.readKey),
+      ...remainder.candidateReads.map((read) => read.readKey),
+    ];
+    const familyOutputKeys = new Set(family.outputs.map((output) => output.readKey));
+    const crossChildRuntimeInputKeys = runtimeInputHandles
+      .flatMap((handle) => [computationRecordReadKey(handle), computationProductDetailReadKey(handle)])
+      .filter((readKey) => familyOutputKeys.has(readKey));
+    expect(crossChildRuntimeInputKeys.length).toBeGreaterThan(0);
+    expect(remainderReadKeys).toEqual(expect.arrayContaining(crossChildRuntimeInputKeys));
+    expect(state?.children.filter((child) =>
+      child.reads.length === 0
+      && child.candidateReads.length === 0
+      && child.openReads.length === 0
+      && child.outputs.length === 0
+    )).toEqual([]);
     expect(store.productDetails.read(TemplateProductDetails.Source, source.productHandle)).toBe(source);
     expect(store.productDetails.read(TemplateProductDetails.RuntimeBinding, binding.productHandle)).toBe(binding);
     expect(store.productDetails.read(TemplateProductDetails.CompositionContext, composition.productHandle)).toBe(composition);
@@ -185,6 +274,53 @@ describe('template compilation computation', () => {
       .toBe(committedEmission.expressionWorld.projector.publication);
     expect(new TemplateTypeSystemOverlayBuilder(store, app.emission.typeSystem).build(committedResource).overlaySource)
       .not.toBeNull();
+  }, 30_000);
+
+  test('uses the compiler front-door state as the production no-op policy', async () => {
+    const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+    const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/au-compose-dynamic-composition');
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:template-compilation-project-generation:no-op-policy',
+    });
+    const app = await runtime.openApp();
+    const baseline = app.emission.templates.resources[0]?.compilation.definition;
+    if (baseline?.template == null) {
+      throw new Error('Expected a compiled authored definition for the no-op policy fixture.');
+    }
+    const alreadyCompiled = customElementDefinitionWithTemplate(baseline, baseline.template, false);
+    const appWorld = appWorldWithDefinition(app.emission.appWorld, baseline, alreadyCompiled);
+    const run = runtime.computationLifecycle.begin({
+      kind: 'template-compiler-no-op-policy-test',
+      reconciliationKey: app.project.projectKey,
+      summary: 'Production compiler-front-door no-op policy proof.',
+    });
+
+    try {
+      const emission = new TemplateCompilationProjectPass(
+        runtime.workspace.store,
+        run,
+        runtime.frameworkSupport,
+      ).compile(
+        appWorld,
+        app.emission.typeSystem,
+        app.emission.resourceIndex,
+        app.emission.routeContexts,
+        {
+          projectKey: `${app.project.projectKey}:no-op-policy`,
+          evaluation: app.emission.evaluation,
+          stateStores: app.emission.state.readStores(),
+          runtimeAnalysisDepth: app.emission.analysisDepth,
+        },
+      );
+      expect(emission.cohortPlan.ownerPlans.some((owner) => owner.definition === alreadyCompiled)).toBe(true);
+      expect([
+        ...emission.resources,
+        ...emission.authoringResources,
+      ].some((resource) => resource.compilation.definition === alreadyCompiled)).toBe(false);
+    } finally {
+      run.abort();
+    }
   }, 30_000);
 
   test('refreshes a compiled-template witness when a stable address handle moves', () => {
@@ -622,6 +758,43 @@ describe('template compilation computation', () => {
       changedFacets: expect.arrayContaining(['scope']),
     }));
 
+    sourceProvider.remove(templateFileName);
+    const alreadyCompiledDefinition = customElementDefinitionWithTemplate(
+      baseline.definition,
+      baseline.definition.template,
+      false,
+    );
+    currentCompilerWorld = compilerWorldWithDefinition(
+      baseline.parentCompilerWorld,
+      baseline.definition,
+      alreadyCompiledDefinition,
+    );
+    const alreadyCompiledAttempt = compiler.prepare(request);
+    expect(alreadyCompiledAttempt.source).toBeNull();
+    expect(alreadyCompiledAttempt.candidateCompilations).toEqual([]);
+    expect(alreadyCompiledAttempt.commit().commit.state).toBe(ComputationCommitState.Committed);
+
+    const noTemplateDefinition = customElementDefinitionWithTemplate(
+      baseline.definition,
+      new CustomElementTemplateDefinition(CustomElementTemplateKind.None),
+    );
+    currentCompilerWorld = compilerWorldWithDefinition(
+      baseline.parentCompilerWorld,
+      baseline.definition,
+      noTemplateDefinition,
+    );
+    const noTemplateAttempt = compiler.prepare(request);
+    expect(noTemplateAttempt.source).toBeNull();
+    expect(noTemplateAttempt.candidateCompilations).toEqual([]);
+    expect(noTemplateAttempt.commit().commit.state).toBe(ComputationCommitState.Committed);
+
+    sourceProvider.write(templateFileName, originalText);
+    currentCompilerWorld = baseline.parentCompilerWorld;
+    const compiledAgainAttempt = compiler.prepare(request);
+    expect(compiledAgainAttempt.source?.state).toBe(SourceTextSnapshotState.Present);
+    expect(compiledAgainAttempt.candidateCompilations[0]).toBeDefined();
+    expect(compiledAgainAttempt.commit().commit.state).toBe(ComputationCommitState.Committed);
+
     const compilerWorldWithoutOwner = compilerWorldWithoutResource(
       baseline.parentCompilerWorld,
       (resource) => resource.definitionProductHandle === baseline.definition.productHandle,
@@ -705,6 +878,22 @@ function compilerWorldWithDefinition(
   );
 }
 
+function appWorldWithDefinition(
+  appWorld: AureliaAppWorldEmission,
+  previous: CustomElementDefinition,
+  next: CustomElementDefinition,
+): AureliaAppWorldEmission {
+  return new AureliaAppWorldEmission(
+    appWorld.configuration,
+    appWorld.diWorld,
+    appWorld.configuredSyntax,
+    appWorld.configuredResources,
+    appWorld.configuredRenderers,
+    appWorld.frameworkServiceCustomizations,
+    appWorld.compilerWorlds.map((world) => compilerWorldWithDefinition(world, previous, next)),
+  );
+}
+
 function compilerWorldWithScopeSource(
   world: TemplateCompilerWorldEmission,
   sourceAddressHandle: AddressHandle,
@@ -746,7 +935,6 @@ function compilerWorldWithResourceSets(
     ),
     world.expressionParser,
     world.attributeMapper,
-    world.nodeObserverLocatorConfiguration,
     world.rendering,
     world.attributeParser,
     world.attributeParserMachine,
@@ -763,6 +951,7 @@ function compilerWorldWithResourceSets(
 function customElementDefinitionWithTemplate(
   definition: CustomElementDefinition,
   template: CustomElementTemplateDefinition,
+  needsCompile = definition.needsCompile,
 ): CustomElementDefinition {
   return new CustomElementDefinition(
     definition.productHandle,
@@ -777,7 +966,7 @@ function customElementDefinitionWithTemplate(
     definition.instructions,
     definition.dependencies,
     definition.injectable,
-    definition.needsCompile,
+    needsCompile,
     definition.surrogates,
     definition.bindables,
     definition.containerless,

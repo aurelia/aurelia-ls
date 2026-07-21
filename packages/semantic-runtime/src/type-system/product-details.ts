@@ -1,28 +1,65 @@
 import { defineProductDetailSlot } from '../kernel/product-details.js';
 import { defineHotDetailSlot } from '../kernel/hot-details.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
+import {
+  kernelHotDetailReference,
+  kernelFieldProvenanceReferences,
+  kernelRecordReferences,
+  mergeKernelDetailReferences,
+  type KernelDetailReference,
+} from '../kernel/detail-references.js';
 import type {
   CheckerTypeMember,
   CheckerTypeShape,
 } from './type-shape.js';
+import {
+  TypeSystemDetailDescriptors,
+  TypeSystemHotDetailDescriptors,
+} from './detail-descriptors.js';
+import { checkerTypeReferenceKernelReferences } from './structural-references.js';
+
+function checkerTypeShapeReferences(
+  shape: CheckerTypeShape,
+): readonly KernelDetailReference[] {
+  return mergeKernelDetailReferences(
+    shape.members.map((member) => kernelHotDetailReference(
+      TypeSystemHotDetailDescriptors.TypeMember,
+      member.detailHandle,
+    )),
+    checkerTypeReferenceKernelReferences(shape.indexedValueType),
+    checkerTypeReferenceKernelReferences(shape.iteratedValueType),
+    checkerTypeReferenceKernelReferences(shape.callReturnType),
+    checkerTypeReferenceKernelReferences(shape.constructReturnType),
+    kernelRecordReferences(shape.declarationSourceAddressHandle),
+    kernelFieldProvenanceReferences(shape.fieldProvenance),
+  );
+}
+
+function checkerTypeMemberReferences(
+  member: CheckerTypeMember,
+): readonly KernelDetailReference[] {
+  return mergeKernelDetailReferences(
+    checkerTypeReferenceKernelReferences(member.ownerType, false),
+    checkerTypeReferenceKernelReferences(member.valueType),
+    kernelRecordReferences(
+      member.declarationIdentityHandle,
+      member.sourceAddressHandle,
+    ),
+    kernelFieldProvenanceReferences(member.fieldProvenance),
+  );
+}
 
 /** Typed detail slots for type-system products used by expression and template inquiry. */
 export const TypeSystemProductDetails = {
-  TypeShape: defineProductDetailSlot<CheckerTypeShape>(
-    KernelVocabulary.TypeSystem.TypeShape.key,
-    'type-system.type-shape',
-    'Type-system type projection with optional hot checker carrier and member details.',
+  TypeShape: defineProductDetailSlot(
+    TypeSystemDetailDescriptors.TypeShape,
+    checkerTypeShapeReferences,
   ),
 } as const;
 
 /** Hot TypeChecker details whose lifetime is owned by a projected type shape. */
 export const TypeSystemHotDetails = {
-  TypeMember: defineHotDetailSlot<
-    CheckerTypeMember,
-    typeof KernelVocabulary.TypeSystem.TypeShape.key
-  >(
-    KernelVocabulary.TypeSystem.TypeShape.key,
-    'type-system.type-member',
-    'Hot type-system member projection visible on a type shape; usually not a durable kernel product.',
+  TypeMember: defineHotDetailSlot(
+    TypeSystemHotDetailDescriptors.TypeMember,
+    checkerTypeMemberReferences,
   ),
 } as const;

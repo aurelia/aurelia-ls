@@ -1,12 +1,13 @@
+import { kernelRecordReferences } from '../kernel/detail-references.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
-import type { I18nTranslationKey } from './model.js';
+import { I18nDetailDescriptors } from './detail-descriptors.js';
 
 /** Typed detail slots for i18n products consumed by authoring inquiries. */
 export const I18nProductDetails = {
-  TranslationKey: defineProductDetailSlot<I18nTranslationKey>(
-    KernelVocabulary.I18n.TranslationKey.key,
-    'i18n.translation-key',
-    'I18n translation key admitted from static init resources.',
+  TranslationKey: defineProductDetailSlot(
+    I18nDetailDescriptors.TranslationKey,
+    (key) => kernelRecordReferences(
+      ...key.fieldProvenance.map((entry) => entry.provenanceHandle),
+    ),
   ),
 } as const;

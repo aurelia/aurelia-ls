@@ -1,5 +1,9 @@
 import { DiKeyIdentityKind, type DiKeyIdentity } from './identity.js';
 import type { KernelRecordHandle } from './handles.js';
+import {
+  sameMaterializedProductValue,
+  sameMaterializedProductWitness,
+} from './materialization.js';
 import { KernelPublicationDecisionKind, type KernelComparablePublicationDecision } from './publication.js';
 import type { KernelStoreRecord } from './store.js';
 
@@ -235,14 +239,12 @@ export function compareKernelRecords(
     case 'materialized-product': {
       const candidate = next as typeof previous;
       return semanticThenWitness(
-        sameValues(
-          [previous.productKindKey, previous.identityHandle],
-          [candidate.productKindKey, candidate.identityHandle],
-        ),
-        sameValues(
-          [previous.addressHandle, previous.provenanceHandle],
-          [candidate.addressHandle, candidate.provenanceHandle],
-        ),
+        sameMaterializedProductValue(previous, candidate)
+          ? KernelPublicationDecisionKind.Retain
+          : KernelPublicationDecisionKind.Replace,
+        sameMaterializedProductWitness(previous, candidate)
+          ? KernelPublicationDecisionKind.Retain
+          : KernelPublicationDecisionKind.Replace,
       );
     }
     case 'materialization-record': {
@@ -331,6 +333,67 @@ export function referencedKernelRecordHandles(record: KernelStoreRecord): readon
         ...record.openSeamHandles,
       ];
   }
+}
+
+/** Seal one normalized record and every embedded collection before fallible publication callbacks can observe it. */
+export function sealKernelRecord<TRecord extends KernelStoreRecord>(record: TRecord): TRecord {
+  switch (record.kind) {
+    case 'template-node-address':
+      Object.freeze(record.path);
+      break;
+    case 'evidence-record':
+      Object.freeze(record.roles);
+      break;
+    case 'provenance-record':
+      Object.freeze(record.evidenceHandles);
+      break;
+    case 'open-seam':
+      Object.freeze(record.reasonKinds);
+      for (const source of record.reasonSources) {
+        Object.freeze(source);
+      }
+      Object.freeze(record.reasonSources);
+      break;
+    case 'materialization-record':
+      Object.freeze(record.productHandles);
+      Object.freeze(record.claimHandles);
+      Object.freeze(record.openSeamHandles);
+      break;
+    case 'source-file-address':
+    case 'source-span-address':
+    case 'template-address':
+    case 'generated-address':
+    case 'external-address':
+    case 'typescript-declaration-identity':
+    case 'aurelia-resource-identity':
+    case 'aurelia-attribute-pattern-identity':
+    case 'container-identity':
+    case 'di-product-identity':
+    case 'di-key-identity':
+    case 'registration-identity':
+    case 'resource-product-identity':
+    case 'evaluation-identity':
+    case 'observation-identity':
+    case 'configuration-identity':
+    case 'framework-identity':
+    case 'router-identity':
+    case 'route-recognizer-identity':
+    case 'i18n-identity':
+    case 'state-identity':
+    case 'validation-identity':
+    case 'fetch-client-identity':
+    case 'dialog-identity':
+    case 'compiler-identity':
+    case 'template-identity':
+    case 'template-node-identity':
+    case 'binding-identity':
+    case 'instruction-identity':
+    case 'type-system-identity':
+    case 'semantic-claim':
+    case 'materialized-product':
+      break;
+  }
+  return Object.freeze(record);
 }
 
 function compareDiKeyIdentities(

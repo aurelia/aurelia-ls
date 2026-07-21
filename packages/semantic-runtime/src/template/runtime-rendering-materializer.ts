@@ -1,4 +1,4 @@
-import { SemanticClaim } from '../kernel/claim.js';
+import { type SemanticClaim } from '../kernel/claim.js';
 import type { Container } from '../di/container.js';
 import {
   type ContainerChildMaterializationEmission,
@@ -14,13 +14,11 @@ import {
 } from '../kernel/evidence.js';
 import {
   OpenSeam,
-  OpenSeamReasonKind,
+  type OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import type {
   AddressHandle,
-  EvidenceHandle,
   ProductHandle,
-  ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
   MaterializationRecord,
@@ -30,7 +28,7 @@ import {
   ConfigurationProductDetails,
 } from '../configuration/product-details.js';
 import {
-  ViewFactory,
+  type ViewFactory,
 } from '../configuration/controller.js';
 import {
   ProvenanceRecord,
@@ -56,7 +54,7 @@ import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializ
 import {
   type RuntimeBinding,
   type RuntimeBindingScopeEffect,
-  RuntimeTargetOperation,
+  type RuntimeTargetOperation,
 } from './runtime-binding.js';
 import type { RuntimeWatcher } from './runtime-watcher.js';
 import {
@@ -65,7 +63,7 @@ import {
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import {
   type TemplateRenderingRunHost,
-  TemplateRenderingRunResult,
+  type TemplateRenderingRunResult,
   type TemplateRenderingRunRequest,
   type TemplateRenderingTargetPlan,
 } from './compiler-world.js';
@@ -73,29 +71,26 @@ import { TemplateProductDetails } from './product-details.js';
 import { ObservationProductDetails } from '../observation/product-details.js';
 import {
   RuntimeControllerCreationKind,
-  RuntimeControllerFrame,
+  type RuntimeControllerFrame,
   RuntimeControllerLifecycleStage,
   RuntimeControllerLifecycleStepKind,
 } from './runtime-controller.js';
 import {
-  CustomElementDefinition,
+  type CustomElementDefinition,
 } from '../resources/custom-element-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import {
   HydrateTemplateControllerInstruction,
-  AttributeBindingInstruction,
-  PropertyBindingInstruction,
-  TemplateBindingMode,
   type TemplateInstruction,
   type TemplateInstructionSequence,
 } from './instruction-ir.js';
 import {
-  TemplateExpressionParse,
-  TemplateValueSite,
+  type TemplateExpressionParse,
+  type TemplateValueSite,
 } from './value-site.js';
 import { RuntimeRenderingSourceSet } from './runtime-rendering-source.js';
 import {
-  RuntimeBindingRenderContext,
+  type RuntimeBindingRenderContext,
   RuntimeRenderedInstructionRecorder,
 } from './runtime-rendered-instruction-recorder.js';
 import type {
@@ -110,7 +105,7 @@ import {
   syntheticViewTargetInputs,
 } from './runtime-synthetic-view-targets.js';
 import {
-  RuntimeViewFactoryMaterialization,
+  type RuntimeViewFactoryMaterialization,
   RuntimeViewFactoryMaterializer,
 } from './runtime-view-factory-materializer.js';
 import { RuntimeControllerPublicationMaterializer } from './runtime-controller-publication.js';
@@ -450,7 +445,7 @@ export class RuntimeRenderingMaterializer {
     const observerLocator = new ObserverLocator(
       this.store,
       input.expressionWorld.projector,
-      input.compilerWorld.nodeObserverLocatorConfiguration ?? undefined,
+      input.compilerWorld.world.nodeObserverLocatorConfiguration ?? undefined,
     );
     const rootDependencyRecords: KernelStoreRecord[] = [];
     const rootChildContainers: ContainerChildMaterializationEmission[] = [];

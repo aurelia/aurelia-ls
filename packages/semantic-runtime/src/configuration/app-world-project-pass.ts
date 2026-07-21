@@ -20,7 +20,7 @@ import {
   type EvaluationIssueProjectResult,
 } from '../evaluation/evaluation-source-issues.js';
 import type { GenerationAuthority } from '../kernel/generation-authority.js';
-import type { KernelPublicationContext } from '../kernel/publication.js';
+import type { ComputationRun } from '../kernel/computation-lifecycle.js';
 import type { KernelStore, KernelTelemetryReadView } from '../kernel/store.js';
 import {
   ResourceDefinitionIndex,
@@ -43,13 +43,13 @@ import {
 } from '../type-system/project.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
-  AureliaAppWorldEmission,
   AureliaAppWorldComposer,
+  type AureliaAppWorldEmission,
 } from './app-world-composer.js';
 import {
   DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
-  SemanticAppAnalysisDepth,
   normalizeSemanticAppAnalysisDepth,
+  type SemanticAppAnalysisDepth,
 } from './app-analysis.js';
 import {
   DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
@@ -430,7 +430,7 @@ export class AureliaAppWorldProjectPass {
 
   constructAndEmit(
     store: KernelStore,
-    publication: KernelPublicationContext,
+    publication: ComputationRun,
     project: ProjectBootFrame,
     evaluation: StaticProjectEvaluationResult,
     conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
@@ -461,7 +461,7 @@ class AureliaAppWorldProjectConstructionFrame {
 
   constructor(
     readonly store: KernelStore,
-    readonly publication: KernelPublicationContext,
+    readonly publication: ComputationRun,
     readonly project: ProjectBootFrame,
     private readonly support: SemanticRuntimeSupport,
     private readonly evaluation: StaticProjectEvaluationResult,

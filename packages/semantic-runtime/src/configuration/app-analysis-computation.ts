@@ -31,10 +31,17 @@ import {
   resourceConventionToolingEvaluationProfile,
   type ResourceConventionToolingEvaluationContext,
 } from '../resources/resource-convention-transform-admission.js';
-import { TemplateCompilationCohortProjectAuthority } from '../template/template-compilation-cohort.js';
 import {
-  AureliaAppWorldProjectEmission,
+  TemplateCompilationCohortProjectAuthority,
+  TemplateCompilationLocus,
+} from '../template/template-compilation-cohort.js';
+import {
+  TemplateCompilerCompileState,
+  templateCompilerCompileState,
+} from '../template/compiler-world.js';
+import {
   AureliaAppWorldProjectPass,
+  type AureliaAppWorldProjectEmission,
   type AureliaAppWorldProjectOptions,
 } from './app-world-project-pass.js';
 import { aureliaAppProjectEvaluationProfile } from './aurelia-project-evaluation.js';
@@ -123,7 +130,10 @@ export class AureliaAppWorldProjectAuthority {
     if (state?.committedRunSequence !== runSequence) {
       throw new Error(`Cannot admit uncommitted app-analysis run ${computationId}@${runSequence}.`);
     }
-    if (!(state.locus instanceof AureliaAppAnalysisLocus) || state.locus.projectKey !== this.projectKey) {
+    if (
+      state.locus.kind !== 'aurelia-app-analysis'
+      || state.locus.reconciliationKey !== this.projectKey
+    ) {
       throw new Error(`App-analysis run ${computationId}@${runSequence} belongs to another project locus.`);
     }
     if (candidate.project.projectKey !== this.projectKey) {
@@ -274,11 +284,6 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
           ],
           options,
         );
-        for (const resource of [...candidate.templates.resources, ...candidate.templates.authoringResources]) {
-          for (const read of resource.compilation.registeredReads) {
-            run.observe(read);
-          }
-        }
         for (const read of candidate.typeSystem.readRegisteredInputs()) {
           run.observe(read);
         }
@@ -314,47 +319,52 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
     const sourceText = new SourceTextSnapshotAuthority(project.inputGeneration);
     const snapshotsByFileName = new Map<string, SourceTextSnapshot>();
     for (const owner of emission.templates.cohortPlan.ownerPlans) {
+      if (templateCompilerCompileState(owner.definition) !== TemplateCompilerCompileState.Compiled) {
+        continue;
+      }
       const sourceAddressHandle = owner.definition.template?.addressHandle ?? null;
       if (sourceAddressHandle == null) {
         continue;
       }
-      const sourceFile = sourceFileAddressForAddress(run, sourceAddressHandle);
-      if (sourceFile == null) {
-        throw new Error(`Template owner ${owner.definition.name} has no authored source-file address.`);
-      }
-      const candidates = authoredSourceHostPathCandidates(
-        project.workspaceRootDir,
-        project.rootDir,
-        sourceFile.path,
-      );
-      let admitted = false;
-      for (const fileName of candidates) {
-        let snapshot = snapshotsByFileName.get(fileName);
-        if (snapshot == null) {
-          snapshot = sourceText.capture(fileName);
-          snapshotsByFileName.set(fileName, snapshot);
+      run.withChild(new TemplateCompilationLocus(project.projectKey, owner.ownerHandle), () => {
+        const sourceFile = sourceFileAddressForAddress(run, sourceAddressHandle);
+        if (sourceFile == null) {
+          throw new Error(`Template owner ${owner.definition.name} has no authored source-file address.`);
+        }
+        const candidates = authoredSourceHostPathCandidates(
+          project.workspaceRootDir,
+          project.rootDir,
+          sourceFile.path,
+        );
+        let admitted = false;
+        for (const fileName of candidates) {
+          let snapshot = snapshotsByFileName.get(fileName);
+          if (snapshot == null) {
+            snapshot = sourceText.capture(fileName);
+            snapshotsByFileName.set(fileName, snapshot);
+          }
           run.observe(snapshot);
-        }
-        if (snapshot.state === SourceTextSnapshotState.Present) {
-          const admittedRevision = owner.definition.template?.authoredSourceRevision ?? null;
-          if (admittedRevision == null) {
-            throw new Error(
-              `Template owner ${owner.definition.name} has no authored source revision for ${sourceFile.path}.`,
-            );
+          if (snapshot.state === SourceTextSnapshotState.Present) {
+            const admittedRevision = owner.definition.template?.authoredSourceRevision ?? null;
+            if (admittedRevision == null) {
+              throw new Error(
+                `Template owner ${owner.definition.name} has no authored source revision for ${sourceFile.path}.`,
+              );
+            }
+            if (snapshot.contentRevision !== admittedRevision) {
+              throw new Error(`Template source ${sourceFile.path} changed after its definition was admitted.`);
+            }
+            admitted = true;
+            break;
           }
-          if (snapshot.contentRevision !== admittedRevision) {
-            throw new Error(`Template source ${sourceFile.path} changed after its definition was admitted.`);
+          if (snapshot.state === SourceTextSnapshotState.Unavailable) {
+            throw new Error(`Template source ${fileName} exists but its text is unavailable.`);
           }
-          admitted = true;
-          break;
         }
-        if (snapshot.state === SourceTextSnapshotState.Unavailable) {
-          throw new Error(`Template source ${fileName} exists but its text is unavailable.`);
+        if (!admitted) {
+          throw new Error(`Template source ${sourceFile.path} is absent from every authored source root.`);
         }
-      }
-      if (!admitted) {
-        throw new Error(`Template source ${sourceFile.path} is absent from every authored source root.`);
-      }
+      });
     }
     return [...snapshotsByFileName.values()].sort((left, right) => left.fileName.localeCompare(right.fileName));
   }

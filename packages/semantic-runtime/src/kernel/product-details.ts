@@ -4,14 +4,24 @@ import type {
   ProductHandle,
   ProvenanceHandle,
 } from './handles.js';
-import type { MaterializedProduct } from './materialization.js';
+import {
+  sameMaterializedProductEnvelope,
+  type MaterializedProduct,
+} from './materialization.js';
 import {
   applyObjectFieldNormalizations,
   prepareObjectFieldNormalization,
+  restoreObjectFieldNormalizations,
   type PreparedObjectFieldNormalization,
 } from './object-field-normalization.js';
 import type { ProductKindKey } from './vocabulary.js';
 import { DetailCatalog } from './detail-catalog.js';
+import {
+  mergeKernelDetailReferences,
+  type KernelDetailReference,
+  type KernelDetailReferenceProjector,
+} from './detail-references.js';
+import type { ProductDetailDescriptor } from './detail-descriptors.js';
 
 declare const productDetailSlotBrand: unique symbol;
 
@@ -26,15 +36,38 @@ export class ProductDetailSlot<
   TProductKind extends ProductKindKey = ProductKindKey,
 > {
   declare readonly [productDetailSlotBrand]: TDetail;
+  private readonly referenceProjector: KernelDetailReferenceProjector<unknown>;
 
   constructor(
-    /** Product kind whose materialized-product envelope this detail can hydrate. */
-    readonly productKindKey: TProductKind,
-    /** Stable slot key for diagnostics, inquiry traces, and tooling projection. */
-    readonly detailKind: string,
-    /** Human/AI-readable explanation of what this detail object contains. */
-    readonly summary: string,
-  ) {}
+    /** Inert occupancy identity safe to import without pulling in the executable projector graph. */
+    readonly descriptor: ProductDetailDescriptor<TDetail, TProductKind>,
+    /** Exact non-owner kernel entries required by this rich payload. */
+    referenceProjector: KernelDetailReferenceProjector<TDetail>,
+  ) {
+    this.referenceProjector = referenceProjector as KernelDetailReferenceProjector<unknown>;
+    Object.freeze(this);
+  }
+
+  get surface(): ProductDetailDescriptor<TDetail, TProductKind>['surface'] {
+    return this.descriptor.surface;
+  }
+
+  get productKindKey(): TProductKind {
+    return this.descriptor.productKindKey;
+  }
+
+  get detailKind(): string {
+    return this.descriptor.detailKind;
+  }
+
+  get summary(): string {
+    return this.descriptor.summary;
+  }
+
+  /** Freeze the slot-owned structural closure before publication admits the detail. */
+  referencesFor(detail: TDetail): readonly KernelDetailReference[] {
+    return mergeKernelDetailReferences(this.referenceProjector(detail));
+  }
 }
 
 /** Typed exact-handle detail read shared by committed and staged analysis views. */
@@ -57,7 +90,11 @@ export class ProductDetailEntry<
     readonly slot: ProductDetailSlot<TDetail, TProductKind>,
     /** Rich in-memory product model for materializer and inquiry use. */
     readonly detail: TDetail,
-  ) {}
+    /** Frozen non-owner kernel closure projected by the typed slot. */
+    readonly references: readonly KernelDetailReference[],
+  ) {
+    Object.freeze(this);
+  }
 
   /** Product handle whose durable envelope owns this detail. */
   get productHandle(): ProductHandle {
@@ -68,6 +105,7 @@ export class ProductDetailEntry<
 type ReadProduct = (handle: ProductHandle) => MaterializedProduct | null;
 type ProductDetailWithHandle = { readonly productHandle: ProductHandle };
 type AllocateOrdinal = () => number;
+type AssertMutationAllowed = () => void;
 
 const productEnvelopeByDetail = new WeakMap<object, MaterializedProduct>();
 
@@ -105,6 +143,7 @@ class ProductDetailEnvelopeBinding {
   constructor(
     readonly detail: object | null,
     readonly product: MaterializedProduct,
+    readonly previousProduct: MaterializedProduct | null,
     readonly normalizations: readonly PreparedObjectFieldNormalization[],
   ) {}
 }
@@ -118,6 +157,34 @@ export class PreparedProductDetailEntry<
     readonly entry: ProductDetailEntry<TDetail, TProductKind>,
     readonly binding: ProductDetailEnvelopeBinding,
   ) {}
+
+  /** Make the candidate envelope visible to final validators without admitting the catalog entry. */
+  admitBinding(): void {
+    admitProductDetailEnvelopeBinding(this.binding);
+  }
+
+  /** Apply the reversible descriptor and weak-owner lease needed by a staged candidate read. */
+  admitCandidateBinding(): void {
+    applyObjectFieldNormalizations(this.binding.normalizations);
+    this.admitBinding();
+  }
+
+  /** Whether provisional admission cannot change the owner observed through an already-committed detail object. */
+  get canAdmitBindingBeforeCommit(): boolean {
+    return this.binding.previousProduct == null
+      || sameMaterializedProductEnvelope(this.binding.previousProduct, this.binding.product);
+  }
+
+  /** Restore the weak owner that preceded provisional final-validation admission. */
+  restoreBinding(): void {
+    restoreProductDetailEnvelopeBinding(this.binding);
+  }
+
+  /** Restore the exact caller-owned object state that preceded a staged candidate read. */
+  restoreCandidateBinding(): void {
+    this.restoreBinding();
+    restoreObjectFieldNormalizations(this.binding.normalizations);
+  }
 }
 
 /**
@@ -142,7 +209,7 @@ function prepareProductDetailEnvelopeBinding(
   product: MaterializedProduct,
 ): ProductDetailEnvelopeBinding {
   if (detail == null || typeof detail !== 'object') {
-    return new ProductDetailEnvelopeBinding(null, product, []);
+    return new ProductDetailEnvelopeBinding(null, product, null, []);
   }
   const existing = productEnvelopeByDetail.get(detail);
   if (existing != null && existing.handle !== product.handle) {
@@ -151,6 +218,7 @@ function prepareProductDetailEnvelopeBinding(
   return new ProductDetailEnvelopeBinding(
     detail,
     product,
+    existing ?? null,
     prepareEnvelopeHandleEchoes(detail, product),
   );
 }
@@ -158,6 +226,17 @@ function prepareProductDetailEnvelopeBinding(
 function admitProductDetailEnvelopeBinding(binding: ProductDetailEnvelopeBinding): void {
   if (binding.detail != null) {
     productEnvelopeByDetail.set(binding.detail, binding.product);
+  }
+}
+
+function restoreProductDetailEnvelopeBinding(binding: ProductDetailEnvelopeBinding): void {
+  if (binding.detail == null) {
+    return;
+  }
+  if (binding.previousProduct == null) {
+    productEnvelopeByDetail.delete(binding.detail);
+  } else {
+    productEnvelopeByDetail.set(binding.detail, binding.previousProduct);
   }
 }
 
@@ -275,6 +354,7 @@ export class ProductDetailCatalog {
     private readonly readProduct: ReadProduct,
     private readonly allocateLifetimeOrdinal: AllocateOrdinal,
     allocateMutationOrdinal: AllocateOrdinal,
+    private readonly assertMutationAllowed: AssertMutationAllowed,
   ) {
     this.catalog = new DetailCatalog(
       (entry) => entry.productHandle,
@@ -289,6 +369,7 @@ export class ProductDetailCatalog {
     productHandle: ProductHandle,
     detail: TDetail,
   ): ProductDetailEntry<TDetail, TProductKind> {
+    this.assertMutationAllowed();
     return this.addAtLifetime(slot, productHandle, detail, this.allocateLifetimeOrdinal());
   }
 
@@ -299,6 +380,7 @@ export class ProductDetailCatalog {
     detail: TDetail,
     lifetimeOrdinal: number,
   ): ProductDetailEntry<TDetail, TProductKind> {
+    this.assertMutationAllowed();
     const product = this.readProduct(productHandle);
     if (product == null) {
       throw new Error(`Cannot attach product detail ${slot.detailKind}; product ${productHandle} is not committed.`);
@@ -325,6 +407,7 @@ export class ProductDetailCatalog {
     slot: ProductDetailSlot<TDetail, TProductKind>,
     product: MaterializedProduct,
     detail: TDetail,
+    references: readonly KernelDetailReference[] = slot.referencesFor(detail),
   ): PreparedProductDetailEntry<TDetail, TProductKind> {
     if (product.productKindKey !== slot.productKindKey) {
       throw new Error(
@@ -333,7 +416,7 @@ export class ProductDetailCatalog {
       );
     }
     return new PreparedProductDetailEntry(
-      new ProductDetailEntry(product, slot, detail),
+      new ProductDetailEntry(product, slot, detail, references),
       prepareProductDetailEnvelopeBinding(detail, product),
     );
   }
@@ -343,10 +426,10 @@ export class ProductDetailCatalog {
     prepared: PreparedProductDetailEntry<TDetail, TProductKind>,
     lifetimeOrdinal: number,
   ): ProductDetailEntry<TDetail, TProductKind> {
+    this.assertMutationAllowed();
     const entry = prepared.entry;
-    const productHandle = entry.productHandle;
-    admitProductDetailEnvelopeBinding(prepared.binding);
     this.catalog.add(entry, lifetimeOrdinal);
+    prepared.admitBinding();
     return entry;
   }
 
@@ -355,6 +438,7 @@ export class ProductDetailCatalog {
     slot: ProductDetailSlot<TDetail, TProductKind>,
     details: Iterable<TDetail>,
   ): readonly ProductDetailEntry<TDetail, TProductKind>[] {
+    this.assertMutationAllowed();
     const entries: ProductDetailEntry<TDetail, TProductKind>[] = [];
     for (const detail of details) {
       entries.push(this.add(slot, detail.productHandle, detail));
@@ -368,6 +452,7 @@ export class ProductDetailCatalog {
     productHandle: ProductHandle,
     detail: TDetail,
   ): ProductDetailEntry<TDetail, TProductKind> {
+    this.assertMutationAllowed();
     const existing = this.catalog.read(productHandle);
     if (existing == null) {
       return this.add(slot, productHandle, detail);
@@ -385,6 +470,7 @@ export class ProductDetailCatalog {
     slot: ProductDetailSlot<TDetail, TProductKind>,
     details: Iterable<TDetail>,
   ): readonly ProductDetailEntry<TDetail, TProductKind>[] {
+    this.assertMutationAllowed();
     const entries: ProductDetailEntry<TDetail, TProductKind>[] = [];
     for (const detail of details) {
       entries.push(this.addIfAbsent(slot, detail.productHandle, detail));
@@ -421,6 +507,7 @@ export class ProductDetailCatalog {
 
   /** Advance an admitted detail with the complete publication closure that owns it. */
   promoteLifetimeOrdinal(productHandle: ProductHandle, lifetimeOrdinal: number): void {
+    this.assertMutationAllowed();
     this.catalog.promoteLifetimeOrdinal(productHandle, lifetimeOrdinal);
   }
 
@@ -449,10 +536,12 @@ export class ProductDetailCatalog {
   }
 
   remove(productHandle: ProductHandle): ProductDetailEntry<unknown> | null {
+    this.assertMutationAllowed();
     return this.catalog.remove(productHandle);
   }
 
   removeAtOrAfterLifetime(marker: number): number {
+    this.assertMutationAllowed();
     return this.catalog.removeAtOrAfterLifetime(marker);
   }
 
@@ -461,6 +550,7 @@ export class ProductDetailCatalog {
     marker: number,
     retainedHandles: ReadonlySet<ProductHandle>,
   ): number {
+    this.assertMutationAllowed();
     return this.catalog.removeUnretainedAtOrAfterLifetime(marker, retainedHandles);
   }
 }
@@ -469,9 +559,8 @@ export function defineProductDetailSlot<
   TDetail,
   TProductKind extends ProductKindKey = ProductKindKey,
 >(
-  productKindKey: TProductKind,
-  detailKind: string,
-  summary: string,
+  descriptor: ProductDetailDescriptor<TDetail, TProductKind>,
+  referenceProjector: KernelDetailReferenceProjector<TDetail>,
 ): ProductDetailSlot<TDetail, TProductKind> {
-  return new ProductDetailSlot(productKindKey, detailKind, summary);
+  return new ProductDetailSlot(descriptor, referenceProjector);
 }

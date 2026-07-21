@@ -1,4 +1,5 @@
 import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
+import type { ComputationLocus } from '../kernel/computation-lifecycle.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import {
   TemplateCompilerWorldAuthority,
@@ -10,6 +11,24 @@ export const enum TemplateCompilationCohortKind {
   App = 'app',
   /** Standalone authoring compilation outside an admitted app-root cohort. */
   Authoring = 'authoring',
+}
+
+/** Stable computation locus for one top-level authored template family across all compiler cohorts. */
+export class TemplateCompilationLocus implements ComputationLocus {
+  readonly kind = 'template-compilation';
+  readonly reconciliationKey: string;
+  readonly summary: string;
+
+  constructor(
+    readonly projectKey: string,
+    readonly ownerHandle: IdentityHandle | ProductHandle,
+  ) {
+    this.reconciliationKey = encodeTemplateCompilationKeyParts([
+      projectKey,
+      ownerHandle,
+    ]);
+    this.summary = `template family ${ownerHandle} in ${projectKey}`;
+  }
 }
 
 export const enum TemplateCompilationAdmissionOriginKind {

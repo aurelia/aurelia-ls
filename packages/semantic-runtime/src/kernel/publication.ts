@@ -1,11 +1,23 @@
-import type { HotDetailEntry, HotDetailReadView, HotDetailSlot } from './hot-details.js';
+import {
+  readHotDetailEntry,
+  type HotDetailEntry,
+  type HotDetailReadView,
+  type HotDetailSlot,
+  type PreparedHotDetailEntry,
+} from './hot-details.js';
 import type {
   KernelHandleFactory,
   KernelRecordHandle,
   HotDetailHandle,
   ProductHandle,
 } from './handles.js';
-import type { ProductDetailEntry, ProductDetailReadView, ProductDetailSlot } from './product-details.js';
+import {
+  readProductDetailEnvelope,
+  type PreparedProductDetailEntry,
+  type ProductDetailEntry,
+  type ProductDetailReadView,
+  type ProductDetailSlot,
+} from './product-details.js';
 import type {
   KernelStore,
   KernelMaterializationReadView,
@@ -18,7 +30,11 @@ import type {
   KernelTelemetryReadView,
 } from './store.js';
 import { SourceFileAddress } from './address.js';
-import type { MaterializationRecord } from './materialization.js';
+import {
+  MaterializedProduct,
+  sameMaterializedProductEnvelope,
+  type MaterializationRecord,
+} from './materialization.js';
 import {
   isSemanticAddressRecord,
   isSemanticIdentityRecord,
@@ -30,6 +46,8 @@ import {
 } from '../telemetry/kernel-density.js';
 import { readSemanticRuntimeDetailDensityRows } from '../telemetry/detail-density.js';
 import type { GenerationAuthority } from './generation-authority.js';
+import { KernelPublicationSurface } from './publication-surface.js';
+import type { KernelDetailReference } from './detail-references.js';
 
 /** How a staged detail behaves when its handle is already owned by another publication. */
 export const enum KernelDetailAdmission {
@@ -58,15 +76,6 @@ export type KernelComparablePublicationDecision =
   | KernelPublicationDecisionKind.RefreshWitness
   | KernelPublicationDecisionKind.Replace;
 
-export const enum KernelPublicationSurface {
-  /** Normalized address, identity, evidence, provenance, claim, product, or materialization record. */
-  Record = 'record',
-  /** Typed detail whose lifetime is bound to a materialized-product envelope. */
-  ProductDetail = 'product-detail',
-  /** Typed epoch-local detail stored outside the normalized product envelope. */
-  HotDetail = 'hot-detail',
-}
-
 /** Old/new record views available while a rich detail compares semantic and witness facts. */
 export interface KernelPublicationComparisonContext {
   readPrevious(handle: KernelRecordHandle): KernelStoreRecord | null;
@@ -81,17 +90,24 @@ export type KernelDetailComparator<TDetail> = (
 
 /** One typed product-detail attachment staged beside its kernel product envelope. */
 export class KernelProductDetailPublication<TDetail> {
+  readonly references: readonly KernelDetailReference[];
+
   constructor(
     readonly slot: ProductDetailSlot<TDetail>,
     readonly productHandle: ProductHandle,
     readonly detail: TDetail,
     readonly admission: KernelDetailAdmission = KernelDetailAdmission.Required,
     readonly compare: KernelDetailComparator<TDetail> | null = null,
-  ) {}
+  ) {
+    this.references = slot.referencesFor(detail);
+    Object.freeze(this);
+  }
 }
 
 /** One typed epoch-local hot detail staged beside a computation publication. */
 export class KernelHotDetailPublication<TDetail> {
+  readonly references: readonly KernelDetailReference[];
+
   constructor(
     readonly slot: HotDetailSlot<TDetail>,
     readonly ownerProductHandle: ProductHandle,
@@ -99,17 +115,27 @@ export class KernelHotDetailPublication<TDetail> {
     readonly detail: TDetail,
     readonly admission: KernelDetailAdmission = KernelDetailAdmission.Required,
     readonly compare: KernelDetailComparator<TDetail> | null = null,
-  ) {}
+  ) {
+    this.references = slot.referencesFor(detail);
+    Object.freeze(this);
+  }
 }
 
 /** Coherent normalized-record emission carried by an immediate or staged publication. */
 export class KernelStoreBatch {
+  readonly records: readonly KernelStoreRecord[];
+  readonly label: string | null;
+
   constructor(
     /** Normalized records emitted together by one analysis step. */
-    readonly records: readonly KernelStoreRecord[] = [],
+    records: readonly KernelStoreRecord[] = [],
     /** Optional non-semantic label for debugging and inquiry traces. */
-    readonly label: string | null = null,
-  ) {}
+    label: string | null = null,
+  ) {
+    this.records = Object.freeze([...records]);
+    this.label = label;
+    Object.freeze(this);
+  }
 }
 
 export function publishProductDetail<TDetail>(
@@ -156,17 +182,32 @@ export function publishProductDetails<TDetail extends { readonly productHandle: 
 
 /** Complete staged mutation emitted by one or more materializer phases. */
 export class KernelPublicationPlan {
+  readonly batch: KernelStoreBatch;
+  readonly productDetails: readonly KernelProductDetailPublication<unknown>[];
+  readonly hotDetails: readonly KernelHotDetailPublication<unknown>[];
+  readonly productDetailAdmissionSnapshots: readonly KernelProductDetailAdmissionSnapshot[];
+  readonly hotDetailAdmissionSnapshots: readonly KernelHotDetailAdmissionSnapshot[];
+  readonly minimumLifetimeOrdinal: number | null;
+
   constructor(
-    readonly batch: KernelStoreBatch,
-    readonly productDetails: readonly KernelProductDetailPublication<unknown>[] = [],
-    readonly hotDetails: readonly KernelHotDetailPublication<unknown>[] = [],
+    batch: KernelStoreBatch,
+    productDetails: readonly KernelProductDetailPublication<unknown>[] = [],
+    hotDetails: readonly KernelHotDetailPublication<unknown>[] = [],
     /** Foreign product-detail admission decisions observed by a staged run. */
-    readonly productDetailAdmissionSnapshots: readonly KernelProductDetailAdmissionSnapshot[] = [],
+    productDetailAdmissionSnapshots: readonly KernelProductDetailAdmissionSnapshot[] = [],
     /** Foreign hot-detail admission decisions observed by a staged run. */
-    readonly hotDetailAdmissionSnapshots: readonly KernelHotDetailAdmissionSnapshot[] = [],
+    hotDetailAdmissionSnapshots: readonly KernelHotDetailAdmissionSnapshot[] = [],
     /** Youngest kernel lifetime consumed through a registered computation read. */
-    readonly minimumLifetimeOrdinal: number | null = null,
-  ) {}
+    minimumLifetimeOrdinal: number | null = null,
+  ) {
+    this.batch = batch;
+    this.productDetails = Object.freeze([...productDetails]);
+    this.hotDetails = Object.freeze([...hotDetails]);
+    this.productDetailAdmissionSnapshots = Object.freeze([...productDetailAdmissionSnapshots]);
+    this.hotDetailAdmissionSnapshots = Object.freeze([...hotDetailAdmissionSnapshots]);
+    this.minimumLifetimeOrdinal = minimumLifetimeOrdinal;
+    Object.freeze(this);
+  }
 
   withMinimumLifetimeOrdinal(minimumLifetimeOrdinal: number | null): KernelPublicationPlan {
     const effective = maxLifetimeOrdinal(this.minimumLifetimeOrdinal, minimumLifetimeOrdinal);
@@ -192,11 +233,43 @@ export class KernelCommittedEntryRevision {
   ) {}
 }
 
+declare const kernelPublicationWriterIdBrand: unique symbol;
+
+/** Run-local writer identity retained while one outer publication is being staged. */
+export type KernelPublicationWriterId = string & { readonly [kernelPublicationWriterIdBrand]: true };
+
+/** Exact candidate revision captured when a staged read consumes another run-local write. */
+export class KernelStagedEntryRevision {
+  private constructor(
+    /** Null for the candidate-local absence created by hiding this computation's prior generation. */
+    readonly writerId: KernelPublicationWriterId | null,
+    readonly surface: KernelPublicationSurface,
+    readonly handle: string,
+    readonly actualKind: string | null,
+    readonly mutationOrdinal: number | null,
+  ) {}
+
+  static absent(surface: KernelPublicationSurface, handle: string): KernelStagedEntryRevision {
+    return new KernelStagedEntryRevision(null, surface, handle, null, null);
+  }
+
+  static present(
+    writerId: KernelPublicationWriterId,
+    surface: KernelPublicationSurface,
+    handle: string,
+    actualKind: string,
+    mutationOrdinal: number,
+  ): KernelStagedEntryRevision {
+    return new KernelStagedEntryRevision(writerId, surface, handle, actualKind, mutationOrdinal);
+  }
+}
+
 /** Exact staged lookup plus the foreign committed revision that supplied it, when one did. */
 export class StagedKernelRead<TValue> {
   constructor(
     readonly value: TValue | null,
     readonly committedRevision: KernelCommittedEntryRevision | null,
+    readonly stagedRevision: KernelStagedEntryRevision | null,
   ) {}
 }
 
@@ -217,6 +290,22 @@ export class KernelHotDetailAdmissionSnapshot {
     readonly detailKind: string,
     readonly expectedEntry: HotDetailEntry<unknown> | null,
     readonly committedRevision: KernelCommittedEntryRevision,
+  ) {}
+}
+
+/** Child writer whose `IfAbsent` publication consumed one exact committed product-detail decision. */
+export class KernelProductDetailAdmissionAttempt {
+  constructor(
+    readonly writerId: KernelPublicationWriterId,
+    readonly snapshot: KernelProductDetailAdmissionSnapshot,
+  ) {}
+}
+
+/** Child writer whose `IfAbsent` publication consumed one exact committed hot-detail decision. */
+export class KernelHotDetailAdmissionAttempt {
+  constructor(
+    readonly writerId: KernelPublicationWriterId,
+    readonly snapshot: KernelHotDetailAdmissionSnapshot,
   ) {}
 }
 
@@ -251,15 +340,46 @@ export class KernelPublicationDecision {
     readonly surface: KernelPublicationSurface,
     readonly detailKind: string,
     readonly decision: KernelPublicationDecisionKind,
-  ) {}
+  ) {
+    Object.freeze(this);
+  }
 }
 
 /** Result of atomically replacing one prior manifest. */
 export class KernelPublicationReplacement {
+  readonly decisions: readonly KernelPublicationDecision[];
+
   constructor(
     readonly manifest: KernelPublicationManifest,
-    readonly decisions: readonly KernelPublicationDecision[],
-  ) {}
+    decisions: readonly KernelPublicationDecision[],
+  ) {
+    this.decisions = Object.freeze([...decisions]);
+    Object.freeze(this);
+  }
+}
+
+/** Immutable run-local publication snapshot used by validation and child-manifest admission. */
+export class SealedKernelPublicationCandidate {
+  private readonly revisionsByKey: ReadonlyMap<string, KernelStagedEntryRevision>;
+
+  constructor(
+    readonly plan: KernelPublicationPlan,
+    revisions: readonly KernelStagedEntryRevision[],
+    readonly productDetailAdmissionAttempts: readonly KernelProductDetailAdmissionAttempt[],
+    readonly hotDetailAdmissionAttempts: readonly KernelHotDetailAdmissionAttempt[],
+  ) {
+    this.revisionsByKey = new Map(revisions.map((revision) => [
+      stagedRevisionKey(revision.surface, revision.handle),
+      revision,
+    ]));
+  }
+
+  readStagedRevision(
+    surface: KernelPublicationSurface,
+    handle: string,
+  ): KernelStagedEntryRevision | null {
+    return this.revisionsByKey.get(stagedRevisionKey(surface, handle)) ?? null;
+  }
 }
 
 function maxLifetimeOrdinal(left: number | null, right: number | null): number | null {
@@ -357,8 +477,13 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
   private records = new Map<KernelRecordHandle, KernelStoreRecord>();
   private productDetails = new Map<ProductHandle, KernelProductDetailPublication<unknown>>();
   private hotDetails = new Map<HotDetailHandle, KernelHotDetailPublication<unknown>>();
+  private recordWriters = new Map<KernelRecordHandle, KernelPublicationWriterId>();
+  private productDetailWriters = new Map<ProductHandle, KernelPublicationWriterId>();
+  private hotDetailWriters = new Map<HotDetailHandle, KernelPublicationWriterId>();
   private productDetailAdmissionSnapshots = new Map<ProductHandle, KernelProductDetailAdmissionSnapshot>();
   private hotDetailAdmissionSnapshots = new Map<HotDetailHandle, KernelHotDetailAdmissionSnapshot>();
+  private productDetailAdmissionWriters = new Map<ProductHandle, Set<KernelPublicationWriterId>>();
+  private hotDetailAdmissionWriters = new Map<HotDetailHandle, Set<KernelPublicationWriterId>>();
   private recordMutationOrdinals = new Map<KernelRecordHandle, number>();
   private productDetailMutationOrdinals = new Map<ProductHandle, number>();
   private hotDetailMutationOrdinals = new Map<HotDetailHandle, number>();
@@ -368,10 +493,22 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
   private readonly baseKernelCounts: SemanticRuntimeKernelCountSnapshot;
   private nextMutationOrdinal = 0;
   private failedPublication: Error | null = null;
+  private sealed = false;
+  private candidateBindingsPreparedForCommit = false;
+  private candidateBindingsFinished = false;
+  private readonly stagedProductDetailBindings = new Map<
+    KernelProductDetailPublication<unknown>,
+    PreparedProductDetailEntry<unknown>
+  >();
+  private readonly stagedHotDetailBindings = new Map<
+    KernelHotDetailPublication<unknown>,
+    PreparedHotDetailEntry<unknown>
+  >();
 
   constructor(
     private readonly store: KernelStore,
     previous: KernelPublicationManifest,
+    private readonly defaultWriterId: KernelPublicationWriterId,
   ) {
     this.previousRecordHandles = new Set(previous.recordHandles);
     this.previousProductDetailHandles = new Set(previous.productDetailHandles);
@@ -401,10 +538,14 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
     this.requireCurrent();
     const staged = this.records.get(handle) ?? null;
     if (staged != null) {
-      return new StagedKernelRead(staged, null);
+      return new StagedKernelRead(staged, null, this.recordStagedRevision(staged));
     }
     if (this.previousRecordHandles.has(handle)) {
-      return new StagedKernelRead<KernelStoreRecord>(null, null);
+      return new StagedKernelRead<KernelStoreRecord>(
+        null,
+        null,
+        KernelStagedEntryRevision.absent(KernelPublicationSurface.Record, handle),
+      );
     }
     const committed = this.store.read(handle);
     return new StagedKernelRead(
@@ -414,6 +555,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
         this.store.readRecordRevision(handle),
         this.store.readRecordLifetimeOrdinal(handle),
       ),
+      null,
     );
   }
 
@@ -476,21 +618,40 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       ? existingEntry.detail as TDetail
       : null;
     if (staged == null) {
-      const committedRevision = this.previousProductDetailHandles.has(productHandle)
+      const hidesPrevious = this.previousProductDetailHandles.has(productHandle);
+      const committedRevision = hidesPrevious
         ? null
         : admission?.committedRevision ?? new KernelCommittedEntryRevision(
             existingEntry?.slot.detailKind ?? null,
             this.store.productDetails.readMutationOrdinal(productHandle),
             this.store.productDetails.readLifetimeOrdinal(productHandle),
           );
-      return new StagedKernelRead(existing, committedRevision);
+      return new StagedKernelRead(
+        existing,
+        committedRevision,
+        hidesPrevious
+          ? KernelStagedEntryRevision.absent(KernelPublicationSurface.ProductDetail, productHandle)
+          : null,
+      );
     }
-    if (staged.slot.detailKind !== slot.detailKind) {
-      return new StagedKernelRead<TDetail>(null, null);
+    if (staged.admission === KernelDetailAdmission.IfAbsent && existingEntry != null) {
+      return new StagedKernelRead(
+        existing,
+        admission?.committedRevision ?? new KernelCommittedEntryRevision(
+          existingEntry.slot.detailKind,
+          this.store.productDetails.readMutationOrdinal(productHandle),
+          this.store.productDetails.readLifetimeOrdinal(productHandle),
+        ),
+        null,
+      );
     }
-    return staged.admission === KernelDetailAdmission.IfAbsent && existing != null
-      ? new StagedKernelRead(existing, admission?.committedRevision ?? null)
-      : new StagedKernelRead(staged.detail as TDetail, null);
+    return staged.slot.detailKind !== slot.detailKind
+      ? new StagedKernelRead<TDetail>(null, null, this.productDetailStagedRevision(staged))
+      : new StagedKernelRead(
+          this.bindStagedProductDetail(staged) as TDetail,
+          null,
+          this.productDetailStagedRevision(staged),
+        );
   }
 
   readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: HotDetailHandle): TDetail | null {
@@ -514,21 +675,40 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       ? existingEntry.detail as TDetail
       : null;
     if (staged == null) {
-      const committedRevision = this.previousHotDetailHandles.has(handle)
+      const hidesPrevious = this.previousHotDetailHandles.has(handle);
+      const committedRevision = hidesPrevious
         ? null
         : admission?.committedRevision ?? new KernelCommittedEntryRevision(
             existingEntry?.slot.detailKind ?? null,
             this.store.hotDetails.readMutationOrdinal(handle),
             this.store.hotDetails.readLifetimeOrdinal(handle),
           );
-      return new StagedKernelRead(existing, committedRevision);
+      return new StagedKernelRead(
+        existing,
+        committedRevision,
+        hidesPrevious
+          ? KernelStagedEntryRevision.absent(KernelPublicationSurface.HotDetail, handle)
+          : null,
+      );
     }
-    if (staged.slot.detailKind !== slot.detailKind) {
-      return new StagedKernelRead<TDetail>(null, null);
+    if (staged.admission === KernelDetailAdmission.IfAbsent && existingEntry != null) {
+      return new StagedKernelRead(
+        existing,
+        admission?.committedRevision ?? new KernelCommittedEntryRevision(
+          existingEntry.slot.detailKind,
+          this.store.hotDetails.readMutationOrdinal(handle),
+          this.store.hotDetails.readLifetimeOrdinal(handle),
+        ),
+        null,
+      );
     }
-    return staged.admission === KernelDetailAdmission.IfAbsent && existing != null
-      ? new StagedKernelRead(existing, admission?.committedRevision ?? null)
-      : new StagedKernelRead(staged.detail as TDetail, null);
+    return staged.slot.detailKind !== slot.detailKind
+      ? new StagedKernelRead<TDetail>(null, null, this.hotDetailStagedRevision(staged))
+      : new StagedKernelRead(
+          this.bindStagedHotDetail(staged) as TDetail,
+          null,
+          this.hotDetailStagedRevision(staged),
+        );
   }
 
   markObservation(): KernelStoreObservationMarker {
@@ -617,7 +797,15 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
   }
 
   publish(plan: KernelPublicationPlan): void {
-    this.assertHealthy();
+    this.publishFrom(this.defaultWriterId, plan);
+  }
+
+  /** Stage one complete materializer emission under the child writer that actually produced it. */
+  publishFrom(
+    writerId: KernelPublicationWriterId,
+    plan: KernelPublicationPlan,
+  ): readonly KernelStagedEntryRevision[] {
+    this.assertPreparing();
     try {
       if (plan.productDetailAdmissionSnapshots.length > 0 || plan.hotDetailAdmissionSnapshots.length > 0) {
         throw new Error('A staged publication cannot import admission snapshots from another transaction.');
@@ -625,12 +813,18 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       const records = new Map(this.records);
       const productDetails = new Map(this.productDetails);
       const hotDetails = new Map(this.hotDetails);
+      const recordWriters = new Map(this.recordWriters);
+      const productDetailWriters = new Map(this.productDetailWriters);
+      const hotDetailWriters = new Map(this.hotDetailWriters);
       const productDetailAdmissionSnapshots = new Map(this.productDetailAdmissionSnapshots);
       const hotDetailAdmissionSnapshots = new Map(this.hotDetailAdmissionSnapshots);
+      const productDetailAdmissionWriters = cloneWriterSets(this.productDetailAdmissionWriters);
+      const hotDetailAdmissionWriters = cloneWriterSets(this.hotDetailAdmissionWriters);
       const recordMutationOrdinals = new Map(this.recordMutationOrdinals);
       const productDetailMutationOrdinals = new Map(this.productDetailMutationOrdinals);
       const hotDetailMutationOrdinals = new Map(this.hotDetailMutationOrdinals);
       let nextMutationOrdinal = this.nextMutationOrdinal;
+      const stagedReads: KernelStagedEntryRevision[] = [];
 
       for (const record of plan.batch.records) {
         const handle = record.handle;
@@ -638,36 +832,216 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
           throw new Error(`Staged publication emitted duplicate kernel record ${handle}.`);
         }
         records.set(handle, record);
+        recordWriters.set(handle, writerId);
         recordMutationOrdinals.set(handle, nextMutationOrdinal++);
       }
       for (const publication of plan.productDetails) {
-        if (this.stageProductDetail(publication, productDetails, productDetailAdmissionSnapshots)) {
+        const outcome = this.stageProductDetail(
+          writerId,
+          publication,
+          productDetails,
+          productDetailAdmissionSnapshots,
+          productDetailAdmissionWriters,
+        );
+        if (outcome === StagedDetailOutcome.Added) {
+          productDetailWriters.set(publication.productHandle, writerId);
           productDetailMutationOrdinals.set(publication.productHandle, nextMutationOrdinal++);
+          if (
+            publication.admission === KernelDetailAdmission.IfAbsent
+            && productDetailAdmissionSnapshots.get(publication.productHandle)?.expectedEntry == null
+          ) {
+            stagedReads.push(KernelStagedEntryRevision.present(
+              writerId,
+              KernelPublicationSurface.ProductDetail,
+              publication.productHandle,
+              publication.slot.detailKind,
+              requiredStagedMutationOrdinal(
+                productDetailMutationOrdinals,
+                publication.productHandle,
+                KernelPublicationSurface.ProductDetail,
+              ),
+            ));
+          }
+        } else if (outcome === StagedDetailOutcome.ReusedStaged) {
+          stagedReads.push(KernelStagedEntryRevision.present(
+            requiredStagedWriter(
+              productDetailWriters,
+              publication.productHandle,
+              KernelPublicationSurface.ProductDetail,
+            ),
+            KernelPublicationSurface.ProductDetail,
+            publication.productHandle,
+            publication.slot.detailKind,
+            requiredStagedMutationOrdinal(
+              productDetailMutationOrdinals,
+              publication.productHandle,
+              KernelPublicationSurface.ProductDetail,
+            ),
+          ));
         }
       }
       for (const publication of plan.hotDetails) {
-        if (this.stageHotDetail(publication, hotDetails, hotDetailAdmissionSnapshots)) {
+        const outcome = this.stageHotDetail(
+          writerId,
+          publication,
+          hotDetails,
+          hotDetailAdmissionSnapshots,
+          hotDetailAdmissionWriters,
+        );
+        if (outcome === StagedDetailOutcome.Added) {
+          hotDetailWriters.set(publication.handle, writerId);
           hotDetailMutationOrdinals.set(publication.handle, nextMutationOrdinal++);
+          if (
+            publication.admission === KernelDetailAdmission.IfAbsent
+            && hotDetailAdmissionSnapshots.get(publication.handle)?.expectedEntry == null
+          ) {
+            stagedReads.push(KernelStagedEntryRevision.present(
+              writerId,
+              KernelPublicationSurface.HotDetail,
+              publication.handle,
+              publication.slot.detailKind,
+              requiredStagedMutationOrdinal(
+                hotDetailMutationOrdinals,
+                publication.handle,
+                KernelPublicationSurface.HotDetail,
+              ),
+            ));
+          }
+        } else if (outcome === StagedDetailOutcome.ReusedStaged) {
+          stagedReads.push(KernelStagedEntryRevision.present(
+            requiredStagedWriter(hotDetailWriters, publication.handle, KernelPublicationSurface.HotDetail),
+            KernelPublicationSurface.HotDetail,
+            publication.handle,
+            publication.slot.detailKind,
+            requiredStagedMutationOrdinal(
+              hotDetailMutationOrdinals,
+              publication.handle,
+              KernelPublicationSurface.HotDetail,
+            ),
+          ));
         }
       }
 
       this.records = records;
       this.productDetails = productDetails;
       this.hotDetails = hotDetails;
+      this.recordWriters = recordWriters;
+      this.productDetailWriters = productDetailWriters;
+      this.hotDetailWriters = hotDetailWriters;
       this.productDetailAdmissionSnapshots = productDetailAdmissionSnapshots;
       this.hotDetailAdmissionSnapshots = hotDetailAdmissionSnapshots;
+      this.productDetailAdmissionWriters = productDetailAdmissionWriters;
+      this.hotDetailAdmissionWriters = hotDetailAdmissionWriters;
       this.recordMutationOrdinals = recordMutationOrdinals;
       this.productDetailMutationOrdinals = productDetailMutationOrdinals;
       this.hotDetailMutationOrdinals = hotDetailMutationOrdinals;
       this.nextMutationOrdinal = nextMutationOrdinal;
+      return stagedReads;
     } catch (error) {
       this.failedPublication = error instanceof Error ? error : new Error(String(error));
       throw error;
     }
   }
 
+  /** Freeze one coherent publication/revision view before any input validator can run. */
+  seal(label: string): SealedKernelPublicationCandidate {
+    this.assertPreparing();
+    this.sealed = true;
+    return new SealedKernelPublicationCandidate(
+      this.toPlanUnchecked(label),
+      [
+        ...[...this.records.values()].map((record) => this.recordStagedRevision(record)),
+        ...[...this.productDetails.values()].map((publication) => this.productDetailStagedRevision(publication)),
+        ...[...this.hotDetails.values()].map((publication) => this.hotDetailStagedRevision(publication)),
+      ],
+      admissionAttempts(
+        this.productDetailAdmissionSnapshots,
+        this.productDetailAdmissionWriters,
+        KernelProductDetailAdmissionAttempt,
+      ),
+      admissionAttempts(
+        this.hotDetailAdmissionSnapshots,
+        this.hotDetailAdmissionWriters,
+        KernelHotDetailAdmissionAttempt,
+      ),
+    );
+  }
+
   toPlan(label: string): KernelPublicationPlan {
-    this.assertHealthy();
+    this.assertPreparing();
+    return this.toPlanUnchecked(label);
+  }
+
+  /** Restore superseded candidate leases before any durable publication can be admitted. */
+  prepareCandidateBindingsForCommit(): void {
+    if (!this.sealed) {
+      throw new Error('Staged candidate bindings cannot be prepared before publication is sealed.');
+    }
+    if (this.candidateBindingsPreparedForCommit || this.candidateBindingsFinished) {
+      throw new Error('Staged candidate bindings have already been prepared for commit.');
+    }
+    this.candidateBindingsPreparedForCommit = true;
+    const errors: unknown[] = [];
+    for (const [publication, prepared] of [...this.stagedHotDetailBindings].reverse()) {
+      if (this.hotDetails.get(publication.handle) === publication) {
+        continue;
+      }
+      try {
+        prepared.restoreCandidateBinding();
+        this.stagedHotDetailBindings.delete(publication);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    for (const [publication, prepared] of [...this.stagedProductDetailBindings].reverse()) {
+      if (this.productDetails.get(publication.productHandle) === publication) {
+        continue;
+      }
+      try {
+        prepared.restoreCandidateBinding();
+        this.stagedProductDetailBindings.delete(publication);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, 'Superseded candidate detail bindings could not be restored before commit.');
+    }
+  }
+
+  /** Close every reversible binding lease created while sibling children inspected staged details. */
+  finishCandidateBindings(committed: boolean): void {
+    if (this.candidateBindingsFinished) {
+      throw new Error('Staged candidate bindings have already been finalized.');
+    }
+    this.candidateBindingsFinished = true;
+    const errors: unknown[] = [];
+    for (const [publication, prepared] of [...this.stagedHotDetailBindings].reverse()) {
+      if (committed && this.hotDetails.get(publication.handle) === publication) {
+        continue;
+      }
+      try {
+        prepared.restoreCandidateBinding();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    for (const [publication, prepared] of [...this.stagedProductDetailBindings].reverse()) {
+      if (committed && this.productDetails.get(publication.productHandle) === publication) {
+        continue;
+      }
+      try {
+        prepared.restoreCandidateBinding();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, 'Staged candidate detail bindings could not be finalized.');
+    }
+  }
+
+  private toPlanUnchecked(label: string): KernelPublicationPlan {
     return new KernelPublicationPlan(
       new KernelStoreBatch(
         [...this.records.values()],
@@ -690,11 +1064,88 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
     return [...this.hotDetailAdmissionSnapshots.values()];
   }
 
+  /** Current exact candidate revision for validating one child-to-child staged read. */
+  readStagedRevision(
+    surface: KernelPublicationSurface,
+    handle: string,
+  ): KernelStagedEntryRevision | null {
+    switch (surface) {
+      case KernelPublicationSurface.Record: {
+        const record = this.records.get(handle as KernelRecordHandle) ?? null;
+        return record == null ? null : this.recordStagedRevision(record);
+      }
+      case KernelPublicationSurface.ProductDetail: {
+        const publication = this.productDetails.get(handle as ProductHandle) ?? null;
+        return publication == null ? null : this.productDetailStagedRevision(publication);
+      }
+      case KernelPublicationSurface.HotDetail: {
+        const publication = this.hotDetails.get(handle as HotDetailHandle) ?? null;
+        return publication == null ? null : this.hotDetailStagedRevision(publication);
+      }
+    }
+  }
+
+  private recordStagedRevision(record: KernelStoreRecord): KernelStagedEntryRevision {
+    return KernelStagedEntryRevision.present(
+      requiredStagedWriter(this.recordWriters, record.handle, KernelPublicationSurface.Record),
+      KernelPublicationSurface.Record,
+      record.handle,
+      record.kind,
+      requiredStagedMutationOrdinal(
+        this.recordMutationOrdinals,
+        record.handle,
+        KernelPublicationSurface.Record,
+      ),
+    );
+  }
+
+  private productDetailStagedRevision(
+    publication: KernelProductDetailPublication<unknown>,
+  ): KernelStagedEntryRevision {
+    return KernelStagedEntryRevision.present(
+      requiredStagedWriter(
+        this.productDetailWriters,
+        publication.productHandle,
+        KernelPublicationSurface.ProductDetail,
+      ),
+      KernelPublicationSurface.ProductDetail,
+      publication.productHandle,
+      publication.slot.detailKind,
+      requiredStagedMutationOrdinal(
+        this.productDetailMutationOrdinals,
+        publication.productHandle,
+        KernelPublicationSurface.ProductDetail,
+      ),
+    );
+  }
+
+  private hotDetailStagedRevision(
+    publication: KernelHotDetailPublication<unknown>,
+  ): KernelStagedEntryRevision {
+    return KernelStagedEntryRevision.present(
+      requiredStagedWriter(
+        this.hotDetailWriters,
+        publication.handle,
+        KernelPublicationSurface.HotDetail,
+      ),
+      KernelPublicationSurface.HotDetail,
+      publication.handle,
+      publication.slot.detailKind,
+      requiredStagedMutationOrdinal(
+        this.hotDetailMutationOrdinals,
+        publication.handle,
+        KernelPublicationSurface.HotDetail,
+      ),
+    );
+  }
+
   private stageProductDetail(
+    writerId: KernelPublicationWriterId,
     publication: KernelProductDetailPublication<unknown>,
     productDetails: Map<ProductHandle, KernelProductDetailPublication<unknown>>,
     admissionSnapshots: Map<ProductHandle, KernelProductDetailAdmissionSnapshot>,
-  ): boolean {
+    admissionWriters: Map<ProductHandle, Set<KernelPublicationWriterId>>,
+  ): StagedDetailOutcome {
     const existing = productDetails.get(publication.productHandle) ?? null;
     if (existing == null) {
       const admission = this.productDetailAdmissionSnapshot(publication, admissionSnapshots);
@@ -704,8 +1155,11 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
           + `${publication.productHandle} already has ${admission.expectedEntry.slot.detailKind}.`,
         );
       }
+      if (publication.admission === KernelDetailAdmission.IfAbsent && admission?.expectedEntry != null) {
+        registerAdmissionWriter(admissionWriters, publication.productHandle, writerId);
+      }
       productDetails.set(publication.productHandle, publication);
-      return true;
+      return StagedDetailOutcome.Added;
     }
     if (existing.slot.detailKind !== publication.slot.detailKind) {
       throw new Error(
@@ -714,7 +1168,12 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       );
     }
     if (publication.admission === KernelDetailAdmission.IfAbsent) {
-      return false;
+      const admission = admissionSnapshots.get(publication.productHandle) ?? null;
+      if (admission?.expectedEntry != null) {
+        registerAdmissionWriter(admissionWriters, publication.productHandle, writerId);
+        return StagedDetailOutcome.ReusedCommitted;
+      }
+      return StagedDetailOutcome.ReusedStaged;
     }
     if (existing.admission === KernelDetailAdmission.IfAbsent) {
       const admission = admissionSnapshots.get(publication.productHandle) ?? null;
@@ -725,16 +1184,18 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
         );
       }
       productDetails.set(publication.productHandle, publication);
-      return true;
+      return StagedDetailOutcome.Added;
     }
     throw new Error(`Staged publication emitted duplicate product detail ${publication.productHandle}.`);
   }
 
   private stageHotDetail(
+    writerId: KernelPublicationWriterId,
     publication: KernelHotDetailPublication<unknown>,
     hotDetails: Map<HotDetailHandle, KernelHotDetailPublication<unknown>>,
     admissionSnapshots: Map<HotDetailHandle, KernelHotDetailAdmissionSnapshot>,
-  ): boolean {
+    admissionWriters: Map<HotDetailHandle, Set<KernelPublicationWriterId>>,
+  ): StagedDetailOutcome {
     const existing = hotDetails.get(publication.handle) ?? null;
     if (existing == null) {
       const admission = this.hotDetailAdmissionSnapshot(publication, admissionSnapshots);
@@ -744,8 +1205,11 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
           + `${publication.handle} already has ${admission.expectedEntry.slot.detailKind}.`,
         );
       }
+      if (publication.admission === KernelDetailAdmission.IfAbsent && admission?.expectedEntry != null) {
+        registerAdmissionWriter(admissionWriters, publication.handle, writerId);
+      }
       hotDetails.set(publication.handle, publication);
-      return true;
+      return StagedDetailOutcome.Added;
     }
     if (existing.slot.detailKind !== publication.slot.detailKind) {
       throw new Error(
@@ -760,7 +1224,12 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       );
     }
     if (publication.admission === KernelDetailAdmission.IfAbsent) {
-      return false;
+      const admission = admissionSnapshots.get(publication.handle) ?? null;
+      if (admission?.expectedEntry != null) {
+        registerAdmissionWriter(admissionWriters, publication.handle, writerId);
+        return StagedDetailOutcome.ReusedCommitted;
+      }
+      return StagedDetailOutcome.ReusedStaged;
     }
     if (existing.admission === KernelDetailAdmission.IfAbsent) {
       const admission = admissionSnapshots.get(publication.handle) ?? null;
@@ -771,7 +1240,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
         );
       }
       hotDetails.set(publication.handle, publication);
-      return true;
+      return StagedDetailOutcome.Added;
     }
     throw new Error(`Staged publication emitted duplicate hot detail ${publication.handle}.`);
   }
@@ -858,6 +1327,101 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       || this.hotDetailAdmissionSnapshots.get(publication.handle)?.expectedEntry == null;
   }
 
+  private bindStagedProductDetail(publication: KernelProductDetailPublication<unknown>): unknown {
+    return this.prepareCandidateRead(() => {
+      const product = this.read(publication.productHandle);
+      if (!(product instanceof MaterializedProduct)) {
+        throw new Error(
+          `Staged product detail ${publication.slot.detailKind} has no materialized-product envelope `
+          + `${publication.productHandle}.`,
+        );
+      }
+      const committedEnvelope = readProductDetailEnvelope(publication.detail);
+      if (committedEnvelope != null) {
+        if (committedEnvelope.handle !== product.handle) {
+          throw new Error(
+            `Product detail is already bound to ${committedEnvelope.handle}; cannot stage it for ${product.handle}.`,
+          );
+        }
+        if (!sameMaterializedProductEnvelope(committedEnvelope, product)) {
+          throw new Error(
+            `Committed product detail ${publication.slot.detailKind} cannot supply candidate ${product.handle}; `
+            + 'its materialized-product envelope changed. Emit a fresh detail object for this generation.',
+          );
+        }
+        // Keep the committed weak binding visible until the candidate is admitted atomically.
+        return publication.detail;
+      }
+      let prepared = this.stagedProductDetailBindings.get(publication);
+      if (prepared == null) {
+        prepared = this.store.productDetails.prepareReplacementEntry(
+          publication.slot,
+          product,
+          publication.detail,
+          publication.references,
+        );
+        prepared.admitCandidateBinding();
+        this.stagedProductDetailBindings.set(publication, prepared);
+      }
+      return publication.detail;
+    });
+  }
+
+  private bindStagedHotDetail(publication: KernelHotDetailPublication<unknown>): unknown {
+    return this.prepareCandidateRead(() => {
+      const owner = this.read(publication.ownerProductHandle);
+      if (!(owner instanceof MaterializedProduct)) {
+        throw new Error(
+          `Staged hot detail ${publication.slot.detailKind} has no materialized-product owner `
+          + `${publication.ownerProductHandle}.`,
+        );
+      }
+      const committedEntry = readHotDetailEntry(publication.detail);
+      if (committedEntry != null) {
+        if (
+          committedEntry.handle !== publication.handle
+          || committedEntry.ownerProductHandle !== owner.handle
+          || committedEntry.slot !== publication.slot
+        ) {
+          throw new Error(
+            `Hot detail is already bound to ${committedEntry.handle} under ${committedEntry.ownerProductHandle}; `
+            + `cannot stage it for ${publication.handle} under ${owner.handle}.`,
+          );
+        }
+        if (!sameMaterializedProductEnvelope(committedEntry.owner, owner)) {
+          throw new Error(
+            `Committed hot detail ${publication.slot.detailKind} cannot supply candidate ${publication.handle}; `
+            + 'its owner product envelope changed. Emit a fresh detail object for this generation.',
+          );
+        }
+        // Store admission refreshes the owner object only after every fallible preflight succeeds.
+        return publication.detail;
+      }
+      let prepared = this.stagedHotDetailBindings.get(publication);
+      if (prepared == null) {
+        prepared = this.store.hotDetails.prepareReplacementEntry(
+          publication.slot,
+          owner,
+          publication.handle,
+          publication.detail,
+          publication.references,
+        );
+        prepared.admitCandidateBinding();
+        this.stagedHotDetailBindings.set(publication, prepared);
+      }
+      return publication.detail;
+    });
+  }
+
+  private prepareCandidateRead<TValue>(prepare: () => TValue): TValue {
+    try {
+      return prepare();
+    } catch (error) {
+      this.failedPublication = error instanceof Error ? error : new Error(String(error));
+      throw error;
+    }
+  }
+
   private assertHealthy(): void {
     if (this.failedPublication != null) {
       throw new Error(
@@ -865,6 +1429,81 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       );
     }
   }
+
+  private assertPreparing(): void {
+    this.assertHealthy();
+    if (this.sealed) {
+      throw new Error('Staged kernel publication is sealed for commit.');
+    }
+  }
+}
+
+const enum StagedDetailOutcome {
+  Added,
+  ReusedStaged,
+  ReusedCommitted,
+}
+
+function stagedRevisionKey(surface: KernelPublicationSurface, handle: string): string {
+  return `${surface}\0${handle}`;
+}
+
+function cloneWriterSets<THandle extends string>(
+  source: ReadonlyMap<THandle, ReadonlySet<KernelPublicationWriterId>>,
+): Map<THandle, Set<KernelPublicationWriterId>> {
+  return new Map([...source].map(([handle, writers]) => [handle, new Set(writers)]));
+}
+
+function registerAdmissionWriter<THandle extends string>(
+  writersByHandle: Map<THandle, Set<KernelPublicationWriterId>>,
+  handle: THandle,
+  writerId: KernelPublicationWriterId,
+): void {
+  const writers = writersByHandle.get(handle) ?? new Set<KernelPublicationWriterId>();
+  writers.add(writerId);
+  writersByHandle.set(handle, writers);
+}
+
+function admissionAttempts<
+  THandle extends string,
+  TSnapshot,
+  TAttempt,
+>(
+  snapshots: ReadonlyMap<THandle, TSnapshot>,
+  writersByHandle: ReadonlyMap<THandle, ReadonlySet<KernelPublicationWriterId>>,
+  Attempt: new (writerId: KernelPublicationWriterId, snapshot: TSnapshot) => TAttempt,
+): readonly TAttempt[] {
+  return [...writersByHandle].flatMap(([handle, writers]) => {
+    const snapshot = snapshots.get(handle);
+    if (snapshot == null) {
+      throw new Error(`Admission writers for ${handle} have no exact catalog snapshot.`);
+    }
+    return [...writers].map((writerId) => new Attempt(writerId, snapshot));
+  });
+}
+
+function requiredStagedWriter<THandle extends string>(
+  writers: ReadonlyMap<THandle, KernelPublicationWriterId>,
+  handle: THandle,
+  surface: KernelPublicationSurface,
+): KernelPublicationWriterId {
+  const writer = writers.get(handle);
+  if (writer == null) {
+    throw new Error(`Staged ${surface} ${handle} has no writer attribution.`);
+  }
+  return writer;
+}
+
+function requiredStagedMutationOrdinal<THandle extends string>(
+  ordinals: ReadonlyMap<THandle, number>,
+  handle: THandle,
+  surface: KernelPublicationSurface,
+): number {
+  const ordinal = ordinals.get(handle);
+  if (ordinal == null) {
+    throw new Error(`Staged ${surface} ${handle} has no mutation revision.`);
+  }
+  return ordinal;
 }
 
 type MutableKernelCountSnapshot = {

@@ -1,0 +1,616 @@
+import { describe, expect, test } from 'vitest';
+
+import { ConfigurationProductDetails } from '../src/configuration/product-details.js';
+import {
+  BindingContext,
+  BindingContextKind,
+  BindingScope,
+  BindingScopeCreator,
+  BindingScopeCreatorKind,
+  BindingScopeOwnerKind,
+  OverrideContext,
+} from '../src/configuration/scope.js';
+import {
+  FrameworkCapabilityAdmissionState,
+  FrameworkCapabilityAvailabilityState,
+  FrameworkCapabilityDemand,
+  FrameworkCapabilityDemandKind,
+  FrameworkCapabilityDemandSiteKind,
+} from '../src/framework/capability-demand.js';
+import { FrameworkProductDetails } from '../src/framework/product-details.js';
+import { KernelHandleFactory, type ProductHandle } from '../src/kernel/handles.js';
+import { KernelPublicationSurface } from '../src/kernel/publication-surface.js';
+import type { ProductDetailDescriptor } from '../src/kernel/detail-descriptors.js';
+import {
+  KernelProductDetailReference,
+  type KernelDetailReference,
+} from '../src/kernel/detail-references.js';
+import {
+  ComputedObservationDependencyMode,
+} from '../src/observation/computed-observation.js';
+import {
+  ComputedObserverObservedDependency,
+  ComputedObserverRuntimeKind,
+  ComputedObserverSource,
+  ComputedObserverSourceReference,
+  ComputedObserverSourceTriggerKind,
+} from '../src/observation/computed-observer-source.js';
+import { ObservationProductDetails } from '../src/observation/product-details.js';
+import {
+  RuntimeBindingDataFlow,
+  RuntimeBindingDataFlowDirection,
+  RuntimeBindingDataFlowSourceAssignmentKind,
+  RuntimeBindingDataFlowSourceKind,
+  RuntimeBindingObservedDependency,
+  RuntimeBindingSourceEvaluationKind,
+  RuntimeBindingValueChannelKind,
+  RuntimeBindingValueChannelReference,
+  RuntimeBindingValueChannelTargetMutationKind,
+  RuntimeObservedDependencyKind,
+  RuntimeObservedMemberSourceState,
+} from '../src/observation/runtime-binding-observation.js';
+import { RuntimeWatcherObservedDependency } from '../src/observation/runtime-watcher-observation.js';
+import {
+  computedObserverSourceReferenceReferences,
+  runtimeBindingValueChannelReferenceReferences,
+  runtimeEffectReferenceReferences,
+} from '../src/observation/structural-references.js';
+import {
+  RuntimeEffect,
+  RuntimeEffectDependencyEvaluationKind,
+  RuntimeEffectKind,
+  RuntimeEffectObservedDependency,
+  RuntimeEffectReference,
+} from '../src/observation/runtime-effect.js';
+import {
+  StateGetterBinding,
+  StateGetterBindingStoreResolutionKind,
+} from '../src/state/model.js';
+import { StateProductDetails } from '../src/state/product-details.js';
+import { FrameworkRegistrationCapability } from '../src/registration/framework-registration-manifest.js';
+import { FrameworkRegistrationKind } from '../src/registration/registration-reference.js';
+import { ResourceDetailDescriptors } from '../src/resources/detail-descriptors.js';
+import { ResourceDefinitionKind } from '../src/resources/resource-kind.js';
+import {
+  AttributeClassification,
+  AttributeClassificationKind,
+} from '../src/template/attribute-syntax.js';
+import {
+  TemplateResourceVisibilityKind,
+  TemplateVisibleResource,
+} from '../src/template/compiler-world-reference.js';
+import { TemplateDetailDescriptors } from '../src/template/detail-descriptors.js';
+import { HtmlIrNodeKind, HtmlNodeReference } from '../src/template/html-ir.js';
+import { TemplateProductDetails } from '../src/template/product-details.js';
+import {
+  RuntimeBindingKind,
+  RuntimeBindingReference,
+  RuntimeBindingSourceOperationKind,
+  RuntimeBindingSourceOperationReference,
+  RuntimeBindingTargetAccessLookup,
+  RuntimeBindingTargetAccessReference,
+  RuntimeBindingTargetKind,
+  RuntimeBindingTargetOperationKind,
+  RuntimeBindingTargetOperationReference,
+} from '../src/template/runtime-binding.js';
+import {
+  runtimeBindingReferenceReferences,
+  runtimeBindingSourceOperationReferenceReferences,
+  runtimeBindingTargetAccessReferenceReferences,
+  runtimeBindingTargetOperationReferenceReferences,
+  runtimeValueConverterApplicationReferenceReferences,
+  runtimeWatcherReferenceReferences,
+} from '../src/template/structural-references.js';
+import { RuntimeValueConverterApplicationReference } from '../src/template/runtime-value-converter.js';
+import { RuntimeWatcherKind, RuntimeWatcherReference } from '../src/template/runtime-watcher.js';
+
+describe('product-detail structural references', () => {
+  test('projects every compact runtime reference to its exact rich-detail occupancy', () => {
+    const handles = new KernelHandleFactory('compact-runtime-structural-references');
+    const address = handles.address('source');
+    const binding = handles.product('binding');
+    const targetAccess = handles.product('target-access');
+    const targetOperation = handles.product('target-operation');
+    const sourceOperation = handles.product('source-operation');
+    const valueChannel = handles.product('value-channel');
+    const valueConverter = handles.product('value-converter');
+    const watcher = handles.product('watcher');
+    const computedObserver = handles.product('computed-observer');
+    const effect = handles.product('effect');
+
+    const cases = [
+      {
+        descriptor: TemplateDetailDescriptors.RuntimeBinding,
+        handle: binding,
+        references: runtimeBindingReferenceReferences(new RuntimeBindingReference(
+          RuntimeBindingKind.Property,
+          binding,
+          handles.identity('binding'),
+          address,
+        )),
+      },
+      {
+        descriptor: TemplateDetailDescriptors.RuntimeBindingTargetAccess,
+        handle: targetAccess,
+        references: runtimeBindingTargetAccessReferenceReferences(new RuntimeBindingTargetAccessReference(
+          RuntimeBindingTargetAccessLookup.Observer,
+          RuntimeBindingTargetKind.Node,
+          'value',
+          targetAccess,
+          handles.identity('target-access'),
+          address,
+        )),
+      },
+      {
+        descriptor: TemplateDetailDescriptors.RuntimeBindingTargetOperation,
+        handle: targetOperation,
+        references: runtimeBindingTargetOperationReferenceReferences(new RuntimeBindingTargetOperationReference(
+          RuntimeBindingTargetOperationKind.PropertySet,
+          RuntimeBindingTargetKind.Node,
+          'value',
+          'value',
+          targetOperation,
+          handles.identity('target-operation'),
+          address,
+        )),
+      },
+      {
+        descriptor: TemplateDetailDescriptors.RuntimeBindingSourceOperation,
+        handle: sourceOperation,
+        references: runtimeBindingSourceOperationReferenceReferences(new RuntimeBindingSourceOperationReference(
+          RuntimeBindingSourceOperationKind.RefAssignTarget,
+          RuntimeBindingTargetKind.BindingContext,
+          'element',
+          sourceOperation,
+          handles.identity('source-operation'),
+          address,
+        )),
+      },
+      {
+        descriptor: ObservationProductDetails.RuntimeBindingValueChannel.descriptor,
+        handle: valueChannel,
+        references: runtimeBindingValueChannelReferenceReferences(new RuntimeBindingValueChannelReference(
+          RuntimeBindingValueChannelKind.RawProperty,
+          valueChannel,
+          handles.identity('value-channel'),
+          address,
+        )),
+      },
+      {
+        descriptor: TemplateDetailDescriptors.RuntimeValueConverterApplication,
+        handle: valueConverter,
+        references: runtimeValueConverterApplicationReferenceReferences(
+          new RuntimeValueConverterApplicationReference(
+            'identity',
+            null,
+            valueConverter,
+            handles.identity('value-converter'),
+            address,
+          ),
+        ),
+      },
+      {
+        descriptor: TemplateDetailDescriptors.RuntimeWatcher,
+        handle: watcher,
+        references: runtimeWatcherReferenceReferences(new RuntimeWatcherReference(
+          RuntimeWatcherKind.Expression,
+          watcher,
+          handles.identity('watcher'),
+          address,
+        )),
+      },
+      {
+        descriptor: ObservationProductDetails.ComputedObserverSource.descriptor,
+        handle: computedObserver,
+        references: computedObserverSourceReferenceReferences(new ComputedObserverSourceReference(
+          ComputedObserverRuntimeKind.ComputedObserver,
+          computedObserver,
+          handles.identity('computed-observer'),
+          address,
+        )),
+      },
+      {
+        descriptor: ObservationProductDetails.RuntimeEffect.descriptor,
+        handle: effect,
+        references: runtimeEffectReferenceReferences(new RuntimeEffectReference(
+          RuntimeEffectKind.Run,
+          RuntimeEffectDependencyEvaluationKind.ConnectableRun,
+          effect,
+          handles.identity('effect'),
+          address,
+        )),
+      },
+    ] as const;
+
+    for (const entry of cases) {
+      expectExactProductDetailReferences(entry.references, [[entry.descriptor, entry.handle]]);
+    }
+
+    expect([
+      runtimeBindingReferenceReferences(null),
+      runtimeBindingTargetAccessReferenceReferences(null),
+      runtimeBindingTargetOperationReferenceReferences(null),
+      runtimeBindingSourceOperationReferenceReferences(null),
+      runtimeBindingValueChannelReferenceReferences(null),
+      runtimeValueConverterApplicationReferenceReferences(null),
+      runtimeWatcherReferenceReferences(null),
+      computedObserverSourceReferenceReferences(null),
+      runtimeEffectReferenceReferences(null),
+    ]).toEqual([[], [], [], [], [], [], [], [], []]);
+  });
+
+  test('retains exact rich-detail occupancy across embedded observation and state products', () => {
+    const handles = new KernelHandleFactory('product-detail-structural-references');
+    const sourceAddress = handles.address('source');
+
+    const runtimeBindingProduct = handles.product('binding');
+    const bindingDataFlowProduct = handles.product('binding-data-flow');
+    const expressionParseProduct = handles.product('expression-parse');
+    const bindingDependency = new RuntimeBindingObservedDependency(
+      handles.product('binding-dependency'),
+      handles.identity('binding-dependency'),
+      new RuntimeBindingReference(
+        RuntimeBindingKind.Property,
+        runtimeBindingProduct,
+        handles.identity('binding'),
+        sourceAddress,
+      ),
+      bindingDataFlowProduct,
+      expressionParseProduct,
+      null,
+      RuntimeObservedDependencyKind.TemplateExpressionRead,
+      'AccessMember',
+      'value',
+      'value',
+      'member',
+      null,
+      null,
+      null,
+      null,
+      RuntimeObservedMemberSourceState.Open,
+      null,
+      0,
+      6,
+      0,
+      6,
+      sourceAddress,
+    );
+    expectExactProductDetailReferences(
+      ObservationProductDetails.RuntimeBindingObservedDependency.referencesFor(bindingDependency),
+      [
+        [TemplateDetailDescriptors.RuntimeBinding, runtimeBindingProduct],
+        [ObservationProductDetails.RuntimeBindingDataFlow.descriptor, bindingDataFlowProduct],
+        [TemplateDetailDescriptors.ExpressionParse, expressionParseProduct],
+      ],
+    );
+
+    const watcherProduct = handles.product('watcher');
+    const watcherDependency = new RuntimeWatcherObservedDependency(
+      handles.product('watcher-dependency'),
+      handles.identity('watcher-dependency'),
+      new RuntimeWatcherReference(
+        RuntimeWatcherKind.Expression,
+        watcherProduct,
+        handles.identity('watcher'),
+        sourceAddress,
+      ),
+      expressionParseProduct,
+      RuntimeObservedDependencyKind.TemplateExpressionRead,
+      'AccessMember',
+      'value',
+      'value',
+      'member',
+      null,
+      null,
+      null,
+      null,
+      0,
+      6,
+      sourceAddress,
+    );
+    expectExactProductDetailReferences(
+      ObservationProductDetails.RuntimeWatcherObservedDependency.referencesFor(watcherDependency),
+      [
+        [TemplateDetailDescriptors.RuntimeWatcher, watcherProduct],
+        [TemplateDetailDescriptors.ExpressionParse, expressionParseProduct],
+      ],
+    );
+
+    const dataFlow = new RuntimeBindingDataFlow(
+      bindingDataFlowProduct,
+      handles.identity('binding-data-flow'),
+      bindingDependency.binding,
+      null,
+      null,
+      null,
+      null,
+      expressionParseProduct,
+      null,
+      RuntimeBindingDataFlowDirection.SourceToTarget,
+      RuntimeBindingSourceEvaluationKind.ConnectableRead,
+      RuntimeBindingValueChannelTargetMutationKind.WritesTarget,
+      true,
+      RuntimeBindingDataFlowSourceKind.Member,
+      'value',
+      'value',
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      [],
+      true,
+      RuntimeBindingDataFlowSourceAssignmentKind.RuntimeAssignable,
+      null,
+      [],
+      true,
+      false,
+      [],
+      [],
+      null,
+      null,
+      sourceAddress,
+    );
+    expectExactProductDetailReferences(
+      ObservationProductDetails.RuntimeBindingDataFlow.referencesFor(dataFlow),
+      [
+        [TemplateDetailDescriptors.RuntimeBinding, runtimeBindingProduct],
+        [TemplateDetailDescriptors.ExpressionParse, expressionParseProduct],
+      ],
+    );
+
+    const computedObserverProduct = handles.product('computed-observer');
+    const computedDependencyProduct = handles.product('computed-dependency');
+    const computedObserverReference = new ComputedObserverSourceReference(
+      ComputedObserverRuntimeKind.ComputedObserver,
+      computedObserverProduct,
+      handles.identity('computed-observer'),
+      sourceAddress,
+    );
+    const computedDependency = new ComputedObserverObservedDependency(
+      computedDependencyProduct,
+      handles.identity('computed-dependency'),
+      computedObserverReference,
+      RuntimeObservedDependencyKind.ProxyPropertyRead,
+      'AccessMember',
+      'state',
+      'state',
+      'value',
+      null,
+      null,
+      0,
+      5,
+      sourceAddress,
+    );
+    const computedObserver = new ComputedObserverSource(
+      computedObserverProduct,
+      computedObserverReference.identityHandle!,
+      'project',
+      ComputedObserverRuntimeKind.ComputedObserver,
+      ComputedObserverSourceTriggerKind.AccessorDescriptor,
+      'ViewModel',
+      'value',
+      ComputedObservationDependencyMode.ProxyAutoTrack,
+      [],
+      0,
+      'sync',
+      null,
+      [computedDependency],
+      sourceAddress,
+    );
+    expectProductDetailReference(
+      ObservationProductDetails.ComputedObserverSource.referencesFor(computedObserver),
+      ObservationProductDetails.ComputedObserverObservedDependency.descriptor,
+      computedDependencyProduct,
+    );
+    expectProductDetailReference(
+      ObservationProductDetails.ComputedObserverObservedDependency.referencesFor(computedDependency),
+      ObservationProductDetails.ComputedObserverSource.descriptor,
+      computedObserverProduct,
+    );
+
+    const effectProduct = handles.product('runtime-effect');
+    const effectDependencyProduct = handles.product('runtime-effect-dependency');
+    const effectReference = new RuntimeEffectReference(
+      RuntimeEffectKind.Run,
+      RuntimeEffectDependencyEvaluationKind.ConnectableRun,
+      effectProduct,
+      handles.identity('runtime-effect'),
+      sourceAddress,
+    );
+    const effectDependency = new RuntimeEffectObservedDependency(
+      effectDependencyProduct,
+      handles.identity('runtime-effect-dependency'),
+      effectReference,
+      RuntimeObservedDependencyKind.ProxyPropertyRead,
+      'AccessMember',
+      'state',
+      'state',
+      'value',
+      null,
+      null,
+      null,
+      null,
+      0,
+      5,
+      sourceAddress,
+    );
+    const effect = new RuntimeEffect(
+      RuntimeEffectKind.Run,
+      RuntimeEffectDependencyEvaluationKind.ConnectableRun,
+      effectProduct,
+      effectReference.identityHandle,
+      true,
+      [effectDependency],
+      sourceAddress,
+    );
+    expectProductDetailReference(
+      ObservationProductDetails.RuntimeEffect.referencesFor(effect),
+      ObservationProductDetails.RuntimeEffectObservedDependency.descriptor,
+      effectDependencyProduct,
+    );
+    expectProductDetailReference(
+      ObservationProductDetails.RuntimeEffectObservedDependency.referencesFor(effectDependency),
+      ObservationProductDetails.RuntimeEffect.descriptor,
+      effectProduct,
+    );
+
+    const storeProduct = handles.product('state-store');
+    const getterBinding = new StateGetterBinding(
+      handles.product('state-getter-binding'),
+      handles.identity('state-getter-binding'),
+      sourceAddress,
+      sourceAddress,
+      sourceAddress,
+      'field',
+      'items',
+      null,
+      StateGetterBindingStoreResolutionKind.DefaultStore,
+      storeProduct,
+      handles.identity('state-store'),
+      '(state) => state.items',
+      null,
+      null,
+      null,
+    );
+    expectProductDetailReference(
+      StateProductDetails.GetterBinding.referencesFor(getterBinding),
+      StateProductDetails.StoreConfiguration.descriptor,
+      storeProduct,
+    );
+  });
+
+  test('preserves exact producer occupancies across scope, framework, and resource carriers', () => {
+    const handles = new KernelHandleFactory('production-product-detail-structural-references');
+    const sourceAddress = handles.address('source');
+    const assignmentInstructionProduct = handles.product('assignment-instruction');
+    const scopeProduct = handles.product('scope');
+    const bindingContextProduct = handles.product('binding-context');
+    const overrideContextProduct = handles.product('override-context');
+    const bindingContext = new BindingContext(
+      bindingContextProduct,
+      handles.identity('binding-context'),
+      BindingContextKind.ViewModel,
+      null,
+      null,
+      [],
+      sourceAddress,
+    );
+    const overrideContext = new OverrideContext(
+      overrideContextProduct,
+      handles.identity('override-context'),
+      scopeProduct,
+      null,
+      [],
+      sourceAddress,
+    );
+    const scope = new BindingScope(
+      scopeProduct,
+      handles.identity('scope'),
+      null,
+      bindingContext,
+      overrideContext,
+      false,
+      BindingScopeOwnerKind.SyntheticView,
+      sourceAddress,
+      [],
+      [new BindingScopeCreator(
+        BindingScopeCreatorKind.RuntimeAssignment,
+        assignmentInstructionProduct,
+        sourceAddress,
+      )],
+    );
+    expectExactProductDetailReferences(
+      ConfigurationProductDetails.BindingScope.referencesFor(scope),
+      [
+        [ConfigurationProductDetails.BindingContext.descriptor, bindingContextProduct],
+        [ConfigurationProductDetails.OverrideContext.descriptor, overrideContextProduct],
+        [TemplateDetailDescriptors.Instruction, assignmentInstructionProduct],
+      ],
+    );
+
+    const definitionProduct = handles.product('resource-definition');
+    const demand = new FrameworkCapabilityDemand(
+      handles.product('capability-demand'),
+      handles.identity('capability-demand'),
+      'project',
+      FrameworkCapabilityDemandSiteKind.TemplateElement,
+      FrameworkCapabilityDemandKind.RuntimeHtmlDefaultResources,
+      FrameworkRegistrationCapability.RuntimeHtmlDefaultResources,
+      [FrameworkRegistrationKind.StandardConfiguration],
+      ['@aurelia/runtime-html'],
+      FrameworkCapabilityAdmissionState.Admitted,
+      [],
+      FrameworkCapabilityAvailabilityState.EvidenceFound,
+      [],
+      '@aurelia/runtime-html',
+      'if',
+      sourceAddress,
+      null,
+      sourceAddress,
+      definitionProduct,
+    );
+    expectExactProductDetailReferences(
+      FrameworkProductDetails.CapabilityDemand.referencesFor(demand),
+      [[ResourceDetailDescriptors.Definition, definitionProduct]],
+    );
+
+    const headerProduct = handles.product('built-in-resource-header');
+    const classification = new AttributeClassification(
+      handles.product('attribute-syntax'),
+      new HtmlNodeReference(HtmlIrNodeKind.Element, null, null, sourceAddress),
+      AttributeClassificationKind.CustomAttribute,
+      ResourceDefinitionKind.CustomElement,
+      new TemplateVisibleResource(
+        ResourceDefinitionKind.CustomElement,
+        'built-in-element',
+        [],
+        headerProduct,
+        handles.identity('built-in-resource-header'),
+        definitionProduct,
+        null,
+        TemplateResourceVisibilityKind.Configured,
+        sourceAddress,
+      ),
+      null,
+      null,
+      [],
+    );
+    expectExactProductDetailReferences(
+      TemplateProductDetails.AttributeClassification.referencesFor(classification),
+      [
+        [TemplateDetailDescriptors.AttributeSyntax, classification.syntaxProductHandle],
+        [ResourceDetailDescriptors.DefinitionHeader, headerProduct],
+        [ResourceDetailDescriptors.Definition, definitionProduct],
+      ],
+    );
+  });
+});
+
+function expectExactProductDetailReferences(
+  references: readonly KernelDetailReference[],
+  expected: readonly (readonly [ProductDetailDescriptor<unknown>, ProductHandle])[],
+): void {
+  expect(references.filter((reference) => reference.surface === KernelPublicationSurface.ProductDetail)).toEqual(
+    expected
+      .map(([descriptor, handle]) => new KernelProductDetailReference(handle, descriptor.detailKind))
+      .sort((left, right) => left.key.localeCompare(right.key)),
+  );
+}
+
+function expectProductDetailReference(
+  references: readonly KernelDetailReference[],
+  descriptor: ProductDetailDescriptor<unknown>,
+  handle: ProductHandle,
+): void {
+  expect(references).toContainEqual(expect.objectContaining({
+    surface: KernelPublicationSurface.ProductDetail,
+    handle,
+    detailKind: descriptor.detailKind,
+  }));
+}
