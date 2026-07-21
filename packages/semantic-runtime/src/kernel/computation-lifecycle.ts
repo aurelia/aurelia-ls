@@ -4,6 +4,7 @@ import type { MaterializationRecord } from './materialization.js';
 import type { ProductDetailSlot } from './product-details.js';
 import {
   KernelDetailAdmission,
+  KernelPublicationDecision,
   KernelPublicationDecisionKind,
   KernelPublicationManifest,
   KernelPublicationPlan,
@@ -13,7 +14,6 @@ import {
   type KernelStagedEntryRevision,
   type SealedKernelPublicationCandidate,
   StagedKernelPublicationContext,
-  type KernelPublicationDecision,
   type KernelHotDetailAdmissionSnapshot,
   type KernelProductDetailAdmissionSnapshot,
 } from './publication.js';
@@ -404,6 +404,49 @@ export class ComputationTransition {
     this.changedReads = Object.freeze([...changedReads]);
     this.invalidReads = Object.freeze([...invalidReads]);
     this.publications = Object.freeze([...publications]);
+    Object.freeze(this);
+  }
+}
+
+export const enum ComputationRetirementCause {
+  /** Domain authority explicitly retired one exact committed generation. */
+  Explicit = 'explicit',
+  /** Kernel lifetime disposal reclaimed the generation's complete publication. */
+  LifetimeDisposal = 'lifetime-disposal',
+}
+
+/** Stable polling position immediately before the next retirement event ordinal. */
+export class ComputationRetirementEventMarker {
+  constructor(readonly nextEventOrdinal: number) {
+    Object.freeze(this);
+  }
+}
+
+/** One exact output withdrawn while retiring a committed computation generation. */
+export class ComputationRetiredOutput {
+  constructor(
+    readonly output: ComputationOutput,
+    readonly decision: KernelPublicationDecision,
+    readonly childId: ComputationChildId | null,
+    readonly childRole: ComputationChildRole | null,
+    readonly childScc: ComputationChildScc | null,
+  ) {
+    Object.freeze(this);
+  }
+}
+
+/** Causal retirement event retained after the corresponding producer/read indexes have been cleared. */
+export class ComputationRetirementEvent {
+  readonly withdrawnOutputs: readonly ComputationRetiredOutput[];
+
+  constructor(
+    readonly ordinal: number,
+    readonly cause: ComputationRetirementCause,
+    readonly computationId: ComputationId,
+    readonly runSequence: number,
+    withdrawnOutputs: readonly ComputationRetiredOutput[],
+  ) {
+    this.withdrawnOutputs = Object.freeze([...withdrawnOutputs]);
     Object.freeze(this);
   }
 }
@@ -1395,6 +1438,8 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
   private readonly childReadersByKey = new Map<string, Set<ComputationChildId>>();
   private readonly childProducerByKey = new Map<string, ComputationChildId>();
   private nextComputationOrdinal = 1;
+  private nextRetirementEventOrdinal = 1;
+  private readonly retirementEvents: ComputationRetirementEvent[] = [];
   private readonly publicationOwner = {};
 
   constructor(private readonly store: KernelStore) {
@@ -1460,6 +1505,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     if (entry == null || state?.committedRunSequence !== runSequence) {
       return false;
     }
+    let retiredOutputs: readonly ComputationRetiredOutput[] = [];
     const replacement = this.store.replaceOwnedPublication(
       state.publication,
       new KernelPublicationPlan(new KernelStoreBatch([], `retire:${computationId}@${runSequence}`)),
@@ -1472,6 +1518,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
             computationId,
           );
           this.validateChildReplacement(state.children, []);
+          retiredOutputs = this.prepareRetiredOutputs(state, decisions);
         },
         validateCurrent: () => {
           if (entry.state !== state) {
@@ -1488,6 +1535,11 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     entry.admittedGenerationDomains.clear();
     entry.latestRunSequence += 1;
     entry.latestFinishedRunSequence = entry.latestRunSequence;
+    this.appendRetirementEvent(
+      state,
+      ComputationRetirementCause.Explicit,
+      retiredOutputs,
+    );
     return true;
   }
 
@@ -1516,6 +1568,14 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
 
   readTransitions(computationId: ComputationId): readonly ComputationTransition[] {
     return [...(this.entriesById.get(computationId)?.transitions ?? [])];
+  }
+
+  markRetirementEvents(): ComputationRetirementEventMarker {
+    return new ComputationRetirementEventMarker(this.nextRetirementEventOrdinal);
+  }
+
+  readRetirementEventsSince(marker: ComputationRetirementEventMarker): readonly ComputationRetirementEvent[] {
+    return this.retirementEvents.filter((event) => event.ordinal >= marker.nextEventOrdinal);
   }
 
   retainActiveDependencies(retention: KernelStoreRetentionCollector): void {
@@ -1548,6 +1608,15 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       if (state == null || lifetimeOrdinal == null || lifetimeOrdinal < context.marker.nextLifetimeOrdinal) {
         continue;
       }
+      const retiredOutputs = this.prepareRetiredOutputs(
+        state,
+        state.outputs.map((output) => new KernelPublicationDecision(
+          output.handle,
+          output.surface,
+          output.detailKind,
+          KernelPublicationDecisionKind.Withdraw,
+        )),
+      );
       this.replaceReadIndex(state.reads, [], entry.computationId);
       this.commitProducerReplacement(state.outputs, [], entry.computationId);
       this.commitChildReplacement(state.children, []);
@@ -1556,6 +1625,11 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       entry.admittedGenerationDomains.clear();
       // Any run prepared against the reclaimed closure must not resurrect it after disposal.
       entry.latestRunSequence += 1;
+      this.appendRetirementEvent(
+        state,
+        ComputationRetirementCause.LifetimeDisposal,
+        retiredOutputs,
+      );
     }
   }
 
@@ -1811,6 +1885,58 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
         this.childProducerByKey.set(output.readKey, child.childId);
       }
     }
+  }
+
+  private prepareRetiredOutputs(
+    state: ComputationState,
+    decisions: readonly KernelPublicationDecision[],
+  ): readonly ComputationRetiredOutput[] {
+    const outputByReadKey = new Map(state.outputs.map((output) => [output.readKey, output]));
+    const childByOutputReadKey = new Map<string, ComputationChildState>();
+    for (const child of state.children) {
+      for (const output of child.outputs) {
+        childByOutputReadKey.set(output.readKey, child);
+      }
+    }
+    const withdrawnOutputs = decisions.flatMap((decision) => {
+      if (decision.decision !== KernelPublicationDecisionKind.Withdraw) {
+        return [];
+      }
+      const readKey = computationOutputReadKey(decision.surface, decision.handle);
+      const output = outputByReadKey.get(readKey) ?? null;
+      if (output == null) {
+        throw new Error(`Retirement withdrew ${readKey} outside the committed computation output manifest.`);
+      }
+      const child = childByOutputReadKey.get(readKey) ?? null;
+      return [new ComputationRetiredOutput(
+        output,
+        decision,
+        child?.childId ?? null,
+        child?.role ?? null,
+        child?.scc ?? null,
+      )];
+    });
+    if (withdrawnOutputs.length !== state.outputs.length) {
+      throw new Error(
+        `Retirement of ${state.computationId}@${state.committedRunSequence} withdrew `
+        + `${withdrawnOutputs.length} of ${state.outputs.length} committed outputs.`,
+      );
+    }
+    return withdrawnOutputs.sort((left, right) => left.output.readKey.localeCompare(right.output.readKey));
+  }
+
+  private appendRetirementEvent(
+    state: ComputationState,
+    cause: ComputationRetirementCause,
+    withdrawnOutputs: readonly ComputationRetiredOutput[],
+  ): void {
+    this.retirementEvents.push(new ComputationRetirementEvent(
+      this.nextRetirementEventOrdinal++,
+      cause,
+      state.computationId,
+      state.committedRunSequence,
+      withdrawnOutputs,
+    ));
   }
 }
 

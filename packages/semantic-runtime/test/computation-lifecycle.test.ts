@@ -16,6 +16,7 @@ import {
   ComputationChildRole,
   ComputationChildSccKind,
   ComputationCommitState,
+  ComputationRetirementCause,
   computationHotDetailReadKey,
   ComputationLifecycleRegistry,
   computationProductDetailReadKey,
@@ -52,6 +53,7 @@ import {
   publishProductDetail,
   type KernelDetailComparator,
 } from "../src/kernel/publication.js";
+import { KernelPublicationSurface } from "../src/kernel/publication-surface.js";
 import {
   SourceTextSnapshotAuthority,
   SourceTextSnapshotState,
@@ -4676,6 +4678,7 @@ describe("computation lifecycle", () => {
     const store = new KernelStore("computation-empty-publication-retirement");
     const lifecycle = new ComputationLifecycleRegistry(store);
     const marker = store.markLifetime();
+    const retirementMarker = lifecycle.markRetirementEvents();
     const run = lifecycle.begin(locus("empty-publication-retirement"));
 
     expect(run.commit().state).toBe(ComputationCommitState.Committed);
@@ -4689,10 +4692,92 @@ describe("computation lifecycle", () => {
     store.disposeSince(marker);
 
     expect(lifecycle.readState(run.computationId)).toBeNull();
+    expect(lifecycle.readRetirementEventsSince(retirementMarker)).toEqual([
+      expect.objectContaining({
+        cause: ComputationRetirementCause.LifetimeDisposal,
+        computationId: run.computationId,
+        runSequence: run.runSequence,
+        withdrawnOutputs: [],
+      }),
+    ]);
     expect(() => store.replacePublication(
       state.publication,
       new KernelPublicationPlan(new KernelStoreBatch([], "empty-publication-retirement:stale")),
     )).toThrow(/stale or foreign publication manifest/);
+  });
+
+  test("publishes exact child-attributed withdrawals after explicit retirement clears ownership", () => {
+    const store = new KernelStore("computation-retirement-events");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("retirement-events:product");
+    const hotHandle = store.handles.hotDetail("retirement-events:hot");
+    const provenanceHandle = store.handles.provenance("retirement-events:product");
+    const productSlot = defineTestProductDetailSlot<{ readonly value: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.retirement-events-product",
+      "Product detail retired through the lifecycle event ledger.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly value: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.retirement-events-hot",
+      "Hot detail retired through the lifecycle event ledger.",
+    );
+    const family = childLocus("retirement-events");
+    const run = lifecycle.begin(locus("retirement-events"));
+    run.withChildPartition(() => {
+      run.withChild(family, () => {
+        run.publish(new KernelPublicationPlan(
+          new KernelStoreBatch([
+            new ProvenanceRecord(provenanceHandle),
+            new MaterializedProduct(
+              productHandle,
+              KernelVocabulary.Template.Source.key,
+              null,
+              null,
+              provenanceHandle,
+            ),
+          ], "retirement-events:publication"),
+          [publishProductDetail(productSlot, productHandle, { value: 1 })],
+          [publishHotDetail(hotSlot, productHandle, hotHandle, { value: 1 })],
+        ));
+      });
+    });
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(run.computationId);
+    const child = state?.children.find((candidate) => candidate.locus.reconciliationKey === family.reconciliationKey)
+      ?? null;
+    const retirementMarker = lifecycle.markRetirementEvents();
+
+    expect(lifecycle.retireCommittedGeneration(run.computationId, run.runSequence)).toBe(true);
+    expect(lifecycle.readState(run.computationId)).toBeNull();
+    const events = lifecycle.readRetirementEventsSince(retirementMarker);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual(expect.objectContaining({
+      ordinal: retirementMarker.nextEventOrdinal,
+      cause: ComputationRetirementCause.Explicit,
+      computationId: run.computationId,
+      runSequence: run.runSequence,
+    }));
+    expect(events[0]?.withdrawnOutputs.map((row) => row.decision.surface).sort()).toEqual([
+      KernelPublicationSurface.HotDetail,
+      KernelPublicationSurface.ProductDetail,
+      KernelPublicationSurface.Record,
+      KernelPublicationSurface.Record,
+    ].sort());
+    expect(events[0]?.withdrawnOutputs.every((row) =>
+      row.decision.decision === KernelPublicationDecisionKind.Withdraw
+      && row.childId === child?.childId
+      && row.childRole === ComputationChildRole.Declared
+      && row.childScc === child?.scc
+    )).toBe(true);
+    for (const row of events[0]?.withdrawnOutputs ?? []) {
+      expect(lifecycle.producerFor(row.output.readKey)).toBeNull();
+      expect(lifecycle.childProducerFor(row.output.readKey)).toBeNull();
+    }
+    const afterRetirement = lifecycle.markRetirementEvents();
+    expect(lifecycle.readRetirementEventsSince(afterRetirement)).toEqual([]);
+    expect(lifecycle.retireCommittedGeneration(run.computationId, run.runSequence)).toBe(false);
+    expect(lifecycle.readRetirementEventsSince(afterRetirement)).toEqual([]);
   });
 
   test("retires a store-owned empty publication manifest at its lifetime boundary", () => {
