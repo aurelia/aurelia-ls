@@ -22,6 +22,11 @@ import {
   type KernelDetailReferenceProjector,
 } from './detail-references.js';
 import type { ProductDetailDescriptor } from './detail-descriptors.js';
+import type {
+  KernelComparablePublicationDecision,
+  KernelDetailComparator,
+  KernelPublicationComparisonContext,
+} from './publication.js';
 
 declare const productDetailSlotBrand: unique symbol;
 
@@ -37,14 +42,18 @@ export class ProductDetailSlot<
 > {
   declare readonly [productDetailSlotBrand]: TDetail;
   private readonly referenceProjector: KernelDetailReferenceProjector<unknown>;
+  private readonly comparator: KernelDetailComparator<unknown> | null;
 
   constructor(
     /** Inert occupancy identity safe to import without pulling in the executable projector graph. */
     readonly descriptor: ProductDetailDescriptor<TDetail, TProductKind>,
     /** Exact non-owner kernel entries required by this rich payload. */
     referenceProjector: KernelDetailReferenceProjector<TDetail>,
+    /** Slot-owned semantic and witness comparison for fresh replacement candidates. */
+    comparator: KernelDetailComparator<TDetail> | null = null,
   ) {
     this.referenceProjector = referenceProjector as KernelDetailReferenceProjector<unknown>;
+    this.comparator = comparator as KernelDetailComparator<unknown> | null;
     Object.freeze(this);
   }
 
@@ -67,6 +76,14 @@ export class ProductDetailSlot<
   /** Freeze the slot-owned structural closure before publication admits the detail. */
   referencesFor(detail: TDetail): readonly KernelDetailReference[] {
     return mergeKernelDetailReferences(this.referenceProjector(detail));
+  }
+
+  compare(
+    previous: TDetail,
+    next: TDetail,
+    context: KernelPublicationComparisonContext,
+  ): KernelComparablePublicationDecision | null {
+    return this.comparator?.(previous, next, context) ?? null;
   }
 }
 
@@ -561,6 +578,7 @@ export function defineProductDetailSlot<
 >(
   descriptor: ProductDetailDescriptor<TDetail, TProductKind>,
   referenceProjector: KernelDetailReferenceProjector<TDetail>,
+  comparator: KernelDetailComparator<TDetail> | null = null,
 ): ProductDetailSlot<TDetail, TProductKind> {
-  return new ProductDetailSlot(descriptor, referenceProjector);
+  return new ProductDetailSlot(descriptor, referenceProjector, comparator);
 }

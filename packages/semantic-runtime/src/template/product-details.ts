@@ -155,6 +155,7 @@ import type {
   TemplateValueSite,
 } from './value-site.js';
 import { TemplateDetailDescriptors } from './detail-descriptors.js';
+import { compareCompiledTemplateDetails } from './compiled-template-comparison.js';
 
 /**
  * Typed detail slots for template/compiler products.
@@ -189,7 +190,11 @@ export const TemplateProductDetails = {
   HtmlDocument: defineProductDetailSlot(TemplateDetailDescriptors.HtmlDocument, referencesForHtmlDocument),
   HtmlNode: defineProductDetailSlot(TemplateDetailDescriptors.HtmlNode, referencesForHtmlNode),
   HtmlAttribute: defineProductDetailSlot(TemplateDetailDescriptors.HtmlAttribute, referencesForHtmlAttribute),
-  CompiledTemplate: defineProductDetailSlot(TemplateDetailDescriptors.CompiledTemplate, referencesForCompiledTemplate),
+  CompiledTemplate: defineProductDetailSlot(
+    TemplateDetailDescriptors.CompiledTemplate,
+    referencesForCompiledTemplate,
+    compareCompiledTemplateDetails,
+  ),
   RenderTarget: defineProductDetailSlot(TemplateDetailDescriptors.RenderTarget, referencesForTemplateRenderTarget),
   AttributeSyntax: defineProductDetailSlot(TemplateDetailDescriptors.AttributeSyntax, referencesForAttributeSyntax),
   AttributeClassification: defineProductDetailSlot(TemplateDetailDescriptors.AttributeClassification, referencesForAttributeClassification),

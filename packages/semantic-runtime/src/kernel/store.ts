@@ -2539,9 +2539,9 @@ function compareProductDetailPublication(
     return KernelPublicationDecisionKind.Replace;
   }
   if (previous.detail === next.detail) {
-    return KernelPublicationDecisionKind.Retain;
+    return KernelPublicationDecisionKind.Replace;
   }
-  return next.compare?.(previous.detail, next.detail, context) ?? KernelPublicationDecisionKind.Replace;
+  return next.slot.compare(previous.detail, next.detail, context) ?? KernelPublicationDecisionKind.Replace;
 }
 
 function compareHotDetailPublication(
@@ -2556,9 +2556,9 @@ function compareHotDetailPublication(
     return KernelPublicationDecisionKind.Replace;
   }
   if (previous.detail === next.detail) {
-    return KernelPublicationDecisionKind.Retain;
+    return KernelPublicationDecisionKind.Replace;
   }
-  return next.compare?.(previous.detail, next.detail, context) ?? KernelPublicationDecisionKind.Replace;
+  return next.slot.compare(previous.detail, next.detail, context) ?? KernelPublicationDecisionKind.Replace;
 }
 
 function handlesForDecision<THandle extends string>(

@@ -61,7 +61,6 @@ import {
   TemplateRenderTarget,
   TemplateRenderTargetKind,
 } from './compiled-template.js';
-import { compareCompiledTemplateDetails } from './compiled-template-comparison.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilerReadView } from './compiler-read-view.js';
@@ -1798,7 +1797,6 @@ export class CompiledTemplateMaterializer {
           emission.compiledTemplate.productHandle,
           emission.compiledTemplate,
           KernelDetailAdmission.Required,
-          compareCompiledTemplateDetails,
         ),
         ...publishProductDetails(TemplateProductDetails.InstructionSequence, emission.instructionSequences),
         ...publishProductDetails(TemplateProductDetails.RenderTarget, emission.renderTargets),

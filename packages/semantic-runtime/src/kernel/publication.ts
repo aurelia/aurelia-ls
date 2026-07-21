@@ -97,7 +97,6 @@ export class KernelProductDetailPublication<TDetail> {
     readonly productHandle: ProductHandle,
     readonly detail: TDetail,
     readonly admission: KernelDetailAdmission = KernelDetailAdmission.Required,
-    readonly compare: KernelDetailComparator<TDetail> | null = null,
   ) {
     this.references = slot.referencesFor(detail);
     Object.freeze(this);
@@ -114,7 +113,6 @@ export class KernelHotDetailPublication<TDetail> {
     readonly handle: HotDetailHandle,
     readonly detail: TDetail,
     readonly admission: KernelDetailAdmission = KernelDetailAdmission.Required,
-    readonly compare: KernelDetailComparator<TDetail> | null = null,
   ) {
     this.references = slot.referencesFor(detail);
     Object.freeze(this);
@@ -143,14 +141,12 @@ export function publishProductDetail<TDetail>(
   productHandle: ProductHandle,
   detail: TDetail,
   admission: KernelDetailAdmission = KernelDetailAdmission.Required,
-  compare: KernelDetailComparator<TDetail> | null = null,
 ): KernelProductDetailPublication<unknown> {
   return new KernelProductDetailPublication(
     slot,
     productHandle,
     detail,
     admission,
-    compare,
   ) as unknown as KernelProductDetailPublication<unknown>;
 }
 
@@ -160,7 +156,6 @@ export function publishHotDetail<TDetail>(
   handle: HotDetailHandle,
   detail: TDetail,
   admission: KernelDetailAdmission = KernelDetailAdmission.Required,
-  compare: KernelDetailComparator<TDetail> | null = null,
 ): KernelHotDetailPublication<unknown> {
   return new KernelHotDetailPublication(
     slot,
@@ -168,7 +163,6 @@ export function publishHotDetail<TDetail>(
     handle,
     detail,
     admission,
-    compare,
   ) as unknown as KernelHotDetailPublication<unknown>;
 }
 
