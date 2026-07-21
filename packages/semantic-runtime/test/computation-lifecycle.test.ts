@@ -13,6 +13,8 @@ import {
 import {
   ComputationOpenReadKind,
   ComputationCandidateReadState,
+  ComputationChildRole,
+  ComputationChildSccKind,
   ComputationCommitState,
   computationHotDetailReadKey,
   ComputationLifecycleRegistry,
@@ -576,6 +578,91 @@ describe("computation lifecycle", () => {
     expect(lifecycle.childProducerFor(familyAKey)).toBeNull();
     expect(lifecycle.childReadersFor(familyAKey)).toEqual([]);
     expect(lifecycle.childReadersFor("source:family-a")).toEqual([]);
+  });
+
+  test("commits an explicit empty remainder as the withdrawal boundary of a complete child partition", () => {
+    const store = new KernelStore("explicit-computation-remainder");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const remainderHandle = store.handles.address("explicit-remainder:outer");
+    const familyHandle = store.handles.address("explicit-remainder:family");
+    const emptyChild = childLocus("empty");
+    const family = childLocus("family");
+
+    const initial = lifecycle.begin(locus("explicit-remainder"));
+    initial.withChildPartition(() => {
+      initial.publish(publication("explicit-remainder:outer", [
+        new SourceFileAddress(remainderHandle, "test", "src/outer.html", SourceLanguage.Html),
+      ]));
+      initial.withChild(family, () => {
+        initial.publish(publication("explicit-remainder:family", [
+          new SourceFileAddress(familyHandle, "test", "src/family.html", SourceLanguage.Html),
+        ]));
+      });
+    });
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const replacement = lifecycle.begin(locus("explicit-remainder"));
+    replacement.withChildPartition(() => {
+      replacement.withChild(emptyChild, () => {});
+      replacement.withChild(family, () => {
+        replacement.publish(publication("explicit-remainder:family", [
+          new SourceFileAddress(familyHandle, "test", "src/family.html", SourceLanguage.Html),
+        ]));
+      });
+    });
+    const result = replacement.commit();
+    const state = lifecycle.readState(replacement.computationId);
+    const remainder = state?.children.find((child) => child.role === ComputationChildRole.Remainder) ?? null;
+
+    expect(result.state).toBe(ComputationCommitState.Committed);
+    expect(result.transition.publications).toContainEqual(expect.objectContaining({
+      handle: remainderHandle,
+      decision: KernelPublicationDecisionKind.Withdraw,
+    }));
+    expect(remainder).not.toBeNull();
+    expect(remainder?.outputs).toEqual([]);
+    expect(remainder?.scc.kind).toBe(ComputationChildSccKind.Singleton);
+    expect(state?.children.some((child) => child.locus.reconciliationKey === emptyChild.reconciliationKey)).toBe(false);
+    expect(state?.children.filter((child) => child.role === ComputationChildRole.Declared)).toHaveLength(1);
+    expect(lifecycle.childProducerFor(computationRecordReadKey(remainderHandle))).toBeNull();
+    expect(lifecycle.childProducerFor(computationRecordReadKey(familyHandle))).not.toBeNull();
+  });
+
+  test("classifies exact candidate cycles before child topology becomes scheduler input", () => {
+    const store = new KernelStore("computation-child-scc");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const firstHandle = store.handles.address("child-scc:first");
+    const secondHandle = store.handles.address("child-scc:second");
+    const firstLocus = childLocus("scc-first");
+    const secondLocus = childLocus("scc-second");
+    const run = lifecycle.begin(locus("child-scc"));
+
+    run.withChildPartition(() => {
+      run.withChild(firstLocus, () => {
+        run.publish(publication("child-scc:first", [
+          new SourceFileAddress(firstHandle, "test", "src/first.html", SourceLanguage.Html),
+        ]));
+      });
+      run.withChild(secondLocus, () => {
+        run.publish(publication("child-scc:second", [
+          new SourceFileAddress(secondHandle, "test", "src/second.html", SourceLanguage.Html),
+        ]));
+      });
+      run.withChild(firstLocus, () => expect(run.read(secondHandle)).not.toBeNull());
+      run.withChild(secondLocus, () => expect(run.read(firstHandle)).not.toBeNull());
+    });
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const children = lifecycle.readState(run.computationId)?.children ?? [];
+    const first = children.find((child) => child.locus.reconciliationKey === firstLocus.reconciliationKey) ?? null;
+    const second = children.find((child) => child.locus.reconciliationKey === secondLocus.reconciliationKey) ?? null;
+    const remainder = children.find((child) => child.role === ComputationChildRole.Remainder) ?? null;
+
+    expect(first?.scc.kind).toBe(ComputationChildSccKind.Cyclic);
+    expect(second?.scc).toBe(first?.scc);
+    expect(first?.scc.memberChildIds).toEqual([first?.childId, second?.childId].sort());
+    expect(remainder?.scc.kind).toBe(ComputationChildSccKind.Singleton);
+    expect(remainder?.scc.memberChildIds).toEqual([remainder?.childId]);
   });
 
   test("rejects a child read when a later child replaces its staged producer", () => {

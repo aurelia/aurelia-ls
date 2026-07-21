@@ -465,6 +465,34 @@ export class ComputationOutput {
   }
 }
 
+export const enum ComputationChildRole {
+  /** Domain-declared child with a stable reconciliation locus. */
+  Declared = 'declared',
+  /** Kernel-owned default scope for work outside declared children in an explicit partition. */
+  Remainder = 'remainder',
+}
+
+export const enum ComputationChildSccKind {
+  /** Child has no candidate dependency cycle with another committed child. */
+  Singleton = 'singleton',
+  /** Child belongs to a nontrivial candidate dependency cycle. */
+  Cyclic = 'cyclic',
+}
+
+/** Exact technical strongly connected component derived from committed candidate-read edges. */
+export class ComputationChildScc {
+  readonly memberChildIds: readonly ComputationChildId[];
+
+  constructor(
+    readonly key: string,
+    readonly kind: ComputationChildSccKind,
+    memberChildIds: readonly ComputationChildId[],
+  ) {
+    this.memberChildIds = Object.freeze([...memberChildIds].sort((left, right) => left.localeCompare(right)));
+    Object.freeze(this);
+  }
+}
+
 /** Current read/output manifest for one logical child admitted with its outer computation. */
 export class ComputationChildState {
   readonly childId: ComputationChildId;
@@ -477,6 +505,8 @@ export class ComputationChildState {
   constructor(
     childId: ComputationChildId,
     locus: ComputationLocus,
+    readonly role: ComputationChildRole,
+    readonly scc: ComputationChildScc,
     reads: readonly ComputationRead[],
     candidateReads: readonly ComputationCandidateRead[],
     openReads: readonly ComputationChildOpenRead[],
@@ -505,7 +535,16 @@ class MutableComputationChild {
   constructor(
     readonly childId: ComputationChildId,
     readonly locus: ComputationLocus,
+    readonly role: ComputationChildRole,
   ) {}
+}
+
+interface PreparedComputationChild {
+  readonly child: MutableComputationChild;
+  readonly reads: readonly ComputationRead[];
+  readonly candidateReads: readonly ComputationCandidateRead[];
+  readonly openReads: readonly ComputationChildOpenRead[];
+  readonly outputs: readonly ComputationOutput[];
 }
 
 class ComputationRemainderLocus implements ComputationLocus {
@@ -616,6 +655,7 @@ export class ComputationRun implements KernelPublicationContext {
   private activeChild: MutableComputationChild;
   private activeChildScopeDepth = 0;
   private hasExplicitChildren = false;
+  private hasExplicitPartition = false;
   private childFailure: ComputationChildPreparationFailure | null = null;
   private phase = ComputationRunPhase.Preparing;
 
@@ -627,13 +667,39 @@ export class ComputationRun implements KernelPublicationContext {
     readonly runSequence: number,
     previousPublication: KernelPublicationManifest,
   ) {
-    this.remainderChild = this.childFor(new ComputationRemainderLocus(locus));
+    this.remainderChild = this.childFor(new ComputationRemainderLocus(locus), ComputationChildRole.Remainder);
     this.activeChild = this.remainderChild;
     this.publications = new StagedKernelPublicationContext(
       this.store,
       previousPublication,
       this.remainderChild.childId,
     );
+  }
+
+  /** Declare that this run owns a complete child partition, including an explicit possibly-empty remainder. */
+  withChildPartition<TValue>(prepare: () => TValue): TValue {
+    this.requirePreparing();
+    if (this.hasExplicitPartition) {
+      throw new Error(`Computation run ${this.computationId}@${this.runSequence} already declared its child partition.`);
+    }
+    if (this.activeChild !== this.remainderChild || this.activeChildScopeDepth !== 0) {
+      throw new Error('A computation child partition must be declared from the outer remainder scope.');
+    }
+    this.hasExplicitPartition = true;
+    this.activeChildScopeDepth += 1;
+    try {
+      const value = prepare();
+      if (isPromiseLike(value)) {
+        void Promise.resolve(value).catch(() => {});
+        throw new Error(`Computation child partition ${this.computationId}@${this.runSequence} must finish synchronously.`);
+      }
+      return value;
+    } catch (error) {
+      this.childFailure ??= new ComputationChildPreparationFailure(this.remainderChild.childId, error);
+      throw error;
+    } finally {
+      this.activeChildScopeDepth -= 1;
+    }
   }
 
   /** Run one synchronous preparation scope under a stable logical child identity. */
@@ -644,7 +710,7 @@ export class ComputationRun implements KernelPublicationContext {
     const previous = this.activeChild;
     let entered = false;
     try {
-      const child = this.childFor(capturedLocus);
+      const child = this.childFor(capturedLocus, ComputationChildRole.Declared);
       this.hasExplicitChildren = true;
       this.activeChild = child;
       this.activeChildScopeDepth += 1;
@@ -928,7 +994,7 @@ export class ComputationRun implements KernelPublicationContext {
     }
 
     const invalidReads: ComputationInvalidRead[] = [];
-    const states = [...this.childrenById.values()].map((child) => {
+    const prepared = [...this.childrenById.values()].map((child): PreparedComputationChild => {
       const reads = [...child.readsByKey.values()].filter((read) => {
         const outputOwner = outputOwnerByReadKey.get(read.readKey) ?? null;
         if (outputOwner == null) {
@@ -981,29 +1047,38 @@ export class ComputationRun implements KernelPublicationContext {
               requiredStagedReadMutationOrdinal(observed),
             )];
       });
-      return new ComputationChildState(
-        child.childId,
-        child.locus,
-        reads.sort((left, right) => left.readKey.localeCompare(right.readKey)),
-        candidateReads.sort((left, right) => left.readKey.localeCompare(right.readKey)),
-        [...child.openReadsByKey.values()].sort((left, right) => left.key.localeCompare(right.key)),
-        (outputsByChild.get(child.childId) ?? []).sort((left, right) => left.readKey.localeCompare(right.readKey)),
-      );
-    }).sort((left, right) => left.childId.localeCompare(right.childId));
+      return {
+        child,
+        reads: reads.sort((left, right) => left.readKey.localeCompare(right.readKey)),
+        candidateReads: candidateReads.sort((left, right) => left.readKey.localeCompare(right.readKey)),
+        openReads: [...child.openReadsByKey.values()].sort((left, right) => left.key.localeCompare(right.key)),
+        outputs: (outputsByChild.get(child.childId) ?? []).sort((left, right) => left.readKey.localeCompare(right.readKey)),
+      };
+    }).filter((candidate) => {
+      const hasContent = preparedComputationChildHasContent(candidate);
+      if (this.hasExplicitPartition) {
+        return candidate.child.role === ComputationChildRole.Remainder || hasContent;
+      }
+      return this.hasExplicitChildren && hasContent;
+    }).sort((left, right) => left.child.childId.localeCompare(right.child.childId));
+    const sccByChildId = classifyComputationChildSccs(prepared);
+    const states = prepared.map((candidate) => new ComputationChildState(
+      candidate.child.childId,
+      candidate.child.locus,
+      candidate.child.role,
+      requiredComputationChildScc(sccByChildId, candidate.child.childId),
+      candidate.reads,
+      candidate.candidateReads,
+      candidate.openReads,
+      candidate.outputs,
+    ));
     return new ComputationChildPreparation(
-      this.hasExplicitChildren
-        ? states.filter((state) =>
-            state.reads.length > 0
-            || state.candidateReads.length > 0
-            || state.openReads.length > 0
-            || state.outputs.length > 0
-          )
-        : [],
+      states,
       invalidReads,
     );
   }
 
-  private childFor(locus: ComputationLocus): MutableComputationChild {
+  private childFor(locus: ComputationLocus, role: ComputationChildRole): MutableComputationChild {
     const capturedLocus = snapshotComputationLocus(locus);
     const childId = computationChildId(this.computationId, capturedLocus);
     const existing = this.childrenById.get(childId);
@@ -1011,9 +1086,12 @@ export class ComputationRun implements KernelPublicationContext {
       if (existing.locus.summary !== capturedLocus.summary) {
         throw new Error(`Computation child ${childId} was reconciled with conflicting summaries.`);
       }
+      if (existing.role !== role) {
+        throw new Error(`Computation child ${childId} was reconciled with conflicting roles.`);
+      }
       return existing;
     }
-    const child = new MutableComputationChild(childId, capturedLocus);
+    const child = new MutableComputationChild(childId, capturedLocus, role);
     this.childrenById.set(childId, child);
     return child;
   }
@@ -1734,6 +1812,110 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       }
     }
   }
+}
+
+function preparedComputationChildHasContent(child: PreparedComputationChild): boolean {
+  return child.reads.length > 0
+    || child.candidateReads.length > 0
+    || child.openReads.length > 0
+    || child.outputs.length > 0;
+}
+
+/** Derive exact technical SCCs from the candidate-local producer edges the kernel already validated. */
+function classifyComputationChildSccs(
+  children: readonly PreparedComputationChild[],
+): ReadonlyMap<ComputationChildId, ComputationChildScc> {
+  const childrenById = new Map(children.map((child) => [child.child.childId, child]));
+  const dependenciesById = new Map<ComputationChildId, readonly ComputationChildId[]>();
+  for (const child of children) {
+    dependenciesById.set(
+      child.child.childId,
+      [...new Set(child.candidateReads.flatMap((read) =>
+        read.state === ComputationCandidateReadState.Present
+          && read.producerChildId != null
+          && childrenById.has(read.producerChildId)
+          ? [read.producerChildId]
+          : []
+      ))].sort((left, right) => left.localeCompare(right)),
+    );
+  }
+
+  let nextIndex = 0;
+  const indexById = new Map<ComputationChildId, number>();
+  const lowLinkById = new Map<ComputationChildId, number>();
+  const stack: ComputationChildId[] = [];
+  const onStack = new Set<ComputationChildId>();
+  const components: ComputationChildId[][] = [];
+
+  const visit = (childId: ComputationChildId): void => {
+    const index = nextIndex++;
+    indexById.set(childId, index);
+    lowLinkById.set(childId, index);
+    stack.push(childId);
+    onStack.add(childId);
+
+    for (const dependencyId of dependenciesById.get(childId) ?? []) {
+      if (!indexById.has(dependencyId)) {
+        visit(dependencyId);
+        lowLinkById.set(childId, Math.min(
+          lowLinkById.get(childId)!,
+          lowLinkById.get(dependencyId)!,
+        ));
+      } else if (onStack.has(dependencyId)) {
+        lowLinkById.set(childId, Math.min(
+          lowLinkById.get(childId)!,
+          indexById.get(dependencyId)!,
+        ));
+      }
+    }
+
+    if (lowLinkById.get(childId) !== indexById.get(childId)) {
+      return;
+    }
+    const component: ComputationChildId[] = [];
+    while (stack.length > 0) {
+      const member = stack.pop()!;
+      onStack.delete(member);
+      component.push(member);
+      if (member === childId) {
+        break;
+      }
+    }
+    components.push(component.sort((left, right) => left.localeCompare(right)));
+  };
+
+  for (const childId of [...childrenById.keys()].sort((left, right) => left.localeCompare(right))) {
+    if (!indexById.has(childId)) {
+      visit(childId);
+    }
+  }
+
+  const byChildId = new Map<ComputationChildId, ComputationChildScc>();
+  for (const members of components) {
+    const kind = members.length > 1
+      ? ComputationChildSccKind.Cyclic
+      : ComputationChildSccKind.Singleton;
+    const scc = new ComputationChildScc(
+      `computation-child-scc:${members.join('|')}`,
+      kind,
+      members,
+    );
+    for (const childId of members) {
+      byChildId.set(childId, scc);
+    }
+  }
+  return byChildId;
+}
+
+function requiredComputationChildScc(
+  sccByChildId: ReadonlyMap<ComputationChildId, ComputationChildScc>,
+  childId: ComputationChildId,
+): ComputationChildScc {
+  const scc = sccByChildId.get(childId) ?? null;
+  if (scc == null) {
+    throw new Error(`Computation child ${childId} has no classified strongly connected component.`);
+  }
+  return scc;
 }
 
 function registerComputationRead(
