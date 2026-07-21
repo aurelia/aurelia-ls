@@ -131,6 +131,27 @@ describe('reusable project evaluation computations', () => {
       .toThrow(/more than one in-process owner/);
   }, 30_000);
 
+  test('reuses an exact-input-valid evaluator across an event-only project-input generation', async () => {
+    const { runtime, project } = await createEvaluationRuntime();
+    const first = runtime.projectEvaluations.acquire(project, aureliaAppProjectEvaluationProfile);
+    expect(first.kind).toBe(StaticProjectEvaluationAcquisitionKind.Computed);
+
+    runtime.workspace.projectInputAuthority.advance();
+    const nextProject = project.forInputGeneration(
+      runtime.workspace.projectInputAuthority.capture(project),
+    );
+    expect(nextProject.inputGeneration.revision).not.toBe(project.inputGeneration.revision);
+    expect(nextProject.observedRevision).toBe(project.observedRevision);
+
+    const second = runtime.projectEvaluations.acquire(nextProject, aureliaAppProjectEvaluationProfile);
+    expect(second.kind).toBe(StaticProjectEvaluationAcquisitionKind.Reused);
+    expect(second.generation).toBe(first.generation);
+    expect(first.generation.isCurrent()).toBe(true);
+    const state = runtime.computationLifecycle.readState(first.generation.computationAuthority.computationId);
+    expect(state?.reads.some((read) => read.domain.startsWith('project-input-generation'))).toBe(false);
+    expect(runtime.computationLifecycle.readersFor(nextProject.inputGeneration.currentnessGuardKey)).toEqual([]);
+  }, 30_000);
+
   test('invalidates a negative module read and preserves the admitted baseline across speculative forks', async () => {
     const { runtime, project, root } = await createEvaluationRuntime();
     await runtime.answerAppQuery({

@@ -158,11 +158,15 @@ values enter through `retainProduced(...)`, including an instance before its fie
 `reconcileEnvironmentAfterExternal(...)` forks those values into the owning graph after the host returns. Do not merge
 these lifecycles or infer graph ownership from a value's environment: produced values and externally inserted values
 cross the boundary in opposite directions.
-The reusable computation records the profile, structural project boot frame, compiler/toolchain environment, and exact
-positive and negative host reads. Consumer-local read scopes share one immutable memoized project-input value view but
-retain separate manifests for app and tooling profiles. Exact reads validate candidate commits; admitted generation
-currentness remains owned by project-input events and computation replacement, so an unannounced mid-transaction host
-write rejects the candidate without revoking its still-admitted incumbent.
+The reusable computation records the profile, compiler/toolchain environment, and exact positive and negative project
+and host reads. Consumer-local read scopes share one immutable memoized project-input value view but retain separate
+manifests for app and tooling profiles. Project-input event identity is a run-local admission guard rather than a
+semantic read: advancing the event generation with exactly equal inputs may reuse the admitted evaluator, while a
+candidate prepared against a revoked generation cannot commit. Exact reads decide semantic serviceability. An
+unannounced host write therefore makes the private incumbent unavailable to public consumers without deleting it; an
+exact revert can make it serviceable again, and a changed candidate can replace it atomically. The outer app generation
+still fails closed whenever its captured project-input event is no longer current, even if an upstream evaluator is
+semantically reusable.
 Ambient value declarations are a separate project/compiler computation shared by all evaluator profiles. It reads the
 configured TypeScript libraries and admitted project declaration files once, retains their exact positive and negative
 input reads, and is observed transitively by the app and Vite evaluation generations. This is intentionally upstream of

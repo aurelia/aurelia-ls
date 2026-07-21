@@ -80,10 +80,15 @@ export class AureliaAppWorldProjectGeneration {
   }
 
   isCurrent(): boolean {
-    return this.authority.isCurrent()
+    return this.isAdmitted()
       && this.currentEmission.project.inputGeneration.isCurrent()
       && this.appEvaluation.isCurrent()
       && this.conventionToolingEvaluation.isCurrent();
+  }
+
+  /** Whether the atomic app publication remains the private committed incumbent. */
+  isAdmitted(): boolean {
+    return this.authority.isCurrent();
   }
 
   requireCurrent(): void {
@@ -113,7 +118,13 @@ export class AureliaAppWorldProjectAuthority {
   ) {}
 
   current(): AureliaAppWorldProjectGeneration | null {
-    if (this.generation?.isCurrent() !== true) {
+    const generation = this.committed();
+    return generation?.isCurrent() === true ? generation : null;
+  }
+
+  /** Private committed incumbent retained across temporary input invalidity until replacement or retirement. */
+  committed(): AureliaAppWorldProjectGeneration | null {
+    if (this.generation?.isAdmitted() !== true) {
       this.generation = null;
     }
     return this.generation;
@@ -226,13 +237,13 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
 
   readEntryCount(): number {
     return [...this.authoritiesByProjectKey.values()]
-      .filter((authority) => authority.current() != null)
+      .filter((authority) => authority.committed() != null)
       .length;
   }
 
   dispose(_context: KernelStoreDisposalContext): void {
     for (const [projectKey, authority] of this.authoritiesByProjectKey) {
-      if (authority.current() == null) {
+      if (authority.committed() == null) {
         this.authoritiesByProjectKey.delete(projectKey);
       }
     }
@@ -270,6 +281,7 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
       const locus = new AureliaAppAnalysisLocus(project.projectKey);
       const run = this.lifecycle.begin(locus);
       try {
+        run.guardCurrent(project.inputGeneration.currentnessGuardKey, project.inputGeneration);
         run.observe(appEvaluationAccess.generation);
         run.observe(conventionToolingEvaluationAccess.generation);
         const candidate = new AureliaAppWorldProjectPass(this.support).constructAndEmit(
@@ -288,7 +300,6 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
           run.observe(read);
         }
         const sourceSnapshots = this.captureTemplateSources(project, candidate, run);
-        run.observe(project);
         for (const read of project.readRegisteredInputs()) {
           run.observe(read);
         }

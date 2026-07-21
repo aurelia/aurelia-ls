@@ -780,12 +780,11 @@ describe('production template-family lifecycle', () => {
     raceOverlay.write(routeFileName, originalRoute);
     raceInputAuthority.advance();
     const rejected = redirectedAttempt.commit();
-    expect(rejected.commit.state).toBe(ComputationCommitState.RejectedInputsChanged);
-    expect(rejected.commit.transition.invalidReads.some((read) =>
-      read.domain === 'project-input-generation'
-        || read.domain === 'project-input-generation-identity'
-        || read.domain === 'project-boot-frame'
-    )).toBe(true);
+    expect(rejected.commit.state).toBe(ComputationCommitState.RejectedCurrentnessChanged);
+    expect(rejected.commit.transition.invalidReads).toEqual([]);
+    expect(rejected.commit.transition.invalidCurrentnessGuards).toEqual([
+      expect.objectContaining({ guardKey: redirectedProject.inputGeneration.currentnessGuardKey }),
+    ]);
     expect(raceRuntime.workspace.store.productDetails.read(
       TemplateProductDetails.Source,
       raceBaselineSourceHandle,

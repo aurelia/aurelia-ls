@@ -107,6 +107,24 @@ class MutableRevisionAuthority {
   }
 }
 
+class MutableGenerationAuthority {
+  private current = true;
+
+  invalidate(): void {
+    this.current = false;
+  }
+
+  isCurrent(): boolean {
+    return this.current;
+  }
+
+  requireCurrent(): void {
+    if (!this.current) {
+      throw new Error("Generation authority is no longer current.");
+    }
+  }
+}
+
 class MutableSourceHost {
   private readonly sourceTextByFileName = new Map<string, string>();
 
@@ -3235,6 +3253,76 @@ describe("computation lifecycle", () => {
     expect(store.read(outputHandle)).toBe(r2Output);
     expect(lifecycle.readState(r2.computationId)?.reads.map((read) => read.observedRevision)).toEqual(["r2"]);
     expect(lifecycle.producerFor(outputReadKey)).toBe(r2.computationId);
+  });
+
+  test("keeps currentness guards out of committed dependency state and rejects revoked admission", () => {
+    const store = new KernelStore("computation-currentness-guard");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const guardKey = "project-input-generation:test";
+    const outputHandle = store.handles.address("currentness-guard:output");
+    const authority = new MutableGenerationAuthority();
+
+    const initial = lifecycle.begin(locus("currentness-guard"));
+    initial.guardCurrent(guardKey, authority);
+    initial.publish(publication("currentness-guard:initial", [
+      new SourceFileAddress(outputHandle, "test", "src/initial.html", SourceLanguage.Html),
+    ]));
+    const committed = initial.commit();
+    expect(committed.state).toBe(ComputationCommitState.Committed);
+    expect(committed.transition.invalidCurrentnessGuards).toEqual([]);
+    expect(lifecycle.readState(initial.computationId)?.reads).toEqual([]);
+    expect(lifecycle.readersFor(guardKey)).toEqual([]);
+
+    const replacement = lifecycle.begin(locus("currentness-guard"));
+    replacement.guardCurrent(guardKey, authority);
+    replacement.publish(publication("currentness-guard:replacement", [
+      new SourceFileAddress(outputHandle, "test", "src/replacement.html", SourceLanguage.Html),
+    ]));
+    authority.invalidate();
+    const rejected = replacement.commit();
+
+    expect(rejected.state).toBe(ComputationCommitState.RejectedCurrentnessChanged);
+    expect(rejected.transition.invalidReads).toEqual([]);
+    expect(rejected.transition.invalidCurrentnessGuards).toEqual([
+      expect.objectContaining({ guardKey }),
+    ]);
+    expect(rejected.transition.publications).toEqual([]);
+    expect(store.readAddress(outputHandle)).toEqual(expect.objectContaining({ path: "src/initial.html" }));
+    expect(lifecycle.readState(initial.computationId)?.committedRunSequence).toBe(initial.runSequence);
+    expect(lifecycle.readersFor(guardKey)).toEqual([]);
+  });
+
+  test("rechecks currentness after exact input validators and rejects authority aliases", () => {
+    const store = new KernelStore("computation-currentness-final-validation");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const guardKey = "project-input-generation:test";
+    const authority = new MutableGenerationAuthority();
+    const outputHandle = store.handles.address("currentness-final-validation:output");
+    const run = lifecycle.begin(locus("currentness-final-validation"));
+    run.guardCurrent(guardKey, authority);
+    run.guardCurrent(guardKey, authority);
+    expect(() => run.guardCurrent(guardKey, new MutableGenerationAuthority())).toThrow(
+      /more than one authority/,
+    );
+    run.observe({
+      readKey: "input:revokes-currentness",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        authority.invalidate();
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+    });
+    run.publish(publication("currentness-final-validation", [
+      new SourceFileAddress(outputHandle, "test", "src/candidate.html", SourceLanguage.Html),
+    ]));
+
+    const rejected = run.commit();
+    expect(rejected.state).toBe(ComputationCommitState.RejectedCurrentnessChanged);
+    expect(rejected.transition.invalidCurrentnessGuards).toEqual([
+      expect.objectContaining({ guardKey }),
+    ]);
+    expect(store.read(outputHandle)).toBeNull();
   });
 
   test("rejects a run superseded from inside its final input validator", () => {

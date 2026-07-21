@@ -402,8 +402,8 @@ export class ResourceConventionTransformAdmissionMaterializer {
     publication: KernelPublicationContext,
   ): ResourceConventionTransformAdmissionIndex {
     evaluationGeneration.requireCurrent();
-    if (evaluationGeneration.project !== project) {
-      throw new Error(`Convention-tooling evaluation belongs to another project generation.`);
+    if (!evaluationGeneration.belongsToProject(project)) {
+      throw new Error(`Convention-tooling evaluation belongs to another project semantic frame.`);
     }
     const evaluation = evaluationGeneration.readBaseline();
     const toolingHost = evaluationGeneration.readBaselineContext();

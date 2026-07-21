@@ -232,6 +232,12 @@ admitting an object whose exact reads, retention, and withdrawal guards describe
 projector, or descriptor trap that starts a newer run supersedes the old candidate before admission.
 Replacement allocates a store lifetime only after this final preflight, then updates outer and child indexes only after
 successful admission. Rejection preserves the incumbent publication and both index layers.
+Run currentness guards are admission capabilities, not semantic inputs. They are rechecked at the same preflight and
+final mutation boundaries, but never enter the computation state, reverse-reader index, changed-read summary, or
+lifetime closure. Use one for a project-input event generation whose revocation means that work may no longer commit;
+register the exact source, configuration, profile, and upstream product reads separately as the causal dependency
+closure. Conflating those roles makes an event-only generation advance invalidate reusable semantic work and invents a
+reader edge that no output actually depends on.
 `ComputationChildState.hasOnlyRevisionedReads` means only that no
 unresolved aggregate read was recorded; it is not yet a scheduler-ready or cycle-free reuse claim. Whole-store,
 source-file-index, and materialization enumeration remain explicit open reads until their domain authorities expose
@@ -290,10 +296,13 @@ kernel graph contributes to an output; observing only the final file text leaves
 source/provenance witness refresh. Rich details use slot-specific comparators where one has been earned; the exact
 executable slot object owns that policy, while its inert descriptor and `detailKind` name catalog occupancy and
 cross-domain references. A distinct same-kind slot is a different executable contract and therefore replaces rather
-than comparing or satisfying a typed read. An unsupported detail comparison conservatively replaces. `project-input.ts` owns coherent, revocable source/configuration generations
-and their captured host reads. `source-text-snapshot.ts` validates exact per-file source values within one such generation
-when a computation needs a source-specific witness. These technical lifecycle products do not replace semantic claims,
-materialization records, evidence, or provenance.
+than comparing or satisfying a typed read. An unsupported detail comparison conservatively replaces.
+`project-input.ts` owns coherent, revocable source/configuration generations and their captured host reads. The event
+generation is a currentness guard; it is not itself a computation read. A boot frame's semantic revision therefore
+describes structural project admissions and compiler options rather than the event sequence that happened to capture
+them. `source-text-snapshot.ts` validates exact per-file source values within one such generation when a computation
+needs a source-specific witness. These technical lifecycle products do not replace semantic claims, materialization
+records, evidence, or provenance.
 
 The store indexes normalized kernel records first. A `MaterializedProduct` is an envelope that names kind, identity,
 address, and provenance. Claims are indexed by subject/object handles in the store instead of being duplicated on the

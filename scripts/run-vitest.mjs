@@ -12,7 +12,7 @@ env.AURELIA_RESOLUTION_STRIP_SOURCED_NODES ??= "1";
 env.AURELIA_HARNESS_TRIM ??= "1";
 
 const nodeOptions = env.NODE_OPTIONS ?? "";
-if (!/\b--max-old-space-size=\d+\b/.test(nodeOptions)) {
+if (!/(?:^|\s)--max-old-space-size=\d+(?:\s|$)/.test(nodeOptions)) {
   env.NODE_OPTIONS = `${nodeOptions} --max-old-space-size=2048`.trim();
 }
 

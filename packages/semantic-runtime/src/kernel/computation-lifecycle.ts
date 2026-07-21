@@ -118,6 +118,31 @@ export interface ComputationRead {
   validate(): ComputationReadValidation;
 }
 
+/** Run-local admission capability that may reject commit but never becomes a semantic dependency edge. */
+class ComputationCurrentnessGuard {
+  private readonly checkCurrent: () => boolean;
+
+  constructor(
+    readonly guardKey: string,
+    private readonly authority: GenerationAuthority,
+  ) {
+    const isCurrent: unknown = Reflect.get(authority, 'isCurrent');
+    if (typeof isCurrent !== 'function') {
+      throw new Error(`Currentness guard ${guardKey} has no isCurrent callback.`);
+    }
+    this.checkCurrent = () => Reflect.apply(isCurrent, authority, []) as boolean;
+    Object.freeze(this);
+  }
+
+  belongsTo(authority: GenerationAuthority): boolean {
+    return this.authority === authority;
+  }
+
+  isCurrent(): boolean {
+    return this.checkCurrent();
+  }
+}
+
 const enum ComputationKernelInputKind {
   Record,
   ProductDetail,
@@ -357,6 +382,8 @@ export const enum ComputationCommitState {
   RejectedSuperseded = 'rejected-superseded',
   /** At least one registered input revision changed before publication. */
   RejectedInputsChanged = 'rejected-inputs-changed',
+  /** A run-currentness capability was revoked before atomic admission. */
+  RejectedCurrentnessChanged = 'rejected-currentness-changed',
 }
 
 /** Old/new registered-read comparison installed atomically with a successful publication. */
@@ -387,10 +414,18 @@ export class ComputationInvalidRead {
   }
 }
 
+/** Run-local currentness capability that was revoked before atomic admission. */
+export class ComputationInvalidCurrentnessGuard {
+  constructor(readonly guardKey: string) {
+    Object.freeze(this);
+  }
+}
+
 /** Inspectable causal row for one admitted or rejected computation run. */
 export class ComputationTransition {
   readonly changedReads: readonly ComputationReadChange[];
   readonly invalidReads: readonly ComputationInvalidRead[];
+  readonly invalidCurrentnessGuards: readonly ComputationInvalidCurrentnessGuard[];
   readonly publications: readonly KernelPublicationDecision[];
 
   constructor(
@@ -399,10 +434,12 @@ export class ComputationTransition {
     readonly state: ComputationCommitState,
     changedReads: readonly ComputationReadChange[],
     invalidReads: readonly ComputationInvalidRead[],
+    invalidCurrentnessGuards: readonly ComputationInvalidCurrentnessGuard[],
     publications: readonly KernelPublicationDecision[],
   ) {
     this.changedReads = Object.freeze([...changedReads]);
     this.invalidReads = Object.freeze([...invalidReads]);
+    this.invalidCurrentnessGuards = Object.freeze([...invalidCurrentnessGuards]);
     this.publications = Object.freeze([...publications]);
     Object.freeze(this);
   }
@@ -635,6 +672,12 @@ class ComputationInputReadValidationError extends Error {
   }
 }
 
+class ComputationCurrentnessValidationError extends Error {
+  constructor(readonly invalidGuards: readonly ComputationInvalidCurrentnessGuard[]) {
+    super('One or more computation currentness guards were revoked before outer publication.');
+  }
+}
+
 class ComputationSupersededDuringCommitError extends Error {
   constructor(computationId: ComputationId, runSequence: number) {
     super(`Computation run ${computationId}@${runSequence} was superseded during publication preflight.`);
@@ -692,6 +735,7 @@ interface MutableComputationEntry {
 /** Run-local transaction. Reads and writes stay private until `commit()` succeeds. */
 export class ComputationRun implements KernelPublicationContext {
   private readonly readsByKey = new Map<string, ComputationRead>();
+  private readonly currentnessGuardsByKey = new Map<string, ComputationCurrentnessGuard>();
   private readonly publications: StagedKernelPublicationContext;
   private readonly childrenById = new Map<ComputationChildId, MutableComputationChild>();
   private readonly remainderChild: MutableComputationChild;
@@ -785,6 +829,7 @@ export class ComputationRun implements KernelPublicationContext {
     return this.childFailure == null
       && this.phase !== ComputationRunPhase.Finished
       && this.registry.isLatestRun(this)
+      && this.currentnessGuardsAreCurrent()
       && this.publications.isCurrent();
   }
 
@@ -795,6 +840,13 @@ export class ComputationRun implements KernelPublicationContext {
     this.requireHealthy();
     if (!this.registry.isLatestRun(this)) {
       throw new Error(`Computation run ${this.computationId}@${this.runSequence} has been superseded.`);
+    }
+    const invalidGuards = invalidCurrentnessGuards([...this.currentnessGuardsByKey.values()]);
+    if (invalidGuards.length > 0) {
+      throw new Error(
+        `Computation run ${this.computationId}@${this.runSequence} has revoked currentness guards: `
+        + invalidGuards.map((guard) => guard.guardKey).join(', '),
+      );
     }
     this.publications.requireCurrent();
   }
@@ -930,6 +982,27 @@ export class ComputationRun implements KernelPublicationContext {
     );
   }
 
+  /** Guard atomic admission without registering a semantic read or reverse-reader edge. */
+  guardCurrent(guardKey: string, authority: GenerationAuthority): void {
+    this.requirePreparing();
+    if (guardKey.trim().length === 0) {
+      throw new Error('Computation currentness guard keys must not be empty.');
+    }
+    authority.requireCurrent();
+    const existing = this.currentnessGuardsByKey.get(guardKey);
+    if (existing != null) {
+      if (!existing.belongsTo(authority)) {
+        throw new Error(`Computation currentness guard ${guardKey} has more than one authority in the same run.`);
+      }
+      return;
+    }
+    this.currentnessGuardsByKey.set(guardKey, new ComputationCurrentnessGuard(guardKey, authority));
+  }
+
+  private currentnessGuardsAreCurrent(): boolean {
+    return [...this.currentnessGuardsByKey.values()].every((guard) => guard.isCurrent());
+  }
+
   publish(plan: KernelPublicationPlan): void {
     this.requirePreparing();
     for (const read of this.publications.publishFrom(this.activeChild.childId, plan)) {
@@ -953,6 +1026,7 @@ export class ComputationRun implements KernelPublicationContext {
       const result = this.registry.commitRun(
         this,
         reads,
+        [...this.currentnessGuardsByKey.values()],
         this.openReadsForCommit(),
         this.minimumConsumedLifetimeOrdinal(reads),
         candidate,
@@ -1644,6 +1718,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
   commitRun(
     run: ComputationRun,
     reads: readonly ComputationRead[],
+    currentnessGuards: readonly ComputationCurrentnessGuard[],
     openReads: readonly ComputationChildOpenRead[],
     minimumLifetimeOrdinal: number | null,
     candidate: SealedKernelPublicationCandidate,
@@ -1653,7 +1728,18 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       throw new Error(`Unknown computation ${run.computationId}.`);
     }
     if (entry.latestRunSequence !== run.runSequence) {
-      return this.reject(entry, run, ComputationCommitState.RejectedSuperseded, []);
+      return this.reject(entry, run, ComputationCommitState.RejectedSuperseded, [], []);
+    }
+
+    const initiallyInvalidGuards = invalidCurrentnessGuards(currentnessGuards);
+    if (initiallyInvalidGuards.length > 0) {
+      return this.reject(
+        entry,
+        run,
+        ComputationCommitState.RejectedCurrentnessChanged,
+        [],
+        initiallyInvalidGuards,
+      );
     }
 
     const previousState = entry.state;
@@ -1667,6 +1753,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
         {
           validate: (decisions) => {
             this.requireLatestRunForCommit(entry, run);
+            requireCurrentnessGuards(currentnessGuards);
             const invalidReads: ComputationInvalidRead[] = [];
             for (const read of reads) {
               const validation = read.validate();
@@ -1684,6 +1771,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
             if (invalidReads.length > 0) {
               throw new ComputationInputReadValidationError(invalidReads);
             }
+            requireCurrentnessGuards(currentnessGuards);
             this.requireLatestRunForCommit(entry, run);
             childPreparation = run.prepareChildCommit(candidate, decisions);
             if (childPreparation.invalidReads.length > 0) {
@@ -1695,9 +1783,13 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
               entry.computationId,
             );
             this.validateChildReplacement(previousState?.children ?? [], childPreparation.states);
+            requireCurrentnessGuards(currentnessGuards);
             this.requireLatestRunForCommit(entry, run);
           },
-          validateCurrent: () => this.requireLatestRunForCommit(entry, run),
+          validateCurrent: () => {
+            this.requireLatestRunForCommit(entry, run);
+            requireCurrentnessGuards(currentnessGuards);
+          },
         },
       );
     } catch (error) {
@@ -1705,10 +1797,19 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
         error instanceof ComputationInputReadValidationError
         || error instanceof ComputationChildReadValidationError
       ) {
-        return this.reject(entry, run, ComputationCommitState.RejectedInputsChanged, error.invalidReads);
+        return this.reject(entry, run, ComputationCommitState.RejectedInputsChanged, error.invalidReads, []);
+      }
+      if (error instanceof ComputationCurrentnessValidationError) {
+        return this.reject(
+          entry,
+          run,
+          ComputationCommitState.RejectedCurrentnessChanged,
+          [],
+          error.invalidGuards,
+        );
       }
       if (error instanceof ComputationSupersededDuringCommitError) {
-        return this.reject(entry, run, ComputationCommitState.RejectedSuperseded, []);
+        return this.reject(entry, run, ComputationCommitState.RejectedSuperseded, [], []);
       }
       throw error;
     }
@@ -1737,6 +1838,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       ComputationCommitState.Committed,
       changedReads,
       [],
+      [],
       replacement.decisions,
     );
     entry.transitions.push(transition);
@@ -1757,6 +1859,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     run: ComputationRun,
     state: ComputationCommitState,
     invalidReads: readonly ComputationInvalidRead[],
+    invalidCurrentnessGuards: readonly ComputationInvalidCurrentnessGuard[],
   ): ComputationCommitResult {
     const transition = new ComputationTransition(
       entry.computationId,
@@ -1764,6 +1867,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       state,
       [],
       invalidReads,
+      invalidCurrentnessGuards,
       [],
     );
     entry.transitions.push(transition);
@@ -2199,6 +2303,21 @@ function compareReadSets(
     ));
   }
   return changes;
+}
+
+function invalidCurrentnessGuards(
+  guards: readonly ComputationCurrentnessGuard[],
+): readonly ComputationInvalidCurrentnessGuard[] {
+  return guards
+    .filter((guard) => !guard.isCurrent())
+    .map((guard) => new ComputationInvalidCurrentnessGuard(guard.guardKey));
+}
+
+function requireCurrentnessGuards(guards: readonly ComputationCurrentnessGuard[]): void {
+  const invalidGuards = invalidCurrentnessGuards(guards);
+  if (invalidGuards.length > 0) {
+    throw new ComputationCurrentnessValidationError(invalidGuards);
+  }
 }
 
 export function computationPublicationRecordHandles(

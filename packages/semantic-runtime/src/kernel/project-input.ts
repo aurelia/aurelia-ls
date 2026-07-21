@@ -297,37 +297,12 @@ class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectI
   }
 }
 
-/** Coarse event-sequence identity without the generation's cumulative exact-read validation. */
-class SemanticRuntimeProjectInputGenerationIdentityRead implements ComputationRead {
-  readonly domain = 'project-input-generation-identity';
-  readonly readKey: string;
-  readonly observedRevision: string;
-
-  constructor(private readonly generation: SemanticRuntimeProjectInputGeneration) {
-    this.readKey = `project-input-generation-identity:${generation.projectKey}`;
-    this.observedRevision = generation.revision;
-  }
-
-  validate(): ComputationReadValidation {
-    const isCurrent = this.generation.isCurrent();
-    return {
-      isCurrent,
-      currentRevision: isCurrent
-        ? this.observedRevision
-        : this.generation.currentAuthorityRevision(),
-      changedFacets: isCurrent ? [] : ['generation'],
-    };
-  }
-}
-
 /** One current immutable source/config host generation for a booted project. */
-export class SemanticRuntimeProjectInputGeneration implements ComputationRead, GenerationAuthority {
-  readonly domain = 'project-input-generation';
-  readonly readKey: string;
-  readonly observedRevision: string;
+export class SemanticRuntimeProjectInputGeneration implements GenerationAuthority {
+  readonly revision: string;
+  readonly currentnessGuardKey: string;
   readonly host: SemanticRuntimeProjectInputHost;
   private readonly capturedHost: CapturedSemanticRuntimeProjectInputHost;
-  private readonly identityRead: ComputationRead;
   private readonly activeReadScopes: SemanticRuntimeProjectInputReadScope[] = [];
 
   constructor(
@@ -337,15 +312,10 @@ export class SemanticRuntimeProjectInputGeneration implements ComputationRead, G
     readonly eventSequence: number,
     readonly ordinal: number,
   ) {
-    this.readKey = `project-input-generation:${projectKey}`;
-    this.observedRevision = `${projectKey}@${eventSequence}.${ordinal}`;
+    this.revision = `${projectKey}@${eventSequence}.${ordinal}`;
+    this.currentnessGuardKey = `project-input-generation:${projectKey}`;
     this.capturedHost = new CapturedSemanticRuntimeProjectInputHost(this, authority);
     this.host = this.capturedHost;
-    this.identityRead = new SemanticRuntimeProjectInputGenerationIdentityRead(this);
-  }
-
-  get revision(): string {
-    return this.observedRevision;
   }
 
   isCurrent(): boolean {
@@ -414,16 +384,6 @@ export class SemanticRuntimeProjectInputGeneration implements ComputationRead, G
     for (const scope of this.activeReadScopes) {
       scope.observe(read);
     }
-  }
-
-  /** Read only explicit event/generation identity, excluding the cumulative host-read ledger. */
-  readIdentity(): ComputationRead {
-    return this.identityRead;
-  }
-
-  /** Current authority revision used by the identity read without exposing the authority itself. */
-  currentAuthorityRevision(): string {
-    return this.authority.currentRevision(this.projectKey);
   }
 
   /** Read the live effective file value when validating an exact source snapshot. */

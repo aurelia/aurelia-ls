@@ -18,6 +18,7 @@ import { EvidenceRecord } from '../src/kernel/evidence.js';
 import { ProvenanceRecord } from '../src/kernel/provenance.js';
 import { ObservationProductDetails } from '../src/observation/product-details.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
+import { StaticProjectEvaluationAcquisitionKind } from '../src/evaluation/project-evaluation.js';
 
 class MutableSourceOverlay {
   private readonly sourceTextByFileName = new Map<string, string>();
@@ -182,10 +183,14 @@ describe('app analysis computation', () => {
       domain: 'source-text',
       changedFacets: ['content'],
     }));
-    expect(service.authorityFor(incumbent.project.projectKey).current()).toBe(incumbentGeneration);
+    const authority = service.authorityFor(incumbent.project.projectKey);
+    expect(authority.committed()?.key).toBe(incumbentGeneration?.key);
+    expect(authority.current()).toBeNull();
+    expect(incumbent.isCurrent()).toBe(false);
+    sourceOverlay.clear(racedSource.fileName);
+    expect(authority.current()?.key).toBe(incumbentGeneration?.key);
     expect(incumbent.isCurrent()).toBe(true);
     expect(incumbent.emission.templates.resources.length).toBeGreaterThan(0);
-    sourceOverlay.clear(racedSource.fileName);
 
     const olderAttempt = service.prepare(incumbent.project, { analysisDepth: 'runtime-topology' });
     const winningAttempt = service.prepare(incumbent.project, { analysisDepth: 'binding-observation' });
@@ -235,6 +240,10 @@ describe('app analysis computation', () => {
     expect(second).not.toBe(first);
     expect(second.project.inputGeneration.revision).not.toBe(first.project.inputGeneration.revision);
     expect(second.isCurrent()).toBe(true);
+    expect(second.emission.profile.evaluationAcquisitions).toEqual([
+      expect.objectContaining({ kind: StaticProjectEvaluationAcquisitionKind.Reused }),
+      expect.objectContaining({ kind: StaticProjectEvaluationAcquisitionKind.Reused }),
+    ]);
     expect(runtime.analysisCacheOverview().value?.cachedAppCount).toBe(1);
 
     const beforeClear = runtime.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });

@@ -2,7 +2,6 @@ import type { AddressHandle, EvidenceHandle, ProvenanceHandle } from '../kernel/
 import { stableKernelLocalHash } from '../kernel/handles.js';
 import type {
   ComputationRead,
-  ComputationReadValidation,
 } from '../kernel/computation-lifecycle.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
@@ -103,11 +102,9 @@ export class SourceFileAdmission {
 }
 
 /** Booted project frame before TypeScript or Aurelia semantics are interpreted. */
-export class ProjectBootFrame implements ComputationRead {
+export class ProjectBootFrame {
   /** One config/compiler-options product derived from this frame's captured input generation. */
   readonly compilerOptions: ProjectCompilerOptionsResult;
-  readonly domain = 'project-boot-frame';
-  readonly readKey: string;
   readonly observedRevision: string;
 
   constructor(
@@ -129,21 +126,7 @@ export class ProjectBootFrame implements ComputationRead {
       rootDir,
       [workspaceRootDir],
     );
-    this.readKey = `project-boot-frame:${projectKey}`;
     this.observedRevision = projectBootFrameRevision(this);
-  }
-
-  validate(): ComputationReadValidation {
-    const invalidReads = this.readRegisteredInputs()
-      .map((read) => read.validate())
-      .filter((validation) => !validation.isCurrent);
-    return {
-      isCurrent: invalidReads.length === 0,
-      currentRevision: invalidReads.length === 0
-        ? this.observedRevision
-        : `${this.observedRevision}:inputs-changed`,
-      changedFacets: [...new Set(invalidReads.flatMap((validation) => validation.changedFacets))],
-    };
   }
 
   requireCurrent(): void {
@@ -151,10 +134,7 @@ export class ProjectBootFrame implements ComputationRead {
   }
 
   readRegisteredInputs(): readonly ComputationRead[] {
-    return [
-      this.inputGeneration.readIdentity(),
-      ...this.compilerOptions.readRegisteredInputs(),
-    ];
+    return this.compilerOptions.readRegisteredInputs();
   }
 
   /** Rebind immutable boot admissions to a newly captured source/config generation. */
@@ -180,7 +160,6 @@ function projectBootFrameRevision(project: ProjectBootFrame): string {
     workspaceRootDir: project.workspaceRootDir,
     rootDir: project.rootDir,
     projectKey: project.projectKey,
-    inputGeneration: project.inputGeneration.revision,
     compilerOptions: project.compilerOptions.revision,
     sourceFiles: project.sourceFiles.map((source) => ({
       path: source.path,

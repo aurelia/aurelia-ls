@@ -305,15 +305,16 @@ class StaticEvaluationAmbientGlobalAuthority {
   constructor(readonly projectKey: string) {}
 
   current(project: ProjectBootFrame): StaticEvaluationAmbientGlobalGeneration | null {
-    const generation = this.currentGeneration();
+    const generation = this.committedGeneration();
     return generation?.project.observedRevision === project.observedRevision
         && generation.validate().isCurrent
       ? generation
       : null;
   }
 
-  currentGeneration(): StaticEvaluationAmbientGlobalGeneration | null {
-    if (this.generation != null && !this.isCurrent(this.generation)) {
+  /** Private committed incumbent, retained while exact inputs are stale so replacement remains atomic. */
+  committedGeneration(): StaticEvaluationAmbientGlobalGeneration | null {
+    if (this.generation != null && !this.isAdmitted(this.generation)) {
       this.generation = null;
     }
     return this.generation;
@@ -336,14 +337,13 @@ class StaticEvaluationAmbientGlobalAuthority {
     return generation;
   }
 
-  isCurrent(generation: StaticEvaluationAmbientGlobalGeneration): boolean {
+  isAdmitted(generation: StaticEvaluationAmbientGlobalGeneration): boolean {
     return this.generation === generation
-      && generation.computationAuthority.isCurrent()
-      && generation.project.inputGeneration.isCurrent();
+      && generation.computationAuthority.isCurrent();
   }
 
   currentRevision(): string {
-    return this.currentGeneration()?.observedRevision ?? 'absent';
+    return this.committedGeneration()?.observedRevision ?? 'absent';
   }
 }
 
@@ -365,32 +365,36 @@ class StaticEvaluationAmbientGlobalGeneration implements ComputationRead {
   }
 
   readDeclarations(): StaticEvaluationAmbientGlobalDeclarations {
-    if (!this.owner.isCurrent(this)) {
+    if (!this.isCurrent()) {
       throw new Error(`Ambient-global generation ${this.readKey}@${this.observedRevision} is no longer current.`);
     }
     return this.declarations;
   }
 
   validate(): ComputationReadValidation {
-    const generationCurrent = this.owner.isCurrent(this);
+    const generationAdmitted = this.owner.isAdmitted(this);
     const invalidInputs = [
-      this.project.validate(),
+      ...this.project.readRegisteredInputs().map((read) => read.validate()),
       ...this.inputReadScope.readRegisteredInputs().map((read) => read.validate()),
     ].filter((validation) => !validation.isCurrent);
-    const isCurrent = generationCurrent && invalidInputs.length === 0;
+    const isCurrent = generationAdmitted && invalidInputs.length === 0;
     return {
       isCurrent,
       currentRevision: isCurrent
         ? this.observedRevision
-        : generationCurrent
+        : generationAdmitted
           ? `${this.observedRevision}:inputs-changed`
           : this.owner.currentRevision(),
       changedFacets: isCurrent
         ? []
-        : !generationCurrent
+        : !generationAdmitted
           ? ['generation']
           : [...new Set(invalidInputs.flatMap((validation) => validation.changedFacets))],
     };
+  }
+
+  isCurrent(): boolean {
+    return this.validate().isCurrent;
   }
 }
 
@@ -429,7 +433,7 @@ class StaticProjectEvaluationAuthority {
     project: ProjectBootFrame,
     profile: StaticProjectEvaluationComputationProfile<TContext>,
   ): StaticProjectEvaluationGeneration<TContext> | null {
-    const generation = this.currentGeneration();
+    const generation = this.committedGeneration();
     return generation?.project.observedRevision === project.observedRevision
         && generation.profileRevision === profile.revision
         && generation.validate().isCurrent
@@ -437,8 +441,9 @@ class StaticProjectEvaluationAuthority {
       : null;
   }
 
-  currentGeneration(): StaticProjectEvaluationGeneration<unknown> | null {
-    if (this.generation != null && !this.isCurrent(this.generation)) {
+  /** Private committed incumbent, retained while exact inputs are stale so replacement remains atomic. */
+  committedGeneration(): StaticProjectEvaluationGeneration<unknown> | null {
+    if (this.generation != null && !this.isAdmitted(this.generation)) {
       this.generation = null;
     }
     return this.generation;
@@ -463,14 +468,13 @@ class StaticProjectEvaluationAuthority {
     return generation;
   }
 
-  isCurrent(generation: StaticProjectEvaluationGeneration<unknown>): boolean {
+  isAdmitted(generation: StaticProjectEvaluationGeneration<unknown>): boolean {
     return this.generation === generation
-      && generation.computationAuthority.isCurrent()
-      && generation.project.inputGeneration.isCurrent();
+      && generation.computationAuthority.isCurrent();
   }
 
   currentRevision(): string {
-    return this.currentGeneration()?.observedRevision ?? 'absent';
+    return this.committedGeneration()?.observedRevision ?? 'absent';
   }
 }
 
@@ -497,13 +501,19 @@ export class StaticProjectEvaluationGeneration<TContext> implements ComputationR
   }
 
   isCurrent(): boolean {
-    return this.owner.isCurrent(this as StaticProjectEvaluationGeneration<unknown>);
+    return this.validate().isCurrent;
   }
 
   requireCurrent(): void {
     if (!this.isCurrent()) {
       throw new Error(`Static project evaluation ${this.readKey}@${this.observedRevision} is no longer current.`);
     }
+  }
+
+  /** Whether this semantic evaluator belongs to an equivalent boot topology and compiler-options frame. */
+  belongsToProject(project: ProjectBootFrame): boolean {
+    return this.project.projectKey === project.projectKey
+      && this.project.observedRevision === project.observedRevision;
   }
 
   /**
@@ -535,19 +545,19 @@ export class StaticProjectEvaluationGeneration<TContext> implements ComputationR
   }
 
   validate(): ComputationReadValidation {
-    const generationCurrent = this.isCurrent();
+    const generationAdmitted = this.owner.isAdmitted(this as StaticProjectEvaluationGeneration<unknown>);
     const invalidInputs = this.inputClosureValidations().filter((validation) => !validation.isCurrent);
-    const isCurrent = generationCurrent && invalidInputs.length === 0;
+    const isCurrent = generationAdmitted && invalidInputs.length === 0;
     return {
       isCurrent,
       currentRevision: isCurrent
         ? this.observedRevision
-        : generationCurrent
+        : generationAdmitted
           ? `${this.observedRevision}:inputs-changed`
           : this.owner.currentRevision(),
       changedFacets: isCurrent
         ? []
-        : !generationCurrent
+        : !generationAdmitted
           ? ['generation']
           : [...new Set(invalidInputs.flatMap((validation) => validation.changedFacets))],
     };
@@ -555,7 +565,7 @@ export class StaticProjectEvaluationGeneration<TContext> implements ComputationR
 
   private inputClosureValidations(): readonly ComputationReadValidation[] {
     return [
-      this.project.validate(),
+      ...this.project.readRegisteredInputs().map((read) => read.validate()),
       this.profile.validate(),
       ...this.baseline.readRegisteredInputs().map((read) => read.validate()),
     ];
@@ -579,17 +589,17 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
 
   readEntryCount(): number {
     return [...this.authoritiesByLocus.values()]
-      .filter((authority) => authority.currentGeneration() != null).length;
+      .filter((authority) => authority.committedGeneration() != null).length;
   }
 
   dispose(_context: KernelStoreDisposalContext): void {
     for (const [key, authority] of this.authoritiesByLocus) {
-      if (authority.currentGeneration() == null) {
+      if (authority.committedGeneration() == null) {
         this.authoritiesByLocus.delete(key);
       }
     }
     for (const [key, authority] of this.ambientAuthoritiesByProject) {
-      if (authority.currentGeneration() == null) {
+      if (authority.committedGeneration() == null) {
         this.ambientAuthoritiesByProject.delete(key);
       }
     }
@@ -620,6 +630,7 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
     const run = this.lifecycle.begin(new StaticProjectEvaluationLocus(project.projectKey, profile.key));
     let finished = false;
     try {
+      run.guardCurrent(project.inputGeneration.currentnessGuardKey, project.inputGeneration);
       const preparation = profile.prepare();
       const result = new StaticProjectEvaluationPass().evaluateAndEmit(
         this.store,
@@ -631,7 +642,6 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
         started,
       );
       run.observe(profile);
-      run.observe(project);
       for (const read of project.readRegisteredInputs()) {
         run.observe(read);
       }
@@ -672,7 +682,7 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
   retireAll(): number {
     let retired = 0;
     for (const authority of this.authoritiesByLocus.values()) {
-      const generation = authority.currentGeneration();
+      const generation = authority.committedGeneration();
       if (
         generation != null
         && this.lifecycle.retireCommittedGeneration(
@@ -684,7 +694,7 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
       }
     }
     for (const authority of this.ambientAuthoritiesByProject.values()) {
-      const generation = authority.currentGeneration();
+      const generation = authority.committedGeneration();
       if (generation != null) {
         // The public count is profile-shaped; ambient declarations are one shared upstream compiler-world input.
         this.lifecycle.retireCommittedGeneration(
@@ -712,8 +722,8 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
     const inputReadScope = project.inputGeneration.createReadScope('static-evaluation-ambient-globals');
     let finished = false;
     try {
+      run.guardCurrent(project.inputGeneration.currentnessGuardKey, project.inputGeneration);
       const declarations = readStaticEvaluationAmbientGlobalDeclarations(project, inputReadScope.host);
-      run.observe(project);
       for (const read of project.readRegisteredInputs()) {
         run.observe(read);
       }
