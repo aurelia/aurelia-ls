@@ -4,7 +4,10 @@ import {
   sameMaterializedProductValue,
   sameMaterializedProductWitness,
 } from './materialization.js';
-import { KernelPublicationDecisionKind, type KernelComparablePublicationDecision } from './publication.js';
+import {
+  KernelPublicationDecisionKind,
+  type KernelComparablePublicationDecision,
+} from './publication-comparison.js';
 import type { KernelStoreRecord } from './store.js';
 
 /**

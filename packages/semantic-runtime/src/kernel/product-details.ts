@@ -26,7 +26,7 @@ import type {
   KernelComparablePublicationDecision,
   KernelDetailComparator,
   KernelPublicationComparisonContext,
-} from './publication.js';
+} from './publication-comparison.js';
 
 declare const productDetailSlotBrand: unique symbol;
 
@@ -474,9 +474,10 @@ export class ProductDetailCatalog {
     if (existing == null) {
       return this.add(slot, productHandle, detail);
     }
-    if (existing.slot.detailKind !== slot.detailKind) {
+    if (existing.slot !== slot) {
       throw new Error(
-        `Product ${productHandle} already has detail ${existing.slot.detailKind}; cannot attach ${slot.detailKind}.`,
+        `Product ${productHandle} already has detail slot ${existing.slot.detailKind}; `
+        + `cannot reuse it through a different ${slot.detailKind} slot contract.`,
       );
     }
     return existing as ProductDetailEntry<TDetail, TProductKind>;
@@ -501,7 +502,7 @@ export class ProductDetailCatalog {
     productHandle: ProductHandle,
   ): TDetail | null {
     const entry = this.catalog.read(productHandle);
-    if (entry == null || entry.slot.detailKind !== slot.detailKind) {
+    if (entry == null || entry.slot !== slot) {
       return null;
     }
     return entry.detail as TDetail;
@@ -533,6 +534,7 @@ export class ProductDetailCatalog {
     slot: ProductDetailSlot<TDetail, TProductKind>,
   ): readonly ProductDetailEntry<TDetail, TProductKind>[] {
     return this.catalog.readByDetailKind(slot.detailKind)
+      .filter((entry) => entry.slot === slot)
       .map((entry) => entry as ProductDetailEntry<TDetail, TProductKind>);
   }
 

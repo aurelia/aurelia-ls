@@ -21,7 +21,7 @@ import type {
   KernelComparablePublicationDecision,
   KernelDetailComparator,
   KernelPublicationComparisonContext,
-} from './publication.js';
+} from './publication-comparison.js';
 
 declare const hotDetailSlotBrand: unique symbol;
 
@@ -328,8 +328,11 @@ export class HotDetailCatalog {
   ): PreparedHotDetailEntry<TDetail> {
     const existing = this.catalog.read(handle);
     if (existing != null) {
-      if (existing.slot.detailKind !== slot.detailKind) {
-        throw new Error(`Hot detail ${handle} already has slot ${existing.slot.detailKind}; cannot attach ${slot.detailKind}.`);
+      if (existing.slot !== slot) {
+        throw new Error(
+          `Hot detail ${handle} already has slot ${existing.slot.detailKind}; `
+          + `cannot attach a different ${slot.detailKind} slot contract.`,
+        );
       }
       throw new Error(`Duplicate hot detail for ${handle}.`);
     }
@@ -380,8 +383,11 @@ export class HotDetailCatalog {
     if (existing == null) {
       return this.add(slot, ownerProductHandle, handle, detail);
     }
-    if (existing.slot.detailKind !== slot.detailKind) {
-      throw new Error(`Hot detail ${handle} already has slot ${existing.slot.detailKind}; cannot attach ${slot.detailKind}.`);
+    if (existing.slot !== slot) {
+      throw new Error(
+        `Hot detail ${handle} already has slot ${existing.slot.detailKind}; `
+        + `cannot reuse it through a different ${slot.detailKind} slot contract.`,
+      );
     }
     if (existing.ownerProductHandle !== ownerProductHandle) {
       throw new Error(
@@ -396,7 +402,7 @@ export class HotDetailCatalog {
     handle: HotDetailHandle,
   ): TDetail | null {
     const entry = this.catalog.read(handle);
-    if (entry == null || entry.slot.detailKind !== slot.detailKind) {
+    if (entry == null || entry.slot !== slot) {
       return null;
     }
     return entry.detail as TDetail;
@@ -427,6 +433,7 @@ export class HotDetailCatalog {
     slot: HotDetailSlot<TDetail>,
   ): readonly HotDetailEntry<TDetail>[] {
     return this.catalog.readByDetailKind(slot.detailKind)
+      .filter((entry) => entry.slot === slot)
       .map((entry) => entry as HotDetailEntry<TDetail>);
   }
 

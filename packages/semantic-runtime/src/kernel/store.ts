@@ -61,15 +61,17 @@ import { normalizeHostPath } from './source-address.js';
 import {
   KernelDetailAdmission,
   KernelPublicationDecision,
-  KernelPublicationDecisionKind,
   KernelPublicationManifest,
   KernelStoreBatch,
-  type KernelPublicationComparisonContext,
   type KernelHotDetailPublication,
   type KernelProductDetailPublication,
   type KernelPublicationPlan,
   KernelPublicationReplacement,
 } from './publication.js';
+import {
+  KernelPublicationDecisionKind,
+  type KernelPublicationComparisonContext,
+} from './publication-comparison.js';
 import { KernelPublicationSurface } from './publication-surface.js';
 import {
   sameKernelDetailReferences,
@@ -1188,9 +1190,24 @@ export class KernelStore {
     previousHandles: ReadonlySet<KernelRecordHandle>,
   ): KernelPublicationComparisonContext {
     return {
-      readPrevious: (handle) => this.records.get(handle) ?? null,
-      readNext: (handle) => nextByHandle.get(handle)
-        ?? (previousHandles.has(handle) ? null : this.records.get(handle) ?? null),
+      compareRecordHandles: (previousHandle, nextHandle) => {
+        if (previousHandle == null || nextHandle == null) {
+          return previousHandle === nextHandle
+            ? KernelPublicationDecisionKind.Retain
+            : KernelPublicationDecisionKind.Replace;
+        }
+        if (previousHandle !== nextHandle) {
+          return KernelPublicationDecisionKind.Replace;
+        }
+        const previous = this.records.get(previousHandle) ?? null;
+        const next = nextByHandle.get(nextHandle)
+          ?? (previousHandles.has(nextHandle) ? null : this.records.get(nextHandle) ?? null);
+        return previous == null || next == null
+          ? previous === next
+            ? KernelPublicationDecisionKind.Retain
+            : KernelPublicationDecisionKind.Replace
+          : compareKernelRecords(previous, next);
+      },
     };
   }
 
@@ -1252,7 +1269,7 @@ export class KernelStore {
       if (existing != null) {
         if (
           publication.admission !== KernelDetailAdmission.IfAbsent
-          || existing.slot.detailKind !== publication.slot.detailKind
+          || existing.slot !== publication.slot
         ) {
           throw new Error(
             `Publication ${label} cannot attach ${publication.slot.detailKind}; ${handle} already has `
@@ -1367,7 +1384,7 @@ export class KernelStore {
       if (existing != null) {
         if (
           publication.admission !== KernelDetailAdmission.IfAbsent
-          || existing.slot.detailKind !== publication.slot.detailKind
+          || existing.slot !== publication.slot
         ) {
           throw new Error(
             `Publication ${label} cannot attach ${publication.slot.detailKind}; ${handle} already has `
@@ -2459,10 +2476,10 @@ function normalizedProductDetailPublications(
       byHandle.set(publication.productHandle, publication);
       continue;
     }
-    if (existing.slot.detailKind !== publication.slot.detailKind) {
+    if (existing.slot !== publication.slot) {
       throw new Error(
         `Publication ${label} stages conflicting detail slots for ${publication.productHandle}: `
-        + `${existing.slot.detailKind} and ${publication.slot.detailKind}.`,
+        + `distinct ${existing.slot.detailKind} and ${publication.slot.detailKind} contracts.`,
       );
     }
     if (publication.admission === KernelDetailAdmission.IfAbsent) {
@@ -2488,10 +2505,10 @@ function normalizedHotDetailPublications(
       byHandle.set(publication.handle, publication);
       continue;
     }
-    if (existing.slot.detailKind !== publication.slot.detailKind) {
+    if (existing.slot !== publication.slot) {
       throw new Error(
         `Publication ${label} stages conflicting hot-detail slots for ${publication.handle}: `
-        + `${existing.slot.detailKind} and ${publication.slot.detailKind}.`,
+        + `distinct ${existing.slot.detailKind} and ${publication.slot.detailKind} contracts.`,
       );
     }
     if (existing.ownerProductHandle !== publication.ownerProductHandle) {
@@ -2532,16 +2549,18 @@ function compareProductDetailPublication(
   next: KernelProductDetailPublication<unknown>,
   context: KernelPublicationComparisonContext,
 ): KernelPublicationDecisionKind {
-  if (previous.slot.detailKind !== next.slot.detailKind) {
+  if (previous.slot !== next.slot) {
     return KernelPublicationDecisionKind.Replace;
   }
   if (!sameKernelDetailReferences(previous.references, next.references)) {
     return KernelPublicationDecisionKind.Replace;
   }
   if (previous.detail === next.detail) {
-    return KernelPublicationDecisionKind.Replace;
+    return isMutableDetailReference(previous.detail)
+      ? KernelPublicationDecisionKind.Replace
+      : KernelPublicationDecisionKind.Retain;
   }
-  return next.slot.compare(previous.detail, next.detail, context) ?? KernelPublicationDecisionKind.Replace;
+  return previous.slot.compare(previous.detail, next.detail, context) ?? KernelPublicationDecisionKind.Replace;
 }
 
 function compareHotDetailPublication(
@@ -2549,16 +2568,22 @@ function compareHotDetailPublication(
   next: KernelHotDetailPublication<unknown>,
   context: KernelPublicationComparisonContext,
 ): KernelPublicationDecisionKind {
-  if (previous.slot.detailKind !== next.slot.detailKind) {
+  if (previous.slot !== next.slot) {
     return KernelPublicationDecisionKind.Replace;
   }
   if (!sameKernelDetailReferences(previous.references, next.references)) {
     return KernelPublicationDecisionKind.Replace;
   }
   if (previous.detail === next.detail) {
-    return KernelPublicationDecisionKind.Replace;
+    return isMutableDetailReference(previous.detail)
+      ? KernelPublicationDecisionKind.Replace
+      : KernelPublicationDecisionKind.Retain;
   }
-  return next.slot.compare(previous.detail, next.detail, context) ?? KernelPublicationDecisionKind.Replace;
+  return previous.slot.compare(previous.detail, next.detail, context) ?? KernelPublicationDecisionKind.Replace;
+}
+
+function isMutableDetailReference(detail: unknown): boolean {
+  return detail !== null && (typeof detail === 'object' || typeof detail === 'function');
 }
 
 function handlesForDecision<THandle extends string>(

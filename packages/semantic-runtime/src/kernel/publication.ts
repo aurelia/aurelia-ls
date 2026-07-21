@@ -48,6 +48,19 @@ import { readSemanticRuntimeDetailDensityRows } from '../telemetry/detail-densit
 import type { GenerationAuthority } from './generation-authority.js';
 import { KernelPublicationSurface } from './publication-surface.js';
 import type { KernelDetailReference } from './detail-references.js';
+import {
+  KernelPublicationDecisionKind,
+  type KernelComparablePublicationDecision,
+  type KernelDetailComparator,
+  type KernelPublicationComparisonContext,
+} from './publication-comparison.js';
+
+export {
+  KernelPublicationDecisionKind,
+  type KernelComparablePublicationDecision,
+  type KernelDetailComparator,
+  type KernelPublicationComparisonContext,
+} from './publication-comparison.js';
 
 /** How a staged detail behaves when its handle is already owned by another publication. */
 export const enum KernelDetailAdmission {
@@ -56,37 +69,6 @@ export const enum KernelDetailAdmission {
   /** Reuse an unrelated existing detail with the same slot instead of claiming ownership. */
   IfAbsent = 'if-absent',
 }
-
-/** Observable decision made while replacing one computation-owned publication. */
-export const enum KernelPublicationDecisionKind {
-  /** A handle did not exist in the prior manifest and is published for the first time. */
-  Publish = 'publish',
-  /** Semantic value and witness data are unchanged, so the existing object remains current. */
-  Retain = 'retain',
-  /** Semantic value is unchanged, but source/provenance witness data must be refreshed. */
-  RefreshWitness = 'refresh-witness',
-  /** Semantic value changed and the prior object is replaced. */
-  Replace = 'replace',
-  /** The prior manifest owned the handle and the new publication no longer emits it. */
-  Withdraw = 'withdraw',
-}
-
-export type KernelComparablePublicationDecision =
-  | KernelPublicationDecisionKind.Retain
-  | KernelPublicationDecisionKind.RefreshWitness
-  | KernelPublicationDecisionKind.Replace;
-
-/** Old/new record views available while a rich detail compares semantic and witness facts. */
-export interface KernelPublicationComparisonContext {
-  readPrevious(handle: KernelRecordHandle): KernelStoreRecord | null;
-  readNext(handle: KernelRecordHandle): KernelStoreRecord | null;
-}
-
-export type KernelDetailComparator<TDetail> = (
-  previous: TDetail,
-  next: TDetail,
-  context: KernelPublicationComparisonContext,
-) => KernelComparablePublicationDecision;
 
 /** One typed product-detail attachment staged beside its kernel product envelope. */
 export class KernelProductDetailPublication<TDetail> {
@@ -608,7 +590,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
         ? null
         : this.store.productDetails.readEntry(productHandle)
       : admission.expectedEntry;
-    const existing = existingEntry?.slot.detailKind === slot.detailKind
+    const existing = existingEntry?.slot === slot
       ? existingEntry.detail as TDetail
       : null;
     if (staged == null) {
@@ -639,7 +621,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
         null,
       );
     }
-    return staged.slot.detailKind !== slot.detailKind
+    return staged.slot !== slot
       ? new StagedKernelRead<TDetail>(null, null, this.productDetailStagedRevision(staged))
       : new StagedKernelRead(
           this.bindStagedProductDetail(staged) as TDetail,
@@ -665,7 +647,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
         ? null
         : this.store.hotDetails.readEntry(handle)
       : admission.expectedEntry;
-    const existing = existingEntry?.slot.detailKind === slot.detailKind
+    const existing = existingEntry?.slot === slot
       ? existingEntry.detail as TDetail
       : null;
     if (staged == null) {
@@ -696,7 +678,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
         null,
       );
     }
-    return staged.slot.detailKind !== slot.detailKind
+    return staged.slot !== slot
       ? new StagedKernelRead<TDetail>(null, null, this.hotDetailStagedRevision(staged))
       : new StagedKernelRead(
           this.bindStagedHotDetail(staged) as TDetail,
@@ -1155,10 +1137,10 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       productDetails.set(publication.productHandle, publication);
       return StagedDetailOutcome.Added;
     }
-    if (existing.slot.detailKind !== publication.slot.detailKind) {
+    if (existing.slot !== publication.slot) {
       throw new Error(
         `Staged publication emitted conflicting product details for ${publication.productHandle}: `
-        + `${existing.slot.detailKind} and ${publication.slot.detailKind}.`,
+        + `distinct ${existing.slot.detailKind} and ${publication.slot.detailKind} slot contracts.`,
       );
     }
     if (publication.admission === KernelDetailAdmission.IfAbsent) {
@@ -1205,10 +1187,10 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       hotDetails.set(publication.handle, publication);
       return StagedDetailOutcome.Added;
     }
-    if (existing.slot.detailKind !== publication.slot.detailKind) {
+    if (existing.slot !== publication.slot) {
       throw new Error(
         `Staged publication emitted conflicting hot details for ${publication.handle}: `
-        + `${existing.slot.detailKind} and ${publication.slot.detailKind}.`,
+        + `distinct ${existing.slot.detailKind} and ${publication.slot.detailKind} slot contracts.`,
       );
     }
     if (existing.ownerProductHandle !== publication.ownerProductHandle) {
@@ -1249,10 +1231,10 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
     let snapshot = snapshots.get(publication.productHandle);
     if (snapshot == null) {
       const expectedEntry = this.store.productDetails.readEntry(publication.productHandle);
-      if (expectedEntry != null && expectedEntry.slot.detailKind !== publication.slot.detailKind) {
+      if (expectedEntry != null && expectedEntry.slot !== publication.slot) {
         throw new Error(
           `Staged publication cannot attach ${publication.slot.detailKind}; ${publication.productHandle} already has `
-          + `${expectedEntry.slot.detailKind}.`,
+          + `a distinct ${expectedEntry.slot.detailKind} slot contract.`,
         );
       }
       snapshot = new KernelProductDetailAdmissionSnapshot(
@@ -1280,10 +1262,10 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
     let snapshot = snapshots.get(publication.handle);
     if (snapshot == null) {
       const expectedEntry = this.store.hotDetails.readEntry(publication.handle);
-      if (expectedEntry != null && expectedEntry.slot.detailKind !== publication.slot.detailKind) {
+      if (expectedEntry != null && expectedEntry.slot !== publication.slot) {
         throw new Error(
           `Staged publication cannot attach ${publication.slot.detailKind}; ${publication.handle} already has `
-          + `${expectedEntry.slot.detailKind}.`,
+          + `a distinct ${expectedEntry.slot.detailKind} slot contract.`,
         );
       }
       if (expectedEntry != null && expectedEntry.ownerProductHandle !== publication.ownerProductHandle) {

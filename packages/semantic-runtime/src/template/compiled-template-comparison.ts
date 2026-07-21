@@ -3,8 +3,7 @@ import {
   KernelPublicationDecisionKind,
   type KernelComparablePublicationDecision,
   type KernelPublicationComparisonContext,
-} from '../kernel/publication.js';
-import { compareKernelRecords } from '../kernel/record-comparison.js';
+} from '../kernel/publication-comparison.js';
 import type { KernelRecordHandle } from '../kernel/handles.js';
 import type { HtmlNodeReference } from './html-ir.js';
 import type {
@@ -157,11 +156,7 @@ function sameRecordWitness(
   if (previousHandle !== nextHandle) {
     return false;
   }
-  const previous = context.readPrevious(previousHandle);
-  const next = context.readNext(nextHandle);
-  return previous == null || next == null
-    ? previous === next
-    : compareKernelRecords(previous, next) === KernelPublicationDecisionKind.Retain;
+  return context.compareRecordHandles(previousHandle, nextHandle) === KernelPublicationDecisionKind.Retain;
 }
 
 function sameNullable<TValue>(

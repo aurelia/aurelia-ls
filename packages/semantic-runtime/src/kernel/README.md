@@ -287,8 +287,10 @@ positive and negative computation reads by spending the store's record revision.
 kernel graph contributes to an output; observing only the final file text leaves the graph route itself staleable.
 
 `record-comparison.ts` exhaustively compares normalized kernel record kinds and keeps semantic replacement distinct from
-source/provenance witness refresh. Rich details use slot-specific comparators where one has been earned; an unsupported
-detail comparison conservatively replaces. `project-input.ts` owns coherent, revocable source/configuration generations
+source/provenance witness refresh. Rich details use slot-specific comparators where one has been earned; the exact
+executable slot object owns that policy, while its inert descriptor and `detailKind` name catalog occupancy and
+cross-domain references. A distinct same-kind slot is a different executable contract and therefore replaces rather
+than comparing or satisfying a typed read. An unsupported detail comparison conservatively replaces. `project-input.ts` owns coherent, revocable source/configuration generations
 and their captured host reads. `source-text-snapshot.ts` validates exact per-file source values within one such generation
 when a computation needs a source-specific witness. These technical lifecycle products do not replace semantic claims,
 materialization records, evidence, or provenance.

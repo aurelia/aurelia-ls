@@ -2389,11 +2389,16 @@ describe("computation lifecycle", () => {
       "test.rich-detail-replacement-target",
       "Available replacement target.",
     );
+    let comparatorCalls = 0;
     const sourceSlot = defineTestProductDetailSlot<{ target: ProductHandle }>(
       KernelVocabulary.Template.Source.key,
       "test.rich-detail-replacement-source",
       "Detail whose target closure determines replacement.",
       (detail) => mergeKernelDetailReferences([kernelProductDetailReference(targetSlot.descriptor, detail.target)]),
+      () => {
+        comparatorCalls += 1;
+        return KernelPublicationDecisionKind.Retain;
+      },
     );
     store.commit(new KernelStoreBatch([
       new ProvenanceRecord(targetAProvenance),
@@ -2435,13 +2440,7 @@ describe("computation lifecycle", () => {
     const replacementDetail = { target: targetB };
     const replacement = store.replaceOwnedPublication(
       initial.manifest,
-      new KernelPublicationPlan(records(), [publishProductDetail(
-        sourceSlot,
-        sourceProductHandle,
-        replacementDetail,
-        KernelDetailAdmission.Required,
-        () => KernelPublicationDecisionKind.Retain,
-      )]),
+      new KernelPublicationPlan(records(), [publishProductDetail(sourceSlot, sourceProductHandle, replacementDetail)]),
       owner,
       preflight,
     );
@@ -2452,6 +2451,7 @@ describe("computation lifecycle", () => {
       decision: KernelPublicationDecisionKind.Replace,
     }));
     expect(store.productDetails.read(sourceSlot, sourceProductHandle)).toBe(replacementDetail);
+    expect(comparatorCalls).toBe(0);
 
     const mutable = { target: targetA };
     const projected = publishProductDetail(sourceSlot, sourceProductHandle, mutable);
@@ -3552,15 +3552,27 @@ describe("computation lifecycle", () => {
     const productHandle = store.handles.product("same-instance:product");
     const hotHandle = store.handles.hotDetail("same-instance:hot");
     const provenanceHandle = store.handles.provenance("same-instance:product");
+    let productComparatorCalls = 0;
+    let hotComparatorCalls = 0;
     const productSlot = defineTestProductDetailSlot<{ revision: number }>(
       KernelVocabulary.Template.Source.key,
       "test.same-instance-product",
       "Mutable product detail used to reject identity-based retention.",
+      noKernelDetailReferences,
+      () => {
+        productComparatorCalls += 1;
+        return KernelPublicationDecisionKind.Retain;
+      },
     );
     const hotSlot = defineTestHotDetailSlot<{ revision: number }>(
       KernelVocabulary.Template.Source.key,
       "test.same-instance-hot",
       "Mutable hot detail used to reject identity-based retention.",
+      noKernelDetailReferences,
+      () => {
+        hotComparatorCalls += 1;
+        return KernelPublicationDecisionKind.Retain;
+      },
     );
     const product = new MaterializedProduct(
       productHandle,
@@ -3607,12 +3619,142 @@ describe("computation lifecycle", () => {
     }));
     expect(store.productDetails.read(productSlot, productHandle)).toBe(productDetail);
     expect(store.hotDetails.read(hotSlot, hotHandle)).toBe(hotDetail);
+    expect(productComparatorCalls).toBe(0);
+    expect(hotComparatorCalls).toBe(0);
 
     const dependentResult = dependent.commit();
     expect(dependentResult.state).toBe(ComputationCommitState.RejectedInputsChanged);
     expect(dependentResult.transition.invalidReads.map((read) => read.readKey)).toEqual(expect.arrayContaining([
       computationProductDetailReadKey(productHandle),
       computationHotDetailReadKey(hotHandle),
+    ]));
+  });
+
+  test("does not let a distinct same-kind slot substitute comparison policy", () => {
+    const store = new KernelStore("detail-slot-comparison-authority");
+    const owner = {};
+    const preflight = { validate(): void {}, validateCurrent(): void {} };
+    const productHandle = store.handles.product("slot-authority:product");
+    const hotHandle = store.handles.hotDetail("slot-authority:hot");
+    const provenanceHandle = store.handles.provenance("slot-authority:product");
+    const initialProductSlot = defineTestProductDetailSlot<{ readonly value: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.slot-authority-product",
+      "Initial product-detail comparison authority.",
+    );
+    const replacementProductSlot = defineTestProductDetailSlot<{ readonly value: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.slot-authority-product",
+      "Substitute product-detail comparison authority.",
+      noKernelDetailReferences,
+      () => KernelPublicationDecisionKind.Retain,
+    );
+    const initialHotSlot = defineTestHotDetailSlot<{ readonly value: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.slot-authority-hot",
+      "Initial hot-detail comparison authority.",
+    );
+    const replacementHotSlot = defineTestHotDetailSlot<{ readonly value: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.slot-authority-hot",
+      "Substitute hot-detail comparison authority.",
+      noKernelDetailReferences,
+      () => KernelPublicationDecisionKind.Retain,
+    );
+    const records = () => new KernelStoreBatch([
+      new ProvenanceRecord(provenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        provenanceHandle,
+      ),
+    ], "slot-authority");
+    const initial = store.replaceOwnedPublication(
+      KernelPublicationManifest.empty,
+      new KernelPublicationPlan(
+        records(),
+        [publishProductDetail(initialProductSlot, productHandle, { value: 1 })],
+        [publishHotDetail(initialHotSlot, productHandle, hotHandle, { value: 1 })],
+      ),
+      owner,
+      preflight,
+    );
+    const replacementProduct = { value: 2 };
+    const replacementHot = { value: 2 };
+    const replacement = store.replaceOwnedPublication(
+      initial.manifest,
+      new KernelPublicationPlan(
+        records(),
+        [publishProductDetail(replacementProductSlot, productHandle, replacementProduct)],
+        [publishHotDetail(replacementHotSlot, productHandle, hotHandle, replacementHot)],
+      ),
+      owner,
+      preflight,
+    );
+
+    expect(replacement.decisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ handle: productHandle, decision: KernelPublicationDecisionKind.Replace }),
+      expect.objectContaining({ handle: hotHandle, decision: KernelPublicationDecisionKind.Replace }),
+    ]));
+    expect(store.productDetails.read(initialProductSlot, productHandle)).toBeNull();
+    expect(store.hotDetails.read(initialHotSlot, hotHandle)).toBeNull();
+    expect(store.productDetails.read(replacementProductSlot, productHandle)).toBe(replacementProduct);
+    expect(store.hotDetails.read(replacementHotSlot, hotHandle)).toBe(replacementHot);
+  });
+
+  test("retains identical primitive rich details without requiring a comparator", () => {
+    const store = new KernelStore("primitive-detail-retention");
+    const owner = {};
+    const preflight = { validate(): void {}, validateCurrent(): void {} };
+    const productHandle = store.handles.product("primitive-detail:product");
+    const hotHandle = store.handles.hotDetail("primitive-detail:hot");
+    const provenanceHandle = store.handles.provenance("primitive-detail:product");
+    const productSlot = defineTestProductDetailSlot<string>(
+      KernelVocabulary.Template.Source.key,
+      "test.primitive-product",
+      "Primitive product detail.",
+    );
+    const hotSlot = defineTestHotDetailSlot<string>(
+      KernelVocabulary.Template.Source.key,
+      "test.primitive-hot",
+      "Primitive hot detail.",
+    );
+    const records = () => new KernelStoreBatch([
+      new ProvenanceRecord(provenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        provenanceHandle,
+      ),
+    ], "primitive-detail");
+    const initial = store.replaceOwnedPublication(
+      KernelPublicationManifest.empty,
+      new KernelPublicationPlan(
+        records(),
+        [publishProductDetail(productSlot, productHandle, "same")],
+        [publishHotDetail(hotSlot, productHandle, hotHandle, "same")],
+      ),
+      owner,
+      preflight,
+    );
+    const replacement = store.replaceOwnedPublication(
+      initial.manifest,
+      new KernelPublicationPlan(
+        records(),
+        [publishProductDetail(productSlot, productHandle, "same")],
+        [publishHotDetail(hotSlot, productHandle, hotHandle, "same")],
+      ),
+      owner,
+      preflight,
+    );
+
+    expect(replacement.decisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ handle: productHandle, detailKind: productSlot.detailKind, decision: KernelPublicationDecisionKind.Retain }),
+      expect.objectContaining({ handle: hotHandle, detailKind: hotSlot.detailKind, decision: KernelPublicationDecisionKind.Retain }),
     ]));
   });
 
@@ -3660,7 +3802,7 @@ describe("computation lifecycle", () => {
     expect(store.read(wrongOwnerHandle)).toBeNull();
   });
 
-  test("replaces reused hot details when their owner witness changes", () => {
+  test("refreshes retained hot details when their owner witness changes", () => {
     const store = new KernelStore("computation-hot-detail-owner-refresh");
     const lifecycle = new ComputationLifecycleRegistry(store);
     const productHandle = store.handles.product("hot-owner-refresh:product");
@@ -3669,10 +3811,13 @@ describe("computation lifecycle", () => {
     const slot = defineTestHotDetailSlot<{ readonly value: number }>(
       KernelVocabulary.Template.Source.key,
       "test.hot-detail-owner-refresh",
-      "Reused hot detail whose unobservable prior value requires conservative replacement.",
+      "Hot detail whose equal value retains while its owner witness refreshes.",
+      noKernelDetailReferences,
+      (previous, next) => previous.value === next.value
+        ? KernelPublicationDecisionKind.Retain
+        : KernelPublicationDecisionKind.Replace,
     );
-    const detail = { value: 1 };
-    const publishAt = (revision: string, hotDetail = detail) => {
+    const publishAt = (revision: string, hotDetail = { value: 1 }) => {
       const addressHandle = store.handles.address(`hot-owner-refresh:source:${revision}`);
       const product = new MaterializedProduct(
         productHandle,
@@ -3702,7 +3847,7 @@ describe("computation lifecycle", () => {
     expect(result.state).toBe(ComputationCommitState.Committed);
     expect(result.transition.publications).toContainEqual(expect.objectContaining({
       handle: hotHandle,
-      decision: KernelPublicationDecisionKind.Replace,
+      decision: KernelPublicationDecisionKind.RefreshWitness,
     }));
     expect(store.hotDetails.readEntry(hotHandle)?.owner).toBe(replacement.product);
     expect(store.hotDetails.readEntry(hotHandle)?.owner.addressHandle).toBe(replacement.addressHandle);

@@ -356,8 +356,14 @@ describe('template compilation computation', () => {
     );
 
     expect(compareCompiledTemplateDetails(runtime, runtime, {
-      readPrevious: (handle) => handle === previousSpan.handle ? previousSpan : sourceFile,
-      readNext: (handle) => handle === nextSpan.handle ? nextSpan : sourceFile,
+      compareRecordHandles: (previousHandle, nextHandle) => {
+        if (previousHandle !== nextHandle) {
+          return KernelPublicationDecisionKind.Replace;
+        }
+        return previousHandle === previousSpan.handle
+          ? KernelPublicationDecisionKind.RefreshWitness
+          : KernelPublicationDecisionKind.Retain;
+      },
     })).toBe(KernelPublicationDecisionKind.RefreshWitness);
   });
 
