@@ -741,49 +741,41 @@
         "resources"
       ],
       "summary": "One authored template owner forms one logical compiler-front-door child across all cohorts and recursive local templates inside the atomic app computation.",
-      "rationale": "A local template is one authored resource declaration shared by every compiler cohort, while its compiler world and compiled products are cohort-derived. The production app computation therefore stages one child per stable authored owner, compiles every admitted app and authoring cohort plus recursive local templates under that child, and keeps the store commit atomic at the outer app boundary. Shared runtime and TypeChecker analysis consumes the exact family products it executes from an explicit post-template child until its cross-family schedule earns narrower owners.",
+      "rationale": "A local template is one authored resource declaration shared by every compiler cohort, while compiler worlds and compiled products are cohort-derived. The production app computation stages one child per stable authored owner, compiles every admitted app and authoring cohort plus recursive local templates under that child, and keeps store commit atomic at the outer app boundary. Shared runtime and TypeChecker analysis remains post-template-owned until its cross-family schedule earns narrower owners.",
       "guidance": [
         "Key a template-family child by project plus stable authored owner. Source paths, declaration ordinals, compiler cohorts, and run IDs are observed or derived facts, not family identity.",
         "Treat the immutable compiler-cohort project plan as complete candidate authority. Share local definitions, bindables, and source products once; retain separate compiler worlds, compilation units, and compiled templates per cohort.",
         "Use one logical child of the production app ComputationRun for the complete recursive compiler front door. Child manifests own reads and outputs but never commit independently from the outer app transaction.",
-        "Use owner plus authored local name for generated resource identity and owner plus property name for local bindables. Reordering declarations may refresh source witnesses but must not churn semantic children.",
-        "Route exact authored-source reads, local definitions, generated compiler worlds, compiler observations, parsing, lowering, and compiled-template products through the family child's required KernelPublicationContext. Direct commits create mixed generations and escape lifecycle ownership.",
-        "Before project-owned runtime and checker analysis, re-observe the live compiler authority and exact-read each resource definition, compiled-template envelope, render target, instruction sequence, instruction, compiler world, resource scope, compiler service, and authored attribute syntax that the runtime consumes. Stable envelope references do not spend the typed details they point to.",
-        "Use templateCompilerCompileState as the sole TemplateCompiler front-door policy for production planning, authoring admission, and focused tests. None and needsCompile=false are compiler no-output states; re-entry of already-compiled definitions into runtime analysis belongs to the later AOT contract.",
-        "Retain both the parent and active compiler worlds for each recursive emission. Re-project child validation worlds from the current parent authority and register exact child lookups so parent and child-only changes both invalidate honestly.",
-        "A retained parent compiler world is validation authority, not another active public compiler world. Public visibility catalogs enumerate active worlds only; projecting retained parents duplicates inherited resource rows.",
-        "The former TemplateCompilationComputationService and dynamic cohort authorities were migration harnesses and are deleted after their useful transition witnesses moved through the production app computation. Do not recreate a second family producer.",
-        "Owner-local materialization membership and pre/family/post phase ownership are revisioned. Do not activate reuse until explicit child carry/rebase, one authoritative publication-decision preview, and conservative SCC propagation are implemented; manifests alone are not a reuse decision."
+        "Route exact authored-source reads, local definitions, generated compiler worlds, compiler observations, parsing, lowering, and compiled-template products through the family child's KernelPublicationContext.",
+        "Before project-owned runtime and checker analysis, re-observe live compiler authority and exact-read every resource definition, compiler product, service detail, and authored attribute syntax that runtime analysis consumes.",
+        "Retain both parent and active compiler worlds for each recursive emission. Pure current projections may be distinct objects with the same stable handle; validate handles and current semantics rather than object identity.",
+        "The former focused family producer and dynamic cohort authorities are deleted. Do not recreate a second family production path.",
+        "Owner-local materialization membership and pre/family/post phase ownership are revisioned. Carry a family only through ComputationRun.tryCarryChild after exact rebase and retained dependency preview; otherwise rerun it.",
+        "The first activation queue remains flat and conservative. Only Retain cuts propagation; open closure, RefreshWitness, nontrivial SCCs, or failed rebase rerun."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-compilation-cohort.ts",
           "symbolName": "TemplateCompilationLocus",
-          "summary": "Stable logical-child identity for one authored template owner across every compiler cohort and recursive local template."
+          "summary": "Stable child identity for one authored template owner."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
           "symbolName": "TemplateCompilationProjectPass",
-          "summary": "Production family-child compiler front door and exact handoff into project-owned runtime/checker analysis."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/template/local-template-definition-materializer.ts",
-          "symbolName": "LocalTemplateDefinitionMaterializer",
-          "summary": "Stable authored local identities and family-owned definition/detail publication."
+          "summary": "Production family compiler front door and carry/rebase integration."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/compiler-read-view.ts",
-          "symbolName": "TemplateCompilerReadView",
-          "summary": "Exact parent and recursively derived child compiler reads."
+          "symbolName": "TemplateCompilerWorldAuthority",
+          "summary": "Current parent and derived compiler-world projection authority."
         },
         {
           "kind": "doc",
           "path": "packages/semantic-runtime/src/template/README.md",
-          "summary": "Production template-family ownership, exact compiler-to-runtime handoff, and deferred activation boundaries."
+          "summary": "Template-family ownership and exact compiler-to-runtime handoff."
         }
       ],
       "liveChecks": [
@@ -796,11 +788,6 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
           "symbolName": "TemplateCompilationProjectPass"
-        },
-        {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/template/local-template-definition-materializer.ts",
-          "symbolName": "LocalTemplateDefinitionMaterializer"
         }
       ],
       "createdAt": "2026-07-17",
@@ -958,6 +945,77 @@
       ],
       "createdAt": "2026-07-19",
       "updatedAt": "2026-07-19"
+    },
+    {
+      "id": "decision:kernel-child-carry-and-detail-comparison",
+      "kind": "decision",
+      "domains": [
+        "kernel",
+        "incrementality",
+        "semantic-runtime",
+        "resources",
+        "template"
+      ],
+      "summary": "Child carry rebases exact dependencies through one atomic publication authority, and rich-detail slots classify fresh semantic versus witness closure without weakening structural lifetime.",
+      "rationale": "Selective activation must preserve the same read, producer, comparison, reference, and lifetime truth as an ordinary rerun. Carry is therefore an explicit kernel operation over one prior declared singleton child, not a domain cache hit. Rich-detail comparison remains slot-owned, while exact structural references remain the dependency and lifetime authority; a changed closure can refresh witnesses or replace semantics but can never retain an incumbent object with stale references.",
+      "guidance": [
+        "Use ComputationRun.tryCarryChild only before candidate work starts and only for a prior declared singleton child with revisioned reads and stable producer ownership.",
+        "Rebase exact reads through their owning current authorities. Candidate-local dependencies must still come from the same producer and preview as Retain; otherwise rerun the child.",
+        "Finish all fallible read-map and staged-revision merges before mutating carried publication. A caught conflict must leave no commit-capable output behind.",
+        "Preview and final replacement use distinct runtime-branded staged-publication capabilities. Output handles, copied structural objects, and preview authority are not commit authority.",
+        "Use the store's decision preview only to complete the partial candidate for comparison. Final omission still means withdrawal, and final commit revalidates ordinary reads, currentness, references, envelopes, and producers.",
+        "Run domain read rebasers under carry quiescence: they may inspect the supplied preview context but may not read, publish, enter children, commit, or abort through the owning run. Decline carry when another child already staged a prior output.",
+        "Finish every external validator and currentness callback before the callback-free descriptor and structural-closure recheck. No callback may run after dependency closure is certified.",
+        "Keep structural-reference closure exact. When closure changes, a slot comparator may return RefreshWitness to install the fresh detail and fresh closure together; comparator Retain is escalated to Replace.",
+        "Resource definition comparison classifies semantic and witness reference subsets inside resources/product-details.ts. Do not duplicate that split in compiler-world, scheduler, or API code.",
+        "Until reads declare semantic-versus-witness sensitivity, RefreshWitness activates every reader conservatively. Only Retain may cut propagation in the first queue."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/computation-lifecycle.ts",
+          "symbolName": "ComputationRun.tryCarryChild",
+          "summary": "Exact prior-child carry, read rebase, decision preview, and transactional preflight."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/publication.ts",
+          "symbolName": "KernelPublicationDecisionCandidate",
+          "summary": "Runtime-branded final staged-publication authority, distinct from preview authority."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/store.ts",
+          "symbolName": "compareProductDetailPublication",
+          "summary": "Store-owned rich-detail comparison and changed-closure guard."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/product-details.ts",
+          "symbolName": "compareResourceDefinitionDetails",
+          "summary": "Resource semantic-versus-witness comparison authority."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/kernel/README.md",
+          "summary": "Kernel carry, comparison, structural closure, and atomic replacement doctrine."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/computation-lifecycle.ts",
+          "symbolName": "ComputationRun"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/resources/product-details.ts",
+          "symbolName": "compareResourceDefinitionDetails"
+        }
+      ],
+      "createdAt": "2026-07-21",
+      "updatedAt": "2026-07-21"
     }
   ]
 }

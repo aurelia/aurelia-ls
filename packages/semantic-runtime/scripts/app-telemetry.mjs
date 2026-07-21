@@ -2165,7 +2165,7 @@ function printRun(run) {
   for (const appQueryClaims of run.appQueryClaimGraphs) {
     console.log(formatQueryClaimGraph(`- app query claims[${appQueryClaims.inquiryProfile}]`, appQueryClaims.queryClaims));
   }
-  printTypeShapeDuplicateRows('- repeated type checker keys', run.typeShapeDuplicates);
+  printTypeShapeDuplicateRows('- repeated semantic type keys', run.typeShapeDuplicates);
   if (run.warnings.length > 0) {
     console.log(`- warnings: ${run.warnings.join('; ')}`);
   }
@@ -2311,7 +2311,7 @@ function printAggregate(aggregate) {
   if (aggregate.appQueryClaims.createdRecords > 0) {
     console.log(formatQueryClaimAggregate('- app query claim totals', aggregate.appQueryClaims));
   }
-  printCountRows('- repeated type checker-key totals', countMapRows(aggregate.typeShapeDuplicates), 10);
+  printCountRows('- repeated semantic type-key totals', countMapRows(aggregate.typeShapeDuplicates), 10);
   if (aggregate.warnings.size > 0) {
     console.log('- warnings');
     for (const [warning, count] of sortedMapEntries(aggregate.warnings).slice(0, 10)) {
@@ -3000,10 +3000,10 @@ function topTypeShapeDuplicateRows(store, limit) {
     if (detail == null || typeof detail !== 'object') {
       continue;
     }
-    const checkerKey = String(detail.checkerKey ?? 'unknown');
-    const current = groups.get(checkerKey) ?? {
-      checkerKey,
-      display: String(detail.display ?? checkerKey),
+    const semanticKey = String(detail.semanticKey ?? 'unknown');
+    const current = groups.get(semanticKey) ?? {
+      semanticKey,
+      display: String(detail.display ?? semanticKey),
       shapeKind: String(detail.shapeKind ?? 'unknown'),
       origins: new Set(),
       sources: new Set(),
@@ -3012,14 +3012,14 @@ function topTypeShapeDuplicateRows(store, limit) {
     current.origins.add(String(detail.origin ?? 'unknown'));
     current.sources.add(String(detail.sourceAddressHandle ?? 'no-source'));
     current.count += 1;
-    groups.set(checkerKey, current);
+    groups.set(semanticKey, current);
   }
   return [...groups.values()]
     .filter((row) => row.count > 1)
     .sort((left, right) => right.count - left.count || left.display.localeCompare(right.display))
     .slice(0, limit)
     .map((row) => ({
-      checkerKey: row.checkerKey,
+      semanticKey: row.semanticKey,
       display: row.display,
       shapeKind: row.shapeKind,
       count: row.count,

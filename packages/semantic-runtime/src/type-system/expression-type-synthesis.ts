@@ -333,7 +333,7 @@ export function commonTypeReference(
   if (first == null) {
     return null;
   }
-  return references.every((reference) => reference.checkerKey === first.checkerKey && reference.display === first.display)
+  return references.every((reference) => reference.semanticKey === first.semanticKey && reference.display === first.display)
     ? first
     : null;
 }
@@ -362,7 +362,7 @@ function displayArrayLiteralType(
   elementCount: number,
 ): string {
   if (elementType != null) {
-    return `Array<${elementType.display ?? elementType.checkerKey ?? 'unknown'}>`;
+    return `Array<${elementType.display ?? elementType.semanticKey ?? 'unknown'}>`;
   }
   return elementCount === 0 ? 'Array<unknown>' : 'Array<mixed>';
 }
@@ -381,7 +381,7 @@ function displayUnionType(shapes: readonly CheckerTypeShape[]): string {
 
 function displayTupleType(elements: readonly CheckerTupleElementRequest[]): string {
   return `[${elements.map((element) => {
-    const value = element.valueType.display ?? element.valueType.checkerKey ?? 'unknown';
+    const value = element.valueType.display ?? element.valueType.semanticKey ?? 'unknown';
     const label = element.name == null ? '' : `${element.name}: `;
     return element.isRest ? `...${label}${value}` : `${label}${value}`;
   }).join(', ')}]`;

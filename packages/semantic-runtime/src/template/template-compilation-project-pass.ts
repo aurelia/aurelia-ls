@@ -40,7 +40,12 @@ import { sourceFileAddressForAddress } from '../kernel/source-address.js';
 import { sourceTextContentRevision } from '../kernel/source-text-snapshot.js';
 import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 import type { GenerationAuthority } from '../kernel/generation-authority.js';
-import type { ComputationRead, ComputationRun } from '../kernel/computation-lifecycle.js';
+import type {
+  ComputationChildCarry,
+  ComputationRead,
+  ComputationReadRebaseContext,
+  ComputationRun,
+} from '../kernel/computation-lifecycle.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { CheckerTypeProjector } from '../type-system/checker-projector.js';
@@ -132,6 +137,7 @@ import {
   type LocalTemplateDefinitionMaterialization,
 } from './local-template-definition-materializer.js';
 import {
+  TemplateCompilerReadObservation,
   TemplateCompilerReadView,
   TemplateCompilerWorldAuthority,
 } from './compiler-read-view.js';
@@ -191,6 +197,31 @@ export class TemplateResourceCompilationEmission {
       ...attributeSyntax.syntaxes,
       ...bindingCommandLowering.attributeSyntaxes,
     ];
+  }
+
+  /** Retain compiler products while rebasing generation-bound worlds and read validators after explicit child carry. */
+  forCarriedGeneration(
+    parentCompilerWorld: TemplateCompilerWorldEmission,
+    compilerWorld: TemplateCompilerWorldEmission,
+    registeredReads: readonly ComputationRead[],
+  ): TemplateResourceCompilationEmission {
+    return new TemplateResourceCompilationEmission(
+      this.localKey,
+      this.familyOwnerHandle,
+      this.analysisContextProductHandle,
+      this.appRootDefinitionProductHandle,
+      parentCompilerWorld,
+      compilerWorld,
+      this.definition,
+      this.unit,
+      this.html,
+      this.attributeSyntax,
+      this.attributeClassification,
+      this.valueSites,
+      this.bindingCommandLowering,
+      this.compiledTemplate,
+      registeredReads,
+    );
   }
 }
 
@@ -285,13 +316,130 @@ export class TemplateCompilationProjectPlan {
 }
 
 /** Complete recursive compiler-front-door values before project-wide runtime/checker analysis. */
+export class TemplateCompilationFamilyFrontDoorEmission {
+  readonly cohortKeys: readonly string[];
+  readonly appCompilations: readonly TemplateResourceCompilationEmission[];
+  readonly authoringCompilations: readonly TemplateResourceCompilationEmission[];
+
+  constructor(
+    readonly ownerHandle: IdentityHandle | ProductHandle,
+    cohortKeys: readonly string[],
+    appCompilations: readonly TemplateResourceCompilationEmission[],
+    authoringCompilations: readonly TemplateResourceCompilationEmission[],
+  ) {
+    this.cohortKeys = Object.freeze([...cohortKeys]);
+    this.appCompilations = Object.freeze([...appCompilations]);
+    this.authoringCompilations = Object.freeze([...authoringCompilations]);
+  }
+
+  matches(owner: TemplateCompilationOwnerPlan): boolean {
+    const cohortKeys = owner.cohorts.map((cohort) => cohort.key);
+    return owner.ownerHandle === this.ownerHandle
+      && cohortKeys.length === this.cohortKeys.length
+      && cohortKeys.every((key, index) => key === this.cohortKeys[index]);
+  }
+}
+
+/** Candidate-local bridge from a retained family closure to current compiler-world and read authorities. */
+class TemplateCompilationFamilyCarryRebaser {
+  private readonly worldsByScope = new Map<IdentityHandle, TemplateCompilerWorldEmission>();
+  private readonly containersByIdentity = new Map<IdentityHandle, TemplateCompilerWorldEmission['container']>();
+
+  constructor(
+    private readonly owner: TemplateCompilationOwnerPlan,
+    private readonly previous: TemplateCompilationFamilyFrontDoorEmission,
+  ) {
+    for (const cohort of owner.cohorts) {
+      const world = cohort.parentCompilerWorld;
+      this.containersByIdentity.set(world.container.identityHandle, world.container);
+      this.worldsByScope.set(world.resourceScope.identityHandle, world);
+    }
+    for (const compilation of [...previous.appCompilations, ...previous.authoringCompilations]) {
+      this.rebaseWorld(compilation.parentCompilerWorld);
+      this.rebaseWorld(compilation.compilerWorld);
+    }
+  }
+
+  readonly rebaseRead = (
+    read: ComputationRead,
+    context: ComputationReadRebaseContext,
+  ): ComputationRead | null | undefined => {
+    if (!(read instanceof TemplateCompilerReadObservation)) {
+      return undefined;
+    }
+    const world = this.worldsByScope.get(read.compilerScopeIdentityHandle) ?? null;
+    return world == null
+      ? null
+      : read.tryRebaseTo(context, TemplateCompilerWorldAuthority.fixed(world));
+  };
+
+  rebase(carry: ComputationChildCarry): TemplateCompilationFamilyFrontDoorEmission {
+    return new TemplateCompilationFamilyFrontDoorEmission(
+      this.owner.ownerHandle,
+      this.owner.cohorts.map((cohort) => cohort.key),
+      this.previous.appCompilations.map((compilation) => this.rebaseCompilation(compilation, carry)),
+      this.previous.authoringCompilations.map((compilation) => this.rebaseCompilation(compilation, carry)),
+    );
+  }
+
+  private rebaseCompilation(
+    compilation: TemplateResourceCompilationEmission,
+    carry: ComputationChildCarry,
+  ): TemplateResourceCompilationEmission {
+    const parentCompilerWorld = this.rebaseWorld(compilation.parentCompilerWorld);
+    const compilerWorld = this.rebaseWorld(compilation.compilerWorld);
+    if (parentCompilerWorld == null || compilerWorld == null) {
+      throw new Error(`Carried template family ${this.owner.ownerHandle} lost its current compiler-world container.`);
+    }
+    return compilation.forCarriedGeneration(
+      parentCompilerWorld,
+      compilerWorld,
+      compilation.registeredReads.map((read) => carry.readFor(read)),
+    );
+  }
+
+  private rebaseWorld(previous: TemplateCompilerWorldEmission): TemplateCompilerWorldEmission | null {
+    const scopeIdentityHandle = previous.resourceScope.identityHandle;
+    const current = this.worldsByScope.get(scopeIdentityHandle) ?? null;
+    if (current != null) {
+      return current;
+    }
+    const container = this.containersByIdentity.get(previous.container.identityHandle) ?? null;
+    if (container == null) {
+      return null;
+    }
+    const rebased = previous.forContainerGeneration(container);
+    this.worldsByScope.set(scopeIdentityHandle, rebased);
+    return rebased;
+  }
+}
+
+/** Complete recursive compiler-front-door values before project-wide runtime/checker analysis. */
 export class TemplateCompilationFrontDoorEmission {
+  readonly families: readonly TemplateCompilationFamilyFrontDoorEmission[];
+  readonly appCompilations: readonly TemplateResourceCompilationEmission[];
+  readonly authoringCompilations: readonly TemplateResourceCompilationEmission[];
+  private readonly familiesByOwnerHandle: ReadonlyMap<IdentityHandle | ProductHandle, TemplateCompilationFamilyFrontDoorEmission>;
+
   constructor(
     readonly plan: TemplateCompilationProjectPlan,
-    readonly appCompilations: readonly TemplateResourceCompilationEmission[],
-    readonly authoringCompilations: readonly TemplateResourceCompilationEmission[],
+    families: readonly TemplateCompilationFamilyFrontDoorEmission[],
     readonly profile: TemplateCompilationProjectProfile,
-  ) {}
+  ) {
+    this.families = Object.freeze([...families]);
+    this.appCompilations = Object.freeze(families.flatMap((family) => family.appCompilations));
+    this.authoringCompilations = Object.freeze(families.flatMap((family) => family.authoringCompilations));
+    this.familiesByOwnerHandle = new Map(families.map((family) => [family.ownerHandle, family]));
+    if (this.familiesByOwnerHandle.size !== families.length) {
+      throw new Error('Template front-door emission contains duplicate family owners.');
+    }
+  }
+
+  familyForOwner(
+    ownerHandle: IdentityHandle | ProductHandle,
+  ): TemplateCompilationFamilyFrontDoorEmission | null {
+    return this.familiesByOwnerHandle.get(ownerHandle) ?? null;
+  }
 }
 
 class TemplateCompilationPhaseRecorder {
@@ -459,18 +607,19 @@ export class TemplateCompilationProjectPass {
   compileFrontDoors(
     plan: TemplateCompilationProjectPlan,
     project: ProjectBootFrame | null = null,
+    previous: TemplateCompilationFrontDoorEmission | null = null,
   ): TemplateCompilationFrontDoorEmission {
     const started = performance.now();
     const phases = new TemplateCompilationPhaseRecorder(this.publication, plan.telemetry);
-    const [appCompilations, authoringCompilations] = this.compilePlannedCohorts(
+    const families = this.compilePlannedCohorts(
       plan.cohortPlan,
       phases,
       project,
+      previous,
     );
     return new TemplateCompilationFrontDoorEmission(
       plan,
-      appCompilations,
-      authoringCompilations,
+      families,
       mergeTemplateCompilationProfiles(plan.profile, templateCompilationProfile(started, phases.phases)),
     );
   }
@@ -540,12 +689,9 @@ export class TemplateCompilationProjectPass {
     plan: TemplateCompilationCohortProjectPlan,
     phases: TemplateCompilationPhaseRecorder,
     project: ProjectBootFrame | null,
-  ): readonly [
-    app: readonly TemplateResourceCompilationEmission[],
-    authoring: readonly TemplateResourceCompilationEmission[],
-  ] {
-    const app: TemplateResourceCompilationEmission[] = [];
-    const authoring: TemplateResourceCompilationEmission[] = [];
+    previous: TemplateCompilationFrontDoorEmission | null,
+  ): readonly TemplateCompilationFamilyFrontDoorEmission[] {
+    const families: TemplateCompilationFamilyFrontDoorEmission[] = [];
     for (const owner of plan.ownerPlans) {
       if (
         owner.cohorts.length === 0
@@ -553,7 +699,21 @@ export class TemplateCompilationProjectPass {
       ) {
         continue;
       }
-      this.publication.withChild(new TemplateCompilationLocus(plan.projectKey, owner.ownerHandle), () => {
+      const locus = new TemplateCompilationLocus(plan.projectKey, owner.ownerHandle);
+      const previousFamily = previous?.familyForOwner(owner.ownerHandle) ?? null;
+      const familyRebaser = previousFamily == null
+        ? null
+        : new TemplateCompilationFamilyCarryRebaser(owner, previousFamily);
+      if (previousFamily?.matches(owner) === true && familyRebaser != null) {
+        const carry = this.publication.tryCarryChild(locus, familyRebaser.rebaseRead);
+        if (carry != null) {
+          families.push(familyRebaser.rebase(carry));
+          continue;
+        }
+      }
+      const app: TemplateResourceCompilationEmission[] = [];
+      const authoring: TemplateResourceCompilationEmission[] = [];
+      this.publication.withChild(locus, () => {
         const compileOwner = (): void => {
           if (project != null) {
             this.requireCurrentTemplateSource(project, owner);
@@ -589,8 +749,14 @@ export class TemplateCompilationProjectPass {
           this.publication.observe(read);
         }
       });
+      families.push(new TemplateCompilationFamilyFrontDoorEmission(
+        owner.ownerHandle,
+        owner.cohorts.map((cohort) => cohort.key),
+        app,
+        authoring,
+      ));
     }
-    return [app, authoring];
+    return families;
   }
 
   private requireCurrentTemplateSource(

@@ -712,8 +712,8 @@ export class TypeSystemIdentity {
     readonly handle: IdentityHandle,
     /** Controlled product kind represented by this identity. */
     readonly productKindKey: ProductKindKey,
-    /** Checker/program-local key that lets the hot sidecar reconnect to current TypeChecker state. */
-    readonly checkerKey: string,
+    /** Stable semantic key for the projected type; hot checker state remains epoch-local detail. */
+    readonly semanticTypeKey: string,
     /** Optional owner identity such as a declaration, binding context, or containing type shape. */
     readonly ownerHandle: IdentityHandle | null,
     /** Source address for the declaration or use-site that caused this projection. */

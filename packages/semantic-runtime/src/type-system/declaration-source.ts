@@ -100,6 +100,11 @@ export function registerIsolatedCheckerDeclarationSourceContext(
   );
 }
 
+/** Stable logical-project namespace for semantic identities projected from one checker generation. */
+export function checkerDeclarationSourceProjectKey(checker: ts.TypeChecker): string {
+  return checkerDeclarationSourceContext(checker).projectKey;
+}
+
 export function sourceSpanForCheckerDeclaration(
   publication: KernelPublicationContext,
   checker: ts.TypeChecker,

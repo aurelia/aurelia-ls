@@ -12,9 +12,11 @@ import {
   KernelPublicationManifest,
   KernelPublicationPlan,
   type KernelPublicationContext,
+  type KernelPublicationDecisionCandidate,
+  type KernelPublicationDecisionPreviewCandidate,
   type KernelPublicationReplacement,
   type KernelPublicationWriterId,
-  type KernelStagedEntryRevision,
+  KernelStagedEntryRevision,
   type SealedKernelPublicationCandidate,
   StagedKernelPublicationContext,
   type KernelHotDetailAdmissionSnapshot,
@@ -91,12 +93,17 @@ export const enum ComputationCandidateReadState {
 
 /** Exact candidate-local dependency, including negative reads that have no producer child. */
 export class ComputationCandidateRead {
+  readonly readKey: string;
+
   constructor(
-    readonly readKey: string,
+    readonly surface: KernelPublicationSurface,
+    readonly handle: string,
+    readonly actualKind: string | null,
     readonly state: ComputationCandidateReadState,
     readonly producerChildId: ComputationChildId | null,
     readonly observedMutationOrdinal: number | null,
   ) {
+    this.readKey = computationOutputReadKey(surface, handle);
     Object.freeze(this);
   }
 }
@@ -119,7 +126,20 @@ export interface ComputationRead {
   readonly domain: string;
   readonly observedRevision: string;
   validate(): ComputationReadValidation;
+  /** Re-capture the same observed value through its current authority, or refuse when that authority cannot rebase. */
+  tryRebaseCurrent(): ComputationRead | null;
 }
+
+/** Side-effect-free candidate view available while deciding whether a prior read can be carried. */
+export interface ComputationReadRebaseContext {
+  readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[];
+}
+
+/** Domain override for reads whose current authority is supplied by the candidate being assembled. */
+export type ComputationReadRebaser = (
+  read: ComputationRead,
+  context: ComputationReadRebaseContext,
+) => ComputationRead | null | undefined;
 
 /** Run-local admission capability that may reject commit but never becomes a semantic dependency edge. */
 class ComputationCurrentnessGuard {
@@ -190,7 +210,7 @@ export class ComputationMaterializationOwnerRead implements ComputationRead {
     private readonly store: KernelStore,
     readonly ownerHandle: MaterializationOwnerHandle,
     excludedRecordHandles: readonly KernelRecordHandle[],
-    observedRecordHandles: readonly KernelRecordHandle[],
+    readonly observedRecordHandles: readonly KernelRecordHandle[],
   ) {
     this.readKey = computationMaterializationOwnerReadKey(ownerHandle);
     this.excludedRecordHandles = new Set(excludedRecordHandles);
@@ -208,6 +228,11 @@ export class ComputationMaterializationOwnerRead implements ComputationRead {
       currentRevision,
       changedFacets: currentRevision === this.observedRevision ? [] : ['membership'],
     };
+  }
+
+  tryRebaseCurrent(): ComputationRead | null {
+    // Candidate-local membership must be reconstructed by ComputationRun so staged additions are not lost.
+    return null;
   }
 }
 
@@ -247,6 +272,16 @@ export class ComputationRecordRead implements ComputationRead {
             ],
     };
   }
+
+  tryRebaseCurrent(): ComputationRead | null {
+    const current = new ComputationRecordRead(
+      this.store,
+      this.handle,
+      this.store.readRecordRevision(this.handle),
+      this.store.readRecordLifetimeOrdinal(this.handle),
+    );
+    return current.observedRevision === this.observedRevision ? current : null;
+  }
 }
 
 /** Exact positive or negative read of one typed product-detail slot. */
@@ -281,6 +316,19 @@ export class ComputationProductDetailRead implements ComputationRead {
       this.store.productDetails.readMutationOrdinal(this.productHandle),
       this.store.productDetails.readLifetimeOrdinal(this.productHandle),
     );
+  }
+
+  tryRebaseCurrent(): ComputationRead | null {
+    const currentEntry = this.store.productDetails.readEntry(this.productHandle);
+    const current = new ComputationProductDetailRead(
+      this.store,
+      this.productHandle,
+      this.detailKind,
+      currentEntry?.slot.detailKind ?? null,
+      this.store.productDetails.readMutationOrdinal(this.productHandle),
+      this.store.productDetails.readLifetimeOrdinal(this.productHandle),
+    );
+    return current.observedRevision === this.observedRevision ? current : null;
   }
 }
 
@@ -317,6 +365,19 @@ export class ComputationHotDetailRead implements ComputationRead {
       this.store.hotDetails.readLifetimeOrdinal(this.handle),
     );
   }
+
+  tryRebaseCurrent(): ComputationRead | null {
+    const currentEntry = this.store.hotDetails.readEntry(this.handle);
+    const current = new ComputationHotDetailRead(
+      this.store,
+      this.handle,
+      this.detailKind,
+      currentEntry?.slot.detailKind ?? null,
+      this.store.hotDetails.readMutationOrdinal(this.handle),
+      this.store.hotDetails.readLifetimeOrdinal(this.handle),
+    );
+    return current.observedRevision === this.observedRevision ? current : null;
+  }
 }
 
 /** Immutable read metadata and callback captured before publication enters the store mutation barrier. */
@@ -327,6 +388,7 @@ class SealedComputationRead implements ComputationRead {
     readonly observedRevision: string,
     private readonly validateCurrent: () => ComputationReadValidation,
     readonly retainedKernelInput: ComputationKernelInput | null,
+    private readonly source: ComputationRead,
   ) {
     Object.freeze(this);
   }
@@ -339,6 +401,10 @@ class SealedComputationRead implements ComputationRead {
       changedFacets: Object.freeze([...current.changedFacets]),
     };
     return Object.freeze(validation);
+  }
+
+  tryRebaseCurrent(): ComputationRead | null {
+    return SealedComputationRead.rebase(this);
   }
 
   retainKernelInput(retention: KernelStoreRetentionCollector): void {
@@ -379,7 +445,46 @@ class SealedComputationRead implements ComputationRead {
       read.observedRevision,
       () => Reflect.apply(validateCurrent, read, []),
       retainedKernelInput,
+      read,
     );
+  }
+
+  static rebase(
+    read: ComputationRead,
+    rebaser: ((read: ComputationRead) => ComputationRead | null | undefined) | null = null,
+  ): SealedComputationRead | null {
+    const sealed = SealedComputationRead.from(read);
+    const overridden = SealedComputationRead.hasKernelRebaseAuthority(sealed.source)
+      ? undefined
+      : rebaser?.(sealed.source);
+    const rebased = overridden === undefined
+      ? sealed.source.tryRebaseCurrent()
+      : overridden;
+    if (rebased == null) {
+      return null;
+    }
+    const candidate = SealedComputationRead.from(rebased);
+    if (candidate.readKey !== sealed.readKey || candidate.domain !== sealed.domain) {
+      throw new Error(
+        `Computation read rebase changed ${sealed.domain}:${sealed.readKey} into `
+        + `${candidate.domain}:${candidate.readKey}.`,
+      );
+    }
+    if (candidate.observedRevision !== sealed.observedRevision || !candidate.validate().isCurrent) {
+      return null;
+    }
+    return candidate;
+  }
+
+  static sourceOf(read: ComputationRead): ComputationRead {
+    return SealedComputationRead.from(read).source;
+  }
+
+  private static hasKernelRebaseAuthority(read: ComputationRead): boolean {
+    return read instanceof ComputationMaterializationOwnerRead
+      || read instanceof ComputationRecordRead
+      || read instanceof ComputationProductDetailRead
+      || read instanceof ComputationHotDetailRead;
   }
 }
 
@@ -646,10 +751,37 @@ export class ComputationChildState {
   }
 }
 
+/** Successful child carry plus the current-authority reads that justified reusing its exact outputs. */
+export class ComputationChildCarry {
+  private readonly readsByKey: ReadonlyMap<string, ComputationRead>;
+
+  constructor(
+    readonly previousState: ComputationChildState,
+    reads: readonly ComputationRead[],
+  ) {
+    this.readsByKey = new Map(reads.map((read) => [read.readKey, read]));
+    Object.freeze(this);
+  }
+
+  readFor(previousRead: ComputationRead): ComputationRead {
+    const current = this.readsByKey.get(previousRead.readKey) ?? null;
+    if (
+      current == null
+      || current.domain !== previousRead.domain
+      || current.observedRevision !== previousRead.observedRevision
+    ) {
+      throw new Error(`Carried child has no coherent current read for ${previousRead.readKey}.`);
+    }
+    return current;
+  }
+}
+
 class MutableComputationChild {
   readonly readsByKey = new Map<string, ComputationRead>();
   readonly stagedReadsByKey = new Map<string, KernelStagedEntryRevision>();
   readonly openReadsByKey = new Map<string, ComputationChildOpenRead>();
+  carriedState: ComputationChildState | null = null;
+  readonly carriedDependencyReadKeys = new Set<string>();
 
   constructor(
     readonly childId: ComputationChildId,
@@ -723,6 +855,15 @@ class ComputationSupersededDuringCommitError extends Error {
   }
 }
 
+/** Preview-only kernel view: a rejected rebase must not register semantic reads in its candidate run. */
+class StagedComputationReadRebaseContext implements ComputationReadRebaseContext {
+  constructor(private readonly publications: StagedKernelPublicationContext) {}
+
+  readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[] {
+    return this.publications.previewMaterializationOwnerCandidate(ownerHandle).records;
+  }
+}
+
 class ComputationChildPreparationFailure extends Error {
   constructor(
     readonly childId: ComputationChildId,
@@ -784,6 +925,7 @@ export class ComputationRun implements KernelPublicationContext {
   private hasExplicitPartition = false;
   private childFailure: ComputationChildPreparationFailure | null = null;
   private phase = ComputationRunPhase.Preparing;
+  private carryReadRebaseActive = false;
 
   constructor(
     private readonly registry: ComputationLifecycleRegistry,
@@ -791,6 +933,7 @@ export class ComputationRun implements KernelPublicationContext {
     readonly computationId: ComputationId,
     readonly locus: ComputationLocus,
     readonly runSequence: number,
+    private readonly previousState: ComputationState | null,
     previousPublication: KernelPublicationManifest,
   ) {
     this.remainderChild = this.childFor(new ComputationRemainderLocus(locus), ComputationChildRole.Remainder);
@@ -837,6 +980,9 @@ export class ComputationRun implements KernelPublicationContext {
     let entered = false;
     try {
       const child = this.childFor(capturedLocus, ComputationChildRole.Declared);
+      if (child.carriedState != null) {
+        throw new Error(`Computation child ${child.childId} was already carried into this candidate.`);
+      }
       this.hasExplicitChildren = true;
       this.activeChild = child;
       this.activeChildScopeDepth += 1;
@@ -873,6 +1019,7 @@ export class ComputationRun implements KernelPublicationContext {
   }
 
   requireCurrent(): void {
+    this.assertCarryReadRebaseInactive();
     if (this.phase === ComputationRunPhase.Finished) {
       throw new Error(`Computation run ${this.computationId}@${this.runSequence} has already finished.`);
     }
@@ -1071,6 +1218,184 @@ export class ComputationRun implements KernelPublicationContext {
     }
   }
 
+  /** Carry one exact prior singleton child when every dependency still denotes a retained candidate value. */
+  tryCarryChild(
+    locus: ComputationLocus,
+    rebaseRead: ComputationReadRebaser | null = null,
+  ): ComputationChildCarry | null {
+    this.requirePreparing();
+    const capturedLocus = snapshotComputationLocus(locus);
+    const childId = computationChildId(this.computationId, capturedLocus);
+    if (childId === this.activeChild.childId) {
+      throw new Error(`Computation child ${childId} cannot carry itself.`);
+    }
+    const previous = this.previousState?.children.find((child) => child.childId === childId) ?? null;
+    if (
+      previous == null
+      || previous.role !== ComputationChildRole.Declared
+      || previous.scc.kind !== ComputationChildSccKind.Singleton
+      || !previous.hasOnlyRevisionedReads
+    ) {
+      return null;
+    }
+
+    const child = this.childFor(capturedLocus, ComputationChildRole.Declared);
+    if (
+      child.carriedState != null
+      || child.readsByKey.size > 0
+      || child.stagedReadsByKey.size > 0
+      || child.openReadsByKey.size > 0
+      || this.publications.hasStagedActivityFrom(child.childId)
+    ) {
+      throw new Error(`Computation child ${child.childId} cannot be carried after candidate work has started.`);
+    }
+    if (!this.outputsAreUnclaimed(previous.outputs)) return null;
+
+    const rebaseContext = new StagedComputationReadRebaseContext(this.publications);
+    const rebasedReads: SealedComputationRead[] = [];
+    for (const read of previous.reads) {
+      const source = SealedComputationRead.sourceOf(read);
+      const rebased = source instanceof ComputationMaterializationOwnerRead
+        ? this.rebaseMaterializationOwnerRead(source, previous)
+        : this.rebaseCarryRead(read, rebaseRead, rebaseContext);
+      if (rebased == null) return null;
+      rebasedReads.push(SealedComputationRead.from(rebased));
+    }
+
+    if (
+      child.carriedState != null
+      || child.readsByKey.size > 0
+      || child.stagedReadsByKey.size > 0
+      || child.openReadsByKey.size > 0
+      || this.publications.hasStagedActivityFrom(child.childId)
+    ) {
+      throw new Error(`Computation child ${child.childId} changed while its carry reads were being rebased.`);
+    }
+    if (!this.outputsAreUnclaimed(previous.outputs)) return null;
+
+    const rebasedCandidateReads: KernelStagedEntryRevision[] = [];
+    const retainedDependencyReadKeys = new Set<string>();
+    for (const read of previous.candidateReads) {
+      const current = this.publications.readStagedRevision(read.surface, read.handle);
+      if (read.state === ComputationCandidateReadState.Absent) {
+        if (current != null || !this.publications.isCandidateEntryAbsent(read.surface, read.handle)) return null;
+        rebasedCandidateReads.push(KernelStagedEntryRevision.absent(read.surface, read.handle));
+        continue;
+      }
+      if (
+        current == null
+        || current.writerId !== read.producerChildId
+        || current.actualKind !== read.actualKind
+      ) {
+        return null;
+      }
+      rebasedCandidateReads.push(current);
+      retainedDependencyReadKeys.add(read.readKey);
+    }
+
+    const preview = this.registry.previewRunPublicationDecisions(
+      this,
+      this.publications.toDecisionPreviewCandidate(
+        `preview:${this.computationId}:run:${this.runSequence}:child:${child.childId}`,
+        previous.outputs,
+      ),
+    );
+    const previewByReadKey = new Map(preview.map((decision) => [
+      computationOutputReadKey(decision.surface, decision.handle),
+      decision,
+    ]));
+    for (const readKey of retainedDependencyReadKeys) {
+      if (previewByReadKey.get(readKey)?.decision !== KernelPublicationDecisionKind.Retain) return null;
+    }
+    for (const output of previous.outputs) {
+      if (this.registry.childProducerFor(output.readKey) !== previous.childId) return null;
+      if (previewByReadKey.get(output.readKey)?.decision !== KernelPublicationDecisionKind.Retain) return null;
+    }
+
+    // Complete every fallible map merge before carry mutates the staged publication. A caught conflict must not leave
+    // commit-capable carried outputs without the dependency evidence that justified them.
+    const carriedRunReads = new Map(this.readsByKey);
+    const carriedChildReads = new Map(child.readsByKey);
+    for (const sealed of rebasedReads) {
+      registerComputationRead(carriedRunReads, sealed, `Computation ${this.computationId}`);
+      registerComputationRead(carriedChildReads, sealed, `Computation child ${child.childId}`);
+    }
+    const carriedStagedReads = new Map(child.stagedReadsByKey);
+    for (const revision of rebasedCandidateReads) {
+      registerStagedEntryRevision(carriedStagedReads, child.childId, revision);
+    }
+
+    this.publications.carryFrom(child.childId, previous.outputs);
+    for (const read of rebasedReads) {
+      const source = SealedComputationRead.sourceOf(read);
+      if (source instanceof ComputationMaterializationOwnerRead) {
+        this.publications.observeMaterializationOwner(source.ownerHandle);
+      }
+    }
+    for (const [readKey, read] of carriedRunReads) this.readsByKey.set(readKey, read);
+    for (const [readKey, read] of carriedChildReads) child.readsByKey.set(readKey, read);
+    for (const [readKey, read] of carriedStagedReads) child.stagedReadsByKey.set(readKey, read);
+    child.carriedState = previous;
+    for (const readKey of retainedDependencyReadKeys) child.carriedDependencyReadKeys.add(readKey);
+    this.hasExplicitChildren = true;
+    return new ComputationChildCarry(previous, rebasedReads);
+  }
+
+  private rebaseCarryRead(
+    read: ComputationRead,
+    rebaseRead: ComputationReadRebaser | null,
+    context: ComputationReadRebaseContext,
+  ): SealedComputationRead | null {
+    if (this.carryReadRebaseActive) {
+      throw new Error(`Computation run ${this.computationId}@${this.runSequence} is already rebasing a carry read.`);
+    }
+    this.carryReadRebaseActive = true;
+    try {
+      return SealedComputationRead.rebase(
+        read,
+        rebaseRead == null ? null : (candidate) => rebaseRead(candidate, context),
+      );
+    } finally {
+      this.carryReadRebaseActive = false;
+    }
+  }
+
+  private outputsAreUnclaimed(outputs: readonly ComputationOutput[]): boolean {
+    return outputs.every((output) =>
+      this.publications.readStagedRevision(output.surface, output.handle) == null,
+    );
+  }
+
+  private rebaseMaterializationOwnerRead(
+    read: ComputationMaterializationOwnerRead,
+    previous: ComputationChildState,
+  ): ComputationMaterializationOwnerRead | null {
+    const expectedHandles = new Set(read.observedRecordHandles);
+    for (const candidateRead of previous.candidateReads) {
+      if (
+        candidateRead.state !== ComputationCandidateReadState.Present
+        || candidateRead.surface !== KernelPublicationSurface.Record
+      ) {
+        continue;
+      }
+      const record = this.store.read(candidateRead.handle as KernelRecordHandle);
+      if (record?.kind === 'materialization-record' && record.ownerHandle === read.ownerHandle) {
+        expectedHandles.add(record.handle);
+      }
+    }
+    const current = this.publications.previewMaterializationOwnerCandidate(read.ownerHandle);
+    const currentHandles = current.records.map((record) => record.handle);
+    if (!sameSortedStrings([...expectedHandles], currentHandles)) {
+      return null;
+    }
+    return new ComputationMaterializationOwnerRead(
+      this.store,
+      read.ownerHandle,
+      current.excludedRecordHandles,
+      current.committedRecords.map((record) => record.handle),
+    );
+  }
+
   commit(): ComputationCommitResult {
     this.assertPreparing();
     this.requireNoActiveChildScope('commit');
@@ -1117,8 +1442,17 @@ export class ComputationRun implements KernelPublicationContext {
   }
 
   private assertPreparing(): void {
+    this.assertCarryReadRebaseInactive();
     if (this.phase !== ComputationRunPhase.Preparing) {
       throw new Error(`Computation run ${this.computationId}@${this.runSequence} is no longer preparing.`);
+    }
+  }
+
+  private assertCarryReadRebaseInactive(): void {
+    if (this.carryReadRebaseActive) {
+      throw new Error(
+        `Computation run ${this.computationId}@${this.runSequence} cannot be used while a carry read is rebasing.`,
+      );
     }
   }
 
@@ -1146,6 +1480,10 @@ export class ComputationRun implements KernelPublicationContext {
     candidate: SealedKernelPublicationCandidate,
     decisions: readonly KernelPublicationDecision[],
   ): ComputationChildPreparation {
+    const decisionsByReadKey = new Map(decisions.map((decision) => [
+      computationOutputReadKey(decision.surface, decision.handle),
+      decision,
+    ]));
     const outputsByChild = new Map<ComputationChildId, ComputationOutput[]>();
     const outputOwnerByReadKey = new Map<string, ComputationChildId>();
     for (const decision of decisions) {
@@ -1209,8 +1547,20 @@ export class ComputationRun implements KernelPublicationContext {
           return [];
         }
         if (stagedEntryIsAbsent(observed)) {
+          if (!this.publications.isCandidateEntryAbsent(observed.surface, observed.handle)) {
+            invalidReads.push(new ComputationInvalidRead(
+              computationStagedReadKey(observed),
+              'computation-child-staged-read',
+              stagedEntryRevisionLabel(observed),
+              'foreign-committed-entry',
+              ['existence'],
+            ));
+            return [];
+          }
           return [new ComputationCandidateRead(
-            computationStagedReadKey(observed),
+            observed.surface,
+            observed.handle,
+            null,
             ComputationCandidateReadState.Absent,
             null,
             null,
@@ -1219,12 +1569,40 @@ export class ComputationRun implements KernelPublicationContext {
         return observed.writerId === child.childId
           ? []
           : [new ComputationCandidateRead(
-              computationStagedReadKey(observed),
+              observed.surface,
+              observed.handle,
+              observed.actualKind,
               ComputationCandidateReadState.Present,
               observed.writerId,
               requiredStagedReadMutationOrdinal(observed),
             )];
       });
+      if (child.carriedState != null) {
+        for (const output of child.carriedState.outputs) {
+          const decision = decisionsByReadKey.get(output.readKey) ?? null;
+          if (decision?.decision !== KernelPublicationDecisionKind.Retain) {
+            invalidReads.push(new ComputationInvalidRead(
+              output.readKey,
+              'computation-child-carried-output',
+              KernelPublicationDecisionKind.Retain,
+              decision?.decision ?? 'missing',
+              ['publication-decision'],
+            ));
+          }
+        }
+        for (const readKey of child.carriedDependencyReadKeys) {
+          const decision = decisionsByReadKey.get(readKey) ?? null;
+          if (decision?.decision !== KernelPublicationDecisionKind.Retain) {
+            invalidReads.push(new ComputationInvalidRead(
+              readKey,
+              'computation-child-carried-dependency',
+              KernelPublicationDecisionKind.Retain,
+              decision?.decision ?? 'missing',
+              ['publication-decision'],
+            ));
+          }
+        }
+      }
       return {
         child,
         reads: reads.sort((left, right) => left.readKey.localeCompare(right.readKey)),
@@ -1240,16 +1618,28 @@ export class ComputationRun implements KernelPublicationContext {
       return this.hasExplicitChildren && hasContent;
     }).sort((left, right) => left.child.childId.localeCompare(right.child.childId));
     const sccByChildId = classifyComputationChildSccs(prepared);
-    const states = prepared.map((candidate) => new ComputationChildState(
-      candidate.child.childId,
-      candidate.child.locus,
-      candidate.child.role,
-      requiredComputationChildScc(sccByChildId, candidate.child.childId),
-      candidate.reads,
-      candidate.candidateReads,
-      candidate.openReads,
-      candidate.outputs,
-    ));
+    const states = prepared.map((candidate) => {
+      const scc = requiredComputationChildScc(sccByChildId, candidate.child.childId);
+      if (candidate.child.carriedState != null && scc.kind !== ComputationChildSccKind.Singleton) {
+        invalidReads.push(new ComputationInvalidRead(
+          candidate.child.childId,
+          'computation-child-carried-topology',
+          ComputationChildSccKind.Singleton,
+          scc.kind,
+          ['strongly-connected-component'],
+        ));
+      }
+      return new ComputationChildState(
+        candidate.child.childId,
+        candidate.child.locus,
+        candidate.child.role,
+        scc,
+        candidate.reads,
+        candidate.candidateReads,
+        candidate.openReads,
+        candidate.outputs,
+      );
+    });
     return new ComputationChildPreparation(
       states,
       invalidReads,
@@ -1282,19 +1672,7 @@ export class ComputationRun implements KernelPublicationContext {
     child: MutableComputationChild,
     revision: KernelStagedEntryRevision,
   ): void {
-    const readKey = computationStagedReadKey(revision);
-    const existing = child.stagedReadsByKey.get(readKey);
-    if (existing != null && !sameStagedEntryRevision(existing, revision)) {
-      if (
-        revision.writerId === child.childId
-        && (existing.writerId == null || existing.writerId === child.childId)
-      ) {
-        child.stagedReadsByKey.set(readKey, revision);
-        return;
-      }
-      throw new Error(`Computation child ${child.childId} observed changing candidate output ${readKey}.`);
-    }
-    child.stagedReadsByKey.set(readKey, revision);
+    registerStagedEntryRevision(child.stagedReadsByKey, child.childId, revision);
   }
 
   private observeOpenRead(read: ComputationChildOpenRead): void {
@@ -1608,7 +1986,24 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       entry.computationId,
       entry.locus,
       entry.latestRunSequence,
+      entry.state,
       entry.state?.publication ?? KernelPublicationManifest.empty,
+    );
+  }
+
+  /** Compare one run-local scheduling candidate through the owning store's final decision authority. */
+  previewRunPublicationDecisions(
+    run: ComputationRun,
+    candidate: KernelPublicationDecisionPreviewCandidate,
+  ): readonly KernelPublicationDecision[] {
+    const entry = this.entriesById.get(run.computationId);
+    if (entry == null || entry.latestRunSequence !== run.runSequence) {
+      throw new Error(`Cannot preview superseded computation run ${run.computationId}@${run.runSequence}.`);
+    }
+    return this.store.previewOwnedPublicationCandidateDecisions(
+      entry.state?.publication ?? KernelPublicationManifest.empty,
+      candidate,
+      this.publicationOwner,
     );
   }
 
@@ -1807,9 +2202,9 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     let childPreparation = new ComputationChildPreparation([], []);
     let replacement: KernelPublicationReplacement;
     try {
-      replacement = this.store.replaceOwnedPublication(
+      replacement = this.store.replaceOwnedPublicationCandidate(
         previousState?.publication ?? KernelPublicationManifest.empty,
-        candidate.plan.withMinimumLifetimeOrdinal(minimumLifetimeOrdinal),
+        candidate.publication.withMinimumLifetimeOrdinal(minimumLifetimeOrdinal),
         this.publicationOwner,
         {
           validate: (decisions) => {
@@ -2224,6 +2619,26 @@ function registerComputationRead(
   readsByKey.set(read.readKey, read);
 }
 
+function registerStagedEntryRevision(
+  readsByKey: Map<string, KernelStagedEntryRevision>,
+  childId: ComputationChildId,
+  revision: KernelStagedEntryRevision,
+): void {
+  const readKey = computationStagedReadKey(revision);
+  const existing = readsByKey.get(readKey);
+  if (existing != null && !sameStagedEntryRevision(existing, revision)) {
+    if (
+      revision.writerId === childId
+      && (existing.writerId == null || existing.writerId === childId)
+    ) {
+      readsByKey.set(readKey, revision);
+      return;
+    }
+    throw new Error(`Computation child ${childId} observed changing candidate output ${readKey}.`);
+  }
+  readsByKey.set(readKey, revision);
+}
+
 function materializationOwnerMembershipRevision(handles: readonly KernelRecordHandle[]): string {
   return JSON.stringify([...handles].sort((left, right) => left.localeCompare(right)));
 }
@@ -2293,6 +2708,13 @@ function sameStagedEntryRevision(
     && left.handle === right.handle
     && left.actualKind === right.actualKind
     && left.mutationOrdinal === right.mutationOrdinal;
+}
+
+function sameSortedStrings(left: readonly string[], right: readonly string[]): boolean {
+  const sortedLeft = [...left].sort((a, b) => a.localeCompare(b));
+  const sortedRight = [...right].sort((a, b) => a.localeCompare(b));
+  return sortedLeft.length === sortedRight.length
+    && sortedLeft.every((value, index) => value === sortedRight[index]);
 }
 
 function stagedEntryRevisionLabel(revision: KernelStagedEntryRevision | null): string {

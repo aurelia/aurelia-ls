@@ -654,7 +654,7 @@ export class BuiltInResourceCatalogMaterializer {
   }
 }
 
-/** Publishes checker-enriched built-in definitions under the app TypeChecker epoch that owns them. */
+/** Publishes checker-enriched built-in definitions under stable logical-project resource handles. */
 export class BuiltInResourceTargetProjectionMaterializer {
   constructor(
     readonly store: KernelStore,
@@ -701,7 +701,7 @@ export class BuiltInResourceTargetProjectionMaterializer {
     const local = [
       'built-in-resource-target',
       localKeyPart(headerHandle),
-      localKeyPart(typeSystem.epoch.key),
+      localKeyPart(typeSystem.project.projectKey),
     ].join(':');
     const definitionProductHandle = this.store.handles.product(`${local}:definition`);
     const existing = this.publication.readProductDetail(ResourceProductDetails.Definition, definitionProductHandle);

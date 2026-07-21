@@ -46,6 +46,7 @@ import { TemplateProductDetails } from '../src/template/product-details.js';
 import { TemplateCompilationLocus } from '../src/template/template-compilation-cohort.js';
 import type { TemplateResourceCompilationEmission } from '../src/template/template-compilation-project-pass.js';
 import { resourceLocalRuntimeBindings } from '../src/template/runtime-resource-ownership.js';
+import { RuntimeValueConverterIssueKind } from '../src/template/runtime-value-converter.js';
 
 class MutableProjectSourceOverlay implements SemanticRuntimeSourceTextOverlay {
   private readonly valuesByFileName = new Map<string, string | null>();
@@ -159,6 +160,91 @@ describe('production template-family lifecycle', () => {
     )).toBe(localChip.definition);
   }, 90_000);
 
+  test('rebuilds local-template compiler worlds when inherited service configuration changes', async () => {
+    const fixtureRoot = pressureFixtureRoot('node-observer-config-errors');
+    const mainFileName = path.join(fixtureRoot, 'src/main.ts');
+    const appFileName = path.join(fixtureRoot, 'src/node-observer-config-errors-app.ts');
+    const originalMain = readFileSync(mainFileName, 'utf8');
+    const originalApp = readFileSync(appFileName, 'utf8');
+    const changedMain = originalMain.replace("events: ['change']", "events: ['inputx']");
+    const localMarkup = [
+      '<template>',
+      '<template as-custom-element="local-chip">',
+      '<bindable name="value"></bindable>',
+      '<input value.two-way="value">',
+      '</template>',
+      '<local-chip value.bind="message"></local-chip>',
+      '</template>',
+    ].join('');
+    const appWithLocal = originalApp.replace(
+      /template: '[^']*',/u,
+      `template: '${localMarkup}',`,
+    );
+    expect(changedMain).not.toBe(originalMain);
+    expect(changedMain.length).toBe(originalMain.length);
+    expect(appWithLocal).not.toBe(originalApp);
+
+    const overlay = new MutableProjectSourceOverlay();
+    overlay.write(appFileName, appWithLocal);
+    const inputAuthority = new SemanticRuntimeProjectInputAuthority(
+      new NodeSemanticRuntimeProjectInputHost(overlay),
+    );
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:local-template-compiler-world-service-transition',
+      projectInputAuthority: inputAuthority,
+    });
+    const baseline = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const baselineRoot = baseline.emission.appWorld.compilerWorlds[0];
+    const baselineOwner = requireNamedCompilation(baseline.emission, 'node-observer-config-errors-app');
+    const baselineLocal = requireNamedCompilation(baseline.emission, 'local-chip');
+    if (baselineRoot == null) {
+      throw new Error('Expected an app-root compiler world.');
+    }
+    const baselineDerived = baselineOwner.compilerWorld;
+    expect(baselineOwner.parentCompilerWorld).toBe(baselineRoot);
+    expect(baselineDerived).not.toBe(baselineRoot);
+    expect(baselineLocal.compilerWorld).toBe(baselineLocal.parentCompilerWorld);
+    expect(baselineLocal.compilerWorld.world.productHandle).toBe(baselineDerived.world.productHandle);
+
+    overlay.write(mainFileName, changedMain);
+    const changed = await reopenApp(runtime, inputAuthority, baseline);
+    const changedRoot = changed.emission.appWorld.compilerWorlds[0];
+    const changedOwner = requireNamedCompilation(changed.emission, 'node-observer-config-errors-app');
+    const changedLocal = requireNamedCompilation(changed.emission, 'local-chip');
+    if (changedRoot == null) {
+      throw new Error('Expected a replacement app-root compiler world.');
+    }
+    const changedDerived = changedOwner.compilerWorld;
+    const transition = latestTransition(runtime, changed);
+
+    expect(changedRoot.world.productHandle).toBe(baselineRoot.world.productHandle);
+    expect(changedDerived.world.productHandle).toBe(baselineDerived.world.productHandle);
+    expect(changedRoot.container.productHandle).toBe(baselineRoot.container.productHandle);
+    expect(changedRoot).not.toBe(baselineRoot);
+    expect(changedOwner).not.toBe(baselineOwner);
+    expect(changedLocal).not.toBe(baselineLocal);
+    expect(changedDerived).not.toBe(baselineDerived);
+    expect(changedOwner.parentCompilerWorld).toBe(changedRoot);
+    expect(changedDerived).not.toBe(changedRoot);
+    expect(changedLocal.compilerWorld).toBe(changedLocal.parentCompilerWorld);
+    expect(changedLocal.compilerWorld.world.productHandle).toBe(changedDerived.world.productHandle);
+    expect(observerEvents(baselineRoot)).toEqual(['change']);
+    expect(observerEvents(baselineDerived)).toEqual(['change']);
+    expect(observerEvents(baselineLocal.compilerWorld)).toEqual(['change']);
+    expect(observerEvents(changedRoot)).toEqual(['inputx']);
+    expect(observerEvents(changedDerived)).toEqual(['inputx']);
+    expect(observerEvents(changedLocal.compilerWorld)).toEqual(['inputx']);
+
+    for (const world of [baselineRoot, baselineDerived]) {
+      expect(transition.publications).toContainEqual(expect.objectContaining({
+        handle: world.world.productHandle,
+        detailKind: TemplateProductDetails.World.detailKind,
+        decision: KernelPublicationDecisionKind.Replace,
+      }));
+    }
+  }, 90_000);
+
   test('reconciles recursive local-template transitions through the atomic app computation', async () => {
     const fixtureRoot = pressureFixtureRoot('template-completion-member-metadata');
     const templateFileName = path.join(fixtureRoot, 'src/app.html');
@@ -214,6 +300,11 @@ describe('production template-family lifecycle', () => {
     }
     expect(reorderTransition.publications).toContainEqual(expect.objectContaining({
       handle: localChip.definition.sourceAddressHandle,
+      decision: KernelPublicationDecisionKind.RefreshWitness,
+    }));
+    expect(reorderTransition.publications).toContainEqual(expect.objectContaining({
+      handle: localChip.definition.productHandle,
+      detailKind: ResourceProductDetails.Definition.detailKind,
       decision: KernelPublicationDecisionKind.RefreshWitness,
     }));
 
@@ -524,6 +615,7 @@ describe('production template-family lifecycle', () => {
     });
     const baseline = await runtime.openApp({ analysisDepth: 'binding-observation' });
     const baselineCompilation = requireNamedCompilation(baseline.emission, 'app');
+    const baselineRootWorld = baseline.emission.appWorld.compilerWorlds[0];
     const sourceHandle = baselineCompilation.unit.templateSource.productHandle;
     const sourceAddressHandle = baselineCompilation.unit.templateSource.sourceAddressHandle;
     expect(sourceAddressHandle).not.toBeNull();
@@ -531,10 +623,55 @@ describe('production template-family lifecycle', () => {
       TemplateProductDetails.CompiledTemplate,
       baselineCompilation.compiledTemplate.compiledTemplate.productHandle,
     );
-
+    const canonicalRootWorld = baselineRootWorld == null
+      ? null
+      : runtime.workspace.store.productDetails.read(
+          TemplateProductDetails.World,
+          baselineRootWorld.world.productHandle,
+        );
     const equal = await reopenApp(runtime, inputAuthority, baseline);
     const equalCompilation = requireNamedCompilation(equal.emission, 'app');
+    const equalRootWorld = equal.emission.appWorld.compilerWorlds[0];
+    expect(baselineRootWorld).toBeDefined();
+    expect(equalRootWorld).toBeDefined();
+    expect(equalRootWorld).not.toBe(baselineRootWorld);
+    expect(equalRootWorld?.container).not.toBe(baselineRootWorld?.container);
+    expect(equalRootWorld?.world).not.toBe(canonicalRootWorld);
+    expect(equalCompilation).not.toBe(baselineCompilation);
+    expect(equalCompilation.parentCompilerWorld).toBe(equalRootWorld);
+    expect(equalCompilation.compilerWorld.container).toBe(equalRootWorld?.container);
+    for (const baselineRead of baselineCompilation.registeredReads) {
+      const equalRead = equalCompilation.registeredReads.find((read) => read.readKey === baselineRead.readKey) ?? null;
+      expect(equalRead).not.toBeNull();
+      expect(equalRead).not.toBe(baselineRead);
+      expect(equalRead?.validate().isCurrent).toBe(true);
+    }
     const equalTransition = latestTransition(runtime, equal);
+    if (baselineRootWorld == null) {
+      throw new Error('Expected an app-root compiler world.');
+    }
+    for (const [slot, handle] of [
+      [TemplateProductDetails.World, baselineRootWorld.world.productHandle],
+      [TemplateProductDetails.ResourceScope, baselineRootWorld.resourceScope.productHandle],
+      [TemplateProductDetails.TemplateCompilerService, baselineRootWorld.templateCompiler.productHandle],
+      [TemplateProductDetails.ResourceResolverService, baselineRootWorld.resourceResolver.productHandle],
+      [TemplateProductDetails.ExpressionParserService, baselineRootWorld.expressionParser.productHandle],
+      [TemplateProductDetails.AttributeMapperService, baselineRootWorld.attributeMapper.productHandle],
+      [TemplateProductDetails.RenderingService, baselineRootWorld.rendering.productHandle],
+      [TemplateProductDetails.AttributeParserService, baselineRootWorld.attributeParser.productHandle],
+      [TemplateProductDetails.AttributeParserMachine, baselineRootWorld.attributeParserMachine.productHandle],
+      [TemplateProductDetails.BindingCommandResolver, baselineRootWorld.bindingCommandResolver.productHandle],
+    ] as const) {
+      expect(equalTransition.publications).toContainEqual(expect.objectContaining({
+        handle,
+        detailKind: slot.detailKind,
+        decision: KernelPublicationDecisionKind.Retain,
+      }));
+    }
+    expect(runtime.workspace.store.productDetails.read(
+      TemplateProductDetails.World,
+      baselineRootWorld.world.productHandle,
+    )).toBe(canonicalRootWorld);
     expect(equalTransition.publications).toContainEqual(expect.objectContaining({
       handle: baselineCompilation.compiledTemplate.compiledTemplate.productHandle,
       detailKind: TemplateProductDetails.CompiledTemplate.detailKind,
@@ -544,7 +681,7 @@ describe('production template-family lifecycle', () => {
       TemplateProductDetails.CompiledTemplate,
       baselineCompilation.compiledTemplate.compiledTemplate.productHandle,
     )).toBe(canonicalCompiledTemplate);
-    expect(equalCompilation.compiledTemplate.compiledTemplate).not.toBe(canonicalCompiledTemplate);
+    expect(equalCompilation.compiledTemplate.compiledTemplate).toBe(canonicalCompiledTemplate);
 
     const expandedText = originalText.replace('<p>${}</p>', '<section>${}</section>');
     expect(expandedText.length).toBeGreaterThan(originalText.length);
@@ -572,6 +709,55 @@ describe('production template-family lifecycle', () => {
       TemplateProductDetails.Source,
       sourceHandle,
     )?.markup).toBe(expandedText);
+  }, 90_000);
+
+  test('rebinds retained template families to current DI state before runtime value-converter analysis', async () => {
+    const fixtureRoot = pressureFixtureRoot('sanitize-value-converter-custom');
+    const mainFileName = path.join(fixtureRoot, 'src/main.ts');
+    const originalMain = readFileSync(mainFileName, 'utf8');
+    const registration = '    Registration.singleton(ISanitizer, AppSanitizer),';
+    const registrationComment = `    /*${' '.repeat(registration.length - 8)}*/`;
+    const withoutSanitizer = originalMain.replace(registration, registrationComment);
+    expect(withoutSanitizer).not.toBe(originalMain);
+    expect(withoutSanitizer.length).toBe(originalMain.length);
+
+    const overlay = new MutableProjectSourceOverlay();
+    const inputAuthority = new SemanticRuntimeProjectInputAuthority(
+      new NodeSemanticRuntimeProjectInputHost(overlay),
+    );
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:production-template-family-current-di-state',
+      projectInputAuthority: inputAuthority,
+    });
+    const baseline = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const baselineCompilation = requireNamedCompilation(baseline.emission, 'sanitize-value-converter-custom-app');
+    const baselineRootWorld = baseline.emission.appWorld.compilerWorlds[0];
+    expect(sanitizerIssues(baseline.emission)).toEqual([]);
+
+    overlay.write(mainFileName, withoutSanitizer);
+    const without = await reopenApp(runtime, inputAuthority, baseline);
+    const withoutCompilation = requireNamedCompilation(without.emission, 'sanitize-value-converter-custom-app');
+    const withoutRootWorld = without.emission.appWorld.compilerWorlds[0];
+    expect(withoutRootWorld).not.toBe(baselineRootWorld);
+    expect(withoutRootWorld?.container).not.toBe(baselineRootWorld?.container);
+    expect(withoutCompilation).not.toBe(baselineCompilation);
+    expect(withoutCompilation.compilerWorld.container).toBe(withoutRootWorld?.container);
+    expect(withoutCompilation.compiledTemplate.compiledTemplate).toBe(
+      baselineCompilation.compiledTemplate.compiledTemplate,
+    );
+    expect(sanitizerIssues(without.emission)).toEqual([
+      RuntimeValueConverterIssueKind.SanitizerMethodNotImplemented,
+    ]);
+    expect(latestTransition(runtime, without).publications).toContainEqual(expect.objectContaining({
+      handle: baselineCompilation.compiledTemplate.compiledTemplate.productHandle,
+      detailKind: TemplateProductDetails.CompiledTemplate.detailKind,
+      decision: KernelPublicationDecisionKind.Retain,
+    }));
+
+    overlay.write(mainFileName, originalMain);
+    const restored = await reopenApp(runtime, inputAuthority, without);
+    expect(sanitizerIssues(restored.emission)).toEqual([]);
   }, 90_000);
 
   test('withdraws and restores the exact family closure for both compiler front-door no-op states', async () => {
@@ -709,6 +895,27 @@ describe('production template-family lifecycle', () => {
     expect(changedBindableRead.resultParts).toContain('entry');
     expect(changedBindableRead.resultParts).not.toContain('item');
     const changedTransition = latestTransition(runtime, changed);
+    expect(changedTransition.publications).toContainEqual(expect.objectContaining({
+      handle: itemCardDefinitionHandle,
+      detailKind: ResourceProductDetails.Definition.detailKind,
+      decision: KernelPublicationDecisionKind.Replace,
+    }));
+    expect(changedTransition.publications).toContainEqual(expect.objectContaining({
+      handle: changedItemList.compilerWorld.resourceScope.productHandle,
+      detailKind: TemplateProductDetails.ResourceScope.detailKind,
+      decision: KernelPublicationDecisionKind.Replace,
+    }));
+    const canonicalChangedScope = runtime.workspace.store.productDetails.read(
+      TemplateProductDetails.ResourceScope,
+      changedItemList.compilerWorld.resourceScope.productHandle,
+    );
+    const canonicalItemCard = canonicalChangedScope?.resources.find((resource) =>
+      resource.name === 'item-card'
+    )?.definition ?? null;
+    expect(canonicalItemCard).toBeInstanceOf(CustomElementDefinition);
+    expect(canonicalItemCard instanceof CustomElementDefinition
+      ? canonicalItemCard.bindables.map((bindable) => bindable.name)
+      : null).toContain('entry');
     expect(changedTransition.changedReads).toContainEqual(expect.objectContaining({
       readKey: baselineBindableRead.readKey,
       previousRevision: baselineBindableRead.observedRevision,
@@ -1179,6 +1386,24 @@ function stableCompilationHandles(compilation: TemplateResourceCompilationEmissi
     templateSource: compilation.unit.templateSource.productHandle,
     compiledTemplate: compilation.compiledTemplate.compiledTemplate.productHandle,
   };
+}
+
+function observerEvents(
+  world: TemplateResourceCompilationEmission['compilerWorld'],
+): readonly string[] | null {
+  return world.world.nodeObserverLocatorConfiguration?.nodeConfigs.find(
+    (config) => config.tagName === 'MY-ELEMENT' && config.propertyName === 'value',
+  )?.config.eventNames ?? null;
+}
+
+function sanitizerIssues(emission: AureliaAppWorldProjectEmission): readonly RuntimeValueConverterIssueKind[] {
+  return emission.templates.resources.flatMap((resource) =>
+    resource.runtimeAnalysis.valueConverter.issues
+      .map((issue) => issue.issueKind)
+      .filter((kind): kind is RuntimeValueConverterIssueKind.SanitizerMethodNotImplemented =>
+        kind === RuntimeValueConverterIssueKind.SanitizerMethodNotImplemented
+      )
+  );
 }
 
 function localTemplateFamilyMarkup(

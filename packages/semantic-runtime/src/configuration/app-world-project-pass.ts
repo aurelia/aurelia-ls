@@ -457,6 +457,7 @@ export class AureliaAppWorldProjectPass {
     evaluationAcquisitions: readonly StaticProjectEvaluationAcquisitionProfile[],
     upstreamReads: readonly ComputationRead[],
     options: AureliaAppWorldProjectOptions = {},
+    incumbent: AureliaAppWorldProjectEmission | null = null,
   ): AureliaAppWorldProjectEmission {
     return new AureliaAppWorldProjectConstructionFrame(
       store,
@@ -468,6 +469,7 @@ export class AureliaAppWorldProjectPass {
       evaluationAcquisitions,
       upstreamReads,
       options,
+      incumbent,
     ).constructAndEmit();
   }
 }
@@ -491,6 +493,7 @@ class AureliaAppWorldProjectConstructionFrame {
     private readonly evaluationAcquisitions: readonly StaticProjectEvaluationAcquisitionProfile[],
     private readonly upstreamReads: readonly ComputationRead[],
     options: AureliaAppWorldProjectOptions,
+    private readonly incumbent: AureliaAppWorldProjectEmission | null,
   ) {
     this.analysisDepth = normalizeSemanticAppAnalysisDepth(
       options.analysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
@@ -531,7 +534,11 @@ class AureliaAppWorldProjectConstructionFrame {
       }
       return emission;
     });
-    const frontDoor = templatePass.compileFrontDoors(preTemplate.templatePlan, this.project);
+    const frontDoor = templatePass.compileFrontDoors(
+      preTemplate.templatePlan,
+      this.project,
+      this.incumbent?.templates.frontDoor ?? null,
+    );
     const postTemplateInputs = this.project.inputGeneration.createReadScope('aurelia-app-analysis:post-template');
     const postTemplate = this.publication.withChild(postTemplateLocus, () => {
       const emission = this.project.inputGeneration.withReadScope(
@@ -737,7 +744,9 @@ class AureliaAppWorldProjectConstructionFrame {
 
   private buildTypeSystem(evaluation: StaticProjectEvaluationResult): TypeSystemProject {
     return this.measure('type-system', () =>
-      new TypeSystemProjectBuilder(this.support).build(this.project, evaluation)
+      new TypeSystemProjectBuilder(this.support).build(this.project, evaluation, {
+        previousProject: this.incumbent?.typeSystem ?? null,
+      })
     );
   }
 

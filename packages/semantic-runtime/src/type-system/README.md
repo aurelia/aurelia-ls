@@ -165,21 +165,26 @@ stay out of durable kernel records is technical, not aesthetic: `ts.Type`, `ts.S
 `ts.TypeChecker` are tied to a Program/language-service epoch, carry object identity, and cannot be serialized into a
 long-lived app map without an invalidation authority. They belong in hot product details and projector carriers.
 
-Durable kernel records should carry product handles, identity handles, checker keys, source addresses, claims, and
+Durable kernel records should carry product handles, identity handles, project-qualified semantic type keys, source addresses, claims, and
 provenance. If a checker fact needs to survive across snapshots or drive rename/refactor behavior, promote the
 specific fact into an explicit product field, identity field, claim predicate, or source address instead of hiding it
 inside the carrier.
-Checker keys are epoch keys for the projected static shape, not just declaration identities. Declared generic and
-library-backed types must include their display/instantiation in the key; `ReadonlyArray<unknown>` and
+Semantic type keys identify the projected static shape inside one logical project, not a TypeChecker object. Declared
+generic and library-backed types must include their display/instantiation in the key; `ReadonlyArray<unknown>` and
 `ReadonlyArray<string>` share a declaration but are different static surfaces for template analysis.
-Type-reference sameness must not treat missing product handles or missing checker keys as equality. A missing handle is
+The current declaration-backed key uses project, source file, declaration span, symbol name, and display. It is stable
+across fresh Programs while that declaration locator is stable, but an unrelated insertion before the declaration can
+conservatively remint it. Do not replace that fallback with `TypeChecker.getFullyQualifiedName(...)`: local declarations
+can share a bare name and anonymous symbols commonly collapse to `__object`. A future declaration reconciler may give
+provably module-addressable named declarations a lexical/export-path identity shared with declaration-source records;
+local, anonymous, computed, and ambiguous declarations must remain positional until stronger evidence exists.
+Type-reference sameness must not treat missing product handles or missing semantic keys as equality. A missing handle is
 open identity evidence, not proof that two projected references are the same type; same-reference checks should require
-matching product handles, matching checker keys, or a deliberately synthetic/primitive display match.
-The projector keeps an epoch-local checker-key/source index for convergence, but it must verify that the indexed
-product detail still exists before reuse. Query-local projections can now be reclaimed by `QueryClaimGraph` through the
-kernel mark/dispose boundary, so a stale index entry should be evicted and reprojected rather than returning a dead
-product handle. `contract:type-projection-lifetime` locks this down by projecting a checker type after a store marker,
-disposing the marker, and proving the sidecar index prunes before the same local key can reproject a fresh detail.
+matching product handles, matching semantic keys, or a deliberately synthetic/primitive display match.
+Projection convergence uses the ordinary product-detail catalog. A fresh Program generation republishes carrier-bearing
+shape/member details at stable project-scoped handles through the same computation owner; a visible projection from a
+different checker generation is rejected rather than borrowed. Query-local projections can still be reclaimed through
+the kernel lifetime boundary without a store-local type-shape sidecar.
 
 This layer is also the named split between evaluation-backed world construction and checker-backed authoring help.
 DI/configuration/resource materializers should prefer evaluation when they are deciding what the app constructed. Template
@@ -429,12 +434,17 @@ dependency/plugin template overlay errors as editable app source.
 misses. Span remaps use a lazy per-Program-source span index, so the correctness guard should not silently become a
 repeated DFS hotspot as overlays and source-discovery nodes multiply. Keep those counters in routed app telemetry so
 large apps can still reveal unexpected remap volume.
-`checker-epoch.ts` gives every TypeChecker object one explicit process-local `TypeSystemProjectEpoch`. Checker-backed
-type keys include that epoch so coincident declaration spans or displays from distinct Programs cannot reconnect to one
-hot carrier. `CheckerTypeProjector.ensureProjection(...)` derives canonical kernel handles from epoch-qualified type
-identity, origin, source, owner, and member policy; equivalent projections in one epoch therefore converge through the
-ordinary product-detail catalog. Do not restore a store-local type-shape sidecar or compare unqualified checker keys:
-kernel lifetime owns projection retention and a fresh Program owns a fresh carrier generation.
+`checker-epoch.ts` gives every TypeChecker object one explicit process-local `TypeSystemProjectEpoch`. That epoch is
+carrier identity only: raw TypeScript objects from distinct Programs must never mix, but unchanged semantic type shapes
+should not receive new kernel handles merely because a fresh Program was constructed. `CheckerTypeProjector` therefore
+derives canonical handles from logical-project-qualified semantic type identity, origin, source, owner, and member
+policy. The owning computation replaces shape/member details with fresh carriers at those handles, while unchanged
+records and downstream compiler semantics can remain retained. Project qualification prevents equal displays or source
+spans in distinct projects from colliding; explicit checker-object guards prevent a foreign old owner from lending a
+stale carrier. Do not restore a store-local type-shape sidecar or put the Program epoch back into semantic handles.
+TypeScript may receive the previous Program for its own structural reuse only when both type-system generations belong
+to the same logical project. Cross-project reuse is rejected before `ts.createProgram(...)`; matching paths or compiler
+options are not sufficient ownership evidence.
 `checker-type-assignability.ts` owns the small shared question "is this projected checker reference assignable to that
 one?". Binding data-flow and runtime composition both use it because the CPU/memory trade-off and checker-epoch
 fallback policy should not be reimplemented at every feature boundary. It only answers when the retained carriers share
@@ -616,7 +626,7 @@ stages remain explicit `input-open` facts because their structural presence is k
 them. Observation joins those stages to runtime application identity and source provenance; type-system does not grow a
 second resource-lifecycle model.
 Callers that start from a lazy `CheckerTypeMember.valueType` must materialize the reference before converter
-projection; a checker-key-only reference is fine for display, but `fromView` overload selection needs the current
+projection; a semantic-key-only reference is fine for display, but `fromView` overload selection needs the current
 program's retained checker carrier. Use the shared expression world/projector for that handoff instead of inventing a
 feature-local type hydrator.
 `expression-member-owner-projector.ts` owns cursor-offset member-owner projection and delegates
@@ -631,9 +641,9 @@ callback parameter typing, object-option typing, and nested literal context do n
 
 - `CheckerTypeReference` is intentionally a reference, not a recursive type graph. Recursive projection should be
   introduced only when an inquiry or materializer needs it.
-- Type-shape identities are session-stable because checker objects are epoch-bound even when their source
-  declarations are source-stable.
-- Type-shape projection converges within one store by origin, checker key, and the source lane that genuinely belongs
+- Type-shape identities are stable within one logical project and active store; checker carriers are replaced for every
+  fresh Program generation.
+- Type-shape projection converges within one store by logical project, origin, semantic type key, and the source lane that genuinely belongs
   to the projected shape. Declaration-backed TypeChecker and evaluated-value declared surfaces converge without a
   projection source address because their semantic type identity is the checker surface plus declaration lane; the
   authored expression, binding, diagnostic, or cursor row must carry the user-facing source site that caused the

@@ -6,13 +6,21 @@ import { describe, expect, test } from 'vitest';
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import { aureliaAppProjectEvaluationProfile } from '../src/configuration/aurelia-project-evaluation.js';
 import { ComputationCommitState } from '../src/kernel/computation-lifecycle.js';
+import { KernelPublicationDecisionKind } from '../src/kernel/publication.js';
+import { KernelStore } from '../src/kernel/store.js';
+import {
+  CustomElementCaptureDefinition,
+  CustomElementCaptureKind,
+  CustomElementDefinition,
+} from '../src/resources/custom-element-definition.js';
 import { ResourceProductDetails } from '../src/resources/product-details.js';
 import { resourceConventionToolingEvaluationProfile } from '../src/resources/resource-convention-transform-admission.js';
 import { ResourceRecognitionProjectPass } from '../src/resources/resource-recognition-project-pass.js';
+import { ResourceTargetReference } from '../src/resources/resource-reference.js';
 import { TypeSystemProjectBuilder } from '../src/type-system/project.js';
 
 describe('resource recognition publication', () => {
-  test('stages and replaces one complete resource project closure through its caller', async () => {
+  test('stages a complete resource project closure and retains equal committed definitions', async () => {
     const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
     const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/app-pattern-routed-catalog-storefront');
     const runtime = await createSemanticRuntime({
@@ -72,7 +80,83 @@ describe('resource recognition publication', () => {
     expect(replacement).toBeDefined();
     expect(replacement).not.toBe(firstDefinition);
     expect(secondRun.readProductDetail(ResourceProductDetails.Definition, firstDefinition.productHandle)).toBe(replacement);
-    expect(secondRun.commit().state).toBe(ComputationCommitState.Committed);
-    expect(store.productDetails.read(ResourceProductDetails.Definition, firstDefinition.productHandle)).toBe(replacement);
+    const secondCommit = secondRun.commit();
+    expect(secondCommit.state).toBe(ComputationCommitState.Committed);
+    expect(secondCommit.transition.publications).toContainEqual(expect.objectContaining({
+      handle: firstDefinition.productHandle,
+      decision: KernelPublicationDecisionKind.Retain,
+    }));
+    expect(store.productDetails.read(ResourceProductDetails.Definition, firstDefinition.productHandle)).toBe(firstDefinition);
   }, 30_000);
+
+  test('distinguishes semantic resource links from witness-only source links', () => {
+    const store = new KernelStore('resource-definition-reference-authority');
+    const productHandle = store.handles.product('resource-definition-reference-authority:product');
+    const definitionIdentityHandle = store.handles.identity('resource-definition-reference-authority:definition');
+    const targetIdentityHandle = store.handles.identity('resource-definition-reference-authority:target');
+    const otherTargetIdentityHandle = store.handles.identity('resource-definition-reference-authority:other-target');
+    const definitionAddressHandle = store.handles.address('resource-definition-reference-authority:definition');
+    const targetAddressHandle = store.handles.address('resource-definition-reference-authority:target');
+    const initialNameAddressHandle = store.handles.address('resource-definition-reference-authority:name:first');
+    const movedNameAddressHandle = store.handles.address('resource-definition-reference-authority:name:moved');
+    const definition = (
+      targetIdentity = targetIdentityHandle,
+      nameSourceAddressHandle = initialNameAddressHandle,
+    ): CustomElementDefinition => new CustomElementDefinition(
+      productHandle,
+      definitionIdentityHandle,
+      definitionAddressHandle,
+      new ResourceTargetReference(targetIdentity, targetAddressHandle, 'ReferenceAuthority'),
+      'reference-authority',
+      [],
+      'au:resource:custom-element:reference-authority',
+      new CustomElementCaptureDefinition(CustomElementCaptureKind.None),
+      null,
+      [],
+      [],
+      null,
+      false,
+      [],
+      [],
+      false,
+      null,
+      false,
+      false,
+      [],
+      null,
+      null,
+      [],
+      [],
+      nameSourceAddressHandle,
+    );
+    const initial = definition();
+    const movedWitness = definition(targetIdentityHandle, movedNameAddressHandle);
+    const changedTarget = definition(otherTargetIdentityHandle);
+    const retainRecords = { compareRecordHandles: () => KernelPublicationDecisionKind.Retain } as const;
+
+    expect(ResourceProductDetails.Definition.referencesFor(initial)).not.toEqual(
+      ResourceProductDetails.Definition.referencesFor(movedWitness),
+    );
+    expect(ResourceProductDetails.Definition.compare(initial, movedWitness, retainRecords)).toBe(
+      KernelPublicationDecisionKind.RefreshWitness,
+    );
+    expect(ResourceProductDetails.Definition.compare(initial, changedTarget, retainRecords)).toBe(
+      KernelPublicationDecisionKind.Replace,
+    );
+    expect(ResourceProductDetails.Definition.compare(initial, definition(), {
+      compareRecordHandles: (previous) => previous === definitionAddressHandle
+        ? KernelPublicationDecisionKind.RefreshWitness
+        : KernelPublicationDecisionKind.Retain,
+    })).toBe(KernelPublicationDecisionKind.RefreshWitness);
+    expect(ResourceProductDetails.Definition.compare(initial, definition(), {
+      compareRecordHandles: (previous) => previous === targetIdentityHandle
+        ? KernelPublicationDecisionKind.RefreshWitness
+        : KernelPublicationDecisionKind.Retain,
+    })).toBe(KernelPublicationDecisionKind.RefreshWitness);
+    expect(ResourceProductDetails.Definition.compare(initial, definition(), {
+      compareRecordHandles: (previous) => previous === targetIdentityHandle
+        ? KernelPublicationDecisionKind.Replace
+        : KernelPublicationDecisionKind.Retain,
+    })).toBe(KernelPublicationDecisionKind.Replace);
+  });
 });

@@ -18,6 +18,8 @@ import { ProvenanceRecord } from '../src/kernel/provenance.js';
 import { ObservationProductDetails } from '../src/observation/product-details.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import { StaticProjectEvaluationAcquisitionKind } from '../src/evaluation/project-evaluation.js';
+import { readTypeSystemProjectDiagnostics } from '../src/type-system/diagnostics.js';
+import { TypeSystemProjectBuilder } from '../src/type-system/project.js';
 
 class MutableSourceOverlay {
   private readonly sourceTextByFileName = new Map<string, string>();
@@ -240,6 +242,42 @@ describe('app analysis computation', () => {
     expect(second.isCurrent()).toBe(false);
   }, 60_000);
 
+  test('rebuilds the TypeScript Program on a fresh host before lazy diagnostics use prior structure', async () => {
+    const fixtureRoot = pressureFixtureRoot('typescript-program-fidelity-node-types');
+    const sourceOverlay = new MutableSourceOverlay();
+    const mainFileName = path.join(fixtureRoot, 'src/main.ts');
+    sourceOverlay.write(path.join(fixtureRoot, 'package.json'), JSON.stringify({ type: 'module' }));
+    sourceOverlay.write(mainFileName, `import './missing';\n${readFileSync(mainFileName, 'utf8')}`);
+    const projectInputAuthority = new SemanticRuntimeProjectInputAuthority(
+      new NodeSemanticRuntimeProjectInputHost(sourceOverlay),
+    );
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:app-analysis-typescript-program-host-rebase',
+      projectInputAuthority,
+    });
+    const first = await runtime.openApp({ analysisDepth: 'runtime-topology' });
+    const firstProgram = first.emission.typeSystem.program;
+    const firstChecker = first.emission.typeSystem.checker;
+
+    projectInputAuthority.advance();
+    const second = await runtime.openApp({
+      projectKey: first.project.projectKey,
+      analysisDepth: 'runtime-topology',
+    });
+    const readsBeforeDiagnostics = second.emission.typeSystem.readRegisteredInputs().length;
+    const diagnostics = readTypeSystemProjectDiagnostics(second.emission.typeSystem);
+
+    expect(second.emission.typeSystem.program).not.toBe(firstProgram);
+    expect(second.emission.typeSystem.checker).not.toBe(firstChecker);
+    expect(diagnostics).toContainEqual(expect.objectContaining({
+      phase: 'semantic',
+      source: expect.objectContaining({ fileName: expect.stringContaining('main.ts') }),
+    }));
+    expect(second.emission.typeSystem.readRegisteredInputs().length).toBeGreaterThanOrEqual(readsBeforeDiagnostics);
+    expect(second.emission.typeSystem.readRegisteredInputs().every((read) => read.validate().isCurrent)).toBe(true);
+  }, 60_000);
+
   test('retains independent project generations while replacing and clearing them exactly', async () => {
     const pressureRoot = path.resolve(fileURLToPath(new URL('../fixtures/pressure', import.meta.url)));
     const runtime = await createSemanticRuntime({
@@ -333,8 +371,13 @@ describe('app analysis computation', () => {
     const cloneB = await runtime.openApp({ projectKey: 'clone-b', analysisDepth: 'binding-observation' });
     const definitionA = cloneA.emission.resources.readDefinitions().find((definition) => definition.name === 'alias-carrier') ?? null;
     const definitionB = cloneB.emission.resources.readDefinitions().find((definition) => definition.name === 'alias-carrier') ?? null;
+    const builtInShowA = cloneA.emission.appWorld.configuredResources.catalogEmission.resources
+      .find((emission) => emission.resource.name === 'show')?.definition ?? null;
+    const builtInShowB = cloneB.emission.appWorld.configuredResources.catalogEmission.resources
+      .find((emission) => emission.resource.name === 'show')?.definition ?? null;
     expect(definitionA?.identityHandle).not.toBeNull();
     expect(definitionB?.identityHandle).not.toBeNull();
+    expect(builtInShowA?.productHandle).not.toBe(builtInShowB?.productHandle);
     if (definitionA?.identityHandle == null || definitionB?.identityHandle == null) {
       throw new Error('Expected both logical projects to publish their own app resource identity.');
     }
@@ -368,6 +411,11 @@ describe('app analysis computation', () => {
     );
     const cloneBSourceHandles = new Set(cloneBSources.map((address) => address.handle));
     expect(cloneASources.every((address) => !cloneBSourceHandles.has(address.handle))).toBe(true);
+    expect(() => new TypeSystemProjectBuilder(runtime.frameworkSupport).build(
+      cloneB.project,
+      cloneB.emission.evaluation,
+      { previousProject: cloneA.emission.typeSystem },
+    )).toThrow(/Program reuse cannot cross logical projects: clone-a -> clone-b/);
 
     expect(cloneA.retireGeneration()).toBe(true);
     expect(cloneA.isCurrent()).toBe(false);

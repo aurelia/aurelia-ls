@@ -105,9 +105,16 @@ classification, expression parsing, and instruction lowering converge on the sam
   public queries fail closed until `SemanticRuntime` rebuilds a coherent app epoch; template products never hot-swap
   underneath old fan-in products. A previously obtained `SemanticAppTemplateQueries` object rechecks the same authority
   at every public operation, so retaining the query capability cannot bypass generation revocation.
-- `compiled-template-comparison.ts` is the first rich-detail cutoff boundary. It compares compiled-template structure
-  separately from source/provenance witnesses and resolves stable address handles against old and proposed record views.
-  Other rich details remain conservative replacements until their downstream ownership justifies a comparator.
+- `compiled-template-comparison.ts` compares compiled-template structure separately from source/provenance witnesses.
+  `compiler-world-comparison.ts` owns the corresponding slot comparisons for compiler worlds, resource scopes, compiler
+  services, parser machines, binding commands, attribute patterns, renderers, and compiler issues; embedded resource
+  definitions delegate to the resource domain's comparator. Stable record handles are resolved against old and proposed
+  views, so semantic changes replace while witness-only movement refreshes the candidate. Do not recreate aggregate
+  compiler-world equality in a materializer or scheduler.
+- `TemplateCompilerWorldEmission` is a generation-local execution frame because it carries the live DI `Container`.
+  Its published world and service objects are immutable semantic candidates: an equal candidate may be distinct from the
+  canonical detail retained by the store. The outer emission is therefore rebased to the current container generation,
+  while slot decisions own semantic reuse. Object identity is neither currentness nor semantic equality.
 - `html-ir.ts` models authored HTML before Aurelia syntax interpretation. It preserves source addresses and recovery
   observations without performing resource lookup.
 - `runtime-dom-name.ts` projects authored tag and attribute spelling into the browser DOM names consumed by framework

@@ -1406,7 +1406,7 @@ class BindingDataFlowTypeAccess implements BindingDataFlowAssignabilityTypeAcces
     return this.shapeAccess.memberValueType(
       shape,
       propertyName,
-      `${reference.productHandle ?? reference.checkerKey ?? 'open'}:member:${propertyName}`,
+      `${reference.productHandle ?? reference.semanticKey ?? 'open'}:member:${propertyName}`,
     )?.toReference() ?? null;
   }
 

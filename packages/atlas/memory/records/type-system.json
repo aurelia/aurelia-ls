@@ -49,7 +49,7 @@
         "Generated template overlays should replay authored expression text inside the already-materialized BindingScope ancestry rather than stringifying projected type displays. Let the checker infer through imported view-model types, root binding-context aliases, and runtime-shaped scope blocks.",
         "When a generated overlay needs a type annotation for a semantic slot that has no same-scope alias, prefer an importable TypeScript type expression over a display string. Runtime-assignment writeback locals can project the target bindable member as an indexed access such as `SyntheticTableCustomAttribute[\"activeRow\"]`, preserving private domain-model names through the exported controller surface.",
         "Use generated-type-expression.ts for generated TypeScript type annotations. It owns source-stable importable type expressions, including structural type nodes such as function types whose parameter or return types need import rewriting and checker-global declarations such as DOM element interfaces; do not make overlay builders fall back to display strings or child placeholder member types.",
-        "Treat missing type-reference handles as open identity evidence, not equality. Same-reference checks should require matching product handles, matching checker keys, or an intentionally synthetic/primitive display match; otherwise unrelated null-handled references can collapse overlay and data-flow types.",
+        "Treat missing type-reference handles as open identity evidence, not equality. Same-reference checks should require matching product handles, matching project-qualified semantic type keys, or an intentionally synthetic/primitive display match; otherwise unrelated null-handled references can collapse overlay and data-flow types.",
         "Keep template overlay resource ownership, semantic selection, expression projection, mapping, and generated TypeScript emission split: runtime-resource-ownership owns source-local expressions/value sites/instructions projected from recursive aggregate render products; template-expression-selection owns expression-parse to runtime-instruction and runtime-scope lookup where aggregate context is required; template-type-system-overlay-expression owns copied/generated authored expression projection and named unsupported-Aurelia-expression pressure; TemplateTypeSystemOverlayBuilder consumes semantic products; template-type-system-overlay-plan owns the typed scope layers and text emission.",
         "Recursive aggregate rendering is reachability/topology evidence, not authored-resource ownership. Cursor, diagnostics, semantic-token, completion, capability-demand, and overlay consumers should select dynamic parses/value sites/instructions through runtime-resource-ownership before consulting aggregate instruction/scope context; do not let a parent overlay or API answer claim child-authored template expressions. Runtime spread products retain exact captured AttrSyntax origins, which must outrank source-span containment so nested same-file template ranges do not become ownership heuristics.",
         "Overlay work is read-first. Before adding a local unsupported-construct branch, query Atlas memory and Work Router, inspect the Aurelia framework source, and inspect existing semantic-runtime products/materializers/evaluator paths. The usual correct answer is to project an existing product, deepen the semantic product, or improve Atlas visibility before emitting a new overlay skip.",
@@ -462,7 +462,7 @@
         "memberWriteAccess is also the source-route handoff for writes. When it falls back to a raw checker/apparent-property symbol, materialize the member value/declaration source in the access result so binding data-flow can publish sourceAssignmentTargetSource for from-view/two-way repair targets.",
         "String-index write access proves writeability through TypeChecker index-signature policy, but the app-owned owner-expression route may still be supplied by observation when no concrete member declaration exists.",
         "Declarationless checker properties from mapped types are not automatically open. Use the checker carrier's mapped readonly token to classify mutable `Record<K, V>` finite properties as writable and `Readonly<Record<K, V>>` finite properties as TypeScript strictness.",
-        "If QueryClaimGraph disposes answer-local type projections, CheckerTypeProjector must evict stale checker-key index rows before reuse so CheckerTypeShapeAccess never receives a dead product handle. `contract:type-projection-lifetime` is the focused proof for this lifetime rule.",
+        "Type-shape and hot-member lifetime follows ordinary computation-owned product/detail publication. If answer-local disposal removes a projection, a later consumer must reproject through the current checker generation rather than tolerate a dead product handle or restore a projector sidecar index. `contract:type-projection-lifetime` is the focused proof for this rule.",
         "If a missing member looks like a weak-typing diagnostic, preserve the open reason rather than synthesizing a misleading member."
       ],
       "anchors": [
@@ -516,7 +516,7 @@
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:type-projection-lifetime",
-          "summary": "Contract proving CheckerTypeShapeAccess cannot receive stale projected type handles from the projector sidecar index after marker disposal."
+          "summary": "Contract proving disposed answer-local type projections re-enter through current computation-owned product/detail publication."
         },
         {
           "kind": "script",
@@ -933,6 +933,68 @@
       ],
       "createdAt": "2026-06-11",
       "updatedAt": "2026-06-11"
+    },
+    {
+      "id": "decision:typescript-carrier-versus-semantic-identity",
+      "kind": "decision",
+      "domains": [
+        "type-system",
+        "checker",
+        "kernel",
+        "incrementality",
+        "semantic-runtime"
+      ],
+      "summary": "TypeChecker objects are Program-local carriers, while project-qualified semantic type keys own cross-Program kernel identity only where declaration evidence supports it.",
+      "rationale": "A fresh Program is required for every captured project-input generation, but rebuilding the Program must not remint every unchanged semantic type product. Conversely, raw ts.Type, ts.Symbol, ts.Node, and checker objects cannot cross Program epochs. Stable kernel identity and carrier lifetime are separate axes: the owning computation republishes fresh carriers at project-qualified semantic handles, and consumers reject foreign checker objects rather than putting the Program epoch back into durable identity.",
+      "guidance": [
+        "Construct a fresh Program for each type-system generation. TypeScript may receive the prior Program for structural reuse only when both generations belong to the same logical project.",
+        "Keep raw checker objects Program-local and validate carrier.checker before borrowing a projected shape or member. Fresh carriers replace at stable semantic handles through the owning computation.",
+        "Qualify semantic type keys by logical project. Equal displays, paths, or source spans from different projects are not the same semantic identity.",
+        "Include generic or instantiated display in declared/library-backed type keys; declaration identity alone cannot distinguish ReadonlyArray<unknown> from ReadonlyArray<string>.",
+        "The current declaration locator includes source position and can conservatively churn after unrelated prefix edits. Keep that limitation visible until a shared declaration reconciler exists.",
+        "Do not substitute TypeChecker.getFullyQualifiedName as universal identity. Local declarations can share bare names and anonymous symbols commonly collapse to __object.",
+        "A future lexical/export-path identity is admissible only for provably module-addressable named declarations and must feed both declaration-source identity and type-shape identity. Keep positional fallback for local, anonymous, computed, and ambiguous declarations."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-projector.ts",
+          "symbolName": "CheckerTypeProjector",
+          "summary": "Project-qualified semantic type projection and Program-local carrier validation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/declaration-source.ts",
+          "symbolName": "checkerDeclarationSourceProjectKey",
+          "summary": "Shared logical-project namespace for checker-backed semantic identities."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProjectBuilder",
+          "summary": "Fresh Program construction with same-logical-project oldProgram reuse."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/type-system/README.md",
+          "summary": "Carrier lifetime, semantic identity, and positional declaration-locator limits."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-projector.ts",
+          "symbolName": "CheckerTypeProjector"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProjectBuilder"
+        }
+      ],
+      "createdAt": "2026-07-21",
+      "updatedAt": "2026-07-21"
     }
   ]
 }

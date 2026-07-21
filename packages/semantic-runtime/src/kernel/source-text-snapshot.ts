@@ -61,6 +61,11 @@ export class SourceTextSnapshot implements ComputationRead {
       changedFacets,
     };
   }
+
+  tryRebaseCurrent(): ComputationRead | null {
+    const current = this.authority.capture(this.fileName);
+    return current.observedRevision === this.observedRevision ? current : null;
+  }
 }
 
 /** Source authority that captures immutable values and can validate them before publication. */

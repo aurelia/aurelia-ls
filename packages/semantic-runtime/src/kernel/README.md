@@ -168,8 +168,9 @@ before replacing the prior state. `publication.ts` is the required materializer 
 execution. `KernelStore.replacePublication(...)` prevalidates ownership, references, detail envelopes, and unsupported
 sidecar participation before one synchronous callback-free replacement. Computation-owned replacement uses
 `replaceOwnedPublication(...)`, which admits source/input validation and the owner's fallible producer-index preflight
-inside the same store mutation barrier before that callback-free mutation tail. Normalized records, publication plans,
-manifests, decisions, and their structural arrays are sealed before any external validator runs. A failed or stale run
+inside the same store mutation barrier. Every external validation callback, including the final currentness callback,
+runs before the store's callback-free normalization and structural-closure recheck and mutation tail. Normalized records,
+publication plans, manifests, decisions, and their structural arrays are sealed before any external validator runs. A failed or stale run
 leaves the previous records, details, read index, producer index, and manifest intact. Sidecar indexes remain
 acceleration structures; replacing a detail they index is rejected until that index registers an explicit lifecycle
 participant.
@@ -186,7 +187,11 @@ staged candidate never rebinds an already committed detail to a changed envelope
 its candidate product envelope is exactly equivalent, otherwise the producer must emit a fresh generation-local
 detail. Retained committed bindings refresh only in the callback-free successful-admission tail. A failed staged write
 poisons the run so an accepted prefix can never become a commit payload. Rich typed detail payloads remain domain
-objects and are not recursively frozen by the kernel.
+objects and are not recursively frozen by the kernel. Ordinary republication of the same mutable object conservatively
+advances its revision; only explicit exact child carry may preserve object identity. Producers still own the stronger
+discipline that semantic fields of an admitted object are immutable between publications. The kernel can detect changed
+structural closure and republished mutation, but cannot infer an arbitrary in-place semantic mutation that was never
+presented as a candidate.
 Committed domain object graphs are admitted once per computation run and domain through the lifecycle registry. Do not
 construct a second authority around the same committed publication or let a domain-local cache decide uniqueness.
 Exact `ComputationRun` record, product-detail, and hot-detail reads capture the committed catalog revision by
@@ -217,13 +222,25 @@ edge, and a later stronger writer rejects the prepared candidate instead of sile
 consumed. Record references plus product-detail and hot-detail envelopes add the same structural edges even when a
 materializer did not issue an explicit lookup.
 
+`ComputationRun.tryCarryChild(...)` is the explicit no-work operation for one prior declared singleton child. It is
+available only before candidate work starts and only when the prior child has revisioned reads, stable producer
+ownership, and no nontrivial SCC. Exact reads must rebase to current authorities; candidate-local dependencies must
+still be present from the same producer and preview as `Retain`. The preview completes the partial candidate with prior
+entries only to spend the store's real comparison policy; omission in the final plan still means withdrawal. Carry
+declines before preview when any sibling has already staged one of the prior outputs. Domain read-rebase callbacks may
+inspect only the supplied preview context; the owning run rejects reads, writes, child entry, commit, and abort while a
+rebaser executes. Carry preflights every read-map merge before it mutates staged publication, then installs exact prior
+entries. Preview and final replacement spend distinct runtime-branded capabilities: arbitrary structural lookalikes and
+preview authority cannot authorize commit, and final sealed authority cannot be reused as speculative preview. Final
+commit revalidates the rebased reads and currentness guards under the same atomic replacement barrier.
+
 The outer computation remains the sole manifest owner and store transaction. Every admitted output has exactly one
 logical child owner, with an explicit remainder child retaining phases that have not earned a narrower boundary.
 Commit seals the publication graph before preparation enters the store replacement barrier. Record/detail comparison,
 binding preparation, and reversible descriptor normalization finish first; then one frozen decision set reaches the final input, child-read, and producer-
-ownership preflight immediately before the callback-free mutation tail. The store revalidates normalized descriptors
-and lifecycle currentness after external validation, so a validator cannot mutate provisional metadata or supersede the
-run unnoticed. Validators may re-read the frozen candidate through the run during the committing phase, but cannot
+ownership preflight immediately before the callback-free mutation tail. After every external validation and currentness
+callback, the store revalidates normalized descriptors and reprojects structural closures, so a validator cannot mutate
+provisional metadata or dependency shape unnoticed. Validators may re-read the frozen candidate through the run during the committing phase, but cannot
 observe new dependencies, enter children, publish, or mutate any store or detail-catalog surface. Rejection restores
 candidate descriptors and provisional weak bindings. Superseded candidate leases are restored before the store can
 admit the final publication, so abandoned cleanup cannot corrupt or throw after durable commit. After external
@@ -299,7 +316,10 @@ kernel graph contributes to an output; observing only the final file text leaves
 source/provenance witness refresh. Rich details use slot-specific comparators where one has been earned; the exact
 executable slot object owns that policy, while its inert descriptor and `detailKind` name catalog occupancy and
 cross-domain references. A distinct same-kind slot is a different executable contract and therefore replaces rather
-than comparing or satisfying a typed read. An unsupported detail comparison conservatively replaces.
+than comparing or satisfying a typed read. Structural-reference closure remains the exact lifetime and dependency
+authority. When that closure changes, the slot comparator may classify the fresh payload and closure as
+`RefreshWitness`, but it may not retain the incumbent object and its old closure; a comparator-reported `Retain` is
+escalated to `Replace`. An unsupported detail comparison conservatively replaces.
 `project-input.ts` owns coherent, revocable source/configuration generations and their captured host reads. The event
 generation is a currentness guard; it is not itself a computation read. A boot frame's semantic revision therefore
 describes structural project admissions and compiler options rather than the event sequence that happened to capture

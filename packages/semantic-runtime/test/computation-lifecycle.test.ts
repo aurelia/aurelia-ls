@@ -24,6 +24,7 @@ import {
   ComputationRecordReadView,
   computationRecordReadKey,
   type ComputationRun,
+  type ComputationChildCarry,
   type ComputationLocus,
   type ComputationRead,
   type ComputationReadValidation,
@@ -48,8 +49,12 @@ import { ProvenanceRecord } from "../src/kernel/provenance.js";
 import {
   KernelDetailAdmission,
   KernelPublicationDecisionKind,
+  KernelPublicationDecisionCandidate,
+  type KernelPublicationDecisionPreviewCandidate,
   KernelPublicationManifest,
   KernelPublicationPlan,
+  type KernelPublicationWriterId,
+  StagedKernelPublicationContext,
   publishHotDetail,
   publishProductDetail,
   type KernelDetailComparator,
@@ -96,6 +101,8 @@ class MutableRevisionAuthority {
           changedFacets: currentRevision === observedRevision ? [] : ["revision"],
         };
       },
+      tryRebaseCurrent: (): ComputationRead | null =>
+        this.current(readKey) === observedRevision ? this.observe(readKey, domain) : null,
     };
   }
 
@@ -599,6 +606,935 @@ describe("computation lifecycle", () => {
     expect(lifecycle.childProducerFor(familyAKey)).toBeNull();
     expect(lifecycle.childReadersFor(familyAKey)).toEqual([]);
     expect(lifecycle.childReadersFor("source:family-a")).toEqual([]);
+  });
+
+  test("carries exact singleton child outputs and rebases candidate dependencies into the new run", () => {
+    const store = new KernelStore("computation-child-carry");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const revisions = new MutableRevisionAuthority();
+    revisions.set("source:carried-family", "1");
+    const pre = childLocus("carry-pre");
+    const family = childLocus("carry-family");
+    const consumer = childLocus("carry-consumer");
+    const preHandle = store.handles.address("child-carry:pre");
+    const provenanceHandle = store.handles.provenance("child-carry:product");
+    const productHandle = store.handles.product("child-carry:product");
+    const hotHandle = store.handles.hotDetail("child-carry:hot");
+    const productSlot = defineTestProductDetailSlot<number>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-carry-product",
+      "Product detail retained only through explicit child carry.",
+    );
+    const hotSlot = defineTestHotDetailSlot<number>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-carry-hot",
+      "Hot detail retained only through explicit child carry.",
+    );
+    const product = new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      null,
+      provenanceHandle,
+    );
+    const productDetail = 1;
+    const hotDetail = 1;
+
+    const initial = lifecycle.begin(locus("child-carry"));
+    initial.withChildPartition(() => {
+      initial.withChild(pre, () => {
+        initial.publish(publication("child-carry:pre:initial", [
+          new SourceFileAddress(preHandle, "test", "src/pre.html", SourceLanguage.Html),
+        ]));
+      });
+      initial.withChild(family, () => {
+        initial.observe(revisions.observe("source:carried-family"));
+        expect(initial.read(preHandle)).not.toBeNull();
+        initial.publish(new KernelPublicationPlan(
+          new KernelStoreBatch([
+            new ProvenanceRecord(provenanceHandle),
+            product,
+          ], "child-carry:family:initial"),
+          [publishProductDetail(productSlot, productHandle, productDetail)],
+          [publishHotDetail(hotSlot, productHandle, hotHandle, hotDetail)],
+        ));
+      });
+    });
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    const initialFamily = lifecycle.readState(initial.computationId)?.children.find(
+      (child) => child.locus.reconciliationKey === family.reconciliationKey,
+    );
+    expect(initialFamily).toBeDefined();
+    if (initialFamily == null) throw new Error("Expected initial carried-family state.");
+    const replacement = lifecycle.begin(locus("child-carry"));
+    let carried: ComputationChildCarry | null = null;
+    replacement.withChildPartition(() => {
+      replacement.withChild(pre, () => {
+        replacement.publish(publication("child-carry:pre:replacement", [
+          new SourceFileAddress(preHandle, "test", "src/pre.html", SourceLanguage.Html),
+        ]));
+      });
+      carried = replacement.tryCarryChild(family);
+      replacement.withChild(consumer, () => {
+        expect(replacement.read(productHandle)).toBe(product);
+        expect(replacement.readProductDetail(productSlot, productHandle)).toBe(productDetail);
+        expect(replacement.readHotDetail(hotSlot, hotHandle)).toBe(hotDetail);
+      });
+    });
+
+    expect(carried?.previousState).toBe(initialFamily);
+    expect(carried?.readFor(initialFamily.reads[0]!)).not.toBe(initialFamily.reads[0]);
+    const result = replacement.commit();
+    expect(result.state).toBe(ComputationCommitState.Committed);
+    const nextFamily = lifecycle.readState(replacement.computationId)?.children.find(
+      (child) => child.locus.reconciliationKey === family.reconciliationKey,
+    );
+    const nextPre = lifecycle.readState(replacement.computationId)?.children.find(
+      (child) => child.locus.reconciliationKey === pre.reconciliationKey,
+    );
+    const nextConsumer = lifecycle.readState(replacement.computationId)?.children.find(
+      (child) => child.locus.reconciliationKey === consumer.reconciliationKey,
+    );
+    const nextDependency = nextFamily?.candidateReads.find(
+      (read) => read.handle === preHandle,
+    );
+    expect(nextDependency).not.toBe(initialFamily.candidateReads.find((read) => read.handle === preHandle));
+    expect(nextDependency).toEqual(expect.objectContaining({
+      state: ComputationCandidateReadState.Present,
+      producerChildId: nextPre?.childId,
+      actualKind: "source-file-address",
+    }));
+    expect(nextFamily?.reads.map((read) => read.readKey)).toEqual(["source:carried-family"]);
+    expect(nextFamily?.outputs.map((output) => output.readKey).sort()).toEqual(
+      initialFamily.outputs.map((output) => output.readKey).sort(),
+    );
+    for (const output of initialFamily.outputs) {
+      expect(result.transition.publications).toContainEqual(expect.objectContaining({
+        surface: output.surface,
+        handle: output.handle,
+        decision: KernelPublicationDecisionKind.Retain,
+      }));
+    }
+    expect(nextConsumer).toBeDefined();
+    expect(lifecycle.childReadersFor(computationRecordReadKey(productHandle))).toEqual([nextConsumer?.childId]);
+  });
+
+  test("refuses stale carry before staging and rejects exact inputs that change after carry", () => {
+    const store = new KernelStore("computation-child-carry-inputs");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const revisions = new MutableRevisionAuthority();
+    revisions.set("source:carry-input", "1");
+    const family = childLocus("carry-input-family");
+    const outputHandle = store.handles.address("child-carry-input:output");
+
+    const initial = lifecycle.begin(locus("child-carry-inputs"));
+    initial.withChildPartition(() => initial.withChild(family, () => {
+      initial.observe(revisions.observe("source:carry-input"));
+      initial.publish(publication("child-carry-input:initial", [
+        new SourceFileAddress(outputHandle, "test", "src/output.html", SourceLanguage.Html),
+      ]));
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    revisions.set("source:carry-input", "2");
+    const staleAtSchedule = lifecycle.begin(locus("child-carry-inputs"));
+    staleAtSchedule.withChildPartition(() => {
+      expect(staleAtSchedule.tryCarryChild(family)).toBeNull();
+    });
+    staleAtSchedule.abort();
+    expect(store.read(outputHandle)).not.toBeNull();
+
+    revisions.set("source:carry-input", "1");
+    const staleAtCommit = lifecycle.begin(locus("child-carry-inputs"));
+    staleAtCommit.withChildPartition(() => {
+      expect(staleAtCommit.tryCarryChild(family)).not.toBeNull();
+    });
+    revisions.set("source:carry-input", "3");
+    const result = staleAtCommit.commit();
+
+    expect(result.state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(result.transition.invalidReads).toContainEqual(expect.objectContaining({
+      readKey: "source:carry-input",
+    }));
+    expect(lifecycle.readState(initial.computationId)?.committedRunSequence).toBe(initial.runSequence);
+    expect(store.read(outputHandle)).not.toBeNull();
+  });
+
+  test("routes restaged mutable details through ordinary replacement decisions", () => {
+    const store = new KernelStore("computation-child-carry-mutable-detail");
+    const owner = {};
+    const productHandle = store.handles.product("child-carry-mutable-detail:product");
+    const provenanceHandle = store.handles.provenance("child-carry-mutable-detail:provenance");
+    const slot = defineTestProductDetailSlot<{ revision: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-carry-mutable-detail",
+      "Mutable incumbent whose in-place changes must advance the detail revision.",
+    );
+    const product = new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      null,
+      provenanceHandle,
+    );
+    const provenance = new ProvenanceRecord(provenanceHandle);
+    const detail = { revision: 1 };
+    const initial = store.replaceOwnedPublication(
+      KernelPublicationManifest.empty,
+      new KernelPublicationPlan(
+        new KernelStoreBatch([provenance, product], "child-carry-mutable-detail:initial"),
+        [publishProductDetail(slot, productHandle, detail)],
+      ),
+      owner,
+      { validate(): void {}, validateCurrent(): void {} },
+    );
+    const initialRevision = store.productDetails.readMutationOrdinal(productHandle);
+
+    const replacement = store.replaceOwnedPublication(
+      initial.manifest,
+      new KernelPublicationPlan(
+        new KernelStoreBatch([provenance, product], "child-carry-mutable-detail:replacement"),
+        [publishProductDetail(slot, productHandle, detail)],
+      ),
+      owner,
+      {
+        validate: () => {
+          detail.revision = 2;
+        },
+        validateCurrent(): void {},
+      },
+    );
+
+    expect(replacement.decisions).toContainEqual(expect.objectContaining({
+      surface: KernelPublicationSurface.ProductDetail,
+      handle: productHandle,
+      decision: KernelPublicationDecisionKind.Replace,
+    }));
+    expect(store.productDetails.readMutationOrdinal(productHandle)).not.toBe(initialRevision);
+    expect(store.productDetails.read(slot, productHandle)).toBe(detail);
+    expect(detail.revision).toBe(2);
+  });
+
+  test("refuses child carry after a retained detail mutates its structural closure", () => {
+    const store = new KernelStore("computation-child-carry-mutated-closure");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const family = childLocus("carry-mutated-closure-family");
+    const targetA = store.handles.address("carry-mutated-closure:target-a");
+    const targetB = store.handles.address("carry-mutated-closure:target-b");
+    const provenanceHandle = store.handles.provenance("carry-mutated-closure:product");
+    const productHandle = store.handles.product("carry-mutated-closure:product");
+    const detail = { target: targetA };
+    const slot = defineTestProductDetailSlot<typeof detail>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-carry-mutated-closure",
+      "Carried detail whose exact structural closure must remain unchanged.",
+      (value) => kernelRecordReferences(value.target),
+    );
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(targetA, "test", "src/a.html", SourceLanguage.Html),
+      new SourceFileAddress(targetB, "test", "src/b.html", SourceLanguage.Html),
+    ], "carry-mutated-closure:targets"));
+
+    const initial = lifecycle.begin(locus("child-carry-mutated-closure"));
+    initial.withChildPartition(() => initial.withChild(family, () => {
+      initial.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(provenanceHandle),
+          new MaterializedProduct(
+            productHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            provenanceHandle,
+          ),
+        ], "carry-mutated-closure:initial"),
+        [publishProductDetail(slot, productHandle, detail)],
+      ));
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    detail.target = targetB;
+    const replacement = lifecycle.begin(locus("child-carry-mutated-closure"));
+    replacement.withChildPartition(() => {
+      expect(replacement.tryCarryChild(family)).toBeNull();
+    });
+    replacement.abort();
+  });
+
+  test("keeps explicit carry authority out of caller-constructed publication candidates", () => {
+    expect(() => new KernelPublicationDecisionCandidate(
+      {},
+      new KernelPublicationPlan(new KernelStoreBatch([], "forged-carry-candidate")),
+      [],
+    )).toThrow(/only be minted by staged publication/);
+  });
+
+  test("rejects forged and preview-only authority at final publication replacement", () => {
+    const store = new KernelStore("publication-candidate-authority-boundaries");
+    const owner = {};
+    const plan = new KernelPublicationPlan(new KernelStoreBatch([], "forged-carry-candidate"));
+    const preflight = { validate(): void {}, validateCurrent(): void {} };
+    const forged = {
+      plan,
+      explicitlyRetains: () => true,
+    } as unknown as KernelPublicationDecisionCandidate;
+
+    expect(() => store.replaceOwnedPublicationCandidate(
+      KernelPublicationManifest.empty,
+      forged,
+      owner,
+      preflight,
+    )).toThrow(/authority was not minted by sealed staged publication/);
+
+    const staged = new StagedKernelPublicationContext(
+      store,
+      KernelPublicationManifest.empty,
+      "test:preview-candidate-authority" as KernelPublicationWriterId,
+    );
+    const preview = staged.toDecisionPreviewCandidate("preview-candidate-authority");
+    expect(() => store.replaceOwnedPublicationCandidate(
+      KernelPublicationManifest.empty,
+      preview as unknown as KernelPublicationDecisionCandidate,
+      owner,
+      preflight,
+    )).toThrow(/authority was not minted by sealed staged publication/);
+  });
+
+  test("rejects final publication authority at the preview boundary", () => {
+    const store = new KernelStore("publication-preview-authority-boundary");
+    const staged = new StagedKernelPublicationContext(
+      store,
+      KernelPublicationManifest.empty,
+      "test:final-candidate-authority" as KernelPublicationWriterId,
+    );
+    const finalCandidate = staged.seal("final-candidate-authority").publication;
+
+    expect(() => store.previewOwnedPublicationCandidateDecisions(
+      KernelPublicationManifest.empty,
+      finalCandidate as unknown as KernelPublicationDecisionPreviewCandidate,
+      {},
+    )).toThrow(/preview authority was not minted by staged publication/);
+  });
+
+  test("reruns a child when its candidate producer does not retain", () => {
+    const store = new KernelStore("computation-child-carry-producer-change");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const pre = childLocus("carry-change-pre");
+    const family = childLocus("carry-change-family");
+    const preHandle = store.handles.address("child-carry-change:pre");
+    const familyHandle = store.handles.address("child-carry-change:family");
+
+    const initial = lifecycle.begin(locus("child-carry-producer-change"));
+    initial.withChildPartition(() => {
+      initial.withChild(pre, () => initial.publish(publication("carry-change:pre:initial", [
+        new SourceFileAddress(preHandle, "test", "src/pre.html", SourceLanguage.Html),
+      ])));
+      initial.withChild(family, () => {
+        expect(initial.read(preHandle)).not.toBeNull();
+        initial.publish(publication("carry-change:family:initial", [
+          new SourceFileAddress(familyHandle, "test", "src/family.html", SourceLanguage.Html),
+        ]));
+      });
+    });
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const replacement = lifecycle.begin(locus("child-carry-producer-change"));
+    replacement.withChildPartition(() => {
+      replacement.withChild(pre, () => replacement.publish(publication("carry-change:pre:replacement", [
+        new SourceFileAddress(preHandle, "test", "src/renamed-pre.html", SourceLanguage.Html),
+      ])));
+      expect(replacement.tryCarryChild(family)).toBeNull();
+      replacement.withChild(family, () => {
+        expect(replacement.read(preHandle)).toEqual(expect.objectContaining({ path: "src/renamed-pre.html" }));
+        replacement.publish(publication("carry-change:family:replacement", [
+          new SourceFileAddress(familyHandle, "test", "src/recomputed-family.html", SourceLanguage.Html),
+        ]));
+      });
+    });
+
+    const result = replacement.commit();
+    expect(result.state).toBe(ComputationCommitState.Committed);
+    expect(result.transition.publications).toContainEqual(expect.objectContaining({
+      handle: preHandle,
+      decision: KernelPublicationDecisionKind.Replace,
+    }));
+    expect(store.read(familyHandle)).toEqual(expect.objectContaining({ path: "src/recomputed-family.html" }));
+  });
+
+  test("rejects a carried dependency when authoritative comparison changes after preview", () => {
+    const store = new KernelStore("computation-child-carry-preview-drift");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const pre = childLocus("carry-preview-pre");
+    const family = childLocus("carry-preview-family");
+    const provenanceHandle = store.handles.provenance("carry-preview:product");
+    const productHandle = store.handles.product("carry-preview:product");
+    const familyHandle = store.handles.address("carry-preview:family");
+    let comparison = KernelPublicationDecisionKind.Retain;
+    const slot = defineTestProductDetailSlot<{ readonly value: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-carry-preview",
+      "Decision-preview drift witness.",
+      noKernelDetailReferences,
+      () => comparison,
+    );
+    const product = () => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      null,
+      provenanceHandle,
+    );
+    const initialDetail = { value: 1 };
+
+    const initial = lifecycle.begin(locus("child-carry-preview-drift"));
+    initial.withChildPartition(() => {
+      initial.withChild(pre, () => initial.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([new ProvenanceRecord(provenanceHandle), product()], "carry-preview:pre:initial"),
+        [publishProductDetail(slot, productHandle, initialDetail)],
+      )));
+      initial.withChild(family, () => {
+        expect(initial.readProductDetail(slot, productHandle)).toBe(initialDetail);
+        initial.publish(publication("carry-preview:family:initial", [
+          new SourceFileAddress(familyHandle, "test", "src/family.html", SourceLanguage.Html),
+        ]));
+      });
+    });
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const replacementDetail = { value: 1 };
+    const replacement = lifecycle.begin(locus("child-carry-preview-drift"));
+    replacement.withChildPartition(() => {
+      replacement.withChild(pre, () => replacement.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([new ProvenanceRecord(provenanceHandle), product()], "carry-preview:pre:replacement"),
+        [publishProductDetail(slot, productHandle, replacementDetail)],
+      )));
+      expect(replacement.tryCarryChild(family)).not.toBeNull();
+    });
+    comparison = KernelPublicationDecisionKind.Replace;
+
+    const result = replacement.commit();
+    expect(result.state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(result.transition.invalidReads).toContainEqual(expect.objectContaining({
+      readKey: computationProductDetailReadKey(productHandle),
+      domain: "computation-child-carried-dependency",
+      currentRevision: KernelPublicationDecisionKind.Replace,
+    }));
+    expect(store.productDetails.read(slot, productHandle)).toBe(initialDetail);
+    expect(lifecycle.readState(initial.computationId)?.committedRunSequence).toBe(initial.runSequence);
+  });
+
+  test("keeps carry distinct from omission and refuses open or cyclic prior children", () => {
+    const store = new KernelStore("computation-child-carry-boundaries");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const carriedLocus = childLocus("carry-boundary-retained");
+    const omittedLocus = childLocus("carry-boundary-omitted");
+    const openLocus = childLocus("carry-boundary-open");
+    const carriedHandle = store.handles.address("carry-boundary:retained");
+    const omittedHandle = store.handles.address("carry-boundary:omitted");
+    const openHandle = store.handles.address("carry-boundary:open");
+
+    const initial = lifecycle.begin(locus("child-carry-boundaries"));
+    initial.withChildPartition(() => {
+      initial.withChild(carriedLocus, () => initial.publish(publication("carry-boundary:retained", [
+        new SourceFileAddress(carriedHandle, "test", "src/retained.html", SourceLanguage.Html),
+      ])));
+      initial.withChild(omittedLocus, () => initial.publish(publication("carry-boundary:omitted", [
+        new SourceFileAddress(omittedHandle, "test", "src/omitted.html", SourceLanguage.Html),
+      ])));
+      initial.withChild(openLocus, () => {
+        initial.readAllRecords();
+        initial.publish(publication("carry-boundary:open", [
+          new SourceFileAddress(openHandle, "test", "src/open.html", SourceLanguage.Html),
+        ]));
+      });
+    });
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const replacement = lifecycle.begin(locus("child-carry-boundaries"));
+    replacement.withChildPartition(() => {
+      expect(replacement.tryCarryChild(carriedLocus)).not.toBeNull();
+      expect(replacement.tryCarryChild(openLocus)).toBeNull();
+    });
+    const result = replacement.commit();
+
+    expect(result.state).toBe(ComputationCommitState.Committed);
+    expect(store.read(carriedHandle)).not.toBeNull();
+    expect(store.read(omittedHandle)).toBeNull();
+    expect(store.read(openHandle)).toBeNull();
+    expect(result.transition.publications).toContainEqual(expect.objectContaining({
+      handle: carriedHandle,
+      decision: KernelPublicationDecisionKind.Retain,
+    }));
+    expect(result.transition.publications).toContainEqual(expect.objectContaining({
+      handle: omittedHandle,
+      decision: KernelPublicationDecisionKind.Withdraw,
+    }));
+
+    const cycleA = childLocus("carry-cycle-a");
+    const cycleB = childLocus("carry-cycle-b");
+    const cycleAHandle = store.handles.address("carry-cycle:a");
+    const cycleBHandle = store.handles.address("carry-cycle:b");
+    const cyclicInitial = lifecycle.begin(locus("child-carry-cyclic"));
+    cyclicInitial.withChildPartition(() => {
+      cyclicInitial.withChild(cycleA, () => cyclicInitial.publish(publication("carry-cycle:a", [
+        new SourceFileAddress(cycleAHandle, "test", "src/a.html", SourceLanguage.Html),
+      ])));
+      cyclicInitial.withChild(cycleB, () => {
+        cyclicInitial.read(cycleAHandle);
+        cyclicInitial.publish(publication("carry-cycle:b", [
+          new SourceFileAddress(cycleBHandle, "test", "src/b.html", SourceLanguage.Html),
+        ]));
+      });
+      cyclicInitial.withChild(cycleA, () => cyclicInitial.read(cycleBHandle));
+    });
+    expect(cyclicInitial.commit().state).toBe(ComputationCommitState.Committed);
+    const cyclicReplacement = lifecycle.begin(locus("child-carry-cyclic"));
+    cyclicReplacement.withChildPartition(() => {
+      expect(cyclicReplacement.tryCarryChild(cycleA)).toBeNull();
+      expect(cyclicReplacement.tryCarryChild(cycleB)).toBeNull();
+    });
+    cyclicReplacement.abort();
+  });
+
+  test("forbids target work before carry while admitting unrelated remainder work", () => {
+    const store = new KernelStore("computation-child-carry-started-work");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const family = childLocus("carry-started-family");
+    const outputHandle = store.handles.address("carry-started:output");
+    const speculativeHandle = store.handles.address("carry-started:speculative");
+    const remainderHandle = store.handles.address("carry-started:remainder");
+
+    const initial = lifecycle.begin(locus("child-carry-started-work"));
+    initial.withChildPartition(() => initial.withChild(family, () => {
+      initial.publish(publication("carry-started:initial", [
+        new SourceFileAddress(outputHandle, "test", "src/output.html", SourceLanguage.Html),
+      ]));
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const targetStarted = lifecycle.begin(locus("child-carry-started-work"));
+    targetStarted.withChildPartition(() => {
+      targetStarted.withChild(family, () => {
+        targetStarted.publish(publication("carry-started:speculative", [
+          new SourceFileAddress(speculativeHandle, "test", "src/speculative.html", SourceLanguage.Html),
+        ]));
+      });
+      expect(() => targetStarted.tryCarryChild(family)).toThrow(/after candidate work has started/);
+    });
+    targetStarted.abort();
+
+    const remainderStarted = lifecycle.begin(locus("child-carry-started-work"));
+    remainderStarted.publish(publication("carry-started:remainder", [
+      new SourceFileAddress(remainderHandle, "test", "src/remainder.html", SourceLanguage.Html),
+    ]));
+    expect(remainderStarted.tryCarryChild(family)).not.toBeNull();
+    const result = remainderStarted.commit();
+    expect(result.state).toBe(ComputationCommitState.Committed);
+    expect(store.read(outputHandle)).not.toBeNull();
+    expect(store.read(remainderHandle)).not.toBeNull();
+  });
+
+  test("rebinds carried reads to current validators instead of preserving prior callbacks", () => {
+    const store = new KernelStore("computation-child-carry-read-rebase");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const family = childLocus("carry-read-rebase-family");
+    const outputHandle = store.handles.address("carry-read-rebase:output");
+    let priorValidations = 0;
+    let currentValidations = 0;
+    const currentRead = (): ComputationRead => ({
+      readKey: "source:carry-read-rebase",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        currentValidations += 1;
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+      tryRebaseCurrent: currentRead,
+    });
+    const priorRead: ComputationRead = {
+      readKey: "source:carry-read-rebase",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        priorValidations += 1;
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+      tryRebaseCurrent: currentRead,
+    };
+
+    const initial = lifecycle.begin(locus("child-carry-read-rebase"));
+    initial.withChildPartition(() => initial.withChild(family, () => {
+      initial.observe(priorRead);
+      initial.publish(publication("carry-read-rebase:initial", [
+        new SourceFileAddress(outputHandle, "test", "src/output.html", SourceLanguage.Html),
+      ]));
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    const priorValidationsAfterInitialCommit = priorValidations;
+
+    const replacement = lifecycle.begin(locus("child-carry-read-rebase"));
+    replacement.withChildPartition(() => {
+      expect(replacement.tryCarryChild(family)).not.toBeNull();
+    });
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+
+    expect(priorValidations).toBe(priorValidationsAfterInitialCommit);
+    expect(currentValidations).toBeGreaterThanOrEqual(2);
+  });
+
+  test("keeps exact kernel reads under kernel rebase authority", () => {
+    const store = new KernelStore("computation-child-carry-kernel-rebase-authority");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const family = childLocus("carry-kernel-rebase-family");
+    const sourceHandle = store.handles.address("carry-kernel-rebase:source");
+    const productHandle = store.handles.product("carry-kernel-rebase:product");
+    const provenanceHandle = store.handles.provenance("carry-kernel-rebase:provenance");
+    const hotHandle = store.handles.hotDetail("carry-kernel-rebase:hot");
+    const outputHandle = store.handles.address("carry-kernel-rebase:output");
+    const productSlot = defineTestProductDetailSlot<{ revision: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.carry-kernel-rebase-product",
+      "Foreign product detail read through kernel authority.",
+    );
+    const hotSlot = defineTestHotDetailSlot<{ revision: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.carry-kernel-rebase-hot",
+      "Foreign hot detail read through kernel authority.",
+    );
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(sourceHandle, "test", "src/source.html", SourceLanguage.Html),
+      new ProvenanceRecord(provenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        provenanceHandle,
+      ),
+    ], "carry-kernel-rebase:foreign"));
+    store.productDetails.add(productSlot, productHandle, { revision: 1 });
+    store.hotDetails.add(hotSlot, productHandle, hotHandle, { revision: 1 });
+
+    const initial = lifecycle.begin(locus("child-carry-kernel-rebase-authority"));
+    initial.withChildPartition(() => initial.withChild(family, () => {
+      expect(initial.read(sourceHandle)).not.toBeNull();
+      expect(initial.readProductDetail(productSlot, productHandle)).not.toBeNull();
+      expect(initial.readHotDetail(hotSlot, hotHandle)).not.toBeNull();
+      initial.publish(publication("carry-kernel-rebase:output", [
+        new SourceFileAddress(outputHandle, "test", "src/output.html", SourceLanguage.Html),
+      ]));
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    let domainRebaseCalls = 0;
+    const unchanged = lifecycle.begin(locus("child-carry-kernel-rebase-authority"));
+    unchanged.withChildPartition(() => {
+      expect(unchanged.tryCarryChild(family, (read) => {
+        domainRebaseCalls += 1;
+        return {
+          readKey: read.readKey,
+          domain: read.domain,
+          observedRevision: read.observedRevision,
+          validate: () => ({ isCurrent: true, currentRevision: read.observedRevision, changedFacets: [] }),
+          tryRebaseCurrent: () => null,
+        };
+      })).not.toBeNull();
+    });
+    unchanged.abort();
+    expect(domainRebaseCalls).toBe(0);
+
+    store.hotDetails.remove(hotHandle);
+    store.hotDetails.add(hotSlot, productHandle, hotHandle, { revision: 2 });
+    const stale = lifecycle.begin(locus("child-carry-kernel-rebase-authority"));
+    stale.withChildPartition(() => {
+      expect(stale.tryCarryChild(family, () => {
+        domainRebaseCalls += 1;
+        throw new Error("Domain rebasers must not receive exact kernel reads.");
+      })).toBeNull();
+    });
+    stale.abort();
+    expect(domainRebaseCalls).toBe(0);
+  });
+
+  test("refuses carry when an exact owner membership gains another materialization", () => {
+    const store = new KernelStore("computation-child-carry-owner-growth");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const family = childLocus("carry-owner-growth-family");
+    const ownerHandle = store.handles.address("carry-owner-growth:owner");
+    const firstHandle = store.handles.materialization("carry-owner-growth:first");
+    const secondHandle = store.handles.materialization("carry-owner-growth:second");
+    const outputHandle = store.handles.address("carry-owner-growth:output");
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(ownerHandle, "test", "src/owner.html", SourceLanguage.Html),
+      new MaterializationRecord(firstHandle, ownerHandle),
+    ], "carry-owner-growth:baseline"));
+
+    const initial = lifecycle.begin(locus("child-carry-owner-growth"));
+    initial.withChildPartition(() => initial.withChild(family, () => {
+      expect(initial.readMaterializationsByOwner(ownerHandle).map((record) => record.handle)).toEqual([firstHandle]);
+      initial.publish(publication("carry-owner-growth:initial", [
+        new SourceFileAddress(outputHandle, "test", "src/output.html", SourceLanguage.Html),
+      ]));
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    store.commit(new KernelStoreBatch([
+      new MaterializationRecord(secondHandle, ownerHandle),
+    ], "carry-owner-growth:added"));
+    const replacement = lifecycle.begin(locus("child-carry-owner-growth"));
+    replacement.withChildPartition(() => {
+      expect(replacement.tryCarryChild(family)).toBeNull();
+    });
+    replacement.abort();
+  });
+
+  test("does not freeze owner membership when speculative carry is rejected", () => {
+    const store = new KernelStore("computation-child-carry-owner-preview");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const revisions = new MutableRevisionAuthority();
+    const family = childLocus("carry-owner-preview-family");
+    const ownerHandle = store.handles.address("carry-owner-preview:owner");
+    const materializationHandle = store.handles.materialization("carry-owner-preview:materialization");
+    const outputHandle = store.handles.address("carry-owner-preview:output");
+    const revisionReadKey = "source:carry-owner-preview";
+    revisions.set(revisionReadKey, "1");
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(ownerHandle, "test", "src/owner.html", SourceLanguage.Html),
+    ], "carry-owner-preview:baseline"));
+
+    const initial = lifecycle.begin(locus("child-carry-owner-preview"));
+    initial.withChildPartition(() => initial.withChild(family, () => {
+      expect(initial.readMaterializationsByOwner(ownerHandle)).toEqual([]);
+      initial.observe(revisions.observe(revisionReadKey));
+      initial.publish(publication("carry-owner-preview:initial", [
+        new SourceFileAddress(outputHandle, "test", "src/output.html", SourceLanguage.Html),
+      ]));
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    revisions.set(revisionReadKey, "2");
+    const replacement = lifecycle.begin(locus("child-carry-owner-preview"));
+    replacement.withChildPartition(() => {
+      expect(replacement.tryCarryChild(family)).toBeNull();
+      replacement.publish(publication("carry-owner-preview:replacement", [
+        new MaterializationRecord(materializationHandle, ownerHandle),
+      ]));
+    });
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+    expect(store.read(materializationHandle)).toBeInstanceOf(MaterializationRecord);
+  });
+
+  test("keeps domain rebase previews side-effect-free when carry is rejected", () => {
+    const store = new KernelStore("computation-child-carry-domain-preview");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const revisions = new MutableRevisionAuthority();
+    const family = childLocus("carry-domain-preview-family");
+    const ownerHandle = store.handles.address("carry-domain-preview:owner");
+    const materializationHandle = store.handles.materialization("carry-domain-preview:materialization");
+    const outputHandle = store.handles.address("carry-domain-preview:output");
+    const revisionReadKey = "source:carry-domain-preview";
+    revisions.set(revisionReadKey, "1");
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(ownerHandle, "test", "src/owner.html", SourceLanguage.Html),
+    ], "carry-domain-preview:baseline"));
+
+    const initial = lifecycle.begin(locus("child-carry-domain-preview"));
+    initial.withChildPartition(() => initial.withChild(family, () => {
+      initial.observe(revisions.observe(revisionReadKey));
+      initial.publish(publication("carry-domain-preview:initial", [
+        new SourceFileAddress(outputHandle, "test", "src/output.html", SourceLanguage.Html),
+      ]));
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const replacement = lifecycle.begin(locus("child-carry-domain-preview"));
+    replacement.withChildPartition(() => {
+      expect(replacement.tryCarryChild(family, (_read, context) => {
+        expect(context.readMaterializationsByOwner(ownerHandle)).toEqual([]);
+        return null;
+      })).toBeNull();
+      replacement.publish(publication("carry-domain-preview:replacement", [
+        new MaterializationRecord(materializationHandle, ownerHandle),
+      ]));
+    });
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+    expect(store.read(materializationHandle)).toBeInstanceOf(MaterializationRecord);
+  });
+
+  test("rejects run reentrancy from a carry-read rebaser without polluting the candidate", () => {
+    const store = new KernelStore("computation-child-carry-rebase-reentrancy");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const revisions = new MutableRevisionAuthority();
+    const family = childLocus("carry-rebase-reentrancy-family");
+    const outputHandle = store.handles.address("carry-rebase-reentrancy:output");
+    const readKey = "source:carry-rebase-reentrancy";
+    revisions.set(readKey, "1");
+
+    const initial = lifecycle.begin(locus("child-carry-rebase-reentrancy"));
+    initial.withChildPartition(() => initial.withChild(family, () => {
+      initial.observe(revisions.observe(readKey));
+      initial.publish(publication("carry-rebase-reentrancy:initial", [
+        new SourceFileAddress(outputHandle, "test", "src/initial.html", SourceLanguage.Html),
+      ]));
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const replacement = lifecycle.begin(locus("child-carry-rebase-reentrancy"));
+    replacement.withChildPartition(() => {
+      expect(() => replacement.tryCarryChild(family, () => {
+        replacement.publish(publication("carry-rebase-reentrancy:illegal", [
+          new SourceFileAddress(outputHandle, "test", "src/illegal.html", SourceLanguage.Html),
+        ]));
+        return null;
+      })).toThrow(/cannot be used while a carry read is rebasing/);
+      replacement.withChild(family, () => replacement.publish(publication(
+        "carry-rebase-reentrancy:replacement",
+        [new SourceFileAddress(outputHandle, "test", "src/recomputed.html", SourceLanguage.Html)],
+      )));
+    });
+
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+    expect(store.read(outputHandle)).toEqual(expect.objectContaining({ path: "src/recomputed.html" }));
+  });
+
+  test("declines carry when another child already stages one of the prior outputs", () => {
+    const store = new KernelStore("computation-child-carry-staged-owner");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const target = childLocus("carry-staged-owner-target");
+    const sibling = childLocus("carry-staged-owner-sibling");
+    const priorHandle = store.handles.address("carry-staged-owner:prior");
+    const replacementHandle = store.handles.address("carry-staged-owner:replacement");
+
+    const initial = lifecycle.begin(locus("child-carry-staged-owner"));
+    initial.withChildPartition(() => initial.withChild(target, () => {
+      initial.publish(publication("carry-staged-owner:initial", [
+        new SourceFileAddress(priorHandle, "test", "src/prior.html", SourceLanguage.Html),
+      ]));
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const replacement = lifecycle.begin(locus("child-carry-staged-owner"));
+    replacement.withChildPartition(() => {
+      replacement.withChild(sibling, () => replacement.publish(publication("carry-staged-owner:sibling", [
+        new SourceFileAddress(priorHandle, "test", "src/prior.html", SourceLanguage.Html),
+      ])));
+      expect(replacement.tryCarryChild(target)).toBeNull();
+      replacement.withChild(target, () => replacement.publish(publication("carry-staged-owner:target", [
+        new SourceFileAddress(replacementHandle, "test", "src/recomputed.html", SourceLanguage.Html),
+      ])));
+    });
+
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+    expect(store.read(priorHandle)).not.toBeNull();
+    expect(store.read(replacementHandle)).not.toBeNull();
+  });
+
+  test("preflights carried read conflicts before staging any prior output", () => {
+    const store = new KernelStore("computation-child-carry-read-conflict");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const family = childLocus("carry-read-conflict-family");
+    const outputHandle = store.handles.address("carry-read-conflict:output");
+    const readKey = "source:carry-read-conflict";
+    const carriedRead: ComputationRead = {
+      readKey,
+      domain: "carried-input",
+      observedRevision: "1",
+      validate: () => ({ isCurrent: true, currentRevision: "1", changedFacets: [] }),
+      tryRebaseCurrent: () => carriedRead,
+    };
+    const remainderRead: ComputationRead = {
+      readKey,
+      domain: "remainder-input",
+      observedRevision: "1",
+      validate: () => ({ isCurrent: true, currentRevision: "1", changedFacets: [] }),
+      tryRebaseCurrent: () => remainderRead,
+    };
+
+    const initial = lifecycle.begin(locus("child-carry-read-conflict"));
+    initial.withChildPartition(() => initial.withChild(family, () => {
+      initial.observe(carriedRead);
+      initial.publish(publication("carry-read-conflict:initial", [
+        new SourceFileAddress(outputHandle, "test", "src/initial.html", SourceLanguage.Html),
+      ]));
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const replacement = lifecycle.begin(locus("child-carry-read-conflict"));
+    replacement.observe(remainderRead);
+    replacement.withChildPartition(() => {
+      expect(() => replacement.tryCarryChild(family)).toThrow(/conflicting revisions/);
+      replacement.withChild(family, () => replacement.publish(publication("carry-read-conflict:replacement", [
+        new SourceFileAddress(outputHandle, "test", "src/recomputed.html", SourceLanguage.Html),
+      ])));
+    });
+
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+    expect(store.read(outputHandle)).toEqual(expect.objectContaining({ path: "src/recomputed.html" }));
+  });
+
+  test("carries a child that observes and owns materializations in the same owner set", () => {
+    const store = new KernelStore("computation-child-carry-owned-membership");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const family = childLocus("carry-owned-membership-family");
+    const ownerHandle = store.handles.address("carry-owned-membership:owner");
+    const materializationHandle = store.handles.materialization("carry-owned-membership:row");
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(ownerHandle, "test", "src/owner.html", SourceLanguage.Html),
+    ], "carry-owned-membership:owner"));
+
+    const initial = lifecycle.begin(locus("child-carry-owned-membership"));
+    initial.withChildPartition(() => initial.withChild(family, () => {
+      initial.publish(publication("carry-owned-membership:initial", [
+        new MaterializationRecord(materializationHandle, ownerHandle),
+      ]));
+      expect(initial.readMaterializationsByOwner(ownerHandle).map((record) => record.handle))
+        .toEqual([materializationHandle]);
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const replacement = lifecycle.begin(locus("child-carry-owned-membership"));
+    replacement.withChildPartition(() => {
+      expect(replacement.tryCarryChild(family)).not.toBeNull();
+    });
+    const result = replacement.commit();
+
+    expect(result.state).toBe(ComputationCommitState.Committed);
+    expect(result.transition.publications).toContainEqual(expect.objectContaining({
+      handle: materializationHandle,
+      decision: KernelPublicationDecisionKind.Retain,
+    }));
+  });
+
+  test("refuses carry when a previously absent candidate entry gains foreign occupancy", () => {
+    const store = new KernelStore("computation-child-carry-negative-occupancy");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const family = childLocus("carry-negative-occupancy-family");
+    const absentHandle = store.handles.address("carry-negative-occupancy:absent");
+    const derivedHandle = store.handles.address("carry-negative-occupancy:derived");
+
+    const seed = lifecycle.begin(locus("child-carry-negative-occupancy"));
+    seed.publish(publication("carry-negative-occupancy:seed", [
+      new SourceFileAddress(absentHandle, "test", "src/withdrawn.html", SourceLanguage.Html),
+    ]));
+    expect(seed.commit().state).toBe(ComputationCommitState.Committed);
+
+    const initial = lifecycle.begin(locus("child-carry-negative-occupancy"));
+    initial.withChildPartition(() => initial.withChild(family, () => {
+      expect(initial.read(absentHandle)).toBeNull();
+      initial.publish(publication("carry-negative-occupancy:derived", [
+        new SourceFileAddress(derivedHandle, "test", "src/derived.html", SourceLanguage.Html),
+      ]));
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(absentHandle, "foreign", "src/foreign.html", SourceLanguage.Html),
+    ], "carry-negative-occupancy:foreign"));
+    const replacement = lifecycle.begin(locus("child-carry-negative-occupancy"));
+    replacement.withChildPartition(() => {
+      expect(replacement.tryCarryChild(family)).toBeNull();
+    });
+    replacement.abort();
   });
 
   test("commits an explicit empty remainder as the withdrawal boundary of a complete child partition", () => {
@@ -2393,7 +3329,7 @@ describe("computation lifecycle", () => {
     expect(store.hotDetails.read(targetHotSlot, targetHotHandle)).not.toBeNull();
   });
 
-  test("replaces retained payloads when their projected dependency closure changes", () => {
+  test("requires slot comparators to classify changed dependency closure without retaining it", () => {
     const store = new KernelStore("rich-detail-reference-replacement");
     const owner = {};
     const preflight = { validate(): void {}, validateCurrent(): void {} };
@@ -2414,9 +3350,11 @@ describe("computation lifecycle", () => {
       "test.rich-detail-replacement-source",
       "Detail whose target closure determines replacement.",
       (detail) => mergeKernelDetailReferences([kernelProductDetailReference(targetSlot.descriptor, detail.target)]),
-      () => {
+      (_previous, next) => {
         comparatorCalls += 1;
-        return KernelPublicationDecisionKind.Retain;
+        return next.target === targetB
+          ? KernelPublicationDecisionKind.Retain
+          : KernelPublicationDecisionKind.RefreshWitness;
       },
     );
     store.commit(new KernelStoreBatch([
@@ -2470,7 +3408,24 @@ describe("computation lifecycle", () => {
       decision: KernelPublicationDecisionKind.Replace,
     }));
     expect(store.productDetails.read(sourceSlot, sourceProductHandle)).toBe(replacementDetail);
-    expect(comparatorCalls).toBe(0);
+    expect(comparatorCalls).toBe(1);
+
+    const witnessRefreshDetail = { target: targetA };
+    const witnessRefresh = store.replaceOwnedPublication(
+      replacement.manifest,
+      new KernelPublicationPlan(records(), [
+        publishProductDetail(sourceSlot, sourceProductHandle, witnessRefreshDetail),
+      ]),
+      owner,
+      preflight,
+    );
+    expect(witnessRefresh.decisions).toContainEqual(expect.objectContaining({
+      handle: sourceProductHandle,
+      detailKind: sourceSlot.detailKind,
+      decision: KernelPublicationDecisionKind.RefreshWitness,
+    }));
+    expect(store.productDetails.read(sourceSlot, sourceProductHandle)).toBe(witnessRefreshDetail);
+    expect(comparatorCalls).toBe(2);
 
     const mutable = { target: targetA };
     const projected = publishProductDetail(sourceSlot, sourceProductHandle, mutable);
@@ -4597,6 +5552,52 @@ describe("computation lifecycle", () => {
     expect(() => run.commit()).toThrow(/structural references after staging/);
     expect(store.read(sourceProductHandle)).toBeNull();
     expect(store.productDetails.read(sourceSlot, sourceProductHandle)).toBeNull();
+  });
+
+  test("rejects structural closure mutation by the final currentness validator", () => {
+    const store = new KernelStore("publication-final-currentness-reference-mutation");
+    const owner = {};
+    const firstAddressHandle = store.handles.address("final-currentness-reference-mutation:first");
+    const secondAddressHandle = store.handles.address("final-currentness-reference-mutation:second");
+    const productHandle = store.handles.product("final-currentness-reference-mutation:product");
+    const provenanceHandle = store.handles.provenance("final-currentness-reference-mutation:provenance");
+    const slot = defineTestProductDetailSlot<{ addressHandle: AddressHandle }>(
+      KernelVocabulary.Template.Source.key,
+      "test.final-currentness-reference-mutation",
+      "Detail whose dependency must remain stable through the last external callback.",
+      (detail) => kernelRecordReferences(detail.addressHandle),
+    );
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(firstAddressHandle, "test", "src/first.html", SourceLanguage.Html),
+      new SourceFileAddress(secondAddressHandle, "test", "src/second.html", SourceLanguage.Html),
+    ], "final-currentness-reference-mutation:targets"));
+    const detail = { addressHandle: firstAddressHandle };
+
+    expect(() => store.replaceOwnedPublication(
+      KernelPublicationManifest.empty,
+      new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(provenanceHandle),
+          new MaterializedProduct(
+            productHandle,
+            KernelVocabulary.Template.Source.key,
+            null,
+            null,
+            provenanceHandle,
+          ),
+        ], "final-currentness-reference-mutation:source"),
+        [publishProductDetail(slot, productHandle, detail)],
+      ),
+      owner,
+      {
+        validate(): void {},
+        validateCurrent: () => {
+          detail.addressHandle = secondAddressHandle;
+        },
+      },
+    )).toThrow(/structural references after staging/);
+    expect(store.read(productHandle)).toBeNull();
+    expect(store.productDetails.read(slot, productHandle)).toBeNull();
   });
 
   test("rejects hot-detail dependency mutation by a final validator", () => {

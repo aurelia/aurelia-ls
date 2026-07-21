@@ -1,5 +1,8 @@
 import type { KernelStore } from '../kernel/store.js';
-import type { KernelPublicationContext } from '../kernel/publication.js';
+import type {
+  ComputationLocus,
+  ComputationRun,
+} from '../kernel/computation-lifecycle.js';
 import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type {
@@ -100,6 +103,18 @@ export class AureliaAppWorldEmission {
   ) {}
 }
 
+/** Stable ownership locus for one app-root compiler world inside the atomic app computation. */
+export class AppRootCompilerWorldLocus implements ComputationLocus {
+  readonly kind = 'app-root-compiler-world';
+  readonly reconciliationKey: string;
+  readonly summary: string;
+
+  constructor(readonly appRootProductHandle: ProductHandle) {
+    this.reconciliationKey = appRootProductHandle;
+    this.summary = `Compiler world for app root ${appRootProductHandle}.`;
+  }
+}
+
 /** Composes the current configuration, DI, and compiler-world materializers without adding a new semantic layer. */
 export class AureliaAppWorldComposer {
   private readonly diWorldConstructor: DiWorldConstructor;
@@ -113,7 +128,7 @@ export class AureliaAppWorldComposer {
     /** Hot analysis store shared by the composed materializers. */
     readonly store: KernelStore,
     /** Publication owner for app-specific catalogs and compiler worlds. */
-    readonly publication: KernelPublicationContext,
+    readonly publication: ComputationRun,
     /** Stable framework catalogs borrowed by this app composition. */
     readonly support: FrameworkSupportCatalogs,
   ) {
@@ -274,7 +289,7 @@ class AppRootCompilerWorldFrame {
   private readonly templateCompilerKeyIdentityHandle: IdentityHandle;
 
   constructor(
-    publication: KernelPublicationContext,
+    private readonly publication: ComputationRun,
     private readonly compilerWorldMaterializer: TemplateCompilerWorldMaterializer,
     private readonly resourceVisibilityComposer: AppWorldResourceVisibilityComposer,
     private readonly configuration: ConfigurationKernelEmission,
@@ -329,7 +344,7 @@ class AppRootCompilerWorldFrame {
       visibleResources: resources,
       resourceDefinitions: this.resourceDefinitions,
     });
-    return this.compilerWorldMaterializer.construct(new TemplateCompilerWorldConstructionRequest(
+    const request = new TemplateCompilerWorldConstructionRequest(
       `app-root:${appRoot.productHandle}`,
       TemplateCompilerWorldKind.AppRoot,
       container,
@@ -342,7 +357,11 @@ class AppRootCompilerWorldFrame {
       appRoot.sourceAddressHandle,
       this.frameworkServiceCustomizations.attributeMapper,
       this.frameworkServiceCustomizations.nodeObserverLocator,
-    ));
+    );
+    const locus = new AppRootCompilerWorldLocus(appRoot.productHandle);
+    return this.publication.withChild(locus, () =>
+      this.compilerWorldMaterializer.construct(request)
+    );
   }
 }
 

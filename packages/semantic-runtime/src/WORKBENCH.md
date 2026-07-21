@@ -245,7 +245,7 @@ the query-claim layer. When a public query grows kernel products, first check th
 and telemetry output before adding another cache or eager projection.
 Telemetry pressure has already shown a few useful compression rules:
 type-member details can be hot children of a durable type-shape rather than durable products themselves; declaration-backed
-TypeChecker/evaluated-value type shapes can converge by checker key and declaration source while expression/binding rows
+TypeChecker/evaluated-value type shapes can converge by project-qualified semantic type key and declaration source while expression/binding rows
 own the user-facing source locus; checker-owned union/intersection keys can converge structurally when their
 constituents are source-independent; template-requested checker-returned types should keep `TypeChecker` origin instead
 of being mislabeled as synthetic; and kernel handle strings are session transport links that may compact long recursive

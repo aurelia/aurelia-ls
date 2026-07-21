@@ -40,6 +40,11 @@ export class ProjectCompilerOptionsEnvironment implements ComputationRead {
       changedFacets: currentRevision === this.observedRevision ? [] : ['toolchain-environment'],
     };
   }
+
+  tryRebaseCurrent(): ComputationRead | null {
+    const current = readProjectCompilerOptionsEnvironment();
+    return current.observedRevision === this.observedRevision ? current : null;
+  }
 }
 
 export class ProjectCompilerOptionsResult {

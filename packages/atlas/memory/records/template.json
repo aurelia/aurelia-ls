@@ -11,48 +11,42 @@
         "template",
         "expression"
       ],
-      "summary": "CheckerTypeProjector is the TypeChecker projection frontier for durable and canonicalized type shapes, hot members, related types, and synthetic type-system products.",
-      "rationale": "Expression, observation, template, and LSP-like inquiries should reuse one checker projection substrate instead of each producing local type summaries. This record complements the expression evaluator record by pointing at the lower-level shape publication layer. Telemetry showed that declaration-backed TypeChecker/evaluated-value surfaces should converge by checker key and declaration lane while caller-owned expression, binding, diagnostic, and cursor products preserve user-facing source loci. Checker-owned unions/intersections can also converge structurally when their constituents are source-independent. Synthetic expression/template shapes remain a separate convergence policy frontier because their identity is often produced by the runtime-shaped expression site.",
+      "summary": "CheckerTypeProjector is the TypeChecker projection frontier for stable semantic type shapes, Program-local carriers, product-owned hot members, related types, and synthetic products.",
+      "rationale": "Expression, observation, template, and IDE/MCP inquiries should reuse one checker projection substrate instead of producing local type summaries. Durable identity is project-qualified semantic shape identity; raw TypeScript objects remain tied to one Program. Declaration-backed and evaluated-value surfaces may converge when their semantic key and declaration lane agree, while caller-owned expression, binding, diagnostic, and cursor products preserve authored loci.",
       "guidance": [
-        "Start here when repeated type checker keys, hot type-member volume, durable type shapes, related indexed/iterated/call/construct types, synthetic type projections, or query-local TypeChecker projection retention appear in telemetry.",
-        "Use CheckerExpressionTypeEvaluator for expression semantics, but keep reusable checker shape publication in CheckerTypeProjector.",
-        "Checker keys for declared or library-backed generic surfaces must include the projected display/instantiation; declaration site alone is not enough for TypeChecker shape identity.",
-        "Do not use expression source as part of declaration-backed TypeChecker type identity just to preserve cursor loci; the caller-owned expression, binding, diagnostic, or cursor product should carry that source.",
-        "Keep declarationSourceAddressHandle as the navigation and owner-type repair lane for checker-backed shapes.",
-        "Template-requested checker-returned types should keep TypeChecker origin. Use SyntheticTemplateType only when the template/runtime substrate creates the shape rather than asking the TypeChecker for it.",
-        "Let checker-owned union/intersection keys converge structurally only when their constituents are source-independent; anonymous authored object/function shapes should remain source-owned.",
-        "Keep synthetic expression/template shapes source-owned until a structural synthetic-type identity policy proves it can preserve the lost runtime expression provenance.",
-        "If QueryClaimGraph disposal removes a query-local shape, evict stale projector index rows before returning a reused handle. `contract:type-projection-lifetime` proves the current type-shape index prunes and reprojects after marker disposal.",
-        "If type projection cost rises, treat it as inquiry-algebra or caching pressure before duplicating narrow type summaries."
+        "Start here when repeated semantic type keys, hot type-member volume, related indexed/iterated/call/construct types, synthetic projections, or Program-local carrier lifetime appear in telemetry.",
+        "Use CheckerExpressionTypeEvaluator for expression semantics, but keep reusable checker shape/member publication in CheckerTypeProjector.",
+        "Project TypeChecker carriers at logical-project-qualified semantic handles. Reject a visible shape or member from another checker generation rather than borrowing stale ts.Type or ts.Symbol objects.",
+        "Declared or library-backed generic surfaces must include display/instantiation in semantic identity; declaration location alone is not enough.",
+        "Do not use expression source as declaration-backed type identity merely to preserve cursor loci. Caller-owned rows carry the authored occurrence.",
+        "Keep declarationSourceAddressHandle as navigation and owner-repair evidence, but do not assume its current positional locator survives unrelated prefix edits.",
+        "Do not use getFullyQualifiedName as universal identity: local declarations and anonymous symbols collide. Re-enter stable lexical identity only through a shared evidence-backed declaration reconciler.",
+        "Let checker-owned union/intersection keys converge structurally only when constituents are source-independent; anonymous authored object/function shapes remain source-owned.",
+        "Projection lifetime is owned by the ordinary product/hot-detail catalogs and computation publication. Do not restore a projector sidecar cache or QueryClaimGraph-specific eviction path.",
+        "Treat increased projection cost as inquiry/scheduling pressure before duplicating narrow type summaries."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/checker-projector.ts",
           "symbolName": "CheckerTypeProjector",
-          "line": 212,
-          "summary": "TypeChecker shape and member projection class."
+          "summary": "Semantic type-shape and Program-local member-carrier projection."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/type-system/checker-projector.ts",
-          "symbolName": "typeProjectionSourceAddress",
-          "summary": "Chooses whether projection source participates in type-shape identity."
+          "filePath": "packages/semantic-runtime/src/type-system/declaration-source.ts",
+          "symbolName": "checkerDeclarationSourceProjectKey",
+          "summary": "Logical-project namespace shared by checker semantic identities."
         },
         {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/type-system/README.md",
-          "summary": "Type-shape convergence and source-lane watchpoints."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/scripts/app-telemetry.mjs",
-          "summary": "Reports repeated type checker keys, hot details, and phase/kernel growth."
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/type-system/README.md",
+          "summary": "Type identity, carrier lifetime, and declaration-locator watchpoints."
         },
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:type-projection-lifetime",
-          "summary": "Contract proving type-shape sidecar indexes mirror kernel product-detail disposal."
+          "summary": "Contract for fresh Program carriers at stable semantic handles and disposal/reprojection."
         }
       ],
       "liveChecks": [
@@ -65,7 +59,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-24"
+      "updatedAt": "2026-07-21"
     },
     {
       "id": "frontier:compiled-template-materializer",
@@ -3018,6 +3012,8 @@
         "Component and authoring container/world materialization must spend the project planner's publication context. Framework authoring support catalogs remain upstream inputs and should later be borrowed from their owning catalog authority, not reassigned to template-family ownership.",
         "Keep cohort identity independent of owner identity, but key project-level parent-world authority by owner plus cohort because owners in one app root can require different component worlds.",
         "Compare compiler-visible resource scopes with all semantic and witness fields, including definition detail, aliases, identities, visibility, and source address. Product-handle equality alone can hide stale detail.",
+        "Keep compiler-world, scope, service, parser, command, pattern, renderer, and issue equality in their product-detail slots. Do not reconstruct a whole-emission comparator in a materializer or scheduler.",
+        "Treat TemplateCompilerWorldEmission as the generation-local live-container frame. Its published semantic candidates may be distinct from retained canonical details; JavaScript object identity is not currentness or equality.",
         "ResourceDependencyReference currently lacks a per-entry source address. Until resource dependency provenance is sharpened, retain the depending definition as the honest broad admission carrier and do not present the dependency target declaration as the edge source.",
         "When a semantic local key becomes a generated filename, always retain a stable hash of the full key. Prefix truncation and punctuation normalization are both lossy projections that can alias distinct TypeScript overlay roots.",
         "Treat overlay origin keys and canonical generated paths as one-to-one identities at TypeSystem project admission. Coalesce only equivalent sources and reject conflicts instead of selecting the first source by order.",
@@ -3047,6 +3043,12 @@
           "filePath": "packages/semantic-runtime/src/template/compiler-read-view.ts",
           "symbolName": "TemplateCompilerWorldAuthority",
           "summary": "Retained parent-world currentness, including removed-world invalidation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/product-details.ts",
+          "symbolName": "TemplateProductDetails",
+          "summary": "Product-detail slots registering compiler-world and service semantic/witness comparison."
         },
         {
           "kind": "source",
@@ -3092,66 +3094,48 @@
         "api",
         "incrementality"
       ],
-      "summary": "A semantic app pins one atomic generation whose pre-template, family, and post-template children expose exact dependency ownership.",
-      "rationale": "Static evaluation, resources, configuration, DI, compiler/runtime/checker rows, observation, state, capability, router products, and their retained TypeScript-backed object graph are one logical public generation. The outer app computation commits that closure atomically while explicit pre-template, authored-family, and post-template child manifests preserve causal ownership for later activation. Candidates still reconstruct the complete fan-in until child carry and decision propagation are implemented.",
+      "summary": "A semantic app pins one atomic generation whose pre-template, family, and post-template children expose exact dependency ownership and explicit carry decisions.",
+      "rationale": "Static evaluation, resources, configuration, DI, compiler/runtime/checker rows, observation, state, capability, router products, and retained TypeScript-backed carriers form one public generation. The outer computation commits that closure atomically. Explicit pre-template, authored-family, and post-template children preserve causal ownership; eligible family children may be carried only after exact rebase and authoritative decision preview, while every other child reruns inside the same candidate.",
       "guidance": [
-        "One project app-analysis locus owns the current generation regardless of analysis depth or authoring policy. Those policies are replacement inputs, not parallel owners of the same stable handles.",
-        "A prepared AureliaAppWorldProjectEmission is run-bound and never public current state. Promote only after a successful lifecycle commit; rejected, stale, superseded, or throwing attempts preserve the previous current generation.",
-        "After commit, bind retained template/checker state to one generation authority. Replacement and disposal must revoke retained evaluator reads and lazy projections; do not retain a mix of run-backed, unguarded store-backed, and committed worlds behind different object paths.",
-        "AureliaAppWorldProjectEmission is the exact generation-owned fan-in, not a wrapper around a separately current template generation. Replacement or disposal makes the whole app emission stale.",
-        "SemanticApp queries, cache summaries, and template access must check currentness before reading kernel state. Retained query capabilities recheck that authority on every operation and rebuild a coherent app epoch rather than hot-swapping one domain underneath old fan-in.",
-        "Carry the exact complete-file revision that produced each inline or external template into resource metadata. Each authored-family child must validate its own current source and register those exact host reads; do not restore a global source-snapshot backup.",
-        "Keep pre-template, stable authored-family, and post-template ownership explicit beneath the atomic transaction. Phase-local input scopes and immutable carriers replace app-wide read replay; shared runtime/checker analysis remains post-owned until a finer SCC is proven.",
-        "Keep one AureliaAppWorldProjectComputationService and one ComputationLifecycleRegistry per SemanticRuntime/KernelStore. Do not create feature-local registries, dynamic cohort authorities, or independently committing family producers.",
-        "This complete-generation boundary is the correctness bridge to fine-grained scheduling. Child manifests do not themselves authorize reuse: explicit carry/rebase, authoritative publication decisions, and deterministic propagation must land before selective activation."
+        "One project app-analysis locus owns the current generation regardless of analysis depth or authoring policy. Those policies are replacement inputs, not parallel owners of stable handles.",
+        "A prepared AureliaAppWorldProjectEmission is run-bound and never public current state. Promote only after successful lifecycle commit; rejected, stale, superseded, or throwing attempts preserve the incumbent.",
+        "After commit, bind retained template/checker state to one generation authority. Replacement and disposal revoke retained evaluator reads and lazy projections.",
+        "Keep pre-template, stable authored-family, and post-template ownership explicit beneath one atomic transaction. Phase-local input scopes and immutable carriers replace app-wide read replay.",
+        "Carry exact authored-file revisions with template metadata and let each family validate its own current source. Do not restore a global source-snapshot backup.",
+        "Keep one AureliaAppWorldProjectComputationService and one ComputationLifecycleRegistry per SemanticRuntime/KernelStore. Do not add feature-local registries or independently committing family producers.",
+        "Selective activation is a technical child-plan decision, not a second public generation. Carry only after exact rebase and Retain preview; open closure, RefreshWitness, nontrivial SCCs, and incomplete dependencies rerun conservatively.",
+        "A generation-local execution emission may carry fresh live infrastructure while equal semantic product candidates resolve to retained canonical details. Do not use JavaScript object identity as an epoch boundary.",
+        "IDE, MCP, and future AOT consume the same coherent generation contract. Consumer cancellation, paging, cache budgets, and persistence may prioritize or retain generations but may not weaken no-mixed-generation truth."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/app-analysis-computation.ts",
           "symbolName": "AureliaAppWorldProjectComputationService",
-          "summary": "Preparation, commit, current authority, and lifetime reconciliation for complete app-analysis generations."
+          "summary": "Preparation, carry selection, commit, current authority, and retirement for app generations."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
           "symbolName": "AureliaAppWorldProjectEmission",
-          "summary": "Immutable pre/post app fan-in owned by one exact current app-analysis generation."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
-          "symbolName": "AureliaAppAnalysisPhaseLocus",
-          "summary": "Stable phase-child identity around authored template-family children."
+          "summary": "Immutable generation-owned app fan-in."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
           "symbolName": "TemplateCompilationProjectPass",
-          "summary": "Immutable plan, family-local compiler front doors, source validation, and shared post-template analysis."
+          "summary": "Phase-local family production and carry/rebase authority."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/runtime.ts",
           "symbolName": "SemanticApp",
-          "summary": "Public currentness guard and stale cache/cursor rebuilding boundary."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
-          "symbolName": "SemanticAppTemplateQueries",
-          "summary": "Revocable public template-query capability that spends the pinned generation on every operation."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/resources/custom-element-definition.ts",
-          "symbolName": "CustomElementTemplateDefinition",
-          "summary": "Template metadata carrying the exact authored-file revision that produced its markup."
+          "summary": "Public currentness boundary for app queries."
         },
         {
           "kind": "doc",
-          "path": "packages/semantic-runtime/src/template/README.md",
-          "summary": "Template-family ownership, phase boundaries, and exact compiler-to-runtime handoff."
+          "path": "packages/semantic-runtime/src/kernel/README.md",
+          "summary": "Atomic lifecycle, child carry, and comparison doctrine."
         }
       ],
       "liveChecks": [
@@ -3159,11 +3143,6 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/configuration/app-analysis-computation.ts",
           "symbolName": "AureliaAppWorldProjectComputationService"
-        },
-        {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
-          "symbolName": "AureliaAppAnalysisPhaseLocus"
         },
         {
           "kind": "source-declaration-exists",

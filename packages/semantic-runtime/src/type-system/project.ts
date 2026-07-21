@@ -160,6 +160,8 @@ export interface TypeSystemProjectBuildOptions {
    * controller, router, or plugin surfaces in TypeScript without growing a second checker setup path.
    */
   readonly overlaySources?: readonly TypeSystemOverlaySource[];
+  /** Prior checker project offered to TypeScript for supported structural Program reuse under a fresh input host. */
+  readonly previousProject?: TypeSystemProject | null;
 }
 
 interface TypeSystemSourceFileIndexes {
@@ -611,10 +613,11 @@ export class TypeSystemProjectBuilder {
       projectOptions.configRootFileNames,
       overlaySourceFiles,
     );
+    const previousProgram = reusablePreviousProgram(project, buildOptions.previousProject ?? null);
     const program = measureTypeSystemProjectPhase(
       phases,
       'program',
-      () => ts.createProgram(rootNames, options, host),
+      () => ts.createProgram(rootNames, options, host, previousProgram),
       (created) => created.getSourceFiles().length,
     );
     const checker = measureTypeSystemProjectPhase(phases, 'checker', () =>
@@ -679,6 +682,22 @@ export class TypeSystemProjectBuilder {
       inputReadScope,
     );
   }
+}
+
+function reusablePreviousProgram(
+  project: ProjectBootFrame,
+  previousProject: TypeSystemProject | null,
+): ts.Program | undefined {
+  if (previousProject == null) {
+    return undefined;
+  }
+  if (previousProject.project.projectKey !== project.projectKey) {
+    throw new Error(
+      `TypeScript Program reuse cannot cross logical projects: ${previousProject.project.projectKey} -> `
+      + `${project.projectKey}.`,
+    );
+  }
+  return previousProject.program;
 }
 
 function typeSystemProgramSourceFileIndex(sourceFiles: readonly ts.SourceFile[]): ReadonlyMap<string, ts.SourceFile> {

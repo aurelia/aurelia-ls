@@ -134,6 +134,31 @@ export class TemplateCompilerWorldEmission {
     readonly syntaxResources: readonly TemplateVisibleResource[],
     readonly records: readonly KernelStoreRecord[],
   ) {}
+
+  /** Preserve immutable compiler products while attaching the current generation's live DI container frame. */
+  forContainerGeneration(container: Container): TemplateCompilerWorldEmission {
+    return container === this.container
+      ? this
+      : new TemplateCompilerWorldEmission(
+          container,
+          this.world,
+          this.resourceScope,
+          this.templateCompiler,
+          this.resourceResolver,
+          this.expressionParser,
+          this.attributeMapper,
+          this.rendering,
+          this.attributeParser,
+          this.attributeParserMachine,
+          this.bindingCommandResolver,
+          this.attributePatterns,
+          this.bindingCommands,
+          this.runtimeRenderers,
+          this.issues,
+          this.syntaxResources,
+          this.records,
+        );
+  }
 }
 
 class CompilerWorldSourceSet {
@@ -296,14 +321,21 @@ export class TemplateCompilerWorldMaterializer {
   ) {}
 
   construct(input: TemplateCompilerWorldConstructionRequest): TemplateCompilerWorldEmission {
-    const emission = this.project(input);
-    this.store.publish(this.publicationFor(input, emission));
-    return emission;
+    return this.publish(input, this.project(input));
   }
 
   /** Build the same immutable world without publishing it, for validation against a current parent authority. */
   project(input: TemplateCompilerWorldConstructionRequest): TemplateCompilerWorldEmission {
     return this.recordsForWorld(input);
+  }
+
+  /** Publish an already-projected compiler world under the caller's current computation child. */
+  publish(
+    input: TemplateCompilerWorldConstructionRequest,
+    emission: TemplateCompilerWorldEmission,
+  ): TemplateCompilerWorldEmission {
+    this.store.publish(this.publicationFor(input, emission));
+    return emission;
   }
 
   private publicationFor(

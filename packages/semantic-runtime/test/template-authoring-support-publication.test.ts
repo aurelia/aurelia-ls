@@ -15,6 +15,7 @@ import {
   ComputationCommitState,
   ComputationLifecycleRegistry,
 } from '../src/kernel/computation-lifecycle.js';
+import { KernelPublicationDecisionKind } from '../src/kernel/publication.js';
 import { KernelStore } from '../src/kernel/store.js';
 import { RuntimeHtmlBuiltInResourceCatalogs } from '../src/resources/built-in-resources.js';
 import { BuiltInResourceTargetProjectionMaterializer } from '../src/resources/built-in-resource-catalog-materializer.js';
@@ -27,6 +28,7 @@ import {
   RuntimeRendererPackage,
 } from '../src/template/runtime-renderer.js';
 import { TypeSystemProjectBuilder } from '../src/type-system/project.js';
+import { TypeSystemProductDetails } from '../src/type-system/product-details.js';
 
 describe('template authoring support publication', () => {
   test('keeps canonical support independent of the app computation that borrows it', () => {
@@ -134,12 +136,23 @@ describe('template authoring support publication', () => {
     const secondProjection = new BuiltInResourceTargetProjectionMaterializer(store, secondRun)
       .project(canonical, secondTypeSystem);
     const secondDefinition = projectedDefinitionFor(secondProjection, canonicalResource.resource.name);
-    expect(secondDefinition.productHandle).not.toBe(firstDefinition.productHandle);
-    expect(secondRun.commit().state).toBe(ComputationCommitState.Committed);
-    expect(store.read(firstDefinition.productHandle!)).toBeNull();
-    expect(store.productDetails.read(ResourceProductDetails.Definition, firstDefinition.productHandle!)).toBeNull();
-    expect(store.productDetails.read(ResourceProductDetails.Definition, secondDefinition.productHandle!))
-      .toBe(secondDefinition);
+    expect(secondDefinition.productHandle).toBe(firstDefinition.productHandle);
+    expect(secondDefinition.target?.targetType?.productHandle)
+      .toBe(firstDefinition.target?.targetType?.productHandle);
+    const secondCommit = secondRun.commit();
+    expect(secondCommit.state).toBe(ComputationCommitState.Committed);
+    expect(secondCommit.transition.publications).toContainEqual(expect.objectContaining({
+      handle: firstDefinition.productHandle,
+      decision: KernelPublicationDecisionKind.Retain,
+    }));
+    expect(store.productDetails.read(ResourceProductDetails.Definition, firstDefinition.productHandle!))
+      .toBe(firstDefinition);
+    const targetTypeProductHandle = firstDefinition.target?.targetType?.productHandle ?? null;
+    expect(targetTypeProductHandle).not.toBeNull();
+    expect(targetTypeProductHandle == null ? null : store.productDetails.read(
+      TypeSystemProductDetails.TypeShape,
+      targetTypeProductHandle,
+    )?.carrier?.checker).toBe(secondTypeSystem.checker);
     expect(store.productDetails.read(
       ResourceProductDetails.Definition,
       canonicalResource.definition.productHandle,

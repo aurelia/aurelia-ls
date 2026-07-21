@@ -1064,7 +1064,7 @@ export class CheckerExpressionTypeEvaluator {
     if (no.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return no;
     }
-    if (yes.typeShape.checkerKey === no.typeShape.checkerKey) {
+    if (yes.typeShape.semanticKey === no.typeShape.semanticKey) {
       return yes;
     }
     return this.support.evaluateTypeUnion(

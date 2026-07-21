@@ -59,7 +59,7 @@ function lazyBindableTypeSurface(
   const value = access.memberValueAccess(
     targetType,
     bindable.name,
-    `bindable-type-surface:${localKeyPart(target.targetType?.checkerKey ?? target.localName ?? 'anonymous')}:${localKeyPart(bindable.name)}`,
+    `bindable-type-surface:${localKeyPart(target.targetType?.semanticKey ?? target.localName ?? 'anonymous')}:${localKeyPart(bindable.name)}`,
   );
   return readCheckerReferenceSurface(store, value.valueType?.toReference() ?? value.valueReference);
 }

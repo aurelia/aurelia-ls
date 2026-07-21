@@ -627,7 +627,7 @@ export class TemplateScopeTypeProjector {
       return null;
     }
     return this.typeProjector.ensureProjection({
-      localKey: `template-controller-match-array-element:${reference.productHandle ?? reference.checkerKey ?? reference.display ?? 'open'}`,
+      localKey: `template-controller-match-array-element:${reference.productHandle ?? reference.semanticKey ?? reference.display ?? 'open'}`,
       checker: carrier.checker,
       type: elementType,
       origin: CheckerTypeProjectionOrigin.TypeChecker,

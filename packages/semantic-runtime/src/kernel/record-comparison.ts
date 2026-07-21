@@ -192,8 +192,8 @@ export function compareKernelRecords(
       const candidate = next as typeof previous;
       return semanticThenWitness(
         sameValues(
-          [previous.productKindKey, previous.checkerKey, previous.ownerHandle, previous.display],
-          [candidate.productKindKey, candidate.checkerKey, candidate.ownerHandle, candidate.display],
+          [previous.productKindKey, previous.semanticTypeKey, previous.ownerHandle, previous.display],
+          [candidate.productKindKey, candidate.semanticTypeKey, candidate.ownerHandle, candidate.display],
         ),
         sameValues([previous.sourceAddressHandle], [candidate.sourceAddressHandle]),
       );

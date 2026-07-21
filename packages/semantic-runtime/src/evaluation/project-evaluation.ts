@@ -250,6 +250,17 @@ export class StaticProjectEvaluationComputationProfile<TContext> implements Comp
       changedFacets: [],
     };
   }
+
+  tryRebaseCurrent(): ComputationRead | null {
+    return this.validate().isCurrent
+      ? new StaticProjectEvaluationComputationProfile(
+          this.key,
+          this.revision,
+          this.summary,
+          this.prepareRun,
+        )
+      : null;
+  }
 }
 
 export const enum StaticProjectEvaluationAcquisitionKind {
@@ -391,6 +402,10 @@ class StaticEvaluationAmbientGlobalGeneration implements ComputationRead {
           ? ['generation']
           : [...new Set(invalidInputs.flatMap((validation) => validation.changedFacets))],
     };
+  }
+
+  tryRebaseCurrent(): ComputationRead | null {
+    return this.validate().isCurrent ? this : null;
   }
 
   isCurrent(): boolean {
@@ -561,6 +576,10 @@ export class StaticProjectEvaluationGeneration<TContext> implements ComputationR
           ? ['generation']
           : [...new Set(invalidInputs.flatMap((validation) => validation.changedFacets))],
     };
+  }
+
+  tryRebaseCurrent(): ComputationRead | null {
+    return this.validate().isCurrent ? this : null;
   }
 
   private inputClosureValidations(): readonly ComputationReadValidation[] {

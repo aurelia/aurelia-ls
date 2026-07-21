@@ -9,6 +9,7 @@ import type { ExpressionParseContext } from '../expression/expression-parse-supp
 import type { ExpressionParseResult } from '../expression/parse-result-algebra.js';
 import type { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
+import { resourceDefinitionComparisonRevisionParts } from '../resources/product-details.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
 import type { TemplateCompilableResourceDefinition } from '../resources/resource-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
@@ -26,6 +27,8 @@ import type {
 } from './attribute-syntax.js';
 import type { TemplateAttributeMapperNode } from './attribute-mapper.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
+
+type TemplateCompilerClosureReadView = Pick<KernelMaterializationReadView, 'readMaterializationsByOwner'>;
 
 export const enum TemplateCompilerReadKind {
   /** Compiler-world envelope and service topology consumed by compilation-unit publication. */
@@ -122,11 +125,13 @@ export class TemplateCompilerReadObservation implements ComputationRead {
     readonly readKind: TemplateCompilerReadKind,
     readonly readKey: string,
     readonly canonicalKey: string,
+    readonly compilerScopeIdentityHandle: IdentityHandle,
     /** Ordered semantic and witness parts that explain the observed positive result; empty means absence. */
     readonly resultParts: readonly string[],
     readonly closure: TemplateCompilerScopeClosure,
     private readonly observed: TemplateCompilerReadRevision,
     private readonly readCurrent: () => TemplateCompilerReadRevision,
+    private readonly readCurrentResult: (world: TemplateCompilerWorldEmission) => readonly string[],
   ) {
     this.observedRevision = observed.value;
   }
@@ -143,6 +148,38 @@ export class TemplateCompilerReadObservation implements ComputationRead {
       currentRevision: current.value,
       changedFacets,
     };
+  }
+
+  tryRebaseCurrent(): ComputationRead | null {
+    // The compiler world is candidate-owned; callers must supply the current owner/cohort authority explicitly.
+    return null;
+  }
+
+  tryRebaseTo(
+    store: TemplateCompilerClosureReadView,
+    authority: TemplateCompilerWorldAuthority,
+  ): TemplateCompilerReadObservation | null {
+    const world = authority.readCurrent();
+    if (world == null || world.resourceScope.identityHandle !== this.compilerScopeIdentityHandle) {
+      return null;
+    }
+    const closure = compilerScopeClosure(store, world);
+    const resultParts = this.readCurrentResult(world);
+    const observed = readRevision(compilerScopeRevision(world), closure, resultParts);
+    if (observed.value !== this.observedRevision) {
+      return null;
+    }
+    return new TemplateCompilerReadObservation(
+      this.readKind,
+      this.readKey,
+      this.canonicalKey,
+      this.compilerScopeIdentityHandle,
+      resultParts,
+      closure,
+      observed,
+      () => currentTemplateCompilerReadRevision(store, authority, this.readCurrentResult),
+      this.readCurrentResult,
+    );
   }
 }
 
@@ -347,6 +384,7 @@ export class TemplateCompilerReadView {
       kind,
       readKey,
       canonicalKey,
+      this.world.resourceScope.identityHandle,
       resultParts,
       this.observedClosure,
       observed,
@@ -358,6 +396,7 @@ export class TemplateCompilerReadView {
           current.world == null ? ['compiler-world-absent'] : readCurrentResult(current.world),
         );
       },
+      readCurrentResult,
     );
     const existing = this.readsByKey.get(readKey);
     if (existing != null && existing.observedRevision !== observation.observedRevision) {
@@ -392,6 +431,29 @@ export class TemplateCompilerReadView {
   }
 }
 
+function currentTemplateCompilerReadRevision(
+  store: TemplateCompilerClosureReadView,
+  authority: TemplateCompilerWorldAuthority,
+  readCurrentResult: (world: TemplateCompilerWorldEmission) => readonly string[],
+): TemplateCompilerReadRevision {
+  const world = authority.readCurrent();
+  if (world == null) {
+    return readRevision(
+      'compiler-world-absent',
+      new TemplateCompilerScopeClosure(
+        TemplateCompilerScopeClosureState.Open,
+        [],
+        [],
+        [],
+        [],
+      ),
+      ['compiler-world-absent'],
+    );
+  }
+  const closure = compilerScopeClosure(store, world);
+  return readRevision(compilerScopeRevision(world), closure, readCurrentResult(world));
+}
+
 class TemplateCompilerReadValidationState {
   constructor(
     readonly world: TemplateCompilerWorldEmission | null,
@@ -401,7 +463,7 @@ class TemplateCompilerReadValidationState {
 }
 
 function compilerScopeClosure(
-  store: KernelMaterializationReadView,
+  store: TemplateCompilerClosureReadView,
   world: TemplateCompilerWorldEmission,
 ): TemplateCompilerScopeClosure {
   const containerOwners: IdentityHandle[] = [];
@@ -660,114 +722,7 @@ function templateCompilerResultParts(
 function resourceDefinitionResultParts(
   definition: TemplateCompilableResourceDefinition | null,
 ): readonly string[] {
-  if (definition == null) {
-    return ['no-definition'];
-  }
-  const shared = [
-    definition.type,
-    definition.productHandle ?? '',
-    definition.identityHandle ?? '',
-    definition.sourceAddressHandle ?? '',
-    ...targetResultParts(definition.target),
-    definition.name,
-    ...definition.aliases.flatMap((alias) => [
-      alias.name, alias.addressHandle ?? '', alias.provenanceHandle ?? '',
-    ]),
-    definition.key,
-  ];
-  return definition.type === ResourceDefinitionKind.CustomElement
-    ? [
-      ...shared,
-      definition.capture.kind,
-      ...targetResultParts(definition.capture.predicateTarget),
-      ...templateDefinitionResultParts(definition.template),
-      ...definition.instructions.flatMap(instructionReferenceResultParts),
-      ...definition.dependencies.flatMap(dependencyReferenceResultParts),
-      definition.injectable ?? '',
-      scalarPart(definition.needsCompile),
-      ...definition.surrogates.flatMap(instructionReferenceResultParts),
-      scalarPart(definition.containerless),
-      definition.shadowOptions?.mode ?? '',
-      scalarPart(definition.hasSlots),
-      scalarPart(definition.enhance),
-      ...definition.watches.flatMap(watchDefinitionResultParts),
-      ...targetResultParts(definition.processContent),
-      scalarPart(definition.strict),
-      definition.nameSourceAddressHandle ?? '',
-      ...fieldProvenanceResultParts(definition.fieldProvenance),
-    ]
-    : [
-      ...shared,
-      scalarPart(definition.isTemplateController),
-      scalarPart(definition.noMultiBindings),
-      definition.containerStrategy,
-      definition.defaultProperty,
-    ];
-}
-
-function templateDefinitionResultParts(
-  template: CustomElementDefinition['template'],
-): readonly string[] {
-  return template == null
-    ? ['no-template']
-    : [
-      template.kind,
-      template.markup ?? '',
-      template.addressHandle ?? '',
-      ...(template.sourceMap == null
-        ? ['no-source-map']
-        : [
-          String(template.sourceMap.decodedLength),
-          ...template.sourceMap.decodedToSourceOffsets.map(String),
-        ]),
-    ];
-}
-
-function instructionReferenceResultParts(
-  instruction: CustomElementDefinition['instructions'][number],
-): readonly string[] {
-  return [instruction.productHandle];
-}
-
-function dependencyReferenceResultParts(
-  dependency: CustomElementDefinition['dependencies'][number],
-): readonly string[] {
-  return [
-    dependency.identityHandle ?? '',
-    dependency.keyName ?? '',
-    dependency.moduleKey ?? '',
-    dependency.localName ?? '',
-    dependency.dependencyKind,
-    dependency.registryKind ?? '',
-  ];
-}
-
-function watchDefinitionResultParts(
-  watch: CustomElementDefinition['watches'][number],
-): readonly string[] {
-  return [
-    watch.expression.kind,
-    ...watchPropertyKeyResultParts(watch.expression.propertyKey),
-    ...targetResultParts(watch.expression.target),
-    watch.callback.kind,
-    ...watchPropertyKeyResultParts(watch.callback.methodName),
-    ...targetResultParts(watch.callback.target),
-    watch.flush,
-    ...fieldProvenanceResultParts(watch.fieldProvenance),
-  ];
-}
-
-function watchPropertyKeyResultParts(
-  propertyKey: CustomElementDefinition['watches'][number]['expression']['propertyKey'],
-): readonly string[] {
-  return propertyKey == null
-    ? ['no-property-key']
-    : [
-      propertyKey.kind,
-      propertyKey.text ?? '',
-      propertyKey.number == null ? '' : String(propertyKey.number),
-      ...targetResultParts(propertyKey.target),
-    ];
+  return resourceDefinitionComparisonRevisionParts(definition);
 }
 
 function bindableReferenceResultParts(
@@ -864,7 +819,7 @@ function targetResultParts(target: ResourceTargetReference | null): readonly str
     target.declarationSourceAddressHandle ?? '',
     target.targetType?.productHandle ?? '',
     target.targetType?.identityHandle ?? '',
-    target.targetType?.checkerKey ?? '',
+    target.targetType?.semanticKey ?? '',
     target.targetType?.display ?? '',
     target.targetType?.shapeKind ?? '',
     target.targetType?.origin ?? '',

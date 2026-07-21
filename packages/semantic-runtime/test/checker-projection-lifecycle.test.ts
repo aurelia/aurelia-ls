@@ -15,6 +15,7 @@ import {
   ComputationLifecycleRegistry,
   type ComputationLocus,
 } from '../src/kernel/computation-lifecycle.js';
+import { KernelPublicationDecisionKind } from '../src/kernel/publication.js';
 import { KernelStore } from '../src/kernel/store.js';
 import { SourceSpanRole } from '../src/kernel/address.js';
 import { CheckerTypeProjector } from '../src/type-system/checker-projector.js';
@@ -24,10 +25,133 @@ import {
   registerCheckerDeclarationSourceContext,
   sourceSpanForCheckerNode,
 } from '../src/type-system/declaration-source.js';
-import { projectTypeSystemProgramSources } from '../src/type-system/program-source-authority.js';
+import {
+  projectTypeSystemProgramSources,
+  TypeSystemProgramSourceAuthority,
+  type TypeSystemProgramSourceCatalog,
+} from '../src/type-system/program-source-authority.js';
 import { TypeSystemProductDetails } from '../src/type-system/product-details.js';
 
 describe('checker projection lifecycle', () => {
+  test('keeps semantic handles stable while replacing fresh Program carriers atomically', () => {
+    const sourceText = `const viewModel = { item: 'Featured' };`;
+    const store = new KernelStore('checker-projection-stable-carrier');
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const programSources = new TypeSystemProgramSourceAuthority(
+      store,
+      lifecycle,
+      'checker-projection-stable-carrier',
+    );
+    const firstFixture = checkerFixture(sourceText, 'stable-projection-project', programSources);
+    const firstRun = lifecycle.begin(locus('stable-carrier'));
+    const first = new CheckerTypeProjector(store, firstRun).ensureProjection({
+      localKey: 'view-model',
+      checker: firstFixture.checker,
+      type: firstFixture.checker.getTypeAtLocation(firstFixture.declaration.name),
+      sourceNode: firstFixture.declaration,
+    });
+    const firstMember = first.members.find((member) => member.name === 'item') ?? null;
+    expect(firstMember).not.toBeNull();
+    expect(firstRun.commit().state).toBe(ComputationCommitState.Committed);
+
+    const abortedFixture = checkerFixture(sourceText, 'stable-projection-project', programSources);
+    const abortedRun = lifecycle.begin(locus('stable-carrier'));
+    const aborted = new CheckerTypeProjector(store, abortedRun).ensureProjection({
+      localKey: 'view-model',
+      checker: abortedFixture.checker,
+      type: abortedFixture.checker.getTypeAtLocation(abortedFixture.declaration.name),
+      sourceNode: abortedFixture.declaration,
+    });
+    expect(aborted.productHandle).toBe(first.productHandle);
+    expect(aborted.identityHandle).toBe(first.identityHandle);
+    expect(aborted.members[0]?.detailHandle).toBe(firstMember?.detailHandle);
+    expect(aborted.carrier?.checker).toBe(abortedFixture.checker);
+    expect(store.readProductDetail(TypeSystemProductDetails.TypeShape, first.productHandle)).toBe(first);
+    abortedRun.abort();
+    expect(store.readProductDetail(TypeSystemProductDetails.TypeShape, first.productHandle)).toBe(first);
+
+    const nextFixture = checkerFixture(sourceText, 'stable-projection-project', programSources);
+    const nextRun = lifecycle.begin(locus('stable-carrier'));
+    const next = new CheckerTypeProjector(store, nextRun).ensureProjection({
+      localKey: 'view-model',
+      checker: nextFixture.checker,
+      type: nextFixture.checker.getTypeAtLocation(nextFixture.declaration.name),
+      sourceNode: nextFixture.declaration,
+    });
+    const nextMember = next.members.find((member) => member.name === 'item') ?? null;
+    expect(next.productHandle).toBe(first.productHandle);
+    expect(next.identityHandle).toBe(first.identityHandle);
+    expect(next.semanticKey).toBe(first.semanticKey);
+    expect(nextMember?.detailHandle).toBe(firstMember?.detailHandle);
+    expect(next).not.toBe(first);
+    expect(nextMember).not.toBe(firstMember);
+    expect(next.carrier?.checker).toBe(nextFixture.checker);
+    expect(nextMember?.carrier?.checker).toBe(nextFixture.checker);
+    const committed = nextRun.commit();
+    expect(committed.state).toBe(ComputationCommitState.Committed);
+    expect(committed.transition.publications).toContainEqual(expect.objectContaining({
+      handle: next.productHandle,
+      decision: KernelPublicationDecisionKind.Replace,
+    }));
+    expect(committed.transition.publications).toContainEqual(expect.objectContaining({
+      handle: nextMember?.detailHandle,
+      decision: KernelPublicationDecisionKind.Replace,
+    }));
+    expect(store.readProductDetail(TypeSystemProductDetails.TypeShape, next.productHandle)).toBe(next);
+  });
+
+  test('namespaces equal checker types by logical project rather than Program epoch', () => {
+    const sourceText = `const viewModel = { item: 'Featured' };`;
+    const firstFixture = checkerFixture(sourceText, 'projection-project-a');
+    const secondFixture = checkerFixture(sourceText, 'projection-project-b');
+    const store = new KernelStore('checker-projection-project-namespace');
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const firstRun = lifecycle.begin(locus('projection-project-a'));
+    const first = new CheckerTypeProjector(store, firstRun).ensureProjection({
+      localKey: 'view-model',
+      checker: firstFixture.checker,
+      type: firstFixture.checker.getTypeAtLocation(firstFixture.declaration.name),
+      sourceNode: firstFixture.declaration,
+    });
+    expect(firstRun.commit().state).toBe(ComputationCommitState.Committed);
+    const secondRun = lifecycle.begin(locus('projection-project-b'));
+    const second = new CheckerTypeProjector(store, secondRun).ensureProjection({
+      localKey: 'view-model',
+      checker: secondFixture.checker,
+      type: secondFixture.checker.getTypeAtLocation(secondFixture.declaration.name),
+      sourceNode: secondFixture.declaration,
+    });
+    expect(second.productHandle).not.toBe(first.productHandle);
+    expect(second.identityHandle).not.toBe(first.identityHandle);
+    expect(second.semanticKey).not.toBe(first.semanticKey);
+    expect(secondRun.commit().state).toBe(ComputationCommitState.Committed);
+  });
+
+  test('rejects borrowing a stale hot carrier before its owner refreshes the projection', () => {
+    const sourceText = `const viewModel = { item: 'Featured' };`;
+    const firstFixture = checkerFixture(sourceText, 'stale-projection-project');
+    const nextFixture = checkerFixture(sourceText, 'stale-projection-project');
+    const store = new KernelStore('checker-projection-stale-borrow');
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const owner = lifecycle.begin(locus('stale-carrier-owner'));
+    new CheckerTypeProjector(store, owner).ensureProjection({
+      localKey: 'view-model',
+      checker: firstFixture.checker,
+      type: firstFixture.checker.getTypeAtLocation(firstFixture.declaration.name),
+      sourceNode: firstFixture.declaration,
+    });
+    expect(owner.commit().state).toBe(ComputationCommitState.Committed);
+
+    const borrower = lifecycle.begin(locus('stale-carrier-borrower'));
+    expect(() => new CheckerTypeProjector(store, borrower).ensureProjection({
+      localKey: 'view-model',
+      checker: nextFixture.checker,
+      type: nextFixture.checker.getTypeAtLocation(nextFixture.declaration.name),
+      sourceNode: nextFixture.declaration,
+    })).toThrow('belongs to a different TypeChecker epoch');
+    borrower.abort();
+  });
+
   test('resolves newly projected nested shapes inside one staged generation', () => {
     const { checker, declaration } = checkerFixture(`
       const viewModel = {
@@ -123,7 +247,11 @@ function locus(owner: string): ComputationLocus {
   };
 }
 
-function checkerFixture(sourceText: string): {
+function checkerFixture(
+  sourceText: string,
+  projectKey = 'checker-projection-lifecycle',
+  programSources: TypeSystemProgramSourceCatalog = projectTypeSystemProgramSources,
+): {
   readonly checker: ts.TypeChecker;
   readonly declaration: ts.VariableDeclaration;
 } {
@@ -144,7 +272,7 @@ function checkerFixture(sourceText: string): {
     options: { noLib: true, strict: true },
     host: compilerHost,
   });
-  const statement = sourceFile.statements[0];
+  const statement = sourceFile.statements.find(ts.isVariableStatement);
   if (!ts.isVariableStatement(statement)) {
     throw new Error('Expected checker fixture variable statement.');
   }
@@ -155,7 +283,7 @@ function checkerFixture(sourceText: string): {
   const checker = program.getTypeChecker();
   registerCheckerDeclarationSourceContext(
     checker,
-    new CheckerDeclarationSourceContext('checker-projection-lifecycle', projectTypeSystemProgramSources, new Set()),
+    new CheckerDeclarationSourceContext(projectKey, programSources, new Set()),
   );
   return { checker, declaration };
 }

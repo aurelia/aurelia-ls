@@ -87,6 +87,12 @@ export class AureliaAppWorldProjectGeneration {
     this.requireCurrent();
     return this.currentEmission;
   }
+
+  /** Private replacement input; unlike the public emission it may be read while source inputs are temporarily stale. */
+  readCommittedEmission(): AureliaAppWorldProjectEmission {
+    this.authority.requireCurrent();
+    return this.currentEmission;
+  }
 }
 
 /** Current committed app generation at one project locus. */
@@ -259,6 +265,8 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
     const appEvaluationProfile = appEvaluationAccess.readProfile();
     const conventionToolingEvaluationProfile = conventionToolingEvaluationAccess.readProfile();
     const locus = new AureliaAppAnalysisLocus(project.projectKey);
+    const authority = this.authorityFor(project.projectKey);
+    const incumbent = authority.committed()?.readCommittedEmission() ?? null;
     const run = this.lifecycle.begin(locus);
     try {
       run.guardCurrent(project.inputGeneration.currentnessGuardKey, project.inputGeneration);
@@ -277,10 +285,11 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
           conventionToolingEvaluationAccess.generation,
         ],
         options,
+        incumbent,
       );
       return new AureliaAppWorldProjectComputationAttempt(
         run,
-        this.authorityFor(project.projectKey),
+        authority,
         locus,
         appEvaluationAccess,
         conventionToolingEvaluationAccess,

@@ -5,15 +5,22 @@ import {
   kernelProductDetailReference,
   kernelRecordReferences,
   mergeKernelDetailReferences,
+  sameKernelDetailReferences,
   type KernelDetailReference,
 } from '../kernel/detail-references.js';
+import {
+  KernelPublicationDecisionKind,
+  type KernelComparablePublicationDecision,
+  type KernelPublicationComparisonContext,
+} from '../kernel/publication-comparison.js';
+import { KernelPublicationSurface } from '../kernel/publication-surface.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import { TemplateDetailDescriptors } from '../template/detail-descriptors.js';
 import { checkerTypeReferenceKernelReferences } from '../type-system/structural-references.js';
-import type {
+import {
   BindableDefinition,
-  BindableDefinitionContribution,
-  BindableSetterDefinition,
+  type BindableDefinitionContribution,
+  type BindableSetterDefinition,
 } from './bindable-definition.js';
 import type {
   BuiltInResourceCatalog,
@@ -291,17 +298,21 @@ function thinNamedDefinitionReferences(
 function resourceDefinitionReferences(
   definition: FullResourceDefinition,
 ): readonly KernelDetailReference[] {
+  let definitionReferences: readonly KernelDetailReference[];
   switch (definition.type) {
     case ResourceDefinitionKind.CustomElement:
-      return customElementReferences(definition);
+      definitionReferences = customElementReferences(definition);
+      break;
     case ResourceDefinitionKind.CustomAttribute:
-      return customAttributeReferences(definition);
+      definitionReferences = customAttributeReferences(definition);
+      break;
     case ResourceDefinitionKind.ValueConverter:
     case ResourceDefinitionKind.BindingBehavior:
     case ResourceDefinitionKind.BindingCommand:
-      return thinNamedDefinitionReferences(definition);
+      definitionReferences = thinNamedDefinitionReferences(definition);
+      break;
     case ResourceDefinitionKind.AttributePattern:
-      return mergeKernelDetailReferences(
+      definitionReferences = mergeKernelDetailReferences(
         resourceTargetReferenceReferences(definition.target),
         definition.patterns.flatMap((pattern) => kernelRecordReferences(
           pattern.addressHandle,
@@ -317,7 +328,797 @@ function resourceDefinitionReferences(
         )),
         kernelFieldProvenanceReferences(definition.fieldProvenance),
       );
+      break;
   }
+  return mergeKernelDetailReferences(
+    definitionReferences,
+    kernelRecordReferences(definition.sourceAddressHandle),
+  );
+}
+
+class ResourceDefinitionReferenceProjection {
+  readonly semantic: readonly KernelDetailReference[];
+  readonly witness: readonly KernelDetailReference[];
+
+  constructor(
+    all: readonly KernelDetailReference[],
+    witness: readonly KernelDetailReference[],
+  ) {
+    const normalizedWitness = mergeKernelDetailReferences(witness);
+    const allKeys = new Set(all.map((reference) => reference.key));
+    const unownedWitness = normalizedWitness.find((reference) => !allKeys.has(reference.key)) ?? null;
+    if (unownedWitness != null) {
+      throw new Error(`Resource witness reference ${unownedWitness.key} is absent from its structural closure.`);
+    }
+    const witnessKeys = new Set(normalizedWitness.map((reference) => reference.key));
+    this.semantic = Object.freeze(all.filter((reference) => !witnessKeys.has(reference.key)));
+    this.witness = normalizedWitness;
+    Object.freeze(this);
+  }
+}
+
+function resourceDefinitionReferenceProjection(
+  definition: FullResourceDefinition,
+): ResourceDefinitionReferenceProjection {
+  return new ResourceDefinitionReferenceProjection(
+    resourceDefinitionReferences(definition),
+    resourceDefinitionWitnessReferences(definition),
+  );
+}
+
+function resourceTargetWitnessReferences(
+  target: ResourceTargetReference | null,
+): readonly KernelDetailReference[] {
+  return target == null
+    ? []
+    : kernelRecordReferences(
+        target.addressHandle,
+        target.declarationSourceAddressHandle,
+        target.targetType?.sourceAddressHandle,
+      );
+}
+
+function bindableWitnessReferences(
+  bindable: BindableDefinition | BindableDefinitionContribution,
+): readonly KernelDetailReference[] {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(
+      bindable.sourceAddressHandle,
+      bindable.nameSourceAddressHandle,
+      bindable.attributeSourceAddressHandle,
+      bindable.callbackSourceAddressHandle,
+      bindable.modeSourceAddressHandle,
+      bindable.setSourceAddressHandle,
+    ),
+    resourceTargetWitnessReferences(bindable.set?.target ?? null),
+    bindable instanceof BindableDefinition
+      ? resourceTargetWitnessReferences(bindable.propertyTarget)
+      : [],
+    bindable instanceof BindableDefinition
+      ? resourceTargetWitnessReferences(bindable.callbackTarget)
+      : [],
+    kernelFieldProvenanceReferences(bindable.fieldProvenance),
+  );
+}
+
+function watchPropertyKeyWitnessReferences(
+  propertyKey: WatchPropertyKeyDefinition | null,
+): readonly KernelDetailReference[] {
+  return resourceTargetWitnessReferences(propertyKey?.target ?? null);
+}
+
+function watchExpressionWitnessReferences(
+  expression: WatchExpressionDefinition | null,
+): readonly KernelDetailReference[] {
+  return expression == null
+    ? []
+    : mergeKernelDetailReferences(
+        watchPropertyKeyWitnessReferences(expression.propertyKey),
+        resourceTargetWitnessReferences(expression.target),
+      );
+}
+
+function watchCallbackWitnessReferences(
+  callback: WatchCallbackDefinition | null,
+): readonly KernelDetailReference[] {
+  return callback == null
+    ? []
+    : mergeKernelDetailReferences(
+        watchPropertyKeyWitnessReferences(callback.methodName),
+        resourceTargetWitnessReferences(callback.target),
+      );
+}
+
+function watchWitnessReferences(
+  watch: WatchDefinition | WatchDefinitionContribution,
+): readonly KernelDetailReference[] {
+  return mergeKernelDetailReferences(
+    watchExpressionWitnessReferences(watch.expression),
+    watchCallbackWitnessReferences(watch.callback),
+    kernelFieldProvenanceReferences(watch.fieldProvenance),
+  );
+}
+
+function customElementContributionWitnessReferences(
+  contribution: CustomElementDefinitionContribution,
+): readonly KernelDetailReference[] {
+  return mergeKernelDetailReferences(
+    resourceTargetWitnessReferences(contribution.target),
+    contribution.aliases.flatMap(resourceAliasReferences),
+    resourceTargetWitnessReferences(contribution.capture?.predicateTarget ?? null),
+    templateReferences(contribution.template),
+    contribution.bindables.flatMap(bindableWitnessReferences),
+    contribution.watches.flatMap(watchWitnessReferences),
+    resourceTargetWitnessReferences(contribution.processContent),
+    kernelFieldProvenanceReferences(contribution.fieldProvenance),
+  );
+}
+
+function customAttributeContributionWitnessReferences(
+  contribution: CustomAttributeDefinitionContribution,
+): readonly KernelDetailReference[] {
+  return mergeKernelDetailReferences(
+    resourceTargetWitnessReferences(contribution.target),
+    contribution.aliases.flatMap(resourceAliasReferences),
+    contribution.bindables.flatMap(bindableWitnessReferences),
+    contribution.watches.flatMap(watchWitnessReferences),
+    kernelFieldProvenanceReferences(contribution.fieldProvenance),
+  );
+}
+
+function resourceDefinitionWitnessReferences(
+  definition: FullResourceDefinition,
+): readonly KernelDetailReference[] {
+  const shared = mergeKernelDetailReferences(
+    kernelRecordReferences(definition.sourceAddressHandle),
+    resourceTargetWitnessReferences(definition.target),
+    kernelFieldProvenanceReferences(definition.fieldProvenance),
+  );
+  switch (definition.type) {
+    case ResourceDefinitionKind.CustomElement:
+      return mergeKernelDetailReferences(
+        shared,
+        definition.aliases.flatMap(resourceAliasReferences),
+        resourceTargetWitnessReferences(definition.capture.predicateTarget),
+        templateReferences(definition.template),
+        definition.bindables.flatMap(bindableWitnessReferences),
+        definition.watches.flatMap(watchWitnessReferences),
+        resourceTargetWitnessReferences(definition.processContent),
+        definition.contributions.flatMap(customElementContributionWitnessReferences),
+        kernelRecordReferences(definition.nameSourceAddressHandle),
+      );
+    case ResourceDefinitionKind.CustomAttribute:
+      return mergeKernelDetailReferences(
+        shared,
+        definition.aliases.flatMap(resourceAliasReferences),
+        definition.bindables.flatMap(bindableWitnessReferences),
+        definition.watches.flatMap(watchWitnessReferences),
+        definition.contributions.flatMap(customAttributeContributionWitnessReferences),
+        kernelRecordReferences(definition.nameSourceAddressHandle),
+      );
+    case ResourceDefinitionKind.ValueConverter:
+    case ResourceDefinitionKind.BindingBehavior:
+    case ResourceDefinitionKind.BindingCommand:
+      return mergeKernelDetailReferences(
+        shared,
+        definition.aliases.flatMap(resourceAliasReferences),
+        definition.contributions.flatMap((contribution) => mergeKernelDetailReferences(
+          resourceTargetWitnessReferences(contribution.target),
+          contribution.aliases.flatMap(resourceAliasReferences),
+          kernelFieldProvenanceReferences(contribution.fieldProvenance),
+        )),
+        kernelRecordReferences(definition.nameSourceAddressHandle),
+      );
+    case ResourceDefinitionKind.AttributePattern:
+      return mergeKernelDetailReferences(
+        shared,
+        definition.patterns.flatMap((pattern) => kernelRecordReferences(
+          pattern.addressHandle,
+          pattern.provenanceHandle,
+        )),
+        definition.contributions.flatMap((contribution) => mergeKernelDetailReferences(
+          resourceTargetWitnessReferences(contribution.target),
+          contribution.patterns.flatMap((pattern) => kernelRecordReferences(
+            pattern.addressHandle,
+            pattern.provenanceHandle,
+          )),
+          kernelFieldProvenanceReferences(contribution.fieldProvenance),
+        )),
+      );
+  }
+}
+
+type ResourceDefinitionComparisonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly ResourceDefinitionComparisonValue[];
+
+class ResourceDefinitionComparisonProjection {
+  constructor(
+    readonly semantic: ResourceDefinitionComparisonValue,
+    readonly witness: ResourceDefinitionComparisonValue,
+    readonly semanticReferences: readonly KernelDetailReference[],
+    readonly witnessReferences: readonly KernelDetailReference[],
+  ) {}
+}
+
+/** Exact definition result consumed by compiler reads and the definition detail slot comparator. */
+export function resourceDefinitionComparisonRevisionParts(
+  definition: FullResourceDefinition | null,
+): readonly string[] {
+  if (definition == null) {
+    return ['no-definition'];
+  }
+  const projection = resourceDefinitionComparisonProjection(definition);
+  return [
+    'definition',
+    JSON.stringify(projection.semantic),
+    JSON.stringify(projection.witness),
+    'semantic-references',
+    JSON.stringify(projection.semanticReferences.map((reference) => [
+      reference.surface,
+      reference.handle,
+      reference.detailKind,
+    ])),
+    'witness-references',
+    JSON.stringify(projection.witnessReferences.map((reference) => [
+      reference.surface,
+      reference.handle,
+      reference.detailKind,
+    ])),
+  ];
+}
+
+export function compareResourceDefinitionDetails(
+  previous: FullResourceDefinition,
+  next: FullResourceDefinition,
+  context: KernelPublicationComparisonContext,
+): KernelComparablePublicationDecision {
+  const left = resourceDefinitionComparisonProjection(previous);
+  const right = resourceDefinitionComparisonProjection(next);
+  if (
+    !sameKernelDetailReferences(left.semanticReferences, right.semanticReferences)
+    || !sameResourceDefinitionComparisonValue(left.semantic, right.semantic)
+  ) {
+    return KernelPublicationDecisionKind.Replace;
+  }
+  let refreshWitness = !sameResourceDefinitionComparisonValue(left.witness, right.witness)
+    || !sameKernelDetailReferences(left.witnessReferences, right.witnessReferences);
+  const semanticReferenceDecision = compareResourceDefinitionRecordReferences(
+    left.semanticReferences,
+    right.semanticReferences,
+    context,
+  );
+  if (semanticReferenceDecision === KernelPublicationDecisionKind.Replace) {
+    return KernelPublicationDecisionKind.Replace;
+  }
+  refreshWitness ||= semanticReferenceDecision === KernelPublicationDecisionKind.RefreshWitness;
+  if (sameKernelDetailReferences(left.witnessReferences, right.witnessReferences)) {
+    refreshWitness ||= compareResourceDefinitionRecordReferences(
+      left.witnessReferences,
+      right.witnessReferences,
+      context,
+    ) !== KernelPublicationDecisionKind.Retain;
+  }
+  return refreshWitness
+    ? KernelPublicationDecisionKind.RefreshWitness
+    : KernelPublicationDecisionKind.Retain;
+}
+
+function compareResourceDefinitionRecordReferences(
+  previous: readonly KernelDetailReference[],
+  next: readonly KernelDetailReference[],
+  context: KernelPublicationComparisonContext,
+): KernelComparablePublicationDecision {
+  let decision: KernelComparablePublicationDecision = KernelPublicationDecisionKind.Retain;
+  for (let index = 0; index < previous.length; index += 1) {
+    const reference = previous[index]!;
+    const candidate = next[index]!;
+    if (
+      reference.surface === KernelPublicationSurface.Record
+      && candidate.surface === KernelPublicationSurface.Record
+    ) {
+      const recordDecision = context.compareRecordHandles(reference.handle, candidate.handle);
+      if (recordDecision === KernelPublicationDecisionKind.Replace) {
+        return KernelPublicationDecisionKind.Replace;
+      }
+      if (recordDecision === KernelPublicationDecisionKind.RefreshWitness) {
+        decision = KernelPublicationDecisionKind.RefreshWitness;
+      }
+    }
+  }
+  return decision;
+}
+
+function resourceDefinitionComparisonProjection(
+  definition: FullResourceDefinition,
+): ResourceDefinitionComparisonProjection {
+  const sharedSemantic: ResourceDefinitionComparisonValue = [
+    definition.type,
+    definition.productHandle,
+    definition.identityHandle,
+    resourceTargetSemanticValue(definition.target),
+  ];
+  const sharedWitness: ResourceDefinitionComparisonValue = [
+    definition.sourceAddressHandle,
+    resourceTargetWitnessValue(definition.target),
+    fieldProvenanceComparisonValue(definition.fieldProvenance),
+  ];
+  const references = resourceDefinitionReferenceProjection(definition);
+  switch (definition.type) {
+    case ResourceDefinitionKind.CustomElement:
+      return new ResourceDefinitionComparisonProjection(
+        [
+          sharedSemantic,
+          definition.name,
+          definition.aliases.map((alias) => alias.name),
+          definition.key,
+          [definition.capture.kind, resourceTargetSemanticValue(definition.capture.predicateTarget)],
+          templateSemanticValue(definition.template),
+          definition.instructions.map(instructionSemanticValue),
+          definition.dependencies.map(dependencySemanticValue),
+          definition.injectable,
+          definition.needsCompile,
+          definition.surrogates.map(instructionSemanticValue),
+          definition.bindables.map(bindableSemanticValue),
+          definition.containerless,
+          definition.shadowOptions?.mode ?? null,
+          definition.hasSlots,
+          definition.enhance,
+          definition.watches.map(watchSemanticValue),
+          definition.strict,
+          resourceTargetSemanticValue(definition.processContent),
+          definition.contributions.map(customElementContributionSemanticValue),
+        ],
+        [
+          sharedWitness,
+          definition.aliases.map(aliasWitnessValue),
+          resourceTargetWitnessValue(definition.capture.predicateTarget),
+          templateWitnessValue(definition.template),
+          definition.bindables.map(bindableWitnessValue),
+          definition.watches.map(watchWitnessValue),
+          resourceTargetWitnessValue(definition.processContent),
+          definition.contributions.map(customElementContributionWitnessValue),
+          definition.nameSourceAddressHandle,
+        ],
+        references.semantic,
+        references.witness,
+      );
+    case ResourceDefinitionKind.CustomAttribute:
+      return new ResourceDefinitionComparisonProjection(
+        [
+          sharedSemantic,
+          definition.name,
+          definition.aliases.map((alias) => alias.name),
+          definition.key,
+          definition.isTemplateController,
+          definition.bindables.map(bindableSemanticValue),
+          definition.noMultiBindings,
+          definition.watches.map(watchSemanticValue),
+          definition.dependencies.map(dependencySemanticValue),
+          definition.containerStrategy,
+          definition.defaultProperty,
+          definition.contributions.map(customAttributeContributionSemanticValue),
+        ],
+        [
+          sharedWitness,
+          definition.aliases.map(aliasWitnessValue),
+          definition.bindables.map(bindableWitnessValue),
+          definition.watches.map(watchWitnessValue),
+          definition.contributions.map(customAttributeContributionWitnessValue),
+          definition.nameSourceAddressHandle,
+        ],
+        references.semantic,
+        references.witness,
+      );
+    case ResourceDefinitionKind.ValueConverter:
+    case ResourceDefinitionKind.BindingBehavior:
+    case ResourceDefinitionKind.BindingCommand:
+      return new ResourceDefinitionComparisonProjection(
+        [
+          sharedSemantic,
+          definition.name,
+          definition.aliases.map((alias) => alias.name),
+          definition.key,
+          definition.contributions.map((contribution) => [
+            contribution.contributionKind,
+            resourceTargetSemanticValue(contribution.target),
+            contribution.name,
+            contribution.aliases.map((alias) => alias.name),
+            contribution.key,
+          ]),
+        ],
+        [
+          sharedWitness,
+          definition.aliases.map(aliasWitnessValue),
+          definition.contributions.map((contribution) => [
+            resourceTargetWitnessValue(contribution.target),
+            contribution.aliases.map(aliasWitnessValue),
+            fieldProvenanceComparisonValue(contribution.fieldProvenance),
+          ]),
+          definition.nameSourceAddressHandle,
+        ],
+        references.semantic,
+        references.witness,
+      );
+    case ResourceDefinitionKind.AttributePattern:
+      return new ResourceDefinitionComparisonProjection(
+        [
+          sharedSemantic,
+          definition.patterns.map(attributePatternSemanticValue),
+          definition.contributions.map((contribution) => [
+            contribution.contributionKind,
+            resourceTargetSemanticValue(contribution.target),
+            contribution.patterns.map(attributePatternSemanticValue),
+          ]),
+        ],
+        [
+          sharedWitness,
+          definition.patterns.map(attributePatternWitnessValue),
+          definition.contributions.map((contribution) => [
+            resourceTargetWitnessValue(contribution.target),
+            contribution.patterns.map(attributePatternWitnessValue),
+            fieldProvenanceComparisonValue(contribution.fieldProvenance),
+          ]),
+        ],
+        references.semantic,
+        references.witness,
+      );
+  }
+}
+
+function resourceTargetSemanticValue(
+  target: ResourceTargetReference | null,
+): ResourceDefinitionComparisonValue {
+  return target == null
+    ? null
+    : [
+      target.identityHandle,
+      target.localName,
+      target.moduleKey,
+      target.targetType == null
+        ? null
+        : [
+          target.targetType.productHandle,
+          target.targetType.identityHandle,
+          target.targetType.semanticKey,
+          target.targetType.display,
+          target.targetType.shapeKind,
+          target.targetType.origin,
+        ],
+    ];
+}
+
+function resourceTargetWitnessValue(
+  target: ResourceTargetReference | null,
+): ResourceDefinitionComparisonValue {
+  return target == null
+    ? null
+    : [
+      target.addressHandle,
+      target.declarationSourceAddressHandle,
+      target.targetType?.sourceAddressHandle ?? null,
+    ];
+}
+
+function aliasWitnessValue(
+  alias: ResourceAliasDefinition,
+): ResourceDefinitionComparisonValue {
+  return [alias.addressHandle, alias.provenanceHandle];
+}
+
+function dependencySemanticValue(
+  dependency: ResourceDependencyReference,
+): ResourceDefinitionComparisonValue {
+  return [
+    dependency.identityHandle,
+    dependency.keyName,
+    dependency.moduleKey,
+    dependency.localName,
+    dependency.dependencyKind,
+    dependency.registryKind,
+  ];
+}
+
+function instructionSemanticValue(
+  instruction: InstructionReference,
+): ResourceDefinitionComparisonValue {
+  return instruction.productHandle;
+}
+
+function templateSemanticValue(
+  template: CustomElementTemplateDefinition | null,
+): ResourceDefinitionComparisonValue {
+  return template == null ? null : [template.kind, template.markup];
+}
+
+function templateWitnessValue(
+  template: CustomElementTemplateDefinition | null,
+): ResourceDefinitionComparisonValue {
+  return template == null
+    ? null
+    : [
+      template.addressHandle,
+      template.authoredSourceRevision,
+      template.sourceMap == null
+        ? null
+        : [template.sourceMap.decodedLength, template.sourceMap.decodedToSourceOffsets],
+    ];
+}
+
+function bindableSemanticValue(
+  bindable: BindableDefinition,
+): ResourceDefinitionComparisonValue {
+  return [
+    bindable.attribute,
+    bindable.callback,
+    bindable.mode,
+    bindable.name,
+    bindable.set.kind,
+    resourceTargetSemanticValue(bindable.set.target),
+    resourceTargetSemanticValue(bindable.propertyTarget),
+    resourceTargetSemanticValue(bindable.callbackTarget),
+  ];
+}
+
+function bindableWitnessValue(
+  bindable: BindableDefinition,
+): ResourceDefinitionComparisonValue {
+  return [
+    bindable.sourceAddressHandle,
+    bindable.nameSourceAddressHandle,
+    bindable.attributeSourceAddressHandle,
+    bindable.callbackSourceAddressHandle,
+    bindable.modeSourceAddressHandle,
+    bindable.setSourceAddressHandle,
+    resourceTargetWitnessValue(bindable.set.target),
+    resourceTargetWitnessValue(bindable.propertyTarget),
+    resourceTargetWitnessValue(bindable.callbackTarget),
+    fieldProvenanceComparisonValue(bindable.fieldProvenance),
+  ];
+}
+
+function bindableContributionSemanticValue(
+  bindable: BindableDefinitionContribution,
+): ResourceDefinitionComparisonValue {
+  return [
+    bindable.contributionKind,
+    bindable.propertyName,
+    bindable.attribute,
+    bindable.callback,
+    bindable.mode,
+    bindable.name,
+    bindable.set == null
+      ? null
+      : [bindable.set.kind, resourceTargetSemanticValue(bindable.set.target)],
+  ];
+}
+
+function bindableContributionWitnessValue(
+  bindable: BindableDefinitionContribution,
+): ResourceDefinitionComparisonValue {
+  return [
+    bindable.sourceAddressHandle,
+    bindable.nameSourceAddressHandle,
+    bindable.attributeSourceAddressHandle,
+    bindable.callbackSourceAddressHandle,
+    bindable.modeSourceAddressHandle,
+    bindable.setSourceAddressHandle,
+    resourceTargetWitnessValue(bindable.set?.target ?? null),
+    fieldProvenanceComparisonValue(bindable.fieldProvenance),
+  ];
+}
+
+function watchSemanticValue(
+  watch: WatchDefinition,
+): ResourceDefinitionComparisonValue {
+  return [
+    watchExpressionSemanticValue(watch.expression),
+    watchCallbackSemanticValue(watch.callback),
+    watch.flush,
+  ];
+}
+
+function watchWitnessValue(
+  watch: WatchDefinition,
+): ResourceDefinitionComparisonValue {
+  return [
+    watchExpressionWitnessValue(watch.expression),
+    watchCallbackWitnessValue(watch.callback),
+    fieldProvenanceComparisonValue(watch.fieldProvenance),
+  ];
+}
+
+function watchContributionSemanticValue(
+  watch: WatchDefinitionContribution,
+): ResourceDefinitionComparisonValue {
+  return [
+    watch.contributionKind,
+    watchExpressionSemanticValue(watch.expression),
+    watchCallbackSemanticValue(watch.callback),
+    watch.flush,
+  ];
+}
+
+function watchContributionWitnessValue(
+  watch: WatchDefinitionContribution,
+): ResourceDefinitionComparisonValue {
+  return [
+    watchExpressionWitnessValue(watch.expression),
+    watchCallbackWitnessValue(watch.callback),
+    fieldProvenanceComparisonValue(watch.fieldProvenance),
+  ];
+}
+
+function watchExpressionSemanticValue(
+  expression: WatchExpressionDefinition | null,
+): ResourceDefinitionComparisonValue {
+  return expression == null
+    ? null
+    : [
+      expression.kind,
+      watchPropertyKeySemanticValue(expression.propertyKey),
+      resourceTargetSemanticValue(expression.target),
+    ];
+}
+
+function watchExpressionWitnessValue(
+  expression: WatchExpressionDefinition | null,
+): ResourceDefinitionComparisonValue {
+  return expression == null
+    ? null
+    : [
+      watchPropertyKeyWitnessValue(expression.propertyKey),
+      resourceTargetWitnessValue(expression.target),
+    ];
+}
+
+function watchCallbackSemanticValue(
+  callback: WatchCallbackDefinition | null,
+): ResourceDefinitionComparisonValue {
+  return callback == null
+    ? null
+    : [
+      callback.kind,
+      watchPropertyKeySemanticValue(callback.methodName),
+      resourceTargetSemanticValue(callback.target),
+    ];
+}
+
+function watchCallbackWitnessValue(
+  callback: WatchCallbackDefinition | null,
+): ResourceDefinitionComparisonValue {
+  return callback == null
+    ? null
+    : [
+      watchPropertyKeyWitnessValue(callback.methodName),
+      resourceTargetWitnessValue(callback.target),
+    ];
+}
+
+function watchPropertyKeySemanticValue(
+  propertyKey: WatchPropertyKeyDefinition | null,
+): ResourceDefinitionComparisonValue {
+  return propertyKey == null
+    ? null
+    : [
+      propertyKey.kind,
+      propertyKey.text,
+      propertyKey.number,
+      resourceTargetSemanticValue(propertyKey.target),
+    ];
+}
+
+function watchPropertyKeyWitnessValue(
+  propertyKey: WatchPropertyKeyDefinition | null,
+): ResourceDefinitionComparisonValue {
+  return resourceTargetWitnessValue(propertyKey?.target ?? null);
+}
+
+function customElementContributionSemanticValue(
+  contribution: CustomElementDefinitionContribution,
+): ResourceDefinitionComparisonValue {
+  return [
+    contribution.contributionKind,
+    resourceTargetSemanticValue(contribution.target),
+    contribution.name,
+    contribution.aliases.map((alias) => alias.name),
+    contribution.key,
+    contribution.capture == null
+      ? null
+      : [contribution.capture.kind, resourceTargetSemanticValue(contribution.capture.predicateTarget)],
+    templateSemanticValue(contribution.template),
+    contribution.instructions.map(instructionSemanticValue),
+    contribution.dependencies.map(dependencySemanticValue),
+    contribution.injectable,
+    contribution.needsCompile,
+    contribution.surrogates.map(instructionSemanticValue),
+    contribution.bindables.map(bindableContributionSemanticValue),
+    contribution.containerless,
+    contribution.shadowOptions?.mode ?? null,
+    contribution.hasSlots,
+    contribution.enhance,
+    contribution.watches.map(watchContributionSemanticValue),
+    contribution.strict,
+    resourceTargetSemanticValue(contribution.processContent),
+  ];
+}
+
+function customElementContributionWitnessValue(
+  contribution: CustomElementDefinitionContribution,
+): ResourceDefinitionComparisonValue {
+  return [
+    resourceTargetWitnessValue(contribution.target),
+    contribution.aliases.map(aliasWitnessValue),
+    resourceTargetWitnessValue(contribution.capture?.predicateTarget ?? null),
+    templateWitnessValue(contribution.template),
+    contribution.bindables.map(bindableContributionWitnessValue),
+    contribution.watches.map(watchContributionWitnessValue),
+    resourceTargetWitnessValue(contribution.processContent),
+    fieldProvenanceComparisonValue(contribution.fieldProvenance),
+  ];
+}
+
+function customAttributeContributionSemanticValue(
+  contribution: CustomAttributeDefinitionContribution,
+): ResourceDefinitionComparisonValue {
+  return [
+    contribution.contributionKind,
+    resourceTargetSemanticValue(contribution.target),
+    contribution.name,
+    contribution.aliases.map((alias) => alias.name),
+    contribution.key,
+    contribution.isTemplateController,
+    contribution.bindables.map(bindableContributionSemanticValue),
+    contribution.noMultiBindings,
+    contribution.watches.map(watchContributionSemanticValue),
+    contribution.dependencies.map(dependencySemanticValue),
+    contribution.containerStrategy,
+    contribution.defaultProperty,
+  ];
+}
+
+function customAttributeContributionWitnessValue(
+  contribution: CustomAttributeDefinitionContribution,
+): ResourceDefinitionComparisonValue {
+  return [
+    resourceTargetWitnessValue(contribution.target),
+    contribution.aliases.map(aliasWitnessValue),
+    contribution.bindables.map(bindableContributionWitnessValue),
+    contribution.watches.map(watchContributionWitnessValue),
+    fieldProvenanceComparisonValue(contribution.fieldProvenance),
+  ];
+}
+
+function attributePatternSemanticValue(
+  pattern: { readonly pattern: string; readonly symbols: string },
+): ResourceDefinitionComparisonValue {
+  return [pattern.pattern, pattern.symbols];
+}
+
+function attributePatternWitnessValue(
+  pattern: { readonly addressHandle: string | null; readonly provenanceHandle: string | null },
+): ResourceDefinitionComparisonValue {
+  return [pattern.addressHandle, pattern.provenanceHandle];
+}
+
+function fieldProvenanceComparisonValue(
+  provenance: readonly { readonly field: string; readonly provenanceHandle: string }[],
+): ResourceDefinitionComparisonValue {
+  return provenance.map((entry) => [entry.field, entry.provenanceHandle]);
+}
+
+function sameResourceDefinitionComparisonValue(
+  previous: ResourceDefinitionComparisonValue,
+  next: ResourceDefinitionComparisonValue,
+): boolean {
+  if (!Array.isArray(previous) || !Array.isArray(next)) {
+    return previous === next;
+  }
+  return previous.length === next.length
+    && previous.every((value, index) => sameResourceDefinitionComparisonValue(value, next[index]!));
 }
 
 function definitionHeaderReferences(
@@ -375,6 +1176,7 @@ export const ResourceProductDetails = {
   Definition: defineProductDetailSlot(
     ResourceDetailDescriptors.Definition,
     resourceDefinitionReferences,
+    compareResourceDefinitionDetails,
   ),
   Issue: defineProductDetailSlot(
     ResourceDetailDescriptors.Issue,

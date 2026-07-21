@@ -246,7 +246,7 @@ export class RuntimeBindingValueChannelTypeSupport {
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeReference {
     const display = uniqueStrings(references.map((reference) =>
-      reference.display ?? reference.checkerKey ?? 'unknown'
+      reference.display ?? reference.semanticKey ?? 'unknown'
     )).join(' | ');
     return this.typeProjector.ensureSyntheticProjection({
       localKey: local,
@@ -402,7 +402,7 @@ export class RuntimeBindingValueChannelTypeSupport {
     return this.typeAccess.memberValueAccess(
       shape,
       propertyName,
-      `${reference?.productHandle ?? reference?.checkerKey ?? 'runtime-binding'}:member:${propertyName}`,
+      `${reference?.productHandle ?? reference?.semanticKey ?? 'runtime-binding'}:member:${propertyName}`,
     ).valueReference;
   }
 

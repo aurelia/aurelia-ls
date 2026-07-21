@@ -154,6 +154,20 @@ export class SemanticRuntimeProjectInputRead implements ComputationRead {
     };
   }
 
+  tryRebaseCurrent(): ComputationRead | null {
+    const currentValue = freezeProjectInputReadValue(this.readCurrent());
+    if (projectInputValueRevision(currentValue) !== this.observedRevision) {
+      return null;
+    }
+    return new SemanticRuntimeProjectInputRead(
+      this.authority,
+      this.kind,
+      this.readKey,
+      this.readCurrent,
+      currentValue,
+    );
+  }
+
   /** Owning authority, exposed only for generation-coherence assertions. */
   belongsTo(authority: SemanticRuntimeProjectInputAuthority): boolean {
     return this.authority === authority;
