@@ -1,6 +1,9 @@
 import type { HotDetailHandle, KernelRecordHandle, ProductHandle } from './handles.js';
 import type { HotDetailSlot } from './hot-details.js';
-import type { MaterializationRecord } from './materialization.js';
+import type {
+  MaterializationOwnerHandle,
+  MaterializationRecord,
+} from './materialization.js';
 import type { ProductDetailSlot } from './product-details.js';
 import {
   KernelDetailAdmission,
@@ -170,6 +173,42 @@ export function computationProductDetailReadKey(productHandle: ProductHandle): s
 
 export function computationHotDetailReadKey(handle: HotDetailHandle): string {
   return `kernel-hot-detail:${handle}`;
+}
+
+export function computationMaterializationOwnerReadKey(ownerHandle: MaterializationOwnerHandle): string {
+  return `kernel-materialization-owner:${ownerHandle}`;
+}
+
+/** Exact membership of foreign materializations for one owner, excluding this computation's own replacement closure. */
+export class ComputationMaterializationOwnerRead implements ComputationRead {
+  readonly domain = 'kernel-materialization-owner';
+  readonly readKey: string;
+  readonly observedRevision: string;
+  private readonly excludedRecordHandles: ReadonlySet<KernelRecordHandle>;
+
+  constructor(
+    private readonly store: KernelStore,
+    readonly ownerHandle: MaterializationOwnerHandle,
+    excludedRecordHandles: readonly KernelRecordHandle[],
+    observedRecordHandles: readonly KernelRecordHandle[],
+  ) {
+    this.readKey = computationMaterializationOwnerReadKey(ownerHandle);
+    this.excludedRecordHandles = new Set(excludedRecordHandles);
+    this.observedRevision = materializationOwnerMembershipRevision(observedRecordHandles);
+  }
+
+  validate(): ComputationReadValidation {
+    const currentRevision = materializationOwnerMembershipRevision(
+      this.store.readMaterializationsByOwner(this.ownerHandle)
+        .filter((record) => !this.excludedRecordHandles.has(record.handle))
+        .map((record) => record.handle),
+    );
+    return {
+      isCurrent: currentRevision === this.observedRevision,
+      currentRevision,
+      changedFacets: currentRevision === this.observedRevision ? [] : ['membership'],
+    };
+  }
 }
 
 /** Exact positive or negative read of one normalized kernel record. */
@@ -913,6 +952,28 @@ export class ComputationRun implements KernelPublicationContext {
       ));
     }
     return records;
+  }
+
+  readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[] {
+    this.requireCurrent();
+    const snapshot = this.publications.readMaterializationOwnerCandidate(ownerHandle);
+    if (this.phase === ComputationRunPhase.Preparing) {
+      this.committedRecordInputs(snapshot.committedRecords);
+      for (const record of snapshot.stagedRecords) {
+        const revision = this.publications.readStagedRevision(KernelPublicationSurface.Record, record.handle);
+        if (revision == null) {
+          throw new Error(`Candidate materialization ${record.handle} has no staged revision.`);
+        }
+        this.observeStagedRevision(revision);
+      }
+      this.observe(new ComputationMaterializationOwnerRead(
+        this.store,
+        ownerHandle,
+        snapshot.excludedRecordHandles,
+        snapshot.committedRecords.map((record) => record.handle),
+      ));
+    }
+    return snapshot.records;
   }
 
   readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
@@ -2161,6 +2222,10 @@ function registerComputationRead(
     throw new Error(`${owner} observed conflicting revisions for ${read.readKey}.`);
   }
   readsByKey.set(read.readKey, read);
+}
+
+function materializationOwnerMembershipRevision(handles: readonly KernelRecordHandle[]): string {
+  return JSON.stringify([...handles].sort((left, right) => left.localeCompare(right)));
 }
 
 /** Add a late-derived dependency without replacing an earlier same-domain witness. */

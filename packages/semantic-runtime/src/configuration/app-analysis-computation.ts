@@ -1,4 +1,3 @@
-import { authoredSourceHostPathCandidates } from '../kernel/authored-source-text.js';
 import {
   ComputationCommitState,
   type ComputationCommitResult,
@@ -8,12 +7,6 @@ import {
   type ComputationLocus,
   type ComputationRun,
 } from '../kernel/computation-lifecycle.js';
-import { sourceFileAddressForAddress } from '../kernel/source-address.js';
-import {
-  SourceTextSnapshotAuthority,
-  SourceTextSnapshotState,
-  type SourceTextSnapshot,
-} from '../kernel/source-text-snapshot.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import type {
   KernelStore,
@@ -31,14 +24,6 @@ import {
   resourceConventionToolingEvaluationProfile,
   type ResourceConventionToolingEvaluationContext,
 } from '../resources/resource-convention-transform-admission.js';
-import {
-  TemplateCompilationCohortProjectAuthority,
-  TemplateCompilationLocus,
-} from '../template/template-compilation-cohort.js';
-import {
-  TemplateCompilerCompileState,
-  templateCompilerCompileState,
-} from '../template/compiler-world.js';
 import {
   AureliaAppWorldProjectPass,
   type AureliaAppWorldProjectEmission,
@@ -107,10 +92,6 @@ export class AureliaAppWorldProjectGeneration {
 /** Current committed app generation at one project locus. */
 export class AureliaAppWorldProjectAuthority {
   private generation: AureliaAppWorldProjectGeneration | null = null;
-  /** Family computations intentionally follow the current complete app generation at this project locus. */
-  readonly cohortAuthority = new TemplateCompilationCohortProjectAuthority(
-    () => this.current()?.emission.templates.cohortPlan ?? null,
-  );
 
   constructor(
     readonly projectKey: string,
@@ -159,7 +140,7 @@ export class AureliaAppWorldProjectAuthority {
     );
     const generation = new AureliaAppWorldProjectGeneration(
       generationAuthority,
-      candidate.forCommittedGeneration(generationAuthority, this.cohortAuthority),
+      candidate.forCommittedGeneration(generationAuthority),
       appEvaluation,
       conventionToolingEvaluation,
     );
@@ -174,7 +155,6 @@ export class AureliaAppWorldProjectComputationAttempt {
     private readonly run: ComputationRun,
     private readonly authority: AureliaAppWorldProjectAuthority,
     readonly locus: AureliaAppAnalysisLocus,
-    readonly sourceSnapshots: readonly SourceTextSnapshot[],
     readonly appEvaluationAccess: StaticProjectEvaluationAccess<null>,
     readonly conventionToolingEvaluationAccess: StaticProjectEvaluationAccess<ResourceConventionToolingEvaluationContext>,
     readonly candidateEmission: AureliaAppWorldProjectEmission,
@@ -271,112 +251,44 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
     options: AureliaAppWorldProjectOptions = {},
   ): AureliaAppWorldProjectComputationAttempt {
     project.requireCurrent();
-    const inputReadScope = project.inputGeneration.createReadScope('aurelia-app-analysis');
-    return project.inputGeneration.withReadScope(inputReadScope, () => {
-      const appEvaluationAccess = this.projectEvaluations.acquire(project, aureliaAppProjectEvaluationProfile);
-      const conventionToolingEvaluationAccess = this.projectEvaluations.acquire(
+    const appEvaluationAccess = this.projectEvaluations.acquire(project, aureliaAppProjectEvaluationProfile);
+    const conventionToolingEvaluationAccess = this.projectEvaluations.acquire(
+      project,
+      resourceConventionToolingEvaluationProfile,
+    );
+    const appEvaluationProfile = appEvaluationAccess.readProfile();
+    const conventionToolingEvaluationProfile = conventionToolingEvaluationAccess.readProfile();
+    const locus = new AureliaAppAnalysisLocus(project.projectKey);
+    const run = this.lifecycle.begin(locus);
+    try {
+      run.guardCurrent(project.inputGeneration.currentnessGuardKey, project.inputGeneration);
+      const candidate = new AureliaAppWorldProjectPass(this.support).constructAndEmit(
+        this.store,
+        run,
         project,
-        resourceConventionToolingEvaluationProfile,
-      );
-      const locus = new AureliaAppAnalysisLocus(project.projectKey);
-      const run = this.lifecycle.begin(locus);
-      try {
-        run.guardCurrent(project.inputGeneration.currentnessGuardKey, project.inputGeneration);
-        run.observe(appEvaluationAccess.generation);
-        run.observe(conventionToolingEvaluationAccess.generation);
-        const candidate = new AureliaAppWorldProjectPass(this.support).constructAndEmit(
-          this.store,
-          run,
-          project,
-          appEvaluationAccess.generation.forkSession(),
+        appEvaluationAccess.generation.forkSession(),
+        conventionToolingEvaluationAccess.generation,
+        [
+          appEvaluationProfile,
+          conventionToolingEvaluationProfile,
+        ],
+        [
+          appEvaluationAccess.generation,
           conventionToolingEvaluationAccess.generation,
-          [
-            appEvaluationAccess.readProfile(),
-            conventionToolingEvaluationAccess.readProfile(),
-          ],
-          options,
-        );
-        for (const read of candidate.typeSystem.readRegisteredInputs()) {
-          run.observe(read);
-        }
-        const sourceSnapshots = this.captureTemplateSources(project, candidate, run);
-        for (const read of project.readRegisteredInputs()) {
-          run.observe(read);
-        }
-        for (const read of inputReadScope.readRegisteredInputs()) {
-          run.observe(read);
-        }
-        return new AureliaAppWorldProjectComputationAttempt(
-          run,
-          this.authorityFor(project.projectKey),
-          locus,
-          sourceSnapshots,
-          appEvaluationAccess,
-          conventionToolingEvaluationAccess,
-          candidate,
-        );
-      } catch (error) {
-        run.abort();
-        throw error;
-      }
-    });
-  }
-
-  private captureTemplateSources(
-    project: ProjectBootFrame,
-    emission: AureliaAppWorldProjectEmission,
-    run: ComputationRun,
-  ): readonly SourceTextSnapshot[] {
-    const sourceText = new SourceTextSnapshotAuthority(project.inputGeneration);
-    const snapshotsByFileName = new Map<string, SourceTextSnapshot>();
-    for (const owner of emission.templates.cohortPlan.ownerPlans) {
-      if (templateCompilerCompileState(owner.definition) !== TemplateCompilerCompileState.Compiled) {
-        continue;
-      }
-      const sourceAddressHandle = owner.definition.template?.addressHandle ?? null;
-      if (sourceAddressHandle == null) {
-        continue;
-      }
-      run.withChild(new TemplateCompilationLocus(project.projectKey, owner.ownerHandle), () => {
-        const sourceFile = sourceFileAddressForAddress(run, sourceAddressHandle);
-        if (sourceFile == null) {
-          throw new Error(`Template owner ${owner.definition.name} has no authored source-file address.`);
-        }
-        const candidates = authoredSourceHostPathCandidates(
-          project.workspaceRootDir,
-          project.rootDir,
-          sourceFile.path,
-        );
-        let admitted = false;
-        for (const fileName of candidates) {
-          let snapshot = snapshotsByFileName.get(fileName);
-          if (snapshot == null) {
-            snapshot = sourceText.capture(fileName);
-            snapshotsByFileName.set(fileName, snapshot);
-          }
-          run.observe(snapshot);
-          if (snapshot.state === SourceTextSnapshotState.Present) {
-            const admittedRevision = owner.definition.template?.authoredSourceRevision ?? null;
-            if (admittedRevision == null) {
-              throw new Error(
-                `Template owner ${owner.definition.name} has no authored source revision for ${sourceFile.path}.`,
-              );
-            }
-            if (snapshot.contentRevision !== admittedRevision) {
-              throw new Error(`Template source ${sourceFile.path} changed after its definition was admitted.`);
-            }
-            admitted = true;
-            break;
-          }
-          if (snapshot.state === SourceTextSnapshotState.Unavailable) {
-            throw new Error(`Template source ${fileName} exists but its text is unavailable.`);
-          }
-        }
-        if (!admitted) {
-          throw new Error(`Template source ${sourceFile.path} is absent from every authored source root.`);
-        }
-      });
+        ],
+        options,
+      );
+      return new AureliaAppWorldProjectComputationAttempt(
+        run,
+        this.authorityFor(project.projectKey),
+        locus,
+        appEvaluationAccess,
+        conventionToolingEvaluationAccess,
+        candidate,
+      );
+    } catch (error) {
+      run.abort();
+      throw error;
     }
-    return [...snapshotsByFileName.values()].sort((left, right) => left.fileName.localeCompare(right.fileName));
   }
 }

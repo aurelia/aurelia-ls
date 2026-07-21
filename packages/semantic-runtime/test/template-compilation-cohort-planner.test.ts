@@ -9,12 +9,14 @@ import {
   type KernelPublicationWriterId,
   StagedKernelPublicationContext,
 } from '../src/kernel/publication.js';
-import { TemplateCompilerReadView } from '../src/template/compiler-read-view.js';
+import {
+  TemplateCompilerReadView,
+  TemplateCompilerWorldAuthority,
+} from '../src/template/compiler-read-view.js';
 import { TemplateResourceVisibilityKind } from '../src/template/compiler-world-reference.js';
 import {
   TemplateCompilationAdmissionOriginKind,
   TemplateCompilationCohortKind,
-  TemplateCompilationCohortProjectAuthority,
   TemplateCompilationCohortProjectPlan,
   TemplateCompilationOwnerPlan,
 } from '../src/template/template-compilation-cohort.js';
@@ -77,9 +79,10 @@ describe('template compilation cohort planning', () => {
         expect(cohort.parentCompilerWorld.resourceScope.resources.some((resource) =>
           resource.definitionProductHandle === ownerPlan.definition.productHandle
         )).toBe(true);
-      }
-      for (const cohort of app.emission.templateCohorts.cohortSetFor(ownerPlan.definition).current()) {
-        const readView = new TemplateCompilerReadView(runtime.workspace.store, cohort.compilerWorldAuthority);
+        const readView = new TemplateCompilerReadView(
+          runtime.workspace.store,
+          TemplateCompilerWorldAuthority.fixed(cohort.parentCompilerWorld),
+        );
         expect(readView.templateOwnerResource(ownerPlan.definition)).not.toBeNull();
       }
     }
@@ -153,19 +156,16 @@ describe('template compilation cohort planning', () => {
     expect(new Set(overlayFileNames).size).toBe(overlayFileNames.length);
   }, 30_000);
 
-  test('updates complete owner cohort sets without leaving removed world authorities callable', async () => {
+  test('indexes immutable owner plans and rejects duplicate owner or cohort identities', async () => {
     const fixtureRoot = fixturePath('router-configuration-root-ownership');
     const runtime = await createSemanticRuntime({
       workspaceRoot: fixtureRoot,
       storeKey: 'contract:template-compilation-cohort-plan:current-authority',
     });
     const app = await runtime.openApp({ includeAuthoringTemplates: true });
-    let currentPlan = app.emission.templates.cohortPlan;
+    const currentPlan = app.emission.templates.cohortPlan;
     const sharedChild = owner(currentPlan, 'shared-child');
-    const authority = new TemplateCompilationCohortProjectAuthority(() => currentPlan);
-    const cohortSet = authority.cohortSetFor(sharedChild.definition);
-    const initialCohorts = cohortSet.current();
-    expect(initialCohorts).toHaveLength(2);
+    expect(sharedChild.cohorts).toHaveLength(2);
     expect(() => new TemplateCompilationOwnerPlan(
       sharedChild.definition,
       [sharedChild.cohorts[0]!, sharedChild.cohorts[0]!],
@@ -178,19 +178,11 @@ describe('template compilation cohort planning', () => {
     )).toThrow(/duplicate owner/u);
 
     const retainedCohortPlan = sharedChild.cohorts[0]!;
-    const removedCohort = initialCohorts.find((cohort) => cohort.key !== retainedCohortPlan.key)!;
-    const removedWorldRead = new TemplateCompilerReadView(
-      runtime.workspace.store,
-      removedCohort.compilerWorldAuthority,
-    );
-    expect(removedWorldRead.templateOwnerResource(sharedChild.definition)).not.toBeNull();
-    const compilerWorldObservation = removedWorldRead.readAll()[0]!;
-
     const retainedSharedChild = new TemplateCompilationOwnerPlan(
       sharedChild.definition,
       [retainedCohortPlan],
     );
-    currentPlan = new TemplateCompilationCohortProjectPlan(
+    const retainedPlan = new TemplateCompilationCohortProjectPlan(
       currentPlan.projectKey,
       [...currentPlan.appRootCompilerWorlds].reverse(),
       currentPlan.ownerPlans.map((candidate) =>
@@ -199,12 +191,10 @@ describe('template compilation cohort planning', () => {
       currentPlan.authoringCompilerWorld,
     );
 
-    expect(cohortSet.current().map((cohort) => cohort.key)).toEqual([retainedCohortPlan.key]);
-    expect(removedCohort.compilerWorldAuthority.readCurrent()).toBeNull();
-    expect(compilerWorldObservation.validate()).toEqual(expect.objectContaining({
-      isCurrent: false,
-      changedFacets: expect.arrayContaining(['scope', 'closure', 'result']),
-    }));
+    expect(owner(retainedPlan, 'shared-child').cohorts).toEqual([retainedCohortPlan]);
+    const removedCohort = sharedChild.cohorts.find((cohort) => cohort.key !== retainedCohortPlan.key)!;
+    expect(owner(retainedPlan, 'shared-child').cohorts).not.toContain(removedCohort);
+    expect(sharedChild.cohorts).toContain(removedCohort);
   }, 30_000);
 });
 

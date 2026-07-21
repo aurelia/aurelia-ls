@@ -240,9 +240,11 @@ closure. Conflating those roles makes an event-only generation advance invalidat
 reader edge that no output actually depends on.
 `ComputationChildState.hasOnlyRevisionedReads` means only that no
 unresolved aggregate read was recorded; it is not yet a scheduler-ready or cycle-free reuse claim. Whole-store,
-source-file-index, and materialization enumeration remain explicit open reads until their domain authorities expose
-membership revisions. Empty child scopes are omitted from committed manifests; an exact negative read or open aggregate
-read is real work and therefore keeps its child state.
+source-file-index, and whole-materialization enumeration remain explicit open reads. Materialization consumers that know
+the semantic owner use exact owner-membership reads instead: additions and removals change that owner's revision, staged
+rows become producer-to-consumer child edges, and the computation's own replacement closure is excluded from commit
+validation. Empty child scopes are omitted from committed manifests; an exact negative read or open aggregate read is
+real work and therefore keeps its child state.
 
 Lifecycle state snapshots read metadata, aggregate-row evidence, outputs, children, and normalized locus identity into
 kernel-owned frozen values before admission. A committed locus intentionally retains only `kind`,
@@ -270,14 +272,15 @@ read view they need, not the committed store directly. `KernelRecordCollectionRe
 and `KernelMaterializationReadView` hide the prior owned manifest and overlay pending records, source-file addresses,
 and materializations on unrelated committed facts. Support and closure checks therefore see one candidate generation
 without publishing an intermediate world or locally merging side lists. Template-family compilation is the first
-recursive consumer: one owner-family run shares authored local definitions across a complete observed cohort set while
-retaining cohort-specific compiler products under one publication replacement.
+recursive consumer: one owner-family child shares authored local definitions across an immutable planned cohort set,
+reads only the materialization owners participating in its compiler scopes, and retains cohort-specific compiler
+products under the enclosing app publication replacement.
 `KernelPublicationContext.readProductDetail(...)` and `readHotDetail(...)` provide the corresponding typed
 read-your-writes view for a known handle. They deliberately do not expose staged whole-slot enumeration: combining a
 prior manifest's rows with candidate rows would manufacture a mixed generation. Aggregate phases must pass their
 complete candidate emissions explicitly, while exact links may follow a staged detail by handle. Whole-store,
-whole-slot, source-file-index, and materialization scans need domain-owned membership/order/closure revisions; recording
-only their returned positive handles would make additions and authoritative absence invisible.
+whole-slot, source-file-index, and whole-materialization scans still need domain-owned membership/order/closure
+revisions; recording only their returned positive handles would make additions and authoritative absence invisible.
 
 A projector or expression world backed by a `ComputationRun` is a candidate-generation capability, not a retained
 query cache. It may be shared by every materializer in that generation and by follow-up work that runs before commit,

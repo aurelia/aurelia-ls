@@ -1621,7 +1621,15 @@ function readConventionalHtmlTemplate(
   const absolutePath = path.resolve(context.projectRootDir ?? path.dirname(context.sourceFile.fileName), admission.path);
   const authoredSource = sourceTextCache.read(absolutePath);
   if (authoredSource == null) {
-    return null;
+    const source = externalTemplateSourceAddress(store, admission.addressHandle, 0, local);
+    return new TemplateDefinitionRead(
+      new CustomElementTemplateDefinition(
+        CustomElementTemplateKind.Open,
+        null,
+        source.addressHandle,
+      ),
+      source.records,
+    );
   }
   const rawMarkup = authoredSource.text;
   const metadata = readHtmlTemplateMetadata(rawMarkup);
@@ -1665,7 +1673,15 @@ function readImportedHtmlTemplate(
   }
   const authoredSource = sourceTextCache.read(absolutePath);
   if (authoredSource == null) {
-    return null;
+    const source = externalTemplateSourceAddress(store, admission.addressHandle, 0, local);
+    return new TemplateDefinitionRead(
+      new CustomElementTemplateDefinition(
+        CustomElementTemplateKind.Open,
+        null,
+        source.addressHandle,
+      ),
+      source.records,
+    );
   }
   const rawMarkup = authoredSource.text;
   const metadata = readHtmlTemplateMetadata(rawMarkup);

@@ -19,6 +19,7 @@ import {
   ComputationRetirementCause,
   computationHotDetailReadKey,
   ComputationLifecycleRegistry,
+  computationMaterializationOwnerReadKey,
   computationProductDetailReadKey,
   ComputationRecordReadView,
   computationRecordReadKey,
@@ -38,7 +39,7 @@ import {
   defineHotDetailDescriptor,
   defineProductDetailDescriptor,
 } from "../src/kernel/detail-descriptors.js";
-import { MaterializedProduct } from "../src/kernel/materialization.js";
+import { MaterializationRecord, MaterializedProduct } from "../src/kernel/materialization.js";
 import {
   defineProductDetailSlot,
   readProductDetailEnvelope,
@@ -2645,6 +2646,111 @@ describe("computation lifecycle", () => {
       ComputationOpenReadKind.Materializations,
       ComputationOpenReadKind.SourceFileIndex,
     ].sort());
+  });
+
+  test("revisions materialization membership per owner without coupling unrelated owners", () => {
+    const store = new KernelStore("computation-materialization-owner-membership");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const ownerA = store.handles.address("materialization-owner:a");
+    const ownerB = store.handles.address("materialization-owner:b");
+    const materializationA = store.handles.materialization("materialization-owner:a:first");
+    const materializationB = store.handles.materialization("materialization-owner:b:first");
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(ownerA, "test", "src/a.html", SourceLanguage.Html),
+      new SourceFileAddress(ownerB, "test", "src/b.html", SourceLanguage.Html),
+      new MaterializationRecord(materializationA, ownerA),
+    ], "materialization-owner:baseline"));
+
+    const run = lifecycle.begin(locus("materialization-owner-membership"));
+    run.withChild(childLocus("owner-a"), () => {
+      expect(run.readMaterializationsByOwner(ownerA).map((record) => record.handle)).toEqual([materializationA]);
+    });
+    store.commit(new KernelStoreBatch([
+      new MaterializationRecord(materializationB, ownerB),
+    ], "materialization-owner:unrelated"));
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const child = lifecycle.readState(run.computationId)?.children.find(
+      (candidate) => candidate.locus.reconciliationKey === "family:owner-a",
+    );
+    expect(child?.hasOnlyRevisionedReads).toBe(true);
+    expect(child?.openReads).toEqual([]);
+    expect(child?.reads.map((read) => read.readKey).sort()).toEqual([
+      computationMaterializationOwnerReadKey(ownerA),
+      computationRecordReadKey(materializationA),
+    ].sort());
+    expect(child?.reads.every((read) => read.validate().isCurrent)).toBe(true);
+  });
+
+  test("rejects a candidate when the materialization membership of its observed owner changes", () => {
+    const store = new KernelStore("computation-materialization-owner-change");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const owner = store.handles.address("materialization-owner:changed");
+    const first = store.handles.materialization("materialization-owner:changed:first");
+    const second = store.handles.materialization("materialization-owner:changed:second");
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(owner, "test", "src/changed.html", SourceLanguage.Html),
+      new MaterializationRecord(first, owner),
+    ], "materialization-owner:changed:baseline"));
+
+    const run = lifecycle.begin(locus("materialization-owner-change"));
+    run.withChild(childLocus("reader"), () => {
+      expect(run.readMaterializationsByOwner(owner)).toHaveLength(1);
+    });
+    store.commit(new KernelStoreBatch([
+      new MaterializationRecord(second, owner),
+    ], "materialization-owner:changed:concurrent"));
+
+    const result = run.commit();
+    expect(result.state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(result.transition.invalidReads).toContainEqual(expect.objectContaining({
+      readKey: computationMaterializationOwnerReadKey(owner),
+      changedFacets: ["membership"],
+    }));
+  });
+
+  test("records staged owner membership as a child dependency and forbids later additions", () => {
+    const store = new KernelStore("computation-materialization-owner-candidate");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const owner = store.handles.address("materialization-owner:candidate");
+    const materialization = store.handles.materialization("materialization-owner:candidate:first");
+    const run = lifecycle.begin(locus("materialization-owner-candidate"));
+    run.withChildPartition(() => {
+      run.withChild(childLocus("producer"), () => {
+        run.publish(publication("materialization-owner:candidate:producer", [
+          new SourceFileAddress(owner, "test", "src/candidate.html", SourceLanguage.Html),
+          new MaterializationRecord(materialization, owner),
+        ]));
+      });
+      run.withChild(childLocus("consumer"), () => {
+        expect(run.readMaterializationsByOwner(owner).map((record) => record.handle)).toEqual([materialization]);
+      });
+    });
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const children = lifecycle.readState(run.computationId)?.children ?? [];
+    const producer = children.find((child) => child.locus.reconciliationKey === "family:producer");
+    const consumer = children.find((child) => child.locus.reconciliationKey === "family:consumer");
+    expect(consumer?.candidateReads).toContainEqual(expect.objectContaining({
+      readKey: computationRecordReadKey(materialization),
+      producerChildId: producer?.childId,
+    }));
+    expect(consumer?.hasOnlyRevisionedReads).toBe(true);
+    expect(consumer?.reads.every((read) => read.validate().isCurrent)).toBe(true);
+
+    const lateOwner = store.handles.address("materialization-owner:late");
+    const lateMaterialization = store.handles.materialization("materialization-owner:late:first");
+    const lateRun = lifecycle.begin(locus("materialization-owner-late-write"));
+    lateRun.withChild(childLocus("consumer"), () => {
+      expect(lateRun.readMaterializationsByOwner(lateOwner)).toEqual([]);
+    });
+    expect(() => lateRun.withChild(childLocus("producer"), () => {
+      lateRun.publish(publication("materialization-owner:late:producer", [
+        new SourceFileAddress(lateOwner, "test", "src/late.html", SourceLanguage.Html),
+        new MaterializationRecord(lateMaterialization, lateOwner),
+      ]));
+    })).toThrow(/after owner .* was observed/);
+    lateRun.abort();
   });
 
   test("promotes aggregate-derived outputs to the youngest positive input lifetime", () => {

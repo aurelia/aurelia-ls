@@ -3012,7 +3012,7 @@
       "rationale": "App/authoring cohort membership was previously discovered while an eager queue compiled resources, so route and dependency origins, parent-world choice, and complete membership disappeared before the family lifecycle could observe them. A project snapshot is the transaction boundary that can plan app-root additions and removals coherently, while stable app-root and owner identities preserve finer semantic ownership. The plan reuses admitted app worlds, route contexts, and resource definitions rather than creating another compiler catalog.",
       "guidance": [
         "Treat App and Authoring as the compiler-cohort kinds. App visibility, route components and fallbacks, resource dependencies, and authoring policy are admission origins, not cohort identities.",
-        "Derive the complete owner-to-cohort plan before compiling any family. Eager replay and lifecycle computations must consume that same plan; do not reconstruct membership from compiled emissions.",
+        "Derive the complete owner-to-cohort plan before compiling any family. The production app computation must consume that same immutable plan; do not reconstruct membership from compiled emissions or introduce a callback-based current authority.",
         "Partition routeable admissions by RouteConfigContext app-root ownership. Do not append every routeable to every app-root compiler world.",
         "Give each owner a deterministic retained parent world containing the owner and its own declared dependencies. Do not preserve first-queue-path or framework first-container cache order as tooling policy.",
         "Component and authoring container/world materialization must spend the project planner's publication context. Framework authoring support catalogs remain upstream inputs and should later be borrowed from their owning catalog authority, not reassigned to template-family ownership.",
@@ -3021,7 +3021,7 @@
         "ResourceDependencyReference currently lacks a per-entry source address. Until resource dependency provenance is sharpened, retain the depending definition as the honest broad admission carrier and do not present the dependency target declaration as the edge source.",
         "When a semantic local key becomes a generated filename, always retain a stable hash of the full key. Prefix truncation and punctuation normalization are both lossy projections that can alias distinct TypeScript overlay roots.",
         "Treat overlay origin keys and canonical generated paths as one-to-one identities at TypeSystem project admission. Coalesce only equivalent sources and reject conflicts instead of selecting the first source by order.",
-        "The current production authority is fixed to one immutable app epoch. Configuration/DI lifecycle and downstream runtime/checker closure are separate gates; do not add a second registration catalog or dual eager/lifecycle producer while connecting them."
+        "The project plan is immutable candidate data inside one app epoch. The outer app computation owns currentness and replacement; do not add a second registration catalog, dynamic cohort authority, or dual eager/lifecycle producer."
       ],
       "anchors": [
         {
@@ -3033,14 +3033,14 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-compilation-cohort.ts",
-          "symbolName": "TemplateCompilationCohortProjectAuthority",
-          "summary": "Owner-specific complete-set and current parent-world authority."
+          "symbolName": "TemplateCompilationCohortProjectPlan",
+          "summary": "Immutable complete owner/cohort and retained parent-world plan."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
           "symbolName": "TemplateCompilationProjectPass",
-          "summary": "Production eager replay consuming the shared cohort plan."
+          "summary": "Production family children consuming the shared cohort plan."
         },
         {
           "kind": "source",
@@ -3075,11 +3075,11 @@
         {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/template/template-compilation-cohort.ts",
-          "symbolName": "TemplateCompilationCohortProjectAuthority"
+          "symbolName": "TemplateCompilationCohortProjectPlan"
         }
       ],
       "createdAt": "2026-07-17",
-      "updatedAt": "2026-07-17"
+      "updatedAt": "2026-07-21"
     },
     {
       "id": "decision:app-analysis-current-generation",
@@ -3092,30 +3092,43 @@
         "api",
         "incrementality"
       ],
-      "summary": "A semantic app pins one exact committed project app-analysis generation and rebuilds the complete fan-in as a unit when it becomes stale.",
-      "rationale": "Static evaluation, resources, configuration, DI, compiler/runtime/checker rows, observation, state, capability, router products, and their retained TypeScript-backed object graph are one logical generation. The former template-only authority could atomically replace template products while upstream and downstream fan-in remained outside the transaction. The production authority now commits one complete project app-analysis closure, installs a generation-guarded store-backed expression world, and makes every app query fail closed when its exact generation is replaced or disposed.",
+      "summary": "A semantic app pins one atomic generation whose pre-template, family, and post-template children expose exact dependency ownership.",
+      "rationale": "Static evaluation, resources, configuration, DI, compiler/runtime/checker rows, observation, state, capability, router products, and their retained TypeScript-backed object graph are one logical public generation. The outer app computation commits that closure atomically while explicit pre-template, authored-family, and post-template child manifests preserve causal ownership for later activation. Candidates still reconstruct the complete fan-in until child carry and decision propagation are implemented.",
       "guidance": [
         "One project app-analysis locus owns the current generation regardless of analysis depth or authoring policy. Those policies are replacement inputs, not parallel owners of the same stable handles.",
         "A prepared AureliaAppWorldProjectEmission is run-bound and never public current state. Promote only after a successful lifecycle commit; rejected, stale, superseded, or throwing attempts preserve the previous current generation.",
-        "After commit, bind every retained resource emission to one generation-guarded store-backed CheckerExpressionTypeWorld. Replacement and disposal must revoke retained evaluator reads and lazy projections; do not retain a mix of run-backed, unguarded store-backed, and committed worlds behind different object paths.",
+        "After commit, bind retained template/checker state to one generation authority. Replacement and disposal must revoke retained evaluator reads and lazy projections; do not retain a mix of run-backed, unguarded store-backed, and committed worlds behind different object paths.",
         "AureliaAppWorldProjectEmission is the exact generation-owned fan-in, not a wrapper around a separately current template generation. Replacement or disposal makes the whole app emission stale.",
-        "SemanticApp queries, cache summaries, and template access must check currentness before reading kernel state. A retained SemanticAppTemplateQueries object rechecks that authority on every operation; runtime cache and cursor admission skip stale apps and rebuild a coherent app epoch rather than hot-swapping templates underneath old fan-in.",
-        "Carry the exact complete-file revision that produced each inline or external template into resource metadata. Preparation must match it to the current immutable source snapshot, and commit must revalidate that snapshot; input-bundle revision, source text, compiler lookup, and kernel record changes remain separately attributable validation domains.",
-        "Keep one AureliaAppWorldProjectComputationService and one ComputationLifecycleRegistry per SemanticRuntime/KernelStore. Do not create feature-local registries or authorities.",
-        "This complete-generation boundary is the correctness bridge to later fine-grained scheduling. Do not weaken exact generation pinning or restore nested producer commits to make partial reuse appear incremental."
+        "SemanticApp queries, cache summaries, and template access must check currentness before reading kernel state. Retained query capabilities recheck that authority on every operation and rebuild a coherent app epoch rather than hot-swapping one domain underneath old fan-in.",
+        "Carry the exact complete-file revision that produced each inline or external template into resource metadata. Each authored-family child must validate its own current source and register those exact host reads; do not restore a global source-snapshot backup.",
+        "Keep pre-template, stable authored-family, and post-template ownership explicit beneath the atomic transaction. Phase-local input scopes and immutable carriers replace app-wide read replay; shared runtime/checker analysis remains post-owned until a finer SCC is proven.",
+        "Keep one AureliaAppWorldProjectComputationService and one ComputationLifecycleRegistry per SemanticRuntime/KernelStore. Do not create feature-local registries, dynamic cohort authorities, or independently committing family producers.",
+        "This complete-generation boundary is the correctness bridge to fine-grained scheduling. Child manifests do not themselves authorize reuse: explicit carry/rebase, authoritative publication decisions, and deterministic propagation must land before selective activation."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/app-analysis-computation.ts",
           "symbolName": "AureliaAppWorldProjectComputationService",
-          "summary": "Preparation, validation, commit, current authority, and lifetime reconciliation for complete app-analysis generations."
+          "summary": "Preparation, commit, current authority, and lifetime reconciliation for complete app-analysis generations."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
           "symbolName": "AureliaAppWorldProjectEmission",
-          "summary": "Immutable app fan-in owned by one exact current app-analysis generation."
+          "summary": "Immutable pre/post app fan-in owned by one exact current app-analysis generation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+          "symbolName": "AureliaAppAnalysisPhaseLocus",
+          "summary": "Stable phase-child identity around authored template-family children."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
+          "symbolName": "TemplateCompilationProjectPass",
+          "summary": "Immutable plan, family-local compiler front doors, source validation, and shared post-template analysis."
         },
         {
           "kind": "source",
@@ -3136,20 +3149,9 @@
           "summary": "Template metadata carrying the exact authored-file revision that produced its markup."
         },
         {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
-          "symbolName": "TemplateCompilationProjectEmission.forCommittedGeneration",
-          "summary": "Post-commit rebinding of every retained analysis emission to one generation-guarded store-backed expression world."
-        },
-        {
           "kind": "doc",
           "path": "packages/semantic-runtime/src/template/README.md",
-          "summary": "Template project-generation ownership, publication, and current-authority doctrine."
-        },
-        {
-          "kind": "doc",
-          "path": "packages/semantic-runtime/src/api/README.md",
-          "summary": "Public app generation pinning and stale-cache behavior."
+          "summary": "Template-family ownership, phase boundaries, and exact compiler-to-runtime handoff."
         }
       ],
       "liveChecks": [
@@ -3161,21 +3163,16 @@
         {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
-          "symbolName": "AureliaAppWorldProjectEmission"
+          "symbolName": "AureliaAppAnalysisPhaseLocus"
         },
         {
           "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
-          "symbolName": "SemanticApp"
-        },
-        {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
-          "symbolName": "SemanticAppTemplateQueries"
+          "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
+          "symbolName": "TemplateCompilationProjectPass"
         }
       ],
-      "createdAt": "2026-07-17",
-      "updatedAt": "2026-07-18"
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-07-21"
     }
   ]
 }

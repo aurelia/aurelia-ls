@@ -43,18 +43,21 @@ classification, expression parsing, and instruction lowering converge on the sam
   planner partitions routeables by their owning app root, computes dependency closure before compilation, and gives
   every owner a deterministic retained parent world containing that owner plus its own declared dependencies. Stable
   project/app-root/owner keys and exact resource-scope comparison prevent queue order, array position, aliases, or
-  source-witness changes from silently selecting a different world. `configuration/app-analysis-computation.ts` owns the
-  current committed app generation and its generation-bound cohort authority, so family computations can follow complete
-  same-runtime replacement without asking an LSP caller to reconstruct cohorts from compiled emissions. Component
-  worlds, the standalone authoring container/world, and its built-in syntax/resource/renderer catalogs all spend the
-  caller's publication context, so a staged project replan cannot leak support records before the transaction commits.
+  source-witness changes from silently selecting a different world. The resulting project plan is immutable candidate
+  data consumed directly by the production app computation; cohort currentness and replacement belong to that
+  computation graph rather than to a second callback-based authority. Component worlds, the standalone authoring
+  container/world, and its built-in syntax/resource/renderer catalogs all spend the caller's publication context, so a
+  staged project replan cannot leak support records before the transaction commits.
 - `template-compilation-project-pass.ts` is the current project-level template entrypoint. It consumes app-world
   compiler worlds and resource/router authority once, obtains the complete cohort plan, and uses that plan for eager
   compilation-unit materialization, HTML parsing, attribute syntax parsing, attribute classification, compiler-owned
   value-site selection, binding-command lowering, compiled-template handoff materialization, and runtime analysis.
   The production app computation enters one logical child per stable authored owner and compiles every app/authoring
   cohort plus recursive local template under that family. Source snapshots and exact compiler reads join the same child
-  manifest as its compiler-front-door outputs. Runtime/checker analysis remains project-owned because its SCC schedule,
+  manifest as its compiler-front-door outputs. Compiler-scope closure reads exact materialization membership for each
+  participating container/resource owner; unrelated owners no longer create an open whole-kernel dependency, while
+  candidate local definitions become ordinary producer-to-consumer child edges. Runtime/checker analysis remains
+  project-owned because its SCC schedule,
   expression world, and bound-controller values cross family boundaries; the temporary outer remainder records that
   boundary honestly instead of assigning unsupported family ownership. Before crossing that boundary, the remainder
   re-observes the compiler-world authority reads and consumes the exact resource definition, compiled-template
@@ -95,24 +98,6 @@ classification, expression parsing, and instruction lowering converge on the sam
   compiler world while registering the exact positive or negative keys that were read. The compiler-world authority is
   re-read at commit, and each observation keeps scope, closure/support, and result revisions distinct. This view is not a
   second resource catalog. Ordinary eager compilation uses the same operations with a fixed world authority.
-- `template-compilation-computation.ts` is the older focused family-transaction harness, retained temporarily for its
-  source/cohort/replacement stress evidence while that evidence migrates to the production app computation. Production
-  does not invoke it, and it must not become a second scheduler or independently activated producer. A stable project plus authored resource
-  owner forms one template-family computation locus. Every run observes an authoritative complete compiler-cohort set,
-  resolves the current owner in each cohort, and admits one coherent external HTML snapshot for the family. Local
-  definitions, bindables, and authored source products are shared family outputs; compiler worlds, compilation units,
-  parsed/lowered products, and compiled templates remain cohort-specific. The recursive family is staged through one
-  publication manifest and atomically replaces its prior closure after source, cohort-membership, parent-world, exact
-  child-lookup, and kernel-record reads validate. It uses the same TemplateCompiler front-door classifier as production,
-  so `None` templates and `needsCompile: false` definitions are no-output states rather than alternate compilation
-  paths. Local identity is owner plus authored name rather than declaration
-  position, so reordering refreshes witnesses without churning semantic children. Owner/source absence, invalid local
-  declarations, and cohort removal withdraw exactly their obsolete closure while failed or stale runs preserve the last
-  coherent family. Inline TypeScript templates, runtime analysis, checker products, dependent public answers, and
-  production LSP epoch replacement remain outside this focused harness. Configuration/DI lifecycle ownership also remains
-  upstream: the cohort planner spends the current app-world snapshot and must not grow a parallel registration or
-  resource catalog; the complete app-analysis authority already owns that larger replacement boundary. Delete this
-  harness and its dynamic cohort authorities after its useful forcing tests run through production child manifests.
 - `configuration/app-analysis-computation.ts` is the production authority around the complete app project pass. One project
   locus owns one current generation regardless of analysis depth or authoring policy; those are replacement inputs, not
   parallel owners of stable handles. `AureliaAppWorldProjectEmission` pins the exact generation used by its downstream

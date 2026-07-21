@@ -43,22 +43,16 @@ export class AuthoredSourceTextCache {
     if (cached !== undefined) {
       return cached;
     }
-    let source: AuthoredSourceText | null;
-    try {
-      const text = this.inputHost.readFile(hostPath);
-      if (text === undefined) {
-        throw new Error(`Authored source ${hostPath} is unavailable.`);
-      }
-      source = {
-        sourcePath,
-        hostPath,
-        text,
-        contentRevision: sourceTextContentRevision(text),
-        lineStarts: authoredSourceLineStartsForText(text),
-      };
-    } catch {
-      source = null;
-    }
+    const text = this.inputHost.readFile(hostPath);
+    const source = text === undefined
+      ? null
+      : {
+          sourcePath,
+          hostPath,
+          text,
+          contentRevision: sourceTextContentRevision(text),
+          lineStarts: authoredSourceLineStartsForText(text),
+        };
     this.sourcesByHostPath.set(hostPath, source);
     return source;
   }

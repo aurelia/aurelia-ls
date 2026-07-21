@@ -79,7 +79,9 @@ source without copying those paths into fixtures or durable docs. Materializers 
 configuration, and registration bodies in the linked package source if project evaluation reaches those modules through
 ordinary import edges.
 
-Boot admissions define project/source membership for the runtime session. Existing admitted file contents, tsconfig,
-and package wiring are read through `SemanticRuntimeProjectInputAuthority`; advancing that authority revokes captured
-hosts and lets the next app request rebuild compiler options and semantic products coherently. Project discovery,
-newly admitted files, and removed project frames are topology changes and still require a fresh booted runtime.
+Project-qualified source admissions define stable physical source identities for the runtime session. Boot creates the
+initial admissions; project evaluation may intern additional imported locations through the same authority without
+making their address lifetime depend on one evaluator generation. File contents, existence, import reachability,
+tsconfig, and package wiring are read through `SemanticRuntimeProjectInputAuthority`; advancing that authority revokes
+captured hosts and lets the next app request rebuild compiler options and semantic products coherently. Project
+discovery and removed project frames are topology changes and still require a fresh booted runtime.

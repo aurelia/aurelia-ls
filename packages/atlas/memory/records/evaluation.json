@@ -574,6 +574,7 @@
         "Keep checker/project inclusion separate from Aurelia app-world evaluation eligibility. Top-level tooling scripts remain visible to TypeScript diagnostics without producing app-world evaluation seams.",
         "Preserve every unique static-evaluation origin, including several module-graph-dependency roots for one source. Never compact origin rows by kind because entryModuleKey and entrySourcePath are causal provenance.",
         "Public open-seam context should consume source origins query-time instead of adding durable kernel records or MCP-local source-origin guesses.",
+        "Intern graph-discovered physical source locations through the project-qualified source-admission authority. Evaluator generations own reachability and exact existence/text/resolution reads, not the lifetime of source-file address records.",
         "Boot source admission remains upstream. A new unimported template or resource requires source-admission producer work; do not hide that gap with evaluator-local filesystem rescans.",
         "Do not add module/SCC caches until exact manifests, repeated-edit measurements, semantic equality, and deterministic activation prove the split is useful."
       ],
@@ -628,6 +629,12 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/boot/boot-workspace.ts",
+          "symbolName": "admitSourceFile",
+          "summary": "Project-qualified stable source identity shared by boot and graph-discovered imported locations."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/boot/source-discovery.ts",
           "symbolName": "discoverSourceFiles",
           "summary": "Boot-owned source admission boundary that is not yet rediscovered across input generations."
@@ -648,14 +655,14 @@
           "kind": "product-large-class",
           "className": "StaticProjectEvaluationComputationService",
           "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
-          "minLineCount": 180,
-          "minMethodCount": 8
+          "minLineCount": 80,
+          "minMethodCount": 3
         },
         {
           "kind": "product-large-class",
           "className": "StaticProjectEvaluationGeneration",
           "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
-          "minLineCount": 60,
+          "minLineCount": 40,
           "minMethodCount": 2
         },
         {
@@ -667,7 +674,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-19"
+      "updatedAt": "2026-07-21"
     },
     {
       "id": "frontier:evaluation-module-loader",

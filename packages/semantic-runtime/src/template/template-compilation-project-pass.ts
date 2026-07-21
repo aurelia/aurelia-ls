@@ -1,5 +1,6 @@
 import { performance } from 'node:perf_hooks';
 
+import type { ProjectBootFrame } from '../boot/frames.js';
 import type { AureliaAppWorldEmission } from '../configuration/app-world-composer.js';
 import {
   DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
@@ -34,6 +35,9 @@ import { ResourceProductDetails } from '../resources/product-details.js';
 import type { KernelStore, KernelTelemetryReadView } from '../kernel/store.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
 import type { ProductDetailSlot } from '../kernel/product-details.js';
+import { authoredSourceHostPathCandidates } from '../kernel/authored-source-text.js';
+import { sourceFileAddressForAddress } from '../kernel/source-address.js';
+import { sourceTextContentRevision } from '../kernel/source-text-snapshot.js';
 import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 import type { GenerationAuthority } from '../kernel/generation-authority.js';
 import type { ComputationRead, ComputationRun } from '../kernel/computation-lifecycle.js';
@@ -268,6 +272,28 @@ export interface TemplateCompilationProjectOptions {
   readonly telemetry?: SemanticRuntimeTelemetryOptions | null;
 }
 
+/** Immutable pre-template plan shared by family compilation and post-template runtime analysis. */
+export class TemplateCompilationProjectPlan {
+  constructor(
+    readonly appWorld: AureliaAppWorldEmission,
+    readonly cohortPlan: TemplateCompilationCohortProjectPlan,
+    readonly authoringTemplateSourceFiles: readonly string[],
+    readonly authoringTemplateLimit: number | null,
+    readonly telemetry: NormalizedSemanticRuntimeTelemetryOptions,
+    readonly profile: TemplateCompilationProjectProfile,
+  ) {}
+}
+
+/** Complete recursive compiler-front-door values before project-wide runtime/checker analysis. */
+export class TemplateCompilationFrontDoorEmission {
+  constructor(
+    readonly plan: TemplateCompilationProjectPlan,
+    readonly appCompilations: readonly TemplateResourceCompilationEmission[],
+    readonly authoringCompilations: readonly TemplateResourceCompilationEmission[],
+    readonly profile: TemplateCompilationProjectProfile,
+  ) {}
+}
+
 class TemplateCompilationPhaseRecorder {
   readonly phases: TemplateCompilationProjectPhaseTiming[] = [];
 
@@ -286,6 +312,22 @@ class TemplateCompilationPhaseRecorder {
 
 /** Template compilation-front-door result for one app-world composition. */
 export class TemplateCompilationProjectEmission {
+  get appWorld(): AureliaAppWorldEmission {
+    return this.frontDoor.plan.appWorld;
+  }
+
+  get cohortPlan(): TemplateCompilationCohortProjectPlan {
+    return this.frontDoor.plan.cohortPlan;
+  }
+
+  get authoringTemplateSourceFiles(): readonly string[] {
+    return this.frontDoor.plan.authoringTemplateSourceFiles;
+  }
+
+  get authoringTemplateLimit(): number | null {
+    return this.frontDoor.plan.authoringTemplateLimit;
+  }
+
   get compilerWorlds(): readonly TemplateCompilerWorldEmission[] {
     return uniqueCompilerWorlds([
       ...this.cohortPlan.appRootCompilerWorlds,
@@ -295,20 +337,14 @@ export class TemplateCompilationProjectEmission {
   }
 
   constructor(
-    /** App-world composition that supplied compiler worlds. */
-    readonly appWorld: AureliaAppWorldEmission,
-    /** Complete pre-compilation owner/cohort plan consumed by both eager replay and family computations. */
-    readonly cohortPlan: TemplateCompilationCohortProjectPlan,
+    /** Plan plus complete recursive compiler-front-door values consumed by runtime/checker analysis. */
+    readonly frontDoor: TemplateCompilationFrontDoorEmission,
     /** App/runtime visible template compilation plus runtime/checker analysis emissions. */
     readonly resources: readonly TemplateResourceRuntimeAnalysisEmission[],
     /** Opt-in standalone resource-library template emissions for authoring/LSP inquiries. */
     readonly authoringResources: readonly TemplateResourceRuntimeAnalysisEmission[],
     /** Checker-expression generation shared by every resource and app-level follow-up in this project emission. */
     readonly expressionWorld: CheckerExpressionTypeWorld,
-    /** Source files selected for standalone authoring compilation; empty means project-wide selection. */
-    readonly authoringTemplateSourceFiles: readonly string[],
-    /** Maximum standalone authoring templates requested for this emission; null means unbounded. */
-    readonly authoringTemplateLimit: number | null,
     /** Nested timing profile for template front-door and runtime-analysis pressure. */
     readonly profile: TemplateCompilationProjectProfile,
   ) {}
@@ -317,13 +353,10 @@ export class TemplateCompilationProjectEmission {
   forCommittedGeneration(authority: GenerationAuthority): TemplateCompilationProjectEmission {
     const expressionWorld = this.expressionWorld.forCommittedGeneration(authority);
     return new TemplateCompilationProjectEmission(
-      this.appWorld,
-      this.cohortPlan,
+      this.frontDoor,
       this.resources.map((resource) => resource.forCommittedGeneration(expressionWorld)),
       this.authoringResources.map((resource) => resource.forCommittedGeneration(expressionWorld)),
       expressionWorld,
-      this.authoringTemplateSourceFiles,
-      this.authoringTemplateLimit,
       this.profile,
     );
   }
@@ -379,25 +412,25 @@ export class TemplateCompilationProjectPass {
     routeContexts: RouteConfigContextMaterializationProjectResult | null = null,
     options: TemplateCompilationProjectOptions = {},
   ): TemplateCompilationProjectEmission {
+    const plan = this.plan(appWorld, typeSystem, resourceDefinitions, routeContexts, options);
+    const frontDoor = this.compileFrontDoors(plan);
+    return this.analyzeFrontDoors(frontDoor, typeSystem, resourceDefinitions, options);
+  }
+
+  /** Plan the complete stable owner/cohort set before entering any authored family child. */
+  plan(
+    appWorld: AureliaAppWorldEmission,
+    typeSystem: TypeSystemProject | null = null,
+    resourceDefinitions: ResourceDefinitionIndex | null = null,
+    routeContexts: RouteConfigContextMaterializationProjectResult | null = null,
+    options: TemplateCompilationProjectOptions = {},
+  ): TemplateCompilationProjectPlan {
     const started = performance.now();
-    const evaluation = options.evaluation?.forkSession() ?? null;
-    const sourceValueActivationView = evaluation == null || typeSystem == null
-      ? null
-      : new DiProviderActivationView(
-          this.publication,
-          evaluation,
-          typeSystem,
-          appWorld.configuration,
-          appWorld.diWorld,
-        );
-    const phaseRecorder = new TemplateCompilationPhaseRecorder(
-      this.publication,
-      normalizeSemanticRuntimeTelemetryOptions(
-        options.telemetry,
-        DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
-      ),
+    const telemetry = normalizeSemanticRuntimeTelemetryOptions(
+      options.telemetry,
+      DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
     );
-    const runtimeAnalysisDepth = options.runtimeAnalysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH;
+    const phases = new TemplateCompilationPhaseRecorder(this.publication, telemetry);
     const authoringTemplateLimit = normalizedAuthoringTemplateLimit(options.authoringTemplateLimit);
     const authoringTemplateSourceFiles = normalizedAuthoringTemplateSourceFiles(options.authoringTemplateSourceFiles);
     const projectKey = options.projectKey ?? 'project';
@@ -410,12 +443,58 @@ export class TemplateCompilationProjectPass {
       options.includeAuthoringTemplates === true,
       authoringTemplateSourceFiles,
       authoringTemplateLimit,
-      phaseRecorder,
+      phases,
     ));
-    const [appCompilations, authoringCompilations] = this.compilePlannedCohorts(
+    return new TemplateCompilationProjectPlan(
+      appWorld,
       cohortPlan,
-      phaseRecorder,
+      authoringTemplateSourceFiles,
+      authoringTemplateLimit,
+      telemetry,
+      templateCompilationProfile(started, phases.phases),
     );
+  }
+
+  /** Compile every recursive family under its existing stable child locus. */
+  compileFrontDoors(
+    plan: TemplateCompilationProjectPlan,
+    project: ProjectBootFrame | null = null,
+  ): TemplateCompilationFrontDoorEmission {
+    const started = performance.now();
+    const phases = new TemplateCompilationPhaseRecorder(this.publication, plan.telemetry);
+    const [appCompilations, authoringCompilations] = this.compilePlannedCohorts(
+      plan.cohortPlan,
+      phases,
+      project,
+    );
+    return new TemplateCompilationFrontDoorEmission(
+      plan,
+      appCompilations,
+      authoringCompilations,
+      mergeTemplateCompilationProfiles(plan.profile, templateCompilationProfile(started, phases.phases)),
+    );
+  }
+
+  /** Materialize the shared runtime/checker graph from already compiled family front doors. */
+  analyzeFrontDoors(
+    frontDoor: TemplateCompilationFrontDoorEmission,
+    typeSystem: TypeSystemProject | null = null,
+    resourceDefinitions: ResourceDefinitionIndex | null = null,
+    options: TemplateCompilationProjectOptions = {},
+  ): TemplateCompilationProjectEmission {
+    const started = performance.now();
+    const evaluation = options.evaluation?.forkSession() ?? null;
+    const sourceValueActivationView = evaluation == null || typeSystem == null
+      ? null
+      : new DiProviderActivationView(
+          this.publication,
+          evaluation,
+          typeSystem,
+          frontDoor.plan.appWorld.configuration,
+          frontDoor.plan.appWorld.diWorld,
+        );
+    const phaseRecorder = new TemplateCompilationPhaseRecorder(this.publication, frontDoor.plan.telemetry);
+    const runtimeAnalysisDepth = options.runtimeAnalysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH;
     const expressionWorld = new CheckerExpressionTypeWorld(
       this.store,
       new CheckerTypeProjector(this.store, this.publication),
@@ -423,7 +502,7 @@ export class TemplateCompilationProjectPass {
       options.stateStores ?? [],
     );
     const resources = this.analyzeCompiledResources(
-      appCompilations,
+      frontDoor.appCompilations,
       options.projectKey ?? null,
       evaluation,
       typeSystem,
@@ -434,7 +513,7 @@ export class TemplateCompilationProjectPass {
       phaseRecorder,
     );
     const authoringResources = this.analyzeCompiledResources(
-      authoringCompilations,
+      frontDoor.authoringCompilations,
       options.projectKey ?? null,
       evaluation,
       typeSystem,
@@ -445,26 +524,22 @@ export class TemplateCompilationProjectPass {
       phaseRecorder,
     );
 
-    const profile: TemplateCompilationProjectProfile = {
-      totalMilliseconds: performance.now() - started,
-      phases: phaseRecorder.phases,
-    };
-
     return new TemplateCompilationProjectEmission(
-      appWorld,
-      cohortPlan,
+      frontDoor,
       resources,
       authoringResources,
       expressionWorld,
-      authoringTemplateSourceFiles,
-      authoringTemplateLimit,
-      profile,
+      mergeTemplateCompilationProfiles(
+        frontDoor.profile,
+        templateCompilationProfile(started, phaseRecorder.phases),
+      ),
     );
   }
 
   private compilePlannedCohorts(
     plan: TemplateCompilationCohortProjectPlan,
     phases: TemplateCompilationPhaseRecorder,
+    project: ProjectBootFrame | null,
   ): readonly [
     app: readonly TemplateResourceCompilationEmission[],
     authoring: readonly TemplateResourceCompilationEmission[],
@@ -479,27 +554,102 @@ export class TemplateCompilationProjectPass {
         continue;
       }
       this.publication.withChild(new TemplateCompilationLocus(plan.projectKey, owner.ownerHandle), () => {
-        for (const cohort of owner.cohorts) {
-          const localKey = templateResourceCompilationLocalKey(plan.projectKey, owner, cohort);
-          const result = cohort.parentCompilerWorld.templateCompiler.compile(
-            new TemplateCompilerCompileRequest(localKey, owner.definition),
-            new ProjectTemplateCompilerHost(
-              this,
-              owner.ownerHandle,
-              TemplateCompilerWorldAuthority.fixed(cohort.parentCompilerWorld),
-              cohort.analysisContextProductHandle,
-              cohort.appRootDefinitionProductHandle,
-              phases,
-            ),
-          );
-          if (result.output != null) {
-            const target = cohort.kind === TemplateCompilationCohortKind.App ? app : authoring;
-            target.push(...result.output);
+        const compileOwner = (): void => {
+          if (project != null) {
+            this.requireCurrentTemplateSource(project, owner);
           }
+          for (const cohort of owner.cohorts) {
+            const localKey = templateResourceCompilationLocalKey(plan.projectKey, owner, cohort);
+            const result = cohort.parentCompilerWorld.templateCompiler.compile(
+              new TemplateCompilerCompileRequest(localKey, owner.definition),
+              new ProjectTemplateCompilerHost(
+                this,
+                owner.ownerHandle,
+                TemplateCompilerWorldAuthority.fixed(cohort.parentCompilerWorld),
+                cohort.analysisContextProductHandle,
+                cohort.appRootDefinitionProductHandle,
+                phases,
+              ),
+            );
+            if (result.output != null) {
+              const target = cohort.kind === TemplateCompilationCohortKind.App ? app : authoring;
+              target.push(...result.output);
+            }
+          }
+        };
+        if (project == null) {
+          compileOwner();
+          return;
+        }
+        const inputReads = project.inputGeneration.createReadScope(
+          `template-family:${encodeTemplateCompilationKeyParts([plan.projectKey, owner.ownerHandle])}`,
+        );
+        project.inputGeneration.withReadScope(inputReads, compileOwner);
+        for (const read of inputReads.readRegisteredInputs()) {
+          this.publication.observe(read);
         }
       });
     }
     return [app, authoring];
+  }
+
+  private requireCurrentTemplateSource(
+    project: ProjectBootFrame,
+    owner: TemplateCompilationOwnerPlan,
+  ): void {
+    const template = owner.definition.template;
+    const sourceAddressHandle = template?.addressHandle ?? null;
+    if (template == null) {
+      throw new Error(`Template owner ${owner.definition.name} has no template definition.`);
+    }
+    if (sourceAddressHandle == null) {
+      if (template.kind === CustomElementTemplateKind.Open) {
+        return;
+      }
+      throw new Error(
+        `Template owner ${owner.definition.name} has no exact authored source revision `
+        + `(kind=${template?.kind ?? 'absent'}, address=${sourceAddressHandle ?? 'absent'}, `
+        + `contributions=${owner.definition.contributions.map((entry) => entry.contributionKind).join(',') || 'none'}).`,
+      );
+    }
+    const sourceFile = sourceFileAddressForAddress(this.publication, sourceAddressHandle);
+    if (sourceFile == null) {
+      throw new Error(`Template owner ${owner.definition.name} has no authored source-file address.`);
+    }
+    if (template.authoredSourceRevision == null) {
+      for (const fileName of authoredSourceHostPathCandidates(
+        project.workspaceRootDir,
+        project.rootDir,
+        sourceFile.path,
+      )) {
+        if (!project.inputGeneration.host.fileExists(fileName)) {
+          continue;
+        }
+        if (project.inputGeneration.host.readFile(fileName) == null) {
+          throw new Error(`Template source ${fileName} exists but its text is unavailable.`);
+        }
+        throw new Error(`Template source ${sourceFile.path} became available after an open definition was admitted.`);
+      }
+      return;
+    }
+    for (const fileName of authoredSourceHostPathCandidates(
+      project.workspaceRootDir,
+      project.rootDir,
+      sourceFile.path,
+    )) {
+      if (!project.inputGeneration.host.fileExists(fileName)) {
+        continue;
+      }
+      const sourceText = project.inputGeneration.host.readFile(fileName);
+      if (sourceText == null) {
+        throw new Error(`Template source ${fileName} exists but its text is unavailable.`);
+      }
+      if (sourceTextContentRevision(sourceText) !== template.authoredSourceRevision) {
+        throw new Error(`Template source ${sourceFile.path} changed after its definition was admitted.`);
+      }
+      return;
+    }
+    throw new Error(`Template source ${sourceFile.path} is absent from every authored source root.`);
   }
 
   private analyzeCompiledResources(
@@ -1454,6 +1604,26 @@ function templateResourceCompilationLocalKey(
     owner.ownerHandle,
     cohort.key,
   ])}`;
+}
+
+function templateCompilationProfile(
+  started: number,
+  phases: readonly TemplateCompilationProjectPhaseTiming[],
+): TemplateCompilationProjectProfile {
+  return {
+    totalMilliseconds: performance.now() - started,
+    phases,
+  };
+}
+
+function mergeTemplateCompilationProfiles(
+  left: TemplateCompilationProjectProfile,
+  right: TemplateCompilationProjectProfile,
+): TemplateCompilationProjectProfile {
+  return {
+    totalMilliseconds: left.totalMilliseconds + right.totalMilliseconds,
+    phases: [...left.phases, ...right.phases],
+  };
 }
 
 function normalizedAuthoringTemplateLimit(value: number | null | undefined): number | null {

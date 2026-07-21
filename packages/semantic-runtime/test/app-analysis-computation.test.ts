@@ -11,7 +11,6 @@ import {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
 } from '../src/kernel/project-input.js';
-import { SourceTextSnapshotState } from '../src/kernel/source-text-snapshot.js';
 import { ResourceDiKeyIdentity } from '../src/kernel/identity.js';
 import { SourceFileAddress } from '../src/kernel/address.js';
 import { EvidenceRecord } from '../src/kernel/evidence.js';
@@ -60,22 +59,10 @@ describe('app analysis computation', () => {
       storeKey: 'contract:app-analysis-atomic-publication',
     });
     const incumbent = await runtime.openApp({ analysisDepth: 'runtime-topology' });
+    const projectKey = incumbent.project.projectKey;
     const retainedExpressionWorld = incumbent.emission.templates.expressionWorld;
     const retainedInquiryWorld = retainedExpressionWorld.freshInquiryGeneration();
     const retainedAsk = incumbent.ask.bind(incumbent);
-    const retainedCohortAuthority = incumbent.emission.templateCohorts;
-    const retainedOwner = incumbent.emission.templates.cohortPlan.ownerPlans[0] ?? null;
-    expect(retainedOwner).not.toBeNull();
-    if (retainedOwner == null) {
-      throw new Error('Expected the fixture to publish a template cohort owner.');
-    }
-    const retainedCohortSet = retainedCohortAuthority.cohortSetFor(retainedOwner.definition);
-    const retainedCompilerWorldAuthority = retainedCohortSet.current()[0]?.compilerWorldAuthority ?? null;
-    expect(retainedCompilerWorldAuthority).not.toBeNull();
-    if (retainedCompilerWorldAuthority == null) {
-      throw new Error('Expected the fixture to publish a compiler-world cohort.');
-    }
-    const incumbentCompilerWorld = retainedCompilerWorldAuthority.current();
     const baselineResource = incumbent.emission.templates.resources[0];
     const baselineSource = baselineResource?.compilation.unit.templateSource ?? null;
     expect(baselineSource).not.toBeNull();
@@ -144,12 +131,8 @@ describe('app analysis computation', () => {
     expect(() => retainedAsk({ kind: SemanticAppQueryKind.TemplateCompilations })).toThrow(/no longer current/);
     expect(() => retainedExpressionWorld.evaluator()).toThrow(/no longer current/);
     expect(() => retainedInquiryWorld.evaluator()).toThrow(/no longer current/);
-    expect(generation.emission.templateCohorts).toBe(retainedCohortAuthority);
-    expect(retainedCompilerWorldAuthority.current()).not.toBe(incumbentCompilerWorld);
-
     expect(runtime.appAnalysisComputations.retire(generation)).toBe(true);
-    expect(retainedCohortAuthority.current()).toBeNull();
-    expect(() => retainedCompilerWorldAuthority.current()).toThrow(/no longer current/);
+    expect(runtime.appAnalysisComputations.authorityFor(projectKey).current()).toBeNull();
   }, 60_000);
 
   test('keeps the incumbent intact when source validation rejects a candidate and when an older run loses', async () => {
@@ -169,25 +152,20 @@ describe('app analysis computation', () => {
     expect(incumbentGeneration).not.toBeNull();
 
     const racedAttempt = service.prepare(incumbent.project, { analysisDepth: 'runtime-topology' });
-    const racedSource = racedAttempt.sourceSnapshots.find(
-      (snapshot) => snapshot.state === SourceTextSnapshotState.Present,
-    );
-    expect(racedSource).toBeDefined();
-    if (racedSource == null) {
-      throw new Error('Expected the app candidate to retain at least one exact authored source snapshot.');
-    }
-    sourceOverlay.write(racedSource.fileName, `${racedSource.requireText()}\n<!-- raced -->`);
+    const racedFileName = path.join(fixtureRoot, 'src/compose-dashboard-app.html');
+    const racedSourceText = readFileSync(racedFileName, 'utf8');
+    sourceOverlay.write(racedFileName, `${racedSourceText}\n<!-- raced -->`);
     const raced = racedAttempt.commit();
     expect(raced.commit.state).toBe(ComputationCommitState.RejectedInputsChanged);
     expect(raced.commit.transition.invalidReads).toContainEqual(expect.objectContaining({
-      domain: 'source-text',
-      changedFacets: ['content'],
+      domain: 'project-input',
+      changedFacets: ['file-content'],
     }));
     const authority = service.authorityFor(incumbent.project.projectKey);
     expect(authority.committed()?.key).toBe(incumbentGeneration?.key);
     expect(authority.current()).toBeNull();
     expect(incumbent.isCurrent()).toBe(false);
-    sourceOverlay.clear(racedSource.fileName);
+    sourceOverlay.clear(racedFileName);
     expect(authority.current()?.key).toBe(incumbentGeneration?.key);
     expect(incumbent.isCurrent()).toBe(true);
     expect(incumbent.emission.templates.resources.length).toBeGreaterThan(0);

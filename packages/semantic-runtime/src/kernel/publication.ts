@@ -33,6 +33,7 @@ import { SourceFileAddress } from './address.js';
 import {
   MaterializedProduct,
   sameMaterializedProductEnvelope,
+  type MaterializationOwnerHandle,
   type MaterializationRecord,
 } from './materialization.js';
 import {
@@ -249,6 +250,27 @@ export class StagedKernelRead<TValue> {
   ) {}
 }
 
+/** Candidate-normalized owner membership plus the committed and staged rows that supplied it. */
+export class StagedKernelMaterializationOwnerRead {
+  readonly records: readonly MaterializationRecord[];
+  readonly committedRecords: readonly MaterializationRecord[];
+  readonly stagedRecords: readonly MaterializationRecord[];
+  readonly excludedRecordHandles: readonly KernelRecordHandle[];
+
+  constructor(
+    records: readonly MaterializationRecord[],
+    committedRecords: readonly MaterializationRecord[],
+    stagedRecords: readonly MaterializationRecord[],
+    excludedRecordHandles: readonly KernelRecordHandle[],
+  ) {
+    this.records = Object.freeze([...records]);
+    this.committedRecords = Object.freeze([...committedRecords]);
+    this.stagedRecords = Object.freeze([...stagedRecords]);
+    this.excludedRecordHandles = Object.freeze([...excludedRecordHandles]);
+    Object.freeze(this);
+  }
+}
+
 /** Exact foreign product-detail entry, or absence, used by one staged admission decision. */
 export class KernelProductDetailAdmissionSnapshot {
   constructor(
@@ -412,6 +434,11 @@ export class GenerationBoundKernelPublicationContext implements KernelPublicatio
     return this.delegate.readMaterializations();
   }
 
+  readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[] {
+    this.requireCurrent();
+    return this.delegate.readMaterializationsByOwner(ownerHandle);
+  }
+
   readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
     this.requireCurrent();
     return this.delegate.readProductDetail(slot, productHandle);
@@ -463,6 +490,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
   private recordMutationOrdinals = new Map<KernelRecordHandle, number>();
   private productDetailMutationOrdinals = new Map<ProductHandle, number>();
   private hotDetailMutationOrdinals = new Map<HotDetailHandle, number>();
+  private readonly observedMaterializationOwners = new Set<MaterializationOwnerHandle>();
   private readonly previousRecordHandles: ReadonlySet<KernelRecordHandle>;
   private readonly previousProductDetailHandles: ReadonlySet<ProductHandle>;
   private readonly previousHotDetailHandles: ReadonlySet<HotDetailHandle>;
@@ -571,6 +599,41 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       }
     }
     return [...materializations.values()];
+  }
+
+  readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[] {
+    return this.readMaterializationOwnerCandidate(ownerHandle).records;
+  }
+
+  /** Read one exact owner set while retaining which rows are foreign inputs and which are candidate outputs. */
+  readMaterializationOwnerCandidate(ownerHandle: MaterializationOwnerHandle): StagedKernelMaterializationOwnerRead {
+    this.requireCurrent();
+    if (!this.sealed) {
+      this.observedMaterializationOwners.add(ownerHandle);
+    }
+    const committed = new Map(
+      this.store.readMaterializationsByOwner(ownerHandle)
+        .filter((record) => !this.previousRecordHandles.has(record.handle))
+        .map((record) => [record.handle, record]),
+    );
+    const previous = this.store.readMaterializationsByOwner(ownerHandle)
+      .filter((record) => this.previousRecordHandles.has(record.handle));
+    const staged = [...this.records.values()]
+      .filter((record): record is MaterializationRecord =>
+        record.kind === 'materialization-record' && record.ownerHandle === ownerHandle
+      )
+      .sort((left, right) => left.handle.localeCompare(right.handle));
+    for (const record of staged) {
+      committed.delete(record.handle);
+    }
+    const committedRecords = [...committed.values()].sort((left, right) => left.handle.localeCompare(right.handle));
+    const records = [...committedRecords, ...staged].sort((left, right) => left.handle.localeCompare(right.handle));
+    return new StagedKernelMaterializationOwnerRead(
+      records,
+      committedRecords,
+      staged,
+      [...new Set([...previous, ...staged].map((record) => record.handle))].sort(),
+    );
   }
 
   readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
@@ -804,6 +867,14 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
 
       for (const record of plan.batch.records) {
         const handle = record.handle;
+        if (
+          record.kind === 'materialization-record'
+          && this.observedMaterializationOwners.has(record.ownerHandle)
+        ) {
+          throw new Error(
+            `Staged publication cannot add materialization ${handle} after owner ${record.ownerHandle} was observed.`,
+          );
+        }
         if (records.has(handle)) {
           throw new Error(`Staged publication emitted duplicate kernel record ${handle}.`);
         }

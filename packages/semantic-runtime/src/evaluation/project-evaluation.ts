@@ -993,7 +993,7 @@ class StaticProjectEvaluationFrame {
     const kernelEmitter = this.kernelEmitter;
     if (kernelEmitter != null) {
       kernelEmitter.emitOpenSeams(evaluation, (seam) =>
-        resolveOpenSeamSource(kernelEmitter.publication, this.project, this.admissionsByModuleKey, seam)
+        resolveOpenSeamSource(kernelEmitter.store, this.project, this.admissionsByModuleKey, seam)
       );
     }
     this.publishSourceResult(new StaticProjectEvaluationSourceResult(
@@ -1074,7 +1074,7 @@ class StaticProjectEvaluationFrame {
     if (this.kernelEmitter == null) {
       return null;
     }
-    const admitted = linkedSourceAdmission(this.kernelEmitter.publication, this.project, sourceFile);
+    const admitted = linkedSourceAdmission(this.kernelEmitter.store, this.project, sourceFile);
     indexSourceAdmission(this.admissionsByModuleKey, this.project, admitted);
     this.admissionsByModuleKey.set(graphModuleKey, admitted);
     this.admissionsByModuleKey.set(normalizeModuleKey(sourceFile.fileName), admitted);
@@ -1189,7 +1189,7 @@ function measureStaticProjectEvaluationPhase<TValue>(
 }
 
 function resolveOpenSeamSource(
-  publication: KernelPublicationContext,
+  store: KernelStore,
   project: ProjectBootFrame,
   admissionsByModuleKey: Map<string, SourceFileAdmission>,
   seam: EvaluationOpenSeam,
@@ -1203,7 +1203,7 @@ function resolveOpenSeamSource(
       sourceFileAddressHandle: existing.addressHandle,
     };
   }
-  const admitted = linkedSourceAdmission(publication, project, sourceFile);
+  const admitted = linkedSourceAdmission(store, project, sourceFile);
   indexSourceAdmission(admissionsByModuleKey, project, admitted);
   admissionsByModuleKey.set(sourceModuleKey, admitted);
   return {
@@ -1222,11 +1222,12 @@ function indexSourceAdmission(
 }
 
 function linkedSourceAdmission(
-  publication: KernelPublicationContext,
+  store: KernelStore,
   project: ProjectBootFrame,
   sourceFile: ts.SourceFile,
 ): SourceFileAdmission {
-  return admitSourceFile(publication, project.workspaceRootDir, project.rootDir, project.projectKey, {
+  // Source locations are project-lifetime identities. Import reachability and text stay evaluator-generation reads.
+  return admitSourceFile(store, project.workspaceRootDir, project.rootDir, project.projectKey, {
     path: sourceFile.fileName,
     note: 'Source file admitted as a static evaluation dependency.',
   });

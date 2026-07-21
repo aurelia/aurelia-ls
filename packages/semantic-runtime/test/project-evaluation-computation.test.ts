@@ -195,6 +195,25 @@ describe('reusable project evaluation computations', () => {
     expect(second).not.toBe(first);
     expect(second.readBaseline().readUnresolvedModules()).toHaveLength(0);
     expect(second.readBaseline().sources.map((source) => source.admission.path)).toContain('missing.ts');
+    const admittedMissingSource = runtime.workspace.store.readSourceFileAddressesByFileName('missing.ts')[0];
+    expect(admittedMissingSource).toBeDefined();
+    expect(runtime.computationLifecycle.readState(second.computationAuthority.computationId)?.outputs)
+      .not.toContainEqual(expect.objectContaining({ handle: admittedMissingSource?.handle }));
+
+    writeFileSync(path.join(root, 'entry.ts'), [
+      "import { DI } from '@aurelia/kernel';",
+      'export const state = { count: 1 };',
+      "export const IState = DI.createInterface('IState', builder => builder.instance(state));",
+      "export const ISelf = DI.createInterface('ISelf', builder => builder.instance(builder));",
+    ].join('\n'), 'utf8');
+    const withoutImportProject = project.forInputGeneration(runtime.workspace.projectInputAuthority.capture(project));
+    const withoutImport = runtime.projectEvaluations.acquire(
+      withoutImportProject,
+      aureliaAppProjectEvaluationProfile,
+    ).generation;
+    expect(withoutImport).not.toBe(second);
+    expect(withoutImport.readBaseline().sources.map((source) => source.admission.path)).not.toContain('missing.ts');
+    expect(runtime.workspace.store.read(admittedMissingSource!.handle)).toBe(admittedMissingSource);
   }, 30_000);
 
   test('rejects a stale ambient-declaration read and recomputes it once a new input generation is captured', async () => {

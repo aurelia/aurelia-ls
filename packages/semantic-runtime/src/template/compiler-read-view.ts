@@ -411,9 +411,8 @@ function compilerScopeClosure(
   const resourceOwners = [...world.resourceScope.resources, ...world.resourceScope.syntaxResources]
     .flatMap((resource) => resource.resourceIdentityHandle == null ? [] : [resource.resourceIdentityHandle]);
   const ownerIdentityHandles = [...new Set([...containerOwners, ...resourceOwners])].sort();
-  const ownerSet = new Set(ownerIdentityHandles);
-  const materializations = store.readMaterializations()
-    .filter((materialization) => ownerSet.has(materialization.ownerHandle as IdentityHandle))
+  const materializations = ownerIdentityHandles
+    .flatMap((ownerHandle) => store.readMaterializationsByOwner(ownerHandle))
     .sort((left, right) => left.handle.localeCompare(right.handle));
   const supportedOwners = new Set(materializations.map((materialization) => materialization.ownerHandle));
   const unsupportedContainerIdentityHandles = containerOwners

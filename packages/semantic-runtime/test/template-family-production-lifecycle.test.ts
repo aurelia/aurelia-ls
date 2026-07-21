@@ -9,9 +9,14 @@ import {
   SemanticRuntime,
   createSemanticRuntime,
 } from '../src/api/runtime.js';
-import type { AureliaAppWorldProjectEmission } from '../src/configuration/app-world-project-pass.js';
+import {
+  AureliaAppAnalysisPhase,
+  type AureliaAppWorldProjectEmission,
+} from '../src/configuration/app-world-project-pass.js';
 import {
   ComputationCommitState,
+  computationProductDetailReadKey,
+  computationRecordReadKey,
   type ComputationChildState,
   type ComputationOutput,
   type ComputationState,
@@ -22,6 +27,7 @@ import { KernelPublicationDecisionKind } from '../src/kernel/publication.js';
 import {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
+  SemanticRuntimeProjectInputReadKind,
   type SemanticRuntimeSourceTextOverlay,
 } from '../src/kernel/project-input.js';
 import { sourceFileAddressForAddress } from '../src/kernel/source-address.js';
@@ -39,6 +45,7 @@ import { TemplateCompilerFrameworkErrorCode } from '../src/template/framework-er
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import { TemplateCompilationLocus } from '../src/template/template-compilation-cohort.js';
 import type { TemplateResourceCompilationEmission } from '../src/template/template-compilation-project-pass.js';
+import { resourceLocalRuntimeBindings } from '../src/template/runtime-resource-ownership.js';
 
 class MutableProjectSourceOverlay implements SemanticRuntimeSourceTextOverlay {
   private readonly valuesByFileName = new Map<string, string | null>();
@@ -125,12 +132,24 @@ describe('production template-family lifecycle', () => {
 
     const committed = attempt.commit();
     expect(committed.commit.state).toBe(ComputationCommitState.Committed);
+    const appState = currentAppState(runtime, project.projectKey);
+    expect(appState.children.some((child) =>
+      child.locus.kind === 'computation-remainder'
+    )).toBe(false);
+    expect(appState.children.filter((child) =>
+      child.locus.kind === 'aurelia-app-analysis-phase'
+    ).map((child) => child.locus.reconciliationKey).sort()).toEqual([
+      JSON.stringify([project.projectKey, AureliaAppAnalysisPhase.PostTemplate]),
+      JSON.stringify([project.projectKey, AureliaAppAnalysisPhase.PreTemplate]),
+    ]);
     const familyLocus = new TemplateCompilationLocus(project.projectKey, familyOwnerHandle);
-    const familyState = currentAppState(runtime, project.projectKey).children.find((child) =>
+    const familyState = appState.children.find((child) =>
       child.locus.kind === familyLocus.kind
         && child.locus.reconciliationKey === familyLocus.reconciliationKey
     ) ?? null;
     expect(familyState).not.toBeNull();
+    expect(familyState?.hasOnlyRevisionedReads).toBe(true);
+    expect(familyState?.openReads).toEqual([]);
     expect(familyState?.outputs).toContainEqual(expect.objectContaining({
       handle: nestedLocal.unit.compilationUnit.productHandle,
     }));
@@ -328,6 +347,119 @@ describe('production template-family lifecycle', () => {
     expect(restoredSourceAttempt.commit().commit.state).toBe(ComputationCommitState.Committed);
   }, 120_000);
 
+  test('keeps recursively rendered child bindings out of their authored parent resource', async () => {
+    const fixtureRoot = pressureFixtureRoot('resource-registration-local-templates');
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:production-template-family-runtime-ownership',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const parent = app.emission.templates.resources.find((resource) =>
+      resource.compilation.definition.name === 'local-templates-app'
+    ) ?? null;
+    if (parent == null) {
+      throw new Error('Expected the local-template fixture family to be runtime analyzed.');
+    }
+    const familyLocalKeyPrefix = `${parent.compilation.localKey}:local-template:`;
+    const localResources = app.emission.templates.resources.filter((resource) =>
+      resource.compilation.localKey.startsWith(familyLocalKeyPrefix)
+    );
+    expect(localResources.map((resource) => resource.compilation.definition.name).sort()).toEqual([
+      'local-chip',
+      'local-icon',
+      'nested-local',
+      'outer-local',
+    ]);
+    expect(localResources.every(
+      (resource) => resource.compilation.familyOwnerHandle === parent.compilation.familyOwnerHandle,
+    )).toBe(true);
+    const outerLocal = localResources.find((resource) => resource.compilation.definition.name === 'outer-local');
+    const nestedLocal = localResources.find((resource) => resource.compilation.definition.name === 'nested-local');
+    expect(nestedLocal?.compilation.localKey).toBe(
+      `${outerLocal?.compilation.localKey}:local-template:nested-local`,
+    );
+
+    const state = currentAppState(runtime, app.project.projectKey);
+    const family = requireFamilyChildState(
+      runtime,
+      app.project.projectKey,
+      parent.compilation.familyOwnerHandle,
+    );
+    const postTemplate = state.children.find((child) =>
+      child.locus.kind === 'aurelia-app-analysis-phase'
+      && child.locus.reconciliationKey === JSON.stringify([
+        app.project.projectKey,
+        AureliaAppAnalysisPhase.PostTemplate,
+      ])
+    ) ?? null;
+    expect(postTemplate).not.toBeNull();
+    const familyOutputKeys = new Set(family.outputs.map((output) => output.readKey));
+    const postTemplateReadKeys = new Set([
+      ...(postTemplate?.reads ?? []).map((read) => read.readKey),
+      ...(postTemplate?.candidateReads ?? []).map((read) => read.readKey),
+    ]);
+    const familyResources = [parent, ...localResources];
+    const runtimeInputHandles = familyResources.flatMap((resource) => [
+      ...(resource.compilation.definition.productHandle == null
+        ? []
+        : [resource.compilation.definition.productHandle]),
+      resource.compilation.compiledTemplate.compiledTemplate.productHandle,
+      ...resource.compilation.compiledTemplate.renderTargets.map((target) => target.productHandle),
+      ...resource.compilation.compiledTemplate.instructionSequences.map((sequence) => sequence.productHandle),
+      ...resource.compilation.compiledTemplate.instructions.map((instruction) => instruction.productHandle),
+      resource.compilation.compilerWorld.world.productHandle,
+      resource.compilation.compilerWorld.resourceScope.productHandle,
+      resource.compilation.compilerWorld.rendering.productHandle,
+      resource.compilation.compilerWorld.templateCompiler.productHandle,
+      resource.compilation.compilerWorld.resourceResolver.productHandle,
+      resource.compilation.compilerWorld.expressionParser.productHandle,
+      resource.compilation.compilerWorld.attributeMapper.productHandle,
+      resource.compilation.compilerWorld.bindingCommandResolver.productHandle,
+      ...resource.compilation.authoredAttributeSyntaxes.map((syntax) => syntax.productHandle),
+    ]);
+    const familyOwnedRuntimeInputKeys = runtimeInputHandles
+      .flatMap((handle) => [computationRecordReadKey(handle), computationProductDetailReadKey(handle)])
+      .filter((readKey) => familyOutputKeys.has(readKey));
+    expect(familyOwnedRuntimeInputKeys.length).toBeGreaterThan(0);
+    expect([...postTemplateReadKeys]).toEqual(expect.arrayContaining(familyOwnedRuntimeInputKeys));
+    for (const resource of localResources) {
+      expect(postTemplateReadKeys).toContain(computationRecordReadKey(resource.compilation.definition.productHandle!));
+      expect(postTemplateReadKeys).toContain(
+        computationProductDetailReadKey(resource.compilation.definition.productHandle!),
+      );
+    }
+    const familyOwnedInstructionKeys = familyResources
+      .flatMap((resource) => resource.compilation.compiledTemplate.instructions)
+      .map((instruction) => computationProductDetailReadKey(instruction.productHandle))
+      .filter((readKey) => familyOutputKeys.has(readKey));
+    expect(familyOwnedInstructionKeys.length).toBeGreaterThan(0);
+    expect([...postTemplateReadKeys]).toEqual(expect.arrayContaining(familyOwnedInstructionKeys));
+    const localWorld = localResources.find((resource) =>
+      resource.compilation.compilerWorld !== resource.compilation.parentCompilerWorld
+    )?.compilation.compilerWorld ?? null;
+    if (localWorld == null) {
+      throw new Error('Expected a family-derived compiler world for local templates.');
+    }
+    expect([...postTemplateReadKeys]).toEqual(expect.arrayContaining([
+      computationRecordReadKey(localWorld.world.productHandle),
+      computationProductDetailReadKey(localWorld.world.productHandle),
+      computationRecordReadKey(localWorld.resourceScope.productHandle),
+      computationProductDetailReadKey(localWorld.resourceScope.productHandle),
+    ]));
+
+    const parentBindingHandles = new Set(
+      resourceLocalRuntimeBindings(runtime.workspace.store, parent).map((binding) => binding.productHandle),
+    );
+    const childBindingHandles = new Set(
+      localResources.flatMap((resource) =>
+        resourceLocalRuntimeBindings(runtime.workspace.store, resource).map((binding) => binding.productHandle)
+      ),
+    );
+    expect(parentBindingHandles.size).toBeGreaterThan(0);
+    expect(childBindingHandles.size).toBeGreaterThan(0);
+    expect([...parentBindingHandles].filter((handle) => childBindingHandles.has(handle))).toEqual([]);
+  }, 60_000);
+
   test('adds and withdraws complete authoring owner cohorts through production planning', async () => {
     const fixtureRoot = pressureFixtureRoot('resource-metadata-errors');
     const sourceFileName = path.join(fixtureRoot, 'src/resource-metadata-errors-app.ts');
@@ -422,8 +554,8 @@ describe('production template-family lifecycle', () => {
     const expandedTransition = latestTransition(runtime, expanded);
     expect(expandedCompilation.unit.templateSource.markup).toBe(expandedText);
     expect(expandedTransition.changedReads).toContainEqual(expect.objectContaining({
-      readKey: `source:${path.resolve(templateFileName)}`,
-      domain: 'source-text',
+      domain: 'project-input',
+      readKey: projectInputPathReadKey(SemanticRuntimeProjectInputReadKind.FileContent, templateFileName),
     }));
     expect(expandedTransition.publications).toContainEqual(expect.objectContaining({
       handle: sourceHandle,
@@ -532,6 +664,24 @@ describe('production template-family lifecycle', () => {
     if (itemCardDefinitionHandle == null) {
       throw new Error('Expected the item-card resource definition.');
     }
+    const baselineState = currentAppState(runtime, baseline.project.projectKey);
+    const preTemplate = baselineState.children.find((child) =>
+      child.locus.kind === 'aurelia-app-analysis-phase'
+      && child.locus.reconciliationKey === JSON.stringify([
+        baseline.project.projectKey,
+        AureliaAppAnalysisPhase.PreTemplate,
+      ])
+    ) ?? null;
+    const baselineItemListFamily = requireFamilyChildState(
+      runtime,
+      baseline.project.projectKey,
+      baselineItemList.familyOwnerHandle,
+    );
+    expect(preTemplate).not.toBeNull();
+    expect(baselineItemListFamily.candidateReads).toContainEqual(expect.objectContaining({
+      readKey: computationProductDetailReadKey(itemCardDefinitionHandle),
+      producerChildId: preTemplate?.childId,
+    }));
     const baselineBindableRead = requireCompilerRead(
       baselineItemList,
       TemplateCompilerReadKind.Bindables,
@@ -743,11 +893,45 @@ describe('production template-family lifecycle', () => {
     )).toBe(true);
     const relocatedTransition = latestTransition(runtime, relocated);
     expect(relocatedTransition.changedReads).toContainEqual(expect.objectContaining({
-      readKey: `source:${path.resolve(originalTemplateFileName)}`,
+      readKey: projectInputPathReadKey(
+        SemanticRuntimeProjectInputReadKind.FileContent,
+        originalTemplateFileName,
+      ),
       nextRevision: null,
     }));
     expect(relocatedTransition.changedReads).toContainEqual(expect.objectContaining({
-      readKey: `source:${path.resolve(relocatedTemplateFileName)}`,
+      readKey: projectInputPathReadKey(
+        SemanticRuntimeProjectInputReadKind.FileContent,
+        relocatedTemplateFileName,
+      ),
+      previousRevision: null,
+    }));
+
+    overlay.write(redirectedTemplateFileName, redirectedTemplate);
+    overlay.write(routeFileName, redirectedRoute);
+    const redirected = await reopenApp(runtime, inputAuthority, relocated);
+    const redirectedCompilation = requireNamedCompilation(redirected.emission, 'item-list-route');
+    expect(redirectedCompilation.unit.templateSource.markup).toBe(redirectedTemplate);
+    const redirectedSourceFile = sourceFileAddressForAddress(
+      runtime.workspace.store,
+      redirectedCompilation.unit.templateSource.sourceAddressHandle,
+    );
+    expect(path.normalize(redirectedSourceFile?.path ?? '').endsWith(
+      path.normalize('src/routes/item-list-route-redirected.html'),
+    )).toBe(true);
+    const redirectedTransition = latestTransition(runtime, redirected);
+    expect(redirectedTransition.changedReads).toContainEqual(expect.objectContaining({
+      readKey: projectInputPathReadKey(
+        SemanticRuntimeProjectInputReadKind.FileContent,
+        relocatedTemplateFileName,
+      ),
+      nextRevision: null,
+    }));
+    expect(redirectedTransition.changedReads).toContainEqual(expect.objectContaining({
+      readKey: projectInputPathReadKey(
+        SemanticRuntimeProjectInputReadKind.FileContent,
+        redirectedTemplateFileName,
+      ),
       previousRevision: null,
     }));
 
@@ -1040,4 +1224,13 @@ function duplicateLocalTemplateMarkup(): string {
 
 function pressureFixtureRoot(name: string): string {
   return path.resolve(fileURLToPath(new URL(`../fixtures/pressure/${name}`, import.meta.url)));
+}
+
+function projectInputPathReadKey(
+  kind: SemanticRuntimeProjectInputReadKind,
+  fileName: string,
+): string {
+  const normalized = path.resolve(fileName).replace(/\\/g, '/');
+  const locus = process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+  return `project-input:${kind}:${locus}`;
 }

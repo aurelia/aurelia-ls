@@ -208,6 +208,10 @@ files remain admitted source records but do not enter app-world static evaluatio
 module-graph envelope from source-host work: source-file reads/parses, TypeScript module resolution, evaluator path
 probes, declaration-source mapping, and cached file-system probes are visible so performance work can choose between
 CPU, memory, and precision instead of adding broad caches blindly.
+Graph-discovered physical source locations reuse the project-qualified source-admission authority; they are not outputs
+of the replaceable evaluator generation. The evaluator generation owns whether a module is reachable and the exact
+text/existence/resolution reads that established that reachability. Keeping those lifetimes separate lets downstream
+records retain valid source-address references while a later evaluator generation removes or relocates an import.
 The module-source host reports specifier-shape counters as well as resolution outcomes. Use `querySuffixCalls`,
 `assetSpecifierCalls`, `extensionlessRelativeCalls`, and `emittedJavaScriptRelativeCalls` to understand the authored
 module graph before changing caches or source-admission policy. Asset/query-shaped relative imports path-probe before

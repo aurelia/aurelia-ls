@@ -4,7 +4,11 @@ import type {
 } from './address.js';
 import type { SemanticClaim } from './claim.js';
 import type { SemanticIdentity } from './identity.js';
-import type { MaterializationRecord, MaterializedProduct } from './materialization.js';
+import type {
+  MaterializationOwnerHandle,
+  MaterializationRecord,
+  MaterializedProduct,
+} from './materialization.js';
 import {
   HotDetailCatalog,
   type HotDetailEntry,
@@ -227,6 +231,7 @@ export interface KernelRecordCollectionReadView extends KernelStoreReadView {
 /** Read boundary for consumers whose support/closure proof depends on materialization ownership. */
 export interface KernelMaterializationReadView extends KernelStoreReadView {
   readMaterializations(): readonly MaterializationRecord[];
+  readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[];
 }
 
 function addToSet<TKey, TValue>(
@@ -335,6 +340,7 @@ export class KernelStore {
   private readonly openSeams = new Map<OpenSeamHandle, OpenSeam>();
   private readonly products = new Map<ProductHandle, MaterializedProduct>();
   private readonly materializations = new Map<MaterializationHandle, MaterializationRecord>();
+  private readonly materializationHandlesByOwner = new Map<MaterializationOwnerHandle, Set<MaterializationHandle>>();
   private readonly sourceFileAddressesByPath = new Map<string, Set<AddressHandle>>();
   private readonly productsByKind = new Map<ProductKindKey, Set<ProductHandle>>();
   private readonly evidenceByAddress = new Map<AddressHandle, Set<EvidenceHandle>>();
@@ -2010,6 +2016,14 @@ export class KernelStore {
     return [...this.materializations.values()];
   }
 
+  /** Exact owner-local materialization membership; callers need not scan unrelated kernel work. */
+  readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[] {
+    return [...readSet(this.materializationHandlesByOwner, ownerHandle)]
+      .sort((left, right) => left.localeCompare(right))
+      .map((handle) => this.materializations.get(handle))
+      .filter((record): record is MaterializationRecord => record != null);
+  }
+
   /** Snapshot kernel size for telemetry; this does not expand product details or source text. */
   readKernelCountSnapshot(): SemanticRuntimeKernelCountSnapshot {
     return {
@@ -2370,6 +2384,7 @@ export class KernelStore {
         return;
       case 'materialization-record':
         this.materializations.set(record.handle, record);
+        addToSet(this.materializationHandlesByOwner, record.ownerHandle, record.handle);
         return;
     }
   }
@@ -2446,6 +2461,7 @@ export class KernelStore {
         return;
       case 'materialization-record':
         this.materializations.delete(record.handle);
+        removeFromSet(this.materializationHandlesByOwner, record.ownerHandle, record.handle);
         return;
     }
   }
