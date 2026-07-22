@@ -144,7 +144,12 @@ export class TemplateValueSiteMaterializer {
     const claims: SemanticClaim[] = [];
     const pendingSites = [
       ...textValueSites(input.html),
-      ...attributeValueSites(input.html, input.attributeSyntax, input.attributeClassification),
+      ...attributeValueSites(
+        input.html,
+        input.attributeSyntax,
+        input.attributeClassification,
+        input.compilerReads,
+      ),
     ];
 
     pendingSites.forEach((pending, index) => {
@@ -286,6 +291,7 @@ function attributeValueSites(
   html: HtmlParseEmission,
   syntaxEmission: AttributeSyntaxParseEmission,
   classificationEmission: AttributeClassificationEmission,
+  compilerReads: TemplateCompilerReadView,
 ): readonly PendingValueSite[] {
   const attributesByProduct = new Map(html.attributes.map((attribute) => [attribute.productHandle, attribute]));
   const syntaxByProduct = new Map(syntaxEmission.syntaxes.map((syntax) => [syntax.productHandle, syntax]));
@@ -303,7 +309,7 @@ function attributeValueSites(
     if (attribute == null) {
       continue;
     }
-    const site = siteForAttributeClassification(classification, syntax, attribute);
+    const site = siteForAttributeClassification(classification, syntax, attribute, compilerReads);
     if (site != null) {
       sites.push(site);
     }
@@ -315,6 +321,7 @@ function siteForAttributeClassification(
   classification: AttributeClassification,
   syntax: AttributeSyntax,
   attribute: HtmlAttribute,
+  compilerReads: TemplateCompilerReadView,
 ): PendingValueSite | null {
   if (classification.bindingCommand != null) {
     return new PendingValueSite(
@@ -343,7 +350,7 @@ function siteForAttributeClassification(
       );
     case AttributeClassificationKind.CustomAttribute:
     case AttributeClassificationKind.TemplateController:
-      return customAttributeOrTemplateControllerSite(classification, syntax, attribute);
+      return customAttributeOrTemplateControllerSite(classification, syntax, attribute, compilerReads);
     case AttributeClassificationKind.Captured:
       return interpolationAttributeSite(
         TemplateValueSiteKind.CapturedValue,
@@ -419,8 +426,9 @@ function customAttributeOrTemplateControllerSite(
   classification: AttributeClassification,
   syntax: AttributeSyntax,
   attribute: HtmlAttribute,
+  compilerReads: TemplateCompilerReadView,
 ): PendingValueSite {
-  const definition = classification.resource?.definition ?? null;
+  const definition = compilerReads.currentDefinition(classification.resource);
   const isMultiBinding = definition instanceof CustomAttributeDefinition
     && !definition.noMultiBindings
     && hasInlineBindings(syntax.rawValue);

@@ -570,7 +570,7 @@ function templateCompilerServiceReferenceReferences(
 function templateVisibleResourceReferences(
   resource: TemplateVisibleResource,
 ): readonly KernelDetailReference[] {
-  const definitionProductHandle = resource.definitionProductHandle ?? resource.definition?.productHandle ?? null;
+  const definitionProductHandle = resource.definitionProductHandle;
   return mergeKernelDetailReferences(
     kernelRecordReferences(
       resource.resourceProductHandle,

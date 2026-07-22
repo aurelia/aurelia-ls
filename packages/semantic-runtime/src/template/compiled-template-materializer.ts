@@ -624,8 +624,9 @@ class CompiledTemplateInstructionFactory {
     if (lane === 'plain') {
       return this.input.compilerReads.mapAttribute(node, syntax.target) ?? camelCaseAttributeName(syntax.target);
     }
-    const customAttributeDefinition = classification.resource?.definition instanceof CustomAttributeDefinition
-      ? classification.resource.definition
+    const currentDefinition = this.input.compilerReads.currentDefinition(classification.resource);
+    const customAttributeDefinition = currentDefinition instanceof CustomAttributeDefinition
+      ? currentDefinition
       : null;
     return classification.bindable?.definition.name ?? customAttributeDefinition?.defaultProperty ?? syntax.target;
   }
@@ -1248,8 +1249,9 @@ class CompiledTemplateInstructionTraversal {
     const visible = this.input.compilerReads.templateOwnerResource(
       this.input.definition,
     );
-    return visible?.definition instanceof CustomElementDefinition
-      ? visible.definition
+    const definition = this.input.compilerReads.currentDefinition(visible);
+    return definition instanceof CustomElementDefinition
+      ? definition
       : null;
   }
 

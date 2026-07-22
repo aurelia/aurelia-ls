@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
-import { AureliaAppWorldEmission } from '../src/configuration/app-world-composer.js';
 import { SourceFileAddress, SourceLanguage, SourceSpanAddress } from '../src/kernel/address.js';
 import type { ProductHandle } from '../src/kernel/handles.js';
 import { KernelStore } from '../src/kernel/store.js';
@@ -19,11 +18,9 @@ import {
   CustomElementTemplateDefinition,
 } from '../src/resources/custom-element-definition.js';
 import {
-  TemplateResourceResolverService,
-  TemplateResourceScope,
-} from '../src/template/compiler-world.js';
-import { TemplateCompilerWorldEmission } from '../src/template/compiler-world-materializer.js';
-import { TemplateVisibleResource } from '../src/template/compiler-world-reference.js';
+  ResourceDefinitionIndex,
+  ResourceDefinitionIndexEntry,
+} from '../src/resources/resource-definition-index.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import { compareCompiledTemplateDetails } from '../src/template/compiled-template-comparison.js';
 import { CompiledTemplate, CompiledTemplateState } from '../src/template/compiled-template.js';
@@ -228,7 +225,7 @@ describe('template compilation project pass', () => {
       throw new Error('Expected a compiled authored definition for the no-op policy fixture.');
     }
     const alreadyCompiled = customElementDefinitionWithTemplate(baseline, baseline.template, false);
-    const appWorld = appWorldWithDefinition(app.emission.appWorld, baseline, alreadyCompiled);
+    const resourceIndex = resourceIndexWithDefinition(app.emission.resourceIndex, baseline, alreadyCompiled);
     const run = runtime.computationLifecycle.begin({
       kind: 'template-compiler-no-op-policy-test',
       reconciliationKey: app.project.projectKey,
@@ -241,9 +238,9 @@ describe('template compilation project pass', () => {
         run,
         runtime.frameworkSupport,
       ).compile(
-        appWorld,
+        app.emission.appWorld,
         app.emission.typeSystem,
-        app.emission.resourceIndex,
+        resourceIndex,
         app.emission.routeContexts,
         {
           projectKey: `${app.project.projectKey}:no-op-policy`,
@@ -308,86 +305,18 @@ describe('template compilation project pass', () => {
 
 });
 
-function compilerWorldWithDefinition(
-  world: TemplateCompilerWorldEmission,
+function resourceIndexWithDefinition(
+  index: ResourceDefinitionIndex,
   previous: CustomElementDefinition,
   next: CustomElementDefinition,
-): TemplateCompilerWorldEmission {
-  const replace = (resource: TemplateVisibleResource) =>
-    resource.definition === previous
-      ? new TemplateVisibleResource(
-        resource.resourceKind,
-        resource.name,
-        resource.aliases,
-        resource.resourceProductHandle,
-        resource.resourceIdentityHandle,
-        resource.definitionProductHandle,
-        next,
-        resource.visibilityKind,
-        resource.sourceAddressHandle,
-      )
-      : resource;
-  return compilerWorldWithResourceSets(
-    world,
-    world.resourceScope.resources.map(replace),
-    world.resourceResolver.resources.map(replace),
-  );
-}
-function appWorldWithDefinition(
-  appWorld: AureliaAppWorldEmission,
-  previous: CustomElementDefinition,
-  next: CustomElementDefinition,
-): AureliaAppWorldEmission {
-  return new AureliaAppWorldEmission(
-    appWorld.configuration,
-    appWorld.diWorld,
-    appWorld.configuredSyntax,
-    appWorld.configuredResources,
-    appWorld.configuredRenderers,
-    appWorld.frameworkServiceCustomizations,
-    appWorld.compilerWorlds.map((world) => compilerWorldWithDefinition(world, previous, next)),
-  );
-}
-
-function compilerWorldWithResourceSets(
-  world: TemplateCompilerWorldEmission,
-  scopedResources: readonly TemplateVisibleResource[],
-  resolverResources: readonly TemplateVisibleResource[],
-  scopeSourceAddressHandle = world.resourceScope.sourceAddressHandle,
-): TemplateCompilerWorldEmission {
-  return new TemplateCompilerWorldEmission(
-    world.container,
-    world.world,
-    new TemplateResourceScope(
-      world.resourceScope.productHandle,
-      world.resourceScope.identityHandle,
-      world.resourceScope.container,
-      scopedResources,
-      world.resourceScope.syntaxResources,
-      scopeSourceAddressHandle,
-      world.resourceScope.fieldProvenance,
-    ),
-    world.templateCompiler,
-    new TemplateResourceResolverService(
-      world.resourceResolver.productHandle,
-      world.resourceResolver.identityHandle,
-      world.resourceResolver.container,
-      resolverResources,
-      world.resourceResolver.sourceAddressHandle,
-      world.resourceResolver.fieldProvenance,
-    ),
-    world.expressionParser,
-    world.attributeMapper,
-    world.rendering,
-    world.attributeParser,
-    world.attributeParserMachine,
-    world.bindingCommandResolver,
-    world.attributePatterns,
-    world.bindingCommands,
-    world.runtimeRenderers,
-    world.issues,
-    world.syntaxResources,
-    world.records,
+): ResourceDefinitionIndex {
+  return new ResourceDefinitionIndex(
+    index.entries.map((entry) => new ResourceDefinitionIndexEntry(
+      entry.moduleKey,
+      entry.localName,
+      entry.sourceNode,
+      entry.definition === previous ? next : entry.definition,
+    )),
   );
 }
 

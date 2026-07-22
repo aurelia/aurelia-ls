@@ -1120,7 +1120,6 @@ function visibleAttributePattern(
     emission.executable.productHandle,
     emission.executable.identityHandle,
     emission.executable.definitionProductHandle,
-    emission.definition,
     visibilityKind,
     emission.registrationSourceAddressHandle ?? emission.executable.sourceAddressHandle,
   );
@@ -1137,7 +1136,6 @@ function visibleBindingCommand(
     emission.executable.productHandle,
     emission.executable.identityHandle,
     emission.executable.definitionProductHandle,
-    emission.definition,
     visibilityKind,
     emission.registrationSourceAddressHandle ?? emission.executable.sourceAddressHandle,
   );

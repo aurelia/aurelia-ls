@@ -236,7 +236,6 @@ function visibleBuiltInResources(
       resource.productHandle,
       resource.identityHandle,
       emission.definition?.productHandle ?? null,
-      emission.definition,
       TemplateResourceVisibilityKind.Configured,
       resource.sourceAddressHandle,
     )];

@@ -9,7 +9,6 @@ import {
 } from '../kernel/publication-comparison.js';
 import type { NodeObserverLocatorConfiguration } from '../observation/observer-locator.js';
 import type { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
-import { compareResourceDefinitionDetails } from '../resources/product-details.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
 import type {
@@ -440,15 +439,11 @@ function compareTemplateVisibleResource(
   ) {
     return KernelPublicationDecisionKind.Replace;
   }
-  return combineDecisions(
-    compareNullableDetails(previous.definition, next.definition, (left, right) =>
-      compareResourceDefinitionDetails(left, right, context)),
-    witnessDecision(sameRecordWitness(
-      previous.sourceAddressHandle,
-      next.sourceAddressHandle,
-      context,
-    )),
-  );
+  return witnessDecision(sameRecordWitness(
+    previous.sourceAddressHandle,
+    next.sourceAddressHandle,
+    context,
+  ));
 }
 
 function sameCompilerServiceReferenceSemantics(

@@ -1,7 +1,9 @@
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { KernelMaterializationReadView, KernelStoreReadView } from '../kernel/store.js';
 import type { BuiltInResource } from '../resources/built-in-resources.js';
+import { ResourceProductDetails } from '../resources/product-details.js';
 import { readBuiltInResourceForDefinition } from '../resources/resource-definition-lineage.js';
+import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { TemplateResourceScope } from './compiler-world.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
@@ -27,4 +29,15 @@ export function readBuiltInVisibleTemplateResource(
 ): BuiltInResource | null {
   const productHandle = resource?.definitionProductHandle ?? resource?.resourceProductHandle ?? null;
   return productHandle == null ? null : readBuiltInResourceForDefinition(store, productHandle);
+}
+
+/** Hydrate the current full definition behind a compiler-visible catalog entry. */
+export function readVisibleTemplateResourceDefinition(
+  store: ProductDetailReadView,
+  resource: TemplateVisibleResource | null,
+): FullResourceDefinition | null {
+  const productHandle = resource?.definitionProductHandle ?? null;
+  return productHandle == null
+    ? null
+    : store.readProductDetail(ResourceProductDetails.Definition, productHandle);
 }

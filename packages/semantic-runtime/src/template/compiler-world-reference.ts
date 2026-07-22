@@ -7,7 +7,6 @@ import type {
   BindableDefinition,
   BindableDefinitionReference,
 } from '../resources/bindable-definition.js';
-import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
 
 export const enum TemplateCompilerServiceKind {
@@ -72,7 +71,7 @@ export class TemplateVisibleResourceReference {
   ) {}
 }
 
-/** Resource definition visible to template compilation through DI/container lookup. */
+/** Resource catalog entry visible to template compilation through DI/container lookup. */
 export class TemplateVisibleResource {
   constructor(
     /** Resource kind visible to the compiler. */
@@ -87,8 +86,6 @@ export class TemplateVisibleResource {
     readonly resourceIdentityHandle: IdentityHandle | null,
     /** Product handle for the full resource definition, when convergence has produced one. */
     readonly definitionProductHandle: ProductHandle | null,
-    /** Full definition detail visible to compiler and inquiry consumers, when known. */
-    readonly definition: FullResourceDefinition | null,
     /** How this resource became visible to the compiler world. */
     readonly visibilityKind: TemplateResourceVisibilityKind,
     /** Source address for the registration, definition, import, or convention that made it visible. */
@@ -117,7 +114,8 @@ export function sameTemplateVisibleResourceSet(
     && left.every((resource, index) => sameTemplateVisibleResource(resource, right[index] ?? null));
 }
 
-function sameTemplateVisibleResource(
+/** Exact semantic-and-witness equality for one compiler-visible catalog row. */
+export function sameTemplateVisibleResource(
   left: TemplateVisibleResource,
   right: TemplateVisibleResource | null,
 ): boolean {
@@ -129,7 +127,6 @@ function sameTemplateVisibleResource(
     && left.resourceProductHandle === right.resourceProductHandle
     && left.resourceIdentityHandle === right.resourceIdentityHandle
     && left.definitionProductHandle === right.definitionProductHandle
-    && left.definition === right.definition
     && left.visibilityKind === right.visibilityKind
     && left.sourceAddressHandle === right.sourceAddressHandle;
 }

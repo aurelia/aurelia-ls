@@ -93,7 +93,10 @@ export interface IncrementalConformanceChildTrace {
   readonly locusKind: string;
   readonly locusKey: string;
   readonly summary: string;
-  readonly subject: string | null;
+  /** Authored owner named by the preceding plan, including withdrawn children. */
+  readonly previousSubject: string | null;
+  /** Authored owner named by the current plan, including newly admitted children. */
+  readonly currentSubject: string | null;
   readonly transition: ComputationChildTransitionKind;
   readonly hadPreviousState: boolean;
   readonly dependencyChildIds: readonly string[];
@@ -110,6 +113,8 @@ export interface IncrementalConformanceTrace {
   readonly transition: ComputationTransition;
   readonly state: ComputationState;
   readonly children: readonly IncrementalConformanceChildTrace[];
+  /** Runtime/checker analysis order after dependency-SCC scheduling. */
+  readonly runtimeAnalysisSubjects: readonly string[];
 }
 
 export interface IncrementalConformanceStep {
@@ -167,6 +172,7 @@ export class IncrementalConformanceHarness {
     label: string,
     mutate: (overlay: MutableProjectSourceOverlay) => void,
   ): Promise<IncrementalConformanceStep> {
+    const previousSubjectByLocusKey = templateSubjectsByLocusKey(this.currentApp);
     mutate(this.overlay);
     this.inputAuthority.advance();
 
@@ -196,7 +202,16 @@ export class IncrementalConformanceHarness {
       trace: {
         transition,
         state: nextState,
-        children: childTrace(previousState, nextState, transition, incremental.app),
+        children: childTrace(
+          previousState,
+          nextState,
+          transition,
+          previousSubjectByLocusKey,
+          templateSubjectsByLocusKey(incremental.app),
+        ),
+        runtimeAnalysisSubjects: incremental.app.emission.templates.resources.map((resource) =>
+          resource.compilation.definition.target.localName ?? resource.compilation.definition.name
+        ),
       },
       incrementalTiming: incremental.timing,
       coldTiming: cold.timing,
@@ -264,14 +279,11 @@ function childTrace(
   previous: ComputationState,
   current: ComputationState,
   transition: ComputationTransition,
-  app: SemanticApp,
+  previousSubjectByLocusKey: ReadonlyMap<string, string>,
+  currentSubjectByLocusKey: ReadonlyMap<string, string>,
 ): readonly IncrementalConformanceChildTrace[] {
   const previousById = new Map(previous.children.map((child) => [child.childId, child]));
   const currentById = new Map(current.children.map((child) => [child.childId, child]));
-  const subjectByLocusKey = new Map(app.emission.templates.frontDoor.plan.cohortPlan.ownerPlans.map((owner) => [
-    new TemplateCompilationLocus(app.project.projectKey, owner.ownerHandle).reconciliationKey,
-    owner.definition.name,
-  ]));
   const decisionsByReadKey = new Map(transition.publications.map((decision) => [
     computationOutputReadKey(decision.surface, decision.handle),
     decision,
@@ -285,7 +297,8 @@ function childTrace(
       locusKind: child.locus.kind,
       locusKey: child.locus.reconciliationKey,
       summary: child.locus.summary,
-      subject: subjectByLocusKey.get(child.locus.reconciliationKey) ?? null,
+      previousSubject: previousSubjectByLocusKey.get(child.locus.reconciliationKey) ?? null,
+      currentSubject: currentSubjectByLocusKey.get(child.locus.reconciliationKey) ?? null,
       transition: childTransition.kind,
       hadPreviousState: childTransition.hadPreviousState,
       dependencyChildIds: computationChildDependencyIds(child),
@@ -298,6 +311,13 @@ function childTrace(
       publicationDecisions: decisionCounts(child, decisionsByReadKey),
     };
   });
+}
+
+function templateSubjectsByLocusKey(app: SemanticApp): ReadonlyMap<string, string> {
+  return new Map(app.emission.templates.frontDoor.plan.cohortPlan.ownerPlans.map((owner) => [
+    new TemplateCompilationLocus(app.project.projectKey, owner.ownerHandle).reconciliationKey,
+    owner.definition.name,
+  ]));
 }
 
 function computationChildDependencyIds(child: ComputationChildState): readonly string[] {

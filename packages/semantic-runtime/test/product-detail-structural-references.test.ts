@@ -573,7 +573,6 @@ describe('product-detail structural references', () => {
         headerProduct,
         handles.identity('built-in-resource-header'),
         definitionProduct,
-        null,
         TemplateResourceVisibilityKind.Configured,
         sourceAddress,
       ),

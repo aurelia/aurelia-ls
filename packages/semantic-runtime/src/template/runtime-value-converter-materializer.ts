@@ -43,6 +43,7 @@ import {
   RuntimeValueConverterInstancePropertyReadState,
 } from '../observation/binding-source-value-evaluator.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
+import { readVisibleTemplateResourceDefinition } from './compiler-resource-lookup.js';
 import { TemplateProductDetails } from './product-details.js';
 import {
   PropertyBinding,
@@ -287,7 +288,7 @@ export class RuntimeValueConverterMaterializer {
       );
     }
 
-    const definition = entry.resource?.definition ?? null;
+    const definition = readVisibleTemplateResourceDefinition(this.publication, entry.resource);
     if (definition == null || definition.type !== ResourceDefinitionKind.ValueConverter) {
       return openValueConverterLifecycle(
         `Value converter '${entry.expression.name.name}' has no app-owned definition for instance lifecycle analysis.`,

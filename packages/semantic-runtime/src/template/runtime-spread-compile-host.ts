@@ -32,6 +32,7 @@ import {
   type TemplateCompilerService,
 } from './compiler-world.js';
 import type { TemplateBindableReference } from './compiler-world-reference.js';
+import { readVisibleTemplateResourceDefinition } from './compiler-resource-lookup.js';
 import { HtmlAttribute, HtmlElement, type HtmlNodeReference } from './html-ir.js';
 import { templateElementLookupNameFromAttributes } from './special-attribute-source.js';
 import {
@@ -180,9 +181,10 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       }
     }
 
-    const attributeResolution = this.world.resourceResolver.attr(target);
-    const attributeDefinition = attributeResolution?.definition instanceof CustomAttributeDefinition
-      ? attributeResolution.definition
+    const attributeResource = this.world.resourceResolver.attr(target);
+    const currentAttributeDefinition = readVisibleTemplateResourceDefinition(this.publication, attributeResource);
+    const attributeDefinition = currentAttributeDefinition instanceof CustomAttributeDefinition
+      ? currentAttributeDefinition
       : null;
     if (attributeDefinition != null) {
       if (attributeDefinition.isTemplateController) {
@@ -644,8 +646,9 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       );
       return definition instanceof CustomElementDefinition ? definition : null;
     }
-    const resolution = this.world.resourceResolver.el(this.elementLookupName(targetNode));
-    return resolution?.definition instanceof CustomElementDefinition ? resolution.definition : null;
+    const resource = this.world.resourceResolver.el(this.elementLookupName(targetNode));
+    const definition = readVisibleTemplateResourceDefinition(this.publication, resource);
+    return definition instanceof CustomElementDefinition ? definition : null;
   }
 
   private elementLookupName(targetNode: HtmlElement): string {

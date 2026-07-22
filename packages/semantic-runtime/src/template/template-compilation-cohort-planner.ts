@@ -156,8 +156,8 @@ export class TemplateCompilationCohortPlanner {
       request.resourceDefinitions,
     );
     const queue = appRootWorld.resourceScope.resources.flatMap((visibleResource) => {
-      const definition = visibleResource.definition;
-      return definition instanceof CustomElementDefinition
+      const definition = customElementDefinitionForVisibleResource(request.resourceDefinitions, visibleResource);
+      return definition != null
         ? [new AppOwnerAdmission(
           definition,
           visibleResource,
@@ -292,11 +292,12 @@ function routeableAdmissionsForAppRoot(
       [routeConfig.fallback, TemplateCompilationAdmissionOriginKind.RouteFallback],
     ] as const) {
       const visibleResource = visibleRouteableResource(routeable, resourceDefinitions);
-      if (!(visibleResource?.definition instanceof CustomElementDefinition)) {
+      const definition = customElementDefinitionForVisibleResource(resourceDefinitions, visibleResource);
+      if (visibleResource == null || definition == null) {
         continue;
       }
       admissions.push(new AppOwnerAdmission(
-        visibleResource.definition,
+        definition,
         visibleResource,
         [new TemplateCompilationAdmissionOrigin(
           kind,
@@ -307,6 +308,14 @@ function routeableAdmissionsForAppRoot(
     }
   }
   return admissions;
+}
+
+function customElementDefinitionForVisibleResource(
+  resourceDefinitions: ResourceDefinitionIndex | null,
+  resource: TemplateVisibleResource | null,
+): CustomElementDefinition | null {
+  const definition = resourceDefinitions?.lookupByProduct(resource?.definitionProductHandle ?? null) ?? null;
+  return definition instanceof CustomElementDefinition ? definition : null;
 }
 
 function routeConfigForContext(

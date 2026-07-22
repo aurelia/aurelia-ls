@@ -13,7 +13,10 @@ import type { BindingBehaviorDefinition } from '../resources/binding-behavior-de
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ValueConverterDefinition } from '../resources/value-converter-definition.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
-import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
+import {
+  findVisibleTemplateResource,
+  readVisibleTemplateResourceDefinition,
+} from '../template/compiler-resource-lookup.js';
 import {
   STATE_BINDING_BEHAVIOR_NAME,
   type StateBindingScopeProjector,
@@ -467,7 +470,7 @@ export class CheckerExpressionResourceProjector {
 
   private findValueConverterDefinition(name: string): ValueConverterDefinition | null {
     const resource = this.findVisibleResource(ResourceDefinitionKind.ValueConverter, name);
-    const definition = resource?.definition ?? null;
+    const definition = readVisibleTemplateResourceDefinition(this.support.projector.publication, resource);
     return definition?.type === ResourceDefinitionKind.ValueConverter
       ? definition
       : null;
@@ -475,7 +478,7 @@ export class CheckerExpressionResourceProjector {
 
   private findBindingBehaviorDefinition(name: string): BindingBehaviorDefinition | null {
     const resource = this.findVisibleResource(ResourceDefinitionKind.BindingBehavior, name);
-    const definition = resource?.definition ?? null;
+    const definition = readVisibleTemplateResourceDefinition(this.support.projector.publication, resource);
     return definition?.type === ResourceDefinitionKind.BindingBehavior
       ? definition
       : null;

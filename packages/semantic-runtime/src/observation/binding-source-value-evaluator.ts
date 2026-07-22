@@ -105,7 +105,10 @@ import {
 } from '../type-system/value-converter-call-surface.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
-import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
+import {
+  findVisibleTemplateResource,
+  readVisibleTemplateResourceDefinition,
+} from '../template/compiler-resource-lookup.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import {
   PropertyBinding,
@@ -455,7 +458,7 @@ export class RuntimeBindingSourceValueEvaluator {
     resourceScope: TemplateResourceScope | null,
   ): ValueConverterDefinition | null {
     const resource = findVisibleTemplateResource(resourceScope, ResourceDefinitionKind.ValueConverter, expression.name.name);
-    const definition = resource?.definition ?? null;
+    const definition = readVisibleTemplateResourceDefinition(this.projector.publication, resource);
     return definition?.type === ResourceDefinitionKind.ValueConverter
       ? definition
       : null;

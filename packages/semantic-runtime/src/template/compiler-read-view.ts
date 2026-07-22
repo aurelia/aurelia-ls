@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import type { ComputationRead, ComputationReadValidation } from '../kernel/computation-lifecycle.js';
 import type { IdentityHandle, OpenSeamHandle, ProductHandle } from '../kernel/handles.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { KernelMaterializationReadView } from '../kernel/store.js';
 import type { Container } from '../di/container.js';
 import type { ExpressionType } from '../expression/ast.js';
@@ -9,18 +10,26 @@ import type { ExpressionParseContext } from '../expression/expression-parse-supp
 import type { ExpressionParseResult } from '../expression/parse-result-algebra.js';
 import type { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
-import { resourceDefinitionComparisonRevisionParts } from '../resources/product-details.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
-import type { TemplateCompilableResourceDefinition } from '../resources/resource-definition.js';
+import type {
+  FullResourceDefinition,
+  TemplateCompilableResourceDefinition,
+} from '../resources/resource-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import { BuiltInAttributeParserExecutionHost } from './attribute-parser-execution-host.js';
-import type {
-  TemplateAttributeBindablesInfo,
-  TemplateBindablesInfo,
-  TemplateElementBindablesInfo,
+import {
   TemplateResolvedResource,
+  TemplateResourceResolutionKind,
+  type TemplateAttributeBindablesInfo,
+  type TemplateBindablesInfo,
+  type TemplateElementBindablesInfo,
 } from './compiler-world.js';
-import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
+import {
+  readVisibleTemplateResourceDefinition,
+} from './compiler-resource-lookup.js';
+import type {
+  TemplateCompilerWorldEmission,
+} from './compiler-world-materializer.js';
 import type { BindingCommandExecutable } from './binding-command-execution.js';
 import type {
   AttributeParserParseResult,
@@ -29,6 +38,11 @@ import type { TemplateAttributeMapperNode } from './attribute-mapper.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
 
 type TemplateCompilerClosureReadView = Pick<KernelMaterializationReadView, 'readMaterializationsByOwner'>;
+type TemplateCompilerReadStore = TemplateCompilerClosureReadView & ProductDetailReadView;
+type TemplateCompilerResultReader = (
+  store: TemplateCompilerReadStore,
+  world: TemplateCompilerWorldEmission,
+) => readonly string[];
 
 export const enum TemplateCompilerReadKind {
   /** Compiler-world envelope and service topology consumed by compilation-unit publication. */
@@ -87,10 +101,6 @@ class TemplateCompilerReadRevision {
     readonly closure: string,
     readonly result: string,
   ) {}
-
-  get value(): string {
-    return `scope=${this.scope};closure=${this.closure};result=${this.result}`;
-  }
 }
 
 /** Authority for the compiler world currently admitted at one stable owner/cohort locus. */
@@ -131,9 +141,10 @@ export class TemplateCompilerReadObservation implements ComputationRead {
     readonly closure: TemplateCompilerScopeClosure,
     private readonly observed: TemplateCompilerReadRevision,
     private readonly readCurrent: () => TemplateCompilerReadRevision,
-    private readonly readCurrentResult: (world: TemplateCompilerWorldEmission) => readonly string[],
+    private readonly readCurrentResult: TemplateCompilerResultReader,
   ) {
-    this.observedRevision = observed.value;
+    // Scope and closure prove that the answer is current; the answer itself is the reusable semantic revision.
+    this.observedRevision = observed.result;
   }
 
   validate(): ComputationReadValidation {
@@ -145,7 +156,7 @@ export class TemplateCompilerReadObservation implements ComputationRead {
     ];
     return {
       isCurrent: changedFacets.length === 0,
-      currentRevision: current.value,
+      currentRevision: current.result,
       changedFacets,
     };
   }
@@ -156,7 +167,7 @@ export class TemplateCompilerReadObservation implements ComputationRead {
   }
 
   tryRebaseTo(
-    store: TemplateCompilerClosureReadView,
+    store: TemplateCompilerReadStore,
     authority: TemplateCompilerWorldAuthority,
   ): TemplateCompilerReadObservation | null {
     const world = authority.readCurrent();
@@ -164,9 +175,11 @@ export class TemplateCompilerReadObservation implements ComputationRead {
       return null;
     }
     const closure = compilerScopeClosure(store, world);
-    const resultParts = this.readCurrentResult(world);
+    const resultParts = this.readCurrentResult(store, world);
     const observed = readRevision(compilerScopeRevision(world), closure, resultParts);
-    if (observed.value !== this.observedRevision) {
+    // Scope and closure are currentness/explanation witnesses. Carry is sound when the exact compiler operation still
+    // returns the same result; the returned observation adopts the current witnesses for the next validation cycle.
+    if (observed.result !== this.observed.result) {
       return null;
     }
     return new TemplateCompilerReadObservation(
@@ -196,7 +209,7 @@ export class TemplateCompilerReadView {
   private currentValidationState: TemplateCompilerReadValidationState | null = null;
 
   constructor(
-    private readonly store: KernelMaterializationReadView,
+    private readonly store: TemplateCompilerReadStore,
     private readonly authority: TemplateCompilerWorldAuthority,
   ) {
     this.world = authority.current();
@@ -206,7 +219,7 @@ export class TemplateCompilerReadView {
       TemplateCompilerReadKind.CompilerWorld,
       this.world.world.identityHandle,
       compilerWorldResultParts(this.world),
-      (current) => compilerWorldResultParts(current),
+      (_store, current) => compilerWorldResultParts(current),
     );
   }
 
@@ -218,24 +231,28 @@ export class TemplateCompilerReadView {
 
   element(name: string): TemplateResolvedResource | null {
     const canonical = name.toLowerCase();
-    const result = this.world.resourceResolver.el(canonical);
+    const result = resolvedVisibleResource(this.store, this.world.resourceResolver.el(canonical));
     this.observe(
       TemplateCompilerReadKind.ElementResource,
       canonical,
-      resourceResultParts(result),
-      (current) => resourceResultParts(current.resourceResolver.el(canonical)),
+      elementResourceResultParts(result),
+      (store, current) => elementResourceResultParts(
+        resolvedVisibleResource(store, current.resourceResolver.el(canonical)),
+      ),
     );
     return result;
   }
 
   attribute(name: string): TemplateResolvedResource | null {
     const canonical = name.toLowerCase();
-    const result = this.world.resourceResolver.attr(canonical);
+    const result = resolvedVisibleResource(this.store, this.world.resourceResolver.attr(canonical));
     this.observe(
       TemplateCompilerReadKind.AttributeResource,
       canonical,
-      resourceResultParts(result),
-      (current) => resourceResultParts(current.resourceResolver.attr(canonical)),
+      attributeResourceResultParts(result),
+      (store, current) => attributeResourceResultParts(
+        resolvedVisibleResource(store, current.resourceResolver.attr(canonical)),
+      ),
     );
     return result;
   }
@@ -251,8 +268,8 @@ export class TemplateCompilerReadView {
       TemplateCompilerReadKind.Bindables,
       canonical,
       bindableResultParts(result),
-      (current) => {
-        const currentDefinition = matchingDefinition(current, definition);
+      (store, current) => {
+        const currentDefinition = matchingDefinition(store, current, definition);
         return currentDefinition == null
           ? ['definition-absent']
           : bindableResultParts(
@@ -272,7 +289,7 @@ export class TemplateCompilerReadView {
       TemplateCompilerReadKind.BindingCommand,
       canonical,
       commandResultParts(result),
-      (current) => commandResultParts(current.bindingCommandResolver.get(canonical)),
+      (_store, current) => commandResultParts(current.bindingCommandResolver.get(canonical)),
     );
     return result;
   }
@@ -287,27 +304,34 @@ export class TemplateCompilerReadView {
       TemplateCompilerReadKind.AttributePattern,
       canonical,
       patternResultParts(result),
-      (current) => patternResultParts(parseAttributeInWorld(current, rawName, rawValue)),
+      (_store, current) => patternResultParts(parseAttributeInWorld(current, rawName, rawValue)),
     );
     return result;
   }
 
   templateOwnerResource(definition: CustomElementDefinition): TemplateVisibleResource | null {
     const canonical = definition.productHandle ?? definition.identityHandle ?? definition.name;
-    const read = (world: TemplateCompilerWorldEmission) => {
-      const currentDefinition = matchingDefinition(world, definition);
+    const read = (store: TemplateCompilerReadStore, world: TemplateCompilerWorldEmission) => {
+      const currentDefinition = matchingDefinition(store, world, definition);
       return currentDefinition == null
         ? null
-        : world.resourceResolver.resources.find((candidate) => candidate.definition === currentDefinition) ?? null;
+        : world.resourceResolver.resources.find((candidate) =>
+            candidate.definitionProductHandle === currentDefinition.productHandle
+          ) ?? null;
     };
-    const result = read(this.world);
+    const result = read(this.store, this.world);
     this.observe(
       TemplateCompilerReadKind.TemplateOwnerResource,
       canonical,
-      templateOwnerResourceResultParts(result),
-      (current) => templateOwnerResourceResultParts(read(current)),
+      templateOwnerResourceResultParts(this.store, result),
+      (store, current) => templateOwnerResourceResultParts(store, read(store, current)),
     );
     return result;
+  }
+
+  /** Hydrate the current definition behind a resource selected by an observed compiler lookup. */
+  currentDefinition(resource: TemplateVisibleResource | null): FullResourceDefinition | null {
+    return readVisibleTemplateResourceDefinition(this.store, resource);
   }
 
   parse(expression: string, context?: ExpressionParseContext): ExpressionParseResult;
@@ -328,7 +352,7 @@ export class TemplateCompilerReadView {
       TemplateCompilerReadKind.ExpressionParser,
       typeof expressionTypeOrContext === 'string' ? expressionTypeOrContext : 'default',
       expressionParserResultParts(this.world),
-      (current) => expressionParserResultParts(current),
+      (_store, current) => expressionParserResultParts(current),
     );
     return result;
   }
@@ -340,7 +364,7 @@ export class TemplateCompilerReadView {
       TemplateCompilerReadKind.AttributeMapper,
       canonical,
       attributeMapperResultParts(this.world, result),
-      (current) => attributeMapperResultParts(current, current.attributeMapper.map(node, attributeName)),
+      (_store, current) => attributeMapperResultParts(current, current.attributeMapper.map(node, attributeName)),
     );
     return result;
   }
@@ -352,7 +376,7 @@ export class TemplateCompilerReadView {
       TemplateCompilerReadKind.AttributeMapper,
       canonical,
       attributeMapperResultParts(this.world, result),
-      (current) => attributeMapperResultParts(current, current.attributeMapper.isTwoWay(node, attributeName)),
+      (_store, current) => attributeMapperResultParts(current, current.attributeMapper.isTwoWay(node, attributeName)),
     );
     return result;
   }
@@ -363,7 +387,7 @@ export class TemplateCompilerReadView {
       TemplateCompilerReadKind.TemplateCompiler,
       'resolve-resources',
       templateCompilerResultParts(this.world, result),
-      (current) => templateCompilerResultParts(current, current.templateCompiler.resolveResources),
+      (_store, current) => templateCompilerResultParts(current, current.templateCompiler.resolveResources),
     );
     return result;
   }
@@ -376,7 +400,7 @@ export class TemplateCompilerReadView {
     kind: TemplateCompilerReadKind,
     canonicalKey: string,
     resultParts: readonly string[],
-    readCurrentResult: (world: TemplateCompilerWorldEmission) => readonly string[],
+    readCurrentResult: TemplateCompilerResultReader,
   ): void {
     const readKey = `${this.world.resourceScope.identityHandle}|${kind}|${canonicalKey}`;
     const observed = readRevision(this.observedScopeRevision, this.observedClosure, resultParts);
@@ -393,7 +417,7 @@ export class TemplateCompilerReadView {
         return readRevision(
           current.scopeRevision,
           current.closure,
-          current.world == null ? ['compiler-world-absent'] : readCurrentResult(current.world),
+          current.world == null ? ['compiler-world-absent'] : readCurrentResult(this.store, current.world),
         );
       },
       readCurrentResult,
@@ -432,9 +456,9 @@ export class TemplateCompilerReadView {
 }
 
 function currentTemplateCompilerReadRevision(
-  store: TemplateCompilerClosureReadView,
+  store: TemplateCompilerReadStore,
   authority: TemplateCompilerWorldAuthority,
-  readCurrentResult: (world: TemplateCompilerWorldEmission) => readonly string[],
+  readCurrentResult: TemplateCompilerResultReader,
 ): TemplateCompilerReadRevision {
   const world = authority.readCurrent();
   if (world == null) {
@@ -451,7 +475,7 @@ function currentTemplateCompilerReadRevision(
     );
   }
   const closure = compilerScopeClosure(store, world);
-  return readRevision(compilerScopeRevision(world), closure, readCurrentResult(world));
+  return readRevision(compilerScopeRevision(world), closure, readCurrentResult(store, world));
 }
 
 class TemplateCompilerReadValidationState {
@@ -526,14 +550,77 @@ function compilerScopeRevision(world: TemplateCompilerWorldEmission): string {
   ]);
 }
 
-function resourceResultParts(result: TemplateResolvedResource | null): readonly string[] {
+function resolvedVisibleResource(
+  store: ProductDetailReadView,
+  resource: TemplateVisibleResource | null,
+): TemplateResolvedResource | null {
+  if (resource == null) {
+    return null;
+  }
+  const definition = readVisibleTemplateResourceDefinition(store, resource);
+  const compilable = definition?.type === ResourceDefinitionKind.CustomElement
+    || definition?.type === ResourceDefinitionKind.CustomAttribute
+    ? definition
+    : null;
+  return new TemplateResolvedResource(
+    compilable == null
+      ? TemplateResourceResolutionKind.HeaderOnly
+      : TemplateResourceResolutionKind.Definition,
+    resource,
+    compilable,
+  );
+}
+
+function resolvedResourceResultParts(result: TemplateResolvedResource | null): readonly string[] {
   return result == null
     ? []
     : [
       result.resolutionKind,
       ...visibleResourceResultParts(result.resource),
-      ...resourceDefinitionResultParts(result.definition),
     ];
+}
+
+function elementResourceResultParts(result: TemplateResolvedResource | null): readonly string[] {
+  if (result == null) {
+    return [];
+  }
+  const definition = result?.definition;
+  return [
+    ...resolvedResourceResultParts(result),
+    ...(definition?.type === ResourceDefinitionKind.CustomElement
+      ? [
+        'custom-element-definition',
+        definition.productHandle ?? '',
+        definition.identityHandle ?? '',
+        definition.name,
+        definition.capture.kind,
+        scalarPart(definition.containerless),
+        scalarPart(definition.shadowOptions != null),
+        scalarPart(definition.processContent != null),
+      ]
+      : ['no-custom-element-definition']),
+  ];
+}
+
+function attributeResourceResultParts(result: TemplateResolvedResource | null): readonly string[] {
+  if (result == null) {
+    return [];
+  }
+  const definition = result?.definition;
+  return [
+    ...resolvedResourceResultParts(result),
+    ...(definition?.type === ResourceDefinitionKind.CustomAttribute
+      ? [
+        'custom-attribute-definition',
+        definition.productHandle ?? '',
+        definition.identityHandle ?? '',
+        definition.name,
+        scalarPart(definition.isTemplateController),
+        scalarPart(definition.noMultiBindings),
+        definition.defaultProperty,
+      ]
+      : ['no-custom-attribute-definition']),
+  ];
 }
 
 function visibleResourceResultParts(result: TemplateVisibleResource | null): readonly string[] {
@@ -551,13 +638,23 @@ function visibleResourceResultParts(result: TemplateVisibleResource | null): rea
     ];
 }
 
-function templateOwnerResourceResultParts(result: TemplateVisibleResource | null): readonly string[] {
+function templateOwnerResourceResultParts(
+  store: ProductDetailReadView,
+  result: TemplateVisibleResource | null,
+): readonly string[] {
+  const definition = readVisibleTemplateResourceDefinition(store, result);
   return result == null
     ? []
     : [
       ...visibleResourceResultParts(result),
-      ...(result.definition?.type === ResourceDefinitionKind.CustomElement
-        ? resourceDefinitionResultParts(result.definition)
+      ...(definition?.type === ResourceDefinitionKind.CustomElement
+        ? [
+          'custom-element-definition',
+          definition.productHandle ?? '',
+          definition.identityHandle ?? '',
+          definition.name,
+          scalarPart(definition.shadowOptions != null),
+        ]
         : ['no-custom-element-definition']),
     ];
 }
@@ -719,12 +816,6 @@ function templateCompilerResultParts(
   ];
 }
 
-function resourceDefinitionResultParts(
-  definition: TemplateCompilableResourceDefinition | null,
-): readonly string[] {
-  return resourceDefinitionComparisonRevisionParts(definition);
-}
-
 function bindableReferenceResultParts(
   bindable: TemplateBindablesInfo['bindables'][number],
 ): readonly string[] {
@@ -756,25 +847,23 @@ function bindableReferenceResultParts(
 }
 
 function matchingDefinition(
+  store: ProductDetailReadView,
   world: TemplateCompilerWorldEmission,
   observed: TemplateCompilableResourceDefinition,
 ): TemplateCompilableResourceDefinition | null {
   const visible = world.resourceResolver.resources.find((candidate) => {
-    const definition = candidate.definition;
-    if (definition?.type !== observed.type) {
-      return false;
-    }
     if (observed.productHandle != null) {
-      return definition.productHandle === observed.productHandle;
+      return candidate.definitionProductHandle === observed.productHandle;
     }
     if (observed.identityHandle != null) {
-      return definition.identityHandle === observed.identityHandle;
+      return candidate.resourceIdentityHandle === observed.identityHandle;
     }
-    return definition.name === observed.name;
+    return candidate.resourceKind === observed.type && candidate.name === observed.name;
   }) ?? null;
-  return visible?.definition?.type === ResourceDefinitionKind.CustomElement
-    || visible?.definition?.type === ResourceDefinitionKind.CustomAttribute
-    ? visible.definition
+  const definition = readVisibleTemplateResourceDefinition(store, visible);
+  return definition?.type === ResourceDefinitionKind.CustomElement
+    || definition?.type === ResourceDefinitionKind.CustomAttribute
+    ? definition
     : null;
 }
 

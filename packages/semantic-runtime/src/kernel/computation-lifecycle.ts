@@ -4,7 +4,7 @@ import type {
   MaterializationOwnerHandle,
   MaterializationRecord,
 } from './materialization.js';
-import type { ProductDetailSlot } from './product-details.js';
+import type { ProductDetailReadView, ProductDetailSlot } from './product-details.js';
 import {
   KernelDetailAdmission,
   KernelPublicationDecision,
@@ -157,10 +157,16 @@ export interface ComputationRead {
   tryRebaseCurrent(): ComputationRead | null;
 }
 
-/** Side-effect-free candidate view after the prospective child carry, available while rebasing its prior reads. */
-export interface ComputationReadRebaseContext {
+/**
+ * Side-effect-free value projection used to derive one domain-owned computation read.
+ * The resulting read must account for every value consumed through this view.
+ */
+export interface ComputationDomainReadProjection extends ProductDetailReadView {
   readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[];
 }
+
+/** Candidate projection after the prospective child carry, available while rebasing its prior reads. */
+export interface ComputationReadRebaseContext extends ComputationDomainReadProjection {}
 
 /** Domain override for reads whose current authority is supplied by the candidate being assembled. */
 export type ComputationReadRebaser = (
@@ -928,6 +934,10 @@ class StagedComputationReadRebaseContext implements ComputationReadRebaseContext
       this.prospectiveOutputs,
     );
   }
+
+  readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
+    return this.publications.previewProductDetailAfterCarry(slot, productHandle, this.prospectiveOutputs);
+  }
 }
 
 class ComputationChildPreparationFailure extends Error {
@@ -992,6 +1002,8 @@ export class ComputationRun implements KernelPublicationContext {
   private childFailure: ComputationChildPreparationFailure | null = null;
   private phase = ComputationRunPhase.Preparing;
   private carryReadRebaseActive = false;
+  /** Candidate-aware values for constructing domain reads without also registering lower-level exact reads. */
+  readonly domainReadProjection: ComputationDomainReadProjection;
 
   constructor(
     private readonly registry: ComputationLifecycleRegistry,
@@ -1009,6 +1021,12 @@ export class ComputationRun implements KernelPublicationContext {
       previousPublication,
       this.remainderChild.childId,
     );
+    this.domainReadProjection = Object.freeze({
+      readMaterializationsByOwner: (ownerHandle: MaterializationOwnerHandle) =>
+        this.readProjectedMaterializationsByOwner(ownerHandle),
+      readProductDetail: <TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle) =>
+        this.readProjectedProductDetail(slot, productHandle),
+    });
   }
 
   /** Declare that this run owns a complete child partition, including an explicit possibly-empty remainder. */
@@ -1189,6 +1207,16 @@ export class ComputationRun implements KernelPublicationContext {
     return snapshot.records;
   }
 
+  private readProjectedMaterializationsByOwner(
+    ownerHandle: MaterializationOwnerHandle,
+  ): readonly MaterializationRecord[] {
+    if (this.phase === ComputationRunPhase.Finished) {
+      return this.store.readMaterializationsByOwner(ownerHandle);
+    }
+    this.requireCurrent();
+    return this.publications.previewMaterializationOwnerCandidate(ownerHandle).records;
+  }
+
   readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
     this.requireCurrent();
     const result = this.publications.readProductDetailWithRevision(slot, productHandle);
@@ -1205,6 +1233,17 @@ export class ComputationRun implements KernelPublicationContext {
       this.observeStagedRevision(result.stagedRevision);
     }
     return result.value;
+  }
+
+  private readProjectedProductDetail<TDetail>(
+    slot: ProductDetailSlot<TDetail>,
+    productHandle: ProductHandle,
+  ): TDetail | null {
+    if (this.phase === ComputationRunPhase.Finished) {
+      return this.store.readProductDetail(slot, productHandle);
+    }
+    this.requireCurrent();
+    return this.publications.readProductDetail(slot, productHandle);
   }
 
   readHotDetail<TDetail>(slot: HotDetailSlot<TDetail>, handle: HotDetailHandle): TDetail | null {
@@ -2709,7 +2748,10 @@ function registerStagedEntryRevision(
       readsByKey.set(readKey, revision);
       return;
     }
-    throw new Error(`Computation child ${childId} observed changing candidate output ${readKey}.`);
+    throw new Error(
+      `Computation child ${childId} observed changing candidate output ${readKey}: `
+      + `${stagedEntryRevisionLabel(existing)} -> ${stagedEntryRevisionLabel(revision)}.`,
+    );
   }
   readsByKey.set(readKey, revision);
 }
@@ -2775,7 +2817,7 @@ function sameStagedEntryRevision(
   right: KernelStagedEntryRevision | null,
 ): boolean {
   if (stagedEntryIsAbsent(left)) {
-    return right == null;
+    return right == null || stagedEntryIsAbsent(right);
   }
   return right != null
     && left.writerId === right.writerId

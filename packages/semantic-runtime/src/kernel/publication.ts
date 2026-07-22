@@ -789,6 +789,27 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
     return [...records.values()].sort((left, right) => left.handle.localeCompare(right.handle));
   }
 
+  /** Read one typed detail as it would appear after a proposed child carry, without staging that carry. */
+  previewProductDetailAfterCarry<TDetail>(
+    slot: ProductDetailSlot<TDetail>,
+    productHandle: ProductHandle,
+    outputs: readonly KernelPublicationCarryOutput[],
+  ): TDetail | null {
+    const staged = this.productDetails.get(productHandle) ?? null;
+    if (staged != null) {
+      return this.readProductDetail(slot, productHandle);
+    }
+    const carried = outputs.find((output) =>
+      output.surface === KernelPublicationSurface.ProductDetail
+      && output.handle === productHandle
+    );
+    if (carried == null) {
+      return this.readProductDetail(slot, productHandle);
+    }
+    const entry = this.previousProductDetailForCarry(carried);
+    return entry.slot === slot ? entry.detail as TDetail : null;
+  }
+
   /** Freeze one owner set after a speculative reader has committed to its observed membership. */
   observeMaterializationOwner(ownerHandle: MaterializationOwnerHandle): void {
     this.requireCurrent();
@@ -1176,15 +1197,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
         }
         case KernelPublicationSurface.ProductDetail: {
           const handle = output.handle as ProductHandle;
-          if (!this.previousProductDetailHandles.has(handle)) {
-            throw new Error(`Cannot carry product detail ${handle}; it is not owned by the prior publication.`);
-          }
-          const entry = this.store.productDetails.readEntry(handle);
-          if (entry == null || entry.slot.detailKind !== output.detailKind) {
-            throw new Error(
-              `Cannot carry product detail ${handle}; its committed slot no longer matches ${output.detailKind}.`,
-            );
-          }
+          const entry = this.previousProductDetailForCarry(output);
           productDetails.push(new KernelProductDetailPublication(entry.slot, handle, entry.detail));
           break;
         }
@@ -1232,6 +1245,20 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       throw new Error(`Cannot carry record ${handle}; its committed kind no longer matches ${output.detailKind}.`);
     }
     return record;
+  }
+
+  private previousProductDetailForCarry(output: KernelPublicationCarryOutput): ProductDetailEntry<unknown> {
+    const handle = output.handle as ProductHandle;
+    if (!this.previousProductDetailHandles.has(handle)) {
+      throw new Error(`Cannot carry product detail ${handle}; it is not owned by the prior publication.`);
+    }
+    const entry = this.store.productDetails.readEntry(handle);
+    if (entry == null || entry.slot.detailKind !== output.detailKind) {
+      throw new Error(
+        `Cannot carry product detail ${handle}; its committed slot no longer matches ${output.detailKind}.`,
+      );
+    }
+    return entry;
   }
 
   /** Freeze one coherent publication/revision view before any input validator can run. */

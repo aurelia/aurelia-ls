@@ -40,6 +40,7 @@ import {
   TemplateCompilerReadObservation,
   TemplateCompilerScopeClosureState,
 } from '../src/template/compiler-read-view.js';
+import { readVisibleTemplateResourceDefinition } from '../src/template/compiler-resource-lookup.js';
 import { TemplateCompilerFrameworkErrorCode } from '../src/template/framework-error-code.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import { TemplateCompilationLocus } from '../src/template/template-compilation-cohort.js';
@@ -851,6 +852,9 @@ describe('production template-family lifecycle', () => {
     );
     const changed = await reopenApp(runtime, inputAuthority, baseline);
     const changedItemList = requireNamedCompilation(changed.emission, 'item-list-route');
+    const changedItemCard = requireNamedCompilation(changed.emission, 'item-card');
+    expect(changedItemList.definition).toBe(requireCustomElementDefinition(changed.emission, 'item-list-route'));
+    expect(changedItemCard.definition).toBe(requireCustomElementDefinition(changed.emission, 'item-card'));
     const changedBindableRead = requireCompilerRead(
       changedItemList,
       TemplateCompilerReadKind.Bindables,
@@ -869,15 +873,18 @@ describe('production template-family lifecycle', () => {
     expect(changedTransition.publications).toContainEqual(expect.objectContaining({
       handle: changedItemList.compilerWorld.resourceScope.productHandle,
       detailKind: TemplateProductDetails.ResourceScope.detailKind,
-      decision: KernelPublicationDecisionKind.Replace,
+      decision: KernelPublicationDecisionKind.Retain,
     }));
     const canonicalChangedScope = runtime.workspace.store.productDetails.read(
       TemplateProductDetails.ResourceScope,
       changedItemList.compilerWorld.resourceScope.productHandle,
     );
-    const canonicalItemCard = canonicalChangedScope?.resources.find((resource) =>
+    const canonicalItemCardReference = canonicalChangedScope?.resources.find((resource) =>
       resource.name === 'item-card'
-    )?.definition ?? null;
+    ) ?? null;
+    const canonicalItemCard = canonicalItemCardReference == null
+      ? null
+      : readVisibleTemplateResourceDefinition(runtime.workspace.store, canonicalItemCardReference);
     expect(canonicalItemCard).toBeInstanceOf(CustomElementDefinition);
     expect(canonicalItemCard instanceof CustomElementDefinition
       ? canonicalItemCard.bindables.map((bindable) => bindable.name)

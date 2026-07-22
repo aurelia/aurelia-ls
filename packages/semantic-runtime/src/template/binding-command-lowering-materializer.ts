@@ -852,9 +852,8 @@ export class BindingCommandLoweringMaterializer {
       ? null
       : ownersByAttributeProduct.get(site.attribute.productHandle) ?? null;
     const classification = site.classification;
-    const definition = classification?.resource?.definition instanceof CustomAttributeDefinition
-      ? classification.resource.definition
-      : null;
+    const currentDefinition = compilerReads.currentDefinition(classification?.resource ?? null);
+    const definition = currentDefinition instanceof CustomAttributeDefinition ? currentDefinition : null;
     const parsedSegments = parseInlineMultiBindingSegments(site.rawValue);
 
     if (attribute == null || owner == null || classification == null || definition == null) {

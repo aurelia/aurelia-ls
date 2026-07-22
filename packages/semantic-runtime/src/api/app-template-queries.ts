@@ -150,7 +150,10 @@ import {
 } from '../resources/resource-kind.js';
 import { TypeSystemHotDetails } from '../type-system/product-details.js';
 import { checkerTypeMemberValueSourceAddressHandle } from '../type-system/checker-type-member-source.js';
-import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
+import {
+  findVisibleTemplateResource,
+  readVisibleTemplateResourceDefinition,
+} from '../template/compiler-resource-lookup.js';
 import { TemplateSpecialAttributeName } from '../template/special-attribute-source.js';
 import { namedRefTargetController } from '../template/runtime-ref-target.js';
 import {
@@ -2936,13 +2939,14 @@ function visibleResourceMatchesTarget(
   resource: TemplateResourceEmission['compilation']['compilerWorld']['resourceScope']['resources'][number],
   target: ResourceReferenceTarget,
 ): boolean {
-  const definitionSourceAddressHandle = resource.definition == null
+  const definition = readVisibleTemplateResourceDefinition(store, resource);
+  const definitionSourceAddressHandle = definition == null
     ? null
-    : 'nameSourceAddressHandle' in resource.definition
-      ? resource.definition.nameSourceAddressHandle
-        ?? resource.definition.target.addressHandle
-        ?? resource.definition.sourceAddressHandle
-      : resource.definition.sourceAddressHandle;
+    : 'nameSourceAddressHandle' in definition
+      ? definition.nameSourceAddressHandle
+        ?? definition.target.addressHandle
+        ?? definition.sourceAddressHandle
+      : definition.sourceAddressHandle;
   return resourceIdentityMatchesTarget(
     store,
     resource.resourceKind,

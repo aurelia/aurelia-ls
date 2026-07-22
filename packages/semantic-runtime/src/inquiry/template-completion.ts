@@ -90,7 +90,10 @@ import {
   TemplateResourceScope,
   templateBindableReferences,
 } from '../template/compiler-world.js';
-import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
+import {
+  findVisibleTemplateResource,
+  readVisibleTemplateResourceDefinition,
+} from '../template/compiler-resource-lookup.js';
 import { expressionResourceOccurrences } from '../template/expression-resource-occurrence.js';
 import {
   TemplateVisibleResource,
@@ -1498,7 +1501,7 @@ function attributeValueCompletionMissingInput(
       }
       return `attribute-value-domain:bindable:${site.bindable?.reference.attribute ?? 'unknown'}`;
     case TemplateValueSiteKind.CustomAttributeValue:
-      if (routerResourcePrimaryValueHasOpenEndedDomain(site)) {
+      if (routerResourcePrimaryValueHasOpenEndedDomain(store, site)) {
         return null;
       }
       if (site.bindable != null) {
@@ -1635,7 +1638,7 @@ function routerResourceRouteCandidates(
   site: TemplateValueSite,
   routeConfigProductHandles: readonly ProductHandle[],
 ): readonly TemplateCompletionCandidate[] {
-  if (!isRouterResourcePrimaryValueSite(site)) {
+  if (!isRouterResourcePrimaryValueSite(store, site)) {
     return [];
   }
   return uniqueRouteConfigCandidates(
@@ -1692,16 +1695,17 @@ function routerRouteParameterCandidate(
 }
 
 function routerResourcePrimaryValueHasOpenEndedDomain(
+  store: KernelStore,
   site: TemplateValueSite,
 ): boolean {
-  return isRouterResourcePrimaryValueSite(site);
+  return isRouterResourcePrimaryValueSite(store, site);
 }
 
-function isRouterResourcePrimaryValueSite(site: TemplateValueSite): boolean {
+function isRouterResourcePrimaryValueSite(store: KernelStore, site: TemplateValueSite): boolean {
   if (site.siteKind !== TemplateValueSiteKind.CustomAttributeValue) {
     return false;
   }
-  const definition = site.classification?.resource?.definition ?? null;
+  const definition = valueSiteResourceDefinition(store, site);
   return definition?.type === ResourceDefinitionKind.CustomAttribute
     && (
       (definition.name === 'load' && definition.target.localName === 'LoadCustomAttribute')
@@ -1791,10 +1795,7 @@ function valueSiteResourceDefinition(
   store: KernelStore,
   site: TemplateValueSite,
 ): FullResourceDefinition | null {
-  const definitionHandle = site.classification?.resource?.definitionProductHandle ?? null;
-  return definitionHandle == null
-    ? null
-    : store.productDetails.read(ResourceProductDetails.Definition, definitionHandle);
+  return readVisibleTemplateResourceDefinition(store, site.classification?.resource ?? null);
 }
 
 function bindableTypeMember(

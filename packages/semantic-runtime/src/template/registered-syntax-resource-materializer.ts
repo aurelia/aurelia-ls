@@ -12,6 +12,7 @@ import { AttributePatternDefinition } from '../resources/attribute-pattern-defin
 import { BindingCommandDefinition } from '../resources/binding-command-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import type { ResourceRegistrationAdmission } from '../registration/registration-admission.js';
+import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
 import {
   AttributePatternExecutionKind,
@@ -54,8 +55,8 @@ export class RegisteredSyntaxResourceMaterializer {
     const attributePatterns: SourceAttributePatternResource[] = [];
     const bindingCommands: SourceBindingCommandResource[] = [];
     const visibleBindingCommandDefinitions = new Set(input.visibleResources.flatMap((resource) =>
-      resource.definition instanceof BindingCommandDefinition && resource.definition.productHandle != null
-        ? [resource.definition.productHandle]
+      resource.resourceKind === ResourceDefinitionKind.BindingCommand && resource.definitionProductHandle != null
+        ? [resource.definitionProductHandle]
         : []
     ));
     const seenBindingCommandDefinitions = new Set<NonNullable<BindingCommandDefinition['productHandle']>>();

@@ -216,7 +216,9 @@ poisons the outer candidate. Children are flat within the outer run: entering a 
 the active writer for that scope; it does not create a parent/child hierarchy. Do not use lexical nesting to imply
 hierarchical scheduling or lifetime. The staged publication retains the final child writer and a run-local mutation ordinal for
 every record, product detail, and hot detail. Exact reads of another child's candidate become child-to-child edges;
-reads of candidate absence are also revisioned so a later sibling cannot silently fill them. Positive foreign
+reads of candidate absence are also revisioned so a later sibling cannot silently fill them. Repeated reads of the same
+candidate-local absence coalesce as one negative dependency; the explicit absence revision and the candidate lookup's
+`null` representation are two views of the same state, not conflicting outputs. Positive foreign
 `IfAbsent` admissions remain committed reads of the child that attempted them, including mismatched-slot lookups, rather
 than dangling edges to a candidate that produced no output. Candidate-local `IfAbsent` admission observes the occupancy
 it establishes: an unchanged self-read disappears from the committed manifest, coalesced siblings retain a producer
@@ -239,6 +241,10 @@ rebaser executes. Carry preflights every read-map merge before it mutates staged
 entries. Preview and final replacement spend distinct runtime-branded capabilities: arbitrary structural lookalikes and
 preview authority cannot authorize commit, and final sealed authority cannot be reused as speculative preview. Final
 commit revalidates the rebased reads and currentness guards under the same atomic replacement barrier.
+`ComputationRun.domainReadProjection` exposes the same candidate-aware product-detail and materialization-owner values
+without registering generic lower-level reads. A domain may use it only while constructing a typed read that accounts
+for every consumed value itself. Carry rebase receives the equivalent after-carry preview, allowing that typed read to
+compare current domain semantics without weakening exact kernel reads or teaching the kernel domain field vocabulary.
 
 The outer computation remains the sole manifest owner and store transaction. Every admitted output has exactly one
 logical child owner, with an explicit remainder child retaining phases that have not earned a narrower boundary.

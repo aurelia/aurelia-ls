@@ -197,10 +197,11 @@ export class TemplateResourceCompilationEmission {
     ];
   }
 
-  /** Retain compiler products while rebasing generation-bound worlds and read validators after explicit child carry. */
-  forCarriedGeneration(
+  /** Retain compiler products while rebasing the generation-bound authorities consumed downstream. */
+  forGeneration(
     parentCompilerWorld: TemplateCompilerWorldEmission,
     compilerWorld: TemplateCompilerWorldEmission,
+    definition: CustomElementDefinition,
     registeredReads: readonly ComputationRead[],
   ): TemplateResourceCompilationEmission {
     return new TemplateResourceCompilationEmission(
@@ -210,7 +211,7 @@ export class TemplateResourceCompilationEmission {
       this.appRootDefinitionProductHandle,
       parentCompilerWorld,
       compilerWorld,
-      this.definition,
+      definition,
       this.unit,
       this.html,
       this.attributeSyntax,
@@ -389,9 +390,10 @@ class TemplateCompilationFamilyCarryRebaser {
     if (parentCompilerWorld == null || compilerWorld == null) {
       throw new Error(`Carried template family ${this.owner.ownerHandle} lost its current compiler-world container.`);
     }
-    return compilation.forCarriedGeneration(
+    return compilation.forGeneration(
       parentCompilerWorld,
       compilerWorld,
+      compilation.definition,
       compilation.registeredReads.map((read) => carry.readFor(read)),
     );
   }
@@ -829,7 +831,12 @@ export class TemplateCompilationProjectPass {
     phases: TemplateCompilationPhaseRecorder,
   ): readonly TemplateResourceRuntimeAnalysisEmission[] {
     const resources: TemplateResourceRuntimeAnalysisEmission[] = [];
-    for (const cohort of runtimeAnalysisCohorts(compilations)) {
+    // Current definition details own both scheduling and analysis. Carried front doors may still hold the prior
+    // definition object, so admit every crossing before deriving cohorts, dependency SCCs, or project context.
+    const currentCompilations = compilations.map((compilation) =>
+      this.requireRuntimeAnalysisInputs(compilation)
+    );
+    for (const cohort of runtimeAnalysisCohorts(currentCompilations)) {
       const projectContext = templateRuntimeAnalysisProjectContext(cohort);
       const cohortResources: TemplateResourceRuntimeAnalysisEmission[] = [];
       for (const group of runtimeAnalysisScheduleGroups(cohort, resourceDefinitions)) {
@@ -837,9 +844,8 @@ export class TemplateCompilationProjectPass {
           this.publication,
           cohortResources,
         );
-        const groupResources = group.map((compilation) => {
-          this.requireRuntimeAnalysisInputs(compilation);
-          return new TemplateResourceRuntimeAnalysisEmission(
+        const groupResources = group.map((compilation) =>
+          new TemplateResourceRuntimeAnalysisEmission(
             compilation,
             phases.measure(
               'runtime-analysis',
@@ -857,8 +863,8 @@ export class TemplateCompilationProjectPass {
                 boundControllerValues,
               ),
             ),
-          );
-        });
+          )
+        );
         cohortResources.push(...groupResources);
       }
       resources.push(...cohortResources);
@@ -867,14 +873,21 @@ export class TemplateCompilationProjectPass {
   }
 
   /** Spend the exact compiler products crossing from an authored family into project-wide runtime analysis. */
-  private requireRuntimeAnalysisInputs(compilation: TemplateResourceCompilationEmission): void {
+  private requireRuntimeAnalysisInputs(
+    compilation: TemplateResourceCompilationEmission,
+  ): TemplateResourceCompilationEmission {
     for (const read of compilation.registeredReads) {
       this.publication.observe(read);
     }
-    if (compilation.definition.productHandle != null) {
-      this.requireRuntimeAnalysisInput(
+    const currentDefinition = compilation.definition.productHandle == null
+      ? compilation.definition
+      : this.requireRuntimeAnalysisInput(
         ResourceProductDetails.Definition,
         compilation.definition.productHandle,
+      );
+    if (!(currentDefinition instanceof CustomElementDefinition)) {
+      throw new Error(
+        `Runtime analysis input ${compilation.definition.productHandle} is not a custom-element definition.`,
       );
     }
     this.requireRuntimeAnalysisInput(
@@ -925,12 +938,20 @@ export class TemplateCompilationProjectPass {
     for (const syntax of compilation.authoredAttributeSyntaxes) {
       this.requireRuntimeAnalysisInput(TemplateProductDetails.AttributeSyntax, syntax.productHandle);
     }
+    return currentDefinition === compilation.definition
+      ? compilation
+      : compilation.forGeneration(
+        compilation.parentCompilerWorld,
+        compilation.compilerWorld,
+        currentDefinition,
+        compilation.registeredReads,
+      );
   }
 
   private requireRuntimeAnalysisInput<TDetail>(
     slot: ProductDetailSlot<TDetail>,
     productHandle: ProductHandle,
-  ): void {
+  ): TDetail {
     const product = this.publication.read(productHandle);
     if (!(product instanceof MaterializedProduct)) {
       throw new Error(`Runtime analysis input ${slot.detailKind} has no materialized product ${productHandle}.`);
@@ -939,6 +960,7 @@ export class TemplateCompilationProjectPass {
     if (detail == null) {
       throw new Error(`Runtime analysis input ${slot.detailKind} has no typed detail for ${productHandle}.`);
     }
+    return detail;
   }
 
   private compilerWorldForLocalDefinitions(
@@ -1069,7 +1091,7 @@ export class TemplateCompilationProjectPass {
           definition,
           ownerTemplate,
           new TemplateCompilerReadView(
-            this.publication,
+            this.publication.domainReadProjection,
             activeCompilerWorld.authority,
           ),
           localElementNames,

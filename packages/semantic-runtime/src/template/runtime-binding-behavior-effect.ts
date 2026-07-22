@@ -3,6 +3,7 @@ import type { ProductDetailReadView } from '../kernel/product-details.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import { readCheckerTypeShapeByProductHandle } from '../type-system/checker-type-shape-access.js';
 import type { CheckerTypeMember, CheckerTypeShape } from '../type-system/type-shape.js';
+import { readVisibleTemplateResourceDefinition } from './compiler-resource-lookup.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
 
 /** Static bind-time effects that can be read from a binding-behavior implementation body. */
@@ -36,7 +37,7 @@ export class RuntimeBindingBehaviorBindEffectReader {
   }
 
   private effectsForResource(resource: TemplateVisibleResource): RuntimeBindingBehaviorBindEffects {
-    const definition = resource.definition;
+    const definition = readVisibleTemplateResourceDefinition(this.store, resource);
     if (definition == null || definition.type !== ResourceDefinitionKind.BindingBehavior) {
       return noBindingBehaviorBindEffects;
     }

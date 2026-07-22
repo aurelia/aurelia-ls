@@ -676,7 +676,10 @@ describe("computation lifecycle", () => {
           new SourceFileAddress(preHandle, "test", "src/pre.html", SourceLanguage.Html),
         ]));
       });
-      carried = replacement.tryCarryChild(family);
+      carried = replacement.tryCarryChild(family, (read, context) => {
+        expect(context.readProductDetail(productSlot, productHandle)).toBe(productDetail);
+        return revisions.observe(read.readKey, read.domain);
+      });
       replacement.withChild(consumer, () => {
         expect(replacement.read(productHandle)).toBe(product);
         expect(replacement.readProductDetail(productSlot, productHandle)).toBe(productDetail);
@@ -3722,6 +3725,7 @@ describe("computation lifecycle", () => {
 
     const replacement = lifecycle.begin(locus("final-candidate-absence"));
     replacement.withChild(childLocus("absence-consumer"), () => {
+      expect(replacement.read(withdrawnHandle)).toBeNull();
       expect(replacement.read(withdrawnHandle)).toBeNull();
       replacement.publish(publication("candidate-absence:replacement", [
         new SourceFileAddress(derivedHandle, "test", "src/derived.html", SourceLanguage.Html),

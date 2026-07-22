@@ -80,7 +80,10 @@ import {
   type TemplateTypeSystemOverlayExpressionProjectionContext,
   type TemplateTypeSystemOverlayExpressionScopeAliases,
 } from './template-type-system-overlay-expression.js';
-import { findVisibleTemplateResource } from './compiler-resource-lookup.js';
+import {
+  findVisibleTemplateResource,
+  readVisibleTemplateResourceDefinition,
+} from './compiler-resource-lookup.js';
 import {
   IteratorBindingScopeEffect,
   LetBindingScopeEffect,
@@ -598,7 +601,7 @@ export class TemplateTypeSystemOverlayBuilder {
           ResourceDefinitionKind.ValueConverter,
           expression.name.name,
         );
-        const definition = visible?.definition;
+        const definition = readVisibleTemplateResourceDefinition(this.store, visible);
         if (definition == null || definition.type !== ResourceDefinitionKind.ValueConverter) {
           return {
             callKind: TemplateTypeSystemOverlayValueConverterCallKind.RuntimeIdentity,

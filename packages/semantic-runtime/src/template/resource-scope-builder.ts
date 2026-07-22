@@ -15,6 +15,7 @@ import {
   runtimeResourceKeyForKind,
 } from '../resources/resource-kind.js';
 import {
+  sameTemplateVisibleResource,
   TemplateResourceVisibilityKind,
   TemplateVisibleResource,
 } from './compiler-world-reference.js';
@@ -35,7 +36,6 @@ export function visibleResourceForDefinition(
     definition.productHandle,
     definition.identityHandle,
     definition.productHandle,
-    definition,
     visibilityKind,
     definition.sourceAddressHandle ?? fallbackSourceAddressHandle,
   );
@@ -71,7 +71,7 @@ export function mergeVisibleResourceScopes(
   preferred: readonly TemplateVisibleResource[],
   inherited: readonly TemplateVisibleResource[],
 ): readonly TemplateVisibleResource[] {
-  const resources: TemplateVisibleResource[] = [];
+  const effective: TemplateVisibleResource[] = [];
   const seenLookupKeys = new Set<string>();
   const seenResourceProducts = new Set<ProductHandle>();
   for (const resource of [...preferred, ...inherited]) {
@@ -79,9 +79,27 @@ export function mergeVisibleResourceScopes(
       continue;
     }
     rememberVisibleResource(resource, seenLookupKeys, seenResourceProducts);
-    resources.push(resource);
+    effective.push(resource);
   }
-  return resources;
+
+  // An exact preferred row wins no new lookup over the inherited row. Keep such winners in inherited order so
+  // adding an already-global dependency does not manufacture a different compiler scope; new and shadowing
+  // preferred rows retain their precedence at the front.
+  const stableInherited: TemplateVisibleResource[] = [];
+  const stableWinners = new Set<TemplateVisibleResource>();
+  for (const inheritedResource of inherited) {
+    const winner = effective.find((resource) =>
+      !stableWinners.has(resource) && sameTemplateVisibleResource(resource, inheritedResource)
+    );
+    if (winner != null) {
+      stableWinners.add(winner);
+      stableInherited.push(winner);
+    }
+  }
+  return [
+    ...effective.filter((resource) => !stableWinners.has(resource)),
+    ...stableInherited,
+  ];
 }
 
 export function directDependencyDefinitions(

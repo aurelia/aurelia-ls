@@ -27,10 +27,7 @@ import {
   CustomElementTemplateKind,
   type CustomElementDefinition,
 } from '../resources/custom-element-definition.js';
-import type {
-  FullResourceDefinition,
-  TemplateCompilableResourceDefinition,
-} from '../resources/resource-definition.js';
+import type { TemplateCompilableResourceDefinition } from '../resources/resource-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
   nestedInstructionProductHandlesForInstructions,
@@ -543,24 +540,24 @@ export class TemplateResourceResolverService {
   ) {}
 
   /** Runtime `IResourceResolver.el(container, name)` shape with the container already fixed by this world. */
-  el(name: string): TemplateResolvedResource | null {
+  el(name: string): TemplateVisibleResource | null {
     const key = name.toLowerCase();
     const resource = this.resources.find((candidate) =>
       candidate.resourceKind === ResourceDefinitionKind.CustomElement
       && matchesVisibleResourceName(candidate, key)
     ) ?? null;
-    return resource == null ? null : resolvedResource(resource);
+    return resource;
   }
 
   /** Runtime `IResourceResolver.attr(container, name)` shape with the container already fixed by this world. */
-  attr(name: string): TemplateResolvedResource | null {
+  attr(name: string): TemplateVisibleResource | null {
     const key = name.toLowerCase();
     const resource = this.resources.find((candidate) =>
       (candidate.resourceKind === ResourceDefinitionKind.CustomAttribute
         || candidate.resourceKind === ResourceDefinitionKind.TemplateController)
       && matchesVisibleResourceName(candidate, key)
     ) ?? null;
-    return resource == null ? null : resolvedResource(resource);
+    return resource;
   }
 
   bindables(definition: CustomElementDefinition): TemplateElementBindablesInfo;
@@ -1116,27 +1113,6 @@ function matchesVisibleResourceName(
 ): boolean {
   return resource.name.toLowerCase() === lookupName
     || resource.aliases.some((alias) => alias.toLowerCase() === lookupName);
-}
-
-function resolvedResource(resource: TemplateVisibleResource): TemplateResolvedResource {
-  const definition = isTemplateCompilableDefinition(resource.definition)
-    ? resource.definition
-    : null;
-  return new TemplateResolvedResource(
-    definition == null
-      ? TemplateResourceResolutionKind.HeaderOnly
-      : TemplateResourceResolutionKind.Definition,
-    resource,
-    definition,
-  );
-}
-
-function isTemplateCompilableDefinition(
-  definition: FullResourceDefinition | null,
-): definition is TemplateCompilableResourceDefinition {
-  return definition != null
-    && (definition.type === ResourceDefinitionKind.CustomElement
-      || definition.type === ResourceDefinitionKind.CustomAttribute);
 }
 
 export function templateBindableReferences(

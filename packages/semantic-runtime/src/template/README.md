@@ -63,16 +63,19 @@ classification, expression parsing, and instruction lowering converge on the sam
   closure or compiles afresh in plan order, and post-template executes after every family. A separate generic scheduler
   would add no ordering information to this topology. App-root compiler worlds remain pre-template outputs: they do not
   yet have an independently reusable dependency closure, and lexically nesting a child around their construction would
-  create a flat sibling rather than hierarchy. Compiler resource reads currently include semantic and witness
-  definition state, so a witness-only resource refresh conservatively reactivates families that resolve that resource;
-  unrelated families still carry. Runtime/checker analysis remains project-owned because its SCC schedule,
+  create a flat sibling rather than hierarchy. Compiler resource reads revise over the facts consumed by each operation:
+  lookup/capture/lowering metadata, bindables, and owner facts are distinct projections rather than one hash of the full
+  definition. Scope and closure remain currentness witnesses, while an equal operation result permits exact family carry
+  after those witnesses rebase. Runtime/checker analysis remains project-owned because its SCC schedule,
   expression world, and bound-controller values cross family boundaries; the explicit post-template child records that
   boundary honestly instead of assigning unsupported family ownership. Before crossing that boundary, post-template
   re-observes the compiler-world authority reads and consumes the exact resource definition, compiled-template
   envelope, render targets, instruction sequences, instructions, compiler world, resource scope, Rendering,
   TemplateCompiler, resource resolver, expression parser, AttrMapper, binding-command resolver, and authored attribute
-  syntax products plus typed details. This includes local-template definitions and instruction details produced by the
-  same family child; stable envelope handles do not imply that referenced semantic details are unchanged. Rendering and
+  syntax products plus typed details. The exact current resource-definition read is also the carrier supplied to
+  runtime analysis: a carried compiler front door must not validate a replacement detail and then keep using its prior
+  definition object. This includes local-template definitions and instruction details produced by the same family child;
+  stable envelope handles do not imply that referenced semantic details are unchanged. Rendering and
   runtime `compileSpread` execute the compiler service set, so those inputs are not implied by carrying a world
   reference. A projected compiler-world authority may yield a distinct immutable world object under the same product
   handle, so the live authority read and catalog detail dependency are both retained rather than collapsed by object
@@ -104,7 +107,9 @@ classification, expression parsing, and instruction lowering converge on the sam
 - `compiler-read-view.ts` is the required run-scoped read boundary for an incremental template front door. It delegates
   resource, bindable, command, pattern, parser, AttrMapper, and TemplateCompiler operations to the admitted immutable
   compiler world while registering the exact positive or negative keys that were read. The compiler-world authority is
-  re-read at commit, and each observation keeps scope, closure/support, and result revisions distinct. This view is not a
+  re-read at commit, and each observation keeps scope, closure/support, and result revisions distinct. Candidate-aware
+  definition and materialization reads come through the computation's domain projection so the compiler observation owns
+  one dependency instead of also registering lower-level exact reads whose sensitivity it supersedes. This view is not a
   second resource catalog. Ordinary eager compilation uses the same operations with a fixed world authority.
 - `configuration/app-analysis-computation.ts` is the production authority around the complete app project pass. One project
   locus owns one current generation regardless of analysis depth or authoring policy; those are replacement inputs, not
@@ -115,9 +120,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   at every public operation, so retaining the query capability cannot bypass generation revocation.
 - `compiled-template-comparison.ts` compares compiled-template structure separately from source/provenance witnesses.
   `compiler-world-comparison.ts` owns the corresponding slot comparisons for compiler worlds, resource scopes, compiler
-  services, parser machines, binding commands, attribute patterns, renderers, and compiler issues; embedded resource
-  definitions delegate to the resource domain's comparator. Stable record handles are resolved against old and proposed
-  views, so semantic changes replace while witness-only movement refreshes the candidate. Do not recreate aggregate
+  services, parser machines, binding commands, attribute patterns, renderers, and compiler issues. Resource scopes and
+  resolver services compare reference-shaped visibility rows; the resource-definition detail slot remains the sole rich
+  definition authority and consumers hydrate it through their current read view. Stable record handles are resolved
+  against old and proposed views, so semantic changes replace while witness-only movement refreshes the candidate. Do not recreate aggregate
   compiler-world equality in a materializer or scheduler.
 - `TemplateCompilerWorldEmission` is a generation-local execution frame because it carries the live DI `Container`.
   Its published world and service objects are immutable semantic candidates: an equal candidate may be distinct from the
