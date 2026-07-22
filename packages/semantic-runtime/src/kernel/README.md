@@ -239,6 +239,14 @@ materializer did not issue an explicit lookup. Those links preserve referential 
 and child topology; they do not claim that the target value was consumed. A materializer whose result depends on target
 semantics must still perform an exact or candidate read through the publication context.
 
+`ComputationRun.observeChildResult(...)` records the coarser case where a child consumes another completed child's
+non-kernel in-memory result. Observation freezes the producer against later preparation and retains a first-class result
+edge in both child manifests and reverse-reader indexes, including when the producer published no kernel outputs. A
+consumer with this edge may carry only after the same producer child carries in the current outer candidate. If the
+producer executes, the consumer executes too even when every output decision happens to be `Retain`; whole-result edges
+do not infer semantic equality from incomplete detail comparators. Prefer exact kernel reads whenever the consumed value
+is persisted. Domain code still owns execution order and cycle policy; the lifecycle only validates the declared edge.
+
 `ComputationRun.tryCarryChild(...)` is the explicit no-work operation for one prior declared singleton child. It is
 available only before candidate work starts and only when the prior child has revisioned reads, stable producer
 ownership, and no nontrivial SCC. Exact reads must rebase to current authorities; candidate-local semantic dependencies

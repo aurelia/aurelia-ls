@@ -137,6 +137,21 @@ export class ComputationStructuralDependency {
   }
 }
 
+/**
+ * Whole-result dependency used when one child consumes another child's in-memory domain result.
+ *
+ * Persisted kernel values should still be read exactly. This coarser edge deliberately permits downstream carry only
+ * when the producer child itself carried; it does not infer semantic equality from the producer's output decisions.
+ */
+export class ComputationChildResultDependency {
+  readonly readKey: string;
+
+  constructor(readonly producerChildId: ComputationChildId) {
+    this.readKey = computationChildResultReadKey(producerChildId);
+    Object.freeze(this);
+  }
+}
+
 /** Commit-time validation result for one typed, domain-owned input read. */
 export interface ComputationReadValidation {
   readonly isCurrent: boolean;
@@ -271,6 +286,11 @@ export function computationHotDetailReadKey(handle: HotDetailHandle): string {
 
 export function computationMaterializationOwnerReadKey(ownerHandle: MaterializationOwnerHandle): string {
   return `kernel-materialization-owner:${ownerHandle}`;
+}
+
+/** Stable activation key for one logical child's complete non-kernel result. */
+export function computationChildResultReadKey(childId: ComputationChildId): string {
+  return `computation-child-result:${childId}`;
 }
 
 /** Exact membership of foreign materializations for one owner, excluding this computation's own replacement closure. */
@@ -834,6 +854,7 @@ export class ComputationChildState {
   readonly reads: readonly ComputationRead[];
   readonly candidateReads: readonly ComputationCandidateRead[];
   readonly structuralDependencies: readonly ComputationStructuralDependency[];
+  readonly resultDependencies: readonly ComputationChildResultDependency[];
   readonly openReads: readonly ComputationChildOpenRead[];
   readonly outputs: readonly ComputationOutput[];
 
@@ -845,6 +866,7 @@ export class ComputationChildState {
     reads: readonly ComputationRead[],
     candidateReads: readonly ComputationCandidateRead[],
     structuralDependencies: readonly ComputationStructuralDependency[],
+    resultDependencies: readonly ComputationChildResultDependency[],
     openReads: readonly ComputationChildOpenRead[],
     outputs: readonly ComputationOutput[],
   ) {
@@ -853,6 +875,7 @@ export class ComputationChildState {
     this.reads = Object.freeze([...reads]);
     this.candidateReads = Object.freeze([...candidateReads]);
     this.structuralDependencies = Object.freeze([...structuralDependencies]);
+    this.resultDependencies = Object.freeze([...resultDependencies]);
     this.openReads = Object.freeze([...openReads]);
     this.outputs = Object.freeze([...outputs]);
     Object.freeze(this);
@@ -893,9 +916,13 @@ class MutableComputationChild {
   readonly readsByKey = new Map<string, ComputationRead>();
   readonly stagedReadsByKey = new Map<string, KernelStagedEntryRevision>();
   readonly structuralReferencesByKey = new Map<string, KernelDetailReference>();
+  readonly resultDependenciesByProducerId = new Map<ComputationChildId, ComputationChildResultDependency>();
   readonly openReadsByKey = new Map<string, ComputationChildOpenRead>();
   carriedState: ComputationChildState | null = null;
   readonly carriedCandidateReadKeys = new Set<string>();
+  activeScopeDepth = 0;
+  hasCompletedPreparation = false;
+  resultFrozen = false;
 
   constructor(
     readonly childId: ComputationChildId,
@@ -909,6 +936,7 @@ interface PreparedComputationChild {
   readonly reads: readonly ComputationRead[];
   readonly candidateReads: readonly ComputationCandidateRead[];
   readonly structuralDependencies: readonly ComputationStructuralDependency[];
+  readonly resultDependencies: readonly ComputationChildResultDependency[];
   readonly openReads: readonly ComputationChildOpenRead[];
   readonly outputs: readonly ComputationOutput[];
 }
@@ -1096,15 +1124,20 @@ export class ComputationRun implements KernelPublicationContext {
     const capturedLocus = snapshotComputationLocus(locus);
     const childId = computationChildId(this.computationId, capturedLocus);
     const previous = this.activeChild;
+    let child: MutableComputationChild | null = null;
     let entered = false;
     try {
-      const child = this.childFor(capturedLocus, ComputationChildRole.Declared);
+      child = this.childFor(capturedLocus, ComputationChildRole.Declared);
       if (child.carriedState != null) {
         throw new Error(`Computation child ${child.childId} was already carried into this candidate.`);
+      }
+      if (child.resultFrozen) {
+        throw new Error(`Computation child ${child.childId} cannot resume after its complete result was observed.`);
       }
       this.hasExplicitChildren = true;
       this.activeChild = child;
       this.activeChildScopeDepth += 1;
+      child.activeScopeDepth += 1;
       entered = true;
       const value = prepare();
       if (isPromiseLike(value)) {
@@ -1112,12 +1145,14 @@ export class ComputationRun implements KernelPublicationContext {
         void Promise.resolve(value).catch(() => {});
         throw new Error(`Computation child ${child.childId} must finish synchronously inside its outer transaction.`);
       }
+      child.hasCompletedPreparation = true;
       return value;
     } catch (error) {
       this.childFailure ??= new ComputationChildPreparationFailure(childId, error);
       throw error;
     } finally {
       if (entered) {
+        child!.activeScopeDepth -= 1;
         this.activeChildScopeDepth -= 1;
         this.activeChild = previous;
       }
@@ -1358,6 +1393,29 @@ export class ComputationRun implements KernelPublicationContext {
     }
   }
 
+  /** Record that the active child consumed another completed child's complete in-memory domain result. */
+  observeChildResult(locus: ComputationLocus): void {
+    this.requirePreparing();
+    const capturedLocus = snapshotComputationLocus(locus);
+    const producerChildId = computationChildId(this.computationId, capturedLocus);
+    if (producerChildId === this.activeChild.childId) {
+      throw new Error(`Computation child ${producerChildId} cannot consume its own complete result.`);
+    }
+    const producer = this.childrenById.get(producerChildId) ?? null;
+    if (
+      producer == null
+      || producer.activeScopeDepth > 0
+      || (producer.carriedState == null && !producer.hasCompletedPreparation)
+    ) {
+      throw new Error(`Computation child ${producerChildId} has no completed result in this candidate.`);
+    }
+    producer.resultFrozen = true;
+    this.activeChild.resultDependenciesByProducerId.set(
+      producerChildId,
+      new ComputationChildResultDependency(producerChildId),
+    );
+  }
+
   /** Carry one exact prior singleton child when every dependency still denotes a retained candidate value. */
   tryCarryChild(
     locus: ComputationLocus,
@@ -1382,9 +1440,13 @@ export class ComputationRun implements KernelPublicationContext {
     const child = this.childFor(capturedLocus, ComputationChildRole.Declared);
     if (
       child.carriedState != null
+      || child.hasCompletedPreparation
+      || child.resultFrozen
+      || child.activeScopeDepth > 0
       || child.readsByKey.size > 0
       || child.stagedReadsByKey.size > 0
       || child.structuralReferencesByKey.size > 0
+      || child.resultDependenciesByProducerId.size > 0
       || child.openReadsByKey.size > 0
       || this.publications.hasStagedActivityFrom(child.childId)
     ) {
@@ -1393,6 +1455,8 @@ export class ComputationRun implements KernelPublicationContext {
     if (!this.outputsAreUnclaimed(previous.outputs)) return null;
     const rebasedStructuralReferences = this.rebaseStructuralDependencies(previous.structuralDependencies);
     if (rebasedStructuralReferences == null) return null;
+    const rebasedResultProducers = this.rebaseResultDependencies(previous.resultDependencies);
+    if (rebasedResultProducers == null) return null;
 
     const rebaseContext = this.publications.createProspectiveCarryReadView(
       previous.outputs,
@@ -1409,9 +1473,13 @@ export class ComputationRun implements KernelPublicationContext {
 
     if (
       child.carriedState != null
+      || child.hasCompletedPreparation
+      || child.resultFrozen
+      || child.activeScopeDepth > 0
       || child.readsByKey.size > 0
       || child.stagedReadsByKey.size > 0
       || child.structuralReferencesByKey.size > 0
+      || child.resultDependenciesByProducerId.size > 0
       || child.openReadsByKey.size > 0
       || this.publications.hasStagedActivityFrom(child.childId)
     ) {
@@ -1484,6 +1552,12 @@ export class ComputationRun implements KernelPublicationContext {
     for (const reference of rebasedStructuralReferences) {
       child.structuralReferencesByKey.set(reference.key, reference);
     }
+    for (const dependency of previous.resultDependencies) {
+      child.resultDependenciesByProducerId.set(dependency.producerChildId, dependency);
+    }
+    for (const producer of rebasedResultProducers) {
+      producer.resultFrozen = true;
+    }
     child.carriedState = previous;
     for (const readKey of retainedDependencyReadKeys) child.carriedCandidateReadKeys.add(readKey);
     this.hasExplicitChildren = true;
@@ -1552,6 +1626,23 @@ export class ComputationRun implements KernelPublicationContext {
       rebased.push(dependency.reference);
     }
     return rebased;
+  }
+
+  private rebaseResultDependencies(
+    dependencies: readonly ComputationChildResultDependency[],
+  ): readonly MutableComputationChild[] | null {
+    const producers: MutableComputationChild[] = [];
+    for (const dependency of dependencies) {
+      const producer = this.childrenById.get(dependency.producerChildId) ?? null;
+      if (
+        producer?.carriedState == null
+        || producer.activeScopeDepth > 0
+      ) {
+        return null;
+      }
+      producers.push(producer);
+    }
+    return producers;
   }
 
   private structuralDependencyKind(
@@ -1724,6 +1815,9 @@ export class ComputationRun implements KernelPublicationContext {
     }
 
     const invalidReads: ComputationInvalidRead[] = [];
+    const resultProducerIds = new Set([...this.childrenById.values()].flatMap((child) =>
+      [...child.resultDependenciesByProducerId.keys()]
+    ));
     const prepared = [...this.childrenById.values()].map((child): PreparedComputationChild => {
       const reads = [...child.readsByKey.values()].filter((read) => {
         const outputOwner = outputOwnerByReadKey.get(read.readKey) ?? null;
@@ -1830,15 +1924,19 @@ export class ComputationRun implements KernelPublicationContext {
             );
           })
           .sort((left, right) => left.readKey.localeCompare(right.readKey)),
+        resultDependencies: [...child.resultDependenciesByProducerId.values()]
+          .sort((left, right) => left.producerChildId.localeCompare(right.producerChildId)),
         openReads: [...child.openReadsByKey.values()].sort((left, right) => left.key.localeCompare(right.key)),
         outputs: (outputsByChild.get(child.childId) ?? []).sort((left, right) => left.readKey.localeCompare(right.readKey)),
       };
     }).filter((candidate) => {
       const hasContent = preparedComputationChildHasContent(candidate);
       if (this.hasExplicitPartition) {
-        return candidate.child.role === ComputationChildRole.Remainder || hasContent;
+        return candidate.child.role === ComputationChildRole.Remainder
+          || resultProducerIds.has(candidate.child.childId)
+          || hasContent;
       }
-      return this.hasExplicitChildren && hasContent;
+      return this.hasExplicitChildren && (resultProducerIds.has(candidate.child.childId) || hasContent);
     }).sort((left, right) => left.child.childId.localeCompare(right.child.childId));
     const sccByChildId = classifyComputationChildSccs(prepared);
     const states = prepared.map((candidate) => {
@@ -1860,6 +1958,7 @@ export class ComputationRun implements KernelPublicationContext {
         candidate.reads,
         candidate.candidateReads,
         candidate.structuralDependencies,
+        candidate.resultDependencies,
         candidate.openReads,
         candidate.outputs,
       );
@@ -2561,6 +2660,10 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
   ): void {
     const previousChildIds = new Set(previous.map((child) => child.childId));
     for (const child of previous) {
+      const resultReadKey = computationChildResultReadKey(child.childId);
+      if (this.childProducerByKey.get(resultReadKey) !== child.childId) {
+        throw new Error(`Child result ${resultReadKey} lost producer ownership before replacement.`);
+      }
       for (const output of child.outputs) {
         if (this.childProducerByKey.get(output.readKey) !== child.childId) {
           throw new Error(`Child output ${output.readKey} lost producer ownership before replacement.`);
@@ -2569,6 +2672,11 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     }
     const nextOutputKeys = new Set<string>();
     for (const child of next) {
+      const resultReadKey = computationChildResultReadKey(child.childId);
+      const existingResultOwner = this.childProducerByKey.get(resultReadKey);
+      if (existingResultOwner != null && !previousChildIds.has(existingResultOwner)) {
+        throw new Error(`Child result ${resultReadKey} is already owned by ${existingResultOwner}.`);
+      }
       for (const output of child.outputs) {
         if (nextOutputKeys.has(output.readKey)) {
           throw new Error(`Child output ${output.readKey} has multiple final owners.`);
@@ -2600,6 +2708,10 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
           this.childProducerByKey.delete(output.readKey);
         }
       }
+      const resultReadKey = computationChildResultReadKey(child.childId);
+      if (this.childProducerByKey.get(resultReadKey) === child.childId) {
+        this.childProducerByKey.delete(resultReadKey);
+      }
     }
     for (const child of next) {
       for (const readKey of computationChildReadKeys(child)) {
@@ -2613,6 +2725,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       for (const output of child.outputs) {
         this.childProducerByKey.set(output.readKey, child.childId);
       }
+      this.childProducerByKey.set(computationChildResultReadKey(child.childId), child.childId);
     }
   }
 
@@ -2673,6 +2786,7 @@ function preparedComputationChildHasContent(child: PreparedComputationChild): bo
   return child.reads.length > 0
     || child.candidateReads.length > 0
     || child.structuralDependencies.length > 0
+    || child.resultDependencies.length > 0
     || child.openReads.length > 0
     || child.outputs.length > 0;
 }
@@ -2696,6 +2810,11 @@ function classifyComputationChildSccs(
         ),
         ...child.structuralDependencies.flatMap((dependency) =>
           dependency.producerChildId != null && childrenById.has(dependency.producerChildId)
+            ? [dependency.producerChildId]
+            : []
+        ),
+        ...child.resultDependencies.flatMap((dependency) =>
+          childrenById.has(dependency.producerChildId)
             ? [dependency.producerChildId]
             : []
         ),
@@ -2946,6 +3065,7 @@ function computationChildReadKeys(child: ComputationChildState): readonly string
   return [...new Set([
     ...child.reads.map((read) => read.readKey),
     ...child.candidateReads.map((read) => read.readKey),
+    ...child.resultDependencies.map((dependency) => dependency.readKey),
   ])];
 }
 

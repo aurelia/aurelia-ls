@@ -20,6 +20,7 @@ import {
   ComputationCommitState,
   ComputationRetirementCause,
   ComputationReadValidationScope,
+  computationChildResultReadKey,
   computationHotDetailReadKey,
   ComputationLifecycleRegistry,
   computationMaterializationOwnerReadKey,
@@ -787,6 +788,190 @@ describe("computation lifecycle", () => {
     }
     expect(nextConsumer).toBeDefined();
     expect(lifecycle.childReadersFor(computationRecordReadKey(productHandle))).toEqual([nextConsumer?.childId]);
+  });
+
+  test("carries a whole-result consumer only after its producer also carries", () => {
+    const store = new KernelStore("computation-child-result-carry");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const producer = childLocus("result-carry-producer");
+    const consumer = childLocus("result-carry-consumer");
+    const independent = childLocus("result-carry-independent");
+    const producerHandle = store.handles.address("child-result-carry:producer");
+    const consumerHandle = store.handles.address("child-result-carry:consumer");
+    const independentHandle = store.handles.address("child-result-carry:independent");
+    const producerAddress = new SourceFileAddress(
+      producerHandle,
+      "test",
+      "src/producer.html",
+      SourceLanguage.Html,
+    );
+    const consumerAddress = new SourceFileAddress(
+      consumerHandle,
+      "test",
+      "src/consumer.html",
+      SourceLanguage.Html,
+    );
+    const independentAddress = new SourceFileAddress(
+      independentHandle,
+      "test",
+      "src/independent.html",
+      SourceLanguage.Html,
+    );
+
+    const initial = lifecycle.begin(locus("child-result-carry"));
+    initial.withChildPartition(() => {
+      initial.withChild(producer, () => {
+        initial.publish(publication("child-result-carry:producer:initial", [producerAddress]));
+      });
+      initial.withChild(consumer, () => {
+        initial.observeChildResult(producer);
+        initial.publish(publication("child-result-carry:consumer:initial", [consumerAddress]));
+      });
+      initial.withChild(independent, () => {
+        initial.publish(publication("child-result-carry:independent:initial", [independentAddress]));
+      });
+    });
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const initialState = lifecycle.readState(initial.computationId);
+    const initialProducer = initialState?.children.find(
+      (child) => child.locus.reconciliationKey === producer.reconciliationKey,
+    );
+    const initialConsumer = initialState?.children.find(
+      (child) => child.locus.reconciliationKey === consumer.reconciliationKey,
+    );
+    expect(initialProducer).toBeDefined();
+    expect(initialConsumer?.resultDependencies).toEqual([
+      expect.objectContaining({ producerChildId: initialProducer?.childId }),
+    ]);
+    if (initialProducer == null || initialConsumer == null) {
+      throw new Error("Expected committed child-result producer and consumer state.");
+    }
+    const resultReadKey = computationChildResultReadKey(initialProducer.childId);
+    expect(lifecycle.childProducerFor(resultReadKey)).toBe(initialProducer.childId);
+    expect(lifecycle.childReadersFor(resultReadKey)).toEqual([initialConsumer.childId]);
+
+    const carried = lifecycle.begin(locus("child-result-carry"));
+    carried.withChildPartition(() => {
+      expect(carried.tryCarryChild(producer)).not.toBeNull();
+      expect(carried.tryCarryChild(consumer)).not.toBeNull();
+      expect(carried.tryCarryChild(independent)).not.toBeNull();
+    });
+    const carriedResult = carried.commit();
+    expect(carriedResult.state).toBe(ComputationCommitState.Committed);
+    expect(carriedResult.transition.children).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        childId: initialProducer.childId,
+        kind: ComputationChildTransitionKind.Carried,
+      }),
+      expect.objectContaining({
+        childId: initialConsumer.childId,
+        kind: ComputationChildTransitionKind.Carried,
+      }),
+    ]));
+
+    const producerExecuted = lifecycle.begin(locus("child-result-carry"));
+    producerExecuted.withChildPartition(() => {
+      producerExecuted.withChild(producer, () => {
+        producerExecuted.publish(publication("child-result-carry:producer:executed", [producerAddress]));
+      });
+      expect(producerExecuted.tryCarryChild(consumer)).toBeNull();
+      producerExecuted.withChild(consumer, () => {
+        producerExecuted.observeChildResult(producer);
+        producerExecuted.publish(publication("child-result-carry:consumer:executed", [consumerAddress]));
+      });
+      expect(producerExecuted.tryCarryChild(independent)).not.toBeNull();
+    });
+    const producerExecutedResult = producerExecuted.commit();
+    expect(producerExecutedResult.state).toBe(ComputationCommitState.Committed);
+    expect(producerExecutedResult.transition.publications).toContainEqual(expect.objectContaining({
+      surface: KernelPublicationSurface.Record,
+      handle: producerHandle,
+      decision: KernelPublicationDecisionKind.Retain,
+    }));
+    expect(producerExecutedResult.transition.children).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        childId: initialProducer.childId,
+        kind: ComputationChildTransitionKind.Executed,
+      }),
+      expect.objectContaining({
+        childId: initialConsumer.childId,
+        kind: ComputationChildTransitionKind.Executed,
+      }),
+    ]));
+  });
+
+  test("retains an observed zero-output producer and freezes it against later preparation", () => {
+    const store = new KernelStore("computation-child-empty-result");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const producer = childLocus("empty-result-producer");
+    const consumer = childLocus("empty-result-consumer");
+    const consumerHandle = store.handles.address("child-empty-result:consumer");
+
+    const premature = lifecycle.begin(locus("child-empty-result-premature"));
+    expect(() => premature.withChild(consumer, () => premature.observeChildResult(producer))).toThrow(
+      /has no completed result in this candidate/,
+    );
+    expect(() => premature.commit()).toThrow(/failed child preparation/);
+
+    const initial = lifecycle.begin(locus("child-empty-result"));
+    initial.withChildPartition(() => {
+      initial.withChild(producer, () => {});
+      initial.withChild(consumer, () => {
+        initial.observeChildResult(producer);
+        initial.publish(publication("child-empty-result:consumer", [
+          new SourceFileAddress(consumerHandle, "test", "src/consumer.html", SourceLanguage.Html),
+        ]));
+      });
+    });
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    const producerState = lifecycle.readState(initial.computationId)?.children.find(
+      (child) => child.locus.reconciliationKey === producer.reconciliationKey,
+    );
+    expect(producerState).toBeDefined();
+    expect(producerState?.outputs).toEqual([]);
+
+    const invalid = lifecycle.begin(locus("child-empty-result"));
+    invalid.withChildPartition(() => {
+      invalid.withChild(producer, () => {});
+      invalid.withChild(consumer, () => invalid.observeChildResult(producer));
+      expect(() => invalid.withChild(producer, () => {})).toThrow(/cannot resume after its complete result was observed/);
+    });
+    expect(() => invalid.commit()).toThrow(/failed child preparation/);
+    expect(lifecycle.readState(initial.computationId)?.committedRunSequence).toBe(initial.runSequence);
+  });
+
+  test("includes whole-result dependencies in technical child SCCs", () => {
+    const store = new KernelStore("computation-child-result-cycle");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const childA = childLocus("result-cycle-a");
+    const childB = childLocus("result-cycle-b");
+    const handleA = store.handles.address("child-result-cycle:a");
+    const handleB = store.handles.address("child-result-cycle:b");
+    const run = lifecycle.begin(locus("child-result-cycle"));
+
+    run.withChildPartition(() => {
+      run.withChild(childA, () => {
+        run.publish(publication("child-result-cycle:a", [
+          new SourceFileAddress(handleA, "test", "src/a.html", SourceLanguage.Html),
+        ]));
+      });
+      run.withChild(childB, () => {
+        expect(run.read(handleA)).not.toBeNull();
+        run.publish(publication("child-result-cycle:b", [
+          new SourceFileAddress(handleB, "test", "src/b.html", SourceLanguage.Html),
+        ]));
+      });
+      run.withChild(childA, () => run.observeChildResult(childB));
+    });
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+    const cycle = lifecycle.readState(run.computationId)?.children.filter((child) =>
+      child.locus.reconciliationKey === childA.reconciliationKey
+      || child.locus.reconciliationKey === childB.reconciliationKey
+    ) ?? [];
+    expect(cycle).toHaveLength(2);
+    expect(cycle.every((child) => child.scc.kind === ComputationChildSccKind.Cyclic)).toBe(true);
+    expect(new Set(cycle.map((child) => child.scc.key)).size).toBe(1);
   });
 
   test("refuses stale carry before staging and rejects exact inputs that change after carry", () => {
