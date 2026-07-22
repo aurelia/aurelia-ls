@@ -280,6 +280,69 @@ export class StagedKernelMaterializationOwnerRead {
   }
 }
 
+/** Exact staged-plus-prospective kernel projection retained by one child's rebased domain reads. */
+export interface KernelProspectiveCarryReadView extends ProductDetailReadView, KernelReadProjectionRevisionView {
+  readonly outputEntriesByKey: ReadonlyMap<string, KernelPublicationEntryDescriptor>;
+  readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[];
+}
+
+class StagedKernelProspectiveCarryReadView implements KernelProspectiveCarryReadView {
+  private ownerSnapshotRevision: KernelReadProjectionRevision | null = null;
+  private readonly ownerSnapshots = new Map<MaterializationOwnerHandle, readonly MaterializationRecord[]>();
+
+  constructor(
+    private readonly publications: StagedKernelPublicationContext,
+    private readonly materializationsByOwner: ReadonlyMap<
+      MaterializationOwnerHandle,
+      readonly MaterializationRecord[]
+    >,
+    private readonly productDetailsByHandle: ReadonlyMap<ProductHandle, ProductDetailEntry<unknown>>,
+    readonly outputEntriesByKey: ReadonlyMap<string, KernelPublicationEntryDescriptor>,
+  ) {}
+
+  readProjectionRevision(): KernelReadProjectionRevision {
+    const current = this.publications.readProjectionRevision();
+    return new KernelReadProjectionRevision(
+      this,
+      current.committedMutationOrdinal,
+      current.candidateMutationOrdinal,
+    );
+  }
+
+  readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[] {
+    this.refreshOwnerSnapshots();
+    const existing = this.ownerSnapshots.get(ownerHandle);
+    if (existing != null) return existing;
+    const records = new Map(
+      this.publications.previewMaterializationOwnerCandidate(ownerHandle).records
+        .map((record) => [record.handle, record]),
+    );
+    for (const record of this.materializationsByOwner.get(ownerHandle) ?? []) {
+      records.set(record.handle, record);
+    }
+    const snapshot = Object.freeze(
+      [...records.values()].sort((left, right) => left.handle.localeCompare(right.handle)),
+    );
+    this.ownerSnapshots.set(ownerHandle, snapshot);
+    return snapshot;
+  }
+
+  readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
+    return this.publications.previewProductDetailAfterCarry(
+      slot,
+      productHandle,
+      this.productDetailsByHandle.get(productHandle) ?? null,
+    );
+  }
+
+  private refreshOwnerSnapshots(): void {
+    const current = this.publications.readProjectionRevision();
+    if (this.ownerSnapshotRevision?.equals(current) === true) return;
+    this.ownerSnapshotRevision = current;
+    this.ownerSnapshots.clear();
+  }
+}
+
 /** Exact foreign product-detail entry, or absence, used by one staged admission decision. */
 export class KernelProductDetailAdmissionSnapshot {
   constructor(
@@ -390,6 +453,17 @@ function publicationEntriesByKey(
   return entriesByKey;
 }
 
+function publicationEntryFromIndexes(
+  indexes: readonly ReadonlyMap<string, KernelPublicationEntryDescriptor>[],
+  key: string,
+): KernelPublicationEntryDescriptor | null {
+  for (let index = indexes.length - 1; index >= 0; index -= 1) {
+    const entry = indexes[index]?.get(key);
+    if (entry != null) return entry;
+  }
+  return null;
+}
+
 /** Final replacement candidate minted only by sealing staged publication, including explicit carry authority. */
 export class KernelPublicationDecisionCandidate {
   readonly #retainedOutputsByKey: ReadonlyMap<string, KernelPublicationEntryDescriptor>;
@@ -445,15 +519,15 @@ function mintKernelPublicationDecisionCandidate(
 
 /** Targeted carry-retention candidate that can be spent only by the non-mutating preview boundary. */
 export class KernelPublicationDecisionPreviewCandidate {
-  readonly #retainedOutputsByKey: ReadonlyMap<string, KernelPublicationEntryDescriptor>;
+  readonly #retainedOutputIndexes: readonly ReadonlyMap<string, KernelPublicationEntryDescriptor>[];
   readonly targets: readonly KernelPublicationEntryDescriptor[];
 
   constructor(
     authority: object,
     readonly previousPublication: KernelPublicationManifest,
     readonly label: string,
-    targets: readonly KernelPublicationEntryDescriptor[],
-    retainedOutputs: readonly KernelPublicationEntryDescriptor[],
+    targetsByKey: ReadonlyMap<string, KernelPublicationEntryDescriptor>,
+    retainedOutputIndexes: readonly ReadonlyMap<string, KernelPublicationEntryDescriptor>[],
     private readonly readRecordValue: (handle: KernelRecordHandle) => KernelStoreRecord | null,
     private readonly readProductDetailValue:
       (handle: ProductHandle) => KernelProductDetailPublication<unknown> | null,
@@ -466,8 +540,8 @@ export class KernelPublicationDecisionPreviewCandidate {
     if (authority !== kernelPublicationDecisionPreviewCandidateAuthority) {
       throw new Error('Kernel publication decision preview candidates can only be minted by staged publication.');
     }
-    this.targets = Object.freeze([...publicationEntriesByKey(targets).values()]);
-    this.#retainedOutputsByKey = publicationEntriesByKey(retainedOutputs);
+    this.targets = Object.freeze([...targetsByKey.values()]);
+    this.#retainedOutputIndexes = Object.freeze([...retainedOutputIndexes]);
     kernelPublicationDecisionPreviewCandidates.add(this);
     Object.freeze(this);
   }
@@ -477,7 +551,10 @@ export class KernelPublicationDecisionPreviewCandidate {
     handle: string,
     detailKind: string,
   ): boolean {
-    return this.#retainedOutputsByKey.get(stagedRevisionKey(surface, handle))?.detailKind === detailKind;
+    return publicationEntryFromIndexes(
+      this.#retainedOutputIndexes,
+      stagedRevisionKey(surface, handle),
+    )?.detailKind === detailKind;
   }
 
   readRecord(handle: KernelRecordHandle): KernelStoreRecord | null {
@@ -517,8 +594,8 @@ export function assertKernelPublicationDecisionPreviewCandidate(
 function mintKernelPublicationDecisionPreviewCandidate(
   previousPublication: KernelPublicationManifest,
   label: string,
-  targets: readonly KernelPublicationEntryDescriptor[],
-  retainedOutputs: readonly KernelPublicationEntryDescriptor[],
+  targetsByKey: ReadonlyMap<string, KernelPublicationEntryDescriptor>,
+  retainedOutputIndexes: readonly ReadonlyMap<string, KernelPublicationEntryDescriptor>[],
   readRecord: (handle: KernelRecordHandle) => KernelStoreRecord | null,
   readProductDetail: (handle: ProductHandle) => KernelProductDetailPublication<unknown> | null,
   readHotDetail: (handle: HotDetailHandle) => KernelHotDetailPublication<unknown> | null,
@@ -530,8 +607,8 @@ function mintKernelPublicationDecisionPreviewCandidate(
     kernelPublicationDecisionPreviewCandidateAuthority,
     previousPublication,
     label,
-    targets,
-    retainedOutputs,
+    targetsByKey,
+    retainedOutputIndexes,
     readRecord,
     readProductDetail,
     readHotDetail,
@@ -679,7 +756,11 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
   private recordMutationOrdinals = new Map<KernelRecordHandle, number>();
   private productDetailMutationOrdinals = new Map<ProductHandle, number>();
   private hotDetailMutationOrdinals = new Map<HotDetailHandle, number>();
-  private readonly carriedOutputsByKey = new Map<string, KernelPublicationEntryDescriptor>();
+  private carriedOutputsByKey = new Map<string, KernelPublicationEntryDescriptor>();
+  private readonly stagedMaterializationsByOwner = new Map<
+    MaterializationOwnerHandle,
+    MaterializationRecord[]
+  >();
   private readonly observedMaterializationOwners = new Set<MaterializationOwnerHandle>();
   private readonly previousRecordHandles: ReadonlySet<KernelRecordHandle>;
   private readonly previousProductDetailHandles: ReadonlySet<ProductHandle>;
@@ -717,6 +798,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
 
   readProjectionRevision(): KernelReadProjectionRevision {
     return new KernelReadProjectionRevision(
+      this,
       this.store.readProjectionRevision().committedMutationOrdinal,
       this.nextMutationOrdinal,
     );
@@ -818,10 +900,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
     );
     const previous = this.store.readMaterializationsByOwner(ownerHandle)
       .filter((record) => this.previousRecordHandles.has(record.handle));
-    const staged = [...this.records.values()]
-      .filter((record): record is MaterializationRecord =>
-        record.kind === 'materialization-record' && record.ownerHandle === ownerHandle
-      )
+    const staged = [...this.stagedMaterializationsByOwner.get(ownerHandle) ?? []]
       .sort((left, right) => left.handle.localeCompare(right.handle));
     for (const record of staged) {
       committed.delete(record.handle);
@@ -836,44 +915,58 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
     );
   }
 
-  /** Read one owner set as it would appear after a proposed child carry, without staging that carry. */
-  previewMaterializationsByOwnerAfterCarry(
-    ownerHandle: MaterializationOwnerHandle,
+  /** Create the staged-plus-prospective projection retained by one prior child's rebased domain reads. */
+  createProspectiveCarryReadView(
     outputs: readonly KernelPublicationEntryDescriptor[],
-  ): readonly MaterializationRecord[] {
-    const records = new Map(
-      this.previewMaterializationOwnerCandidate(ownerHandle).records
-        .map((record) => [record.handle, record]),
-    );
-    for (const output of outputs) {
-      if (output.surface !== KernelPublicationSurface.Record) continue;
-      const record = this.previousRecordForCarry(output);
-      if (record.kind === 'materialization-record' && record.ownerHandle === ownerHandle) {
-        records.set(record.handle, record);
+  ): KernelProspectiveCarryReadView {
+    this.assertPreparing();
+    const materializationsByOwner = new Map<MaterializationOwnerHandle, MaterializationRecord[]>();
+    const productDetailsByHandle = new Map<ProductHandle, ProductDetailEntry<unknown>>();
+    const outputEntriesByKey = publicationEntriesByKey(outputs);
+    for (const output of outputEntriesByKey.values()) {
+      if (
+        output.surface === KernelPublicationSurface.Record
+        && output.detailKind === 'materialization-record'
+      ) {
+        const record = this.previousRecordForCarry(output);
+        if (record.kind !== 'materialization-record') {
+          throw new Error(`Cannot project record ${record.handle}; it is not a materialization.`);
+        }
+        const records = materializationsByOwner.get(record.ownerHandle);
+        if (records == null) {
+          materializationsByOwner.set(record.ownerHandle, [record]);
+        } else {
+          records.push(record);
+        }
+      } else if (output.surface === KernelPublicationSurface.ProductDetail) {
+        productDetailsByHandle.set(
+          output.handle as ProductHandle,
+          this.previousProductDetailForCarry(output),
+        );
       }
     }
-    return [...records.values()].sort((left, right) => left.handle.localeCompare(right.handle));
+    return new StagedKernelProspectiveCarryReadView(
+      this,
+      materializationsByOwner,
+      productDetailsByHandle,
+      outputEntriesByKey,
+    );
   }
 
   /** Read one typed detail as it would appear after a proposed child carry, without staging that carry. */
   previewProductDetailAfterCarry<TDetail>(
     slot: ProductDetailSlot<TDetail>,
     productHandle: ProductHandle,
-    outputs: readonly KernelPublicationEntryDescriptor[],
+    carried: ProductDetailEntry<unknown> | null,
   ): TDetail | null {
     const staged = this.productDetails.get(productHandle) ?? null;
     if (staged != null) {
       return this.readProductDetail(slot, productHandle);
     }
-    const carried = outputs.find((output) =>
-      output.surface === KernelPublicationSurface.ProductDetail
-      && output.handle === productHandle
-    );
     if (carried == null) {
       return this.readProductDetail(slot, productHandle);
     }
-    const entry = this.previousProductDetailForCarry(carried);
-    return entry.slot === slot ? entry.detail as TDetail : null;
+    return carried.slot === slot ? carried.detail as TDetail : null;
   }
 
   /** Freeze one owner set after a speculative reader has committed to its observed membership. */
@@ -1231,6 +1324,15 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
       this.productDetailMutationOrdinals = productDetailMutationOrdinals;
       this.hotDetailMutationOrdinals = hotDetailMutationOrdinals;
       this.nextMutationOrdinal = nextMutationOrdinal;
+      for (const record of plan.batch.records) {
+        if (record.kind !== 'materialization-record') continue;
+        const records = this.stagedMaterializationsByOwner.get(record.ownerHandle);
+        if (records == null) {
+          this.stagedMaterializationsByOwner.set(record.ownerHandle, [record]);
+        } else {
+          records.push(record);
+        }
+      }
       return stagedReads;
     } catch (error) {
       this.failedPublication = error instanceof Error ? error : new Error(String(error));
@@ -1295,9 +1397,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
         hotDetails,
       ),
     );
-    for (const [key, output] of carriedOutputsByKey) {
-      this.carriedOutputsByKey.set(key, output);
-    }
+    this.carriedOutputsByKey = carriedOutputsByKey;
     return reads;
   }
 
@@ -1363,19 +1463,31 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
   toDecisionPreviewCandidate(
     label: string,
     targets: readonly KernelPublicationEntryDescriptor[],
-    prospectiveCarryOutputs: readonly KernelPublicationEntryDescriptor[] = [],
+    prospectiveCarry: KernelProspectiveCarryReadView | null = null,
   ): KernelPublicationDecisionPreviewCandidate {
     this.assertPreparing();
-    const retainedOutputs = [
-      ...this.carriedOutputsByKey.values(),
-      ...prospectiveCarryOutputs,
-    ];
-    const retainedByKey = publicationEntriesByKey(retainedOutputs);
-    for (const target of publicationEntriesByKey(targets).values()) {
+    const retainedOutputIndexes = prospectiveCarry == null
+      ? [this.carriedOutputsByKey]
+      : [this.carriedOutputsByKey, prospectiveCarry.outputEntriesByKey];
+    if (prospectiveCarry != null) {
+      for (const [key, output] of prospectiveCarry.outputEntriesByKey) {
+        const existing = this.carriedOutputsByKey.get(key);
+        if (existing != null && existing.detailKind !== output.detailKind) {
+          throw new Error(
+            `Cannot preview ${key}; carried kind ${existing.detailKind} conflicts with ${output.detailKind}.`,
+          );
+        }
+      }
+    }
+    const targetsByKey = publicationEntriesByKey(targets);
+    for (const target of targetsByKey.values()) {
       if (!this.previousOwns(target.surface, target.handle)) {
         throw new Error(`Cannot preview ${target.surface} ${target.handle}; it is not owned by the prior publication.`);
       }
-      const retained = retainedByKey.get(stagedRevisionKey(target.surface, target.handle)) ?? null;
+      const retained = publicationEntryFromIndexes(
+        retainedOutputIndexes,
+        stagedRevisionKey(target.surface, target.handle),
+      );
       if (retained != null) {
         if (retained.detailKind !== target.detailKind) {
           throw new Error(
@@ -1397,8 +1509,8 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
     return mintKernelPublicationDecisionPreviewCandidate(
       this.previousPublication,
       label,
-      targets,
-      retainedOutputs,
+      targetsByKey,
+      retainedOutputIndexes,
       (handle) => this.records.get(handle) ?? this.store.read(handle),
       (handle) => {
         const staged = this.productDetails.get(handle) ?? null;

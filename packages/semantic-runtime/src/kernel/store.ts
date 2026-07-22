@@ -151,12 +151,15 @@ export interface KernelStoreObservationMarker {
 /** Technical revision of one committed-plus-candidate read projection; never a semantic dependency by itself. */
 export class KernelReadProjectionRevision {
   constructor(
+    /** Identity of the read projection whose mutation ordinals follow. */
+    readonly projectionIdentity: object,
     readonly committedMutationOrdinal: number,
     readonly candidateMutationOrdinal: number,
   ) {}
 
   equals(other: KernelReadProjectionRevision): boolean {
-    return this.committedMutationOrdinal === other.committedMutationOrdinal
+    return this.projectionIdentity === other.projectionIdentity
+      && this.committedMutationOrdinal === other.committedMutationOrdinal
       && this.candidateMutationOrdinal === other.candidateMutationOrdinal;
   }
 }
@@ -448,7 +451,7 @@ export class KernelStore {
   }
 
   readProjectionRevision(): KernelReadProjectionRevision {
-    return new KernelReadProjectionRevision(this.nextMutationOrdinal, 0);
+    return new KernelReadProjectionRevision(this, this.nextMutationOrdinal, 0);
   }
 
   /** Add a normalized kernel record and update cheap navigation indexes. */

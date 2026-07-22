@@ -34,7 +34,6 @@ import {
   type KernelStoreDetailDensityDelta,
   type KernelStoreDisposalContext,
   type KernelStoreObservationMarker,
-  type KernelReadProjectionRevision,
   type KernelReadProjectionRevisionView,
   type KernelStoreReadView,
   type KernelStoreRecord,
@@ -207,7 +206,10 @@ export interface ComputationDomainReadProjection extends ProductDetailReadView, 
 /** Candidate projection after the prospective child carry, available while rebasing its prior reads. */
 export interface ComputationReadRebaseContext extends ComputationDomainReadProjection {}
 
-/** Domain override for reads whose current authority is supplied by the candidate being assembled. */
+/**
+ * Domain override for reads whose current authority is supplied by the candidate being assembled.
+ * Returning `undefined` delegates to the lifecycle's current exact/equivalent-read rebase; `null` refuses carry.
+ */
 export type ComputationReadRebaser = (
   read: ComputationRead,
   context: ComputationReadRebaseContext,
@@ -530,13 +532,15 @@ class SealedComputationRead implements ComputationRead {
   static rebase(
     read: ComputationRead,
     rebaser: ((read: ComputationRead) => ComputationRead | null | undefined) | null = null,
+    currentEquivalent: ComputationRead | null = null,
   ): SealedComputationRead | null {
     const sealed = SealedComputationRead.from(read);
     const overridden = SealedComputationRead.hasKernelRebaseAuthority(sealed.source)
       ? undefined
       : rebaser?.(sealed.source);
+    const reusedCurrentEquivalent = overridden === undefined && currentEquivalent != null;
     const rebased = overridden === undefined
-      ? sealed.source.tryRebaseCurrent()
+      ? currentEquivalent ?? sealed.source.tryRebaseCurrent()
       : overridden;
     if (rebased == null) {
       return null;
@@ -548,7 +552,10 @@ class SealedComputationRead implements ComputationRead {
         + `${candidate.domain}:${candidate.readKey}.`,
       );
     }
-    if (candidate.observedRevision !== sealed.observedRevision || !candidate.validate().isCurrent) {
+    if (
+      candidate.observedRevision !== sealed.observedRevision
+      || (!reusedCurrentEquivalent && !candidate.validate().isCurrent)
+    ) {
       return null;
     }
     return candidate;
@@ -963,29 +970,6 @@ class ComputationCurrentnessValidationError extends Error {
 class ComputationSupersededDuringCommitError extends Error {
   constructor(computationId: ComputationId, runSequence: number) {
     super(`Computation run ${computationId}@${runSequence} was superseded during publication preflight.`);
-  }
-}
-
-/** Preview-only kernel view: a rejected rebase must not register semantic reads in its candidate run. */
-class StagedComputationReadRebaseContext implements ComputationReadRebaseContext {
-  constructor(
-    private readonly publications: StagedKernelPublicationContext,
-    private readonly prospectiveOutputs: readonly ComputationOutput[],
-  ) {}
-
-  readProjectionRevision(): KernelReadProjectionRevision {
-    return this.publications.readProjectionRevision();
-  }
-
-  readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[] {
-    return this.publications.previewMaterializationsByOwnerAfterCarry(
-      ownerHandle,
-      this.prospectiveOutputs,
-    );
-  }
-
-  readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
-    return this.publications.previewProductDetailAfterCarry(slot, productHandle, this.prospectiveOutputs);
   }
 }
 
@@ -1410,7 +1394,9 @@ export class ComputationRun implements KernelPublicationContext {
     const rebasedStructuralReferences = this.rebaseStructuralDependencies(previous.structuralDependencies);
     if (rebasedStructuralReferences == null) return null;
 
-    const rebaseContext = new StagedComputationReadRebaseContext(this.publications, previous.outputs);
+    const rebaseContext = this.publications.createProspectiveCarryReadView(
+      previous.outputs,
+    );
     const rebasedReads: SealedComputationRead[] = [];
     for (const read of previous.reads) {
       const source = SealedComputationRead.sourceOf(read);
@@ -1467,7 +1453,7 @@ export class ComputationRun implements KernelPublicationContext {
       this.publications.toDecisionPreviewCandidate(
         `preview:${this.computationId}:run:${this.runSequence}:child:${child.childId}`,
         [...retainedDependencyOutputs, ...previous.outputs],
-        previous.outputs,
+        rebaseContext,
       ),
     );
     if (preview.some((decision) => decision.decision !== KernelPublicationDecisionKind.Retain)) return null;
@@ -1510,12 +1496,10 @@ export class ComputationRun implements KernelPublicationContext {
     context: ComputationReadRebaseContext,
   ): SealedComputationRead | null {
     const currentCandidateRead = this.readsByKey.get(read.readKey) ?? null;
-    if (
+    const currentEquivalent = (
       currentCandidateRead?.domain === read.domain
       && currentCandidateRead.observedRevision === read.observedRevision
-    ) {
-      return SealedComputationRead.from(currentCandidateRead);
-    }
+    ) ? currentCandidateRead : null;
     if (this.carryReadRebaseActive) {
       throw new Error(`Computation run ${this.computationId}@${this.runSequence} is already rebasing a carry read.`);
     }
@@ -1524,6 +1508,7 @@ export class ComputationRun implements KernelPublicationContext {
       return SealedComputationRead.rebase(
         read,
         rebaseRead == null ? null : (candidate) => rebaseRead(candidate, context),
+        currentEquivalent,
       );
     } finally {
       this.carryReadRebaseActive = false;

@@ -277,6 +277,7 @@ class CountingTemplateCompilerReadStore {
   readProjectionRevision(): KernelReadProjectionRevision {
     const committed = this.store.readProjectionRevision();
     return new KernelReadProjectionRevision(
+      this,
       committed.committedMutationOrdinal,
       this.candidateMutationOrdinal,
     );

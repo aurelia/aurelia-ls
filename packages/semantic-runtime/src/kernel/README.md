@@ -255,9 +255,15 @@ commit revalidates the rebased reads and currentness guards under the same atomi
 without registering generic lower-level reads. A domain may use it only while constructing a typed read that accounts
 for every consumed value itself. Carry rebase receives the equivalent after-carry preview, allowing that typed read to
 compare current domain semantics without weakening exact kernel reads or teaching the kernel domain field vocabulary.
-Both projections expose a committed-plus-candidate `KernelReadProjectionRevision` for memoizing repeated traversal at
-one unchanged view. This is a technical cache witness, not a computation read or semantic epoch; the typed domain read
-still owns its result revision and final currentness validation.
+The prospective carry projection indexes its exact output descriptors once, groups carried materializations by owner,
+and joins them with the staged publication's owner index. The projection remains live while later children stage: its
+opaque identity distinguishes alternative overlays, while its committed and candidate ordinals advance with the shared
+base. A domain rebaser gets first refusal for projection-sensitive reads; returning `undefined` permits the lifecycle to
+reuse an equal read already acquired by this run, while `null` refuses carry. Final commit still performs an independent
+currentness proof.
+Both projections expose a `KernelReadProjectionRevision` for memoizing repeated traversal at one unchanged view. This
+is a technical cache witness, not a computation read or semantic epoch; the typed domain read still owns its result
+revision and final currentness validation.
 
 The outer computation remains the sole manifest owner and store transaction. Every admitted output has exactly one
 logical child owner, with an explicit remainder child retaining phases that have not earned a narrower boundary.

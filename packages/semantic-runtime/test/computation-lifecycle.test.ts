@@ -972,6 +972,60 @@ describe("computation lifecycle", () => {
     )).toThrow(/preview authority was not minted by staged publication/);
   });
 
+  test("distinguishes prospective carry projections over the same staged base", () => {
+    const store = new KernelStore("prospective-carry-projection-identity");
+    const owner = {};
+    const materializationOwner = store.handles.address("prospective-carry-projection:owner");
+    const firstHandle = store.handles.materialization("prospective-carry-projection:first");
+    const secondHandle = store.handles.materialization("prospective-carry-projection:second");
+    const ownerAddress = new SourceFileAddress(
+      materializationOwner,
+      "test",
+      "src/owner.html",
+      SourceLanguage.Html,
+    );
+    const first = new MaterializationRecord(firstHandle, materializationOwner);
+    const second = new MaterializationRecord(secondHandle, materializationOwner);
+    const replacement = store.replaceOwnedPublication(
+      KernelPublicationManifest.empty,
+      publication("prospective-carry-projection:initial", [ownerAddress, first, second]),
+      owner,
+      { validate(): void {}, validateCurrent(): void {} },
+    );
+    const staged = new StagedKernelPublicationContext(
+      store,
+      replacement.manifest,
+      "test:prospective-carry-projection" as KernelPublicationWriterId,
+    );
+    const firstProjection = staged.createProspectiveCarryReadView([{
+      surface: KernelPublicationSurface.Record,
+      handle: firstHandle,
+      detailKind: first.kind,
+    }]);
+    const secondProjection = staged.createProspectiveCarryReadView([{
+      surface: KernelPublicationSurface.Record,
+      handle: secondHandle,
+      detailKind: second.kind,
+    }]);
+
+    const firstRevision = firstProjection.readProjectionRevision();
+    expect(firstRevision.equals(firstProjection.readProjectionRevision())).toBe(true);
+    expect(firstRevision.equals(secondProjection.readProjectionRevision())).toBe(false);
+    const firstOwnerSnapshot = firstProjection.readMaterializationsByOwner(materializationOwner);
+    expect(firstOwnerSnapshot.map((record) => record.handle)).toEqual([firstHandle]);
+    expect(firstProjection.readMaterializationsByOwner(materializationOwner)).toBe(firstOwnerSnapshot);
+    expect(secondProjection.readMaterializationsByOwner(materializationOwner).map((record) => record.handle)).toEqual([
+      secondHandle,
+    ]);
+
+    staged.publish(publication("prospective-carry-projection:staged", [second]));
+    expect(firstRevision.equals(firstProjection.readProjectionRevision())).toBe(false);
+    expect(firstProjection.readMaterializationsByOwner(materializationOwner).map((record) => record.handle)).toEqual([
+      firstHandle,
+      secondHandle,
+    ]);
+  });
+
   test("previews only requested retention decisions and rejects a stale targeted candidate", () => {
     const store = new KernelStore("publication-targeted-preview");
     const owner = {};
@@ -1716,7 +1770,90 @@ describe("computation lifecycle", () => {
     expect(store.read(materializationHandle)).toBeInstanceOf(MaterializationRecord);
   });
 
-  test("reuses a current candidate read for carry but revalidates it at final commit", () => {
+  test("lets a later child refresh a shared result read against its wider prospective closure", () => {
+    const store = new KernelStore("computation-child-carry-shared-prospective-closure");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const firstFamily = childLocus("carry-shared-prospective-closure:first");
+    const secondFamily = childLocus("carry-shared-prospective-closure:second");
+    const ownerHandle = store.handles.address("carry-shared-prospective-closure:owner");
+    const firstHandle = store.handles.materialization("carry-shared-prospective-closure:first");
+    const secondHandle = store.handles.materialization("carry-shared-prospective-closure:second");
+    const readKey = "domain:carry-shared-prospective-closure";
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(ownerHandle, "test", "src/owner.html", SourceLanguage.Html),
+    ], "carry-shared-prospective-closure:baseline"));
+
+    let seedRead: ComputationRead;
+    seedRead = {
+      readKey,
+      domain: "test-domain",
+      observedRevision: "same-result",
+      validate: () => ({
+        isCurrent: true,
+        currentRevision: "same-result",
+        changedFacets: [],
+      }),
+      tryRebaseCurrent: () => seedRead,
+    };
+    const initial = lifecycle.begin(locus("child-carry-shared-prospective-closure"));
+    initial.withChildPartition(() => {
+      initial.withChild(firstFamily, () => {
+        initial.observe(seedRead);
+        initial.publish(publication("carry-shared-prospective-closure:first", [
+          new MaterializationRecord(firstHandle, ownerHandle),
+        ]));
+      });
+      initial.withChild(secondFamily, () => {
+        initial.observe(seedRead);
+        initial.publish(publication("carry-shared-prospective-closure:second", [
+          new MaterializationRecord(secondHandle, ownerHandle),
+        ]));
+      });
+    });
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    let rebaseCalls = 0;
+    const capturedClosures: string[][] = [];
+    const replacement = lifecycle.begin(locus("child-carry-shared-prospective-closure"));
+    replacement.withChildPartition(() => {
+      for (const family of [firstFamily, secondFamily]) {
+        expect(replacement.tryCarryChild(family, (read, context) => {
+          rebaseCalls += 1;
+          const expected = context.readMaterializationsByOwner(ownerHandle)
+            .map((record) => record.handle)
+            .sort();
+          capturedClosures.push(expected);
+          return {
+            readKey: read.readKey,
+            domain: read.domain,
+            observedRevision: read.observedRevision,
+            validate: () => {
+              const current = context.readMaterializationsByOwner(ownerHandle)
+                .map((record) => record.handle)
+                .sort();
+              const isCurrent = current.length === expected.length
+                && current.every((handle, index) => handle === expected[index]);
+              return {
+                isCurrent,
+                currentRevision: read.observedRevision,
+                changedFacets: isCurrent ? [] : ["closure"],
+              };
+            },
+            tryRebaseCurrent: () => null,
+          };
+        })).not.toBeNull();
+      }
+    });
+
+    expect(rebaseCalls).toBe(2);
+    expect(capturedClosures).toEqual([
+      [firstHandle],
+      [firstHandle, secondHandle].sort(),
+    ]);
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+  });
+
+  test("reuses a current candidate read after the domain rebaser delegates and revalidates it at final commit", () => {
     const store = new KernelStore("computation-child-carry-current-candidate-read");
     const lifecycle = new ComputationLifecycleRegistry(store);
     const revisions = new MutableRevisionAuthority();
@@ -1740,12 +1877,12 @@ describe("computation lifecycle", () => {
     replacement.withChildPartition(() => {
       expect(replacement.tryCarryChild(family, () => {
         rebaseCalls += 1;
-        return null;
+        return undefined;
       })).not.toBeNull();
     });
     revisions.set(readKey, "2");
 
-    expect(rebaseCalls).toBe(0);
+    expect(rebaseCalls).toBe(1);
     expect(replacement.commit().state).toBe(ComputationCommitState.RejectedInputsChanged);
     expect(store.read(outputHandle)).toBeInstanceOf(SourceFileAddress);
   });
