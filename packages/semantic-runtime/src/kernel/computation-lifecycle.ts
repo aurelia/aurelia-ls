@@ -19,11 +19,12 @@ import {
   KernelStagedEntryRevision,
   type SealedKernelPublicationCandidate,
   StagedKernelPublicationContext,
-  type KernelHotDetailAdmissionSnapshot,
-  type KernelProductDetailAdmissionSnapshot,
 } from './publication.js';
 import { KernelPublicationSurface } from './publication-surface.js';
-import type { KernelDetailReference } from './detail-references.js';
+import {
+  type KernelDetailReference,
+  KernelRecordReference,
+} from './detail-references.js';
 import {
   KernelStoreBatch,
   type KernelStore,
@@ -108,6 +109,32 @@ export class ComputationCandidateRead {
   }
 }
 
+/** Identity link required by one child's publication closure, without implying that the target value was consumed. */
+export class ComputationStructuralDependency {
+  readonly readKey: string;
+
+  constructor(
+    readonly reference: KernelDetailReference,
+    readonly producerChildId: ComputationChildId | null,
+  ) {
+    this.readKey = computationOutputReadKey(reference.surface, reference.handle);
+    Object.freeze(this);
+  }
+
+  get surface(): KernelPublicationSurface {
+    return this.reference.surface;
+  }
+
+  get handle(): string {
+    return this.reference.handle;
+  }
+
+  /** Exact rich-detail slot required by the link; normalized record references are intentionally kind-agnostic. */
+  get requiredDetailKind(): string | null {
+    return this.reference.detailKind;
+  }
+}
+
 /** Commit-time validation result for one typed, domain-owned input read. */
 export interface ComputationReadValidation {
   readonly isCurrent: boolean;
@@ -130,7 +157,7 @@ export interface ComputationRead {
   tryRebaseCurrent(): ComputationRead | null;
 }
 
-/** Side-effect-free candidate view available while deciding whether a prior read can be carried. */
+/** Side-effect-free candidate view after the prospective child carry, available while rebasing its prior reads. */
 export interface ComputationReadRebaseContext {
   readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[];
 }
@@ -565,12 +592,35 @@ export class ComputationInvalidCurrentnessGuard {
   }
 }
 
+/** How one logical child participated in an admitted outer computation transition. */
+export const enum ComputationChildTransitionKind {
+  /** The child prepared a fresh candidate closure in this run. */
+  Executed = 'executed',
+  /** The child reused its exact prior closure after current-authority rebase and decision preview. */
+  Carried = 'carried',
+  /** The prior child had no successor in the admitted candidate and its closure was withdrawn. */
+  Withdrawn = 'withdrawn',
+}
+
+/** Inspectable child-level execution fact for one admitted outer transition. */
+export class ComputationChildTransition {
+  constructor(
+    readonly childId: ComputationChildId,
+    readonly locus: ComputationLocus,
+    readonly kind: ComputationChildTransitionKind,
+    readonly hadPreviousState: boolean,
+  ) {
+    Object.freeze(this);
+  }
+}
+
 /** Inspectable causal row for one admitted or rejected computation run. */
 export class ComputationTransition {
   readonly changedReads: readonly ComputationReadChange[];
   readonly invalidReads: readonly ComputationInvalidRead[];
   readonly invalidCurrentnessGuards: readonly ComputationInvalidCurrentnessGuard[];
   readonly publications: readonly KernelPublicationDecision[];
+  readonly children: readonly ComputationChildTransition[];
 
   constructor(
     readonly computationId: ComputationId,
@@ -580,11 +630,13 @@ export class ComputationTransition {
     invalidReads: readonly ComputationInvalidRead[],
     invalidCurrentnessGuards: readonly ComputationInvalidCurrentnessGuard[],
     publications: readonly KernelPublicationDecision[],
+    children: readonly ComputationChildTransition[],
   ) {
     this.changedReads = Object.freeze([...changedReads]);
     this.invalidReads = Object.freeze([...invalidReads]);
     this.invalidCurrentnessGuards = Object.freeze([...invalidCurrentnessGuards]);
     this.publications = Object.freeze([...publications]);
+    this.children = Object.freeze([...children]);
     Object.freeze(this);
   }
 }
@@ -697,13 +749,13 @@ export const enum ComputationChildRole {
 }
 
 export const enum ComputationChildSccKind {
-  /** Child has no candidate dependency cycle with another committed child. */
+  /** Child has no semantic-candidate or structural-publication cycle with another committed child. */
   Singleton = 'singleton',
-  /** Child belongs to a nontrivial candidate dependency cycle. */
+  /** Child belongs to a nontrivial semantic-candidate or structural-publication dependency cycle. */
   Cyclic = 'cyclic',
 }
 
-/** Exact technical strongly connected component derived from committed candidate-read edges. */
+/** Exact technical strongly connected component derived from committed child-dependency edges. */
 export class ComputationChildScc {
   readonly memberChildIds: readonly ComputationChildId[];
 
@@ -723,6 +775,7 @@ export class ComputationChildState {
   readonly locus: ComputationLocus;
   readonly reads: readonly ComputationRead[];
   readonly candidateReads: readonly ComputationCandidateRead[];
+  readonly structuralDependencies: readonly ComputationStructuralDependency[];
   readonly openReads: readonly ComputationChildOpenRead[];
   readonly outputs: readonly ComputationOutput[];
 
@@ -733,6 +786,7 @@ export class ComputationChildState {
     readonly scc: ComputationChildScc,
     reads: readonly ComputationRead[],
     candidateReads: readonly ComputationCandidateRead[],
+    structuralDependencies: readonly ComputationStructuralDependency[],
     openReads: readonly ComputationChildOpenRead[],
     outputs: readonly ComputationOutput[],
   ) {
@@ -740,6 +794,7 @@ export class ComputationChildState {
     this.locus = locus;
     this.reads = Object.freeze([...reads]);
     this.candidateReads = Object.freeze([...candidateReads]);
+    this.structuralDependencies = Object.freeze([...structuralDependencies]);
     this.openReads = Object.freeze([...openReads]);
     this.outputs = Object.freeze([...outputs]);
     Object.freeze(this);
@@ -779,9 +834,10 @@ export class ComputationChildCarry {
 class MutableComputationChild {
   readonly readsByKey = new Map<string, ComputationRead>();
   readonly stagedReadsByKey = new Map<string, KernelStagedEntryRevision>();
+  readonly structuralReferencesByKey = new Map<string, KernelDetailReference>();
   readonly openReadsByKey = new Map<string, ComputationChildOpenRead>();
   carriedState: ComputationChildState | null = null;
-  readonly carriedDependencyReadKeys = new Set<string>();
+  readonly carriedCandidateReadKeys = new Set<string>();
 
   constructor(
     readonly childId: ComputationChildId,
@@ -794,6 +850,7 @@ interface PreparedComputationChild {
   readonly child: MutableComputationChild;
   readonly reads: readonly ComputationRead[];
   readonly candidateReads: readonly ComputationCandidateRead[];
+  readonly structuralDependencies: readonly ComputationStructuralDependency[];
   readonly openReads: readonly ComputationChildOpenRead[];
   readonly outputs: readonly ComputationOutput[];
 }
@@ -819,13 +876,16 @@ const enum ComputationRunPhase {
 /** Preflighted child manifests or the candidate-local reads that made them stale. */
 export class ComputationChildPreparation {
   readonly states: readonly ComputationChildState[];
+  readonly transitions: readonly ComputationChildTransition[];
   readonly invalidReads: readonly ComputationInvalidRead[];
 
   constructor(
     states: readonly ComputationChildState[],
+    transitions: readonly ComputationChildTransition[],
     invalidReads: readonly ComputationInvalidRead[],
   ) {
     this.states = Object.freeze([...states]);
+    this.transitions = Object.freeze([...transitions]);
     this.invalidReads = Object.freeze([...invalidReads]);
     Object.freeze(this);
   }
@@ -857,10 +917,16 @@ class ComputationSupersededDuringCommitError extends Error {
 
 /** Preview-only kernel view: a rejected rebase must not register semantic reads in its candidate run. */
 class StagedComputationReadRebaseContext implements ComputationReadRebaseContext {
-  constructor(private readonly publications: StagedKernelPublicationContext) {}
+  constructor(
+    private readonly publications: StagedKernelPublicationContext,
+    private readonly prospectiveOutputs: readonly ComputationOutput[],
+  ) {}
 
   readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[] {
-    return this.publications.previewMaterializationOwnerCandidate(ownerHandle).records;
+    return this.publications.previewMaterializationsByOwnerAfterCarry(
+      ownerHandle,
+      this.prospectiveOutputs,
+    );
   }
 }
 
@@ -1244,14 +1310,17 @@ export class ComputationRun implements KernelPublicationContext {
       child.carriedState != null
       || child.readsByKey.size > 0
       || child.stagedReadsByKey.size > 0
+      || child.structuralReferencesByKey.size > 0
       || child.openReadsByKey.size > 0
       || this.publications.hasStagedActivityFrom(child.childId)
     ) {
       throw new Error(`Computation child ${child.childId} cannot be carried after candidate work has started.`);
     }
     if (!this.outputsAreUnclaimed(previous.outputs)) return null;
+    const rebasedStructuralReferences = this.rebaseStructuralDependencies(previous.structuralDependencies);
+    if (rebasedStructuralReferences == null) return null;
 
-    const rebaseContext = new StagedComputationReadRebaseContext(this.publications);
+    const rebaseContext = new StagedComputationReadRebaseContext(this.publications, previous.outputs);
     const rebasedReads: SealedComputationRead[] = [];
     for (const read of previous.reads) {
       const source = SealedComputationRead.sourceOf(read);
@@ -1266,6 +1335,7 @@ export class ComputationRun implements KernelPublicationContext {
       child.carriedState != null
       || child.readsByKey.size > 0
       || child.stagedReadsByKey.size > 0
+      || child.structuralReferencesByKey.size > 0
       || child.openReadsByKey.size > 0
       || this.publications.hasStagedActivityFrom(child.childId)
     ) {
@@ -1335,8 +1405,11 @@ export class ComputationRun implements KernelPublicationContext {
     for (const [readKey, read] of carriedRunReads) this.readsByKey.set(readKey, read);
     for (const [readKey, read] of carriedChildReads) child.readsByKey.set(readKey, read);
     for (const [readKey, read] of carriedStagedReads) child.stagedReadsByKey.set(readKey, read);
+    for (const reference of rebasedStructuralReferences) {
+      child.structuralReferencesByKey.set(reference.key, reference);
+    }
     child.carriedState = previous;
-    for (const readKey of retainedDependencyReadKeys) child.carriedDependencyReadKeys.add(readKey);
+    for (const readKey of retainedDependencyReadKeys) child.carriedCandidateReadKeys.add(readKey);
     this.hasExplicitChildren = true;
     return new ComputationChildCarry(previous, rebasedReads);
   }
@@ -1364,6 +1437,46 @@ export class ComputationRun implements KernelPublicationContext {
     return outputs.every((output) =>
       this.publications.readStagedRevision(output.surface, output.handle) == null,
     );
+  }
+
+  private rebaseStructuralDependencies(
+    dependencies: readonly ComputationStructuralDependency[],
+  ): readonly KernelDetailReference[] | null {
+    const rebased: KernelDetailReference[] = [];
+    for (const dependency of dependencies) {
+      const staged = this.publications.readStagedRevision(dependency.surface, dependency.handle);
+      const actualKind = staged?.actualKind
+        ?? this.structuralDependencyKind(dependency.surface, dependency.handle);
+      if (
+        actualKind == null
+        || (dependency.requiredDetailKind != null && dependency.requiredDetailKind !== actualKind)
+      ) {
+        return null;
+      }
+      rebased.push(dependency.reference);
+    }
+    return rebased;
+  }
+
+  private structuralDependencyKind(
+    surface: KernelPublicationSurface,
+    handle: string,
+  ): string | null {
+    const staged = this.publications.readStagedRevision(surface, handle);
+    if (staged != null) {
+      return staged.actualKind;
+    }
+    if (this.publications.isCandidateEntryAbsent(surface, handle)) {
+      return null;
+    }
+    switch (surface) {
+      case KernelPublicationSurface.Record:
+        return this.store.read(handle as KernelRecordHandle)?.kind ?? null;
+      case KernelPublicationSurface.ProductDetail:
+        return this.store.productDetails.readEntry(handle as ProductHandle)?.slot.detailKind ?? null;
+      case KernelPublicationSurface.HotDetail:
+        return this.store.hotDetails.readEntry(handle as HotDetailHandle)?.slot.detailKind ?? null;
+    }
   }
 
   private rebaseMaterializationOwnerRead(
@@ -1407,7 +1520,7 @@ export class ComputationRun implements KernelPublicationContext {
         `computation:${this.computationId}:run:${this.runSequence}`,
       );
       this.publications.prepareCandidateBindingsForCommit();
-      this.registerPublicationStructuralReads(candidate);
+      this.registerPublicationStructuralDependencies(candidate);
       const reads = this.readsForCommit(candidate);
       const result = this.registry.commitRun(
         this,
@@ -1590,7 +1703,7 @@ export class ComputationRun implements KernelPublicationContext {
             ));
           }
         }
-        for (const readKey of child.carriedDependencyReadKeys) {
+        for (const readKey of child.carriedCandidateReadKeys) {
           const decision = decisionsByReadKey.get(readKey) ?? null;
           if (decision?.decision !== KernelPublicationDecisionKind.Retain) {
             invalidReads.push(new ComputationInvalidRead(
@@ -1607,6 +1720,15 @@ export class ComputationRun implements KernelPublicationContext {
         child,
         reads: reads.sort((left, right) => left.readKey.localeCompare(right.readKey)),
         candidateReads: candidateReads.sort((left, right) => left.readKey.localeCompare(right.readKey)),
+        structuralDependencies: [...child.structuralReferencesByKey.values()]
+          .map((reference) => {
+            const readKey = computationOutputReadKey(reference.surface, reference.handle);
+            return new ComputationStructuralDependency(
+              reference,
+              outputOwnerByReadKey.get(readKey) ?? this.registry.childProducerFor(readKey),
+            );
+          })
+          .sort((left, right) => left.readKey.localeCompare(right.readKey)),
         openReads: [...child.openReadsByKey.values()].sort((left, right) => left.key.localeCompare(right.key)),
         outputs: (outputsByChild.get(child.childId) ?? []).sort((left, right) => left.readKey.localeCompare(right.readKey)),
       };
@@ -1636,12 +1758,38 @@ export class ComputationRun implements KernelPublicationContext {
         scc,
         candidate.reads,
         candidate.candidateReads,
+        candidate.structuralDependencies,
         candidate.openReads,
         candidate.outputs,
       );
     });
+    const currentById = new Map(states.map((state) => [state.childId, state]));
+    const carriedIds = new Set(prepared
+      .filter((candidate) => candidate.child.carriedState != null)
+      .map((candidate) => candidate.child.childId));
+    const previousChildren = this.previousState?.children ?? [];
+    const previousIds = new Set(previousChildren.map((child) => child.childId));
+    const transitions = [
+      ...states.map((state) => new ComputationChildTransition(
+        state.childId,
+        state.locus,
+        carriedIds.has(state.childId)
+          ? ComputationChildTransitionKind.Carried
+          : ComputationChildTransitionKind.Executed,
+        previousIds.has(state.childId),
+      )),
+      ...previousChildren
+        .filter((child) => !currentById.has(child.childId))
+        .map((child) => new ComputationChildTransition(
+          child.childId,
+          child.locus,
+          ComputationChildTransitionKind.Withdrawn,
+          true,
+        )),
+    ].sort((left, right) => left.childId.localeCompare(right.childId));
     return new ComputationChildPreparation(
       states,
+      transitions,
       invalidReads,
     );
   }
@@ -1734,23 +1882,26 @@ export class ComputationRun implements KernelPublicationContext {
     return [...readsByKey.values()].sort((left, right) => left.key.localeCompare(right.key));
   }
 
-  private registerPublicationStructuralReads(candidate: SealedKernelPublicationCandidate): void {
-    const productAdmissionByHandle = new Map(
-      candidate.plan.productDetailAdmissionSnapshots.map((snapshot) => [snapshot.productHandle, snapshot]),
-    );
-    const hotAdmissionByHandle = new Map(
-      candidate.plan.hotDetailAdmissionSnapshots.map((snapshot) => [snapshot.handle, snapshot]),
-    );
+  private registerPublicationStructuralDependencies(candidate: SealedKernelPublicationCandidate): void {
+    const borrowedProductDetails = new Set(candidate.plan.productDetailAdmissionSnapshots
+      .filter((snapshot) => snapshot.expectedEntry != null)
+      .map((snapshot) => snapshot.productHandle));
+    const borrowedHotDetails = new Set(candidate.plan.hotDetailAdmissionSnapshots
+      .filter((snapshot) => snapshot.expectedEntry != null)
+      .map((snapshot) => snapshot.handle));
     for (const record of candidate.plan.batch.records) {
       const writerId = requiredCandidateWriter(candidate, KernelPublicationSurface.Record, record.handle);
       for (const reference of referencedKernelRecordHandles(record)) {
-        this.registerStructuralRecordRead(candidate, writerId, reference);
+        this.registerStructuralDependency(
+          writerId,
+          new KernelRecordReference(reference),
+        );
       }
     }
     for (const publication of candidate.plan.productDetails) {
       if (
         publication.admission === KernelDetailAdmission.IfAbsent
-        && productAdmissionByHandle.get(publication.productHandle)?.expectedEntry != null
+        && borrowedProductDetails.has(publication.productHandle)
       ) {
         continue;
       }
@@ -1759,139 +1910,53 @@ export class ComputationRun implements KernelPublicationContext {
         KernelPublicationSurface.ProductDetail,
         publication.productHandle,
       );
-      this.registerStructuralRecordRead(candidate, writerId, publication.productHandle);
+      this.registerStructuralDependency(
+        writerId,
+        new KernelRecordReference(publication.productHandle),
+      );
       for (const reference of publication.references) {
-        this.registerStructuralDetailReference(
-          candidate,
-          writerId,
-          reference,
-          productAdmissionByHandle,
-          hotAdmissionByHandle,
-        );
+        this.registerStructuralDependency(writerId, reference);
       }
     }
     for (const publication of candidate.plan.hotDetails) {
       if (
         publication.admission === KernelDetailAdmission.IfAbsent
-        && hotAdmissionByHandle.get(publication.handle)?.expectedEntry != null
+        && borrowedHotDetails.has(publication.handle)
       ) {
         continue;
       }
       const writerId = requiredCandidateWriter(candidate, KernelPublicationSurface.HotDetail, publication.handle);
-      this.registerStructuralRecordRead(candidate, writerId, publication.ownerProductHandle);
+      this.registerStructuralDependency(
+        writerId,
+        new KernelRecordReference(publication.ownerProductHandle),
+      );
       for (const reference of publication.references) {
-        this.registerStructuralDetailReference(
-          candidate,
-          writerId,
-          reference,
-          productAdmissionByHandle,
-          hotAdmissionByHandle,
-        );
+        this.registerStructuralDependency(writerId, reference);
       }
     }
   }
 
-  private registerStructuralDetailReference(
-    candidate: SealedKernelPublicationCandidate,
+  private registerStructuralDependency(
     writerId: ComputationChildId,
     reference: KernelDetailReference,
-    productAdmissionByHandle: ReadonlyMap<ProductHandle, KernelProductDetailAdmissionSnapshot>,
-    hotAdmissionByHandle: ReadonlyMap<HotDetailHandle, KernelHotDetailAdmissionSnapshot>,
-  ): void {
-    switch (reference.surface) {
-      case KernelPublicationSurface.Record:
-        this.registerStructuralRecordRead(candidate, writerId, reference.handle);
-        return;
-      case KernelPublicationSurface.ProductDetail: {
-        const handle = reference.handle;
-        const borrowed = productAdmissionByHandle.get(handle) ?? null;
-        if (borrowed?.expectedEntry != null) {
-          this.registerStructuralDetailRead(writerId, new ComputationProductDetailRead(
-            this.store,
-            handle,
-            reference.detailKind,
-            borrowed.committedRevision.actualKind,
-            borrowed.committedRevision.mutationOrdinal,
-            borrowed.committedRevision.lifetimeOrdinal,
-          ));
-          return;
-        }
-        const child = this.requireChild(writerId);
-        const staged = candidate.readStagedRevision(KernelPublicationSurface.ProductDetail, handle);
-        if (staged != null) {
-          this.observeStagedRevisionForChild(child, staged);
-          return;
-        }
-        const entry = this.store.productDetails.readEntry(handle);
-        this.registerStructuralDetailRead(writerId, new ComputationProductDetailRead(
-          this.store,
-          handle,
-          reference.detailKind,
-          entry?.slot.detailKind ?? null,
-          this.store.productDetails.readMutationOrdinal(handle),
-          this.store.productDetails.readLifetimeOrdinal(handle),
-        ));
-        return;
-      }
-      case KernelPublicationSurface.HotDetail: {
-        const handle = reference.handle;
-        const borrowed = hotAdmissionByHandle.get(handle) ?? null;
-        if (borrowed?.expectedEntry != null) {
-          this.registerStructuralDetailRead(writerId, new ComputationHotDetailRead(
-            this.store,
-            handle,
-            reference.detailKind,
-            borrowed.committedRevision.actualKind,
-            borrowed.committedRevision.mutationOrdinal,
-            borrowed.committedRevision.lifetimeOrdinal,
-          ));
-          return;
-        }
-        const child = this.requireChild(writerId);
-        const staged = candidate.readStagedRevision(KernelPublicationSurface.HotDetail, handle);
-        if (staged != null) {
-          this.observeStagedRevisionForChild(child, staged);
-          return;
-        }
-        const entry = this.store.hotDetails.readEntry(handle);
-        this.registerStructuralDetailRead(writerId, new ComputationHotDetailRead(
-          this.store,
-          handle,
-          reference.detailKind,
-          entry?.slot.detailKind ?? null,
-          this.store.hotDetails.readMutationOrdinal(handle),
-          this.store.hotDetails.readLifetimeOrdinal(handle),
-        ));
-      }
-    }
-  }
-
-  private registerStructuralDetailRead(writerId: ComputationChildId, read: ComputationRead): void {
-    const child = this.requireChild(writerId);
-    const sealed = SealedComputationRead.from(read);
-    registerSupplementalRead(this.readsByKey, sealed, `Computation ${this.computationId}`);
-    registerSupplementalRead(child.readsByKey, sealed, `Computation child ${child.childId}`);
-  }
-
-  private registerStructuralRecordRead(
-    candidate: SealedKernelPublicationCandidate,
-    writerId: ComputationChildId,
-    handle: KernelRecordHandle,
   ): void {
     const child = this.requireChild(writerId);
-    const staged = candidate.readStagedRevision(KernelPublicationSurface.Record, handle);
-    if (staged != null) {
-      this.observeStagedRevisionForChild(child, staged);
+    const actualKind = this.structuralDependencyKind(reference.surface, reference.handle);
+    if (actualKind == null || (reference.detailKind != null && reference.detailKind !== actualKind)) {
+      // KernelStore owns post-state reference validation and its domain-specific failure vocabulary.
       return;
     }
-    const read = SealedComputationRead.from(new ComputationRecordRead(
-      this.store,
-      handle,
-      this.store.readRecordRevision(handle),
-      this.store.readRecordLifetimeOrdinal(handle),
-    ));
-    registerSupplementalRead(this.readsByKey, read, `Computation ${this.computationId}`);
-    registerSupplementalRead(child.readsByKey, read, `Computation child ${child.childId}`);
+    const readKey = computationOutputReadKey(reference.surface, reference.handle);
+    const ownRevision = this.publications.readStagedRevision(reference.surface, reference.handle);
+    if (ownRevision?.writerId === writerId) return;
+    const existing = child.structuralReferencesByKey.get(reference.key) ?? null;
+    if (
+      existing != null
+      && existing.detailKind !== reference.detailKind
+    ) {
+      throw new Error(`Computation child ${writerId} has conflicting structural targets for ${readKey}.`);
+    }
+    child.structuralReferencesByKey.set(reference.key, reference);
   }
 
   private readsForCommit(candidate: SealedKernelPublicationCandidate): readonly ComputationRead[] {
@@ -2199,7 +2264,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     }
 
     const previousState = entry.state;
-    let childPreparation = new ComputationChildPreparation([], []);
+    let childPreparation = new ComputationChildPreparation([], [], []);
     let replacement: KernelPublicationReplacement;
     try {
       replacement = this.store.replaceOwnedPublicationCandidate(
@@ -2296,6 +2361,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       [],
       [],
       replacement.decisions,
+      childPreparation.transitions,
     );
     entry.transitions.push(transition);
     return new ComputationCommitResult(ComputationCommitState.Committed, transition);
@@ -2324,6 +2390,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       [],
       invalidReads,
       invalidCurrentnessGuards,
+      [],
       [],
     );
     entry.transitions.push(transition);
@@ -2503,11 +2570,12 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
 function preparedComputationChildHasContent(child: PreparedComputationChild): boolean {
   return child.reads.length > 0
     || child.candidateReads.length > 0
+    || child.structuralDependencies.length > 0
     || child.openReads.length > 0
     || child.outputs.length > 0;
 }
 
-/** Derive exact technical SCCs from the candidate-local producer edges the kernel already validated. */
+/** Derive exact technical SCCs from semantic candidate reads and publication-structure producer edges. */
 function classifyComputationChildSccs(
   children: readonly PreparedComputationChild[],
 ): ReadonlyMap<ComputationChildId, ComputationChildScc> {
@@ -2516,13 +2584,20 @@ function classifyComputationChildSccs(
   for (const child of children) {
     dependenciesById.set(
       child.child.childId,
-      [...new Set(child.candidateReads.flatMap((read) =>
-        read.state === ComputationCandidateReadState.Present
-          && read.producerChildId != null
-          && childrenById.has(read.producerChildId)
-          ? [read.producerChildId]
-          : []
-      ))].sort((left, right) => left.localeCompare(right)),
+      [...new Set([
+        ...child.candidateReads.flatMap((read) =>
+          read.state === ComputationCandidateReadState.Present
+            && read.producerChildId != null
+            && childrenById.has(read.producerChildId)
+            ? [read.producerChildId]
+            : []
+        ),
+        ...child.structuralDependencies.flatMap((dependency) =>
+          dependency.producerChildId != null && childrenById.has(dependency.producerChildId)
+            ? [dependency.producerChildId]
+            : []
+        ),
+      ])].sort((left, right) => left.localeCompare(right)),
     );
   }
 
@@ -2866,7 +2941,7 @@ function computationOutputsFromDecisions(
     .sort((left, right) => left.readKey.localeCompare(right.readKey));
 }
 
-function computationOutputReadKey(
+export function computationOutputReadKey(
   surface: KernelPublicationSurface,
   handle: string,
 ): string {

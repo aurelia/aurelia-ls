@@ -22,18 +22,16 @@ import {
   TemplateCompilerWorldKind,
 } from './compiler-world.js';
 import {
-  sameTemplateVisibleResourceSet,
   TemplateResourceVisibilityKind,
   type TemplateVisibleResource,
 } from './compiler-world-reference.js';
 import {
-  TemplateCompilerWorldConstructionRequest,
+  TemplateCompilerWorldDerivationRequest,
   TemplateCompilerWorldMaterializer,
   type TemplateCompilerWorldEmission,
 } from './compiler-world-materializer.js';
 import {
   directDependencyDefinitions,
-  mergeVisibleResourceScopes,
   visibleResourceForDefinition,
 } from './resource-scope-builder.js';
 import {
@@ -250,13 +248,6 @@ export class TemplateCompilationCohortPlanner {
         dependency.sourceAddressHandle ?? admission.definition.sourceAddressHandle,
       ))
       .filter((resource): resource is TemplateVisibleResource => resource != null);
-    const resources = mergeVisibleResourceScopes(
-      [admission.visibleResource, ...dependencies],
-      appRootWorld.resourceScope.resources,
-    );
-    if (sameTemplateVisibleResourceSet(resources, appRootWorld.resourceScope.resources)) {
-      return appRootWorld;
-    }
     const appRootHandle = appRootWorld.world.appRoot?.identityHandle
       ?? appRootWorld.world.appRoot?.productHandle
       ?? appRootWorld.world.identityHandle;
@@ -265,19 +256,13 @@ export class TemplateCompilationCohortPlanner {
       appRootHandle,
       stableOwnerHandle(admission.definition),
     ])}`;
-    return this.compilerWorlds.construct(new TemplateCompilerWorldConstructionRequest(
+    return this.compilerWorlds.constructDerived(new TemplateCompilerWorldDerivationRequest(
       localKey,
       TemplateCompilerWorldKind.Component,
-      appRootWorld.container,
-      appRootWorld.world.appRoot,
-      resources,
-      appRootWorld.attributePatterns,
-      appRootWorld.bindingCommands,
-      appRootWorld.runtimeRenderers,
+      appRootWorld,
+      [admission.visibleResource, ...dependencies],
       TemplateResourceVisibilityKind.Configured,
       admission.definition.sourceAddressHandle,
-      appRootWorld.attributeMapper.configuration,
-      appRootWorld.world.nodeObserverLocatorConfiguration,
     ));
   }
 }

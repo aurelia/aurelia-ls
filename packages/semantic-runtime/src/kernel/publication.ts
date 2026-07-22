@@ -770,6 +770,25 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
     );
   }
 
+  /** Read one owner set as it would appear after a proposed child carry, without staging that carry. */
+  previewMaterializationsByOwnerAfterCarry(
+    ownerHandle: MaterializationOwnerHandle,
+    outputs: readonly KernelPublicationCarryOutput[],
+  ): readonly MaterializationRecord[] {
+    const records = new Map(
+      this.previewMaterializationOwnerCandidate(ownerHandle).records
+        .map((record) => [record.handle, record]),
+    );
+    for (const output of outputs) {
+      if (output.surface !== KernelPublicationSurface.Record) continue;
+      const record = this.previousRecordForCarry(output);
+      if (record.kind === 'materialization-record' && record.ownerHandle === ownerHandle) {
+        records.set(record.handle, record);
+      }
+    }
+    return [...records.values()].sort((left, right) => left.handle.localeCompare(right.handle));
+  }
+
   /** Freeze one owner set after a speculative reader has committed to its observed membership. */
   observeMaterializationOwner(ownerHandle: MaterializationOwnerHandle): void {
     this.requireCurrent();
@@ -1152,15 +1171,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       carriedOutputsByKey.set(key, output);
       switch (output.surface) {
         case KernelPublicationSurface.Record: {
-          const handle = output.handle as KernelRecordHandle;
-          if (!this.previousRecordHandles.has(handle)) {
-            throw new Error(`Cannot carry record ${handle}; it is not owned by the prior publication.`);
-          }
-          const record = this.store.read(handle);
-          if (record == null || record.kind !== output.detailKind) {
-            throw new Error(`Cannot carry record ${handle}; its committed kind no longer matches ${output.detailKind}.`);
-          }
-          records.push(record);
+          records.push(this.previousRecordForCarry(output));
           break;
         }
         case KernelPublicationSurface.ProductDetail: {
@@ -1209,6 +1220,18 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
       this.carriedOutputsByKey.set(key, output);
     }
     return reads;
+  }
+
+  private previousRecordForCarry(output: KernelPublicationCarryOutput): KernelStoreRecord {
+    const handle = output.handle as KernelRecordHandle;
+    if (!this.previousRecordHandles.has(handle)) {
+      throw new Error(`Cannot carry record ${handle}; it is not owned by the prior publication.`);
+    }
+    const record = this.store.read(handle);
+    if (record == null || record.kind !== output.detailKind) {
+      throw new Error(`Cannot carry record ${handle}; its committed kind no longer matches ${output.detailKind}.`);
+    }
+    return record;
   }
 
   /** Freeze one coherent publication/revision view before any input validator can run. */

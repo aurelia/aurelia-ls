@@ -68,7 +68,7 @@ import {
 } from './attribute-syntax-materializer.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
 import {
-  TemplateCompilerWorldConstructionRequest,
+  TemplateCompilerWorldDerivationRequest,
   type TemplateCompilerWorldEmission,
   TemplateCompilerWorldMaterializer,
 } from './compiler-world-materializer.js';
@@ -81,7 +81,6 @@ import {
   type TemplateCompilerService,
 } from './compiler-world.js';
 import {
-  sameTemplateVisibleResourceSet,
   TemplateResourceVisibilityKind,
   type TemplateVisibleResource,
 } from './compiler-world-reference.js';
@@ -129,7 +128,6 @@ import {
 } from './template-runtime-analysis-context.js';
 import {
   directDependencyDefinitions,
-  mergeVisibleResourceScopes,
   visibleResourceForDefinition,
 } from './resource-scope-builder.js';
 import {
@@ -611,7 +609,7 @@ export class TemplateCompilationProjectPass {
   ): TemplateCompilationFrontDoorEmission {
     const started = performance.now();
     const phases = new TemplateCompilationPhaseRecorder(this.publication, plan.telemetry);
-    const families = this.compilePlannedCohorts(
+    const families = this.activatePlannedFamilies(
       plan.cohortPlan,
       phases,
       project,
@@ -685,7 +683,8 @@ export class TemplateCompilationProjectPass {
     );
   }
 
-  private compilePlannedCohorts(
+  /** Activate the flat family layer in plan order: carry an exact prior closure or compile that owner afresh. */
+  private activatePlannedFamilies(
     plan: TemplateCompilationCohortProjectPlan,
     phases: TemplateCompilationPhaseRecorder,
     project: ProjectBootFrame | null,
@@ -986,13 +985,13 @@ export class TemplateCompilationProjectPass {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): TemplateCompilerWorldEmission {
-    const request = this.compilerWorldConstructionRequest(
+    const request = this.compilerWorldDerivationRequest(
       parentCompilerWorld,
       preferredResources,
       localKey,
       sourceAddressHandle,
     );
-    return request == null ? parentCompilerWorld : this.compilerWorldMaterializer.construct(request);
+    return this.compilerWorldMaterializer.constructDerived(request);
   }
 
   private projectCompilerWorldWithPreferredResources(
@@ -1001,44 +1000,28 @@ export class TemplateCompilationProjectPass {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): TemplateCompilerWorldEmission {
-    const request = this.compilerWorldConstructionRequest(
+    const request = this.compilerWorldDerivationRequest(
       parentCompilerWorld,
       preferredResources,
       localKey,
       sourceAddressHandle,
     );
-    return request == null ? parentCompilerWorld : this.compilerWorldMaterializer.project(request);
+    return this.compilerWorldMaterializer.projectDerived(request);
   }
 
-  private compilerWorldConstructionRequest(
+  private compilerWorldDerivationRequest(
     parentCompilerWorld: TemplateCompilerWorldEmission,
     preferredResources: readonly TemplateVisibleResource[],
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
-  ): TemplateCompilerWorldConstructionRequest | null {
-    if (preferredResources.length === 0) {
-      return null;
-    }
-    const resources = mergeVisibleResourceScopes(
-      preferredResources,
-      parentCompilerWorld.resourceScope.resources,
-    );
-    if (sameTemplateVisibleResourceSet(resources, parentCompilerWorld.resourceScope.resources)) {
-      return null;
-    }
-    return new TemplateCompilerWorldConstructionRequest(
+  ): TemplateCompilerWorldDerivationRequest {
+    return new TemplateCompilerWorldDerivationRequest(
       localKey,
       TemplateCompilerWorldKind.Component,
-      parentCompilerWorld.container,
-      parentCompilerWorld.world.appRoot,
-      resources,
-      parentCompilerWorld.attributePatterns,
-      parentCompilerWorld.bindingCommands,
-      parentCompilerWorld.runtimeRenderers,
+      parentCompilerWorld,
+      preferredResources,
       TemplateResourceVisibilityKind.Configured,
       sourceAddressHandle,
-      parentCompilerWorld.attributeMapper.configuration,
-      parentCompilerWorld.world.nodeObserverLocatorConfiguration,
     );
   }
 

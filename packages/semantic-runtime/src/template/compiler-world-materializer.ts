@@ -31,6 +31,7 @@ import {
   TemplateResourceScope,
 } from './compiler-world.js';
 import {
+  sameTemplateVisibleResourceSet,
   type TemplateCompilerServiceReference,
   type TemplateResourceVisibilityKind,
   TemplateVisibleResource,
@@ -67,6 +68,7 @@ import {
 import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
+import type { ProductDetailSlot } from '../kernel/product-details.js';
 import {
   KernelPublicationPlan,
   publishProductDetail,
@@ -84,6 +86,7 @@ import {
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
 import { TemplateProductDetails } from './product-details.js';
+import { mergeVisibleResourceScopes } from './resource-scope-builder.js';
 
 export class TemplateCompilerWorldConstructionRequest {
   constructor(
@@ -111,6 +114,18 @@ export class TemplateCompilerWorldConstructionRequest {
     readonly attributeMapperConfiguration: AttributeMapperConfiguration = AttributeMapperConfiguration.empty,
     /** App-authored NodeObserverLocator service state visible to runtime binding analysis for this world. */
     readonly nodeObserverLocatorConfiguration: NodeObserverLocatorConfiguration | null = null,
+  ) {}
+}
+
+/** Inputs for a component compiler world that inherits semantic services from an admitted parent world. */
+export class TemplateCompilerWorldDerivationRequest {
+  constructor(
+    readonly localKey: string,
+    readonly worldKind: TemplateCompilerWorldKind,
+    readonly parent: TemplateCompilerWorldEmission,
+    readonly preferredResources: readonly TemplateVisibleResource[],
+    readonly syntaxVisibilityKind: TemplateResourceVisibilityKind,
+    readonly sourceAddressHandle: AddressHandle | null,
   ) {}
 }
 
@@ -321,7 +336,17 @@ export class TemplateCompilerWorldMaterializer {
   ) {}
 
   construct(input: TemplateCompilerWorldConstructionRequest): TemplateCompilerWorldEmission {
-    return this.publish(input, this.project(input));
+    return this.publish(input.localKey, this.project(input));
+  }
+
+  /** Construct a derived world while registering the exact parent products whose values it inherits. */
+  constructDerived(input: TemplateCompilerWorldDerivationRequest): TemplateCompilerWorldEmission {
+    const construction = this.constructionRequestForDerivation(input);
+    if (construction == null) {
+      return input.parent;
+    }
+    this.observeDerivationInputs(input.parent);
+    return this.construct(construction);
   }
 
   /** Build the same immutable world without publishing it, for validation against a current parent authority. */
@@ -329,21 +354,73 @@ export class TemplateCompilerWorldMaterializer {
     return this.recordsForWorld(input);
   }
 
+  /** Project the current derived-world candidate without registering reads or publishing products. */
+  projectDerived(input: TemplateCompilerWorldDerivationRequest): TemplateCompilerWorldEmission {
+    const construction = this.constructionRequestForDerivation(input);
+    return construction == null ? input.parent : this.project(construction);
+  }
+
   /** Publish an already-projected compiler world under the caller's current computation child. */
   publish(
-    input: TemplateCompilerWorldConstructionRequest,
+    localKey: string,
     emission: TemplateCompilerWorldEmission,
   ): TemplateCompilerWorldEmission {
-    this.store.publish(this.publicationFor(input, emission));
+    this.store.publish(this.publicationFor(localKey, emission));
     return emission;
   }
 
+  private constructionRequestForDerivation(
+    input: TemplateCompilerWorldDerivationRequest,
+  ): TemplateCompilerWorldConstructionRequest | null {
+    const parent = input.parent;
+    const resources = mergeVisibleResourceScopes(
+      input.preferredResources,
+      parent.resourceScope.resources,
+    );
+    if (sameTemplateVisibleResourceSet(resources, parent.resourceScope.resources)) {
+      return null;
+    }
+    return new TemplateCompilerWorldConstructionRequest(
+      input.localKey,
+      input.worldKind,
+      parent.container,
+      parent.world.appRoot,
+      resources,
+      parent.attributePatterns,
+      parent.bindingCommands,
+      parent.runtimeRenderers,
+      input.syntaxVisibilityKind,
+      input.sourceAddressHandle,
+      parent.attributeMapper.configuration,
+      parent.world.nodeObserverLocatorConfiguration,
+    );
+  }
+
+  private observeDerivationInputs(parent: TemplateCompilerWorldEmission): void {
+    this.requireDerivationInput(TemplateProductDetails.World, parent.world.productHandle);
+    this.requireDerivationInput(TemplateProductDetails.ResourceScope, parent.resourceScope.productHandle);
+    this.requireDerivationInput(TemplateProductDetails.AttributeParserService, parent.attributeParser.productHandle);
+    this.requireDerivationInput(TemplateProductDetails.AttributeParserMachine, parent.attributeParserMachine.productHandle);
+    this.requireDerivationInput(TemplateProductDetails.BindingCommandResolver, parent.bindingCommandResolver.productHandle);
+    this.requireDerivationInput(TemplateProductDetails.AttributeMapperService, parent.attributeMapper.productHandle);
+    this.requireDerivationInput(TemplateProductDetails.RenderingService, parent.rendering.productHandle);
+  }
+
+  private requireDerivationInput<TDetail>(
+    slot: ProductDetailSlot<TDetail>,
+    productHandle: ProductHandle,
+  ): void {
+    if (this.store.readProductDetail(slot, productHandle) == null) {
+      throw new Error(`Derived compiler world input ${slot.detailKind} is unavailable for ${productHandle}.`);
+    }
+  }
+
   private publicationFor(
-    input: TemplateCompilerWorldConstructionRequest,
+    localKey: string,
     emission: TemplateCompilerWorldEmission,
   ): KernelPublicationPlan {
     return new KernelPublicationPlan(
-      new KernelStoreBatch(emission.records, `template-compiler-world:${input.localKey}`),
+      new KernelStoreBatch(emission.records, `template-compiler-world:${localKey}`),
       [
         publishProductDetail(TemplateProductDetails.World, emission.world.productHandle, emission.world),
         publishProductDetail(

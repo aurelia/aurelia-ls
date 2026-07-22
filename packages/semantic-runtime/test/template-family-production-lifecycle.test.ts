@@ -28,7 +28,6 @@ import {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
   SemanticRuntimeProjectInputReadKind,
-  type SemanticRuntimeSourceTextOverlay,
 } from '../src/kernel/project-input.js';
 import { sourceFileAddressForAddress } from '../src/kernel/source-address.js';
 import {
@@ -47,40 +46,7 @@ import { TemplateCompilationLocus } from '../src/template/template-compilation-c
 import type { TemplateResourceCompilationEmission } from '../src/template/template-compilation-project-pass.js';
 import { resourceLocalRuntimeBindings } from '../src/template/runtime-resource-ownership.js';
 import { RuntimeValueConverterIssueKind } from '../src/template/runtime-value-converter.js';
-
-class MutableProjectSourceOverlay implements SemanticRuntimeSourceTextOverlay {
-  private readonly valuesByFileName = new Map<string, string | null>();
-  private failedFileName: string | null = null;
-
-  write(fileName: string, sourceText: string): void {
-    this.valuesByFileName.set(path.resolve(fileName), sourceText);
-  }
-
-  remove(fileName: string): void {
-    this.valuesByFileName.set(path.resolve(fileName), null);
-  }
-
-  fail(fileName: string): void {
-    this.failedFileName = path.resolve(fileName);
-  }
-
-  resume(): void {
-    this.failedFileName = null;
-  }
-
-  readFile(fileName: string): string | undefined {
-    const resolved = path.resolve(fileName);
-    if (resolved === this.failedFileName) {
-      throw new Error('Injected project-source failure.');
-    }
-    return this.valuesByFileName.get(resolved) ?? undefined;
-  }
-
-  fileExists(fileName: string): boolean | undefined {
-    const value = this.valuesByFileName.get(path.resolve(fileName));
-    return value === undefined ? undefined : value !== null;
-  }
-}
+import { MutableProjectSourceOverlay } from './support/incremental-conformance.js';
 
 describe('production template-family lifecycle', () => {
   test('stages a complete recursive family before atomically assigning child ownership', async () => {
@@ -864,7 +830,7 @@ describe('production template-family lifecycle', () => {
       baselineItemList.familyOwnerHandle,
     );
     expect(preTemplate).not.toBeNull();
-    expect(baselineItemListFamily.candidateReads).toContainEqual(expect.objectContaining({
+    expect(baselineItemListFamily.structuralDependencies).toContainEqual(expect.objectContaining({
       readKey: computationProductDetailReadKey(itemCardDefinitionHandle),
       producerChildId: preTemplate?.childId,
     }));

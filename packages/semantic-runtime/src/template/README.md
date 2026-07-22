@@ -25,7 +25,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   configured framework syntax-catalog admissions for the owning app-root sequence. Duplicate attribute-pattern
   registrations publish template-compiler `attribute_pattern_duplicate` (`AUR0089`), and duplicate binding-command
   keys publish warning-severity `binding_command_existed` (`AUR0157`) before the duplicate executable can become
-  spendable compiler-world state.
+  spendable compiler-world state. Derived component worlds use one request shape for both construction and projection.
+  Construction registers exact reads of the parent products whose values it inherits; side-effect-free projection is
+  reserved for live-authority validation and does not pretend to publish or consume those products.
 - `parse-context.ts` carries inquiry pressure that genuinely changes parser/lowering behavior: strict parsing,
   recovery, frontier/cursor preservation, and consumer lane.
 - `compilation-unit.ts` models the compiler front door: authored template source, the selected compiler world,
@@ -56,10 +58,16 @@ classification, expression parsing, and instruction lowering converge on the sam
   cohort plus recursive local template under that family. Source snapshots and exact compiler reads join the same child
   manifest as its compiler-front-door outputs. Compiler-scope closure reads exact materialization membership for each
   participating container/resource owner; unrelated owners no longer create an open whole-kernel dependency, while
-  candidate local definitions become ordinary producer-to-consumer child edges. Runtime/checker analysis remains
-  project-owned because its SCC schedule,
-  expression world, and bound-controller values cross family boundaries; the temporary outer remainder records that
-  boundary honestly instead of assigning unsupported family ownership. Before crossing that boundary, the remainder
+  candidate local definitions become ordinary producer-to-consumer child edges. The production activation layer is a
+  deterministic star: pre-template executes first, each independent owner family then either carries its exact prior
+  closure or compiles afresh in plan order, and post-template executes after every family. A separate generic scheduler
+  would add no ordering information to this topology. App-root compiler worlds remain pre-template outputs: they do not
+  yet have an independently reusable dependency closure, and lexically nesting a child around their construction would
+  create a flat sibling rather than hierarchy. Compiler resource reads currently include semantic and witness
+  definition state, so a witness-only resource refresh conservatively reactivates families that resolve that resource;
+  unrelated families still carry. Runtime/checker analysis remains project-owned because its SCC schedule,
+  expression world, and bound-controller values cross family boundaries; the explicit post-template child records that
+  boundary honestly instead of assigning unsupported family ownership. Before crossing that boundary, post-template
   re-observes the compiler-world authority reads and consumes the exact resource definition, compiled-template
   envelope, render targets, instruction sequences, instructions, compiler world, resource scope, Rendering,
   TemplateCompiler, resource resolver, expression parser, AttrMapper, binding-command resolver, and authored attribute

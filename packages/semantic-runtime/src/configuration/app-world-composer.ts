@@ -1,8 +1,5 @@
 import type { KernelStore } from '../kernel/store.js';
-import type {
-  ComputationLocus,
-  ComputationRun,
-} from '../kernel/computation-lifecycle.js';
+import type { ComputationRun } from '../kernel/computation-lifecycle.js';
 import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type {
@@ -101,18 +98,6 @@ export class AureliaAppWorldEmission {
     /** Compiler worlds created for app roots with modeled containers. */
     readonly compilerWorlds: readonly TemplateCompilerWorldEmission[],
   ) {}
-}
-
-/** Stable ownership locus for one app-root compiler world inside the atomic app computation. */
-export class AppRootCompilerWorldLocus implements ComputationLocus {
-  readonly kind = 'app-root-compiler-world';
-  readonly reconciliationKey: string;
-  readonly summary: string;
-
-  constructor(readonly appRootProductHandle: ProductHandle) {
-    this.reconciliationKey = appRootProductHandle;
-    this.summary = `Compiler world for app root ${appRootProductHandle}.`;
-  }
 }
 
 /** Composes the current configuration, DI, and compiler-world materializers without adding a new semantic layer. */
@@ -289,7 +274,7 @@ class AppRootCompilerWorldFrame {
   private readonly templateCompilerKeyIdentityHandle: IdentityHandle;
 
   constructor(
-    private readonly publication: ComputationRun,
+    publication: ComputationRun,
     private readonly compilerWorldMaterializer: TemplateCompilerWorldMaterializer,
     private readonly resourceVisibilityComposer: AppWorldResourceVisibilityComposer,
     private readonly configuration: ConfigurationKernelEmission,
@@ -358,10 +343,7 @@ class AppRootCompilerWorldFrame {
       this.frameworkServiceCustomizations.attributeMapper,
       this.frameworkServiceCustomizations.nodeObserverLocator,
     );
-    const locus = new AppRootCompilerWorldLocus(appRoot.productHandle);
-    return this.publication.withChild(locus, () =>
-      this.compilerWorldMaterializer.construct(request)
-    );
+    return this.compilerWorldMaterializer.construct(request);
   }
 }
 

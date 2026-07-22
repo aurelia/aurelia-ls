@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
 import {
+  GeneratedAddress,
   SourceFileAddress,
   SourceLanguage,
   SourceSpanAddress,
@@ -15,6 +16,7 @@ import {
   ComputationCandidateReadState,
   ComputationChildRole,
   ComputationChildSccKind,
+  ComputationChildTransitionKind,
   ComputationCommitState,
   ComputationRetirementCause,
   computationHotDetailReadKey,
@@ -708,6 +710,23 @@ describe("computation lifecycle", () => {
     expect(nextFamily?.outputs.map((output) => output.readKey).sort()).toEqual(
       initialFamily.outputs.map((output) => output.readKey).sort(),
     );
+    expect(result.transition.children).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        childId: nextFamily?.childId,
+        kind: ComputationChildTransitionKind.Carried,
+        hadPreviousState: true,
+      }),
+      expect.objectContaining({
+        childId: nextPre?.childId,
+        kind: ComputationChildTransitionKind.Executed,
+        hadPreviousState: true,
+      }),
+      expect.objectContaining({
+        childId: nextConsumer?.childId,
+        kind: ComputationChildTransitionKind.Executed,
+        hadPreviousState: false,
+      }),
+    ]));
     for (const output of initialFamily.outputs) {
       expect(result.transition.publications).toContainEqual(expect.objectContaining({
         surface: output.surface,
@@ -961,6 +980,73 @@ describe("computation lifecycle", () => {
     expect(store.read(familyHandle)).toEqual(expect.objectContaining({ path: "src/recomputed-family.html" }));
   });
 
+  test("carries structural links across target replacement and preserves them for later generations", () => {
+    const store = new KernelStore("computation-child-carry-structural-replacement");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const target = childLocus("carry-structural-target");
+    const consumer = childLocus("carry-structural-consumer");
+    const targetHandle = store.handles.address("carry-structural:target");
+    const consumerHandle = store.handles.address("carry-structural:consumer");
+
+    const publishTarget = (run: ComputationRun, path: string) => run.withChild(target, () => {
+      run.publish(publication(`carry-structural:target:${path}`, [
+        new SourceFileAddress(targetHandle, "test", path, SourceLanguage.Html),
+      ]));
+    });
+
+    const initial = lifecycle.begin(locus("child-carry-structural-replacement"));
+    initial.withChildPartition(() => {
+      publishTarget(initial, "src/target-1.html");
+      initial.withChild(consumer, () => {
+        initial.publish(publication("carry-structural:consumer", [
+          new SourceSpanAddress(consumerHandle, targetHandle, 1, 3),
+        ]));
+      });
+    });
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const replacement = lifecycle.begin(locus("child-carry-structural-replacement"));
+    replacement.withChildPartition(() => {
+      publishTarget(replacement, "src/target-2.html");
+      expect(replacement.tryCarryChild(consumer)).not.toBeNull();
+    });
+    const replacementResult = replacement.commit();
+    expect(replacementResult.state).toBe(ComputationCommitState.Committed);
+    expect(replacementResult.transition.publications).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        handle: targetHandle,
+        decision: KernelPublicationDecisionKind.Replace,
+      }),
+      expect.objectContaining({
+        handle: consumerHandle,
+        decision: KernelPublicationDecisionKind.Retain,
+      }),
+    ]));
+    expect(replacementResult.transition.children).toContainEqual(expect.objectContaining({
+      locus: expect.objectContaining({ reconciliationKey: consumer.reconciliationKey }),
+      kind: ComputationChildTransitionKind.Carried,
+    }));
+
+    const next = lifecycle.begin(locus("child-carry-structural-replacement"));
+    next.withChildPartition(() => {
+      publishTarget(next, "src/target-3.html");
+      expect(next.tryCarryChild(consumer)).not.toBeNull();
+    });
+    expect(next.commit().state).toBe(ComputationCommitState.Committed);
+    const nextConsumer = lifecycle.readState(next.computationId)?.children
+      .find((child) => child.locus.reconciliationKey === consumer.reconciliationKey);
+    expect(nextConsumer?.structuralDependencies).toContainEqual(expect.objectContaining({
+      readKey: computationRecordReadKey(targetHandle),
+      producerChildId: lifecycle.childProducerFor(computationRecordReadKey(targetHandle)),
+    }));
+
+    const withdrawal = lifecycle.begin(locus("child-carry-structural-replacement"));
+    withdrawal.withChildPartition(() => {
+      expect(withdrawal.tryCarryChild(consumer)).toBeNull();
+    });
+    withdrawal.abort();
+  });
+
   test("rejects a carried dependency when authoritative comparison changes after preview", () => {
     const store = new KernelStore("computation-child-carry-preview-drift");
     const lifecycle = new ComputationLifecycleRegistry(store);
@@ -1094,6 +1180,36 @@ describe("computation lifecycle", () => {
       expect(cyclicReplacement.tryCarryChild(cycleB)).toBeNull();
     });
     cyclicReplacement.abort();
+
+    const structuralCycleA = childLocus("carry-structural-cycle-a");
+    const structuralCycleB = childLocus("carry-structural-cycle-b");
+    const structuralCycleAHandle = store.handles.address("carry-structural-cycle:a");
+    const structuralCycleBHandle = store.handles.address("carry-structural-cycle:b");
+    const structuralCycleInitial = lifecycle.begin(locus("child-carry-structural-cyclic"));
+    structuralCycleInitial.withChildPartition(() => {
+      structuralCycleInitial.withChild(structuralCycleA, () => {
+        structuralCycleInitial.publish(publication("carry-structural-cycle:a", [
+          new GeneratedAddress(structuralCycleAHandle, "a", structuralCycleBHandle),
+        ]));
+      });
+      structuralCycleInitial.withChild(structuralCycleB, () => {
+        structuralCycleInitial.publish(publication("carry-structural-cycle:b", [
+          new GeneratedAddress(structuralCycleBHandle, "b", structuralCycleAHandle),
+        ]));
+      });
+    });
+    expect(structuralCycleInitial.commit().state).toBe(ComputationCommitState.Committed);
+    expect(lifecycle.readState(structuralCycleInitial.computationId)?.children
+      .filter((child) => child.role === ComputationChildRole.Declared)).toEqual([
+      expect.objectContaining({ scc: expect.objectContaining({ kind: ComputationChildSccKind.Cyclic }) }),
+      expect.objectContaining({ scc: expect.objectContaining({ kind: ComputationChildSccKind.Cyclic }) }),
+    ]);
+    const structuralCycleReplacement = lifecycle.begin(locus("child-carry-structural-cyclic"));
+    structuralCycleReplacement.withChildPartition(() => {
+      expect(structuralCycleReplacement.tryCarryChild(structuralCycleA)).toBeNull();
+      expect(structuralCycleReplacement.tryCarryChild(structuralCycleB)).toBeNull();
+    });
+    structuralCycleReplacement.abort();
   });
 
   test("forbids target work before carry while admitting unrelated remainder work", () => {
@@ -1319,6 +1435,43 @@ describe("computation lifecycle", () => {
       replacement.publish(publication("carry-owner-preview:replacement", [
         new MaterializationRecord(materializationHandle, ownerHandle),
       ]));
+    });
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+    expect(store.read(materializationHandle)).toBeInstanceOf(MaterializationRecord);
+  });
+
+  test("exposes a child's prospective materializations while rebasing its domain reads", () => {
+    const store = new KernelStore("computation-child-carry-self-materialization-preview");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const revisions = new MutableRevisionAuthority();
+    const family = childLocus("carry-self-materialization-preview-family");
+    const ownerHandle = store.handles.address("carry-self-materialization-preview:owner");
+    const materializationHandle = store.handles.materialization(
+      "carry-self-materialization-preview:materialization",
+    );
+    const readKey = "domain:carry-self-materialization-preview";
+    revisions.set(readKey, "1");
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(ownerHandle, "test", "src/owner.html", SourceLanguage.Html),
+    ], "carry-self-materialization-preview:baseline"));
+
+    const initial = lifecycle.begin(locus("child-carry-self-materialization-preview"));
+    initial.withChildPartition(() => initial.withChild(family, () => {
+      initial.observe(revisions.observe(readKey, "test-domain"));
+      initial.publish(publication("carry-self-materialization-preview:initial", [
+        new MaterializationRecord(materializationHandle, ownerHandle),
+      ]));
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const replacement = lifecycle.begin(locus("child-carry-self-materialization-preview"));
+    replacement.withChildPartition(() => {
+      expect(replacement.tryCarryChild(family, (read, context) => {
+        expect(context.readMaterializationsByOwner(ownerHandle).map((record) => record.handle)).toEqual([
+          materializationHandle,
+        ]);
+        return revisions.observe(read.readKey, read.domain);
+      })).not.toBeNull();
     });
     expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
     expect(store.read(materializationHandle)).toBeInstanceOf(MaterializationRecord);
@@ -1939,7 +2092,7 @@ describe("computation lifecycle", () => {
     expect(lifecycle.childProducerFor(hotReadKey)).toBeNull();
   });
 
-  test("resolves structural references to borrowed details as exact committed child reads", () => {
+  test("keeps borrowed occupancy reads distinct from structural references to the same details", () => {
     const store = new KernelStore("computation-child-borrowed-structural-reference");
     const lifecycle = new ComputationLifecycleRegistry(store);
     const targetProductHandle = store.handles.product("child-borrowed-structural:target");
@@ -2029,8 +2182,10 @@ describe("computation lifecycle", () => {
     const expectedReadKeys = [productReadKey, hotReadKey].sort();
     expect(borrower?.reads.map((read) => read.readKey).sort()).toEqual(expectedReadKeys);
     expect(borrower?.outputs).toEqual([]);
-    expect(consumer?.reads.map((read) => read.readKey).sort()).toEqual(expectedReadKeys);
+    expect(consumer?.reads).toEqual([]);
     expect(consumer?.candidateReads).toEqual([]);
+    expect(consumer?.structuralDependencies.map((dependency) => dependency.readKey).sort()).toEqual(expectedReadKeys);
+    expect(consumer?.structuralDependencies.every((dependency) => dependency.producerChildId == null)).toBe(true);
     expect(lifecycle.childProducerFor(productReadKey)).toBeNull();
     expect(lifecycle.childProducerFor(hotReadKey)).toBeNull();
   });
@@ -2792,7 +2947,7 @@ describe("computation lifecycle", () => {
     expect(store.hotDetails.read(slot, hotHandle)).toBe(freshDetail);
   });
 
-  test("derives child dependencies from record references and detail envelopes", () => {
+  test("derives structural child dependencies from record references and detail envelopes", () => {
     const store = new KernelStore("computation-structural-child-reads");
     const lifecycle = new ComputationLifecycleRegistry(store);
     const fileHandle = store.handles.address("structural-child:file");
@@ -2852,21 +3007,21 @@ describe("computation lifecycle", () => {
     );
     const hotDetailChild = state?.children.find((child) => child.locus.reconciliationKey === "family:hot-detail");
     expect(envelopeOwner).toBeDefined();
-    expect(span?.candidateReads).toContainEqual(expect.objectContaining({
+    expect(span?.structuralDependencies).toContainEqual(expect.objectContaining({
       readKey: computationRecordReadKey(fileHandle),
       producerChildId: envelopeOwner?.childId,
     }));
-    expect(productDetailChild?.candidateReads).toContainEqual(expect.objectContaining({
+    expect(productDetailChild?.structuralDependencies).toContainEqual(expect.objectContaining({
       readKey: computationRecordReadKey(productHandle),
       producerChildId: envelopeOwner?.childId,
     }));
-    expect(hotDetailChild?.candidateReads).toContainEqual(expect.objectContaining({
+    expect(hotDetailChild?.structuralDependencies).toContainEqual(expect.objectContaining({
       readKey: computationRecordReadKey(productHandle),
       producerChildId: envelopeOwner?.childId,
     }));
   });
 
-  test("retains foreign structural references as exact outer and child reads", () => {
+  test("retains foreign structural references without inventing semantic reads", () => {
     const store = new KernelStore("computation-foreign-structural-reads");
     const lifecycle = new ComputationLifecycleRegistry(store);
     const fileHandle = store.handles.address("foreign-structural:file");
@@ -2906,12 +3061,13 @@ describe("computation lifecycle", () => {
       computationRecordReadKey(fileHandle),
       computationRecordReadKey(productHandle),
     ].sort();
-    expect(state?.reads.map((read) => read.readKey).sort()).toEqual(expectedReadKeys);
-    expect(child?.reads.map((read) => read.readKey).sort()).toEqual(expectedReadKeys);
+    expect(state?.reads).toEqual([]);
+    expect(child?.reads).toEqual([]);
     expect(child?.candidateReads).toEqual([]);
+    expect(child?.structuralDependencies.map((dependency) => dependency.readKey).sort()).toEqual(expectedReadKeys);
   });
 
-  test("projects rich-detail dependencies into exact reads on all three kernel surfaces", () => {
+  test("projects rich-detail dependencies without treating target mutation as value consumption", () => {
     const store = new KernelStore("computation-rich-detail-structural-reads");
     const lifecycle = new ComputationLifecycleRegistry(store);
     const linkedRecordHandle = store.handles.address("rich-detail-reads:linked-record");
@@ -2986,18 +3142,22 @@ describe("computation lifecycle", () => {
       computationProductDetailReadKey(targetProductHandle),
       computationHotDetailReadKey(targetHotHandle),
     ].sort();
-    expect(state?.reads.map((read) => read.readKey).sort()).toEqual(expectedReadKeys);
-    expect(state?.children[0]?.reads.map((read) => read.readKey).sort()).toEqual(expectedReadKeys);
-    expect(lifecycle.readersFor(computationProductDetailReadKey(targetProductHandle))).toEqual([run.computationId]);
-    expect(lifecycle.readersFor(computationHotDetailReadKey(targetHotHandle))).toEqual([run.computationId]);
+    expect(state?.reads).toEqual([]);
+    expect(state?.children[0]?.reads).toEqual([]);
+    expect(state?.children[0]?.structuralDependencies.map((dependency) => dependency.readKey).sort())
+      .toEqual(expectedReadKeys);
+    expect(lifecycle.readersFor(computationProductDetailReadKey(targetProductHandle))).toEqual([]);
+    expect(lifecycle.readersFor(computationHotDetailReadKey(targetHotHandle))).toEqual([]);
 
     store.productDetails.remove(targetProductHandle);
     store.productDetails.add(targetProductSlot, targetProductHandle, { revision: 2 });
-    expect(state?.reads.find((read) => read.readKey === computationProductDetailReadKey(targetProductHandle))
-      ?.validate().isCurrent).toBe(false);
+    expect(state?.children[0]?.structuralDependencies).toContainEqual(expect.objectContaining({
+      readKey: computationProductDetailReadKey(targetProductHandle),
+      requiredDetailKind: targetProductSlot.detailKind,
+    }));
   });
 
-  test("derives child edges from staged rich-detail dependencies on all three kernel surfaces", () => {
+  test("derives structural child edges on all three kernel surfaces", () => {
     const store = new KernelStore("computation-rich-detail-child-edges");
     const lifecycle = new ComputationLifecycleRegistry(store);
     const linkedRecordHandle = store.handles.address("rich-detail-child:record");
@@ -3072,7 +3232,7 @@ describe("computation lifecycle", () => {
     const state = lifecycle.readState(run.computationId);
     const target = state?.children.find((child) => child.locus.reconciliationKey === "family:target");
     const source = state?.children.find((child) => child.locus.reconciliationKey === "family:source");
-    expect(source?.candidateReads).toEqual(expect.arrayContaining([
+    expect(source?.structuralDependencies).toEqual(expect.arrayContaining([
       expect.objectContaining({
         readKey: computationRecordReadKey(linkedRecordHandle),
         producerChildId: target?.childId,
@@ -6362,6 +6522,58 @@ describe("computation lifecycle", () => {
     expect(store.productDetails.read(productSlot, productHandle)).toBe(productDetail);
     expect(store.hotDetails.read(hotSlot, hotHandle)).toBe(hotDetail);
     expect(lifecycle.readState(run.computationId)?.committedRunSequence).toBe(run.runSequence);
+  });
+
+  test("promotes and retains a publication through a foreign structural reference alone", () => {
+    const store = new KernelStore("computation-structural-lifetime-closure");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("structural-lifetime-closure:product");
+    const initialProvenanceHandle = store.handles.provenance("structural-lifetime-closure:initial");
+    const initial = lifecycle.begin(locus("structural-lifetime-closure"));
+    initial.publish(new KernelPublicationPlan(new KernelStoreBatch([
+      new ProvenanceRecord(initialProvenanceHandle),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        initialProvenanceHandle,
+      ),
+    ], "structural-lifetime-closure:initial")));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    const marker = store.markLifetime();
+
+    const foreignProvenanceHandle = store.handles.provenance("structural-lifetime-closure:foreign");
+    const unrelatedHandle = store.handles.address("structural-lifetime-closure:unrelated");
+    store.commit(new KernelStoreBatch([
+      new ProvenanceRecord(foreignProvenanceHandle),
+      new SourceFileAddress(unrelatedHandle, "test", "src/unrelated.html", SourceLanguage.Html),
+    ], "structural-lifetime-closure:foreign"));
+
+    const replacement = lifecycle.begin(locus("structural-lifetime-closure"));
+    replacement.publish(new KernelPublicationPlan(new KernelStoreBatch([
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Template.Source.key,
+        null,
+        null,
+        foreignProvenanceHandle,
+      ),
+    ], "structural-lifetime-closure:replacement")));
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+
+    const state = lifecycle.readState(replacement.computationId);
+    expect(state?.reads).toEqual([]);
+    expect(state?.publication.lifetimeOrdinal).toBe(store.readRecordLifetimeOrdinal(foreignProvenanceHandle));
+    expect(store.readRecordLifetimeOrdinal(productHandle)).toBe(state?.publication.lifetimeOrdinal);
+
+    const disposal = store.disposeUnownedSince(marker);
+
+    expect(disposal.records).toBe(1);
+    expect(store.read(unrelatedHandle)).toBeNull();
+    expect(store.read(foreignProvenanceHandle)).not.toBeNull();
+    expect(store.read(productHandle)).not.toBeNull();
+    expect(lifecycle.readState(replacement.computationId)?.committedRunSequence).toBe(replacement.runSequence);
   });
 
   test("promotes a replacement closure to the youngest foreign reference and registered record read", () => {

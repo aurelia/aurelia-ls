@@ -3009,7 +3009,7 @@
         "Derive the complete owner-to-cohort plan before compiling any family. The production app computation must consume that same immutable plan; do not reconstruct membership from compiled emissions or introduce a callback-based current authority.",
         "Partition routeable admissions by RouteConfigContext app-root ownership. Do not append every routeable to every app-root compiler world.",
         "Give each owner a deterministic retained parent world containing the owner and its own declared dependencies. Do not preserve first-queue-path or framework first-container cache order as tooling policy.",
-        "Component and authoring container/world materialization must spend the project planner's publication context. Framework authoring support catalogs remain upstream inputs and should later be borrowed from their owning catalog authority, not reassigned to template-family ownership.",
+        "Component and authoring container/world materialization must spend the project planner's publication context. Framework authoring support catalogs are borrowed from their workspace-lived authority, while checker-enriched target projections remain project-owned; neither belongs to template-family ownership.",
         "Keep cohort identity independent of owner identity, but key project-level parent-world authority by owner plus cohort because owners in one app root can require different component worlds.",
         "Compare compiler-visible resource scopes with all semantic and witness fields, including definition detail, aliases, identities, visibility, and source address. Product-handle equality alone can hide stale detail.",
         "Keep compiler-world, scope, service, parser, command, pattern, renderer, and issue equality in their product-detail slots. Do not reconstruct a whole-emission comparator in a materializer or scheduler.",
@@ -3017,7 +3017,8 @@
         "ResourceDependencyReference currently lacks a per-entry source address. Until resource dependency provenance is sharpened, retain the depending definition as the honest broad admission carrier and do not present the dependency target declaration as the edge source.",
         "When a semantic local key becomes a generated filename, always retain a stable hash of the full key. Prefix truncation and punctuation normalization are both lossy projections that can alias distinct TypeScript overlay roots.",
         "Treat overlay origin keys and canonical generated paths as one-to-one identities at TypeSystem project admission. Coalesce only equivalent sources and reject conflicts instead of selecting the first source by order.",
-        "The project plan is immutable candidate data inside one app epoch. The outer app computation owns currentness and replacement; do not add a second registration catalog, dynamic cohort authority, or dual eager/lifecycle producer."
+        "The project plan is immutable candidate data inside one app epoch. The outer app computation owns currentness and replacement; do not add a second registration catalog, dynamic cohort authority, or dual eager/lifecycle producer.",
+        "When testing deterministic replanning, replay incumbent app-root compiler worlds into an isolated staged replacement before invoking the one production planner. Do not invent a second side-effect-free planner API or pass incumbent objects whose publication has been hidden."
       ],
       "anchors": [
         {
@@ -3081,7 +3082,7 @@
         }
       ],
       "createdAt": "2026-07-17",
-      "updatedAt": "2026-07-21"
+      "updatedAt": "2026-07-22"
     },
     {
       "id": "decision:app-analysis-current-generation",

@@ -212,20 +212,26 @@ The staged record/detail maps are both the read-your-writes authority and the fi
 
 `ComputationRun.withChild(...)` partitions one still-atomic outer candidate into logical read/output manifests. Child
 scopes are synchronous preparation scopes: they cannot commit or abort the run, and a thrown or asynchronous callback
-poisons the outer candidate. The staged publication retains the final child writer and a run-local mutation ordinal for
+poisons the outer candidate. Children are flat within the outer run: entering a child from inside another child changes
+the active writer for that scope; it does not create a parent/child hierarchy. Do not use lexical nesting to imply
+hierarchical scheduling or lifetime. The staged publication retains the final child writer and a run-local mutation ordinal for
 every record, product detail, and hot detail. Exact reads of another child's candidate become child-to-child edges;
 reads of candidate absence are also revisioned so a later sibling cannot silently fill them. Positive foreign
 `IfAbsent` admissions remain committed reads of the child that attempted them, including mismatched-slot lookups, rather
 than dangling edges to a candidate that produced no output. Candidate-local `IfAbsent` admission observes the occupancy
 it establishes: an unchanged self-read disappears from the committed manifest, coalesced siblings retain a producer
 edge, and a later stronger writer rejects the prepared candidate instead of silently changing what an earlier child
-consumed. Record references plus product-detail and hot-detail envelopes add the same structural edges even when a
-materializer did not issue an explicit lookup.
+consumed. Publication references and product/hot-detail envelopes register structural dependencies even when a
+materializer did not issue an explicit lookup. Those links preserve referential integrity, retention, withdrawal safety,
+and child topology; they do not claim that the target value was consumed. A materializer whose result depends on target
+semantics must still perform an exact or candidate read through the publication context.
 
 `ComputationRun.tryCarryChild(...)` is the explicit no-work operation for one prior declared singleton child. It is
 available only before candidate work starts and only when the prior child has revisioned reads, stable producer
-ownership, and no nontrivial SCC. Exact reads must rebase to current authorities; candidate-local dependencies must
-still be present from the same producer and preview as `Retain`. The preview completes the partial candidate with prior
+ownership, and no nontrivial SCC. Exact reads must rebase to current authorities; candidate-local semantic dependencies
+must still be present from the same producer and preview as `Retain`. Structural dependencies rebase by target presence
+and rich-detail slot compatibility, so replacing a target value under the same identity does not by itself invalidate a
+consumer that only retains the link. The preview completes the partial candidate with prior
 entries only to spend the store's real comparison policy; omission in the final plan still means withdrawal. Carry
 declines before preview when any sibling has already staged one of the prior outputs. Domain read-rebase callbacks may
 inspect only the supplied preview context; the owning run rejects reads, writes, child entry, commit, and abort while a
@@ -238,7 +244,9 @@ The outer computation remains the sole manifest owner and store transaction. Eve
 logical child owner, with an explicit remainder child retaining phases that have not earned a narrower boundary.
 Commit seals the publication graph before preparation enters the store replacement barrier. Record/detail comparison,
 binding preparation, and reversible descriptor normalization finish first; then one frozen decision set reaches the final input, child-read, and producer-
-ownership preflight immediately before the callback-free mutation tail. After every external validation and currentness
+ownership preflight immediately before the callback-free mutation tail. Admitted transitions classify each
+prior/current child as executed, carried, or withdrawn so conformance and later schedulers can inspect how the atomic
+result was obtained without retaining domain payloads. After every external validation and currentness
 callback, the store revalidates normalized descriptors and reprojects structural closures, so a validator cannot mutate
 provisional metadata or dependency shape unnoticed. Validators may re-read the frozen candidate through the run during the committing phase, but cannot
 observe new dependencies, enter children, publish, or mutate any store or detail-catalog surface. Rejection restores
@@ -272,8 +280,8 @@ references. It may reclaim unrelated young rows, but never the live input closur
 
 The first production partition is the complete recursive authored-template compiler front door across all app and
 authoring cohorts for one stable owner. It owns source snapshots, compiler observations, and compilation/parsing/
-lowering products. Project-wide runtime and TypeChecker analysis deliberately remains in the outer remainder because
-its schedule, expression world, and bound-controller values currently cross family boundaries. Do not promote those
+lowering products. Project-wide runtime and TypeChecker analysis deliberately remains in the explicit post-template
+child because its schedule, expression world, and bound-controller values currently cross family boundaries. Do not promote those
 products to family ownership until those aggregate and cross-family edges are explicit.
 
 `KernelStore.publish(...)` remains the immediate first-publication boundary used by eager producers. It is not a

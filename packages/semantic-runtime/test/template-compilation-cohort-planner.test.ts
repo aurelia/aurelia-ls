@@ -14,6 +14,7 @@ import {
   TemplateCompilerWorldAuthority,
 } from '../src/template/compiler-read-view.js';
 import { TemplateResourceVisibilityKind } from '../src/template/compiler-world-reference.js';
+import { TemplateCompilerWorldMaterializer } from '../src/template/compiler-world-materializer.js';
 import {
   TemplateCompilationAdmissionOriginKind,
   TemplateCompilationCohortKind,
@@ -119,13 +120,19 @@ describe('template compilation cohort planning', () => {
     if (currentComputation == null) {
       throw new Error('Expected a current app-analysis computation.');
     }
+    const projectionWriter = 'test:reordered-cohort-plan' as KernelPublicationWriterId;
+    const projection = new StagedKernelPublicationContext(
+      runtime.workspace.store,
+      currentComputation.publication,
+      projectionWriter,
+    );
+    const compilerWorlds = new TemplateCompilerWorldMaterializer(projection);
+    for (const world of reorderedAppWorld.compilerWorlds) {
+      compilerWorlds.publish(`test-replay:${world.world.productHandle}`, world);
+    }
     const reorderedPlan = new TemplateCompilationCohortPlanner(
       runtime.workspace.store,
-      new StagedKernelPublicationContext(
-        runtime.workspace.store,
-        currentComputation.publication,
-        'test:reordered-cohort-plan' as KernelPublicationWriterId,
-      ),
+      projection,
       runtime.frameworkSupport,
     ).plan(new TemplateCompilationCohortPlanningRequest(
       app.project.projectKey,
@@ -143,6 +150,7 @@ describe('template compilation cohort planning', () => {
       },
     ));
     expect(planOccurrenceKeys(reorderedPlan)).toEqual(planOccurrenceKeys(plan));
+    expect(projection.hasStagedActivityFrom(projectionWriter)).toBe(true);
     expect(runtime.workspace.store.readAllRecords()).toHaveLength(committedRecordCount);
 
     const overlayBuilder = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem);
