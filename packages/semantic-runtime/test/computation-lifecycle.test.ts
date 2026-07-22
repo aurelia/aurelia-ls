@@ -3024,7 +3024,7 @@ describe("computation lifecycle", () => {
     expect(readHotDetailEntry(store.hotDetails.read(hotSlot, hotHandle))?.handle).toBe(hotHandle);
   });
 
-  test("restores fresh staged detail bindings when a computation aborts", () => {
+  test("restores fresh staged detail bindings when a failed write poisons the computation", () => {
     const store = new KernelStore("computation-aborted-staged-detail-bindings");
     const lifecycle = new ComputationLifecycleRegistry(store);
     const productHandle = store.handles.product("aborted-staged-bindings:product");
@@ -3065,12 +3065,20 @@ describe("computation lifecycle", () => {
     expect(readProductDetailEnvelope(productDetail)?.handle).toBe(productHandle);
     expect(readHotDetailEntry(hotDetail)?.handle).toBe(hotHandle);
 
+    const transientHandle = store.handles.address("aborted-staged-bindings:transient");
+    expect(() => run.publish(publication("aborted-staged-bindings:failed-write", [
+      new SourceFileAddress(transientHandle, "test", "src/transient-a.html", SourceLanguage.Html),
+      new SourceFileAddress(transientHandle, "test", "src/transient-b.html", SourceLanguage.Html),
+    ]))).toThrow(/duplicate kernel record/);
+    expect(run.isCurrent()).toBe(false);
+    expect(() => run.domainReadProjection.readProjectionRevision()).toThrow(/cannot continue after a failed write/);
     run.abort();
 
     expect(readProductDetailEnvelope(productDetail)).toBeNull();
     expect(readHotDetailEntry(hotDetail)).toBeNull();
     expect(Object.getOwnPropertyDescriptor(productDetail, "productHandle")).toEqual(productDescriptor);
     expect(Object.getOwnPropertyDescriptor(hotDetail, "handle")).toEqual(hotDescriptor);
+    expect(store.read(transientHandle)).toBeNull();
   });
 
   test("restores fresh staged detail bindings when input validation rejects a computation", () => {

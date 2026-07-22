@@ -193,8 +193,12 @@ final validation sees the post-state graph; rejection restores those bindings an
 staged candidate never rebinds an already committed detail to a changed envelope. A reused detail may be read only when
 its candidate product envelope is exactly equivalent, otherwise the producer must emit a fresh generation-local
 detail. Retained committed bindings refresh only in the callback-free successful-admission tail. A failed staged write
-poisons the run so an accepted prefix can never become a commit payload. Rich typed detail payloads remain domain
-objects and are not recursively frozen by the kernel. Ordinary republication of the same mutable object conservatively
+poisons the run so an accepted prefix can never become a commit payload. Candidate-owned maps therefore mutate in
+place instead of retaining an unreachable per-write rollback image; abort and rejected commit still close every
+reversible detail-binding lease before the run finishes. Each staged entry mints one exact writer-and-mutation revision
+that is reused by candidate reads and final sealing instead of being reconstructed from parallel indexes. Rich typed
+detail payloads remain domain objects and are not recursively frozen by the kernel. Ordinary republication of the same
+mutable object conservatively
 advances its revision; only explicit exact child carry may preserve object identity. Producers still own the stronger
 discipline that semantic fields of an admitted object are immutable between publications. The kernel can detect changed
 structural closure and republished mutation, but cannot infer an arbitrary in-place semantic mutation that was never
