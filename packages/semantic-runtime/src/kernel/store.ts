@@ -111,6 +111,7 @@ interface KernelStoreCommitIndex {
 
 interface PreparedProductDetailPublication {
   readonly ownedHandles: readonly ProductHandle[];
+  readonly borrowedLifetimeOrdinals: ReadonlyMap<ProductHandle, number>;
   readonly add: readonly KernelProductDetailPublication<unknown>[];
   readonly remove: ReadonlySet<ProductHandle>;
   readonly decisions: readonly KernelPublicationDecision[];
@@ -118,6 +119,7 @@ interface PreparedProductDetailPublication {
 
 interface PreparedHotDetailPublication {
   readonly ownedHandles: readonly HotDetailHandle[];
+  readonly borrowedLifetimeOrdinals: ReadonlyMap<HotDetailHandle, number>;
   readonly add: readonly KernelHotDetailPublication<unknown>[];
   readonly remove: ReadonlySet<HotDetailHandle>;
   readonly decisions: readonly KernelPublicationDecision[];
@@ -139,7 +141,20 @@ interface PreparedKernelPublicationDecisions {
   readonly unavailableHotDetailHandles: ReadonlySet<HotDetailHandle>;
   readonly recordsToRemove: ReadonlySet<KernelRecordHandle>;
   readonly recordsToAdd: readonly KernelStoreRecord[];
+  readonly dependencyLifetimeOrdinal: number | null;
   readonly decisions: readonly KernelPublicationDecision[];
+}
+
+interface KernelPublicationDependencyResolutionContext {
+  readonly recordsByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>;
+  readonly productDetailsByHandle: ReadonlyMap<ProductHandle, KernelProductDetailPublication<unknown>>;
+  readonly hotDetailsByHandle: ReadonlyMap<HotDetailHandle, KernelHotDetailPublication<unknown>>;
+  readonly borrowedProductDetailLifetimes: ReadonlyMap<ProductHandle, number>;
+  readonly borrowedHotDetailLifetimes: ReadonlyMap<HotDetailHandle, number>;
+  readonly previousRecordHandles: ReadonlySet<KernelRecordHandle>;
+  readonly previousProductDetailHandles: ReadonlySet<ProductHandle>;
+  readonly previousHotDetailHandles: ReadonlySet<HotDetailHandle>;
+  readonly label: string;
 }
 
 /** Boundary for reclaiming entries born inside a later answer or app epoch. */
@@ -671,6 +686,7 @@ export class KernelStore {
         unavailableHotDetailHandles,
         recordsToRemove,
         recordsToAdd,
+        dependencyLifetimeOrdinal,
         decisions,
       } = prepared;
       this.validateSurvivingReferences(
@@ -714,9 +730,8 @@ export class KernelStore {
       const addedProductDetailHandles = new Set(productDetailPlan.add.map((entry) => entry.productHandle));
       const addedHotDetailHandles = new Set(hotDetailPlan.add.map((entry) => entry.handle));
 
-      const dependencyLifetimeOrdinal = this.publicationDependencyLifetimeOrdinal(
-        next,
-        recordsByHandle,
+      const effectiveDependencyLifetimeOrdinal = maxOptionalOrdinal(
+        dependencyLifetimeOrdinal,
         minimumLifetimeOrdinal,
       );
       const normalizations = [
@@ -772,7 +787,7 @@ export class KernelStore {
         ? null
         : Math.max(
           previous.lifetimeOrdinal ?? this.allocateLifetimeOrdinal(),
-          dependencyLifetimeOrdinal ?? -1,
+          effectiveDependencyLifetimeOrdinal ?? -1,
         );
       const manifest = isUnownedImmediatePublication
         ? KernelPublicationManifest.empty
@@ -831,7 +846,7 @@ export class KernelStore {
     }
   }
 
-  /** Normalize and compare one candidate without deciding whether its incomplete post-state is yet admissible. */
+  /** Normalize, compare, and analyze one candidate without deciding whether its incomplete post-state is admissible. */
   private preparePublicationDecisions(
     previous: KernelPublicationManifest,
     next: KernelPublicationPlan,
@@ -862,31 +877,8 @@ export class KernelStore {
     const hotDetailsByHandle = decisionCandidate?.hotDetailsByHandle
       ?? normalizedHotDetailPublications(next.hotDetails, label);
     this.validatePublicationRecordOwnership(recordsByHandle, previousRecordHandles, label);
-    const borrowedProductDetailHandles = new Set(
-      next.productDetailAdmissionSnapshots
-        .filter((snapshot) => snapshot.expectedEntry != null)
-        .map((snapshot) => snapshot.productHandle),
-    );
-    const borrowedHotDetailHandles = new Set(
-      next.hotDetailAdmissionSnapshots
-        .filter((snapshot) => snapshot.expectedEntry != null)
-        .map((snapshot) => snapshot.handle),
-    );
     const pending = this.buildCommitIndex(next.batch.records);
     this.validateBatch(next.batch, pending, label, previousRecordHandles);
-    this.validatePublicationReferences(
-      next.batch.records,
-      productDetailsByHandle,
-      hotDetailsByHandle,
-      recordsByHandle,
-      previousRecordHandles,
-      previousProductDetailHandles,
-      previousHotDetailHandles,
-      borrowedProductDetailHandles,
-      borrowedHotDetailHandles,
-      label,
-    );
-
     const recordDecisions = this.recordPublicationDecisions(
       previousRecordHandles,
       recordsByHandle,
@@ -894,13 +886,6 @@ export class KernelStore {
     );
     const comparisonContext = this.publicationComparisonContext((handle) => recordsByHandle.get(handle)
       ?? (previousRecordHandles.has(handle) ? null : this.records.get(handle) ?? null));
-    const recordKindsByHandle = new Map<KernelRecordHandle, string>();
-    for (const handle of new Set([...previousRecordHandles, ...recordsByHandle.keys()])) {
-      recordKindsByHandle.set(
-        handle,
-        recordsByHandle.get(handle)?.kind ?? this.records.get(handle)?.kind ?? 'kernel-record',
-      );
-    }
     const productDetailPlan = this.prepareProductDetailPublication(
       previousProductDetailHandles,
       productDetailsByHandle,
@@ -920,6 +905,17 @@ export class KernelStore {
       comparisonContext,
       label,
       decisionCandidate,
+    );
+    const dependencyLifetimeOrdinal = this.analyzePublicationDependencies(
+      productDetailsByHandle,
+      hotDetailsByHandle,
+      recordsByHandle,
+      previousRecordHandles,
+      previousProductDetailHandles,
+      previousHotDetailHandles,
+      productDetailPlan.borrowedLifetimeOrdinals,
+      hotDetailPlan.borrowedLifetimeOrdinals,
+      label,
     );
     const withdrawnRecordHandles = handlesForDecision(recordDecisions, KernelPublicationDecisionKind.Withdraw);
     const unavailableProductDetailHandles = new Set(productDetailPlan.decisions
@@ -953,7 +949,7 @@ export class KernelStore {
       ...publicationDecisionRows(
         recordDecisions,
         KernelPublicationSurface.Record,
-        (handle) => recordKindsByHandle.get(handle) ?? 'kernel-record',
+        (handle) => recordsByHandle.get(handle)?.kind ?? this.records.get(handle)?.kind ?? 'kernel-record',
       ),
       ...productDetailPlan.decisions,
       ...hotDetailPlan.decisions,
@@ -974,6 +970,7 @@ export class KernelStore {
       unavailableHotDetailHandles,
       recordsToRemove,
       recordsToAdd,
+      dependencyLifetimeOrdinal,
       decisions,
     };
   }
@@ -1154,65 +1151,153 @@ export class KernelStore {
     }
   }
 
-  private validatePublicationReferences(
-    records: readonly KernelStoreRecord[],
+  private analyzePublicationDependencies(
     productDetailsByHandle: ReadonlyMap<ProductHandle, KernelProductDetailPublication<unknown>>,
     hotDetailsByHandle: ReadonlyMap<HotDetailHandle, KernelHotDetailPublication<unknown>>,
-    nextByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
+    recordsByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
     previousRecordHandles: ReadonlySet<KernelRecordHandle>,
     previousProductDetailHandles: ReadonlySet<ProductHandle>,
     previousHotDetailHandles: ReadonlySet<HotDetailHandle>,
-    borrowedProductDetailHandles: ReadonlySet<ProductHandle>,
-    borrowedHotDetailHandles: ReadonlySet<HotDetailHandle>,
+    borrowedProductDetailLifetimes: ReadonlyMap<ProductHandle, number>,
+    borrowedHotDetailLifetimes: ReadonlyMap<HotDetailHandle, number>,
     label: string,
-  ): void {
-    for (const record of records) {
+  ): number | null {
+    const context: KernelPublicationDependencyResolutionContext = {
+      recordsByHandle,
+      productDetailsByHandle,
+      hotDetailsByHandle,
+      borrowedProductDetailLifetimes,
+      borrowedHotDetailLifetimes,
+      previousRecordHandles,
+      previousProductDetailHandles,
+      previousHotDetailHandles,
+      label,
+    };
+    let lifetimeOrdinal: number | null = null;
+    const consume = (
+      surface: KernelPublicationSurface,
+      handle: string,
+      detailKind: string | null,
+      owner: string,
+    ): void => {
+      lifetimeOrdinal = maxOptionalOrdinal(
+        lifetimeOrdinal,
+        this.resolvePublicationDependency(surface, handle, detailKind, context, owner),
+      );
+    };
+    const consumeForeignEnvelope = (handle: KernelRecordHandle): void => {
+      if (recordsByHandle.has(handle) || previousRecordHandles.has(handle)) {
+        return;
+      }
+      lifetimeOrdinal = maxOptionalOrdinal(
+        lifetimeOrdinal,
+        this.recordLifetimeOrdinalByHandle.get(handle) ?? null,
+      );
+    };
+
+    for (const record of recordsByHandle.values()) {
       for (const reference of referencedKernelRecordHandles(record)) {
-        const survives = nextByHandle.has(reference)
-          || (this.records.has(reference) && !previousRecordHandles.has(reference));
-        if (!survives) {
-          throw new Error(
-            `Publication ${label} leaves ${record.handle} referencing unavailable record ${reference}.`,
-          );
-        }
+        consume(KernelPublicationSurface.Record, reference, null, record.handle);
       }
     }
     for (const publication of productDetailsByHandle.values()) {
-      if (borrowedProductDetailHandles.has(publication.productHandle)) {
+      if (borrowedProductDetailLifetimes.has(publication.productHandle)) {
         continue;
       }
+      consumeForeignEnvelope(publication.productHandle);
       for (const reference of publication.references) {
-        this.validateDetailReference(
-          reference,
-          productDetailsByHandle,
-          hotDetailsByHandle,
-          nextByHandle,
-          previousRecordHandles,
-          previousProductDetailHandles,
-          previousHotDetailHandles,
-          label,
+        consume(
+          reference.surface,
+          reference.handle,
+          reference.detailKind,
           `${publication.slot.detailKind} ${publication.productHandle}`,
         );
       }
     }
     for (const publication of hotDetailsByHandle.values()) {
-      if (borrowedHotDetailHandles.has(publication.handle)) {
+      if (borrowedHotDetailLifetimes.has(publication.handle)) {
         continue;
       }
+      consumeForeignEnvelope(publication.ownerProductHandle);
       for (const reference of publication.references) {
-        this.validateDetailReference(
-          reference,
-          productDetailsByHandle,
-          hotDetailsByHandle,
-          nextByHandle,
-          previousRecordHandles,
-          previousProductDetailHandles,
-          previousHotDetailHandles,
-          label,
+        consume(
+          reference.surface,
+          reference.handle,
+          reference.detailKind,
           `${publication.slot.detailKind} ${publication.handle}`,
         );
       }
     }
+    for (const borrowedLifetimeOrdinal of borrowedProductDetailLifetimes.values()) {
+      lifetimeOrdinal = maxOptionalOrdinal(lifetimeOrdinal, borrowedLifetimeOrdinal);
+    }
+    for (const borrowedLifetimeOrdinal of borrowedHotDetailLifetimes.values()) {
+      lifetimeOrdinal = maxOptionalOrdinal(lifetimeOrdinal, borrowedLifetimeOrdinal);
+    }
+    return lifetimeOrdinal;
+  }
+
+  private resolvePublicationDependency(
+    surface: KernelPublicationSurface,
+    handle: string,
+    detailKind: string | null,
+    context: KernelPublicationDependencyResolutionContext,
+    owner: string,
+  ): number | null {
+    switch (surface) {
+      case KernelPublicationSurface.Record: {
+        const recordHandle = handle as KernelRecordHandle;
+        if (context.recordsByHandle.has(recordHandle)) {
+          return null;
+        }
+        if (!context.previousRecordHandles.has(recordHandle) && this.records.has(recordHandle)) {
+          return this.recordLifetimeOrdinalByHandle.get(recordHandle) ?? null;
+        }
+        break;
+      }
+      case KernelPublicationSurface.ProductDetail: {
+        const productHandle = handle as ProductHandle;
+        if (
+          context.productDetailsByHandle.has(productHandle)
+          && !context.borrowedProductDetailLifetimes.has(productHandle)
+        ) {
+          if (context.productDetailsByHandle.get(productHandle)?.slot.detailKind === detailKind) {
+            return null;
+          }
+          break;
+        }
+        const entry = context.previousProductDetailHandles.has(productHandle)
+          ? null
+          : this.productDetails.readEntry(productHandle);
+        if (entry?.slot.detailKind === detailKind) {
+          return this.productDetails.readLifetimeOrdinal(productHandle);
+        }
+        break;
+      }
+      case KernelPublicationSurface.HotDetail: {
+        const hotHandle = handle as HotDetailHandle;
+        if (
+          context.hotDetailsByHandle.has(hotHandle)
+          && !context.borrowedHotDetailLifetimes.has(hotHandle)
+        ) {
+          if (context.hotDetailsByHandle.get(hotHandle)?.slot.detailKind === detailKind) {
+            return null;
+          }
+          break;
+        }
+        const entry = context.previousHotDetailHandles.has(hotHandle)
+          ? null
+          : this.hotDetails.readEntry(hotHandle);
+        if (entry?.slot.detailKind === detailKind) {
+          return this.hotDetails.readLifetimeOrdinal(hotHandle);
+        }
+        break;
+      }
+    }
+    throw new Error(
+      `Publication ${context.label} leaves ${owner} referencing unavailable ${surface} ${handle}`
+      + `${detailKind == null ? '' : ` with detail kind ${detailKind}`}.`,
+    );
   }
 
   /** Reject payload mutation that would detach the admitted object from its validated dependency closure. */
@@ -1239,187 +1324,6 @@ export class KernelStore {
         );
       }
     }
-  }
-
-  private validateDetailReference(
-    reference: KernelDetailReference,
-    productDetailsByHandle: ReadonlyMap<ProductHandle, KernelProductDetailPublication<unknown>>,
-    hotDetailsByHandle: ReadonlyMap<HotDetailHandle, KernelHotDetailPublication<unknown>>,
-    nextByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
-    previousRecordHandles: ReadonlySet<KernelRecordHandle>,
-    previousProductDetailHandles: ReadonlySet<ProductHandle>,
-    previousHotDetailHandles: ReadonlySet<HotDetailHandle>,
-    label: string,
-    owner: string,
-  ): void {
-    switch (reference.surface) {
-      case KernelPublicationSurface.Record: {
-        const handle = reference.handle;
-        if (nextByHandle.has(handle) || (this.records.has(handle) && !previousRecordHandles.has(handle))) {
-          return;
-        }
-        break;
-      }
-      case KernelPublicationSurface.ProductDetail: {
-        const handle = reference.handle;
-        const detailKind = productDetailsByHandle.get(handle)?.slot.detailKind
-          ?? (previousProductDetailHandles.has(handle) ? null : this.productDetails.readEntry(handle)?.slot.detailKind)
-          ?? null;
-        if (detailKind === reference.detailKind) {
-          return;
-        }
-        break;
-      }
-      case KernelPublicationSurface.HotDetail: {
-        const handle = reference.handle;
-        const detailKind = hotDetailsByHandle.get(handle)?.slot.detailKind
-          ?? (previousHotDetailHandles.has(handle) ? null : this.hotDetails.readEntry(handle)?.slot.detailKind)
-          ?? null;
-        if (detailKind === reference.detailKind) {
-          return;
-        }
-        break;
-      }
-    }
-    throw new Error(
-      `Publication ${label} leaves ${owner} referencing unavailable ${reference.surface} ${reference.handle}`
-      + `${reference.detailKind == null ? '' : ` with detail kind ${reference.detailKind}`}.`,
-    );
-  }
-
-  private publicationDependencyLifetimeOrdinal(
-    plan: KernelPublicationPlan,
-    nextByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
-    minimumLifetimeOrdinal: number | null = null,
-  ): number | null {
-    let lifetimeOrdinal = minimumLifetimeOrdinal;
-    const borrowedProductDetailHandles = new Set(
-      plan.productDetailAdmissionSnapshots
-        .filter((snapshot) => snapshot.expectedEntry != null)
-        .map((snapshot) => snapshot.productHandle),
-    );
-    const borrowedHotDetailHandles = new Set(
-      plan.hotDetailAdmissionSnapshots
-        .filter((snapshot) => snapshot.expectedEntry != null)
-        .map((snapshot) => snapshot.handle),
-    );
-    const candidateProductDetailHandles = new Set(
-      plan.productDetails
-        .map((publication) => publication.productHandle)
-        .filter((handle) => !borrowedProductDetailHandles.has(handle)),
-    );
-    const candidateHotDetailHandles = new Set(
-      plan.hotDetails
-        .map((publication) => publication.handle)
-        .filter((handle) => !borrowedHotDetailHandles.has(handle)),
-    );
-    for (const record of plan.batch.records) {
-      for (const reference of referencedKernelRecordHandles(record)) {
-        if (nextByHandle.has(reference)) {
-          continue;
-        }
-        lifetimeOrdinal = maxOptionalOrdinal(
-          lifetimeOrdinal,
-          this.recordLifetimeOrdinalByHandle.get(reference) ?? null,
-        );
-      }
-    }
-    for (const publication of plan.productDetails) {
-      if (!nextByHandle.has(publication.productHandle)) {
-        lifetimeOrdinal = maxOptionalOrdinal(
-          lifetimeOrdinal,
-          this.recordLifetimeOrdinalByHandle.get(publication.productHandle) ?? null,
-        );
-      }
-      if (!borrowedProductDetailHandles.has(publication.productHandle)) {
-        lifetimeOrdinal = this.detailReferenceDependencyLifetimeOrdinal(
-          publication.references,
-          nextByHandle,
-          candidateProductDetailHandles,
-          candidateHotDetailHandles,
-          lifetimeOrdinal,
-        );
-      }
-    }
-    for (const publication of plan.hotDetails) {
-      if (!nextByHandle.has(publication.ownerProductHandle)) {
-        lifetimeOrdinal = maxOptionalOrdinal(
-          lifetimeOrdinal,
-          this.recordLifetimeOrdinalByHandle.get(publication.ownerProductHandle) ?? null,
-        );
-      }
-      if (!borrowedHotDetailHandles.has(publication.handle)) {
-        lifetimeOrdinal = this.detailReferenceDependencyLifetimeOrdinal(
-          publication.references,
-          nextByHandle,
-          candidateProductDetailHandles,
-          candidateHotDetailHandles,
-          lifetimeOrdinal,
-        );
-      }
-    }
-    for (const snapshot of plan.productDetailAdmissionSnapshots) {
-      if (snapshot.expectedEntry != null) {
-        lifetimeOrdinal = maxOptionalOrdinal(
-          lifetimeOrdinal,
-          this.productDetails.readLifetimeOrdinal(snapshot.productHandle),
-        );
-      }
-    }
-    for (const snapshot of plan.hotDetailAdmissionSnapshots) {
-      if (snapshot.expectedEntry != null) {
-        lifetimeOrdinal = maxOptionalOrdinal(
-          lifetimeOrdinal,
-          this.hotDetails.readLifetimeOrdinal(snapshot.handle),
-        );
-      }
-    }
-    return lifetimeOrdinal;
-  }
-
-  private detailReferenceDependencyLifetimeOrdinal(
-    references: readonly KernelDetailReference[],
-    nextByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
-    candidateProductDetailHandles: ReadonlySet<ProductHandle>,
-    candidateHotDetailHandles: ReadonlySet<HotDetailHandle>,
-    initial: number | null,
-  ): number | null {
-    let lifetimeOrdinal = initial;
-    for (const reference of references) {
-      switch (reference.surface) {
-        case KernelPublicationSurface.Record: {
-          const handle = reference.handle;
-          if (!nextByHandle.has(handle)) {
-            lifetimeOrdinal = maxOptionalOrdinal(
-              lifetimeOrdinal,
-              this.recordLifetimeOrdinalByHandle.get(handle) ?? null,
-            );
-          }
-          break;
-        }
-        case KernelPublicationSurface.ProductDetail: {
-          const handle = reference.handle;
-          if (!candidateProductDetailHandles.has(handle)) {
-            lifetimeOrdinal = maxOptionalOrdinal(
-              lifetimeOrdinal,
-              this.productDetails.readLifetimeOrdinal(handle),
-            );
-          }
-          break;
-        }
-        case KernelPublicationSurface.HotDetail: {
-          const handle = reference.handle;
-          if (!candidateHotDetailHandles.has(handle)) {
-            lifetimeOrdinal = maxOptionalOrdinal(
-              lifetimeOrdinal,
-              this.hotDetails.readLifetimeOrdinal(handle),
-            );
-          }
-          break;
-        }
-      }
-    }
-    return lifetimeOrdinal;
   }
 
   private previewPublicationDecision(
@@ -1686,6 +1590,7 @@ export class KernelStore {
     decisionCandidate: KernelPublicationComparisonAuthority | null,
   ): PreparedProductDetailPublication {
     const ownedHandles: ProductHandle[] = [];
+    const borrowedLifetimeOrdinals = new Map<ProductHandle, number>();
     const add: KernelProductDetailPublication<unknown>[] = [];
     const remove = new Set<ProductHandle>();
     const decisions: KernelPublicationDecision[] = [];
@@ -1745,6 +1650,11 @@ export class KernelStore {
             + `${existing.slot.detailKind}.`,
           );
         }
+        const lifetimeOrdinal = this.productDetails.readLifetimeOrdinal(handle);
+        if (lifetimeOrdinal == null) {
+          throw new Error(`Publication ${label} found product detail ${handle} without an ownership lifetime.`);
+        }
+        borrowedLifetimeOrdinals.set(handle, lifetimeOrdinal);
         continue;
       }
       ownedHandles.push(handle);
@@ -1757,7 +1667,7 @@ export class KernelStore {
       ));
     }
 
-    return { ownedHandles, add, remove, decisions };
+    return { ownedHandles, borrowedLifetimeOrdinals, add, remove, decisions };
   }
 
   private validateProductDetailEnvelope(
@@ -1832,6 +1742,7 @@ export class KernelStore {
     decisionCandidate: KernelPublicationComparisonAuthority | null,
   ): PreparedHotDetailPublication {
     const ownedHandles: HotDetailHandle[] = [];
+    const borrowedLifetimeOrdinals = new Map<HotDetailHandle, number>();
     const add: KernelHotDetailPublication<unknown>[] = [];
     const remove = new Set<HotDetailHandle>();
     const decisions: KernelPublicationDecision[] = [];
@@ -1903,6 +1814,11 @@ export class KernelStore {
             + `${existing.ownerProductHandle}, not ${publication.ownerProductHandle}.`,
           );
         }
+        const lifetimeOrdinal = this.hotDetails.readLifetimeOrdinal(handle);
+        if (lifetimeOrdinal == null) {
+          throw new Error(`Publication ${label} found hot detail ${handle} without an ownership lifetime.`);
+        }
+        borrowedLifetimeOrdinals.set(handle, lifetimeOrdinal);
         continue;
       }
       ownedHandles.push(handle);
@@ -1914,7 +1830,7 @@ export class KernelStore {
         KernelPublicationDecisionKind.Publish,
       ));
     }
-    return { ownedHandles, add, remove, decisions };
+    return { ownedHandles, borrowedLifetimeOrdinals, add, remove, decisions };
   }
 
   private validateHotDetailOwner(

@@ -229,6 +229,10 @@ heuristic. Detail dependency keys identify catalog occupancy by handle; the requ
 facets, because one handle cannot host independent slots. Exact reads whose keys become outputs of the same admitted
 generation are removed only after the store has
 computed the authoritative publication decisions; borrowed `IfAbsent` rows have no output decision and remain reads.
+Product- and hot-detail planners are the sole authority for admission. Final replacement consumes their prepared result
+in one dependency analysis that jointly validates structural references and computes the youngest foreign lifetime.
+A losing `IfAbsent` proposal contributes neither its payload closure nor its proposed envelope edge; the exact occupancy
+it borrowed contributes its committed lifetime. Do not classify admission again in a parallel graph walk.
 Replacement and retirement preflight producer ownership before store mutation, then update the index infallibly after
 admission. Lifetime disposal clears it with the reclaimed publication.
 The next run at a locus reads through a candidate view that hides every record and detail owned by the prior manifest.

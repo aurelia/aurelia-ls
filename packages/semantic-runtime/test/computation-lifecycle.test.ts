@@ -548,6 +548,128 @@ describe("computation lifecycle", () => {
     expect(lifecycle.readersFor(productDetailKey)).toEqual([borrower.computationId]);
   });
 
+  test("keeps rejected if-absent payload references outside the committed dependency closure", () => {
+    const store = new KernelStore("borrowed-if-absent-payload-closure");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("borrowed-payload:product");
+    const provenanceHandle = store.handles.provenance("borrowed-payload:provenance");
+    const ownedHandle = store.handles.address("borrowed-payload:owned");
+    const youngTargetHandle = store.handles.address("borrowed-payload:young-target");
+    const missingTargetHandle = store.handles.address("borrowed-payload:missing-target");
+    const slot = defineTestProductDetailSlot<{ readonly targets: readonly AddressHandle[] }>(
+      KernelVocabulary.Template.Source.key,
+      "test.borrowed-if-absent-payload-closure",
+      "Borrowed occupancy whose rejected candidate payload must not become a dependency.",
+      (detail) => mergeKernelDetailReferences(kernelRecordReferences(...detail.targets)),
+    );
+
+    const foreign = lifecycle.begin(locus("borrowed-payload-foreign"));
+    foreign.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "borrowed-payload:foreign"),
+      [publishProductDetail(slot, productHandle, { targets: [] })],
+    ));
+    expect(foreign.commit().state).toBe(ComputationCommitState.Committed);
+
+    const initial = lifecycle.begin(locus("borrowed-payload-owner"));
+    initial.publish(publication("borrowed-payload:initial", [
+      new SourceFileAddress(ownedHandle, "test", "src/borrowed-payload.html", SourceLanguage.Html),
+    ]));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    const initialLifetime = lifecycle.readState(initial.computationId)?.publication.lifetimeOrdinal;
+    const marker = store.markLifetime();
+    store.commit(new KernelStoreBatch([
+      new SourceFileAddress(youngTargetHandle, "test", "src/young-target.html", SourceLanguage.Html),
+    ], "borrowed-payload:young-target"));
+
+    const replacement = lifecycle.begin(locus("borrowed-payload-owner"));
+    replacement.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new SourceFileAddress(ownedHandle, "test", "src/borrowed-payload.html", SourceLanguage.Html),
+      ], "borrowed-payload:replacement"),
+      [publishProductDetail(
+        slot,
+        productHandle,
+        { targets: [youngTargetHandle, missingTargetHandle] },
+        KernelDetailAdmission.IfAbsent,
+      )],
+    ));
+    expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
+    const state = lifecycle.readState(replacement.computationId);
+    expect(state?.publication.lifetimeOrdinal).toBe(initialLifetime);
+    expect(state?.reads.map((read) => read.readKey)).toEqual([
+      computationProductDetailReadKey(productHandle),
+    ]);
+
+    store.disposeUnownedSince(marker);
+    expect(store.read(youngTargetHandle)).toBeNull();
+    expect(store.read(ownedHandle)).not.toBeNull();
+    expect(store.productDetails.read(slot, productHandle)).toEqual({ targets: [] });
+  });
+
+  test("ignores rejected if-absent payload references during immediate publication", () => {
+    const store = new KernelStore("immediate-if-absent-payload-closure");
+    const productHandle = store.handles.product("immediate-borrowed-payload:product");
+    const provenanceHandle = store.handles.provenance("immediate-borrowed-payload:provenance");
+    const hotHandle = store.handles.hotDetail("immediate-borrowed-payload:hot");
+    const missingTargetHandle = store.handles.address("immediate-borrowed-payload:missing-target");
+    const slot = defineTestProductDetailSlot<{ readonly targets: readonly AddressHandle[] }>(
+      KernelVocabulary.Template.Source.key,
+      "test.immediate-if-absent-payload-closure",
+      "Immediate borrowed occupancy whose rejected payload must not become a dependency.",
+      (detail) => mergeKernelDetailReferences(kernelRecordReferences(...detail.targets)),
+    );
+    const hotSlot = defineTestHotDetailSlot<{ readonly targets: readonly AddressHandle[] }>(
+      KernelVocabulary.Template.Source.key,
+      "test.immediate-if-absent-hot-payload-closure",
+      "Immediate borrowed hot occupancy whose rejected payload must not become a dependency.",
+      (detail) => mergeKernelDetailReferences(kernelRecordReferences(...detail.targets)),
+    );
+    const existingProductDetail = { targets: [] };
+    const existingHotDetail = { targets: [] };
+    store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "immediate-borrowed-payload:existing"),
+      [publishProductDetail(slot, productHandle, existingProductDetail)],
+      [publishHotDetail(hotSlot, productHandle, hotHandle, existingHotDetail)],
+    ));
+
+    expect(() => store.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([], "immediate-borrowed-payload:candidate"),
+      [publishProductDetail(
+        slot,
+        productHandle,
+        { targets: [missingTargetHandle] },
+        KernelDetailAdmission.IfAbsent,
+      )],
+      [publishHotDetail(
+        hotSlot,
+        productHandle,
+        hotHandle,
+        { targets: [missingTargetHandle] },
+        KernelDetailAdmission.IfAbsent,
+      )],
+    ))).not.toThrow();
+    expect(store.productDetails.read(slot, productHandle)).toBe(existingProductDetail);
+    expect(store.hotDetails.read(hotSlot, hotHandle)).toBe(existingHotDetail);
+  });
+
   test("drops exact reads superseded by outputs from the same committed generation", () => {
     const store = new KernelStore("computation-read-before-own-write");
     const lifecycle = new ComputationLifecycleRegistry(store);
