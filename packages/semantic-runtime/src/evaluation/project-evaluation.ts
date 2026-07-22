@@ -143,9 +143,11 @@ export class StaticProjectEvaluationSourceResult {
 
 /** Static-evaluation result for one booted project frame. */
 export class StaticProjectEvaluationResult {
+  private projectFrame: ProjectBootFrame;
+
   constructor(
     /** Project frame whose TS/JS source files were evaluated. */
-    readonly project: ProjectBootFrame,
+    project: ProjectBootFrame,
     /** Per-source static-evaluation results. */
     readonly sources: readonly StaticProjectEvaluationSourceResult[],
     /** Module keys in the order their modeled execution completed, dependencies before their importing entry. */
@@ -158,7 +160,13 @@ export class StaticProjectEvaluationResult {
     private readonly inputReadScope: SemanticRuntimeProjectInputReadScope | null = null,
     /** Typed upstream products consumed while constructing this evaluator graph. */
     private readonly upstreamReads: readonly ComputationRead[] = [],
-  ) {}
+  ) {
+    this.projectFrame = project;
+  }
+
+  get project(): ProjectBootFrame {
+    return this.projectFrame;
+  }
 
   readEvaluatedSources(): readonly EvaluatedProjectSource[] {
     return this.sources.filter(isEvaluatedProjectSource);
@@ -173,6 +181,22 @@ export class StaticProjectEvaluationResult {
       ...this.upstreamReads,
       ...(this.inputReadScope?.readRegisteredInputs() ?? []),
     ];
+  }
+
+  /** Rebind unchanged evaluator inputs to the current project generation without rebuilding evaluator values. */
+  tryRebaseCurrentInputGeneration(
+    project: ProjectBootFrame,
+    validationScope: ComputationReadValidationScope,
+  ): boolean {
+    if (
+      project.projectKey !== this.projectFrame.projectKey
+      || project.observedRevision !== this.projectFrame.observedRevision
+      || this.inputReadScope?.tryRebaseCurrentInScope(project.inputGeneration, validationScope) === false
+    ) {
+      return false;
+    }
+    this.projectFrame = project;
+    return true;
   }
 
   /** Fork mutable evaluator values and environments for one speculative follow-up analysis session. */
@@ -334,10 +358,7 @@ class StaticEvaluationAmbientGlobalAuthority {
     validationScope: ComputationReadValidationScope,
   ): StaticEvaluationAmbientGlobalGeneration | null {
     const generation = this.committedGeneration();
-    return generation?.project.observedRevision === project.observedRevision
-        && validationScope.validate(generation).isCurrent
-      ? generation
-      : null;
+    return generation?.tryRebaseFor(project, validationScope) === true ? generation : null;
   }
 
   /** Private committed incumbent, retained while exact inputs are stale so replacement remains atomic. */
@@ -384,12 +405,16 @@ class StaticEvaluationAmbientGlobalGeneration implements ComputationRead {
   constructor(
     private readonly owner: StaticEvaluationAmbientGlobalAuthority,
     readonly computationAuthority: ComputationGenerationAuthority,
-    readonly project: ProjectBootFrame,
+    private projectFrame: ProjectBootFrame,
     private readonly declarations: StaticEvaluationAmbientGlobalDeclarations,
     private readonly inputReadScope: SemanticRuntimeProjectInputReadScope,
   ) {
-    this.readKey = `static-evaluation-ambient-globals:${project.projectKey}`;
-    this.observedRevision = `${project.observedRevision}:${computationAuthority.key}`;
+    this.readKey = `static-evaluation-ambient-globals:${projectFrame.projectKey}`;
+    this.observedRevision = `${projectFrame.observedRevision}:${computationAuthority.key}`;
+  }
+
+  get project(): ProjectBootFrame {
+    return this.projectFrame;
   }
 
   readDeclarations(scope?: ComputationReadValidationScope): StaticEvaluationAmbientGlobalDeclarations {
@@ -430,6 +455,23 @@ class StaticEvaluationAmbientGlobalGeneration implements ComputationRead {
 
   tryRebaseCurrent(): ComputationRead | null {
     return this.validate().isCurrent ? this : null;
+  }
+
+  tryRebaseFor(
+    project: ProjectBootFrame,
+    validationScope: ComputationReadValidationScope,
+  ): boolean {
+    if (
+      project.projectKey !== this.projectFrame.projectKey
+      || project.observedRevision !== this.projectFrame.observedRevision
+      || !this.owner.isAdmitted(this)
+      || !project.readRegisteredInputs().every((read) => validationScope.validate(read).isCurrent)
+      || !this.inputReadScope.tryRebaseCurrentInScope(project.inputGeneration, validationScope)
+    ) {
+      return false;
+    }
+    this.projectFrame = project;
+    return validationScope.validate(this).isCurrent;
   }
 
   isCurrent(scope?: ComputationReadValidationScope): boolean {
@@ -479,9 +521,7 @@ class StaticProjectEvaluationAuthority {
     validationScope: ComputationReadValidationScope,
   ): StaticProjectEvaluationGeneration<TContext> | null {
     const generation = this.committedGeneration();
-    return generation?.project.observedRevision === project.observedRevision
-        && generation.profileRevision === profile.revision
-        && validationScope.validate(generation).isCurrent
+    return generation?.tryRebaseFor(project, profile, validationScope) === true
       ? generation as StaticProjectEvaluationGeneration<TContext>
       : null;
   }
@@ -534,15 +574,19 @@ export class StaticProjectEvaluationGeneration<TContext> implements ComputationR
   constructor(
     private readonly owner: StaticProjectEvaluationAuthority,
     readonly computationAuthority: ComputationGenerationAuthority,
-    readonly project: ProjectBootFrame,
+    private projectFrame: ProjectBootFrame,
     private readonly profile: StaticProjectEvaluationComputationProfile<TContext>,
     private readonly baseline: StaticProjectEvaluationResult,
     private readonly context: TContext,
   ) {
     this.profileKey = profile.key;
     this.profileRevision = profile.revision;
-    this.readKey = `static-project-evaluation-generation:${project.projectKey}:${profile.key}`;
-    this.observedRevision = `${project.observedRevision}:${profile.revision}:${computationAuthority.key}`;
+    this.readKey = `static-project-evaluation-generation:${projectFrame.projectKey}:${profile.key}`;
+    this.observedRevision = `${projectFrame.observedRevision}:${profile.revision}:${computationAuthority.key}`;
+  }
+
+  get project(): ProjectBootFrame {
+    return this.projectFrame;
   }
 
   isCurrent(scope?: ComputationReadValidationScope): boolean {
@@ -593,7 +637,7 @@ export class StaticProjectEvaluationGeneration<TContext> implements ComputationR
     if (scope == null) {
       return new ComputationReadValidationScope().validate(this);
     }
-    const generationAdmitted = this.owner.isAdmitted(this as StaticProjectEvaluationGeneration<unknown>);
+    const generationAdmitted = this.owner.isAdmitted(this);
     const invalidInputs = generationAdmitted
       ? [
           ...this.project.readRegisteredInputs(),
@@ -621,6 +665,26 @@ export class StaticProjectEvaluationGeneration<TContext> implements ComputationR
 
   tryRebaseCurrent(): ComputationRead | null {
     return this.validate().isCurrent ? this : null;
+  }
+
+  tryRebaseFor(
+    project: ProjectBootFrame,
+    profile: StaticProjectEvaluationComputationProfile<TContext>,
+    validationScope: ComputationReadValidationScope,
+  ): boolean {
+    if (
+      project.projectKey !== this.projectFrame.projectKey
+      || project.observedRevision !== this.projectFrame.observedRevision
+      || profile.key !== this.profileKey
+      || profile.revision !== this.profileRevision
+      || !this.owner.isAdmitted(this)
+      || !project.readRegisteredInputs().every((read) => validationScope.validate(read).isCurrent)
+      || !this.baseline.tryRebaseCurrentInputGeneration(project, validationScope)
+    ) {
+      return false;
+    }
+    this.projectFrame = project;
+    return validationScope.validate(this).isCurrent;
   }
 }
 
@@ -670,6 +734,7 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
     this.requireProfileOwnership(profile);
     const started = performance.now();
     const authority = this.authorityFor(project.projectKey, profile.key);
+    const ambientAccess = this.acquireAmbientGlobals(project, validationScope);
     const current = authority.current(project, profile, validationScope);
     if (current != null) {
       return new StaticProjectEvaluationAccess(
@@ -680,7 +745,6 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
       );
     }
 
-    const ambientAccess = this.acquireAmbientGlobals(project, validationScope);
     const run = this.lifecycle.begin(new StaticProjectEvaluationLocus(project.projectKey, profile.key));
     let finished = false;
     try {

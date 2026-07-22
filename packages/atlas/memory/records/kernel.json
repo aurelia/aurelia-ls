@@ -623,6 +623,7 @@
         "Do not call aggregate enumeration complete by registering only returned positive handles. Whole-store, whole-slot, source-file-index, compiler-world membership, and materialization scans require domain-owned membership, order, absence, and closure revisions. Until then, keep the read open while promoting outputs to the youngest lifetime among positive committed rows it returned.",
         "Keep exactly one ComputationLifecycleRegistry per KernelStore. Lifetime disposal must retire the exact committed manifest capability, clear outer and child read/producer indexes, and supersede any run prepared before the reclaimed publication disappeared, including an empty committed closure.",
         "Admit retained domain object graphs once per computation run and domain through ComputationLifecycleRegistry; domain-local authority objects must not independently decide whether the same committed publication can become current twice.",
+        "Rebase equivalent consumer input manifests through the target SemanticRuntimeProjectInputGeneration's shared captured host. The target generation owns one immutable value/read table; do not reconstruct retained-value hosts or let evaluator and checker consumers recapture the same logical read independently. ComputationReadValidationScope may share validation only within one synchronous proof, while candidate acquisition and final commit always start separate proofs.",
         "Use markLifetime for reclamation boundaries and markObservation for telemetry deltas. Publication replacement preserves lifetime identity while advancing mutation observation order.",
         "KernelStore.publish is an immediate first-publication boundary, not a recomputation protocol. Route its records and details through the same all-or-nothing replacement preflight, but do not allocate a lifetime when the one-shot publication owns nothing. Empty replaceable store or computation generations still own exact manifests. Do not approximate replacement with cleanup calls or split one replaceable owner across legacy immediate publications.",
         "Keep QueryClaimGraph focused on answer shape, lazy materialization, retention, and answer-side disposal. Do not move durable product dependency ownership or computation invalidation into the answer graph.",
@@ -695,6 +696,12 @@
           "filePath": "packages/semantic-runtime/src/template/compiler-read-view.ts",
           "symbolName": "TemplateCompilerReadView",
           "summary": "Immutable compiler-world authority and typed positive/negative read registration."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/project-input.ts",
+          "symbolName": "SemanticRuntimeProjectInputGeneration",
+          "summary": "Generation-owned immutable host-value table and authoritative consumer read-scope rebase boundary."
         },
         {
           "kind": "source",

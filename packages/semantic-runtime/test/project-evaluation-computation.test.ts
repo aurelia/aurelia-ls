@@ -146,6 +146,7 @@ describe('reusable project evaluation computations', () => {
     const second = runtime.projectEvaluations.acquire(nextProject, aureliaAppProjectEvaluationProfile);
     expect(second.kind).toBe(StaticProjectEvaluationAcquisitionKind.Reused);
     expect(second.generation).toBe(first.generation);
+    expect(second.readBaseline().project).toBe(nextProject);
     expect(first.generation.isCurrent()).toBe(true);
     const state = runtime.computationLifecycle.readState(first.generation.computationAuthority.computationId);
     expect(state?.reads.some((read) => read.domain.startsWith('project-input-generation'))).toBe(false);

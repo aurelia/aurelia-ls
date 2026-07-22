@@ -399,6 +399,12 @@ describes structural project admissions and compiler options rather than the eve
 them. `source-text-snapshot.ts` validates exact per-file source values within one such generation when a computation
 needs a source-specific witness. These technical lifecycle products do not replace semantic claims, materialization
 records, evidence, or provenance.
+Each project-input generation also owns the memoized immutable value table used to rebase independently admitted
+consumer read scopes. Equivalent consumers must re-capture retained reads through that target generation rather than
+constructing private retained-value hosts or rereading the live host independently. One operation-local
+`ComputationReadValidationScope` may share exact validation while those scopes rebase, but candidate acquisition and
+final atomic commit remain separate proofs. The default host is still pull-validated; an event generation does not by
+itself prove that unannounced file-system values stayed unchanged.
 
 The store indexes normalized kernel records first. A `MaterializedProduct` is an envelope that names kind, identity,
 address, and provenance. Claims are indexed by subject/object handles in the store instead of being duplicated on the

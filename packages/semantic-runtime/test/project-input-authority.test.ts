@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
+import { ComputationReadValidationScope } from '../src/kernel/computation-lifecycle.js';
 import {
   NodeSemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputAuthority,
@@ -15,6 +16,7 @@ import {
 class MutableProjectInputHost implements SemanticRuntimeProjectInputHost {
   private readonly files = new Map<string, string>();
   private readonly directories = new Set<string>();
+  private readonly fileReadCounts = new Map<string, number>();
 
   write(fileName: string, text: string): void {
     const normalized = normalize(fileName);
@@ -27,7 +29,17 @@ class MutableProjectInputHost implements SemanticRuntimeProjectInputHost {
   }
 
   readFile(fileName: string): string | undefined {
-    return this.files.get(normalize(fileName));
+    const normalized = normalize(fileName);
+    this.fileReadCounts.set(normalized, (this.fileReadCounts.get(normalized) ?? 0) + 1);
+    return this.files.get(normalized);
+  }
+
+  fileReadCount(fileName: string): number {
+    return this.fileReadCounts.get(normalize(fileName)) ?? 0;
+  }
+
+  resetFileReadCounts(): void {
+    this.fileReadCounts.clear();
   }
 
   fileExists(fileName: string): boolean {
@@ -179,6 +191,41 @@ describe('SemanticRuntimeProjectInputAuthority', () => {
     expect(stableHost.readFile(sourceFile)).toContain('1');
     expect(stableHost.fileExists(missingFile)).toBe(false);
     expect(scope.tryRebaseCurrent(second)).toBe(false);
+  });
+
+  test('shares target-generation input capture across consumer scopes in one proof', () => {
+    const rootDir = normalize('C:/workspace/app');
+    const sourceFile = normalize(`${rootDir}/src/app.ts`);
+    const host = new MutableProjectInputHost();
+    host.write(sourceFile, 'export const value = 1;');
+    const authority = new SemanticRuntimeProjectInputAuthority(host);
+    const first = authority.capture({ projectKey: 'app', rootDir });
+    const scopes = [
+      first.createReadScope('consumer-a'),
+      first.createReadScope('consumer-b'),
+      first.createReadScope('consumer-c'),
+    ];
+    for (const scope of scopes) {
+      expect(scope.host.readFile(sourceFile)).toContain('1');
+    }
+
+    authority.advance();
+    const second = authority.capture({ projectKey: 'app', rootDir });
+    const validationScope = new ComputationReadValidationScope();
+    const targetOwnerScope = second.createReadScope('target-owner');
+    host.resetFileReadCounts();
+
+    second.withReadScope(targetOwnerScope, () => {
+      for (const scope of scopes) {
+        expect(scope.tryRebaseCurrentInScope(second, validationScope)).toBe(true);
+      }
+    });
+    expect(host.fileReadCount(sourceFile)).toBe(2);
+    expect(scopes.every((scope) => scope.belongsTo(second))).toBe(true);
+    const sharedRead = scopes[0]?.readRegisteredInputs()[0];
+    expect(sharedRead).toBeDefined();
+    expect(scopes.every((scope) => scope.readRegisteredInputs()[0] === sharedRead)).toBe(true);
+    expect(targetOwnerScope.readRegisteredInputs()).toEqual([sharedRead]);
   });
 
   test('refuses read-scope rebase when a prior positive or negative read changed', () => {

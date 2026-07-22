@@ -15,6 +15,7 @@ import {
 import {
   SourceFileRole,
 } from '../kernel/address.js';
+import type { ComputationReadValidationScope } from '../kernel/computation-lifecycle.js';
 import type {
   SemanticRuntimeProjectInputHost,
   SemanticRuntimeProjectInputGeneration,
@@ -260,8 +261,11 @@ export class TypeSystemProject {
   }
 
   /** Advance the stable compiler-host facade after this checker generation's exact host reads still match. */
-  tryRebaseCurrentInputGeneration(inputGeneration: SemanticRuntimeProjectInputGeneration): boolean {
-    return this.inputReadScope.tryRebaseCurrent(inputGeneration);
+  tryRebaseCurrentInputGeneration(
+    inputGeneration: SemanticRuntimeProjectInputGeneration,
+    validationScope: ComputationReadValidationScope,
+  ): boolean {
+    return this.inputReadScope.tryRebaseCurrentInScope(inputGeneration, validationScope);
   }
 
   /** Read an evaluator-owned source file by evaluator module key. */

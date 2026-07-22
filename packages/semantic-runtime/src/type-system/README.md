@@ -462,8 +462,9 @@ the complete Program alive.
 `TypeSystemProjectAccess` carries the operation-local validation proof from acquisition through profile and Program
 reads, sharing leaves already proved by evaluator acquisition without weakening the generation's own exact-input
 contract. Stable compiler-host rebasing remains a separate value-recapture operation: it binds equivalent reads to the
-new project-input generation and cannot be replaced by a memoized currentness result. Final app commit independently
-revalidates the resulting generation through a fresh proof.
+new project-input generation through that generation's shared captured host and cannot be replaced by a memoized
+currentness result. Evaluator and checker acquisitions may share one synchronous proof while retaining independent
+consumer manifests; final app commit independently revalidates the resulting generation through a fresh proof.
 `checker-type-assignability.ts` owns the small shared question "is this projected checker reference assignable to that
 one?". Binding data-flow and runtime composition both use it because the CPU/memory trade-off and checker-epoch
 fallback policy should not be reimplemented at every feature boundary. It only answers when the retained carriers share

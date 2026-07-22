@@ -9,9 +9,10 @@ import path from 'node:path';
 
 import ts from 'typescript';
 
-import type {
-  ComputationRead,
-  ComputationReadValidation,
+import {
+  ComputationReadValidationScope,
+  type ComputationRead,
+  type ComputationReadValidation,
 } from './computation-lifecycle.js';
 import {
   combineGenerationCurrentnessWitnesses,
@@ -160,16 +161,21 @@ export class SemanticRuntimeProjectInputRead implements ComputationRead {
   }
 
   tryRebaseCurrent(): SemanticRuntimeProjectInputRead | null {
-    const currentValue = freezeProjectInputReadValue(this.readCurrent());
-    if (projectInputValueRevision(currentValue) !== this.observedRevision) {
+    const current = this.captureCurrent();
+    if (current.observedRevision !== this.observedRevision) {
       return null;
     }
+    return current;
+  }
+
+  /** Capture this exact host operation through the same authority for a newer project-input generation. */
+  captureCurrent(): SemanticRuntimeProjectInputRead {
     return new SemanticRuntimeProjectInputRead(
       this.authority,
       this.kind,
       this.readKey,
       this.readCurrent,
-      currentValue,
+      freezeProjectInputReadValue(this.readCurrent()),
     );
   }
 
@@ -257,18 +263,28 @@ export class SemanticRuntimeProjectInputReadScope {
    */
   tryRebaseCurrent(generation: SemanticRuntimeProjectInputGeneration): boolean {
     if (generation === this.generation) {
-      return generation.validate().isCurrent
-        && this.readRegisteredInputs().every((read) => read.validate().isCurrent);
+      const validationScope = new ComputationReadValidationScope();
+      return generation.validate(validationScope).isCurrent
+        && this.readRegisteredInputs().every((read) => validationScope.validate(read).isCurrent);
     }
+    const validationScope = new ComputationReadValidationScope();
+    return this.tryRebaseCurrentInScope(generation, validationScope);
+  }
+
+  /** Rebase under an enclosing synchronous proof so shared target reads validate once. */
+  tryRebaseCurrentInScope(
+    generation: SemanticRuntimeProjectInputGeneration,
+    validationScope: ComputationReadValidationScope,
+  ): boolean {
     generation.requireCompatibleReadScopeOwner(this.generation);
     this.generation.requireReadScopeInactive(this);
     generation.requireCurrent();
-    if (!generation.validate().isCurrent) {
+    if (!generation.validate(validationScope).isCurrent) {
       return false;
     }
     const rebasedReads: SemanticRuntimeProjectInputRead[] = [];
     for (const read of this.readRegisteredInputs()) {
-      const rebased = read.tryRebaseCurrent();
+      const rebased = generation.tryRebaseRead(read);
       if (rebased == null) {
         return false;
       }
@@ -279,7 +295,7 @@ export class SemanticRuntimeProjectInputReadScope {
       this.readsByKey.set(read.readKey, read);
     }
     this.generation = generation;
-    this.rebasableHost.rebase(generation.observedHost((read) => this.observe(read), rebasedReads));
+    this.rebasableHost.rebase(generation.observedHost((read) => this.observe(read)));
     return true;
   }
 
@@ -373,8 +389,27 @@ class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectI
     return [...this.readsByKey.values()].sort((left, right) => left.readKey.localeCompare(right.readKey));
   }
 
-  validateAll(): readonly ComputationReadValidation[] {
-    return this.readAll().map((read) => read.validate());
+  validateAllInScope(validationScope: ComputationReadValidationScope): readonly ComputationReadValidation[] {
+    return this.readAll().map((read) => validationScope.validate(read));
+  }
+
+  /** Reuse one generation-owned host sample across every consumer scope rebasing the same logical read. */
+  tryRebaseRead(read: SemanticRuntimeProjectInputRead): SemanticRuntimeProjectInputRead | null {
+    this.generation.requireCurrent();
+    if (!read.belongsTo(this.authority)) {
+      throw new Error(`Project-input read ${read.readKey} belongs to another input authority.`);
+    }
+    let current = this.readsByKey.get(read.readKey);
+    if (current == null) {
+      current = read.captureCurrent();
+      this.valuesByReadKey.set(read.readKey, current.value);
+      this.readsByKey.set(read.readKey, current);
+    }
+    this.generation.observeScopedRead(current);
+    this.observeRead?.(current);
+    return current.kind === read.kind && current.observedRevision === read.observedRevision
+      ? current
+      : null;
   }
 
   private read(
@@ -429,7 +464,7 @@ export class SemanticRuntimeProjectInputGeneration implements GenerationAuthorit
     }
   }
 
-  validate(): ComputationReadValidation {
+  validate(validationScope: ComputationReadValidationScope = new ComputationReadValidationScope()): ComputationReadValidation {
     if (!this.isCurrent()) {
       return {
         isCurrent: false,
@@ -437,7 +472,8 @@ export class SemanticRuntimeProjectInputGeneration implements GenerationAuthorit
         changedFacets: ['generation'],
       };
     }
-    const invalidReads = this.capturedHost.validateAll().filter((validation) => !validation.isCurrent);
+    const invalidReads = this.capturedHost.validateAllInScope(validationScope)
+      .filter((validation) => !validation.isCurrent);
     return {
       isCurrent: invalidReads.length === 0,
       currentRevision: invalidReads.length === 0 ? this.revision : `${this.revision}:inputs-changed`,
@@ -458,21 +494,14 @@ export class SemanticRuntimeProjectInputGeneration implements GenerationAuthorit
   /** Captured host view for one consumer-local read scope. */
   observedHost(
     observeRead: (read: SemanticRuntimeProjectInputRead) => void,
-    retainedReads: readonly SemanticRuntimeProjectInputRead[] = [],
   ): SemanticRuntimeProjectInputHost {
     this.requireCurrent();
-    if (retainedReads.length === 0) {
-      return this.capturedHost.withObserver(observeRead);
-    }
-    const readsByKey = new Map(retainedReads.map((read) => [read.readKey, read]));
-    const valuesByReadKey = new Map(retainedReads.map((read) => [read.readKey, read.value]));
-    return new CapturedSemanticRuntimeProjectInputHost(
-      this,
-      this.authority,
-      valuesByReadKey,
-      readsByKey,
-      observeRead,
-    );
+    return this.capturedHost.withObserver(observeRead);
+  }
+
+  /** Capture one retained read through this generation's shared immutable host table. */
+  tryRebaseRead(read: SemanticRuntimeProjectInputRead): SemanticRuntimeProjectInputRead | null {
+    return this.capturedHost.tryRebaseRead(read);
   }
 
   /** Refuse read-scope rebasing across logical projects or independent input authorities. */

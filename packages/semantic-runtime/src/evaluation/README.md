@@ -169,6 +169,11 @@ unannounced host write therefore makes the private incumbent unavailable to publ
 exact revert can make it serviceable again, and a changed candidate can replace it atomically. The outer app generation
 still fails closed whenever its captured project-input event is no longer current, even if an upstream evaluator is
 semantically reusable.
+Event-only reuse rebinds ambient-global and profile evaluator read scopes through the new project-input generation's
+shared captured host. It also advances the admitted result's current `ProjectBootFrame`, without rebuilding or mutating
+the evaluator value graph. This is a value-recapture operation, not a carried boolean proof: acquisition and final
+publication each validate through a fresh `ComputationReadValidationScope`, so a source mutation between them still
+rejects the candidate.
 Acquisition returns a `StaticProjectEvaluationAccess` bound to the synchronous validation proof that admitted or reused
 the generation. Profile, baseline, context, and session-fork reads spend that access instead of reopening the same
 project/profile/baseline closure independently. App preparation may share one proof across its app-evaluation,

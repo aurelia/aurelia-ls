@@ -247,7 +247,7 @@ export class TypeSystemProjectGeneration implements ComputationRead {
     ) {
       return false;
     }
-    if (!this.typeSystem.tryRebaseCurrentInputGeneration(project.inputGeneration)) {
+    if (!this.typeSystem.tryRebaseCurrentInputGeneration(project.inputGeneration, validationScope)) {
       return false;
     }
     this.evaluationSources.rebaseTo(evaluation);

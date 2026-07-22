@@ -570,6 +570,7 @@
         "Treat the admitted result as the baseline. Inspection-only consumers may read it; every replaceable or speculative analysis owner takes one forkSession() and shares that session across its evaluator-backed readers.",
         "Runtime-host metadata transfer must preserve aliases and cycles. Fork foreign or canonical host-returned values; adopt only values proven to belong to the candidate session graph.",
         "Keep ambient TypeScript-lib and admitted project-declaration globals in the shared project/compiler computation. App and Vite profiles observe the same generation rather than rescanning the same compiler world.",
+        "On an event-only project-input advance, rebase ambient and profile evaluator read scopes through the target generation's shared captured host and advance the admitted result's current ProjectBootFrame. Preserve the evaluator value graph only after exact semantic inputs match; do not carry an earlier validation result across acquisition and final publication.",
         "Keep source roles authoritative: tests, declarations, templates, styles, manifests, tooling scripts, and tooling configs should not enter app-world static evaluation by accident.",
         "Keep checker/project inclusion separate from Aurelia app-world evaluation eligibility. Top-level tooling scripts remain visible to TypeScript diagnostics without producing app-world evaluation seams.",
         "Preserve every unique static-evaluation origin, including several module-graph-dependency roots for one source. Never compact origin rows by kind because entryModuleKey and entrySourcePath are causal provenance.",
@@ -674,7 +675,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-21"
+      "updatedAt": "2026-07-22"
     },
     {
       "id": "frontier:evaluation-module-loader",
