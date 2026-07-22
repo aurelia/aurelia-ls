@@ -320,9 +320,12 @@ references. It may reclaim unrelated young rows, but never the live input closur
 
 The first production partition is the complete recursive authored-template compiler front door across all app and
 authoring cohorts for one stable owner. It owns source snapshots, compiler observations, and compilation/parsing/
-lowering products. Project-wide runtime and TypeChecker analysis deliberately remains in the explicit post-template
-child because its schedule, expression world, and bound-controller values currently cross family boundaries. Do not promote those
-products to family ownership until those aggregate and cross-family edges are explicit.
+lowering products. Project-wide runtime and TypeChecker analysis owns a separate explicit `template-runtime` child
+because its evaluator session, schedule, expression world, and bound-controller values currently cross family
+boundaries. The downstream `post-template` child records a whole-result dependency on that runtime child before
+observation, state, capability, and router fan-in. This edge prevents downstream carry whenever runtime analysis had to
+execute even when every staged kernel output retained an equal value. Do not promote runtime products to family
+ownership until evaluator-realm and cross-family result edges are explicit.
 
 `KernelStore.publish(...)` remains the immediate first-publication boundary used by eager producers. It is not a
 recomputation protocol: it has no prior manifest, cannot withdraw omitted output, and legacy nested producers may emit

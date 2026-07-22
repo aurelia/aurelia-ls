@@ -31,10 +31,7 @@ import {
 } from '../resources/custom-element-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
-import { ResourceProductDetails } from '../resources/product-details.js';
 import type { KernelStore, KernelTelemetryReadView } from '../kernel/store.js';
-import { MaterializedProduct } from '../kernel/materialization.js';
-import type { ProductDetailSlot } from '../kernel/product-details.js';
 import { authoredSourceHostPathCandidates } from '../kernel/authored-source-text.js';
 import { sourceFileAddressForAddress } from '../kernel/source-address.js';
 import { sourceTextContentRevision } from '../kernel/source-text-snapshot.js';
@@ -952,15 +949,13 @@ export class TemplateCompilationProjectPass {
     phases: TemplateCompilationPhaseRecorder,
   ): readonly TemplateResourceRuntimeAnalysisEmission[] {
     const resources: TemplateResourceRuntimeAnalysisEmission[] = [];
-    // Current definition details own both scheduling and analysis. Carried front doors may still hold the prior
-    // definition object, so admit every crossing before deriving cohorts, dependency SCCs, or project context.
-    const currentCompilations = compilations.map((compilation) =>
-      this.requireRuntimeAnalysisInputs(compilation)
-    );
-    for (const cohort of runtimeAnalysisCohorts(currentCompilations)) {
-      const projectContext = templateRuntimeAnalysisProjectContext(cohort);
+    for (const cohort of runtimeAnalysisCohorts(compilations)) {
+      const projectContext = templateRuntimeAnalysisProjectContext(this.publication, cohort);
+      // Current definition details own both scheduling and analysis. The project context spends every exact compiler
+      // product at this boundary and serves the same registered resource to recursive runtime consumers.
+      const currentCohort = cohort.map((compilation) => projectContext.requireCompilation(compilation));
       const cohortResources: TemplateResourceRuntimeAnalysisEmission[] = [];
-      for (const group of runtimeAnalysisScheduleGroups(cohort, resourceDefinitions)) {
+      for (const group of runtimeAnalysisScheduleGroups(currentCohort, resourceDefinitions)) {
         const boundControllerValues = runtimeBoundControllerValueTableForTemplateResources(
           this.publication,
           cohortResources,
@@ -991,97 +986,6 @@ export class TemplateCompilationProjectPass {
       resources.push(...cohortResources);
     }
     return resources;
-  }
-
-  /** Spend the exact compiler products crossing from an authored family into project-wide runtime analysis. */
-  private requireRuntimeAnalysisInputs(
-    compilation: TemplateResourceCompilationEmission,
-  ): TemplateResourceCompilationEmission {
-    for (const read of compilation.registeredReads) {
-      this.publication.observe(read);
-    }
-    const currentDefinition = compilation.definition.productHandle == null
-      ? compilation.definition
-      : this.requireRuntimeAnalysisInput(
-        ResourceProductDetails.Definition,
-        compilation.definition.productHandle,
-      );
-    if (!(currentDefinition instanceof CustomElementDefinition)) {
-      throw new Error(
-        `Runtime analysis input ${compilation.definition.productHandle} is not a custom-element definition.`,
-      );
-    }
-    this.requireRuntimeAnalysisInput(
-      TemplateProductDetails.CompiledTemplate,
-      compilation.compiledTemplate.compiledTemplate.productHandle,
-    );
-    for (const target of compilation.compiledTemplate.renderTargets) {
-      this.requireRuntimeAnalysisInput(TemplateProductDetails.RenderTarget, target.productHandle);
-    }
-    for (const sequence of compilation.compiledTemplate.instructionSequences) {
-      this.requireRuntimeAnalysisInput(TemplateProductDetails.InstructionSequence, sequence.productHandle);
-    }
-    for (const instruction of compilation.compiledTemplate.instructions) {
-      this.requireRuntimeAnalysisInput(TemplateProductDetails.Instruction, instruction.productHandle);
-    }
-    this.requireRuntimeAnalysisInput(
-      TemplateProductDetails.World,
-      compilation.compilerWorld.world.productHandle,
-    );
-    this.requireRuntimeAnalysisInput(
-      TemplateProductDetails.ResourceScope,
-      compilation.compilerWorld.resourceScope.productHandle,
-    );
-    this.requireRuntimeAnalysisInput(
-      TemplateProductDetails.RenderingService,
-      compilation.compilerWorld.rendering.productHandle,
-    );
-    this.requireRuntimeAnalysisInput(
-      TemplateProductDetails.TemplateCompilerService,
-      compilation.compilerWorld.templateCompiler.productHandle,
-    );
-    this.requireRuntimeAnalysisInput(
-      TemplateProductDetails.ResourceResolverService,
-      compilation.compilerWorld.resourceResolver.productHandle,
-    );
-    this.requireRuntimeAnalysisInput(
-      TemplateProductDetails.ExpressionParserService,
-      compilation.compilerWorld.expressionParser.productHandle,
-    );
-    this.requireRuntimeAnalysisInput(
-      TemplateProductDetails.AttributeMapperService,
-      compilation.compilerWorld.attributeMapper.productHandle,
-    );
-    this.requireRuntimeAnalysisInput(
-      TemplateProductDetails.BindingCommandResolver,
-      compilation.compilerWorld.bindingCommandResolver.productHandle,
-    );
-    for (const syntax of compilation.authoredAttributeSyntaxes) {
-      this.requireRuntimeAnalysisInput(TemplateProductDetails.AttributeSyntax, syntax.productHandle);
-    }
-    return currentDefinition === compilation.definition
-      ? compilation
-      : compilation.forGeneration(
-        compilation.parentCompilerWorld,
-        compilation.compilerWorld,
-        currentDefinition,
-        compilation.registeredReads,
-      );
-  }
-
-  private requireRuntimeAnalysisInput<TDetail>(
-    slot: ProductDetailSlot<TDetail>,
-    productHandle: ProductHandle,
-  ): TDetail {
-    const product = this.publication.read(productHandle);
-    if (!(product instanceof MaterializedProduct)) {
-      throw new Error(`Runtime analysis input ${slot.detailKind} has no materialized product ${productHandle}.`);
-    }
-    const detail = this.publication.readProductDetail(slot, productHandle);
-    if (detail == null) {
-      throw new Error(`Runtime analysis input ${slot.detailKind} has no typed detail for ${productHandle}.`);
-    }
-    return detail;
   }
 
   private compilerWorldForLocalDefinitions(
@@ -1927,20 +1831,14 @@ function originalIndexForKey(
 }
 
 function templateRuntimeAnalysisProjectContext(
-    compilations: readonly TemplateResourceCompilationEmission[],
-  ): TemplateRuntimeAnalysisProjectContext {
-    return new TemplateRuntimeAnalysisProjectContext(compilations.flatMap((compilation) =>
-      compilation.definition.productHandle == null
-        ? []
-        : [new TemplateRuntimeAnalysisResource(
-          compilation.analysisContextProductHandle,
-          compilation.definition.productHandle,
-          compilation.compiledTemplate.compiledTemplate.productHandle,
-          compilation.compiledTemplate,
-          compilation.compilerWorld,
-        )]
-    ));
-  }
+  publication: ComputationRun,
+  compilations: readonly TemplateResourceCompilationEmission[],
+): TemplateRuntimeAnalysisProjectContext {
+  return new TemplateRuntimeAnalysisProjectContext(
+    publication,
+    compilations.map((compilation) => new TemplateRuntimeAnalysisResource(compilation)),
+  );
+}
 
 function templateResourceCompilationLocalKey(
   projectKey: string,

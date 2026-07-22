@@ -112,6 +112,7 @@ describe('production template-family lifecycle', () => {
     ).map((child) => child.locus.reconciliationKey).sort()).toEqual([
       JSON.stringify([project.projectKey, AureliaAppAnalysisPhase.PostTemplate]),
       JSON.stringify([project.projectKey, AureliaAppAnalysisPhase.PreTemplate]),
+      JSON.stringify([project.projectKey, AureliaAppAnalysisPhase.TemplateRuntime]),
     ]);
     const familyLocus = new TemplateCompilationLocus(project.projectKey, familyOwnerHandle);
     const familyState = appState.children.find((child) =>
@@ -446,6 +447,13 @@ describe('production template-family lifecycle', () => {
       app.project.projectKey,
       parent.compilation.familyOwnerHandle,
     );
+    const templateRuntime = state.children.find((child) =>
+      child.locus.kind === 'aurelia-app-analysis-phase'
+      && child.locus.reconciliationKey === JSON.stringify([
+        app.project.projectKey,
+        AureliaAppAnalysisPhase.TemplateRuntime,
+      ])
+    ) ?? null;
     const postTemplate = state.children.find((child) =>
       child.locus.kind === 'aurelia-app-analysis-phase'
       && child.locus.reconciliationKey === JSON.stringify([
@@ -453,11 +461,16 @@ describe('production template-family lifecycle', () => {
         AureliaAppAnalysisPhase.PostTemplate,
       ])
     ) ?? null;
+    expect(templateRuntime).not.toBeNull();
+    expect(templateRuntime?.openReads).toEqual([]);
     expect(postTemplate).not.toBeNull();
+    expect(postTemplate?.resultDependencies).toEqual([
+      expect.objectContaining({ producerChildId: templateRuntime?.childId }),
+    ]);
     const familyOutputKeys = new Set(family.outputs.map((output) => output.readKey));
-    const postTemplateReadKeys = new Set([
-      ...(postTemplate?.reads ?? []).map((read) => read.readKey),
-      ...(postTemplate?.candidateReads ?? []).map((read) => read.readKey),
+    const templateRuntimeReadKeys = new Set([
+      ...(templateRuntime?.reads ?? []).map((read) => read.readKey),
+      ...(templateRuntime?.candidateReads ?? []).map((read) => read.readKey),
     ]);
     const familyResources = [parent, ...localResources];
     const runtimeInputHandles = familyResources.flatMap((resource) => [
@@ -482,10 +495,12 @@ describe('production template-family lifecycle', () => {
       .flatMap((handle) => [computationRecordReadKey(handle), computationProductDetailReadKey(handle)])
       .filter((readKey) => familyOutputKeys.has(readKey));
     expect(familyOwnedRuntimeInputKeys.length).toBeGreaterThan(0);
-    expect([...postTemplateReadKeys]).toEqual(expect.arrayContaining(familyOwnedRuntimeInputKeys));
+    expect([...templateRuntimeReadKeys]).toEqual(expect.arrayContaining(familyOwnedRuntimeInputKeys));
     for (const resource of localResources) {
-      expect(postTemplateReadKeys).toContain(computationRecordReadKey(resource.compilation.definition.productHandle!));
-      expect(postTemplateReadKeys).toContain(
+      expect(templateRuntimeReadKeys).toContain(
+        computationRecordReadKey(resource.compilation.definition.productHandle!),
+      );
+      expect(templateRuntimeReadKeys).toContain(
         computationProductDetailReadKey(resource.compilation.definition.productHandle!),
       );
     }
@@ -494,14 +509,14 @@ describe('production template-family lifecycle', () => {
       .map((instruction) => computationProductDetailReadKey(instruction.productHandle))
       .filter((readKey) => familyOutputKeys.has(readKey));
     expect(familyOwnedInstructionKeys.length).toBeGreaterThan(0);
-    expect([...postTemplateReadKeys]).toEqual(expect.arrayContaining(familyOwnedInstructionKeys));
+    expect([...templateRuntimeReadKeys]).toEqual(expect.arrayContaining(familyOwnedInstructionKeys));
     const localWorld = localResources.find((resource) =>
       resource.compilation.compilerWorld !== resource.compilation.parentCompilerWorld
     )?.compilation.compilerWorld ?? null;
     if (localWorld == null) {
       throw new Error('Expected a family-derived compiler world for local templates.');
     }
-    expect([...postTemplateReadKeys]).toEqual(expect.arrayContaining([
+    expect([...templateRuntimeReadKeys]).toEqual(expect.arrayContaining([
       computationRecordReadKey(localWorld.world.productHandle),
       computationProductDetailReadKey(localWorld.world.productHandle),
       computationRecordReadKey(localWorld.resourceScope.productHandle),
@@ -628,6 +643,15 @@ describe('production template-family lifecycle', () => {
       locus: expect.objectContaining({
         reconciliationKey: JSON.stringify([
           equal.project.projectKey,
+          AureliaAppAnalysisPhase.TemplateRuntime,
+        ]),
+      }),
+      kind: ComputationChildTransitionKind.Carried,
+    }));
+    expect(equalTransition.children).toContainEqual(expect.objectContaining({
+      locus: expect.objectContaining({
+        reconciliationKey: JSON.stringify([
+          equal.project.projectKey,
           AureliaAppAnalysisPhase.PostTemplate,
         ]),
       }),
@@ -733,19 +757,40 @@ describe('production template-family lifecycle', () => {
       locus: expect.objectContaining({
         reconciliationKey: JSON.stringify([
           carried.project.projectKey,
+          AureliaAppAnalysisPhase.TemplateRuntime,
+        ]),
+      }),
+      kind: ComputationChildTransitionKind.Carried,
+    }));
+    expect(transition.children).toContainEqual(expect.objectContaining({
+      locus: expect.objectContaining({
+        reconciliationKey: JSON.stringify([
+          carried.project.projectKey,
           AureliaAppAnalysisPhase.PostTemplate,
         ]),
       }),
       kind: ComputationChildTransitionKind.Carried,
     }));
-    const postTemplate = currentAppState(runtime, carried.project.projectKey).children.find((child) =>
+    const state = currentAppState(runtime, carried.project.projectKey);
+    const templateRuntime = state.children.find((child) =>
+      child.locus.kind === 'aurelia-app-analysis-phase'
+      && child.locus.reconciliationKey === JSON.stringify([
+        carried.project.projectKey,
+        AureliaAppAnalysisPhase.TemplateRuntime,
+      ])
+    ) ?? null;
+    const postTemplate = state.children.find((child) =>
       child.locus.kind === 'aurelia-app-analysis-phase'
       && child.locus.reconciliationKey === JSON.stringify([
         carried.project.projectKey,
         AureliaAppAnalysisPhase.PostTemplate,
       ])
     ) ?? null;
+    expect(templateRuntime?.openReads).toEqual([]);
     expect(postTemplate?.openReads).toEqual([]);
+    expect(postTemplate?.resultDependencies).toEqual([
+      expect.objectContaining({ producerChildId: templateRuntime?.childId }),
+    ]);
     for (const resource of carried.emission.templates.resources) {
       const previous = baselineRuntimeAnalysisByLocalKey.get(resource.compilation.localKey) ?? null;
       expect(previous).not.toBeNull();

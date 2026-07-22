@@ -362,20 +362,16 @@ export class TemplateScopeConstructionFrame {
     root: BindingScopeConstructionEmission,
     services: TemplateScopeConstructionServices,
   ): TemplateScopeConstructionFrame {
-    const compiledTemplates = uniqueCompiledTemplateEmissions([
-      input.compiledTemplate,
-      ...input.projectContext.readCompiledTemplateEmissions(),
-    ]);
     return new TemplateScopeConstructionFrame(
       input,
       root,
       services,
-      new Map(compiledTemplates.flatMap((compiledTemplate) =>
-        compiledTemplate.instructionSequences.map((sequence) => [sequence.productHandle, sequence] as const)
+      new Map(input.compiledTemplate.instructionSequences.map((sequence) =>
+        [sequence.productHandle, sequence] as const
       )),
       new Map([
-        ...compiledTemplates.flatMap((compiledTemplate) =>
-          compiledTemplate.instructions.map((instruction) => [instruction.productHandle, instruction] as const)
+        ...input.compiledTemplate.instructions.map((instruction) =>
+          [instruction.productHandle, instruction] as const
         ),
         ...input.runtimeBindings.dynamicInstructions.map((instruction) => [instruction.productHandle, instruction] as const),
       ]),
@@ -385,13 +381,15 @@ export class TemplateScopeConstructionFrame {
   readSequence(productHandle: ProductHandle | null): TemplateInstructionSequence | null {
     return productHandle == null
       ? null
-      : this.sequencesByProduct.get(productHandle) ?? null;
+      : this.sequencesByProduct.get(productHandle)
+        ?? this.input.projectContext.readInstructionSequence(productHandle);
   }
 
   readInstruction(productHandle: ProductHandle | null): TemplateInstruction | null {
     return productHandle == null
       ? null
-      : this.instructionsByProduct.get(productHandle) ?? null;
+      : this.instructionsByProduct.get(productHandle)
+        ?? this.input.projectContext.readInstruction(productHandle);
   }
 
   addInstructionScope(
@@ -2264,21 +2262,6 @@ function bindableTargetMember(
     ? null
     : readOrProjectCheckerTypeMembersInProjection(projector, targetType, targetTypeProductHandle)
       .find((member) => member.name === bindable.name) ?? null;
-}
-
-function uniqueCompiledTemplateEmissions(
-  emissions: readonly CompiledTemplateEmission[],
-): readonly CompiledTemplateEmission[] {
-  const seen = new Set<ProductHandle>();
-  const unique: CompiledTemplateEmission[] = [];
-  for (const emission of emissions) {
-    if (seen.has(emission.compiledTemplate.productHandle)) {
-      continue;
-    }
-    seen.add(emission.compiledTemplate.productHandle);
-    unique.push(emission);
-  }
-  return unique;
 }
 
 function runtimeControllerForProductHandle(

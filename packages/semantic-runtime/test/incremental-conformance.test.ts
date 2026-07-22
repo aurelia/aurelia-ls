@@ -52,8 +52,14 @@ describe('incremental production conformance', () => {
     expect(noOpFamilies.every((child) => child.transition === ComputationChildTransitionKind.Carried)).toBe(true);
     expect(analysisPhaseTransition(noOp.trace.children, AureliaAppAnalysisPhase.PreTemplate))
       .toBe(ComputationChildTransitionKind.Executed);
+    expect(analysisPhaseTransition(noOp.trace.children, AureliaAppAnalysisPhase.TemplateRuntime))
+      .toBe(ComputationChildTransitionKind.Carried);
     expect(analysisPhaseTransition(noOp.trace.children, AureliaAppAnalysisPhase.PostTemplate))
       .toBe(ComputationChildTransitionKind.Carried);
+    const noOpTemplateRuntime = analysisPhaseChild(noOp.trace.children, AureliaAppAnalysisPhase.TemplateRuntime);
+    const noOpPostTemplate = analysisPhaseChild(noOp.trace.children, AureliaAppAnalysisPhase.PostTemplate);
+    expect(noOpPostTemplate.resultDependencies).toBe(1);
+    expect(noOpPostTemplate.dependencyChildIds).toContain(noOpTemplateRuntime.childId);
     expect(noOp.trace.children.some((child) => child.locusKind === 'app-root-compiler-world')).toBe(false);
 
     const changed = await harness.advance('one template family source edit', (overlay) => {
@@ -77,6 +83,8 @@ describe('incremental production conformance', () => {
     expect(changedFamilies.every((child) =>
       child.dependencyChildIds.length === 1
       && child.dependencyChildIds[0] === preTemplate.childId)).toBe(true);
+    expect(analysisPhaseTransition(changed.trace.children, AureliaAppAnalysisPhase.TemplateRuntime))
+      .toBe(ComputationChildTransitionKind.Executed);
     expect(analysisPhaseTransition(changed.trace.children, AureliaAppAnalysisPhase.PostTemplate))
       .toBe(ComputationChildTransitionKind.Executed);
 
@@ -97,6 +105,8 @@ describe('incremental production conformance', () => {
         ComputationChildTransitionKind.Withdrawn,
       ],
     });
+    expect(analysisPhaseTransition(semanticChange.trace.children, AureliaAppAnalysisPhase.TemplateRuntime))
+      .toBe(ComputationChildTransitionKind.Executed);
     expect(analysisPhaseTransition(semanticChange.trace.children, AureliaAppAnalysisPhase.PostTemplate))
       .toBe(ComputationChildTransitionKind.Executed);
 
@@ -115,6 +125,8 @@ describe('incremental production conformance', () => {
     });
     expect(dependencyChange.trace.runtimeAnalysisSubjects.indexOf('SecondaryHost'))
       .toBeLessThan(dependencyChange.trace.runtimeAnalysisSubjects.indexOf('GlobalLocalChip'));
+    expect(analysisPhaseTransition(dependencyChange.trace.children, AureliaAppAnalysisPhase.TemplateRuntime))
+      .toBe(ComputationChildTransitionKind.Executed);
     expect(analysisPhaseTransition(dependencyChange.trace.children, AureliaAppAnalysisPhase.PostTemplate))
       .toBe(ComputationChildTransitionKind.Executed);
 
@@ -127,6 +139,8 @@ describe('incremental production conformance', () => {
       'local-templates-app': [ComputationChildTransitionKind.Carried],
       'secondary-host': [ComputationChildTransitionKind.Carried],
     });
+    expect(analysisPhaseTransition(settled.trace.children, AureliaAppAnalysisPhase.TemplateRuntime))
+      .toBe(ComputationChildTransitionKind.Carried);
     expect(analysisPhaseTransition(settled.trace.children, AureliaAppAnalysisPhase.PostTemplate))
       .toBe(ComputationChildTransitionKind.Carried);
   }, 300_000);
@@ -149,6 +163,8 @@ describe('incremental production conformance', () => {
       previousSubject: 'secondary-host',
       transition: ComputationChildTransitionKind.Withdrawn,
     }));
+    expect(analysisPhaseTransition(withdrawn.trace.children, AureliaAppAnalysisPhase.TemplateRuntime))
+      .toBe(ComputationChildTransitionKind.Executed);
     expect(analysisPhaseTransition(withdrawn.trace.children, AureliaAppAnalysisPhase.PostTemplate))
       .toBe(ComputationChildTransitionKind.Executed);
 
@@ -161,6 +177,8 @@ describe('incremental production conformance', () => {
       currentSubject: 'secondary-host',
       transition: ComputationChildTransitionKind.Executed,
     }));
+    expect(analysisPhaseTransition(reintroduced.trace.children, AureliaAppAnalysisPhase.TemplateRuntime))
+      .toBe(ComputationChildTransitionKind.Executed);
     expect(analysisPhaseTransition(reintroduced.trace.children, AureliaAppAnalysisPhase.PostTemplate))
       .toBe(ComputationChildTransitionKind.Executed);
   }, 180_000);
@@ -170,6 +188,13 @@ function analysisPhaseTransition(
   children: readonly IncrementalConformanceChildTrace[],
   phase: AureliaAppAnalysisPhase,
 ): ComputationChildTransitionKind {
+  return analysisPhaseChild(children, phase).transition;
+}
+
+function analysisPhaseChild(
+  children: readonly IncrementalConformanceChildTrace[],
+  phase: AureliaAppAnalysisPhase,
+): IncrementalConformanceChildTrace {
   const child = children.find((candidate) =>
     candidate.locusKind === 'aurelia-app-analysis-phase'
       && candidate.summary.startsWith(`${phase} `)
@@ -177,7 +202,7 @@ function analysisPhaseTransition(
   if (child == null) {
     throw new Error(`Expected ${phase} app-analysis trace.`);
   }
-  return child.transition;
+  return child;
 }
 
 function familyTransitions(

@@ -60,8 +60,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   participating container/resource owner; unrelated owners no longer create an open whole-kernel dependency, while
   candidate local definitions become ordinary producer-to-consumer child edges. The production activation layer is a
   deterministic star: pre-template executes first, each independent owner family then either carries its exact prior
-  closure or compiles afresh in plan order, and post-template executes after every family. A separate generic scheduler
-  would add no ordering information to this topology. App-root compiler worlds remain pre-template outputs: they do not
+  closure or compiles afresh in plan order, one project-wide template-runtime child analyzes the complete front door,
+  and post-template fan-in consumes that whole result. A separate generic scheduler would add no ordering information
+  to this topology. App-root compiler worlds remain pre-template outputs: they do not
   yet have an independently reusable dependency closure, and lexically nesting a child around their construction would
   create a flat sibling rather than hierarchy. Compiler resource reads revise over the facts consumed by each operation:
   lookup/capture/lowering metadata, bindables, and owner facts are distinct projections rather than one hash of the full
@@ -69,16 +70,18 @@ classification, expression parsing, and instruction lowering converge on the sam
   after those witnesses rebase. Fresh and carried observations in one compiler scope share a scope/closure snapshot at
   the kernel projection revision; staged or committed publication movement invalidates that snapshot before the next
   validation. This preserves per-operation result reads without re-enumerating the same owner closure for every lookup.
-  Runtime/checker analysis remains project-owned because its SCC schedule,
-  expression world, and bound-controller values cross family boundaries; the explicit post-template child records that
-  boundary honestly instead of assigning unsupported family ownership. Before crossing that boundary, post-template
-  re-observes the compiler-world authority reads and consumes the exact resource definition, compiled-template
+  Runtime/checker analysis remains project-owned because its evaluator session, SCC schedule,
+  expression world, and bound-controller values cross family boundaries; the explicit template-runtime child records
+  that boundary honestly instead of assigning unsupported family ownership. It re-observes the compiler-world authority
+  reads and consumes the exact resource definition, compiled-template
   envelope, render targets, instruction sequences, instructions, compiler world, resource scope, Rendering,
   TemplateCompiler, resource resolver, expression parser, AttrMapper, binding-command resolver, and authored attribute
   syntax products plus typed details. The exact current resource-definition read is also the carrier supplied to
   runtime analysis: a carried compiler front door must not validate a replacement detail and then keep using its prior
   definition object. This includes local-template definitions and instruction details produced by the same family child;
-  stable envelope handles do not imply that referenced semantic details are unchanged. Rendering and
+  stable envelope handles do not imply that referenced semantic details are unchanged. The post-template child consumes
+  the runtime child as one complete in-memory result, so it cannot carry observation/router state across an executed
+  runtime generation whose individual kernel outputs happened to retain. Rendering and
   runtime `compileSpread` execute the compiler service set, so those inputs are not implied by carrying a world
   reference. A projected compiler-world authority may yield a distinct immutable world object under the same product
   handle, so the live authority read and catalog detail dependency are both retained rather than collapsed by object
@@ -485,6 +488,11 @@ classification, expression parsing, and instruction lowering converge on the sam
   observer value-channel projection, and binding data-flow materialization. Runtime analysis runs after the project has
   compiled every template front door, and receives
   `TemplateRuntimeAnalysisProjectContext` so controller products can be linked to already-known compiled templates.
+  That context is also the exact compiler-product admission boundary: every analyzed compilation spends its own
+  definition, template, instruction, syntax, and compiler-service products there, while a local scope frame indexes only
+  its own instructions. Recursive rendering resolves foreign instructions and resources through the same boundary rather
+  than preloading cohort-wide template objects into every frame. This routing is required before runtime groups can gain
+  narrower ownership; do not restore cohort-wide frame preloading here.
   Recursive rendering intentionally exposes child bindings in a parent aggregate analysis as well as the child's own
   analysis. `runtime-resource-ownership.ts` is the shared source/controller ownership boundary used by public binding
   projections and project-level source-owned producers. It also projects source-local dynamic instructions, expression

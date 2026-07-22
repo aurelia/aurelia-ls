@@ -148,10 +148,12 @@ forked instead of being claimed by the first session that sees them. Session-bou
 product host, and one module graph uses one host identity, so a candidate-owned session can itself be forked for an
 isolated downstream phase without routing returned values back through the parent session. Forking per reader is incorrect: one authored
 configuration/resource value would acquire several unrelated
-identities, breaking joins such as two app roots that intentionally share one router configuration. Template compilation
-inside a complete app-analysis candidate and its post-template binding/router evaluation each own an explicit forked
-session, separate from the admitted project-evaluation graph and from one another, so rejected work cannot mutate the
-incumbent or leak mutable evaluator state across lifecycle phases.
+identities, breaking joins such as two app roots that intentionally share one router configuration. Project-wide
+template-runtime analysis inside a complete app-analysis candidate and its downstream post-template binding/router
+evaluation each own an explicit forked session, separate from the admitted project-evaluation graph and from one
+another, so rejected work cannot mutate the incumbent or leak mutable evaluator state across lifecycle phases. The
+shared template-runtime session is why its current lifecycle child spans every runtime dependency SCC; splitting those
+SCCs requires an explicit evaluator-realm partition rather than independent forks that only appear isolated.
 `StaticEvaluationValueGraph` is the ownership capability for those mutable values and environments. Evaluator-created
 values enter through `retainProduced(...)`, including an instance before its field initializers execute so recursive
 `this` references keep one identity. A runtime host may mutate an already-owned environment with foreign values;

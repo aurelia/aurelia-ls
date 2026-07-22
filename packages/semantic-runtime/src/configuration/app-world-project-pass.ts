@@ -308,7 +308,9 @@ export interface AureliaAppWorldProjectOptions {
 export const enum AureliaAppAnalysisPhase {
   /** Project evaluation, TypeScript, resources, configuration, DI, and compiler-world planning. */
   PreTemplate = 'pre-template',
-  /** Shared runtime/checker analysis and observation/router fan-in after family compilation. */
+  /** Shared runtime/checker analysis over the complete recursive template-family front doors. */
+  TemplateRuntime = 'template-runtime',
+  /** Observation, state, capability, and router fan-in over the complete template runtime result. */
   PostTemplate = 'post-template',
 }
 
@@ -327,7 +329,7 @@ export class AureliaAppAnalysisPhaseLocus implements ComputationLocus {
   }
 }
 
-/** Immutable pre-template values retained for family compilation, post-template fan-in, and later child carry. */
+/** Immutable pre-template values retained for family compilation, runtime analysis, fan-in, and later child carry. */
 export class AureliaAppWorldPreTemplateEmission {
   constructor(
     readonly analysisDepth: SemanticAppAnalysisDepth,
@@ -364,7 +366,7 @@ export class AureliaAppWorldPreTemplateEmission {
   ) {}
 }
 
-/** Immutable post-template values derived from the complete recursive family front doors. */
+/** Immutable post-template values derived from one complete template-runtime result. */
 export class AureliaAppWorldPostTemplateEmission {
   constructor(
     readonly templates: TemplateCompilationProjectEmission,
@@ -538,6 +540,10 @@ class AureliaAppWorldProjectConstructionFrame {
       this.project.projectKey,
       AureliaAppAnalysisPhase.PreTemplate,
     );
+    const templateRuntimeLocus = new AureliaAppAnalysisPhaseLocus(
+      this.project.projectKey,
+      AureliaAppAnalysisPhase.TemplateRuntime,
+    );
     const postTemplateLocus = new AureliaAppAnalysisPhaseLocus(
       this.project.projectKey,
       AureliaAppAnalysisPhase.PostTemplate,
@@ -565,14 +571,22 @@ class AureliaAppWorldProjectConstructionFrame {
       this.project,
       this.incumbent?.templates.frontDoor ?? null,
     );
-    const carriedPostTemplate = this.prepareCarriedPostTemplate(templatePass, preTemplate, frontDoor);
+    const carriedTemplateRuntime = this.prepareCarriedTemplateRuntime(templatePass, preTemplate, frontDoor);
+    const templates = carriedTemplateRuntime != null
+      && this.publication.tryCarryChild(
+        templateRuntimeLocus,
+        templateCompilerReadRebaserForFrontDoor(frontDoor),
+      ) != null
+        ? carriedTemplateRuntime
+        : this.executeTemplateRuntime(templateRuntimeLocus, templatePass, preTemplate, frontDoor);
+    const carriedPostTemplate = this.prepareCarriedPostTemplate(preTemplate, templates);
     const postTemplate = carriedPostTemplate != null
       && this.publication.tryCarryChild(
         postTemplateLocus,
         templateCompilerReadRebaserForFrontDoor(frontDoor),
       ) != null
         ? carriedPostTemplate
-        : this.executePostTemplate(postTemplateLocus, templatePass, preTemplate, frontDoor);
+        : this.executePostTemplate(postTemplateLocus, templateRuntimeLocus, preTemplate, templates);
 
     return new AureliaAppWorldProjectEmission(
       preTemplate,
@@ -664,11 +678,11 @@ class AureliaAppWorldProjectConstructionFrame {
     );
   }
 
-  private prepareCarriedPostTemplate(
+  private prepareCarriedTemplateRuntime(
     templatePass: TemplateCompilationProjectPass,
     preTemplate: AureliaAppWorldPreTemplateEmission,
     frontDoor: TemplateCompilationFrontDoorEmission,
-  ): AureliaAppWorldPostTemplateEmission | null {
+  ): TemplateCompilationProjectEmission | null {
     const previous = this.incumbent;
     if (
       previous == null
@@ -680,12 +694,46 @@ class AureliaAppWorldProjectConstructionFrame {
     ) {
       return null;
     }
-    const templates = templatePass.rebaseAnalyzedFrontDoors(
+    return templatePass.rebaseAnalyzedFrontDoors(
       frontDoor,
       previous.templates,
       this.templateCompilationOptions(preTemplate.evaluation, preTemplate.stateBase),
     );
-    if (templates == null) {
+  }
+
+  private executeTemplateRuntime(
+    locus: AureliaAppAnalysisPhaseLocus,
+    templatePass: TemplateCompilationProjectPass,
+    preTemplate: AureliaAppWorldPreTemplateEmission,
+    frontDoor: TemplateCompilationFrontDoorEmission,
+  ): TemplateCompilationProjectEmission {
+    const inputs = this.project.inputGeneration.createReadScope('aurelia-app-analysis:template-runtime');
+    return this.publication.withChild(locus, () => {
+      const emission = this.project.inputGeneration.withReadScope(
+        inputs,
+        () => this.measure('template-compilation', () => templatePass.analyzeFrontDoors(
+          frontDoor,
+          preTemplate.typeSystem,
+          preTemplate.resourceIndex,
+          this.templateCompilationOptions(preTemplate.evaluation, preTemplate.stateBase),
+        )),
+      );
+      for (const read of this.upstreamReads) {
+        this.publication.observe(read);
+      }
+      for (const read of inputs.readRegisteredInputs()) {
+        this.publication.observe(read);
+      }
+      return emission;
+    });
+  }
+
+  private prepareCarriedPostTemplate(
+    preTemplate: AureliaAppWorldPreTemplateEmission,
+    templates: TemplateCompilationProjectEmission,
+  ): AureliaAppWorldPostTemplateEmission | null {
+    const previous = this.incumbent?.postTemplate ?? null;
+    if (previous == null) {
       return null;
     }
     const templateContainerChainFacts = preTemplate.appWorld.containerChainFacts.withContainers(
@@ -717,15 +765,16 @@ class AureliaAppWorldProjectConstructionFrame {
 
   private executePostTemplate(
     locus: AureliaAppAnalysisPhaseLocus,
-    templatePass: TemplateCompilationProjectPass,
+    templateRuntimeLocus: AureliaAppAnalysisPhaseLocus,
     preTemplate: AureliaAppWorldPreTemplateEmission,
-    frontDoor: TemplateCompilationFrontDoorEmission,
+    templates: TemplateCompilationProjectEmission,
   ): AureliaAppWorldPostTemplateEmission {
     const inputs = this.project.inputGeneration.createReadScope('aurelia-app-analysis:post-template');
     return this.publication.withChild(locus, () => {
+      this.publication.observeChildResult(templateRuntimeLocus);
       const emission = this.project.inputGeneration.withReadScope(
         inputs,
-        () => this.constructPostTemplate(templatePass, preTemplate, frontDoor),
+        () => this.constructPostTemplate(preTemplate, templates),
       );
       for (const read of this.upstreamReads) {
         this.publication.observe(read);
@@ -738,9 +787,8 @@ class AureliaAppWorldProjectConstructionFrame {
   }
 
   private constructPostTemplate(
-    templatePass: TemplateCompilationProjectPass,
     preTemplate: AureliaAppWorldPreTemplateEmission,
-    frontDoor: TemplateCompilationFrontDoorEmission,
+    templates: TemplateCompilationProjectEmission,
   ): AureliaAppWorldPostTemplateEmission {
     const {
       evaluation,
@@ -756,12 +804,6 @@ class AureliaAppWorldProjectConstructionFrame {
       serviceRootEnrichment,
       sourceObservation,
     } = preTemplate;
-    const templates = this.measure('template-compilation', () => templatePass.analyzeFrontDoors(
-      frontDoor,
-      typeSystem,
-      resourceIndex,
-      this.templateCompilationOptions(evaluation, stateBase),
-    ));
     const templateContainerChainFacts = appWorld.containerChainFacts.withContainers(
       this.publication,
       templateRuntimeChildContainers(templates),

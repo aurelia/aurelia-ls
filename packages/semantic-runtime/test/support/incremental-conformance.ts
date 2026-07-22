@@ -103,6 +103,7 @@ export interface IncrementalConformanceChildTrace {
   readonly reads: number;
   readonly candidateReads: number;
   readonly structuralDependencies: number;
+  readonly resultDependencies: number;
   readonly openReads: number;
   readonly openReadKinds: readonly string[];
   readonly outputs: number;
@@ -306,6 +307,7 @@ function childTrace(
       reads: child.reads.length,
       candidateReads: child.candidateReads.length,
       structuralDependencies: child.structuralDependencies.length,
+      resultDependencies: child.resultDependencies.length,
       openReads: child.openReads.length,
       openReadKinds: [...new Set(child.openReads.map((read) => read.kind))].sort(),
       outputs: child.outputs.length,
@@ -326,6 +328,7 @@ function computationChildDependencyIds(child: ComputationChildState): readonly s
     ...child.candidateReads.flatMap((read) => read.producerChildId == null ? [] : [read.producerChildId]),
     ...child.structuralDependencies.flatMap((dependency) =>
       dependency.producerChildId == null ? [] : [dependency.producerChildId]),
+    ...child.resultDependencies.map((dependency) => dependency.producerChildId),
   ])]
     .filter((childId) => childId !== child.childId)
     .sort((left, right) => left.localeCompare(right));
