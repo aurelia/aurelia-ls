@@ -260,7 +260,10 @@ and joins them with the staged publication's owner index. The projection remains
 opaque identity distinguishes alternative overlays, while its committed and candidate ordinals advance with the shared
 base. A domain rebaser gets first refusal for projection-sensitive reads; returning `undefined` permits the lifecycle to
 reuse an equal read already acquired by this run, while `null` refuses carry. Final commit still performs an independent
-currentness proof.
+currentness proof. Rich-detail publications projected for the targeted decision preview remain owned by that prospective
+view. Successful carry installs those exact publications after rechecking prior ownership, slot, owner, and detail
+identity; it does not project the same structural closure a third time merely to stage it. This reuse is not final
+publication authority: after every external callback, complete replacement still reprojects each closure independently.
 Both projections expose a `KernelReadProjectionRevision` for memoizing repeated traversal at one unchanged view. This
 is a technical cache witness, not a computation read or semantic epoch; the typed domain read still owns its result
 revision and final currentness validation.

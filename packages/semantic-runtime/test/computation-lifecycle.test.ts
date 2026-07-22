@@ -656,15 +656,25 @@ describe("computation lifecycle", () => {
     const provenanceHandle = store.handles.provenance("child-carry:product");
     const productHandle = store.handles.product("child-carry:product");
     const hotHandle = store.handles.hotDetail("child-carry:hot");
+    let productReferenceProjections = 0;
+    let hotReferenceProjections = 0;
     const productSlot = defineTestProductDetailSlot<number>(
       KernelVocabulary.Template.Source.key,
       "test.child-carry-product",
       "Product detail retained only through explicit child carry.",
+      (detail) => {
+        productReferenceProjections += 1;
+        return noKernelDetailReferences(detail);
+      },
     );
     const hotSlot = defineTestHotDetailSlot<number>(
       KernelVocabulary.Template.Source.key,
       "test.child-carry-hot",
       "Hot detail retained only through explicit child carry.",
+      (detail) => {
+        hotReferenceProjections += 1;
+        return noKernelDetailReferences(detail);
+      },
     );
     const product = new MaterializedProduct(
       productHandle,
@@ -697,6 +707,8 @@ describe("computation lifecycle", () => {
       });
     });
     expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    productReferenceProjections = 0;
+    hotReferenceProjections = 0;
     const initialFamily = lifecycle.readState(initial.computationId)?.children.find(
       (child) => child.locus.reconciliationKey === family.reconciliationKey,
     );
@@ -725,6 +737,8 @@ describe("computation lifecycle", () => {
     expect(carried?.readFor(initialFamily.reads[0]!)).not.toBe(initialFamily.reads[0]);
     const result = replacement.commit();
     expect(result.state).toBe(ComputationCommitState.Committed);
+    expect(productReferenceProjections).toBe(2);
+    expect(hotReferenceProjections).toBe(2);
     const nextFamily = lifecycle.readState(replacement.computationId)?.children.find(
       (child) => child.locus.reconciliationKey === family.reconciliationKey,
     );
@@ -1017,6 +1031,15 @@ describe("computation lifecycle", () => {
     expect(secondProjection.readMaterializationsByOwner(materializationOwner).map((record) => record.handle)).toEqual([
       secondHandle,
     ]);
+    const foreignStaged = new StagedKernelPublicationContext(
+      store,
+      replacement.manifest,
+      "test:foreign-prospective-carry-projection" as KernelPublicationWriterId,
+    );
+    expect(() => foreignStaged.carryFrom(
+      "test:foreign-prospective-carry-projection" as KernelPublicationWriterId,
+      firstProjection,
+    )).toThrow(/does not belong to this staged publication/);
 
     staged.publish(publication("prospective-carry-projection:staged", [second]));
     expect(firstRevision.equals(firstProjection.readProjectionRevision())).toBe(false);

@@ -1471,7 +1471,7 @@ export class ComputationRun implements KernelPublicationContext {
       registerStagedEntryRevision(carriedStagedReads, child.childId, revision);
     }
 
-    this.publications.carryFrom(child.childId, previous.outputs);
+    this.publications.carryFrom(child.childId, rebaseContext);
     for (const read of rebasedReads) {
       const source = SealedComputationRead.sourceOf(read);
       if (source instanceof ComputationMaterializationOwnerRead) {

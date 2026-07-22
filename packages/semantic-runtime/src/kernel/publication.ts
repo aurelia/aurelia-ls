@@ -284,11 +284,17 @@ export class StagedKernelMaterializationOwnerRead {
 export interface KernelProspectiveCarryReadView extends ProductDetailReadView, KernelReadProjectionRevisionView {
   readonly outputEntriesByKey: ReadonlyMap<string, KernelPublicationEntryDescriptor>;
   readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[];
+  /** Preview-owned product publication whose projected closure may be reused only by this carry attempt. */
+  readProductDetailPublication(productHandle: ProductHandle): KernelProductDetailPublication<unknown> | null;
+  /** Preview-owned hot publication whose projected closure may be reused only by this carry attempt. */
+  readHotDetailPublication(handle: HotDetailHandle): KernelHotDetailPublication<unknown> | null;
 }
 
 class StagedKernelProspectiveCarryReadView implements KernelProspectiveCarryReadView {
   private ownerSnapshotRevision: KernelReadProjectionRevision | null = null;
   private readonly ownerSnapshots = new Map<MaterializationOwnerHandle, readonly MaterializationRecord[]>();
+  private readonly productDetailPublications = new Map<ProductHandle, KernelProductDetailPublication<unknown>>();
+  private readonly hotDetailPublications = new Map<HotDetailHandle, KernelHotDetailPublication<unknown>>();
 
   constructor(
     private readonly publications: StagedKernelPublicationContext,
@@ -297,6 +303,7 @@ class StagedKernelProspectiveCarryReadView implements KernelProspectiveCarryRead
       readonly MaterializationRecord[]
     >,
     private readonly productDetailsByHandle: ReadonlyMap<ProductHandle, ProductDetailEntry<unknown>>,
+    private readonly hotDetailsByHandle: ReadonlyMap<HotDetailHandle, HotDetailEntry<unknown>>,
     readonly outputEntriesByKey: ReadonlyMap<string, KernelPublicationEntryDescriptor>,
   ) {}
 
@@ -333,6 +340,31 @@ class StagedKernelProspectiveCarryReadView implements KernelProspectiveCarryRead
       productHandle,
       this.productDetailsByHandle.get(productHandle) ?? null,
     );
+  }
+
+  readProductDetailPublication(productHandle: ProductHandle): KernelProductDetailPublication<unknown> | null {
+    const existing = this.productDetailPublications.get(productHandle);
+    if (existing != null) return existing;
+    const entry = this.productDetailsByHandle.get(productHandle) ?? null;
+    if (entry == null) return null;
+    const publication = new KernelProductDetailPublication(entry.slot, productHandle, entry.detail);
+    this.productDetailPublications.set(productHandle, publication);
+    return publication;
+  }
+
+  readHotDetailPublication(handle: HotDetailHandle): KernelHotDetailPublication<unknown> | null {
+    const existing = this.hotDetailPublications.get(handle);
+    if (existing != null) return existing;
+    const entry = this.hotDetailsByHandle.get(handle) ?? null;
+    if (entry == null) return null;
+    const publication = new KernelHotDetailPublication(
+      entry.slot,
+      entry.ownerProductHandle,
+      handle,
+      entry.detail,
+    );
+    this.hotDetailPublications.set(handle, publication);
+    return publication;
   }
 
   private refreshOwnerSnapshots(): void {
@@ -762,6 +794,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
     MaterializationRecord[]
   >();
   private readonly observedMaterializationOwners = new Set<MaterializationOwnerHandle>();
+  private readonly prospectiveCarryReadViews = new WeakSet<KernelProspectiveCarryReadView>();
   private readonly previousRecordHandles: ReadonlySet<KernelRecordHandle>;
   private readonly previousProductDetailHandles: ReadonlySet<ProductHandle>;
   private readonly previousHotDetailHandles: ReadonlySet<HotDetailHandle>;
@@ -922,6 +955,7 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
     this.assertPreparing();
     const materializationsByOwner = new Map<MaterializationOwnerHandle, MaterializationRecord[]>();
     const productDetailsByHandle = new Map<ProductHandle, ProductDetailEntry<unknown>>();
+    const hotDetailsByHandle = new Map<HotDetailHandle, HotDetailEntry<unknown>>();
     const outputEntriesByKey = publicationEntriesByKey(outputs);
     for (const output of outputEntriesByKey.values()) {
       if (
@@ -943,14 +977,22 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
           output.handle as ProductHandle,
           this.previousProductDetailForCarry(output),
         );
+      } else if (output.surface === KernelPublicationSurface.HotDetail) {
+        hotDetailsByHandle.set(
+          output.handle as HotDetailHandle,
+          this.previousHotDetailForCarry(output),
+        );
       }
     }
-    return new StagedKernelProspectiveCarryReadView(
+    const view = new StagedKernelProspectiveCarryReadView(
       this,
       materializationsByOwner,
       productDetailsByHandle,
+      hotDetailsByHandle,
       outputEntriesByKey,
     );
+    this.prospectiveCarryReadViews.add(view);
+    return view;
   }
 
   /** Read one typed detail as it would appear after a proposed child carry, without staging that carry. */
@@ -1343,15 +1385,16 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
   /** Stage one prior child's exact owned entries under its stable writer identity. */
   carryFrom(
     writerId: KernelPublicationWriterId,
-    outputs: readonly KernelPublicationEntryDescriptor[],
+    prospectiveCarry: KernelProspectiveCarryReadView,
   ): readonly KernelStagedEntryRevision[] {
     this.assertPreparing();
+    this.assertProspectiveCarryReadView(prospectiveCarry);
     const carriedOutputsByKey = new Map(this.carriedOutputsByKey);
     const records: KernelStoreRecord[] = [];
     const productDetails: KernelProductDetailPublication<unknown>[] = [];
     const hotDetails: KernelHotDetailPublication<unknown>[] = [];
 
-    for (const output of outputs) {
+    for (const output of prospectiveCarry.outputEntriesByKey.values()) {
       const key = stagedRevisionKey(output.surface, output.handle);
       const existing = carriedOutputsByKey.get(key) ?? null;
       if (existing != null && existing.detailKind !== output.detailKind) {
@@ -1366,24 +1409,25 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
         case KernelPublicationSurface.ProductDetail: {
           const handle = output.handle as ProductHandle;
           const entry = this.previousProductDetailForCarry(output);
-          productDetails.push(new KernelProductDetailPublication(entry.slot, handle, entry.detail));
+          const publication = prospectiveCarry.readProductDetailPublication(handle);
+          if (publication?.slot !== entry.slot || publication.detail !== entry.detail) {
+            throw new Error(`Cannot carry product detail ${handle}; its projected entry no longer matches the store.`);
+          }
+          productDetails.push(publication);
           break;
         }
         case KernelPublicationSurface.HotDetail: {
           const handle = output.handle as HotDetailHandle;
-          if (!this.previousHotDetailHandles.has(handle)) {
-            throw new Error(`Cannot carry hot detail ${handle}; it is not owned by the prior publication.`);
+          const entry = this.previousHotDetailForCarry(output);
+          const publication = prospectiveCarry.readHotDetailPublication(handle);
+          if (
+            publication?.slot !== entry.slot
+            || publication.ownerProductHandle !== entry.ownerProductHandle
+            || publication.detail !== entry.detail
+          ) {
+            throw new Error(`Cannot carry hot detail ${handle}; its projected entry no longer matches the store.`);
           }
-          const entry = this.store.hotDetails.readEntry(handle);
-          if (entry == null || entry.slot.detailKind !== output.detailKind) {
-            throw new Error(`Cannot carry hot detail ${handle}; its committed slot no longer matches ${output.detailKind}.`);
-          }
-          hotDetails.push(new KernelHotDetailPublication(
-            entry.slot,
-            entry.ownerProductHandle,
-            handle,
-            entry.detail,
-          ));
+          hotDetails.push(publication);
           break;
         }
       }
@@ -1427,6 +1471,18 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
     return entry;
   }
 
+  private previousHotDetailForCarry(output: KernelPublicationEntryDescriptor): HotDetailEntry<unknown> {
+    const handle = output.handle as HotDetailHandle;
+    if (!this.previousHotDetailHandles.has(handle)) {
+      throw new Error(`Cannot carry hot detail ${handle}; it is not owned by the prior publication.`);
+    }
+    const entry = this.store.hotDetails.readEntry(handle);
+    if (entry == null || entry.slot.detailKind !== output.detailKind) {
+      throw new Error(`Cannot carry hot detail ${handle}; its committed slot no longer matches ${output.detailKind}.`);
+    }
+    return entry;
+  }
+
   /** Freeze one coherent publication/revision view before any input validator can run. */
   seal(label: string): SealedKernelPublicationCandidate {
     this.assertPreparing();
@@ -1466,6 +1522,9 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
     prospectiveCarry: KernelProspectiveCarryReadView | null = null,
   ): KernelPublicationDecisionPreviewCandidate {
     this.assertPreparing();
+    if (prospectiveCarry != null) {
+      this.assertProspectiveCarryReadView(prospectiveCarry);
+    }
     const retainedOutputIndexes = prospectiveCarry == null
       ? [this.carriedOutputsByKey]
       : [this.carriedOutputsByKey, prospectiveCarry.outputEntriesByKey];
@@ -1515,12 +1574,16 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
       (handle) => {
         const staged = this.productDetails.get(handle) ?? null;
         if (staged != null) return staged;
+        const carried = prospectiveCarry?.readProductDetailPublication(handle) ?? null;
+        if (carried != null) return carried;
         const entry = this.store.productDetails.readEntry(handle);
         return entry == null ? null : new KernelProductDetailPublication(entry.slot, handle, entry.detail);
       },
       (handle) => {
         const staged = this.hotDetails.get(handle) ?? null;
         if (staged != null) return staged;
+        const carried = prospectiveCarry?.readHotDetailPublication(handle) ?? null;
+        if (carried != null) return carried;
         const entry = this.store.hotDetails.readEntry(handle);
         return entry == null ? null : new KernelHotDetailPublication(
           entry.slot,
@@ -1538,6 +1601,12 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
         }
       },
     );
+  }
+
+  private assertProspectiveCarryReadView(view: KernelProspectiveCarryReadView): void {
+    if (!this.prospectiveCarryReadViews.has(view)) {
+      throw new Error('Prospective carry read view does not belong to this staged publication.');
+    }
   }
 
   private previousOwns(surface: KernelPublicationSurface, handle: string): boolean {

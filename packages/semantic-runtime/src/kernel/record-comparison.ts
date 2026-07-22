@@ -20,6 +20,10 @@ export function compareKernelRecords(
   previous: KernelStoreRecord,
   next: KernelStoreRecord,
 ): KernelComparablePublicationDecision {
+  // Store comparison sees sealed records, so exact identity proves both semantic and witness equality.
+  if (previous === next) {
+    return KernelPublicationDecisionKind.Retain;
+  }
   if (previous.kind !== next.kind) {
     return KernelPublicationDecisionKind.Replace;
   }
