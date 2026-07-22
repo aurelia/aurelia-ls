@@ -166,12 +166,19 @@ committed store and reporting an atomic candidate as empty.
 stable computation ID; each run stages a complete read set and publication closure; commit revalidates every typed read
 before replacing the prior state. `publication.ts` is the required materializer write boundary for immediate and staged
 execution. `KernelStore.replacePublication(...)` prevalidates ownership, references, detail envelopes, and unsupported
-sidecar participation before one synchronous callback-free replacement. Computation-owned replacement uses
+sidecar participation before one synchronous replacement. Computation-owned replacement uses
 `replaceOwnedPublication(...)`, which admits source/input validation and the owner's fallible producer-index preflight
-inside the same store mutation barrier. Every external validation callback, including the final currentness callback,
-runs before the store's callback-free normalization and structural-closure recheck and mutation tail. Normalized records,
-publication plans, manifests, decisions, and their structural arrays are sealed before any external validator runs. A failed or stale run
-leaves the previous records, details, read index, producer index, and manifest intact. Sidecar indexes remain
+inside the same store mutation barrier. External read and owner validators run before reversible descriptor
+revalidation and rich-detail structural-closure reprojection; those candidate-owned operations may themselves invoke
+JavaScript. The lifecycle therefore carries one nominal `GenerationCurrentnessWitness` over the exact run and every
+guarded input generation. Kernel-private monotonic clocks recheck that witness after descriptor and projector callbacks,
+immediately before the truly callback-free mutation tail. The witness proves generation identity, not semantic input
+equality: exact source/configuration values remain typed computation reads, and an editor or host source event must
+advance project-input authority before admission. Transient publication views expose operational currentness but do not
+implement `GenerationAuthority`, so a finished run, poisoned staging context, or eternal store cannot masquerade as a
+witnessed durable generation. Normalized records, publication plans, manifests, decisions, and their
+structural arrays are sealed before any external validator runs. A failed or stale run leaves the previous records,
+details, read index, producer index, and manifest intact. Sidecar indexes remain
 acceleration structures; replacing a detail they index is rejected until that index registers an explicit lifecycle
 participant.
 The retained lifecycle read set is transition evidence, not automatically the public serviceability contract of the

@@ -63,6 +63,11 @@ import {
 } from '../telemetry/detail-density.js';
 import { normalizeHostPath } from './source-address.js';
 import {
+  emptyGenerationCurrentnessWitness,
+  type GenerationCurrentnessWitness,
+  requireGenerationCurrentness,
+} from './generation-authority.js';
+import {
   assertKernelPublicationDecisionCandidate,
   assertKernelPublicationDecisionPreviewCandidate,
   KernelDetailAdmission,
@@ -235,13 +240,16 @@ export interface KernelStoreRetentionCollector {
 export interface KernelPublicationReplacementPreflight {
   /** Validate inputs and prepared ownership decisions at the end of the fallible preparation barrier. */
   validate(decisions: readonly KernelPublicationDecision[]): void;
-  /** Run the owner's last currentness callback before the store's callback-free metadata and closure recheck. */
+  /** Run callbackful owner currentness checks before the store revalidates candidate metadata and closures. */
   validateCurrent(): void;
+  /** Exact owner and input generation identity rechecked without callbacks after candidate-owned JavaScript returns. */
+  readonly finalAuthority: GenerationCurrentnessWitness;
 }
 
 const storeOwnedPublicationPreflight: KernelPublicationReplacementPreflight = {
   validate(): void {},
   validateCurrent(): void {},
+  finalAuthority: emptyGenerationCurrentnessWitness,
 };
 
 const enum KernelStoreMutationPhase {
@@ -726,6 +734,7 @@ export class KernelStore {
           ownedHotDetails,
           label,
         );
+        requireGenerationCurrentness(preflight.finalAuthority);
       } catch (error) {
         const rollbackErrors: unknown[] = [];
         for (const entry of [...provisionalDetailBindings].reverse()) {

@@ -83,6 +83,11 @@ import {
   type KernelDetailReferenceProjector,
 } from "../src/kernel/detail-references.js";
 import { KernelVocabulary, type ProductKindKey } from "../src/kernel/vocabulary.js";
+import {
+  emptyGenerationCurrentnessWitness,
+  GenerationCurrentnessClock,
+  type GenerationCurrentnessWitness,
+} from "../src/kernel/generation-authority.js";
 
 class MutableRevisionAuthority {
   private readonly revisions = new Map<string, string>();
@@ -120,18 +125,19 @@ class MutableRevisionAuthority {
 }
 
 class MutableGenerationAuthority {
-  private current = true;
+  private readonly currentness = new GenerationCurrentnessClock();
+  readonly currentnessWitness: GenerationCurrentnessWitness = this.currentness.capture("test-generation");
 
   invalidate(): void {
-    this.current = false;
+    this.currentness.advance();
   }
 
   isCurrent(): boolean {
-    return this.current;
+    return this.currentnessWitness.isCurrent();
   }
 
   requireCurrent(): void {
-    if (!this.current) {
+    if (!this.isCurrent()) {
       throw new Error("Generation authority is no longer current.");
     }
   }
@@ -1062,7 +1068,7 @@ describe("computation lifecycle", () => {
         [publishProductDetail(slot, productHandle, detail)],
       ),
       owner,
-      { validate(): void {}, validateCurrent(): void {} },
+      { validate(): void {}, validateCurrent(): void {}, finalAuthority: emptyGenerationCurrentnessWitness },
     );
     const initialRevision = store.productDetails.readMutationOrdinal(productHandle);
 
@@ -1078,6 +1084,7 @@ describe("computation lifecycle", () => {
           detail.revision = 2;
         },
         validateCurrent(): void {},
+        finalAuthority: emptyGenerationCurrentnessWitness,
       },
     );
 
@@ -1149,7 +1156,7 @@ describe("computation lifecycle", () => {
     const store = new KernelStore("publication-candidate-authority-boundaries");
     const owner = {};
     const plan = new KernelPublicationPlan(new KernelStoreBatch([], "forged-carry-candidate"));
-    const preflight = { validate(): void {}, validateCurrent(): void {} };
+    const preflight = { validate(): void {}, validateCurrent(): void {}, finalAuthority: emptyGenerationCurrentnessWitness };
     const forged = {
       plan,
       explicitlyRetains: () => true,
@@ -1210,7 +1217,7 @@ describe("computation lifecycle", () => {
       KernelPublicationManifest.empty,
       publication("prospective-carry-projection:initial", [ownerAddress, first, second]),
       owner,
-      { validate(): void {}, validateCurrent(): void {} },
+      { validate(): void {}, validateCurrent(): void {}, finalAuthority: emptyGenerationCurrentnessWitness },
     );
     const staged = new StagedKernelPublicationContext(
       store,
@@ -1268,7 +1275,7 @@ describe("computation lifecycle", () => {
         new SourceFileAddress(unrelatedHandle, "test", "src/unrelated.html", SourceLanguage.Html),
       ]),
       owner,
-      { validate(): void {}, validateCurrent(): void {} },
+      { validate(): void {}, validateCurrent(): void {}, finalAuthority: emptyGenerationCurrentnessWitness },
     );
     const staged = new StagedKernelPublicationContext(
       store,
@@ -3953,7 +3960,7 @@ describe("computation lifecycle", () => {
   test("blocks withdrawal while a foreign rich detail still references the target occupancy", () => {
     const store = new KernelStore("rich-detail-withdrawal-safety");
     const targetOwner = {};
-    const preflight = { validate(): void {}, validateCurrent(): void {} };
+    const preflight = { validate(): void {}, validateCurrent(): void {}, finalAuthority: emptyGenerationCurrentnessWitness };
     const targetProductHandle = store.handles.product("rich-detail-withdrawal:target");
     const targetProvenanceHandle = store.handles.provenance("rich-detail-withdrawal:target-provenance");
     const sourceProductHandle = store.handles.product("rich-detail-withdrawal:source");
@@ -4042,7 +4049,7 @@ describe("computation lifecycle", () => {
     const store = new KernelStore("rich-detail-selective-retention");
     const marker = store.markLifetime();
     const owner = {};
-    const preflight = { validate(): void {}, validateCurrent(): void {} };
+    const preflight = { validate(): void {}, validateCurrent(): void {}, finalAuthority: emptyGenerationCurrentnessWitness };
     const directRecordHandle = store.handles.address("rich-detail-retention:direct");
     const nestedProductRecordHandle = store.handles.address("rich-detail-retention:nested-product");
     const nestedHotRecordHandle = store.handles.address("rich-detail-retention:nested-hot");
@@ -4139,7 +4146,7 @@ describe("computation lifecycle", () => {
   test("requires slot comparators to classify changed dependency closure without retaining it", () => {
     const store = new KernelStore("rich-detail-reference-replacement");
     const owner = {};
-    const preflight = { validate(): void {}, validateCurrent(): void {} };
+    const preflight = { validate(): void {}, validateCurrent(): void {}, finalAuthority: emptyGenerationCurrentnessWitness };
     const targetA = store.handles.product("rich-detail-replacement:target-a");
     const targetB = store.handles.product("rich-detail-replacement:target-b");
     const targetAProvenance = store.handles.provenance("rich-detail-replacement:target-a");
@@ -4777,6 +4784,7 @@ describe("computation lifecycle", () => {
           expect(() => (decisions as unknown as unknown[]).splice(0)).toThrow();
         },
         validateCurrent(): void {},
+        finalAuthority: emptyGenerationCurrentnessWitness,
       },
     );
     expect(initial.decisions).toHaveLength(4);
@@ -4794,6 +4802,7 @@ describe("computation lifecycle", () => {
           new SourceFileAddress(intruderHandle, "test", "src/intruder.html", SourceLanguage.Html),
         ], "preflight-reentrancy:intruder")),
         validateCurrent(): void {},
+        finalAuthority: emptyGenerationCurrentnessWitness,
       },
     )).toThrow(/cannot commit a record batch during an atomic publication replacement/);
     expect(store.read(firstHandle)).toBe(first);
@@ -4811,6 +4820,7 @@ describe("computation lifecycle", () => {
           store.productDetails.add(productSlot, productHandle, { owner: "intruder" });
         },
         validateCurrent(): void {},
+        finalAuthority: emptyGenerationCurrentnessWitness,
       },
     )).toThrow(/detail catalogs cannot mutate/);
     expect(store.read(firstHandle)).toBe(first);
@@ -4828,6 +4838,7 @@ describe("computation lifecycle", () => {
           store.hotDetails.add(hotSlot, productHandle, hotHandle, { owner: "intruder" });
         },
         validateCurrent(): void {},
+        finalAuthority: emptyGenerationCurrentnessWitness,
       },
     )).toThrow(/detail catalogs cannot mutate/);
     expect(store.read(firstHandle)).toBe(first);
@@ -4869,7 +4880,7 @@ describe("computation lifecycle", () => {
         [publishProductDetail(productSlot, productHandle, { version: 1 })],
       ),
       owner,
-      { validate(): void {}, validateCurrent(): void {} },
+      { validate(): void {}, validateCurrent(): void {}, finalAuthority: emptyGenerationCurrentnessWitness },
     );
     const originalProduct = store.read(productHandle);
     const originalDetail = store.productDetails.read(productSlot, productHandle);
@@ -4888,7 +4899,7 @@ describe("computation lifecycle", () => {
         )],
       ),
       owner,
-      { validate(): void {}, validateCurrent(): void {} },
+      { validate(): void {}, validateCurrent(): void {}, finalAuthority: emptyGenerationCurrentnessWitness },
     )).toThrow(/cannot commit a record batch during an atomic publication replacement/);
     expect(store.read(productHandle)).toBe(originalProduct);
     expect(store.productDetails.read(productSlot, productHandle)).toBe(originalDetail);
@@ -5590,7 +5601,7 @@ describe("computation lifecycle", () => {
   test("does not let a distinct same-kind slot substitute comparison policy", () => {
     const store = new KernelStore("detail-slot-comparison-authority");
     const owner = {};
-    const preflight = { validate(): void {}, validateCurrent(): void {} };
+    const preflight = { validate(): void {}, validateCurrent(): void {}, finalAuthority: emptyGenerationCurrentnessWitness };
     const productHandle = store.handles.product("slot-authority:product");
     const hotHandle = store.handles.hotDetail("slot-authority:hot");
     const provenanceHandle = store.handles.provenance("slot-authority:product");
@@ -5664,7 +5675,7 @@ describe("computation lifecycle", () => {
   test("retains identical primitive rich details without requiring a comparator", () => {
     const store = new KernelStore("primitive-detail-retention");
     const owner = {};
-    const preflight = { validate(): void {}, validateCurrent(): void {} };
+    const preflight = { validate(): void {}, validateCurrent(): void {}, finalAuthority: emptyGenerationCurrentnessWitness };
     const productHandle = store.handles.product("primitive-detail:product");
     const hotHandle = store.handles.hotDetail("primitive-detail:hot");
     const provenanceHandle = store.handles.provenance("primitive-detail:product");
@@ -6402,6 +6413,7 @@ describe("computation lifecycle", () => {
         validateCurrent: () => {
           detail.addressHandle = secondAddressHandle;
         },
+        finalAuthority: emptyGenerationCurrentnessWitness,
       },
     )).toThrow(/structural references after staging/);
     expect(store.read(productHandle)).toBeNull();
@@ -6707,6 +6719,196 @@ describe("computation lifecycle", () => {
     }));
     expect(newerRuns).toHaveLength(1);
     newerRuns[0]!.abort();
+  });
+
+  test("rejects supersession from final descriptor revalidation", () => {
+    const store = new KernelStore("computation-final-descriptor-supersession");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("final-descriptor-supersession:product");
+    const provenanceHandle = store.handles.provenance("final-descriptor-supersession:provenance");
+    const slot = defineTestProductDetailSlot<{ readonly productHandle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.final-descriptor-supersession",
+      "Descriptor trap that supersedes its publication after owner currentness validation.",
+    );
+    const newerRuns: ComputationRun[] = [];
+    let armed = false;
+    let triggered = false;
+    const target = { productHandle };
+    const detail = new Proxy(target, {
+      getOwnPropertyDescriptor: (object, property) => {
+        if (armed && !triggered && property === "productHandle") {
+          triggered = true;
+          newerRuns.push(lifecycle.begin(locus("final-descriptor-supersession")));
+        }
+        return Reflect.getOwnPropertyDescriptor(object, property);
+      },
+    });
+    const run = lifecycle.begin(locus("final-descriptor-supersession"));
+    run.observe({
+      readKey: "test:final-descriptor-supersession",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        armed = true;
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+    });
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "final-descriptor-supersession"),
+      [publishProductDetail(slot, productHandle, detail)],
+    ));
+
+    expect(run.commit().state).toBe(ComputationCommitState.RejectedSuperseded);
+    expect(store.read(productHandle)).toBeNull();
+    expect(readProductDetailEnvelope(detail)).toBeNull();
+    expect(Object.getOwnPropertyDescriptor(detail, "productHandle")).toEqual(expect.objectContaining({
+      value: productHandle,
+    }));
+    expect(newerRuns).toHaveLength(1);
+    newerRuns[0]!.abort();
+  });
+
+  test("rejects supersession from final structural closure reprojection", () => {
+    const store = new KernelStore("computation-final-projector-supersession");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const productHandle = store.handles.product("final-projector-supersession:product");
+    const provenanceHandle = store.handles.provenance("final-projector-supersession:provenance");
+    const newerRuns: ComputationRun[] = [];
+    let armed = false;
+    let triggered = false;
+    const slot = defineTestProductDetailSlot<{ readonly productHandle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.final-projector-supersession",
+      "Structural projector that supersedes its publication after owner currentness validation.",
+      () => {
+        if (armed && !triggered) {
+          triggered = true;
+          newerRuns.push(lifecycle.begin(locus("final-projector-supersession")));
+        }
+        return noKernelDetailReferences();
+      },
+    );
+    const product = () => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      null,
+      provenanceHandle,
+    );
+    const incumbentDetail = { productHandle };
+    const initial = lifecycle.begin(locus("final-projector-supersession"));
+    initial.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        product(),
+      ], "final-projector-supersession:initial"),
+      [publishProductDetail(slot, productHandle, incumbentDetail)],
+    ));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+    const incumbentProduct = store.read(productHandle);
+    const incumbentDetailRevision = store.productDetails.readMutationOrdinal(productHandle);
+    const lifetime = store.markLifetime();
+    const observation = store.markObservation();
+
+    const detail = { productHandle };
+    const run = lifecycle.begin(locus("final-projector-supersession"));
+    run.observe({
+      readKey: "test:final-projector-supersession",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        armed = true;
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+    });
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        product(),
+      ], "final-projector-supersession:replacement"),
+      [publishProductDetail(slot, productHandle, detail)],
+    ));
+
+    expect(run.commit().state).toBe(ComputationCommitState.RejectedSuperseded);
+    expect(store.read(productHandle)).toBe(incumbentProduct);
+    expect(store.productDetails.read(slot, productHandle)).toBe(incumbentDetail);
+    expect(store.productDetails.readMutationOrdinal(productHandle)).toBe(incumbentDetailRevision);
+    expect(readProductDetailEnvelope(detail)).toBeNull();
+    expect(store.markLifetime()).toEqual(lifetime);
+    expect(store.markObservation()).toEqual(observation);
+    expect(lifecycle.readState(initial.computationId)?.committedRunSequence).toBe(initial.runSequence);
+    expect(newerRuns).toHaveLength(1);
+    newerRuns[0]!.abort();
+  });
+
+  test("rejects currentness revocation from final hot-detail closure reprojection", () => {
+    const store = new KernelStore("computation-final-hot-projector-currentness");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const run = lifecycle.begin(locus("final-hot-projector-currentness"));
+    // Logical guard labels are diagnostic vocabulary and must not masquerade as the run's nominal authority.
+    const guardKey = `computation-run:${run.computationId}`;
+    const authority = new MutableGenerationAuthority();
+    const productHandle = store.handles.product("final-hot-projector-currentness:product");
+    const provenanceHandle = store.handles.provenance("final-hot-projector-currentness:provenance");
+    const hotHandle = store.handles.hotDetail("final-hot-projector-currentness:detail");
+    let armed = false;
+    let triggered = false;
+    const slot = defineTestHotDetailSlot<{ readonly handle: string }>(
+      KernelVocabulary.Template.Source.key,
+      "test.final-hot-projector-currentness",
+      "Hot-detail projector that revokes input currentness after callbackful validation.",
+      () => {
+        if (armed && !triggered) {
+          triggered = true;
+          authority.invalidate();
+        }
+        return noKernelDetailReferences();
+      },
+    );
+    const detail = { handle: hotHandle };
+    run.guardCurrent(guardKey, authority);
+    run.observe({
+      readKey: "test:final-hot-projector-currentness",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        armed = true;
+        return { isCurrent: true, currentRevision: "1", changedFacets: [] };
+      },
+    });
+    run.publish(new KernelPublicationPlan(
+      new KernelStoreBatch([
+        new ProvenanceRecord(provenanceHandle),
+        new MaterializedProduct(
+          productHandle,
+          KernelVocabulary.Template.Source.key,
+          null,
+          null,
+          provenanceHandle,
+        ),
+      ], "final-hot-projector-currentness"),
+      [],
+      [publishHotDetail(slot, productHandle, hotHandle, detail)],
+    ));
+
+    const rejected = run.commit();
+    expect(rejected.state).toBe(ComputationCommitState.RejectedCurrentnessChanged);
+    expect(rejected.transition.invalidCurrentnessGuards).toEqual([
+      expect.objectContaining({ guardKey }),
+    ]);
+    expect(store.read(productHandle)).toBeNull();
+    expect(store.hotDetails.read(slot, hotHandle)).toBeNull();
+    expect(readHotDetailEntry(detail)).toBeNull();
   });
 
   test("completes fallible detail binding before replacing live records", () => {

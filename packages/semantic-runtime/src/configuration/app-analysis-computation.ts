@@ -14,6 +14,11 @@ import type {
   KernelStoreDisposalContext,
   KernelStoreSidecarIndex,
 } from '../kernel/store.js';
+import {
+  combineGenerationCurrentnessWitnesses,
+  type GenerationAuthority,
+  type GenerationCurrentnessWitness,
+} from '../kernel/generation-authority.js';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type { StaticProjectEvaluationComputationService } from '../evaluation/project-evaluation.js';
 import type { SemanticRuntimeSupport } from '../framework/framework-support-authority.js';
@@ -39,14 +44,22 @@ export class AureliaAppAnalysisLocus implements ComputationLocus {
 }
 
 /** One committed app object graph guarded by the computation that owns all of its kernel publications. */
-export class AureliaAppWorldProjectGeneration {
+export class AureliaAppWorldProjectGeneration implements GenerationAuthority {
   readonly key: string;
+  readonly currentnessWitness: GenerationCurrentnessWitness;
 
   constructor(
     private readonly authority: ComputationGenerationAuthority,
     private readonly currentEmission: AureliaAppWorldProjectEmission,
   ) {
     this.key = authority.key;
+    this.currentnessWitness = combineGenerationCurrentnessWitnesses([
+      authority.currentnessWitness,
+      currentEmission.project.inputGeneration.currentnessWitness,
+      currentEmission.preTemplate.evaluationGeneration.computationAuthority.currentnessWitness,
+      currentEmission.preTemplate.conventionToolingEvaluationGeneration.computationAuthority.currentnessWitness,
+      currentEmission.preTemplate.typeSystemGeneration.computationAuthority.currentnessWitness,
+    ]);
   }
 
   get computationId(): ComputationId {

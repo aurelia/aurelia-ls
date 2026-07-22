@@ -41,7 +41,14 @@ import {
 } from './store.js';
 import { referencedKernelRecordHandles } from './record-comparison.js';
 import type { SemanticRuntimeKernelCountSnapshot } from '../telemetry/kernel-density.js';
-import type { GenerationAuthority } from './generation-authority.js';
+import {
+  combineGenerationCurrentnessWitnesses,
+  GenerationCurrentnessChangedError,
+  GenerationCurrentnessClock,
+  rekeyGenerationCurrentnessWitness,
+  type GenerationAuthority,
+  type GenerationCurrentnessWitness,
+} from './generation-authority.js';
 import type { SourceFileAddress } from './address.js';
 
 declare const computationIdBrand: unique symbol;
@@ -233,6 +240,7 @@ export type ComputationReadRebaser = (
 /** Run-local admission capability that may reject commit but never becomes a semantic dependency edge. */
 class ComputationCurrentnessGuard {
   private readonly checkCurrent: () => boolean;
+  readonly currentnessWitness: GenerationCurrentnessWitness;
 
   constructor(
     readonly guardKey: string,
@@ -243,6 +251,7 @@ class ComputationCurrentnessGuard {
       throw new Error(`Currentness guard ${guardKey} has no isCurrent callback.`);
     }
     this.checkCurrent = () => Reflect.apply(isCurrent, authority, []) as boolean;
+    this.currentnessWitness = rekeyGenerationCurrentnessWitness(authority.currentnessWitness, guardKey);
     Object.freeze(this);
   }
 
@@ -291,6 +300,14 @@ export function computationMaterializationOwnerReadKey(ownerHandle: Materializat
 /** Stable activation key for one logical child's complete non-kernel result. */
 export function computationChildResultReadKey(childId: ComputationChildId): string {
   return `computation-child-result:${childId}`;
+}
+
+function computationRunCurrentnessKey(computationId: ComputationId): string {
+  return `computation-run:${computationId}`;
+}
+
+function computationGenerationCurrentnessKey(computationId: ComputationId): string {
+  return `computation-generation:${computationId}`;
 }
 
 /** Exact membership of foreign materializations for one owner, excluding this computation's own replacement closure. */
@@ -782,6 +799,7 @@ export class ComputationState {
   readonly outputs: readonly ComputationOutput[];
   readonly children: readonly ComputationChildState[];
   readonly publication: KernelPublicationManifest;
+  readonly currentnessWitness: GenerationCurrentnessWitness;
 
   constructor(
     computationId: ComputationId,
@@ -792,6 +810,7 @@ export class ComputationState {
     outputs: readonly ComputationOutput[],
     children: readonly ComputationChildState[],
     publication: KernelPublicationManifest,
+    currentnessWitness: GenerationCurrentnessWitness,
   ) {
     this.computationId = computationId;
     this.locus = locus;
@@ -801,6 +820,7 @@ export class ComputationState {
     this.outputs = Object.freeze([...outputs]);
     this.children = Object.freeze([...children]);
     this.publication = publication;
+    this.currentnessWitness = currentnessWitness;
     Object.freeze(this);
   }
 }
@@ -1021,15 +1041,15 @@ class LifecycleComputationGenerationAuthority implements ComputationGenerationAu
   readonly key: string;
 
   constructor(
-    private readonly lifecycle: ComputationLifecycleRegistry,
     readonly computationId: ComputationId,
     readonly runSequence: number,
+    readonly currentnessWitness: GenerationCurrentnessWitness,
   ) {
     this.key = `${computationId}@${runSequence}`;
   }
 
   isCurrent(): boolean {
-    return this.lifecycle.readState(this.computationId)?.committedRunSequence === this.runSequence;
+    return this.currentnessWitness.isCurrent();
   }
 
   requireCurrent(): void {
@@ -1042,7 +1062,8 @@ class LifecycleComputationGenerationAuthority implements ComputationGenerationAu
 interface MutableComputationEntry {
   readonly computationId: ComputationId;
   readonly locus: ComputationLocus;
-  latestRunSequence: number;
+  readonly runCurrentness: GenerationCurrentnessClock;
+  readonly committedCurrentness: GenerationCurrentnessClock;
   latestFinishedRunSequence: number;
   state: ComputationState | null;
   readonly admittedGenerationDomains: Set<string>;
@@ -1073,6 +1094,8 @@ export class ComputationRun implements KernelPublicationContext {
     readonly computationId: ComputationId,
     readonly locus: ComputationLocus,
     readonly runSequence: number,
+    /** Exact candidate position used by final admission; operational publication-view health remains separate. */
+    readonly candidateCurrentnessWitness: GenerationCurrentnessWitness,
     private readonly previousState: ComputationState | null,
     previousPublication: KernelPublicationManifest,
   ) {
@@ -2233,7 +2256,8 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       entry = {
         computationId,
         locus: capturedLocus,
-        latestRunSequence: 0,
+        runCurrentness: new GenerationCurrentnessClock(),
+        committedCurrentness: new GenerationCurrentnessClock(),
         latestFinishedRunSequence: 0,
         state: null,
         admittedGenerationDomains: new Set(),
@@ -2244,13 +2268,14 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     } else if (entry.locus.summary !== capturedLocus.summary) {
       throw new Error(`Computation locus ${registryKey} was reconciled with conflicting summaries.`);
     }
-    entry.latestRunSequence += 1;
+    const runSequence = entry.runCurrentness.advance();
     return new ComputationRun(
       this,
       this.store,
       entry.computationId,
       entry.locus,
-      entry.latestRunSequence,
+      runSequence,
+      entry.runCurrentness.capture(computationRunCurrentnessKey(entry.computationId)),
       entry.state,
       entry.state?.publication ?? KernelPublicationManifest.empty,
     );
@@ -2262,7 +2287,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     candidate: KernelPublicationDecisionPreviewCandidate,
   ): readonly KernelPublicationDecision[] {
     const entry = this.entriesById.get(run.computationId);
-    if (entry == null || entry.latestRunSequence !== run.runSequence) {
+    if (entry == null || !run.candidateCurrentnessWitness.isCurrent()) {
       throw new Error(`Cannot preview superseded computation run ${run.computationId}@${run.runSequence}.`);
     }
     return this.store.previewOwnedPublicationCandidateDecisions(
@@ -2290,7 +2315,11 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       throw new Error(`Computation generation ${computationId}@${runSequence} already admitted ${domain}.`);
     }
     entry.admittedGenerationDomains.add(domain);
-    return new LifecycleComputationGenerationAuthority(this, computationId, runSequence);
+    return new LifecycleComputationGenerationAuthority(
+      computationId,
+      runSequence,
+      entry.state.currentnessWitness,
+    );
   }
 
   /** Withdraw one exact current generation without relying on its relative store lifetime. */
@@ -2320,16 +2349,18 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
             throw new Error(`Computation generation ${computationId}@${runSequence} changed during retirement.`);
           }
         },
+        finalAuthority: state.currentnessWitness,
       },
     );
     this.store.retirePublicationManifest(replacement.manifest, this.publicationOwner);
     this.replaceReadIndex(state.reads, [], computationId);
     this.commitProducerReplacement(state.outputs, [], computationId);
     this.commitChildReplacement(state.children, []);
+    entry.committedCurrentness.advance();
     entry.state = null;
     entry.admittedGenerationDomains.clear();
-    entry.latestRunSequence += 1;
-    entry.latestFinishedRunSequence = entry.latestRunSequence;
+    entry.runCurrentness.advance();
+    entry.latestFinishedRunSequence = entry.runCurrentness.currentOrdinal;
     this.appendRetirementEvent(
       state,
       ComputationRetirementCause.Explicit,
@@ -2340,7 +2371,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
 
   /** Whether a prepared run still owns the newest candidate position at its stable locus. */
   isLatestRun(run: ComputationRun): boolean {
-    return this.entriesById.get(run.computationId)?.latestRunSequence === run.runSequence;
+    return this.entriesById.has(run.computationId) && run.candidateCurrentnessWitness.isCurrent();
   }
 
   readersFor(readKey: string): readonly ComputationId[] {
@@ -2394,9 +2425,9 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
 
   dispose(context: KernelStoreDisposalContext): void {
     for (const entry of this.entriesById.values()) {
-      if (entry.latestFinishedRunSequence < entry.latestRunSequence) {
+      if (entry.latestFinishedRunSequence < entry.runCurrentness.currentOrdinal) {
         // A lifetime boundary invalidates prepared work even when it has not published a first generation yet.
-        entry.latestRunSequence += 1;
+        entry.runCurrentness.advance();
       }
       const state = entry.state;
       const lifetimeOrdinal = state?.publication.lifetimeOrdinal ?? null;
@@ -2416,10 +2447,11 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       this.commitProducerReplacement(state.outputs, [], entry.computationId);
       this.commitChildReplacement(state.children, []);
       this.store.retirePublicationManifest(state.publication, this.publicationOwner);
+      entry.committedCurrentness.advance();
       entry.state = null;
       entry.admittedGenerationDomains.clear();
       // Any run prepared against the reclaimed closure must not resurrect it after disposal.
-      entry.latestRunSequence += 1;
+      entry.runCurrentness.advance();
       this.appendRetirementEvent(
         state,
         ComputationRetirementCause.LifetimeDisposal,
@@ -2448,7 +2480,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     if (entry == null) {
       throw new Error(`Unknown computation ${run.computationId}.`);
     }
-    if (entry.latestRunSequence !== run.runSequence) {
+    if (!run.candidateCurrentnessWitness.isCurrent()) {
       return this.reject(entry, run, ComputationCommitState.RejectedSuperseded, [], []);
     }
 
@@ -2512,6 +2544,10 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
             this.requireLatestRunForCommit(entry, run);
             requireCurrentnessGuards(currentnessGuards);
           },
+          finalAuthority: combineGenerationCurrentnessWitnesses([
+            run.candidateCurrentnessWitness,
+            ...currentnessGuards.map((guard) => guard.currentnessWitness),
+          ]),
         },
       );
     } catch (error) {
@@ -2533,12 +2569,28 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       if (error instanceof ComputationSupersededDuringCommitError) {
         return this.reject(entry, run, ComputationCommitState.RejectedSuperseded, [], []);
       }
+      if (error instanceof GenerationCurrentnessChangedError) {
+        const invalidKeys = new Set(error.invalidKeys);
+        if (!run.candidateCurrentnessWitness.isCurrent()) {
+          return this.reject(entry, run, ComputationCommitState.RejectedSuperseded, [], []);
+        }
+        return this.reject(
+          entry,
+          run,
+          ComputationCommitState.RejectedCurrentnessChanged,
+          [],
+          currentnessGuards
+            .filter((guard) => invalidKeys.has(guard.guardKey))
+            .map((guard) => new ComputationInvalidCurrentnessGuard(guard.guardKey)),
+        );
+      }
       throw error;
     }
     const outputs = computationOutputsFromDecisions(replacement.decisions);
     const outputKeys = new Set(outputs.map((output) => output.readKey));
     const committedReads = reads.filter((read) => !outputKeys.has(read.readKey));
     const changedReads = compareReadSets(previousState?.reads ?? [], committedReads);
+    entry.committedCurrentness.advance();
     const nextState = new ComputationState(
       entry.computationId,
       entry.locus,
@@ -2548,6 +2600,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       outputs,
       childPreparation.states,
       replacement.manifest,
+      entry.committedCurrentness.capture(computationGenerationCurrentnessKey(entry.computationId)),
     );
     this.replaceReadIndex(previousState?.reads ?? [], committedReads, entry.computationId);
     this.commitProducerReplacement(previousState?.outputs ?? [], outputs, entry.computationId);
@@ -2572,7 +2625,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     entry: MutableComputationEntry,
     run: ComputationRun,
   ): void {
-    if (entry.latestRunSequence !== run.runSequence) {
+    if (!run.candidateCurrentnessWitness.isCurrent()) {
       throw new ComputationSupersededDuringCommitError(run.computationId, run.runSequence);
     }
   }

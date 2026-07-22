@@ -48,7 +48,7 @@ import {
   type SemanticRuntimeKernelCountSnapshot,
 } from '../telemetry/kernel-density.js';
 import { readSemanticRuntimeDetailDensityRows } from '../telemetry/detail-density.js';
-import type { GenerationAuthority } from './generation-authority.js';
+import type { CurrentnessAuthority, GenerationAuthority } from './generation-authority.js';
 import { KernelPublicationSurface } from './publication-surface.js';
 import type { KernelDetailReferenceClosure } from './detail-references.js';
 import type { KernelPublicationDecisionKind } from './publication-comparison.js';
@@ -682,7 +682,7 @@ export interface KernelPublicationContext
   extends KernelRecordCollectionReadView, KernelSourceFileReadView, KernelMaterializationReadView,
     ProductDetailReadView, HotDetailReadView,
     KernelTelemetryReadView,
-    GenerationAuthority {
+    CurrentnessAuthority {
   publish(plan: KernelPublicationPlan): void;
 }
 

@@ -13,7 +13,12 @@ import type {
   ComputationRead,
   ComputationReadValidation,
 } from './computation-lifecycle.js';
-import type { GenerationAuthority } from './generation-authority.js';
+import {
+  combineGenerationCurrentnessWitnesses,
+  GenerationCurrentnessClock,
+  type GenerationAuthority,
+  type GenerationCurrentnessWitness,
+} from './generation-authority.js';
 import { sourceTextContentRevision } from './source-text-snapshot.js';
 
 /** Optional non-filesystem source values layered over the host filesystem, such as open editor documents. */
@@ -406,6 +411,7 @@ export class SemanticRuntimeProjectInputGeneration implements GenerationAuthorit
     readonly rootDir: string,
     readonly eventSequence: number,
     readonly ordinal: number,
+    readonly currentnessWitness: GenerationCurrentnessWitness,
   ) {
     this.revision = `${projectKey}@${eventSequence}.${ordinal}`;
     this.currentnessGuardKey = `project-input-generation:${projectKey}`;
@@ -414,7 +420,7 @@ export class SemanticRuntimeProjectInputGeneration implements GenerationAuthorit
   }
 
   isCurrent(): boolean {
-    return this.authority.isCurrent(this);
+    return this.currentnessWitness.isCurrent();
   }
 
   requireCurrent(): void {
@@ -531,8 +537,9 @@ export class SemanticRuntimeProjectInputGeneration implements GenerationAuthorit
 /** Runtime-owned authority for capturing coherent project source/config generations. */
 export class SemanticRuntimeProjectInputAuthority {
   private readonly generationsByProjectKey = new Map<string, SemanticRuntimeProjectInputGeneration>();
+  private readonly generationCurrentnessByProjectKey = new Map<string, GenerationCurrentnessClock>();
+  private readonly eventCurrentness = new GenerationCurrentnessClock();
   private nextGenerationOrdinal = 1;
-  private eventSequence = 0;
 
   constructor(
     private readonly liveHost: SemanticRuntimeProjectInputHost = nodeSemanticRuntimeProjectInputHost,
@@ -540,12 +547,11 @@ export class SemanticRuntimeProjectInputAuthority {
 
   /** Synchronously revoke captured generations after an editor/host source event. */
   advance(): number {
-    this.eventSequence += 1;
-    return this.eventSequence;
+    return this.eventCurrentness.advance();
   }
 
   get currentEventSequence(): number {
-    return this.eventSequence;
+    return this.eventCurrentness.currentOrdinal;
   }
 
   capture(scope: SemanticRuntimeProjectInputScope): SemanticRuntimeProjectInputGeneration {
@@ -554,25 +560,31 @@ export class SemanticRuntimeProjectInputAuthority {
     if (
       current != null
       && current.rootDir === rootDir
-      && current.eventSequence === this.eventSequence
+      && current.eventSequence === this.currentEventSequence
       && current.validate().isCurrent
     ) {
       return current;
     }
+    let projectCurrentness = this.generationCurrentnessByProjectKey.get(scope.projectKey);
+    if (projectCurrentness == null) {
+      projectCurrentness = new GenerationCurrentnessClock();
+      this.generationCurrentnessByProjectKey.set(scope.projectKey, projectCurrentness);
+    }
+    projectCurrentness.advance();
+    const currentnessGuardKey = `project-input-generation:${scope.projectKey}`;
     const generation = new SemanticRuntimeProjectInputGeneration(
       this,
       scope.projectKey,
       rootDir,
-      this.eventSequence,
+      this.currentEventSequence,
       this.nextGenerationOrdinal++,
+      combineGenerationCurrentnessWitnesses([
+        this.eventCurrentness.capture(currentnessGuardKey),
+        projectCurrentness.capture(currentnessGuardKey),
+      ]),
     );
     this.generationsByProjectKey.set(scope.projectKey, generation);
     return generation;
-  }
-
-  isCurrent(generation: SemanticRuntimeProjectInputGeneration): boolean {
-    return generation.eventSequence === this.eventSequence
-      && this.generationsByProjectKey.get(generation.projectKey) === generation;
   }
 
   currentRevision(projectKey: string): string {
