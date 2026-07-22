@@ -62,6 +62,7 @@ import type {
 } from '../telemetry/memory.js';
 import type { SemanticRuntimeTelemetryOptions } from '../telemetry/options.js';
 import type { CheckerExpressionTypeEvaluationCacheStats } from '../type-system/expression-type-evaluation.js';
+import type { TypeSystemProjectAcquisitionKind } from '../type-system/project-computation.js';
 import type { TypeSystemTypeScriptVersionRelation } from '../type-system/typescript-environment.js';
 import type { ConfigurationOptionValueKind } from '../configuration/configuration-option.js';
 import type { ControllerPhase } from '../configuration/controller.js';
@@ -1010,6 +1011,7 @@ export interface SemanticRuntimeAnalysisCacheOverviewRequest {
 export interface SemanticRuntimeAnalysisCacheOverviewResult {
   readonly displayText: string;
   readonly cachedAppCount: number;
+  readonly typeSystemProjectCount: number;
   readonly cachedApps: readonly SemanticRuntimeCachedAppSummary[];
   readonly runtimeQueryClaimProfiles: readonly SemanticRuntimeCachedAppQueryClaimProfileSummary[];
   readonly typeSystemDependencyCache: SemanticRuntimeTypeSystemDependencyCacheSummary;
@@ -1094,6 +1096,7 @@ export interface SemanticRuntimeAnalysisCacheClearResult {
   readonly typeSystemDependencyCacheClearPolicy: SemanticTypeSystemDependencyCacheClearPolicy;
   readonly disposedCachedApps: number;
   readonly disposedStaticProjectEvaluations: number;
+  readonly disposedTypeSystemProjects: number;
   readonly disposedQueryClaimRecords: number;
   readonly disposedKernelRecords: number;
   readonly disposedProductDetails: number;
@@ -1111,6 +1114,7 @@ export interface SemanticRuntimeAnalysisCacheClearResult {
   readonly clearedTypeSystemDependencyExternalDeclarationSourceTextCharacters: number;
   readonly remainingCachedApps: number;
   readonly remainingStaticProjectEvaluations: number;
+  readonly remainingTypeSystemProjects: number;
   readonly workspaceKernel: SemanticRuntimeKernelCountSnapshot;
   readonly summary: string;
 }
@@ -1178,6 +1182,7 @@ export interface SemanticRuntimeCachedAppProfileSummary {
   readonly phaseCount: number;
   readonly topPhases: readonly SemanticRuntimePhaseTimingSummary[];
   readonly staticEvaluationAcquisitions: readonly SemanticRuntimeStaticProjectEvaluationAcquisitionSummary[];
+  readonly typeSystemAcquisition: SemanticRuntimeTypeSystemProjectAcquisitionSummary;
   readonly staticEvaluationPhases: readonly SemanticRuntimePhaseTimingSummary[];
   readonly staticEvaluationHost: EvaluationModuleSourceHostProfile;
   readonly staticEvaluationSources: StaticProjectEvaluationSourceFileStats;
@@ -1199,6 +1204,12 @@ export interface SemanticRuntimeCachedAppProfileSummary {
 export interface SemanticRuntimeStaticProjectEvaluationAcquisitionSummary {
   readonly profileKey: string;
   readonly acquisitionKind: StaticProjectEvaluationAcquisitionKind;
+  readonly acquisitionMilliseconds: number;
+  readonly constructionMilliseconds: number;
+}
+
+export interface SemanticRuntimeTypeSystemProjectAcquisitionSummary {
+  readonly acquisitionKind: TypeSystemProjectAcquisitionKind;
   readonly acquisitionMilliseconds: number;
   readonly constructionMilliseconds: number;
 }

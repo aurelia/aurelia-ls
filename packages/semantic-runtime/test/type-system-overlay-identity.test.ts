@@ -11,7 +11,11 @@ import { TypeSystemProjectBuilder } from '../src/type-system/project.js';
 describe('type-system overlay identity', () => {
   test('preserves full semantic identity through lossy generated filenames', async () => {
     const { app, runtime, resource } = await openFixture('filename');
-    const builder = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem);
+    const builder = new TemplateTypeSystemOverlayBuilder(
+      runtime.workspace.store,
+      app.emission.project,
+      app.emission.typeSystem,
+    );
     const punctuationLeft = requiredOverlay(builder.build(resource, 'contract:overlay'));
     const punctuationRight = requiredOverlay(builder.build(resource, 'contract-overlay'));
     const sharedPrefix = 'contract:overlay:'.repeat(20);
@@ -25,7 +29,7 @@ describe('type-system overlay identity', () => {
   test('deduplicates equivalent overlays and rejects conflicting path or origin identities', async () => {
     const { app, runtime, resource } = await openFixture('admission');
     const source = requiredOverlay(
-      new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+      new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
         .build(resource, 'contract:overlay-admission'),
     );
     const equivalent: TypeSystemOverlaySource = {

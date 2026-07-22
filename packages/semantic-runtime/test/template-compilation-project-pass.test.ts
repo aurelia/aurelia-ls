@@ -208,7 +208,8 @@ describe('template compilation project pass', () => {
     }
     expect(committedEmission.expressionWorld.freshInquiryGeneration().projector.publication)
       .toBe(committedEmission.expressionWorld.projector.publication);
-    expect(new TemplateTypeSystemOverlayBuilder(store, app.emission.typeSystem).build(committedResource).overlaySource)
+    expect(new TemplateTypeSystemOverlayBuilder(store, app.emission.project, app.emission.typeSystem)
+      .build(committedResource).overlaySource)
       .not.toBeNull();
   }, 30_000);
 

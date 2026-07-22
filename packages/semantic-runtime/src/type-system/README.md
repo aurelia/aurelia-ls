@@ -23,8 +23,8 @@ source, value, expression, or template-local slot.
   `readProgramSymbolAtLocation(...)`, `readProgramAliasedSymbolAtLocation(...)`, or
   `readProgramTypeOfSymbolAtLocation(...)` when a caller needs TypeChecker facts for a node that may have come from
   evaluation, source discovery, or semantic materialization rather than the Program AST.
-- Keep the checker epoch app-local: use the booted project root's `tsconfig.json` when present, otherwise fall back to
-  Aurelia-app-shaped defaults instead of inheriting the semantic-runtime package's own build config.
+- Keep the checker epoch project-local: use the booted project root's `tsconfig.json` when present, otherwise fall back
+  to Aurelia-app-shaped defaults instead of inheriting the semantic-runtime package's own build config.
 - Materialize type-shape product envelopes with identities, provenance, and typed details.
 - Keep checker type members as hot details owned by a type-shape/member-surface projection unless a future product
   needs durable member graph semantics.
@@ -445,6 +445,16 @@ stale carrier. Do not restore a store-local type-shape sidecar or put the Progra
 TypeScript may receive the previous Program for its own structural reuse only when both type-system generations belong
 to the same logical project. Cross-project reuse is rejected before `ts.createProgram(...)`; matching paths or compiler
 options are not sufficient ownership evidence.
+`TypeSystemProjectComputationService` owns one admitted base Program/checker generation per logical project. An input
+event may rebase that generation only when project structure, the evaluated TS/JS source projection, and every exact
+positive and negative compiler-host read remain equal. The compiler host keeps one stable facade; rebasing seeds it
+with the prior immutable read values, while a previously unseen lazy module-export read enters through the current
+project-input generation. Event-only and HTML-only app replacements can therefore retain the exact Program and checker,
+whereas TS/JS, compiler-option, module-resolution, or source-set changes build and admit a fresh generation. Template
+overlays receive the current app `ProjectBootFrame` separately from the reusable checker so authored HTML is never read
+through an older frame merely because its Program remains valid. Explicit app-epoch disposal retires the reusable
+checker generation; preserving the separate dependency `SourceFile` cache only warms reconstruction and does not keep
+the complete Program alive.
 `checker-type-assignability.ts` owns the small shared question "is this projected checker reference assignable to that
 one?". Binding data-flow and runtime composition both use it because the CPU/memory trade-off and checker-epoch
 fallback policy should not be reimplemented at every feature boundary. It only answers when the retained carriers share

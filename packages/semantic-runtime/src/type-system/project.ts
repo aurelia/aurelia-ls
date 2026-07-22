@@ -17,6 +17,7 @@ import {
 } from '../kernel/address.js';
 import type {
   SemanticRuntimeProjectInputHost,
+  SemanticRuntimeProjectInputGeneration,
   SemanticRuntimeProjectInputRead,
   SemanticRuntimeProjectInputReadScope,
 } from '../kernel/project-input.js';
@@ -170,6 +171,33 @@ interface TypeSystemSourceFileIndexes {
   readonly moduleKeyByPath: Map<string, string>;
 }
 
+/** Derived fingerprint of the exact evaluated TS/JS source view consumed by one TypeScript Program. */
+export class TypeSystemEvaluatedSourceSnapshot {
+  constructor(
+    readonly revision: string,
+    readonly sources: ReturnType<StaticProjectEvaluationResult['readEvaluatedSources']>,
+  ) {}
+}
+
+export function typeSystemEvaluatedSourceSnapshot(
+  evaluation: StaticProjectEvaluationResult,
+): TypeSystemEvaluatedSourceSnapshot {
+  const sources = evaluation.readEvaluatedSources()
+    .filter((source) => isTypeSystemProgramRootSourceFile(source.sourceFile.fileName))
+    .sort((left, right) =>
+      normalizeModuleKey(left.moduleKey).localeCompare(normalizeModuleKey(right.moduleKey))
+      || canonicalTypeSystemPath(left.sourceFile.fileName).localeCompare(
+        canonicalTypeSystemPath(right.sourceFile.fileName),
+      )
+    );
+  const revision = sourceTextContentRevision(JSON.stringify(sources.map((source) => ({
+    moduleKey: normalizeModuleKey(source.moduleKey),
+    fileName: canonicalTypeSystemPath(source.sourceFile.fileName),
+    sourceTextRevision: sourceTextContentRevision(source.sourceFile.text),
+  }))));
+  return new TypeSystemEvaluatedSourceSnapshot(revision, sources);
+}
+
 /** Current TypeScript Program/checker epoch for one booted project frame. */
 export class TypeSystemProject {
   private readonly moduleExportsBySpecifier = new Map<string, ReadonlyMap<string, ts.Symbol> | null>();
@@ -190,6 +218,8 @@ export class TypeSystemProject {
     readonly project: ProjectBootFrame,
     /** Static evaluation whose parsed source files are reused by this program. */
     readonly evaluation: StaticProjectEvaluationResult,
+    /** Semantic revision of the evaluated TS/JS source subset consumed by this Program. */
+    readonly evaluatedSourceRevision: string,
     /** TypeScript Program for current project source and reachable dependencies. */
     readonly program: ts.Program,
     /** Checker owned by the current Program. */
@@ -219,6 +249,11 @@ export class TypeSystemProject {
 
   readRegisteredInputs(): readonly SemanticRuntimeProjectInputRead[] {
     return this.inputReadScope.readRegisteredInputs();
+  }
+
+  /** Advance the stable compiler-host facade after this checker generation's exact host reads still match. */
+  tryRebaseCurrentInputGeneration(inputGeneration: SemanticRuntimeProjectInputGeneration): boolean {
+    return this.inputReadScope.tryRebaseCurrent(inputGeneration);
   }
 
   /** Read an evaluator-owned source file by evaluator module key. */
@@ -573,10 +608,11 @@ export class TypeSystemProjectBuilder {
     const started = performance.now();
     const hostSourceFileCacheBefore = sharedCompilerHostSourceFileCache.snapshot();
     const phases: TypeSystemProjectPhaseTiming[] = [];
+    const evaluatedSourceSnapshot = typeSystemEvaluatedSourceSnapshot(evaluation);
     const evaluatedSources = measureTypeSystemProjectPhase(
       phases,
       'evaluated-source-index',
-      () => evaluation.readEvaluatedSources(),
+      () => evaluatedSourceSnapshot.sources,
       (sources) => sources.length,
     );
     const sourceFiles = typeSystemSourceFileIndexes(evaluatedSources);
@@ -643,6 +679,7 @@ export class TypeSystemProjectBuilder {
       typeSystemProjectEpochForChecker(checker),
       project,
       evaluation,
+      evaluatedSourceSnapshot.revision,
       program,
       checker,
       projectOptions.configDiagnostics,

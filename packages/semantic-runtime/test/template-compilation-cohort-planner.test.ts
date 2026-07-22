@@ -164,7 +164,11 @@ describe('template compilation cohort planning', () => {
     expect(projection.hasStagedActivityFrom(projectionWriter)).toBe(true);
     expect(runtime.workspace.store.readAllRecords()).toHaveLength(committedRecordCount);
 
-    const overlayBuilder = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem);
+    const overlayBuilder = new TemplateTypeSystemOverlayBuilder(
+      runtime.workspace.store,
+      app.emission.project,
+      app.emission.typeSystem,
+    );
     const overlayFileNames = [
       ...app.emission.templates.resources,
       ...app.emission.templates.authoringResources,

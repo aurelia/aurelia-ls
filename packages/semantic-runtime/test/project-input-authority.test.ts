@@ -151,6 +151,77 @@ describe('SemanticRuntimeProjectInputAuthority', () => {
       .toThrow(/cannot cross an asynchronous boundary/);
   });
 
+  test('rebases a consumer host across an event-only generation after exact positive and negative reads', () => {
+    const rootDir = normalize('C:/workspace/app');
+    const sourceFile = normalize(`${rootDir}/src/app.ts`);
+    const missingFile = normalize(`${rootDir}/src/missing.ts`);
+    const host = new MutableProjectInputHost();
+    host.write(sourceFile, 'export const value = 1;');
+    const authority = new SemanticRuntimeProjectInputAuthority(host);
+    const first = authority.capture({ projectKey: 'app', rootDir });
+    const scope = first.createReadScope('reusable-consumer');
+    const stableHost = scope.host;
+
+    expect(stableHost.readFile(sourceFile)).toContain('1');
+    expect(stableHost.fileExists(missingFile)).toBe(false);
+    authority.advance();
+    const second = authority.capture({ projectKey: 'app', rootDir });
+
+    expect(scope.tryRebaseCurrent(second)).toBe(true);
+    expect(scope.host).toBe(stableHost);
+    expect(stableHost.readFile(sourceFile)).toContain('1');
+    expect(stableHost.fileExists(missingFile)).toBe(false);
+    expect(scope.belongsTo(second)).toBe(true);
+    expect(scope.readRegisteredInputs().every((read) => read.validate().isCurrent)).toBe(true);
+
+    host.write(sourceFile, 'export const value = 2;');
+    host.write(missingFile, 'export const admitted = true;');
+    expect(stableHost.readFile(sourceFile)).toContain('1');
+    expect(stableHost.fileExists(missingFile)).toBe(false);
+    expect(scope.tryRebaseCurrent(second)).toBe(false);
+  });
+
+  test('refuses read-scope rebase when a prior positive or negative read changed', () => {
+    const rootDir = normalize('C:/workspace/app');
+    const sourceFile = normalize(`${rootDir}/src/app.ts`);
+    const missingFile = normalize(`${rootDir}/src/missing.ts`);
+    const host = new MutableProjectInputHost();
+    host.write(sourceFile, 'export const value = 1;');
+    const authority = new SemanticRuntimeProjectInputAuthority(host);
+    const first = authority.capture({ projectKey: 'app', rootDir });
+    const contentScope = first.createReadScope('content-consumer');
+    const existenceScope = first.createReadScope('existence-consumer');
+    contentScope.host.readFile(sourceFile);
+    existenceScope.host.fileExists(missingFile);
+
+    host.write(sourceFile, 'export const value = 2;');
+    host.write(missingFile, 'export const admitted = true;');
+    authority.advance();
+    const second = authority.capture({ projectKey: 'app', rootDir });
+
+    expect(contentScope.tryRebaseCurrent(second)).toBe(false);
+    expect(existenceScope.tryRebaseCurrent(second)).toBe(false);
+    expect(contentScope.belongsTo(first)).toBe(true);
+    expect(existenceScope.belongsTo(first)).toBe(true);
+    expect(() => contentScope.host.readFile(sourceFile)).toThrow(/no longer current/);
+  });
+
+  test('refuses read-scope rebase across input authorities and while the scope is active', () => {
+    const rootDir = normalize('C:/workspace/app');
+    const firstAuthority = new SemanticRuntimeProjectInputAuthority(new MutableProjectInputHost());
+    const secondAuthority = new SemanticRuntimeProjectInputAuthority(new MutableProjectInputHost());
+    const first = firstAuthority.capture({ projectKey: 'app', rootDir });
+    const unrelated = secondAuthority.capture({ projectKey: 'app', rootDir });
+    const scope = first.createReadScope('owned-consumer');
+
+    expect(() => scope.tryRebaseCurrent(unrelated)).toThrow(/unrelated generation/);
+    expect(() => first.withReadScope(scope, () => {
+      firstAuthority.advance();
+      const next = firstAuthority.capture({ projectKey: 'app', rootDir });
+      scope.tryRebaseCurrent(next);
+    })).toThrow(/cannot rebase while it is active/);
+  });
+
   test('invalidates retained runtime summaries by every captured project revision', async () => {
     const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
     const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/aliased-bindable-surfaces');

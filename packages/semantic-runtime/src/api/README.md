@@ -99,12 +99,13 @@ also spend that authority on every operation; capturing one before replacement d
 Generic adapters that only need one answer should prefer `runtime.answerAppQuery(...)` over manual
 `openApp(...).ask(...)`. That routed API reads the app-query catalog for default depth, derives an inquiry profile from
 the locus when the caller did not supply one, records a runtime-level routed answer claim before returning, and disposes
-app epochs for recompute-friendly profiles such as MCP orientation. When that recompute-friendly default disposes the
-app epoch, it also clears the process-local TypeScript dependency SourceFile cache; pass
-`typeSystemDependencyCacheClearPolicy: 'preserve'` when a session intentionally wants to keep the next TypeChecker
-Program warm. Long-lived adapters can still force `appRetention: 'retain-app'` when they intend to reuse the opened app
-world, or `appRetention: 'dispose-app'` when a public transport must reclaim even a previously cached compatible app
-epoch after a one-off answer.
+app epochs for recompute-friendly profiles such as MCP orientation. Disposing the app epoch also retires its reusable
+base Program/checker generation. The recompute-friendly default separately clears the process-local TypeScript
+dependency SourceFile cache; pass `typeSystemDependencyCacheClearPolicy: 'preserve'` when a session wants to warm the
+next Program reconstruction without retaining the complete checker. Long-lived adapters can still force
+`appRetention: 'retain-app'` when they intend to reuse the opened app world and checker, or
+`appRetention: 'dispose-app'` when a public transport must reclaim even a previously cached compatible app epoch after a
+one-off answer.
 App-world queries at `detail: 'handles'` automatically retain their owning app generation because those handles are
 opaque navigable pointers into that generation. An explicit `appRetention: 'dispose-app'` combination is rejected
 instead of returning dead handles. App-world-free handle answers remain independent of app retention.
@@ -250,12 +251,11 @@ which rich details are retaining mass.
 Use `includeTypeSystemDependencyEntries` with a small `rowLimit` when dependency SourceFile cache density says a bucket
 is hot but the next decision needs the largest retained TypeScript dependency entries. Keep it off for ordinary adapter
 status reads because bucket counts and source-text totals are usually enough.
-Treat the workspace `KernelStore` as session-lifetime for boot/source records and workspace support. The TypeScript
-dependency `SourceFile` cache is a separate process-local structure. App-world products have an explicit reclaim
-boundary: `runtime.clearAnalysisCache()` first disposes unowned answer-local rows, then retires each exact cached app
-generation while preserving boot and workspace-support ownership. The TypeSystemProject compiler-host source-file cache is
-process-local because it trades memory for much
-cheaper repeated Program construction over dependency and library declaration files; pass
+Treat the workspace `KernelStore` as session-lifetime for boot/source records and workspace support. Reusable base
+Program/checker generations are project-locus computations: compatible app replacements may share one, while explicit
+app disposal and `runtime.clearAnalysisCache()` retire them. The TypeSystemProject compiler-host dependency `SourceFile`
+cache is a separate process-local structure because it trades memory for much cheaper repeated Program construction
+over dependency and library declaration files; pass
 `typeSystemDependencyCacheClearPolicy: 'all'` to `clearAnalysisCache(...)` when reclaiming that memory is more
 important than keeping the next app open warm. For one-off routed public calls, pass the same policy to
 `answerAppQuery(...)` or `answerAppQueries(...)` so the clear is part of the answer claim rather than a separate

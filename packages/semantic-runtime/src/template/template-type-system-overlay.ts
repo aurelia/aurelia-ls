@@ -9,6 +9,7 @@ import {
   type ProductHandle,
 } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { ProjectBootFrame } from '../boot/frames.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import {
   BindingContextKind,
@@ -327,11 +328,12 @@ export class TemplateTypeSystemOverlayBuilder {
 
   constructor(
     readonly store: KernelStore,
+    readonly project: ProjectBootFrame,
     readonly typeSystem: TypeSystemProject,
   ) {
     this.expressions = new TemplateTypeSystemOverlayExpressionProjector(
-      typeSystem.project.rootDir,
-      typeSystem.project.inputGeneration.host,
+      project.rootDir,
+      project.inputGeneration.host,
     );
   }
 
@@ -340,7 +342,7 @@ export class TemplateTypeSystemOverlayBuilder {
     localKey: string = resource.compilation.localKey,
   ): TemplateTypeSystemOverlayEmission {
     const overlayFileName = path.join(
-      this.typeSystem.project.rootDir,
+      this.project.rootDir,
       '.semantic-runtime',
       'overlays',
       'templates',
@@ -897,7 +899,7 @@ export class TemplateTypeSystemOverlayBuilder {
     target: ResourceTargetReference,
     overlayFileName: string,
   ): OverlayTypeExpression | null {
-    const fromIdentity = resourceTargetTypeExpressionFromIdentity(this.store, target, overlayFileName, this.typeSystem.project.rootDir);
+    const fromIdentity = resourceTargetTypeExpressionFromIdentity(this.store, target, overlayFileName, this.project.rootDir);
     if (fromIdentity != null) {
       return fromIdentity;
     }
@@ -911,7 +913,7 @@ export class TemplateTypeSystemOverlayBuilder {
     return {
       typeExpression: typeImportExpression(
         overlayFileName,
-        path.resolve(this.typeSystem.project.rootDir, target.moduleKey),
+        path.resolve(this.project.rootDir, target.moduleKey),
         target.localName,
       ),
     };
@@ -2047,7 +2049,7 @@ export class TemplateTypeSystemOverlayBuilder {
     if (!(identity instanceof TypeScriptDeclarationIdentity) || identity.moduleKey == null || identity.localName == null) {
       return null;
     }
-    const targetFileName = path.resolve(this.typeSystem.project.rootDir, identity.moduleKey);
+    const targetFileName = path.resolve(this.project.rootDir, identity.moduleKey);
     return {
       typeName: identity.exportedName ?? identity.localName,
       moduleSpecifier: moduleSpecifierForGeneratedTypeScriptSource(overlayFileName, targetFileName),

@@ -42,6 +42,7 @@ import {
   readTypeSystemCompilerHostSourceFileCacheOverview,
   type TypeSystemCompilerHostSourceFileCacheClearSummary,
 } from '../type-system/project.js';
+import { TypeSystemProjectComputationService } from '../type-system/project-computation.js';
 import type {
   CheckerExpressionTypeEvaluationCacheStats,
 } from '../type-system/expression-type-evaluation.js';
@@ -449,6 +450,7 @@ export class SemanticRuntime {
   readonly computationLifecycle: ComputationLifecycleRegistry;
   readonly frameworkSupport: FrameworkSupportAuthority;
   readonly projectEvaluations: StaticProjectEvaluationComputationService;
+  readonly typeSystemProjects: TypeSystemProjectComputationService;
   readonly appAnalysisComputations: AureliaAppWorldProjectComputationService;
 
   private constructor(
@@ -465,11 +467,17 @@ export class SemanticRuntime {
       workspace.store,
       this.computationLifecycle,
     );
+    this.typeSystemProjects = new TypeSystemProjectComputationService(
+      workspace.store,
+      this.computationLifecycle,
+      this.frameworkSupport,
+    );
     this.appAnalysisComputations = new AureliaAppWorldProjectComputationService(
       workspace.store,
       this.computationLifecycle,
       this.frameworkSupport,
       this.projectEvaluations,
+      this.typeSystemProjects,
     );
   }
 
@@ -608,6 +616,7 @@ export class SemanticRuntime {
     const processMemory = readSemanticRuntimeMemorySample();
     const valueWithoutDisplayText: Omit<SemanticRuntimeAnalysisCacheOverviewResult, 'displayText'> = {
       cachedAppCount: cachedApps.length,
+      typeSystemProjectCount: this.typeSystemProjects.readEntryCount(),
       cachedApps,
       runtimeQueryClaimProfiles,
       typeSystemDependencyCache,
@@ -655,6 +664,7 @@ export class SemanticRuntime {
     const clearedTypeSystemDependencyCache = clearTypeSystemCompilerHostSourceFileCache(typeSystemDependencyCacheClearPolicy);
     const kernelBefore = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
     const disposed = this.disposeCachedAppEpochs(QueryClaimDisposalReason.AppEpochDisposed);
+    const disposedTypeSystemProjects = disposed.typeSystemProjects + this.typeSystemProjects.retireAll();
     const disposedStaticProjectEvaluations = this.projectEvaluations.retireAll();
     const disposedRuntimeQueryClaimRecords = this.disposeRuntimeQueryClaims(QueryClaimDisposalReason.SessionEnded);
     const workspaceKernel = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
@@ -663,6 +673,7 @@ export class SemanticRuntime {
       typeSystemDependencyCacheClearPolicy,
       disposedCachedApps: disposed.apps,
       disposedStaticProjectEvaluations,
+      disposedTypeSystemProjects,
       disposedQueryClaimRecords: disposed.queryClaimRecords + disposedRuntimeQueryClaimRecords,
       disposedKernelRecords: kernel.records,
       disposedProductDetails: kernel.productDetails,
@@ -671,9 +682,11 @@ export class SemanticRuntime {
       ...typeSystemDependencyCacheClearResultFields(clearedTypeSystemDependencyCache),
       remainingCachedApps: this.appsByCacheKey.size,
       remainingStaticProjectEvaluations: this.projectEvaluations.readEntryCount(),
+      remainingTypeSystemProjects: this.typeSystemProjects.readEntryCount(),
       workspaceKernel,
       summary:
-        `Cleared ${disposed.apps} cached app epoch(s), ${disposedStaticProjectEvaluations} static project evaluation(s), ` +
+        `Cleared ${disposed.apps} cached app epoch(s), ${disposedTypeSystemProjects} TypeScript project generation(s), ` +
+        `${disposedStaticProjectEvaluations} static project evaluation(s), ` +
         `${disposed.queryClaimRecords + disposedRuntimeQueryClaimRecords} query-claim record(s), ` +
         `${describeKernelDisposal(kernel)}, and ${clearedTypeSystemDependencyCache.entries} ` +
         `TypeScript dependency source-file cache file(s) using policy '${typeSystemDependencyCacheClearPolicy}'; ` +
@@ -1720,11 +1733,17 @@ export class SemanticRuntime {
 
   private disposeCachedAppEpochs(
     reason: QueryClaimDisposalReason,
-  ): { readonly apps: number; readonly queryClaimRecords: number; readonly kernel: KernelStoreDisposalSummary } {
+  ): {
+    readonly apps: number;
+    readonly typeSystemProjects: number;
+    readonly queryClaimRecords: number;
+    readonly kernel: KernelStoreDisposalSummary;
+  } {
     const apps = [...new Set(this.appsByCacheKey.values())];
     if (apps.length === 0) {
       return {
         apps: 0,
+        typeSystemProjects: 0,
         queryClaimRecords: 0,
         kernel: {
           records: 0,
@@ -1744,6 +1763,8 @@ export class SemanticRuntime {
     for (const app of apps) {
       app.retireGeneration();
     }
+    const typeSystemProjects = [...new Set(apps.map((app) => app.project.projectKey))]
+      .reduce((count, projectKey) => count + Number(this.typeSystemProjects.retire(projectKey)), 0);
     const kernel = kernelDisposalBetween(
       kernelBefore,
       this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false }),
@@ -1751,6 +1772,7 @@ export class SemanticRuntime {
     this.appsByCacheKey.clear();
     return {
       apps: apps.length,
+      typeSystemProjects,
       queryClaimRecords,
       kernel,
     };
@@ -2026,8 +2048,8 @@ function semanticRuntimeAnalysisCacheClearDisplayText(
   value: Omit<SemanticRuntimeAnalysisCacheClearResult, 'displayText'>,
 ): string {
   const lines = [
-    `Analysis cache clear: disposed ${value.disposedCachedApps} cached app epoch(s), ${value.disposedStaticProjectEvaluations} static project evaluation(s), ${value.disposedQueryClaimRecords} query-claim record(s), and ${value.disposedKernelRecords} analysis-owned kernel record(s); workspace kernel retains ${value.workspaceKernel.totalRecords} boot/source-discovery record(s); dependencyPolicy=${value.typeSystemDependencyCacheClearPolicy}.`,
-    `Kernel disposal: ${value.disposedProductDetails} product detail(s), ${value.disposedHotDetails} hot detail(s), ${value.disposedKernelHandleCharacters} handle character(s); remaining app epochs=${value.remainingCachedApps}, remaining static evaluations=${value.remainingStaticProjectEvaluations}, workspace kernel records=${value.workspaceKernel.totalRecords}.`,
+    `Analysis cache clear: disposed ${value.disposedCachedApps} cached app epoch(s), ${value.disposedTypeSystemProjects} TypeScript project generation(s), ${value.disposedStaticProjectEvaluations} static project evaluation(s), ${value.disposedQueryClaimRecords} query-claim record(s), and ${value.disposedKernelRecords} analysis-owned kernel record(s); workspace kernel retains ${value.workspaceKernel.totalRecords} boot/source-discovery record(s); dependencyPolicy=${value.typeSystemDependencyCacheClearPolicy}.`,
+    `Kernel disposal: ${value.disposedProductDetails} product detail(s), ${value.disposedHotDetails} hot detail(s), ${value.disposedKernelHandleCharacters} handle character(s); remaining app epochs=${value.remainingCachedApps}, TypeScript projects=${value.remainingTypeSystemProjects}, static evaluations=${value.remainingStaticProjectEvaluations}, workspace kernel records=${value.workspaceKernel.totalRecords}.`,
     `TypeScript dependency cache cleared: ${value.clearedTypeSystemDependencySourceFiles} file(s), ${value.clearedTypeSystemDependencySourceTextCharacters} source-text character(s), nodeModules=${value.clearedTypeSystemDependencyNodeModuleSourceFiles}, defaultLibraries=${value.clearedTypeSystemDependencyDefaultLibrarySourceFiles}, externalDeclarations=${value.clearedTypeSystemDependencyExternalDeclarationSourceFiles}.`,
   ];
   if (value.remainingCachedApps > 0) {
@@ -2570,6 +2592,13 @@ export class SemanticApp {
           acquisitionMilliseconds: roundMilliseconds(acquisition.milliseconds),
           constructionMilliseconds: roundMilliseconds(acquisition.constructionMilliseconds),
         })),
+        typeSystemAcquisition: {
+          acquisitionKind: this.emission.profile.typeSystemAcquisition.kind,
+          acquisitionMilliseconds: roundMilliseconds(this.emission.profile.typeSystemAcquisition.milliseconds),
+          constructionMilliseconds: roundMilliseconds(
+            this.emission.profile.typeSystemAcquisition.constructionMilliseconds,
+          ),
+        },
         staticEvaluationPhases: semanticRuntimeAggregatedPhaseTimingSummaries(this.emission.evaluation.profile.phases, rowLimit),
         staticEvaluationHost: this.emission.evaluation.profile.sourceHost,
         staticEvaluationSources: this.emission.evaluation.profile.sourceFiles,

@@ -1251,7 +1251,7 @@ async function readGeneratedTemplateScopeOverlayProbe() {
       preciseDiagnosticMapped: false,
     };
   }
-  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-repeat-template-overlay');
   const overlaySource = emission.overlaySource;
   if (overlaySource == null) {
@@ -1300,7 +1300,7 @@ async function readGeneratedLetScopeOverlayProbe() {
   let selected = null;
   let emission = null;
   for (const resource of app.emission.templates.resources) {
-    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
       .build(resource, 'contract-let-template-overlay');
     if (candidate.expressionProbes.some((probe) => probe.authoredExpressionText === 'state.readRequest(requestId)')) {
       selected = resource;
@@ -1357,7 +1357,7 @@ async function readGeneratedEventScopeOverlayProbe() {
       nonSourceObservedDependencyCount: 0,
     };
   }
-  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-event-template-overlay');
   if (emission.overlaySource == null) {
     return {
@@ -1397,7 +1397,7 @@ async function readGeneratedRuntimeAssignmentOverlayProbe() {
   });
   let emission = null;
   for (const resource of app.emission.templates.resources) {
-    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
       .build(resource, 'contract-runtime-assignment-template-overlay');
     if (
       candidate.expressionProbes.some((probe) => probe.authoredExpressionText === 'rows')
@@ -1469,7 +1469,7 @@ async function readGeneratedRuntimeAssignmentConverterOverlayProbe() {
   });
   let emission = null;
   for (const resource of app.emission.templates.resources) {
-    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
       .build(resource, 'contract-runtime-assignment-converter-template-overlay');
     if (
       candidate.expressionProbes.some((probe) => probe.overlayExpressionText.includes('.toView(') && probe.overlayExpressionText.includes('$selectedId'))
@@ -1548,7 +1548,7 @@ async function readGeneratedScopeAliasOverlayProbe() {
       scopeStateTopology: emptyScopeStateTopology(),
     };
   }
-  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-scope-alias-template-overlay');
   if (emission.overlaySource == null) {
     return {
@@ -1673,7 +1673,7 @@ async function readGeneratedValueConverterOverlayProbe() {
       argumentMismatchHasSemanticProductHandle: false,
     };
   }
-  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-value-converter-template-overlay');
   if (emission.overlaySource == null) {
     return {
@@ -1896,7 +1896,7 @@ async function readGeneratedBoundControllerOverlayProbe() {
   let emission = null;
   let selectedResource = null;
   for (const resource of app.emission.templates.resources) {
-    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+    const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
       .build(resource, 'contract-bound-controller-template-overlay');
     if (candidate.expressionProbes.some((probe) => probe.authoredExpressionText === 'onAction(action)')) {
       emission = candidate;
@@ -1980,7 +1980,7 @@ async function readGeneratedStateSourceOverlayProbe() {
       overlayDiagnosticCount: 0,
     };
   }
-  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-state-source-template-overlay');
   if (emission.overlaySource == null) {
     return {
@@ -2042,7 +2042,7 @@ async function readGeneratedStateConditionBoundaryOverlayProbe() {
       stateBoundChildType: null,
     };
   }
-  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-state-condition-boundary-template-overlay');
   if (emission.overlaySource == null) {
     return {
@@ -2142,7 +2142,7 @@ async function readResourceLocalOverlayOwnershipProbe() {
   ) ?? null;
   const build = (resource, key) => resource == null
     ? null
-    : new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+    : new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
         .build(resource, key);
   const parentOverlay = build(parent, 'contract-resource-local-parent-overlay');
   const childOverlay = build(child, 'contract-resource-local-child-overlay');
@@ -2234,7 +2234,7 @@ async function buildResourceOverlayFixture(fixtureRoot, definitionName, originKe
     resource,
     emission: resource == null
       ? null
-      : new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+      : new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
           .build(resource, originKey),
   };
 }

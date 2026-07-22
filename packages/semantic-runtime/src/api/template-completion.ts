@@ -756,7 +756,7 @@ function templateOverlayDiagnosticCache(
   if (cached != null) {
     return cached;
   }
-  const builder = new TemplateTypeSystemOverlayBuilder(store, emission.typeSystem);
+  const builder = new TemplateTypeSystemOverlayBuilder(store, emission.project, emission.typeSystem);
   const overlaySelections: TemplateOverlayDiagnosticSelection[] = templateResourceSelections(store, emission)
     .map((selection): TemplateOverlayDiagnosticSelection => ({
       selection,

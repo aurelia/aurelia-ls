@@ -230,7 +230,7 @@ describe('reusable project evaluation computations', () => {
     expect(second.generation).not.toBe(first);
   }, 30_000);
 
-  test('retires app generations before both evaluator profiles during explicit analysis-cache clearing', async () => {
+  test('retires app, TypeScript, and evaluator generations during explicit analysis-cache clearing', async () => {
     const { runtime, project } = await createEvaluationRuntime();
     const app = await runtime.openApp({ projectKey: project.projectKey });
     const appEvaluation = runtime.projectEvaluations.acquire(project, aureliaAppProjectEvaluationProfile).generation;
@@ -245,7 +245,9 @@ describe('reusable project evaluation computations', () => {
       throw new Error('Expected analysis-cache clear result.');
     }
     expect(cleared.disposedCachedApps).toBe(1);
+    expect(cleared.disposedTypeSystemProjects).toBe(1);
     expect(cleared.disposedStaticProjectEvaluations).toBe(2);
+    expect(cleared.remainingTypeSystemProjects).toBe(0);
     expect(cleared.remainingStaticProjectEvaluations).toBe(0);
     expect(runtime.computationLifecycle.readersFor('static-evaluation-ambient-globals:app')).toHaveLength(0);
     expect(app.isCurrent()).toBe(false);

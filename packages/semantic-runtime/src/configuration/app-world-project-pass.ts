@@ -42,10 +42,11 @@ import {
   ResourceRecognitionProjectPass,
   type ResourceRecognitionProjectResult,
 } from '../resources/resource-recognition-project-pass.js';
-import {
-  TypeSystemProjectBuilder,
-} from '../type-system/project.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import type {
+  TypeSystemProjectAcquisitionProfile,
+  TypeSystemProjectGeneration,
+} from '../type-system/project-computation.js';
 import {
   AureliaAppWorldComposer,
   type AureliaAppWorldEmission,
@@ -234,7 +235,6 @@ import {
 } from './app-task-source-api-roots.js';
 
 export type AureliaAppWorldProjectPhaseName =
-  | 'type-system'
   | 'module-loader-issues'
   | 'framework-api-issues'
   | 'observation-source-issues'
@@ -287,6 +287,7 @@ export interface AureliaAppWorldProjectProfile {
   readonly totalMilliseconds: number;
   readonly phases: readonly AureliaAppWorldProjectPhaseTiming[];
   readonly evaluationAcquisitions: readonly StaticProjectEvaluationAcquisitionProfile[];
+  readonly typeSystemAcquisition: TypeSystemProjectAcquisitionProfile;
 }
 
 export interface AureliaAppWorldProjectOptions {
@@ -453,8 +454,10 @@ export class AureliaAppWorldProjectPass {
     publication: ComputationRun,
     project: ProjectBootFrame,
     evaluation: StaticProjectEvaluationResult,
+    typeSystemProject: TypeSystemProjectGeneration,
     conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
     evaluationAcquisitions: readonly StaticProjectEvaluationAcquisitionProfile[],
+    typeSystemAcquisition: TypeSystemProjectAcquisitionProfile,
     upstreamReads: readonly ComputationRead[],
     options: AureliaAppWorldProjectOptions = {},
     incumbent: AureliaAppWorldProjectEmission | null = null,
@@ -465,8 +468,10 @@ export class AureliaAppWorldProjectPass {
       project,
       this.support,
       evaluation,
+      typeSystemProject,
       conventionToolingEvaluation,
       evaluationAcquisitions,
+      typeSystemAcquisition,
       upstreamReads,
       options,
       incumbent,
@@ -489,8 +494,10 @@ class AureliaAppWorldProjectConstructionFrame {
     readonly project: ProjectBootFrame,
     private readonly support: SemanticRuntimeSupport,
     private readonly evaluation: StaticProjectEvaluationResult,
+    private readonly typeSystemProject: TypeSystemProjectGeneration,
     private readonly conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
     private readonly evaluationAcquisitions: readonly StaticProjectEvaluationAcquisitionProfile[],
+    private readonly typeSystemAcquisition: TypeSystemProjectAcquisitionProfile,
     private readonly upstreamReads: readonly ComputationRead[],
     options: AureliaAppWorldProjectOptions,
     private readonly incumbent: AureliaAppWorldProjectEmission | null,
@@ -551,13 +558,6 @@ class AureliaAppWorldProjectConstructionFrame {
       return emission;
     });
 
-    // TypeScript may lazily spend its captured host after construction; those reads still belong to the pre phase.
-    this.publication.withChild(preTemplateLocus, () => {
-      for (const read of preTemplate.typeSystem.readRegisteredInputs()) {
-        this.publication.observe(read);
-      }
-    });
-
     return new AureliaAppWorldProjectEmission(
       preTemplate,
       postTemplate,
@@ -569,7 +569,7 @@ class AureliaAppWorldProjectConstructionFrame {
     templatePass: TemplateCompilationProjectPass,
   ): AureliaAppWorldPreTemplateEmission {
     const evaluation = this.evaluation;
-    const typeSystem = this.buildTypeSystem(evaluation);
+    const typeSystem = this.typeSystemProject.readProject();
     const evaluationIssues = this.materializeEvaluationIssues(evaluation, typeSystem);
     const sourceObservation = this.materializeObservationSourceIssues(typeSystem);
     const computedObservation = this.materializeComputedObservationDefinitions(typeSystem);
@@ -659,6 +659,7 @@ class AureliaAppWorldProjectConstructionFrame {
       serviceRoots,
       sourceObservation,
     } = preTemplate;
+    this.publication.observe(this.typeSystemProject);
     const templates = this.measure('template-compilation', () => templatePass.analyzeFrontDoors(
       frontDoor,
       typeSystem,
@@ -740,14 +741,6 @@ class AureliaAppWorldProjectConstructionFrame {
       authoringTemplateLimit: this.authoringTemplateLimit,
       telemetry: this.telemetry,
     };
-  }
-
-  private buildTypeSystem(evaluation: StaticProjectEvaluationResult): TypeSystemProject {
-    return this.measure('type-system', () =>
-      new TypeSystemProjectBuilder(this.support).build(this.project, evaluation, {
-        previousProject: this.incumbent?.typeSystem ?? null,
-      })
-    );
   }
 
   private materializeEvaluationIssues(
@@ -1283,6 +1276,7 @@ class AureliaAppWorldProjectConstructionFrame {
       totalMilliseconds: performance.now() - this.started,
       phases: this.phases,
       evaluationAcquisitions: this.evaluationAcquisitions,
+      typeSystemAcquisition: this.typeSystemAcquisition,
     };
   }
 

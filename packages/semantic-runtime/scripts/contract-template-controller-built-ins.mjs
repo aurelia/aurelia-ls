@@ -58,7 +58,7 @@ const runtimeControllers = collectAppRows(app, SemanticAppQueryKind.RuntimeContr
 const resource = app.emission.templates.resources[0] ?? null;
 const overlayEmission = resource == null
   ? null
-  : new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  : new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-template-controller-built-ins');
 const overlayTypeSystem = overlayEmission?.overlaySource == null
   ? null
@@ -368,7 +368,7 @@ async function readVirtualRepeatProbe() {
       skippedExpressionCount: 0,
     };
   }
-  const overlayEmission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
+  const overlayEmission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
     .build(resource, 'contract-ui-virtualization-template-controller');
   if (overlayEmission.overlaySource == null) {
     return {

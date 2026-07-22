@@ -154,7 +154,7 @@ export class SemanticRuntimeProjectInputRead implements ComputationRead {
     };
   }
 
-  tryRebaseCurrent(): ComputationRead | null {
+  tryRebaseCurrent(): SemanticRuntimeProjectInputRead | null {
     const currentValue = freezeProjectInputReadValue(this.readCurrent());
     if (projectInputValueRevision(currentValue) !== this.observedRevision) {
       return null;
@@ -174,19 +174,59 @@ export class SemanticRuntimeProjectInputRead implements ComputationRead {
   }
 }
 
+/** Stable consumer host whose captured generation may advance only after exact-read validation. */
+class RebasableSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectInputHost {
+  constructor(private current: SemanticRuntimeProjectInputHost) {}
+
+  rebase(current: SemanticRuntimeProjectInputHost): void {
+    this.current = current;
+  }
+
+  readFile(fileName: string): string | undefined {
+    return this.current.readFile(fileName);
+  }
+
+  fileExists(fileName: string): boolean {
+    return this.current.fileExists(fileName);
+  }
+
+  readDirectory(directoryName: string): readonly string[] {
+    return this.current.readDirectory(directoryName);
+  }
+
+  directoryExists(directoryName: string): boolean {
+    return this.current.directoryExists(directoryName);
+  }
+
+  realpath(fileName: string): string {
+    return this.current.realpath(fileName);
+  }
+
+  matchFiles(
+    rootDir: string,
+    extensions?: readonly string[],
+    excludes?: readonly string[],
+    includes?: readonly string[],
+    depth?: number,
+  ): readonly string[] {
+    return this.current.matchFiles(rootDir, extensions, excludes, includes, depth);
+  }
+}
+
 /** Exact host reads made by one consumer while sharing its project generation's immutable values. */
 export class SemanticRuntimeProjectInputReadScope {
   private readonly readsByKey = new Map<string, SemanticRuntimeProjectInputRead>();
+  private readonly rebasableHost: RebasableSemanticRuntimeProjectInputHost;
   readonly host: SemanticRuntimeProjectInputHost;
 
   constructor(
-    private readonly generation: SemanticRuntimeProjectInputGeneration,
+    private generation: SemanticRuntimeProjectInputGeneration,
     readonly key: string,
-    createHost: (
-      observeRead: (read: SemanticRuntimeProjectInputRead) => void,
-    ) => SemanticRuntimeProjectInputHost,
   ) {
-    this.host = createHost((read) => this.readsByKey.set(read.readKey, read));
+    this.rebasableHost = new RebasableSemanticRuntimeProjectInputHost(
+      generation.observedHost((read) => this.observe(read)),
+    );
+    this.host = this.rebasableHost;
   }
 
   readRegisteredInputs(): readonly SemanticRuntimeProjectInputRead[] {
@@ -194,7 +234,48 @@ export class SemanticRuntimeProjectInputReadScope {
   }
 
   observe(read: SemanticRuntimeProjectInputRead): void {
+    const existing = this.readsByKey.get(read.readKey);
+    if (existing != null && existing.observedRevision !== read.observedRevision) {
+      throw new Error(
+        `Project-input read scope ${this.key} observed conflicting revisions for ${read.readKey}: `
+        + `${existing.observedRevision} and ${read.observedRevision}.`,
+      );
+    }
     this.readsByKey.set(read.readKey, read);
+  }
+
+  /**
+   * Rebind this consumer's stable host to an equivalent current generation after every exact read still matches.
+   *
+   * This advances an independently admitted semantic computation; it never makes the previous project generation
+   * current again.
+   */
+  tryRebaseCurrent(generation: SemanticRuntimeProjectInputGeneration): boolean {
+    if (generation === this.generation) {
+      return generation.validate().isCurrent
+        && this.readRegisteredInputs().every((read) => read.validate().isCurrent);
+    }
+    generation.requireCompatibleReadScopeOwner(this.generation);
+    this.generation.requireReadScopeInactive(this);
+    generation.requireCurrent();
+    if (!generation.validate().isCurrent) {
+      return false;
+    }
+    const rebasedReads: SemanticRuntimeProjectInputRead[] = [];
+    for (const read of this.readRegisteredInputs()) {
+      const rebased = read.tryRebaseCurrent();
+      if (rebased == null) {
+        return false;
+      }
+      rebasedReads.push(rebased);
+    }
+    this.readsByKey.clear();
+    for (const read of rebasedReads) {
+      this.readsByKey.set(read.readKey, read);
+    }
+    this.generation = generation;
+    this.rebasableHost.rebase(generation.observedHost((read) => this.observe(read), rebasedReads));
+    return true;
   }
 
   belongsTo(generation: SemanticRuntimeProjectInputGeneration): boolean {
@@ -365,11 +446,47 @@ export class SemanticRuntimeProjectInputGeneration implements GenerationAuthorit
   /** Create a consumer-local exact-read manifest over the generation's shared immutable host values. */
   createReadScope(key: string): SemanticRuntimeProjectInputReadScope {
     this.requireCurrent();
-    return new SemanticRuntimeProjectInputReadScope(
+    return new SemanticRuntimeProjectInputReadScope(this, key);
+  }
+
+  /** Captured host view for one consumer-local read scope. */
+  observedHost(
+    observeRead: (read: SemanticRuntimeProjectInputRead) => void,
+    retainedReads: readonly SemanticRuntimeProjectInputRead[] = [],
+  ): SemanticRuntimeProjectInputHost {
+    this.requireCurrent();
+    if (retainedReads.length === 0) {
+      return this.capturedHost.withObserver(observeRead);
+    }
+    const readsByKey = new Map(retainedReads.map((read) => [read.readKey, read]));
+    const valuesByReadKey = new Map(retainedReads.map((read) => [read.readKey, read.value]));
+    return new CapturedSemanticRuntimeProjectInputHost(
       this,
-      key,
-      (observeRead) => this.capturedHost.withObserver(observeRead),
+      this.authority,
+      valuesByReadKey,
+      readsByKey,
+      observeRead,
     );
+  }
+
+  /** Refuse read-scope rebasing across logical projects or independent input authorities. */
+  requireCompatibleReadScopeOwner(previous: SemanticRuntimeProjectInputGeneration): void {
+    if (
+      this.authority !== previous.authority
+      || this.projectKey !== previous.projectKey
+      || this.rootDir !== previous.rootDir
+    ) {
+      throw new Error(
+        `Project-input read scope cannot rebase ${previous.revision} to unrelated generation ${this.revision}.`,
+      );
+    }
+  }
+
+  /** A consumer scope cannot change generations while participating in a synchronous owner scope. */
+  requireReadScopeInactive(scope: SemanticRuntimeProjectInputReadScope): void {
+    if (this.activeReadScopes.includes(scope)) {
+      throw new Error(`Project-input read scope ${scope.key} cannot rebase while it is active.`);
+    }
   }
 
   /** Capture every host read made synchronously by one enclosing analysis owner. */

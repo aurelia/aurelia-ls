@@ -20,6 +20,8 @@ import { TemplateProductDetails } from '../src/template/product-details.js';
 import { StaticProjectEvaluationAcquisitionKind } from '../src/evaluation/project-evaluation.js';
 import { readTypeSystemProjectDiagnostics } from '../src/type-system/diagnostics.js';
 import { TypeSystemProjectBuilder } from '../src/type-system/project.js';
+import { TypeSystemProjectAcquisitionKind } from '../src/type-system/project-computation.js';
+import { TemplateTypeSystemOverlayBuilder } from '../src/template/template-type-system-overlay.js';
 
 class MutableSourceOverlay {
   private readonly sourceTextByFileName = new Map<string, string>();
@@ -242,7 +244,7 @@ describe('app analysis computation', () => {
     expect(second.isCurrent()).toBe(false);
   }, 60_000);
 
-  test('rebuilds the TypeScript Program on a fresh host before lazy diagnostics use prior structure', async () => {
+  test('reuses an exact checker across input events and rebuilds it after a TypeScript edit', async () => {
     const fixtureRoot = pressureFixtureRoot('typescript-program-fidelity-node-types');
     const sourceOverlay = new MutableSourceOverlay();
     const mainFileName = path.join(fixtureRoot, 'src/main.ts');
@@ -268,14 +270,107 @@ describe('app analysis computation', () => {
     const readsBeforeDiagnostics = second.emission.typeSystem.readRegisteredInputs().length;
     const diagnostics = readTypeSystemProjectDiagnostics(second.emission.typeSystem);
 
-    expect(second.emission.typeSystem.program).not.toBe(firstProgram);
-    expect(second.emission.typeSystem.checker).not.toBe(firstChecker);
+    expect(second.emission.typeSystem.program).toBe(firstProgram);
+    expect(second.emission.typeSystem.checker).toBe(firstChecker);
+    expect(second.emission.profile.typeSystemAcquisition.kind).toBe(TypeSystemProjectAcquisitionKind.Reused);
     expect(diagnostics).toContainEqual(expect.objectContaining({
       phase: 'semantic',
       source: expect.objectContaining({ fileName: expect.stringContaining('main.ts') }),
     }));
     expect(second.emission.typeSystem.readRegisteredInputs().length).toBeGreaterThanOrEqual(readsBeforeDiagnostics);
     expect(second.emission.typeSystem.readRegisteredInputs().every((read) => read.validate().isCurrent)).toBe(true);
+
+    expect(() => second.emission.typeSystem.readProgramExportedSymbol('typescript', 'createProgram')).not.toThrow();
+    expect(second.emission.typeSystem.readRegisteredInputs().every((read) => read.validate().isCurrent)).toBe(true);
+
+    sourceOverlay.write(mainFileName, [
+      `import './missing';`,
+      readFileSync(mainFileName, 'utf8'),
+      'export const checkerEpochTwo = true;',
+    ].join('\n'));
+    projectInputAuthority.advance();
+    const third = await runtime.openApp({
+      projectKey: first.project.projectKey,
+      analysisDepth: 'runtime-topology',
+    });
+
+    expect(third.emission.typeSystem.program).not.toBe(firstProgram);
+    expect(third.emission.typeSystem.checker).not.toBe(firstChecker);
+    expect(third.emission.profile.typeSystemAcquisition.kind).toBe(TypeSystemProjectAcquisitionKind.Computed);
+    expect(third.emission.typeSystem.readRegisteredInputs().every((read) => read.validate().isCurrent)).toBe(true);
+  }, 60_000);
+
+  test('reuses the checker across an HTML edit while overlay projection reads the current app frame', async () => {
+    const fixtureRoot = pressureFixtureRoot('template-overlay-type-errors');
+    const templateFileName = path.join(fixtureRoot, 'src/template-overlay-type-errors-app.html');
+    const sourceOverlay = new MutableSourceOverlay();
+    const originalTemplate = readFileSync(templateFileName, 'utf8');
+    sourceOverlay.write(templateFileName, originalTemplate);
+    const projectInputAuthority = new SemanticRuntimeProjectInputAuthority(
+      new NodeSemanticRuntimeProjectInputHost(sourceOverlay),
+    );
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:app-analysis-html-checker-reuse',
+      projectInputAuthority,
+    });
+    const first = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const firstProgram = first.emission.typeSystem.program;
+    const firstChecker = first.emission.typeSystem.checker;
+    const firstOverlay = first.emission.templates.resources
+      .map((resource) => new TemplateTypeSystemOverlayBuilder(
+        runtime.workspace.store,
+        first.emission.project,
+        first.emission.typeSystem,
+      ).build(resource).overlaySource)
+      .find((source) => source?.text.includes('missingLabel') === true) ?? null;
+    expect(firstOverlay?.text).toContain('missingLabel');
+
+    sourceOverlay.write(templateFileName, originalTemplate.replace('item.missingLabel', 'item.label'));
+    projectInputAuthority.advance();
+    const second = await runtime.openApp({
+      projectKey: first.project.projectKey,
+      analysisDepth: 'binding-observation',
+    });
+    const secondOverlay = second.emission.templates.resources
+      .map((resource) => new TemplateTypeSystemOverlayBuilder(
+        runtime.workspace.store,
+        second.emission.project,
+        second.emission.typeSystem,
+      ).build(resource).overlaySource)
+      .find((source) => source?.text.includes('item.label') === true) ?? null;
+
+    expect(second.emission.typeSystem.program).toBe(firstProgram);
+    expect(second.emission.typeSystem.checker).toBe(firstChecker);
+    expect(second.emission.profile.typeSystemAcquisition.kind).toBe(TypeSystemProjectAcquisitionKind.Reused);
+    expect(secondOverlay?.text).toContain('item.label');
+    expect(secondOverlay?.text).not.toContain('item.missingLabel');
+  }, 60_000);
+
+  test('retires the reusable checker when explicit app disposal ends its owning epoch', async () => {
+    const fixtureRoot = pressureFixtureRoot('template-completion-member-metadata');
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:app-analysis-checker-disposal',
+    });
+    const retained = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const retainedChecker = retained.emission.typeSystem.checker;
+
+    await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.AppDiagnostics,
+      appRetention: 'dispose-app',
+      typeSystemDependencyCacheClearPolicy: 'preserve',
+    });
+
+    expect(retained.isCurrent()).toBe(false);
+    expect(runtime.analysisCacheOverview().value).toEqual(expect.objectContaining({
+      cachedAppCount: 0,
+      typeSystemProjectCount: 0,
+    }));
+
+    const reopened = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    expect(reopened.emission.typeSystem.checker).not.toBe(retainedChecker);
+    expect(reopened.emission.profile.typeSystemAcquisition.kind).toBe(TypeSystemProjectAcquisitionKind.Computed);
   }, 60_000);
 
   test('retains independent project generations while replacing and clearing them exactly', async () => {
@@ -313,6 +408,7 @@ describe('app analysis computation', () => {
     expect(runtime.workspace.store.read(completionSource.productHandle)).not.toBeNull();
     expect(runtime.workspace.store.read(compositionSource.productHandle)).not.toBeNull();
     expect(runtime.analysisCacheOverview().value?.cachedAppCount).toBe(2);
+    expect(runtime.analysisCacheOverview().value?.typeSystemProjectCount).toBe(2);
 
     const deeperCompletion = await runtime.openApp({
       projectKey: 'completion',
@@ -333,11 +429,13 @@ describe('app analysis computation', () => {
       throw new Error('Expected multi-project cache-clear telemetry.');
     }
     expect(clear.disposedCachedApps).toBe(2);
+    expect(clear.disposedTypeSystemProjects).toBe(2);
     expect(clear.disposedKernelRecords).toBe(beforeClear.totalRecords - afterClear.totalRecords);
     expect(clear.disposedProductDetails).toBe(beforeClear.productDetails - afterClear.productDetails);
     expect(clear.disposedHotDetails).toBe(beforeClear.hotDetails - afterClear.hotDetails);
     expect(clear.disposedKernelHandleCharacters).toBe(beforeClear.handleCharacters - afterClear.handleCharacters);
     expect(clear.remainingCachedApps).toBe(0);
+    expect(clear.remainingTypeSystemProjects).toBe(0);
     expect(deeperCompletion.isCurrent()).toBe(false);
     expect(composition.isCurrent()).toBe(false);
     expect(runtime.appAnalysisComputations.authorityFor('completion').current()).toBeNull();
