@@ -336,9 +336,12 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   custom route-param object construction, and live active-navigation state remain route-context/runtime frontier work.
 - Resolving string or lazy-import routeables through a full `RouteConfigContext` dependency/resource scope. The current
   model handles dependency-array custom-element names for child route contexts and can claim the closed string miss
-  where no component is known (`rtNoComponent` / `AUR3552`), but root-container registration visibility, imported view
-  resources, inline templates, and `resolveCustomElementDefinition(...)` guards such as `AUR3551` and `AUR3553` stay
-  unclaimed until semantic-runtime has a fuller scope-specific routeable resolver product.
+  where no component is known (`rtNoComponent` / `AUR3552`). Literal `import(...)` routeables reuse the evaluator's
+  retained module link, the shared `ModuleLoader` item/pressure product, and canonical resource identity; direct imports
+  and provably pure `.then(module => module.Export)` selectors follow the router's raw/first-non-default/default selection
+  order without executing arbitrary metadata callbacks. Root-container registration visibility, imported view resources,
+  inline templates, and `resolveCustomElementDefinition(...)` guards such as `AUR3551` and `AUR3553` stay unclaimed until
+  semantic-runtime has a fuller scope-specific routeable resolver product.
 - Emulating imperative router path-generation API calls such as `generateRootedPath(...)` /
   `generateRelativePath(...)`; `createEagerInstructions(...)` / `AUR3404` belongs to that public API surface, while
   router-resource object values are modeled through `RouteConfigContext._generateViewportInstruction(...)`.

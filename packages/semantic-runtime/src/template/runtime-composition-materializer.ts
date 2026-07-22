@@ -15,7 +15,6 @@ import {
   closedEvaluationPromiseFulfillment,
   type EvaluationValue,
 } from '../evaluation/values.js';
-import { readDeclarationLocalName } from '../evaluation/ts-syntax.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import {
   EvidenceKind,
@@ -93,6 +92,7 @@ import {
   type CheckerTypeShape,
 } from '../type-system/type-shape.js';
 import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import {
   readCheckerTypeShape,
 } from '../type-system/checker-type-shape-access.js';
@@ -107,6 +107,7 @@ import {
 } from './instruction-ir.js';
 import {
   CompositionComponentResolutionKind,
+  CompositionComponentCandidateCoverageKind,
   CompositionActivationModelHandoff,
   CompositionContext,
   CompositionController,
@@ -156,6 +157,7 @@ export class RuntimeCompositionMaterializationRequest {
     readonly expressionWorld: CheckerExpressionTypeWorld,
     readonly projectContext: TemplateRuntimeAnalysisProjectContext,
     readonly resourceDefinitions: ResourceDefinitionIndex | null,
+    readonly typeSystem: TypeSystemProject | null,
     readonly resourceScope: TemplateResourceScope | null,
     readonly sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   ) {}
@@ -249,9 +251,17 @@ interface StaticAuComposeInputs {
 interface ComponentResolution {
   readonly candidates: readonly CompositionResolvedComponent[];
   readonly resolutionKind: CompositionComponentResolutionKind;
+  readonly candidateCoverageKind: CompositionComponentCandidateCoverageKind;
   readonly objectViewModelActivationHandoff: CompositionActivationModelHandoff | null;
   readonly openReason: string | null;
   readonly openReasonKinds: readonly OpenSeamReasonKind[];
+}
+
+class ComponentTypeResolution {
+  constructor(
+    readonly candidates: readonly CompositionResolvedComponent[],
+    readonly coverageKind: CompositionComponentCandidateCoverageKind,
+  ) {}
 }
 
 class ComposedChildControllerHandoff {
@@ -344,10 +354,12 @@ export class RuntimeCompositionMaterializer {
         [RuntimeCompositionInputKind.Tag, tag],
         [RuntimeCompositionInputKind.FlushMode, flushMode],
       ] as const;
+      const componentResolution = this.resolveComponent(local, input, controller, component, model, staticInputs);
       const inputPressure = this.openCompositionInputSeams(
         local,
         input.sourceValueEvaluator,
         evaluatedInputs,
+        componentResolution,
         source,
         records,
       );
@@ -357,7 +369,7 @@ export class RuntimeCompositionMaterializer {
         input,
         controller,
         context,
-        this.resolveComponent(local, input, controller, component, model, staticInputs),
+        componentResolution,
         inputPressure.filter((pressure) => pressure.inputKind === RuntimeCompositionInputKind.Component),
         source,
         records,
@@ -374,7 +386,7 @@ export class RuntimeCompositionMaterializer {
       );
       const compositionResolution = componentResolutionWithInputPressure(
         controllerHandoff.resolution,
-        evaluatedInputs.map(([, evaluated]) => evaluated),
+        inputPressure,
       );
       const composition = this.createController(local, controller, context, compositionResolution, model, source.provenanceHandle);
       const inputOpenSeamHandles = inputPressure.map((pressure) => pressure.seam.handle);
@@ -474,6 +486,7 @@ export class RuntimeCompositionMaterializer {
       hostController.productHandle,
       hostController.parent?.productHandle ?? null,
       resolution.resolutionKind,
+      resolution.candidateCoverageKind,
       modelResolutionKind(model),
       resolution.candidates,
       resolution.objectViewModelActivationHandoff,
@@ -771,6 +784,7 @@ export class RuntimeCompositionMaterializer {
       return {
         candidates: [],
         resolutionKind: CompositionComponentResolutionKind.TemplateOnly,
+        candidateCoverageKind: CompositionComponentCandidateCoverageKind.NotApplicable,
         objectViewModelActivationHandoff: null,
         openReason: null,
         openReasonKinds: [],
@@ -782,6 +796,7 @@ export class RuntimeCompositionMaterializer {
         return {
           candidates: staticCandidates,
           resolutionKind: CompositionComponentResolutionKind.StaticValue,
+          candidateCoverageKind: CompositionComponentCandidateCoverageKind.NotApplicable,
           objectViewModelActivationHandoff: null,
           openReason: null,
           openReasonKinds: [],
@@ -790,6 +805,7 @@ export class RuntimeCompositionMaterializer {
       return {
         candidates: [],
         resolutionKind: CompositionComponentResolutionKind.Open,
+        candidateCoverageKind: CompositionComponentCandidateCoverageKind.NotApplicable,
         objectViewModelActivationHandoff: null,
         openReason: `AuCompose component name '${staticInputs.component}' did not resolve to a visible custom-element definition.`,
         openReasonKinds: [OpenSeamReasonKind.BindingSourceResourceOpen],
@@ -802,6 +818,7 @@ export class RuntimeCompositionMaterializer {
       return {
         candidates: valueCandidates,
         resolutionKind: CompositionComponentResolutionKind.StaticValue,
+        candidateCoverageKind: CompositionComponentCandidateCoverageKind.NotApplicable,
         objectViewModelActivationHandoff: null,
         openReason: null,
         openReasonKinds: [],
@@ -811,6 +828,7 @@ export class RuntimeCompositionMaterializer {
       return {
         candidates: [],
         resolutionKind: CompositionComponentResolutionKind.ObjectViewModel,
+        candidateCoverageKind: CompositionComponentCandidateCoverageKind.NotApplicable,
         objectViewModelActivationHandoff: activationModelHandoffForType(
           input.expressionWorld.projector,
           component.sourceType,
@@ -824,19 +842,24 @@ export class RuntimeCompositionMaterializer {
         openReasonKinds: [],
       };
     }
-    const typeCandidates = this.resolveComponentType(input, component.sourceType, model);
-    if (typeCandidates.length > 0) {
+    const typeResolution = this.resolveComponentType(input, component.sourceType, model);
+    if (typeResolution.candidates.length > 0) {
+      const partial = typeResolution.coverageKind === CompositionComponentCandidateCoverageKind.Partial;
       return {
-        candidates: typeCandidates,
+        candidates: typeResolution.candidates,
         resolutionKind: CompositionComponentResolutionKind.TypeCandidate,
+        candidateCoverageKind: typeResolution.coverageKind,
         objectViewModelActivationHandoff: null,
-        openReason: null,
-        openReasonKinds: [],
+        openReason: partial
+          ? 'AuCompose resolved only part of the finite TypeChecker component candidate set.'
+          : null,
+        openReasonKinds: partial ? [OpenSeamReasonKind.BindingSourceTypeOpen] : [],
       };
     }
     return {
       candidates: [],
       resolutionKind: CompositionComponentResolutionKind.Open,
+      candidateCoverageKind: typeResolution.coverageKind,
       objectViewModelActivationHandoff: null,
       openReason: component.openReason
         ?? 'AuCompose component input did not resolve to a custom-element definition candidate.',
@@ -906,35 +929,59 @@ export class RuntimeCompositionMaterializer {
     input: RuntimeCompositionMaterializationRequest,
     sourceType: CheckerTypeReference | null,
     model: EvaluatedBinding,
-  ): readonly CompositionResolvedComponent[] {
-    if (input.resourceDefinitions == null || sourceType?.productHandle == null) {
-      return [];
+  ): ComponentTypeResolution {
+    if (
+      input.resourceDefinitions == null
+      || input.typeSystem == null
+      || sourceType?.productHandle == null
+    ) {
+      return new ComponentTypeResolution([], CompositionComponentCandidateCoverageKind.Open);
     }
     const shape = readCheckerTypeShape(input.expressionWorld.projector.publication, sourceType);
     if (shape == null) {
-      return [];
+      return new ComponentTypeResolution([], CompositionComponentCandidateCoverageKind.Open);
     }
-    const definitions = candidateTypesForShape(shape)
-      .flatMap((type) => definitionsForType(input.resourceDefinitions!, type));
-    return resolvedComponentRows(
+    const candidateTypes = candidateTypesForShape(shape);
+    if (candidateTypes.length === 0) {
+      return new ComponentTypeResolution([], CompositionComponentCandidateCoverageKind.Open);
+    }
+    let coveredTypes = 0;
+    const definitions = candidateTypes.flatMap((type) => {
+      const candidates = definitionsForType(input.resourceDefinitions!, input.typeSystem!, type);
+      if (candidates.length > 0) {
+        coveredTypes += 1;
+      }
+      return candidates;
+    });
+    const candidates = resolvedComponentRows(
       input.expressionWorld.projector,
       input,
       definitions,
       CompositionComponentResolutionKind.TypeCandidate,
       model,
     );
+    const coverageKind = coveredTypes === candidateTypes.length
+      ? CompositionComponentCandidateCoverageKind.Complete
+      : coveredTypes > 0
+        ? CompositionComponentCandidateCoverageKind.Partial
+        : CompositionComponentCandidateCoverageKind.Open;
+    return new ComponentTypeResolution(candidates, coverageKind);
   }
 
   private openCompositionInputSeams(
     local: string,
     sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
     inputs: readonly (readonly [RuntimeCompositionInputKind, EvaluatedBinding])[],
+    componentResolution: ComponentResolution,
     source: CompositionSourceSet,
     records: KernelStoreRecord[],
   ): readonly CompositionInputPressure[] {
     const result: CompositionInputPressure[] = [];
     for (const [inputKind, evaluated] of inputs) {
       if (!evaluated.isOpen || evaluated.evaluation == null) {
+        continue;
+      }
+      if (compositionInputPressureIsSatisfied(inputKind, evaluated, componentResolution)) {
         continue;
       }
       const sourceAddressHandle = evaluated.binding?.sourceAddressHandle ?? null;
@@ -1140,11 +1187,11 @@ function modelResolutionKind(model: EvaluatedBinding): CompositionModelResolutio
 
 function componentResolutionWithInputPressure(
   resolution: ComponentResolution,
-  inputs: readonly EvaluatedBinding[],
+  inputPressure: readonly CompositionInputPressure[],
 ): ComponentResolution {
   const summaries = [
     resolution.openReason,
-    ...inputs.map((input) => input.openReason),
+    ...inputPressure.map((pressure) => pressure.seam.summary),
   ].filter((summary): summary is string => summary != null);
   if (summaries.length === 0) {
     return resolution;
@@ -1154,9 +1201,29 @@ function componentResolutionWithInputPressure(
     openReason: [...new Set(summaries)].join(' '),
     openReasonKinds: [...new Set([
       ...resolution.openReasonKinds,
-      ...inputs.flatMap((input) => input.openReasonKinds),
+      ...inputPressure.flatMap((pressure) => pressure.seam.reasonKinds),
     ])],
   };
+}
+
+function compositionInputPressureIsSatisfied(
+  inputKind: RuntimeCompositionInputKind,
+  input: EvaluatedBinding,
+  componentResolution: ComponentResolution,
+): boolean {
+  if (
+    inputKind !== RuntimeCompositionInputKind.Component
+    || componentResolution.resolutionKind !== CompositionComponentResolutionKind.TypeCandidate
+    || componentResolution.candidateCoverageKind !== CompositionComponentCandidateCoverageKind.Complete
+    || input.openReasonKinds.length === 0
+  ) {
+    return false;
+  }
+  return input.openReasonKinds.every((reasonKind) =>
+    reasonKind === OpenSeamReasonKind.BindingSourceNeedsRuntimeValue
+    || reasonKind === OpenSeamReasonKind.BindingSourceSlotNoStaticValue
+    || reasonKind === OpenSeamReasonKind.BindingSourceMemberNoStaticValue
+  );
 }
 
 function valueIsObjectViewModelComponent(value: EvaluationValue): boolean {
@@ -1296,17 +1363,19 @@ function candidateTypesForShape(shape: CheckerTypeShape): readonly ts.Type[] {
 
 function definitionsForType(
   resourceDefinitions: ResourceDefinitionIndex,
+  typeSystem: TypeSystemProject,
   type: ts.Type,
 ): readonly FullResourceDefinition[] {
   const definitions: FullResourceDefinition[] = [];
   for (const declaration of declarationCandidatesForType(type)) {
-    const definition = definitionForDeclaration(resourceDefinitions, declaration);
+    const definition = resourceDefinitions.lookupByTypeScriptDeclaration(typeSystem, declaration);
     if (definition != null) {
       definitions.push(definition);
     }
   }
   return definitions.filter((definition, index, all) =>
-    definition.productHandle != null
+    definition.type === ResourceDefinitionKind.CustomElement
+    && definition.productHandle != null
     && all.findIndex((candidate) => candidate.productHandle === definition.productHandle) === index
   );
 }
@@ -1318,19 +1387,6 @@ function declarationCandidatesForType(type: ts.Type): readonly ts.Declaration[] 
     declarations.push(...(signature.getReturnType().symbol?.declarations ?? []));
   }
   return declarations.filter((declaration, index, all) => all.indexOf(declaration) === index);
-}
-
-function definitionForDeclaration(
-  resourceDefinitions: ResourceDefinitionIndex,
-  declaration: ts.Declaration,
-): FullResourceDefinition | null {
-  const localName = readDeclarationLocalName(declaration);
-  if (localName == null) {
-    return null;
-  }
-  const definition = resourceDefinitions.lookupByModuleLocal(declaration.getSourceFile().fileName, localName)
-    ?? resourceDefinitions.lookupByLocalName(localName);
-  return definition?.type === ResourceDefinitionKind.CustomElement ? definition : null;
 }
 
 function recordsForCompositionContext(

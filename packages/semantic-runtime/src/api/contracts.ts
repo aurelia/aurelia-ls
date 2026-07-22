@@ -253,6 +253,7 @@ import type {
 import type {
   CompositionActivateMethodKind,
   CompositionActivationModelHandoffKind,
+  CompositionComponentCandidateCoverageKind,
   CompositionComponentResolutionKind,
   CompositionInputFulfillmentKind,
   CompositionModelResolutionKind,
@@ -4275,6 +4276,8 @@ export interface SemanticRuntimeCompositionRow {
   readonly hasCompositionBinding: boolean;
   readonly hasComposingBinding: boolean;
   readonly componentResolutionKind: CompositionComponentResolutionKind | `${CompositionComponentResolutionKind}`;
+  /** Whether TypeChecker-derived component candidates cover every finite source-type constituent. */
+  readonly componentCandidateCoverageKind: CompositionComponentCandidateCoverageKind | `${CompositionComponentCandidateCoverageKind}`;
   readonly modelResolutionKind: CompositionModelResolutionKind | `${CompositionModelResolutionKind}`;
   readonly resolvedComponentCount: number;
   readonly resolvedComponentNames: readonly string[];

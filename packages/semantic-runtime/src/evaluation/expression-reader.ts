@@ -100,6 +100,23 @@ export class StaticSourceLiteralExpressionReader implements StaticExpressionEval
   }
 }
 
+/**
+ * Resolve one authored dynamic import through the module graph retained by an admitted evaluation result.
+ *
+ * Declarative consumers use this instead of replaying their enclosing expression: module linkage is already an
+ * evaluator-owned fact, while callbacks and surrounding metadata may still be unsafe to execute speculatively.
+ */
+export function readStaticModuleDynamicImport(
+  evaluation: StaticModuleEvaluationResult,
+  call: ts.CallExpression,
+  moduleSpecifier: string,
+): EvaluationRead<EvaluationValue> {
+  return new EvaluationRead(
+    evaluation.runtimeHost.resolveDynamicImport?.(evaluation.moduleKey, moduleSpecifier, call) ?? null,
+    call,
+  );
+}
+
 /** Generic expression reader over an already-built module environment. */
 export class StaticEvaluationExpressionReader implements StaticExpressionEvaluationReader {
   private evaluator: StaticEvaluator | null = null;

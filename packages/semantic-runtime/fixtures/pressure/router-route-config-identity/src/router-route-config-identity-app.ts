@@ -285,6 +285,16 @@ export class StaticDefaultsRoute {
       path: 'lazy-valid',
       component: import('./routes/lazy-route'),
     },
+    {
+      id: 'lazy-selected',
+      path: 'lazy-selected',
+      component: import('./routes/lazy-route').then(module => module.LazyRoute),
+    },
+    {
+      id: 'lazy-selected-element',
+      path: 'lazy-selected-element',
+      component: import('./routes/lazy-route').then(module => module['LazyRoute']),
+    },
     ConventionOnlyRoute,
     MergedRoute,
     {

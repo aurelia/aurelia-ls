@@ -22,6 +22,7 @@ import {
   EvaluationBoundaryKind,
   EvaluationBoundaryValue,
   EvaluationClassValue,
+  EvaluationDateValue,
   EvaluationFunctionValue,
   EvaluationInstanceValue,
   EvaluationMapEntry,
@@ -35,6 +36,7 @@ import {
   EvaluationPromiseValue,
   EvaluationSetElement,
   EvaluationSetValue,
+  EvaluationUnknownValue,
   EvaluationValueKind,
   type EvaluationValue,
 } from '../src/evaluation/values.js';
@@ -195,6 +197,45 @@ describe('static evaluation sessions', () => {
     expect(result.status).toBe(ModuleLoaderTransformStatus.Analyzed);
     expect(result.analyzedModule?.items.map((item) => item.key)).toEqual(['known']);
     expect(result.analyzedModule?.mayHaveUnknownItems).toBe(true);
+  });
+
+  test('preserves object-valued exports and filtered-item membership pressure through ModuleLoader analysis', () => {
+    const source = ts.createSourceFile(
+      'src/module-item-pressure.ts',
+      'export const collection = []; export const unresolved = externalValue; export const primitive = 1;',
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const collection = new EvaluationArrayValue([], source.statements[0] ?? source);
+    const unresolved = new EvaluationUnknownValue('The export value depends on runtime state.', source.statements[1] ?? source);
+    const primitive = new EvaluationNumberValue(1, source.statements[2] ?? source);
+    const namespace = new EvaluationModuleNamespaceValue(
+      'src/module-item-pressure.ts',
+      new Map([
+        ['collection', new EvaluationModuleNamespaceExport('collection', collection, source.statements[0] ?? source)],
+        ['unresolved', new EvaluationModuleNamespaceExport('unresolved', unresolved, source.statements[1] ?? source)],
+        ['primitive', new EvaluationModuleNamespaceExport('primitive', primitive, source.statements[2] ?? source)],
+      ]),
+      false,
+      source,
+    );
+
+    const result = new ModuleLoader().load(namespace);
+
+    expect(result.status).toBe(ModuleLoaderTransformStatus.Analyzed);
+    expect(result.analyzedModule?.items.map((item) => item.key)).toEqual(['collection']);
+    expect(result.analyzedModule?.mayHaveUnknownItems).toBe(true);
+    expect(result.analyzedModule?.mayHaveUnknownOrder).toBe(true);
+  });
+
+  test('accepts direct evaluator objects that have no enumerable module items', () => {
+    const result = new ModuleLoader().load(new EvaluationDateValue(0));
+
+    expect(result.status).toBe(ModuleLoaderTransformStatus.Analyzed);
+    expect(result.analyzedModule?.items).toEqual([]);
+    expect(result.analyzedModule?.mayHaveUnknownItems).toBe(false);
+    expect(result.analyzedModule?.mayHaveUnknownOrder).toBe(false);
   });
 
   test('preserves aliases and cycles while isolating follow-up mutation from the project snapshot', () => {

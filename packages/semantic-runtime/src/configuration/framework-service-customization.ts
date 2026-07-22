@@ -6,6 +6,7 @@ import {
 } from '../evaluation/boundary-open-reason.js';
 import {
   EvaluationRead,
+  readStaticSourceLiteralValue,
   readStaticStringValue,
   StaticInvocationEvidenceExpressionReader,
   StaticSourceLiteralExpressionReader,
@@ -1285,6 +1286,10 @@ function readStaticString(
   reader: StaticExpressionEvaluationReader,
   evaluations: EvaluationRead<EvaluationValue>[],
 ): string | null {
+  const literalValue = readStaticSourceLiteralValue(expression);
+  if (literalValue != null) {
+    return readStaticStringValue(literalValue);
+  }
   const read = reader.evaluateExpression(expression);
   evaluations.push(read);
   return read.value == null ? null : readStaticStringValue(read.value);

@@ -35,6 +35,9 @@ const closedComponentRows = compositions.filter((row) =>
 const pressuredComponentRows = compositions.filter((row) =>
   sourceText(row.source).includes('component.bind="pressuredComponent"')
 );
+const partialComponentRows = compositions.filter((row) =>
+  sourceText(row.source).includes('component.bind="partialComponent"')
+);
 const failures = [];
 
 if (closedComponentRows.length === 0) {
@@ -42,6 +45,9 @@ if (closedComponentRows.length === 0) {
 }
 if (pressuredComponentRows.length === 0) {
   failures.push('Expected a runtime-composition row for the open-with-value component candidate.');
+}
+if (partialComponentRows.length === 0) {
+  failures.push('Expected a runtime-composition row for the partially covered TypeChecker candidate set.');
 }
 
 for (const row of closedComponentRows) {
@@ -104,6 +110,30 @@ for (const row of pressuredComponentRows) {
   }
 }
 
+for (const row of partialComponentRows) {
+  const contextSeams = productOpenSeams(row.handles?.compositionContextProductHandle ?? null);
+  const componentSeams = contextSeams.filter((seam) => inputNameForSeam(seam).includes('component'));
+  if (
+    row.componentResolutionKind !== 'type-candidate'
+    || row.componentCandidateCoverageKind !== 'partial'
+    || !row.resolvedComponentNames.includes('pressure-widget')
+    || row.openReason == null
+  ) {
+    failures.push(`Expected the same-named cross-module non-resource constituent to remain a partial candidate set: ${JSON.stringify({
+      componentResolutionKind: row.componentResolutionKind,
+      componentCandidateCoverageKind: row.componentCandidateCoverageKind,
+      resolvedComponentNames: row.resolvedComponentNames,
+      openReason: row.openReason,
+    })}.`);
+  }
+  if (componentSeams.length !== 1) {
+    failures.push(`Expected partial candidate coverage to retain exactly one component-input seam, observed ${componentSeams.length}.`);
+  }
+  if (row.composedChildControllerCount !== 0 || row.composedChildContainerCount !== 0) {
+    failures.push(`Expected partial candidate coverage not to materialize a concrete child, observed controllers=${row.composedChildControllerCount}, containers=${row.composedChildContainerCount}.`);
+  }
+}
+
 function productOpenSeams(productHandle) {
   if (productHandle == null) {
     return [];
@@ -141,6 +171,7 @@ const summary = {
     templateInputFulfillmentKind: row.templateInputFulfillmentKind,
     modelInputFulfillmentKind: row.modelInputFulfillmentKind,
     resolvedComponentNames: row.resolvedComponentNames,
+    componentCandidateCoverageKind: row.componentCandidateCoverageKind,
     composedChildControllerCount: row.composedChildControllerCount,
     composedChildContainerCount: row.composedChildContainerCount,
     contextOpenInputs: productOpenSeams(row.handles?.compositionContextProductHandle ?? null).flatMap(inputNameForSeam),

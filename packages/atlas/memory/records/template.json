@@ -2074,12 +2074,13 @@
         "Start here when work touches `<au-compose>`, CompositionContext, CompositionController, component/model binding evaluation, or dynamic composition candidate reporting.",
         "Keep static invalid `scopeBehavior`, `flushMode`, and missing static string component diagnostics in the controller issue lane; dynamic component/model resolution belongs to runtime composition after controller bind and binding data-flow.",
         "Use TypeChecker constructable candidates as a semantic fallback when value evaluation stays open but the component binding source type names custom-element classes.",
-        "Resource-definition lookup can enter through module-local identity when evaluator values carry a module key, or through unique local declaration identity when a TypeChecker declaration is the carrier.",
+        "Resource-definition lookup enters through evaluator value identity or `ResourceDefinitionIndex.lookupByTypeScriptDeclaration(...)`, which maps the Program-owned declaration through canonical module identity. Never fall back to a global local-name match; same-named declarations in different modules must remain distinct.",
         "Runtime composition rows now include the first lifecycle handoff: absent/parameterless `activate` closes as such, and `activate(model)` compares the model binding source type with the activation parameter type through shared checker assignability. The checker-backed activation handoff lives in `runtime-composition-activation.ts`; keep it reusable for future routeable-component activation comparisons rather than burying it in the composition scanner.",
         "`activate(model)` parameter projection spends the shared `checker-signature-parameters.ts` overload candidate-basis. Do not regress runtime composition to `getCallSignatures()[0]`; overloaded lifecycle hooks should compare the model against all arity-compatible first-parameter candidates through checker-backed union projection.",
         "AuCompose activation analysis now has explicit method and parameter frames: `activateMethodProjection(...)` owns member discovery, declaration location, value type, and callable signature admission; `activationParameterProjectionFrame(...)` owns candidate-basis and parameter-reference projection; `activationModelHandoffForParameterProjection(...)` owns absent/model-open/assignability handoff folding.",
         "Runtime composition rows now report candidate resource-analysis coverage and candidate resource-controller counts by joining resolved component definitions back to their project-level template/runtime analyses.",
         "Runtime composition contexts distinguish absent, direct, promise-fulfilled, and open component/template/model inputs so generated fixtures can verify promise-valued `AuCompose` support without inferring it from component resolution alone.",
+        "TypeChecker component candidate coverage is independent from runtime input fulfillment: complete means every finite constituent resolves, partial retains useful candidates plus open pressure, and open means no exhaustive set was proved. A complete multi-candidate set may close identity analysis but must not fabricate one runtime-selected child controller.",
         "Closed static/value custom-element composition branches now materialize an aggregate composed child controller; TypeChecker-only candidate unions remain candidates rather than fake child controllers.",
         "Closed static/value custom-element child-controller materialization now enters through `ComposedChildControllerMaterializationFrame`: admission owns parent container and resolved definition, then the materialization phase owns child-container emission, runtime controller construction, lifecycle step, host-child claim, and controller publication.",
         "Parent-to-child component/model closure depends on `RuntimeBoundControllerValueTable` being threaded into child resource analysis and extended with the current resource's rendered controller values during runtime composition. Treat `Array.find receiver did not reduce to a known array` on bound child controller state as binding-source/evaluator pressure before adding AuCompose-local shortcuts.",
@@ -2222,7 +2223,7 @@
         }
       ],
       "createdAt": "2026-05-17",
-      "updatedAt": "2026-06-05"
+      "updatedAt": "2026-07-22"
     },
     {
       "id": "reuse:repeat-scope-value-carriers",

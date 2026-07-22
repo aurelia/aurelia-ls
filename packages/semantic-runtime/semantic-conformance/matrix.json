@@ -10443,7 +10443,7 @@
               "closure": "complete",
               "equals": {
                 "value.selectedMemberName": "load",
-                "value.rows.length": 12
+                "value.rows.length": 13
               },
               "rows": [
                 { "fields": { "referenceKind": "resource-usage", "name": "load" }, "source": { "marker": "load=\"route: product-detail; params.bind: { productId: 'espresso' }\"", "token": "load" }, "count": 1 }
@@ -11132,7 +11132,7 @@
               "name": "routes",
               "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "routeKind": "route", "originKind": "route-decorator", "valueKind": "object-literal", "title": "Router Route Config Identity Pressure", "childRouteCount": 20, "component.name": "RouterRouteConfigIdentityApp", "component.resolved": true } },
+                { "fields": { "routeKind": "route", "originKind": "route-decorator", "valueKind": "object-literal", "title": "Router Route Config Identity Pressure", "childRouteCount": 22, "component.name": "RouterRouteConfigIdentityApp", "component.resolved": true } },
                 { "fields": { "routeKind": "route", "originKind": "configure-call", "valueKind": "object-literal", "id": "configured-id", "title": "Configured Route", "childRouteCount": 1, "component.name": "ConfiguredRoute", "fallback.name": "FallbackRoute" } },
                 { "fields": { "routeKind": "route", "originKind": "route-decorator", "valueKind": "path-expression", "id": "decorator-path", "title": "Decorator Path Title", "viewport": "main", "component.name": "DecoratorPathRoute" }, "source": { "marker": "@route(['decorator-path', 'decorator-alt'])", "token": "@route(['decorator-path', 'decorator-alt'])" } },
                 { "fields": { "routeKind": "route", "originKind": "class-static-defaults", "valueKind": "class-static-defaults", "id": "static-default-id", "title": "Static Defaults Title", "caseSensitive": true, "transitionPlan": "replace", "viewport": "details", "hasData": true, "childRouteCount": 2, "fallback.name": "FallbackRoute", "nav": false } },
@@ -11152,7 +11152,9 @@
                 { "fields": { "id": "decorator-object", "fallback.componentKind": "resource-definition", "fallback.name": "FallbackRoute", "fallback.resolved": true }, "sourceField": "fallback.source", "source": { "marker": "data: { source: 'decorator-object' }", "token": "FallbackRoute" } },
                 { "fields": { "id": "class-reference-route", "valueKind": "routeable-component", "component.componentKind": "resource-definition", "component.name": "ClassReferenceRoute", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "ClassReferenceRoute,\n    {", "token": "ClassReferenceRoute" } },
                 { "fields": { "id": "scoped-alias", "component.componentKind": "custom-element-name", "component.name": "scoped-child-alias", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "id: 'scoped-alias'", "token": "'scoped-child-alias'" } },
-                { "fields": { "id": "lazy-valid", "component.componentKind": "promise", "component.name": "./routes/lazy-route" }, "sourceField": "component.source", "source": { "marker": "component: import('./routes/lazy-route')", "token": "import('./routes/lazy-route')" } }
+                { "fields": { "id": "lazy-valid", "component.componentKind": "promise", "component.name": "./routes/lazy-route" }, "sourceField": "component.source", "source": { "marker": "path: 'lazy-valid',\n      component: import('./routes/lazy-route')", "token": "import('./routes/lazy-route')" } },
+                { "fields": { "id": "lazy-selected", "component.componentKind": "promise", "component.name": "./routes/lazy-route", "component.resolvedName": "lazy-route", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "component: import('./routes/lazy-route').then(module => module.LazyRoute)", "token": "import('./routes/lazy-route').then(module => module.LazyRoute)" } },
+                { "fields": { "id": "lazy-selected-element", "component.componentKind": "promise", "component.name": "./routes/lazy-route", "component.resolvedName": "lazy-route", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "component: import('./routes/lazy-route').then(module => module['LazyRoute'])", "token": "import('./routes/lazy-route').then(module => module['LazyRoute'])" } }
               ]
             }
           ]
@@ -11405,7 +11407,9 @@
               "name": "routes",
               "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "id": "lazy-valid", "component.componentKind": "promise", "component.name": "./routes/lazy-route", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "component: import('./routes/lazy-route')", "token": "import('./routes/lazy-route')" } }
+                { "fields": { "id": "lazy-valid", "component.componentKind": "promise", "component.name": "./routes/lazy-route", "component.resolvedName": "lazy-route", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "path: 'lazy-valid',\n      component: import('./routes/lazy-route')", "token": "import('./routes/lazy-route')" } },
+                { "fields": { "id": "lazy-selected", "component.componentKind": "promise", "component.name": "./routes/lazy-route", "component.resolvedName": "lazy-route", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "component: import('./routes/lazy-route').then(module => module.LazyRoute)", "token": "import('./routes/lazy-route').then(module => module.LazyRoute)" } },
+                { "fields": { "id": "lazy-selected-element", "component.componentKind": "promise", "component.name": "./routes/lazy-route", "component.resolvedName": "lazy-route", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "component: import('./routes/lazy-route').then(module => module['LazyRoute'])", "token": "import('./routes/lazy-route').then(module => module['LazyRoute'])" } }
               ]
             }
           ]
@@ -12020,7 +12024,7 @@
               "query": { "kind": "runtime-compositions", "options": { "page": { "size": 100 } } },
               "equals": { "value.rows.length": 10 },
               "rows": [
-                { "fields": { "renderingDefinitionName": "compose-dashboard-app", "renderingContextKind": "recursive-resource-instance", "componentResolutionKind": "type-candidate", "modelResolutionKind": "static-value", "modelAssignableToActivationParameterCount": 2 }, "source": { "marker": "<au-compose component.bind=\"widget.component\" model.bind=\"widget\"></au-compose>", "token": "<au-compose component.bind=\"widget.component\" model.bind=\"widget\"></au-compose>" } },
+                { "fields": { "renderingDefinitionName": "compose-dashboard-app", "renderingContextKind": "recursive-resource-instance", "componentResolutionKind": "type-candidate", "componentCandidateCoverageKind": "complete", "modelResolutionKind": "static-value", "modelAssignableToActivationParameterCount": 2 }, "source": { "marker": "<au-compose component.bind=\"widget.component\" model.bind=\"widget\"></au-compose>", "token": "<au-compose component.bind=\"widget.component\" model.bind=\"widget\"></au-compose>" } },
                 { "fields": { "renderingDefinitionName": "compose-dashboard-app", "renderingContextKind": "definition-resource", "componentResolutionKind": "static-value", "modelResolutionKind": "static-value", "modelAssignableToActivationParameterCount": 1 }, "source": { "marker": "<au-compose component=\"chart-widget\" model.bind=\"selectedWidget\"></au-compose>", "token": "<au-compose component=\"chart-widget\" model.bind=\"selectedWidget\"></au-compose>" } },
                 { "fields": { "renderingDefinitionName": "compose-dashboard-app", "renderingContextKind": "definition-resource", "componentResolutionKind": "template-only", "modelResolutionKind": "absent", "modelAssignableToActivationParameterCount": 0 }, "source": { "marker": "<au-compose template.bind=\"getAsyncTemplate()\" scope-behavior=\"scoped\" composition.bind=\"composition\"></au-compose>", "token": "<au-compose template.bind=\"getAsyncTemplate()\" scope-behavior=\"scoped\" composition.bind=\"composition\"></au-compose>" } },
                 { "fields": { "renderingDefinitionName": "widget-host", "renderingContextKind": "definition-resource", "componentResolutionKind": "static-value", "modelResolutionKind": "static-value", "modelAssignableToActivationParameterCount": 0 }, "source": { "sourceFile": "src/widget-host.html", "marker": "<au-compose component.bind=\"component\" model.bind=\"model\"></au-compose>", "token": "<au-compose component.bind=\"component\" model.bind=\"model\"></au-compose>" } },

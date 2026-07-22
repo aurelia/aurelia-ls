@@ -1,17 +1,28 @@
 import ts from 'typescript';
 import {
   readClassTarget,
+  readStaticModuleDynamicImport,
   readStaticStringArrayValue,
   StaticInvocationEvidenceExpressionReader,
   StaticSourceLiteralExpressionReader,
   type StaticExpressionEvaluationReader,
 } from '../evaluation/expression-reader.js';
 import {
+  EvaluationPromiseSettlementKind,
+  EvaluationPromiseValue,
   EvaluationValueKind,
-  closedEvaluationPromiseFulfillment,
-  type EvaluationPromiseValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
+import { EvaluationValueEvidence } from '../evaluation/value-pressure.js';
+import {
+  readStaticValueProperty,
+  StaticValueMemberReadKind,
+} from '../evaluation/property-access.js';
+import {
+  ModuleLoader,
+  ModuleLoaderTransformStatus,
+  type AnalyzedModule,
+} from '../evaluation/module-loader.js';
 import {
   isStaticCallInvocationOccurrence,
   type StaticInvocationOccurrence,
@@ -133,6 +144,33 @@ interface RouteableComponentObservation {
   readonly sourceNode: ts.Node;
   readonly resourceDefinition: FullResourceDefinition | null;
   readonly invalidLazyImport: boolean;
+}
+
+class DynamicImportRouteableExpression {
+  constructor(
+    readonly call: ts.CallExpression,
+    readonly moduleSpecifier: string,
+    readonly selectedExportName: string | null,
+  ) {}
+}
+
+class LazyRouteableResolution {
+  constructor(
+    readonly resourceDefinition: FullResourceDefinition | null,
+    readonly invalid: boolean,
+  ) {}
+
+  static resolved(resourceDefinition: FullResourceDefinition): LazyRouteableResolution {
+    return new LazyRouteableResolution(resourceDefinition, false);
+  }
+
+  static open(): LazyRouteableResolution {
+    return new LazyRouteableResolution(null, false);
+  }
+
+  static invalid(): LazyRouteableResolution {
+    return new LazyRouteableResolution(null, true);
+  }
 }
 
 interface RouteConfigObservation {
@@ -1810,10 +1848,24 @@ function routeableComponentForExpression(
   if (ts.isStringLiteral(current) || ts.isNoSubstitutionTemplateLiteral(current)) {
     return stringRouteableComponent(context, current, routeContextComponent);
   }
-  const dynamicImportSpecifier = readDynamicImportSpecifier(current);
+  const dynamicImport = readDynamicImportRouteableExpression(current);
+  const dynamicImportSpecifier = dynamicImport?.moduleSpecifier ?? readDynamicImportSpecifier(current);
   const read = context.expressionReader.evaluateExpression(current);
   if (read.value?.kind === EvaluationValueKind.Promise) {
     return promiseRouteableComponent(context, current, read.value, dynamicImportSpecifier);
+  }
+  if (dynamicImport != null) {
+    const importRead = readStaticModuleDynamicImport(
+      context.evaluation.evaluation,
+      dynamicImport.call,
+      dynamicImport.moduleSpecifier,
+    );
+    const promise = importRead.value?.kind === EvaluationValueKind.Promise
+      ? selectDynamicImportExport(importRead.value, dynamicImport.selectedExportName, current)
+      : null;
+    if (promise != null) {
+      return promiseRouteableComponent(context, current, promise, dynamicImport.moduleSpecifier);
+    }
   }
   if (dynamicImportSpecifier != null) {
     return dynamicImportRouteableComponent(current, dynamicImportSpecifier);
@@ -1845,16 +1897,13 @@ function promiseRouteableComponent(
   promise: EvaluationPromiseValue,
   dynamicImportSpecifier: string | null,
 ): RouteableComponentObservation {
-  const resourceDefinition = routeableResourceDefinitionForPromise(context, promise);
+  const resolution = lazyRouteableResolution(context, promise);
   return {
     componentKind: RouteableComponentKind.Promise,
-    localName: dynamicImportSpecifier ?? resourceDefinition?.target.localName ?? readReferenceName(expression),
+    localName: dynamicImportSpecifier ?? resolution.resourceDefinition?.target.localName ?? readReferenceName(expression),
     sourceNode: expression,
-    resourceDefinition,
-    invalidLazyImport: resourceDefinition == null && promiseFulfillmentIsKnownInvalidLazyImport(
-      context,
-      closedEvaluationPromiseFulfillment(promise),
-    ),
+    resourceDefinition: resolution.resourceDefinition,
+    invalidLazyImport: resolution.invalid,
   };
 }
 
@@ -1920,64 +1969,231 @@ function readDynamicImportSpecifier(
     : null;
 }
 
-function routeableResourceDefinitionForPromise(
-  context: RouteConfigRecognitionContext,
-  promise: EvaluationPromiseValue,
-): FullResourceDefinition | null {
-  const fulfillment = closedEvaluationPromiseFulfillment(promise);
-  return fulfillment == null ? null : routeableResourceDefinitionForFulfillment(context, fulfillment);
+function readDynamicImportRouteableExpression(
+  expression: ts.Expression,
+): DynamicImportRouteableExpression | null {
+  const current = unwrapExpression(expression);
+  const direct = readDirectDynamicImport(current);
+  if (direct != null) {
+    return direct;
+  }
+  if (!ts.isCallExpression(current)) {
+    return null;
+  }
+  const callee = unwrapExpression(current.expression);
+  if (
+    !ts.isPropertyAccessExpression(callee)
+    || callee.name.text !== 'then'
+    || current.arguments.length !== 1
+  ) {
+    return null;
+  }
+  const imported = readDirectDynamicImport(unwrapExpression(callee.expression));
+  const selectedExportName = readDynamicImportExportSelector(current.arguments[0]!);
+  return imported == null || selectedExportName == null
+    ? null
+    : new DynamicImportRouteableExpression(imported.call, imported.moduleSpecifier, selectedExportName);
 }
 
-function promiseFulfillmentIsKnownInvalidLazyImport(
+function readDirectDynamicImport(
+  expression: ts.Expression,
+): DynamicImportRouteableExpression | null {
+  const current = unwrapExpression(expression);
+  if (!ts.isCallExpression(current) || current.expression.kind !== ts.SyntaxKind.ImportKeyword) {
+    return null;
+  }
+  const argument = current.arguments[0];
+  if (argument == null || ts.isSpreadElement(argument)) {
+    return null;
+  }
+  const specifier = unwrapExpression(argument);
+  return ts.isStringLiteral(specifier) || ts.isNoSubstitutionTemplateLiteral(specifier)
+    ? new DynamicImportRouteableExpression(current, specifier.text, null)
+    : null;
+}
+
+function readDynamicImportExportSelector(
+  expression: ts.Expression,
+): string | null {
+  const callback = unwrapExpression(expression);
+  if (
+    (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback))
+    || callback.parameters.length !== 1
+  ) {
+    return null;
+  }
+  const parameter = callback.parameters[0]!.name;
+  if (!ts.isIdentifier(parameter)) {
+    return null;
+  }
+  const result = ts.isBlock(callback.body)
+    ? callback.body.statements.length === 1 && ts.isReturnStatement(callback.body.statements[0]!)
+      ? callback.body.statements[0]!.expression ?? null
+      : null
+    : callback.body;
+  if (result == null) {
+    return null;
+  }
+  const selected = unwrapExpression(result);
+  if (
+    ts.isPropertyAccessExpression(selected)
+    && ts.isIdentifier(unwrapExpression(selected.expression))
+    && (unwrapExpression(selected.expression) as ts.Identifier).text === parameter.text
+  ) {
+    return selected.name.text;
+  }
+  if (
+    ts.isElementAccessExpression(selected)
+    && ts.isIdentifier(unwrapExpression(selected.expression))
+    && (unwrapExpression(selected.expression) as ts.Identifier).text === parameter.text
+    && selected.argumentExpression != null
+  ) {
+    const key = unwrapExpression(selected.argumentExpression);
+    return ts.isStringLiteralLike(key) ? key.text : null;
+  }
+  return null;
+}
+
+function selectDynamicImportExport(
+  promise: EvaluationPromiseValue,
+  selectedExportName: string | null,
+  sourceNode: ts.Node,
+): EvaluationPromiseValue | null {
+  if (selectedExportName == null) {
+    return promise;
+  }
+  if (promise.settlement.kind !== EvaluationPromiseSettlementKind.Fulfilled) {
+    return promise;
+  }
+  const fulfillment = promise.settlement.evidence.value;
+  if (fulfillment.kind !== EvaluationValueKind.ModuleNamespace) {
+    return null;
+  }
+  const selected = readStaticValueProperty(fulfillment, selectedExportName, sourceNode);
+  if (
+    selected.kind !== StaticValueMemberReadKind.Value
+    && selected.kind !== StaticValueMemberReadKind.Candidate
+  ) {
+    return null;
+  }
+  return EvaluationPromiseValue.fulfilled(
+    new EvaluationValueEvidence(
+      selected.value,
+      [...promise.settlement.evidence.openSeams, ...selected.openSeams],
+    ),
+    sourceNode,
+  );
+}
+
+function lazyRouteableResolution(
   context: RouteConfigRecognitionContext,
-  value: EvaluationValue | null,
+  value: EvaluationValue,
+): LazyRouteableResolution {
+  const loaded = new ModuleLoader().load(value);
+  if (loaded.status !== ModuleLoaderTransformStatus.Analyzed || loaded.analyzedModule == null) {
+    return LazyRouteableResolution.open();
+  }
+  const directDefinition = customElementDefinitionForValue(context, loaded.analyzedModule.raw);
+  if (directDefinition != null) {
+    return LazyRouteableResolution.resolved(directDefinition);
+  }
+  if (
+    loaded.analyzedModule.mayHaveUnknownItems
+    || loaded.analyzedModule.mayHaveUnknownOrder
+    || loaded.analyzedModule.membershipOpenSeams.length > 0
+    || loaded.analyzedModule.orderOpenSeams.length > 0
+  ) {
+    return LazyRouteableResolution.open();
+  }
+
+  let defaultDefinition: FullResourceDefinition | null = null;
+  let selectionIsOpen = false;
+  for (const item of loaded.analyzedModule.items) {
+    if (item.openSeams.length > 0) {
+      selectionIsOpen = true;
+      continue;
+    }
+    const definition = customElementDefinitionForValue(context, item.value);
+    if (definition == null) {
+      continue;
+    }
+    if (item.key === 'default') {
+      defaultDefinition = definition;
+      continue;
+    }
+    return selectionIsOpen
+      ? LazyRouteableResolution.open()
+      : LazyRouteableResolution.resolved(definition);
+  }
+  if (defaultDefinition != null) {
+    return selectionIsOpen
+      ? LazyRouteableResolution.open()
+      : LazyRouteableResolution.resolved(defaultDefinition);
+  }
+  if (selectionIsOpen || rawMayBePartialCustomElementDefinition(loaded.analyzedModule.raw)) {
+    return LazyRouteableResolution.open();
+  }
+  return analyzedModuleIsKnownInvalidLazyImport(context, loaded.analyzedModule)
+    ? LazyRouteableResolution.invalid()
+    : LazyRouteableResolution.open();
+}
+
+function customElementDefinitionForValue(
+  context: RouteConfigRecognitionContext,
+  value: EvaluationValue,
+): FullResourceDefinition | null {
+  const definition = context.resourceIndex.lookupValue(value);
+  return definition?.type === ResourceDefinitionKind.CustomElement ? definition : null;
+}
+
+function rawMayBePartialCustomElementDefinition(
+  value: EvaluationValue,
 ): boolean {
-  if (value == null) {
-    return false;
-  }
-  if (value.kind === EvaluationValueKind.Promise) {
-    return promiseFulfillmentIsKnownInvalidLazyImport(context, closedEvaluationPromiseFulfillment(value));
-  }
-  if (routeableResourceDefinitionForFulfillment(context, value) != null) {
-    return false;
-  }
+  return (
+    value.kind === EvaluationValueKind.Object
+    || value.kind === EvaluationValueKind.BoundaryObject
+    || value.kind === EvaluationValueKind.ModuleNamespace
+  ) && hasOwnNameProperty(value);
+}
+
+function analyzedModuleIsKnownInvalidLazyImport(
+  context: RouteConfigRecognitionContext,
+  module: AnalyzedModule,
+): boolean {
+  const value = module.raw;
   switch (value.kind) {
     case EvaluationValueKind.Class:
     case EvaluationValueKind.Function:
+    case EvaluationValueKind.Unknown:
+    case EvaluationValueKind.BoundaryValue:
+    case EvaluationValueKind.Promise:
       return false;
     case EvaluationValueKind.Object:
     case EvaluationValueKind.BoundaryObject:
       return !hasOwnNameProperty(value);
     case EvaluationValueKind.ModuleNamespace:
-      return moduleNamespaceIsKnownInvalidLazyImport(value);
-    case EvaluationValueKind.Unknown:
-    case EvaluationValueKind.BoundaryValue:
-      return false;
+      if (value.mayHaveUnknownExports || hasOwnNameProperty(value)) {
+        return false;
+      }
+      return [...value.exportEntries.values()].every((entry) =>
+        entry.openSeams.length === 0
+        && exportValueIsDefinitelyNotLazyRouteable(context, entry.value)
+      );
     default:
       return true;
   }
 }
 
-function moduleNamespaceIsKnownInvalidLazyImport(
-  value: Extract<EvaluationValue, { readonly kind: EvaluationValueKind.ModuleNamespace }>,
-): boolean {
-  if (value.mayHaveUnknownExports || hasOwnNameProperty(value)) {
-    return false;
-  }
-  for (const exportEntry of value.exportEntries.values()) {
-    if (!exportValueIsDefinitelyNotLazyRouteable(exportEntry.value)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 function exportValueIsDefinitelyNotLazyRouteable(
+  context: RouteConfigRecognitionContext,
   value: EvaluationValue,
 ): boolean {
   switch (value.kind) {
     case EvaluationValueKind.Class:
-    case EvaluationValueKind.Function:
+    case EvaluationValueKind.Function: {
+      const definition = context.resourceIndex.lookupValue(value);
+      return definition != null && definition.type !== ResourceDefinitionKind.CustomElement;
+    }
     case EvaluationValueKind.Object:
     case EvaluationValueKind.BoundaryObject:
     case EvaluationValueKind.ModuleNamespace:
@@ -1988,37 +2204,6 @@ function exportValueIsDefinitelyNotLazyRouteable(
     default:
       return true;
   }
-}
-
-function routeableResourceDefinitionForFulfillment(
-  context: RouteConfigRecognitionContext,
-  value: EvaluationValue,
-): FullResourceDefinition | null {
-  if (value.kind === EvaluationValueKind.Promise) {
-    return routeableResourceDefinitionForPromise(context, value);
-  }
-  if (value.kind === EvaluationValueKind.Class || value.kind === EvaluationValueKind.Function) {
-    return context.resourceIndex.lookupValue(value);
-  }
-  if (value.kind !== EvaluationValueKind.ModuleNamespace) {
-    return null;
-  }
-
-  const moduleDefinitions = context.resourceIndex.lookupByModule(value.moduleKey);
-  if (moduleDefinitions.length === 1) {
-    return moduleDefinitions[0]!;
-  }
-  const defaultDefinition = context.resourceIndex.lookupValue(value.exportEntries.get('default')?.value ?? null);
-  for (const [exportName, exportEntry] of value.exportEntries) {
-    if (exportName === 'default') {
-      continue;
-    }
-    const definition = context.resourceIndex.lookupValue(exportEntry.value);
-    if (definition != null) {
-      return definition;
-    }
-  }
-  return defaultDefinition;
 }
 
 function hasOwnNameProperty(
@@ -2273,21 +2458,28 @@ function routeConfigFieldState(
       ? RouteConfigFieldStateKind.Referential
       : RouteConfigFieldStateKind.Open;
   }
+  const sourceNode = observation.fieldSourceNodes[field];
   switch (field) {
     case 'id': if (observation.id != null) return RouteConfigFieldStateKind.Closed; break;
     case 'path': if (observation.paths.length > 0) return RouteConfigFieldStateKind.Closed; break;
-    case 'title': if (observation.title != null) return RouteConfigFieldStateKind.Closed; break;
+    case 'title':
+      if (observation.title != null) return RouteConfigFieldStateKind.Closed;
+      if (routeConfigFieldIsCallable(context, sourceNode)) return RouteConfigFieldStateKind.Referential;
+      break;
     case 'component': if (component != null) return RouteConfigFieldStateKind.Referential; break;
     case 'redirectTo': if (observation.redirectTo != null) return RouteConfigFieldStateKind.Closed; break;
     case 'caseSensitive': if (observation.caseSensitive != null) return RouteConfigFieldStateKind.Closed; break;
-    case 'transitionPlan': if (observation.transitionPlan != null) return RouteConfigFieldStateKind.Closed; break;
+    case 'transitionPlan':
+      if (observation.transitionPlan != null) return RouteConfigFieldStateKind.Closed;
+      if (routeConfigFieldIsCallable(context, sourceNode)) return RouteConfigFieldStateKind.Referential;
+      break;
     case 'viewport': if (observation.viewport != null) return RouteConfigFieldStateKind.Closed; break;
+    case 'data': if (observation.hasData != null) return RouteConfigFieldStateKind.Referential; break;
     case 'children': if (observation.childRoutes.length > 0) return RouteConfigFieldStateKind.Referential; break;
     case 'fallback': if (fallback != null) return RouteConfigFieldStateKind.Referential; break;
     case 'nav': if (observation.nav != null) return RouteConfigFieldStateKind.Closed; break;
   }
 
-  const sourceNode = observation.fieldSourceNodes[field];
   if (sourceNode == null || !ts.isExpression(sourceNode)) {
     return observation.valueKind === RouteConfigValueKind.OpenExpression
       ? RouteConfigFieldStateKind.Open
@@ -2314,6 +2506,20 @@ function routeConfigFieldState(
         ? RouteConfigFieldStateKind.Open
         : RouteConfigFieldStateKind.Closed;
   }
+}
+
+function routeConfigFieldIsCallable(
+  context: RouteConfigRecognitionContext,
+  sourceNode: ts.Node | null | undefined,
+): boolean {
+  if (sourceNode == null || !ts.isExpression(sourceNode)) {
+    return false;
+  }
+  const value = context.expressionReader.evaluateExpression(sourceNode).value;
+  if (value != null && routeConfigValueIsFunction(value)) {
+    return true;
+  }
+  return (context.typeSystem.readProgramTypeAtLocation(sourceNode)?.getCallSignatures().length ?? 0) > 0;
 }
 
 function routeConfigFieldProvenance(

@@ -691,6 +691,7 @@
       "guidance": [
         "Start here when `aliasedResourcesRegistry(...)`, `IModuleLoader.load(...)`, or analyzed module export pressure appears.",
         "Keep direct-input versus promise-fulfillment behavior aligned with `kernel:ModuleLoader`: direct primitive/function/nullish inputs reject, promise nullish fulfillments reject, and non-null non-object promise fulfillments analyze to an empty module.",
+        "Module item filtering follows JavaScript `typeof`: retain every definitely non-null object/function export, omit closed primitives, and keep item membership/order open when entry pressure or an unresolved value category could change the filtered set. Consumers must spend both per-item and aggregate pressure before claiming closure.",
         "ModuleLoaderIssueMaterializer scans evaluated project sources, so issue source spans must use the EvaluatedProjectSource admission handle rather than re-resolving the source file by name.",
         "Use EvaluationIssuePublisher for evaluation diagnostics so issue evidence, provenance, identity, and materialized-product records stay behind the shared kernel issue-publication primitive.",
         "Do not suppress `di.open-registry-body` for aliased registries with a shim; the honest next layer is resource-export and registry-body materialization from analyzed module items.",
@@ -766,7 +767,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-07-19"
+      "updatedAt": "2026-07-22"
     },
     {
       "id": "frontier:evaluation-framework-api-issues",

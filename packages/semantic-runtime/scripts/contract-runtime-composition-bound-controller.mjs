@@ -25,6 +25,7 @@ const overloadedChartRows = compositions.filter((row) =>
   row.resolvedComponentClassNames?.includes('ChartWidget') === true
 );
 const openRows = compositions.filter((row) => row.openReason != null);
+const typeCandidateRows = compositions.filter((row) => row.componentResolutionKind === 'type-candidate');
 const failures = [
   widgetHostRows.length === 2
     ? null
@@ -35,16 +36,18 @@ const failures = [
   widgetHostRows.some((row) => row.renderingContextKind === 'definition-resource')
     ? null
     : 'Expected a definition-resource widget-host row from the resource analysis pass.',
-  openRows.length === 1
+  openRows.length === 0
     ? null
-    : `Expected one honest repeat-local composition candidate row; observed ${openRows.length}.`,
-  openRows[0]?.componentResolutionKind === 'type-candidate'
-    && openRows[0].resolvedComponentClassNames.includes('ChartWidget')
-    && openRows[0].resolvedComponentClassNames.includes('InventoryWidget')
-    && openRows[0].composedChildControllerCount === 0
-    && openRows[0].reasonKinds.includes('binding-source-slot-no-static-value')
+    : `Expected complete finite candidate coverage not to publish an open composition row; observed ${openRows.length}.`,
+  typeCandidateRows.length === 1
+    && typeCandidateRows[0].componentCandidateCoverageKind === 'complete'
+    && typeCandidateRows[0].componentInputFulfillmentKind === 'open'
+    && typeCandidateRows[0].resolvedComponentClassNames.includes('ChartWidget')
+    && typeCandidateRows[0].resolvedComponentClassNames.includes('InventoryWidget')
+    && typeCandidateRows[0].composedChildControllerCount === 0
+    && typeCandidateRows[0].openReason == null
     ? null
-    : `Expected the repeat-local composition to retain type candidates without materializing a confident child controller: ${JSON.stringify(openRows[0] ?? null)}.`,
+    : `Expected the repeat-local composition to retain complete type candidates without claiming a concrete child controller or an analysis seam: ${JSON.stringify(typeCandidateRows[0] ?? null)}.`,
   ...widgetHostRows.map((row) =>
     row.componentResolutionKind === 'static-value'
     && row.modelResolutionKind === 'static-value'
@@ -109,6 +112,14 @@ const summary = {
   openRows: openRows.map((row) => ({
     renderingDefinitionName: row.renderingDefinitionName,
     source: row.source?.label ?? null,
+    openReason: row.openReason,
+  })),
+  typeCandidateRows: typeCandidateRows.map((row) => ({
+    renderingDefinitionName: row.renderingDefinitionName,
+    source: row.source?.label ?? null,
+    componentCandidateCoverageKind: row.componentCandidateCoverageKind,
+    componentInputFulfillmentKind: row.componentInputFulfillmentKind,
+    resolvedComponentClassNames: row.resolvedComponentClassNames,
     openReason: row.openReason,
   })),
 };

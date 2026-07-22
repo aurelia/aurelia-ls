@@ -1104,7 +1104,11 @@ same lane: dynamic property bindings such as `component.bind`, `model.bind`, `co
 come from controller binding, while static `scope-behavior`, `tag`, and `flush-mode` come from literal
 `SetPropertyInstruction`s on the hydrate instruction. Component/template/model inputs also carry direct/promise/absent/open
 fulfillment fields so API callers can tell when a framework-supported promise-valued composition input was statically
-unwrapped. Plain object and non-resource constructable components report
+unwrapped. TypeChecker-backed component rows separately expose candidate coverage: `complete` means every finite union
+constituent resolved to a custom-element definition, `partial` retains useful candidates while keeping the composition
+open, and `open` means no exhaustive candidate set was provable. Candidate coverage does not claim the runtime-selected
+component value is known and never authorizes materializing one concrete child from a multi-candidate set. Plain object
+and non-resource constructable components report
 `componentResolutionKind=object-view-model`; they can still contribute activation handoff rows, but they do not claim
 compiled-template or candidate resource-analysis coverage because no custom-element definition exists.
 Rows also carry `renderingContextKind` so callers can separate a resource's definition-local template analysis from

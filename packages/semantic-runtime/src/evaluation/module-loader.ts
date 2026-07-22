@@ -1,6 +1,10 @@
 import ts from 'typescript';
 import { auLink } from '../kernel/au-link.js';
 import { readEvaluationEnumerableOwnEntries } from './enumerable-own-properties.js';
+import {
+  compactEvaluationOpenSeams,
+  type EvaluationOpenSeam,
+} from './seams.js';
 import type {
   EvaluationObjectProperty,
   EvaluationValue,
@@ -25,6 +29,8 @@ export const enum ModuleLoaderInputPosition {
 /** One export-like entry discovered by ModuleLoader._analyze. */
 @auLink('kernel:ModuleItem')
 export class ModuleItem {
+  readonly openSeams: readonly EvaluationOpenSeam[];
+
   constructor(
     readonly key: string,
     readonly value: EvaluationValue,
@@ -33,20 +39,34 @@ export class ModuleItem {
     /** ResourceDefinition metadata is not attached until resource-definition convergence owns that handoff. */
     readonly definition: null,
     readonly sourceProperty: EvaluationObjectProperty | null = null,
-  ) {}
+    /** Exact evaluator pressure qualifying this retained export value. */
+    openSeams: readonly EvaluationOpenSeam[] = [],
+  ) {
+    this.openSeams = compactEvaluationOpenSeams(openSeams);
+  }
 }
 
 /** Result of ModuleLoader._analyze before an optional transform callback is applied. */
 @auLink('kernel:AnalyzedModule')
 export class AnalyzedModule {
+  readonly membershipOpenSeams: readonly EvaluationOpenSeam[];
+  readonly orderOpenSeams: readonly EvaluationOpenSeam[];
+
   constructor(
     readonly raw: EvaluationValue,
     readonly items: readonly ModuleItem[],
-    /** Additional enumerable module entries may exist beyond `items`. */
+    /** The runtime ModuleLoader item set may contain additional or different entries beyond retained `items`. */
     readonly mayHaveUnknownItems: boolean,
     /** Known entries may not occupy their retained relative positions at runtime. */
     readonly mayHaveUnknownOrder: boolean,
-  ) {}
+    /** Exact pressure preventing the module-item set from closing. */
+    membershipOpenSeams: readonly EvaluationOpenSeam[] = [],
+    /** Exact pressure preventing retained module-item order from closing. */
+    orderOpenSeams: readonly EvaluationOpenSeam[] = [],
+  ) {
+    this.membershipOpenSeams = compactEvaluationOpenSeams(membershipOpenSeams);
+    this.orderOpenSeams = compactEvaluationOpenSeams(orderOpenSeams);
+  }
 }
 
 export class ModuleLoaderTransformIssue {
@@ -119,11 +139,22 @@ export class ModuleLoader {
         : ModuleLoaderTransformResult.analyzed(new AnalyzedModule(value, [], false, false));
     }
     const enumerable = readEvaluationEnumerableOwnEntries(value);
+    const entries = enumerable?.entries ?? [];
+    const itemMembershipIsOpen = entries.some((entry) =>
+      entry.openSeams.length > 0 || moduleItemParticipationIsOpen(entry.value)
+    );
+    const itemMembershipOpenSeams = entries.flatMap((entry) =>
+      entry.openSeams.length > 0 || moduleItemParticipationIsOpen(entry.value)
+        ? entry.openSeams
+        : []
+    );
     return ModuleLoaderTransformResult.analyzed(new AnalyzedModule(
       value,
-      moduleItemsForEntries(enumerable?.entries ?? []),
-      enumerable?.mayHaveUnknownEntries ?? true,
-      enumerable?.mayHaveUnknownOrder ?? true,
+      moduleItemsForEntries(entries),
+      (enumerable?.mayHaveUnknownEntries ?? true) || itemMembershipIsOpen,
+      (enumerable?.mayHaveUnknownOrder ?? true) || itemMembershipIsOpen,
+      [...(enumerable?.membershipOpenSeams ?? []), ...itemMembershipOpenSeams],
+      [...(enumerable?.orderOpenSeams ?? []), ...itemMembershipOpenSeams],
     ));
   }
 }
@@ -136,6 +167,7 @@ function isDirectModuleTransformObject(value: EvaluationValue): boolean {
     case EvaluationValueKind.Set:
     case EvaluationValueKind.Map:
     case EvaluationValueKind.RegularExpression:
+    case EvaluationValueKind.Date:
     case EvaluationValueKind.Instance:
     case EvaluationValueKind.ModuleNamespace:
       return true;
@@ -166,7 +198,7 @@ function moduleItemsForEntries(
   entries: NonNullable<ReturnType<typeof readEvaluationEnumerableOwnEntries>>['entries'],
 ): readonly ModuleItem[] {
   return entries.flatMap((entry) =>
-    moduleItemForProperty(entry.name, entry.value, entry.property)
+    moduleItemForProperty(entry.name, entry.value, entry.property, entry.openSeams)
   );
 }
 
@@ -174,19 +206,33 @@ function moduleItemForProperty(
   key: string,
   value: EvaluationValue,
   property: EvaluationObjectProperty | null,
+  openSeams: readonly EvaluationOpenSeam[],
 ): readonly ModuleItem[] {
   switch (value.kind) {
     case EvaluationValueKind.Object:
     case EvaluationValueKind.BoundaryObject:
     case EvaluationValueKind.Instance:
-      return [new ModuleItem(key, value, hasRegisterFunction(value.properties), false, null, property)];
+      return [new ModuleItem(key, value, hasRegisterFunction(value.properties), false, null, property, openSeams)];
     case EvaluationValueKind.Function:
-      return [new ModuleItem(key, value, hasRegisterFunction(value.properties), isConstructableFunction(value), null, property)];
+      return [new ModuleItem(key, value, hasRegisterFunction(value.properties), isConstructableFunction(value), null, property, openSeams)];
     case EvaluationValueKind.Class:
-      return [new ModuleItem(key, value, hasRegisterFunction(value.properties), true, null, property)];
+      return [new ModuleItem(key, value, hasRegisterFunction(value.properties), true, null, property, openSeams)];
+    case EvaluationValueKind.RegularExpression:
+    case EvaluationValueKind.Date:
+    case EvaluationValueKind.Array:
+    case EvaluationValueKind.Set:
+    case EvaluationValueKind.Map:
+    case EvaluationValueKind.ModuleNamespace:
+    case EvaluationValueKind.Promise:
+      return [new ModuleItem(key, value, false, false, null, property, openSeams)];
     default:
       return [];
   }
+}
+
+function moduleItemParticipationIsOpen(value: EvaluationValue): boolean {
+  return value.kind === EvaluationValueKind.Unknown
+    || value.kind === EvaluationValueKind.BoundaryValue;
 }
 
 function hasRegisterFunction(

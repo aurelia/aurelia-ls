@@ -696,6 +696,7 @@ class TemplateRuntimeAnalysisFrame {
       this.expressionWorld,
       this.request.projectContext,
       this.request.resourceDefinitions,
+      this.request.typeSystem,
       this.request.compilerWorld.resourceScope,
       sourceValueEvaluator,
     ));

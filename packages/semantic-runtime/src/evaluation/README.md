@@ -536,10 +536,12 @@ TypeScript-authored.
   and the old post-TypeScript path-probe retry should stay out unless a profile shows it resolves real modules.
 - `ModuleLoader` mirrors the framework's direct-input and promise-fulfillment distinction: direct values must be
   promises or non-null object-like values; promise fulfillments reject only nullish modules and otherwise produce an
-  analyzed module, with non-object fulfillments yielding an empty item list. An analyzed module retains known items and
-  separate unknown-membership/order flags; consumers must not infer closure merely because known exports survived the
-  handoff. `ModuleItem.definition` is deliberately empty until resource-definition convergence owns the handoff from
-  analyzed exports to resource definitions.
+  analyzed module, with non-object fulfillments yielding an empty item list. Its item filter follows JavaScript
+  `typeof`: every definitely non-null object or function export survives, primitives do not, and evaluator-open values
+  keep module-item membership open rather than disappearing from an apparently exact result. An analyzed module retains
+  known items, per-item pressure, and separate membership/order pressure; consumers must not infer closure merely because
+  known exports survived the handoff. `ModuleItem.definition` is deliberately empty until resource-definition
+  convergence owns the handoff from analyzed exports to resource definitions.
 - `EvaluationKernelEmitter` currently maps evaluator seam kinds onto general `KernelVocabulary.Evaluation` keys.
   Keep this emitter narrow: it translates evaluator-local seams to product-owned seam vocabulary, but it must not
   learn Aurelia resource, configuration, registration, template, or DI semantics.

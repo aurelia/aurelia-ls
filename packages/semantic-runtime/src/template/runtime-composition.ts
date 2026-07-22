@@ -22,6 +22,17 @@ export const enum CompositionComponentResolutionKind {
   Open = 'open',
 }
 
+export const enum CompositionComponentCandidateCoverageKind {
+  /** Component resolution did not use a TypeChecker candidate set. */
+  NotApplicable = 'not-applicable',
+  /** Every finite TypeChecker constituent resolved to at least one custom-element definition. */
+  Complete = 'complete',
+  /** Some finite TypeChecker constituents resolved, while at least one constituent did not. */
+  Partial = 'partial',
+  /** A finite TypeChecker candidate set or its resource identities could not be proven. */
+  Open = 'open',
+}
+
 export const enum CompositionModelResolutionKind {
   /** No `model` input was supplied. */
   Absent = 'absent',
@@ -174,6 +185,8 @@ export class CompositionController {
     /** Parent rendering controller used for activation scope handoff. */
     readonly parentControllerProductHandle: ProductHandle | null,
     readonly componentResolutionKind: CompositionComponentResolutionKind | `${CompositionComponentResolutionKind}`,
+    /** Completeness of the TypeChecker candidate set when `componentResolutionKind` is `type-candidate`. */
+    readonly componentCandidateCoverageKind: CompositionComponentCandidateCoverageKind | `${CompositionComponentCandidateCoverageKind}`,
     readonly modelResolutionKind: CompositionModelResolutionKind | `${CompositionModelResolutionKind}`,
     readonly resolvedComponents: readonly CompositionResolvedComponent[],
     readonly objectViewModelActivationHandoff: CompositionActivationModelHandoff | null,

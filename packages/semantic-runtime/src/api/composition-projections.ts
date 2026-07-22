@@ -132,6 +132,7 @@ function runtimeCompositionRow(
     hasCompositionBinding: context?.compositionBinding != null,
     hasComposingBinding: context?.composingBinding != null,
     componentResolutionKind: composition.componentResolutionKind,
+    componentCandidateCoverageKind: composition.componentCandidateCoverageKind,
     modelResolutionKind: composition.modelResolutionKind,
     resolvedComponentCount: composition.resolvedComponents.length,
     resolvedComponentNames: composition.resolvedComponents.map((component) => component.name),

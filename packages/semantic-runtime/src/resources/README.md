@@ -71,7 +71,9 @@ runtime definition shape.
 Carrier identity is not declaration identity. When a TypeScript target is provable, target publication resolves the
 Program-owned alias-normalized symbol and reuses the canonical declaration-source identity. Distinct decorators,
 static metadata, and define calls can therefore retain separate source observations and products while joining on one
-declaration. Checker type-shape identity remains an owned type projection and must not be used as declaration equality.
+declaration. `ResourceDefinitionIndex.lookupByTypeScriptDeclaration(...)` is the shared declaration-to-definition join;
+consumers must not fall back to global local-name matching. Checker type-shape identity remains an owned type projection
+and must not be used as declaration equality.
 
 Definition models sit beyond headers. Recognition observations are the AST-bearing layer; definition models use
 kernel handles, scalar fields, entry-level source handles, and field provenance rather than retaining TypeScript

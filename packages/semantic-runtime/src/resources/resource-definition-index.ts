@@ -130,17 +130,25 @@ export class ResourceDefinitionIndex {
     }
     const matching = new Set<FullResourceDefinition>();
     for (const declaration of symbol.declarations ?? []) {
-      const localName = readDeclarationLocalName(declaration);
-      if (localName == null) {
-        continue;
-      }
-      const moduleKey = typeSystem.readModuleKeyForSourceFile(declaration.getSourceFile());
-      const definition = moduleKey == null ? null : this.lookupByModuleLocal(moduleKey, localName);
+      const definition = this.lookupByTypeScriptDeclaration(typeSystem, declaration);
       if (definition != null) {
         matching.add(definition);
       }
     }
     return matching.size === 1 ? matching.values().next().value ?? null : null;
+  }
+
+  /** Resolve a Program-owned declaration through the evaluator module identity shared by resource convergence. */
+  lookupByTypeScriptDeclaration(
+    typeSystem: TypeSystemProject,
+    declaration: ts.Declaration,
+  ): FullResourceDefinition | null {
+    const localName = readDeclarationLocalName(declaration);
+    if (localName == null) {
+      return null;
+    }
+    const moduleKey = typeSystem.readModuleKeyForSourceFile(declaration.getSourceFile());
+    return moduleKey == null ? null : this.lookupByModuleLocal(moduleKey, localName);
   }
 
   lookupByProduct(productHandle: ProductHandle | null): FullResourceDefinition | null {
