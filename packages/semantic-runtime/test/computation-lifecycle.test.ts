@@ -913,7 +913,7 @@ describe("computation lifecycle", () => {
       KernelPublicationManifest.empty,
       "test:preview-candidate-authority" as KernelPublicationWriterId,
     );
-    const preview = staged.toDecisionPreviewCandidate("preview-candidate-authority");
+    const preview = staged.toDecisionPreviewCandidate("preview-candidate-authority", []);
     expect(() => store.replaceOwnedPublicationCandidate(
       KernelPublicationManifest.empty,
       preview as unknown as KernelPublicationDecisionCandidate,
@@ -936,6 +936,71 @@ describe("computation lifecycle", () => {
       finalCandidate as unknown as KernelPublicationDecisionPreviewCandidate,
       {},
     )).toThrow(/preview authority was not minted by staged publication/);
+  });
+
+  test("previews only requested retention decisions and rejects a stale targeted candidate", () => {
+    const store = new KernelStore("publication-targeted-preview");
+    const owner = {};
+    const retainedHandle = store.handles.address("publication-targeted-preview:retained");
+    const unrelatedHandle = store.handles.address("publication-targeted-preview:unrelated");
+    const stagedHandle = store.handles.address("publication-targeted-preview:staged");
+    const replacement = store.replaceOwnedPublication(
+      KernelPublicationManifest.empty,
+      publication("publication-targeted-preview:initial", [
+        new SourceFileAddress(retainedHandle, "test", "src/retained.html", SourceLanguage.Html),
+        new SourceFileAddress(unrelatedHandle, "test", "src/unrelated.html", SourceLanguage.Html),
+      ]),
+      owner,
+      { validate(): void {}, validateCurrent(): void {} },
+    );
+    const staged = new StagedKernelPublicationContext(
+      store,
+      replacement.manifest,
+      "test:publication-targeted-preview" as KernelPublicationWriterId,
+    );
+    const stagedRetained = new SourceFileAddress(
+      retainedHandle,
+      "test",
+      "src/retained.html",
+      SourceLanguage.Html,
+    );
+    staged.publish(publication("publication-targeted-preview:retained", [stagedRetained]));
+    const target: {
+      surface: KernelPublicationSurface;
+      handle: string;
+      detailKind: string;
+    } = {
+      surface: KernelPublicationSurface.Record,
+      handle: retainedHandle,
+      detailKind: "source-file-address",
+    };
+    const preview = staged.toDecisionPreviewCandidate(
+      "publication-targeted-preview",
+      [target],
+    );
+    target.detailKind = "mutated-after-preview-mint";
+
+    expect(store.previewOwnedPublicationCandidateDecisions(
+      replacement.manifest,
+      preview,
+      owner,
+    )).toEqual([
+      expect.objectContaining({
+        handle: retainedHandle,
+        detailKind: "source-file-address",
+        decision: KernelPublicationDecisionKind.Retain,
+      }),
+    ]);
+    expect(Object.isFrozen(stagedRetained)).toBe(true);
+
+    staged.publish(publication("publication-targeted-preview:mutation", [
+      new SourceFileAddress(stagedHandle, "test", "src/staged.html", SourceLanguage.Html),
+    ]));
+    expect(() => store.previewOwnedPublicationCandidateDecisions(
+      replacement.manifest,
+      preview,
+      owner,
+    )).toThrow(/decision preview .* is stale after candidate mutation/);
   });
 
   test("reruns a child when its candidate producer does not retain", () => {
@@ -981,6 +1046,143 @@ describe("computation lifecycle", () => {
       decision: KernelPublicationDecisionKind.Replace,
     }));
     expect(store.read(familyHandle)).toEqual(expect.objectContaining({ path: "src/recomputed-family.html" }));
+  });
+
+  test("keeps the owning run quiescent while a detail comparator participates in carry preview", () => {
+    const store = new KernelStore("computation-child-carry-preview-quiescence");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const producer = childLocus("carry-preview-quiescence-producer");
+    const consumer = childLocus("carry-preview-quiescence-consumer");
+    const provenanceHandle = store.handles.provenance("carry-preview-quiescence:product");
+    const productHandle = store.handles.product("carry-preview-quiescence:product");
+    const consumerHandle = store.handles.address("carry-preview-quiescence:consumer");
+    let replacement: ComputationRun | null = null;
+    let previewReentryError: unknown = null;
+    let probePreview = false;
+    const slot = defineTestProductDetailSlot<{ readonly value: number }>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-carry-preview-quiescence",
+      "Carry-preview quiescence witness.",
+      noKernelDetailReferences,
+      () => {
+        if (probePreview && replacement != null) {
+          try {
+            replacement.read(productHandle);
+          } catch (error) {
+            previewReentryError = error;
+          }
+        }
+        return KernelPublicationDecisionKind.Retain;
+      },
+    );
+    const product = () => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      null,
+      provenanceHandle,
+    );
+
+    const initial = lifecycle.begin(locus("child-carry-preview-quiescence"));
+    initial.withChildPartition(() => {
+      initial.withChild(producer, () => initial.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([new ProvenanceRecord(provenanceHandle), product()], "carry-preview-quiescence:initial"),
+        [publishProductDetail(slot, productHandle, { value: 1 })],
+      )));
+      initial.withChild(consumer, () => {
+        expect(initial.readProductDetail(slot, productHandle)).toEqual({ value: 1 });
+        initial.publish(publication("carry-preview-quiescence:consumer", [
+          new SourceFileAddress(consumerHandle, "test", "src/consumer.html", SourceLanguage.Html),
+        ]));
+      });
+    });
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const next = lifecycle.begin(locus("child-carry-preview-quiescence"));
+    replacement = next;
+    next.withChildPartition(() => {
+      next.withChild(producer, () => next.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([
+          new ProvenanceRecord(provenanceHandle),
+          product(),
+        ], "carry-preview-quiescence:replacement"),
+        [publishProductDetail(slot, productHandle, { value: 1 })],
+      )));
+      probePreview = true;
+      expect(next.tryCarryChild(consumer)).not.toBeNull();
+      probePreview = false;
+    });
+
+    expect(previewReentryError).toEqual(expect.objectContaining({
+      message: expect.stringMatching(/cannot be used during child-carry decision preview/),
+    }));
+    expect(next.commit().state).toBe(ComputationCommitState.Committed);
+  });
+
+  test("reruns an exact carried detail when another child refreshes its product witness", () => {
+    const store = new KernelStore("computation-child-carry-owner-witness");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const owner = childLocus("carry-owner-witness-product");
+    const detail = childLocus("carry-owner-witness-detail");
+    const productHandle = store.handles.product("carry-owner-witness:product");
+    const firstProvenance = store.handles.provenance("carry-owner-witness:first");
+    const secondProvenance = store.handles.provenance("carry-owner-witness:second");
+    const slot = defineTestProductDetailSlot<number>(
+      KernelVocabulary.Template.Source.key,
+      "test.child-carry-owner-witness",
+      "Product-witness carry decision.",
+    );
+    const product = (provenanceHandle: typeof firstProvenance) => new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.Source.key,
+      null,
+      null,
+      provenanceHandle,
+    );
+
+    const initial = lifecycle.begin(locus("child-carry-owner-witness"));
+    initial.withChildPartition(() => {
+      initial.withChild(owner, () => initial.publish(publication("carry-owner-witness:initial-owner", [
+        new ProvenanceRecord(firstProvenance),
+        product(firstProvenance),
+      ])));
+      initial.withChild(detail, () => initial.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "carry-owner-witness:initial-detail"),
+        [publishProductDetail(slot, productHandle, 1)],
+      )));
+    });
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const replacement = lifecycle.begin(locus("child-carry-owner-witness"));
+    replacement.withChildPartition(() => {
+      replacement.withChild(owner, () => replacement.publish(publication("carry-owner-witness:next-owner", [
+        new ProvenanceRecord(secondProvenance),
+        product(secondProvenance),
+      ])));
+      expect(replacement.tryCarryChild(detail)).toBeNull();
+      replacement.withChild(detail, () => replacement.publish(new KernelPublicationPlan(
+        new KernelStoreBatch([], "carry-owner-witness:next-detail"),
+        [publishProductDetail(slot, productHandle, 1)],
+      )));
+    });
+
+    const result = replacement.commit();
+    expect(result.state).toBe(ComputationCommitState.Committed);
+    expect(result.transition.publications).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        handle: productHandle,
+        decision: KernelPublicationDecisionKind.RefreshWitness,
+      }),
+      expect.objectContaining({
+        handle: productHandle,
+        surface: KernelPublicationSurface.ProductDetail,
+        decision: KernelPublicationDecisionKind.RefreshWitness,
+      }),
+    ]));
+    expect(result.transition.children).toContainEqual(expect.objectContaining({
+      locus: expect.objectContaining({ reconciliationKey: detail.reconciliationKey }),
+      kind: ComputationChildTransitionKind.Executed,
+    }));
   });
 
   test("carries structural links across target replacement and preserves them for later generations", () => {

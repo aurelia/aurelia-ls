@@ -233,11 +233,14 @@ available only before candidate work starts and only when the prior child has re
 ownership, and no nontrivial SCC. Exact reads must rebase to current authorities; candidate-local semantic dependencies
 must still be present from the same producer and preview as `Retain`. Structural dependencies rebase by target presence
 and rich-detail slot compatibility, so replacing a target value under the same identity does not by itself invalidate a
-consumer that only retains the link. The preview completes the partial candidate with prior
-entries only to spend the store's real comparison policy; omission in the final plan still means withdrawal. Carry
-declines before preview when any sibling has already staged one of the prior outputs. Domain read-rebase callbacks may
-inspect only the supplied preview context; the owning run rejects reads, writes, child entry, commit, and abort while a
-rebaser executes. Carry preflights every read-map merge before it mutates staged publication, then installs exact prior
+consumer that only retains the link. The store-owned preview classifies only the prior child outputs and positive
+candidate dependencies whose `Retain` decisions gate carry. Its lazy projection may read an omitted prior entry as the
+committed value while resolving that bounded comparison closure; omission in the final plan still means withdrawal.
+Every touched prior entry must retain the exact manifest lifetime, and staged records are sealed before a comparator can
+observe them. Carry declines before preview when any sibling has already staged one of the prior outputs. Domain
+read-rebase callbacks may inspect only the supplied preview context; the owning run rejects reads, writes, child entry,
+commit, and abort while a rebaser executes. Carry preflights every read-map merge before it mutates staged publication,
+then installs exact prior
 entries. Preview and final replacement spend distinct runtime-branded capabilities: arbitrary structural lookalikes and
 preview authority cannot authorize commit, and final sealed authority cannot be reused as speculative preview. Final
 commit revalidates the rebased reads and currentness guards under the same atomic replacement barrier.

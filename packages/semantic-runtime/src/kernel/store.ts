@@ -69,6 +69,7 @@ import {
   KernelPublicationDecision,
   type KernelPublicationDecisionCandidate,
   type KernelPublicationDecisionPreviewCandidate,
+  type KernelPublicationEntryDescriptor,
   KernelPublicationManifest,
   KernelStoreBatch,
   type KernelHotDetailPublication,
@@ -573,7 +574,7 @@ export class KernelStore {
     }
   }
 
-  /** Preview one staged lifecycle candidate through the same carry-aware authority used by final replacement. */
+  /** Preview only the decisions whose retention gates one staged child carry. */
   previewOwnedPublicationCandidateDecisions(
     previous: KernelPublicationManifest,
     next: KernelPublicationDecisionPreviewCandidate,
@@ -583,7 +584,39 @@ export class KernelStore {
     this.assertStoreMutationAllowed('preview a publication candidate');
     this.mutationPhase = KernelStoreMutationPhase.PreparingPublication;
     try {
-      return this.preparePublicationDecisions(previous, next.plan, owner, next).decisions;
+      if (next.previousPublication !== previous) {
+        throw new Error('Kernel publication decision preview does not belong to the manifest being replaced.');
+      }
+      this.validatePublicationManifestAuthority(previous, owner, next.label);
+      next.assertCurrent();
+      const validatedPreviousEntries = new Set<string>();
+      for (const target of next.targets) {
+        this.validatePreviousPublicationEntry(
+          previous,
+          target.surface,
+          target.handle,
+          target.detailKind,
+          next.label,
+          validatedPreviousEntries,
+        );
+      }
+      const recordDecisions = new Map<KernelRecordHandle, KernelPublicationDecisionKind>();
+      const comparisonContext = this.publicationComparisonContext((handle) => this.recordForDecisionPreview(
+        previous,
+        next,
+        handle,
+        validatedPreviousEntries,
+      ));
+      const decisions = next.targets.map((target) => this.previewPublicationDecision(
+        target,
+        previous,
+        next,
+        recordDecisions,
+        comparisonContext,
+        validatedPreviousEntries,
+      ));
+      next.assertCurrent();
+      return Object.freeze(decisions);
     } finally {
       this.mutationPhase = KernelStoreMutationPhase.Idle;
     }
@@ -785,7 +818,7 @@ export class KernelStore {
     previous: KernelPublicationManifest,
     next: KernelPublicationPlan,
     owner: object,
-    decisionCandidate: KernelPublicationComparisonAuthority | null = null,
+    decisionCandidate: KernelPublicationDecisionCandidate | null = null,
   ): PreparedKernelPublicationDecisions {
     if (decisionCandidate != null && decisionCandidate.plan !== next) {
       throw new Error('Kernel publication carry authority does not belong to the candidate being compared.');
@@ -840,7 +873,8 @@ export class KernelStore {
       recordsByHandle,
       decisionCandidate,
     );
-    const comparisonContext = this.publicationComparisonContext(recordsByHandle, previousRecordHandles);
+    const comparisonContext = this.publicationComparisonContext((handle) => recordsByHandle.get(handle)
+      ?? (previousRecordHandles.has(handle) ? null : this.records.get(handle) ?? null));
     const recordKindsByHandle = new Map<KernelRecordHandle, string>();
     for (const handle of new Set([...previousRecordHandles, ...recordsByHandle.keys()])) {
       recordKindsByHandle.set(
@@ -987,6 +1021,62 @@ export class KernelStore {
         throw new Error(`Publication ${label} does not own hot detail ${handle}.`);
       }
     }
+  }
+
+  private validatePreviousPublicationEntry(
+    manifest: KernelPublicationManifest,
+    surface: KernelPublicationSurface,
+    handle: string,
+    expectedKind: string | null,
+    label: string,
+    validatedEntries: Set<string>,
+  ): void {
+    const key = `${surface}:${handle}`;
+    if (validatedEntries.has(key)) return;
+    const lifetimeOrdinal = manifest.lifetimeOrdinal;
+    if (lifetimeOrdinal == null) {
+      throw new Error(`Publication ${label} cannot preview owned entry ${handle} without its lifetime identity.`);
+    }
+    let actualKind: string;
+    let actualLifetimeOrdinal: number | null;
+    switch (surface) {
+      case KernelPublicationSurface.Record: {
+        const record = this.records.get(handle as KernelRecordHandle) ?? null;
+        if (record == null) {
+          throw new Error(`Publication ${label} cannot preview missing owned record ${handle}.`);
+        }
+        actualKind = record.kind;
+        actualLifetimeOrdinal = this.recordLifetimeOrdinalByHandle.get(handle as KernelRecordHandle) ?? null;
+        break;
+      }
+      case KernelPublicationSurface.ProductDetail: {
+        const entry = this.productDetails.readEntry(handle as ProductHandle);
+        if (entry == null) {
+          throw new Error(`Publication ${label} cannot preview missing owned product detail ${handle}.`);
+        }
+        actualKind = entry.slot.detailKind;
+        actualLifetimeOrdinal = this.productDetails.readLifetimeOrdinal(handle as ProductHandle);
+        break;
+      }
+      case KernelPublicationSurface.HotDetail: {
+        const entry = this.hotDetails.readEntry(handle as HotDetailHandle);
+        if (entry == null) {
+          throw new Error(`Publication ${label} cannot preview missing owned hot detail ${handle}.`);
+        }
+        actualKind = entry.slot.detailKind;
+        actualLifetimeOrdinal = this.hotDetails.readLifetimeOrdinal(handle as HotDetailHandle);
+        break;
+      }
+    }
+    if (actualLifetimeOrdinal !== lifetimeOrdinal) {
+      throw new Error(`Publication ${label} does not own ${surface} ${handle}.`);
+    }
+    if (expectedKind != null && actualKind !== expectedKind) {
+      throw new Error(
+        `Publication ${label} cannot preview ${surface} ${handle} as ${expectedKind}; committed kind is ${actualKind}.`,
+      );
+    }
+    validatedEntries.add(key);
   }
 
   private validatePublicationAdmissionSnapshots(
@@ -1319,6 +1409,191 @@ export class KernelStore {
     return lifetimeOrdinal;
   }
 
+  private previewPublicationDecision(
+    target: KernelPublicationEntryDescriptor,
+    previousPublication: KernelPublicationManifest,
+    candidate: KernelPublicationDecisionPreviewCandidate,
+    recordDecisions: Map<KernelRecordHandle, KernelPublicationDecisionKind>,
+    comparisonContext: KernelPublicationComparisonContext,
+    validatedPreviousEntries: Set<string>,
+  ): KernelPublicationDecision {
+    switch (target.surface) {
+      case KernelPublicationSurface.Record: {
+        const handle = target.handle as KernelRecordHandle;
+        const decision = this.previewRecordPublicationDecision(
+          handle,
+          previousPublication,
+          candidate,
+          recordDecisions,
+          validatedPreviousEntries,
+        );
+        if (decision == null) {
+          throw new Error(`Publication ${candidate.label} cannot preview unowned record ${handle}.`);
+        }
+        return new KernelPublicationDecision(handle, target.surface, target.detailKind, decision);
+      }
+      case KernelPublicationSurface.ProductDetail: {
+        const handle = target.handle as ProductHandle;
+        const existing = this.productDetails.readEntry(handle);
+        const publication = candidate.readProductDetail(handle);
+        if (existing == null || publication == null) {
+          throw new Error(`Publication ${candidate.label} cannot preview missing product detail ${handle}.`);
+        }
+        this.validateProductDetailEnvelopeAgainst(
+          publication,
+          this.productForDecisionPreview(
+            previousPublication,
+            candidate,
+            publication.productHandle,
+            validatedPreviousEntries,
+          ),
+          candidate.label,
+        );
+        const decision = this.compareOwnedProductDetailPublication(
+          handle,
+          existing,
+          publication,
+          this.previewRecordPublicationDecision(
+            publication.productHandle,
+            previousPublication,
+            candidate,
+            recordDecisions,
+            validatedPreviousEntries,
+          ),
+          comparisonContext,
+          candidate,
+        );
+        return new KernelPublicationDecision(handle, target.surface, target.detailKind, decision);
+      }
+      case KernelPublicationSurface.HotDetail: {
+        const handle = target.handle as HotDetailHandle;
+        const existing = this.hotDetails.readEntry(handle);
+        const publication = candidate.readHotDetail(handle);
+        if (existing == null || publication == null) {
+          throw new Error(`Publication ${candidate.label} cannot preview missing hot detail ${handle}.`);
+        }
+        this.validateHotDetailOwnerAgainst(
+          publication,
+          this.productForDecisionPreview(
+            previousPublication,
+            candidate,
+            publication.ownerProductHandle,
+            validatedPreviousEntries,
+          ),
+          candidate.label,
+        );
+        if (existing.ownerProductHandle !== publication.ownerProductHandle) {
+          throw new Error(
+            `Publication ${candidate.label} cannot move hot detail ${handle} from owner `
+            + `${existing.ownerProductHandle} to ${publication.ownerProductHandle}.`,
+          );
+        }
+        const decision = this.compareOwnedHotDetailPublication(
+          handle,
+          existing,
+          publication,
+          this.previewRecordPublicationDecision(
+            publication.ownerProductHandle,
+            previousPublication,
+            candidate,
+            recordDecisions,
+            validatedPreviousEntries,
+          ),
+          comparisonContext,
+          candidate,
+        );
+        return new KernelPublicationDecision(handle, target.surface, target.detailKind, decision);
+      }
+    }
+  }
+
+  private previewRecordPublicationDecision(
+    handle: KernelRecordHandle,
+    previousPublication: KernelPublicationManifest,
+    candidate: KernelPublicationDecisionPreviewCandidate,
+    decisions: Map<KernelRecordHandle, KernelPublicationDecisionKind>,
+    validatedPreviousEntries: Set<string>,
+  ): KernelPublicationDecisionKind | null {
+    const cached = decisions.get(handle);
+    if (cached != null) return cached;
+    let decision: KernelPublicationDecisionKind | null = null;
+    if (candidate.hasPreviousRecord(handle)) {
+      decision = this.compareOwnedRecordPublication(
+        handle,
+        this.records.get(handle) ?? null,
+        this.recordForDecisionPreview(
+          previousPublication,
+          candidate,
+          handle,
+          validatedPreviousEntries,
+        ),
+        candidate,
+      );
+    } else if (candidate.hasStagedRecord(handle)) {
+      decision = KernelPublicationDecisionKind.Publish;
+    }
+    if (decision != null) decisions.set(handle, decision);
+    return decision;
+  }
+
+  private recordForDecisionPreview(
+    previousPublication: KernelPublicationManifest,
+    candidate: KernelPublicationDecisionPreviewCandidate,
+    handle: KernelRecordHandle,
+    validatedPreviousEntries: Set<string>,
+  ): KernelStoreRecord | null {
+    if (candidate.hasPreviousRecord(handle)) {
+      this.validatePreviousPublicationEntry(
+        previousPublication,
+        KernelPublicationSurface.Record,
+        handle,
+        null,
+        candidate.label,
+        validatedPreviousEntries,
+      );
+    }
+    const record = candidate.readRecord(handle);
+    if (record != null) sealKernelRecord(record);
+    return record;
+  }
+
+  private productForDecisionPreview(
+    previousPublication: KernelPublicationManifest,
+    candidate: KernelPublicationDecisionPreviewCandidate,
+    handle: ProductHandle,
+    validatedPreviousEntries: Set<string>,
+  ): MaterializedProduct | null {
+    const record = this.recordForDecisionPreview(
+      previousPublication,
+      candidate,
+      handle,
+      validatedPreviousEntries,
+    );
+    return record?.kind === 'materialized-product' ? record : null;
+  }
+
+  private compareOwnedRecordPublication(
+    handle: KernelRecordHandle,
+    previous: KernelStoreRecord | null,
+    next: KernelStoreRecord | null,
+    decisionCandidate: KernelPublicationComparisonAuthority | null,
+  ): KernelPublicationDecisionKind {
+    let decision = next == null || previous == null
+      ? KernelPublicationDecisionKind.Withdraw
+      : compareKernelRecords(previous, next);
+    if (
+      next != null
+      && previous != null
+      && decisionCandidate?.explicitlyRetains(KernelPublicationSurface.Record, handle, next.kind) === true
+    ) {
+      if (next !== previous) {
+        throw new Error(`Explicitly carried record ${handle} is not the exact committed record.`);
+      }
+      decision = KernelPublicationDecisionKind.Retain;
+    }
+    return decision;
+  }
+
   private recordPublicationDecisions(
     previousRecordHandles: ReadonlySet<KernelRecordHandle>,
     nextByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
@@ -1328,20 +1603,7 @@ export class KernelStore {
     for (const handle of previousRecordHandles) {
       const next = nextByHandle.get(handle) ?? null;
       const previous = this.records.get(handle) ?? null;
-      let decision = next == null || previous == null
-        ? KernelPublicationDecisionKind.Withdraw
-        : compareKernelRecords(previous, next);
-      if (
-        next != null
-        && previous != null
-        && decisionCandidate?.explicitlyRetains(KernelPublicationSurface.Record, handle, next.kind) === true
-      ) {
-        if (next !== previous) {
-          throw new Error(`Explicitly carried record ${handle} is not the exact committed record.`);
-        }
-        decision = KernelPublicationDecisionKind.Retain;
-      }
-      decisions.set(handle, decision);
+      decisions.set(handle, this.compareOwnedRecordPublication(handle, previous, next, decisionCandidate));
     }
     for (const handle of nextByHandle.keys()) {
       if (!previousRecordHandles.has(handle)) {
@@ -1352,8 +1614,7 @@ export class KernelStore {
   }
 
   private publicationComparisonContext(
-    nextByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
-    previousHandles: ReadonlySet<KernelRecordHandle>,
+    readNextRecord: (handle: KernelRecordHandle) => KernelStoreRecord | null,
   ): KernelPublicationComparisonContext {
     return {
       compareRecordHandles: (previousHandle, nextHandle) => {
@@ -1366,8 +1627,7 @@ export class KernelStore {
           return KernelPublicationDecisionKind.Replace;
         }
         const previous = this.records.get(previousHandle) ?? null;
-        const next = nextByHandle.get(nextHandle)
-          ?? (previousHandles.has(nextHandle) ? null : this.records.get(nextHandle) ?? null);
+        const next = readNextRecord(nextHandle);
         return previous == null || next == null
           ? previous === next
             ? KernelPublicationDecisionKind.Retain
@@ -1375,6 +1635,33 @@ export class KernelStore {
           : compareKernelRecords(previous, next);
       },
     };
+  }
+
+  private compareOwnedProductDetailPublication(
+    handle: ProductHandle,
+    existing: ProductDetailEntry<unknown>,
+    publication: KernelProductDetailPublication<unknown>,
+    productDecision: KernelPublicationDecisionKind | null | undefined,
+    comparisonContext: KernelPublicationComparisonContext,
+    decisionCandidate: KernelPublicationComparisonAuthority | null,
+  ): KernelPublicationDecisionKind {
+    let decision = compareProductDetailPublication(existing, publication, comparisonContext);
+    if (decisionCandidate?.explicitlyRetains(
+      KernelPublicationSurface.ProductDetail,
+      handle,
+      publication.slot.detailKind,
+    ) === true) {
+      if (publication.slot !== existing.slot || publication.detail !== existing.detail) {
+        throw new Error(`Explicitly carried product detail ${handle} is not the exact committed entry.`);
+      }
+      if (sameKernelDetailReferences(existing.references, publication.references)) {
+        decision = KernelPublicationDecisionKind.Retain;
+      }
+    }
+    return decision === KernelPublicationDecisionKind.Retain
+      && productDecision !== KernelPublicationDecisionKind.Retain
+      ? KernelPublicationDecisionKind.RefreshWitness
+      : decision;
   }
 
   private prepareProductDetailPublication(
@@ -1410,22 +1697,14 @@ export class KernelStore {
       }
       this.validateProductDetailEnvelope(publication, nextRecordsByHandle, previousRecordHandles, label);
       const productDecision = recordDecisions.get(handle);
-      let decision = compareProductDetailPublication(existing, publication, comparisonContext);
-      if (decisionCandidate?.explicitlyRetains(
-        KernelPublicationSurface.ProductDetail,
+      const decision = this.compareOwnedProductDetailPublication(
         handle,
-        publication.slot.detailKind,
-      ) === true) {
-        if (publication.slot !== existing.slot || publication.detail !== existing.detail) {
-          throw new Error(`Explicitly carried product detail ${handle} is not the exact committed entry.`);
-        }
-        if (sameKernelDetailReferences(existing.references, publication.references)) {
-          decision = KernelPublicationDecisionKind.Retain;
-        }
-      }
-      if (decision === KernelPublicationDecisionKind.Retain && productDecision !== KernelPublicationDecisionKind.Retain) {
-        decision = KernelPublicationDecisionKind.RefreshWitness;
-      }
+        existing,
+        publication,
+        productDecision,
+        comparisonContext,
+        decisionCandidate,
+      );
       ownedHandles.push(handle);
       decisions.push(new KernelPublicationDecision(
         handle,
@@ -1481,6 +1760,14 @@ export class KernelStore {
       nextRecordsByHandle,
       previousRecordHandles,
     );
+    this.validateProductDetailEnvelopeAgainst(publication, product, label);
+  }
+
+  private validateProductDetailEnvelopeAgainst(
+    publication: KernelProductDetailPublication<unknown>,
+    product: MaterializedProduct | null,
+    label: string,
+  ): void {
     if (product == null) {
       throw new Error(
         `Publication ${label} cannot attach ${publication.slot.detailKind}; product `
@@ -1493,6 +1780,34 @@ export class KernelStore {
         + `${publication.productHandle} has kind ${product.productKindKey}, expected ${publication.slot.productKindKey}.`,
       );
     }
+  }
+
+  private compareOwnedHotDetailPublication(
+    handle: HotDetailHandle,
+    existing: HotDetailEntry<unknown>,
+    publication: KernelHotDetailPublication<unknown>,
+    ownerDecision: KernelPublicationDecisionKind | null | undefined,
+    comparisonContext: KernelPublicationComparisonContext,
+    decisionCandidate: KernelPublicationComparisonAuthority | null,
+  ): KernelPublicationDecisionKind {
+    let decision = compareHotDetailPublication(existing, publication, comparisonContext);
+    if (decisionCandidate?.explicitlyRetains(
+      KernelPublicationSurface.HotDetail,
+      handle,
+      publication.slot.detailKind,
+    ) === true) {
+      if (publication.slot !== existing.slot || publication.detail !== existing.detail) {
+        throw new Error(`Explicitly carried hot detail ${handle} is not the exact committed entry.`);
+      }
+      if (sameKernelDetailReferences(existing.references, publication.references)) {
+        decision = KernelPublicationDecisionKind.Retain;
+      }
+    }
+    return decision === KernelPublicationDecisionKind.Retain
+      && ownerDecision != null
+      && ownerDecision !== KernelPublicationDecisionKind.Retain
+      ? KernelPublicationDecisionKind.RefreshWitness
+      : decision;
   }
 
   private prepareHotDetailPublication(
@@ -1534,26 +1849,14 @@ export class KernelStore {
         );
       }
       const ownerDecision = recordDecisions.get(publication.ownerProductHandle);
-      let decision = compareHotDetailPublication(existing, publication, comparisonContext);
-      if (decisionCandidate?.explicitlyRetains(
-        KernelPublicationSurface.HotDetail,
+      const decision = this.compareOwnedHotDetailPublication(
         handle,
-        publication.slot.detailKind,
-      ) === true) {
-        if (publication.slot !== existing.slot || publication.detail !== existing.detail) {
-          throw new Error(`Explicitly carried hot detail ${handle} is not the exact committed entry.`);
-        }
-        if (sameKernelDetailReferences(existing.references, publication.references)) {
-          decision = KernelPublicationDecisionKind.Retain;
-        }
-      }
-      if (
-        decision === KernelPublicationDecisionKind.Retain
-        && ownerDecision != null
-        && ownerDecision !== KernelPublicationDecisionKind.Retain
-      ) {
-        decision = KernelPublicationDecisionKind.RefreshWitness;
-      }
+        existing,
+        publication,
+        ownerDecision,
+        comparisonContext,
+        decisionCandidate,
+      );
       ownedHandles.push(handle);
       decisions.push(new KernelPublicationDecision(
         handle,
@@ -1614,6 +1917,14 @@ export class KernelStore {
       nextRecordsByHandle,
       previousRecordHandles,
     );
+    this.validateHotDetailOwnerAgainst(publication, owner, label);
+  }
+
+  private validateHotDetailOwnerAgainst(
+    publication: KernelHotDetailPublication<unknown>,
+    owner: MaterializedProduct | null,
+    label: string,
+  ): void {
     if (owner == null) {
       throw new Error(
         `Publication ${label} cannot attach ${publication.slot.detailKind}; owner product `

@@ -12,6 +12,7 @@ import {
   KernelPublicationManifest,
   KernelPublicationPlan,
   type KernelPublicationContext,
+  type KernelPublicationEntryDescriptor,
   type KernelPublicationDecisionCandidate,
   type KernelPublicationDecisionPreviewCandidate,
   type KernelPublicationReplacement,
@@ -1008,6 +1009,7 @@ export class ComputationRun implements KernelPublicationContext {
   private childFailure: ComputationChildPreparationFailure | null = null;
   private phase = ComputationRunPhase.Preparing;
   private carryReadRebaseActive = false;
+  private carryDecisionPreviewActive = false;
   /** Candidate-aware values for constructing domain reads without also registering lower-level exact reads. */
   readonly domainReadProjection: ComputationDomainReadProjection;
 
@@ -1391,6 +1393,7 @@ export class ComputationRun implements KernelPublicationContext {
 
     const rebasedCandidateReads: KernelStagedEntryRevision[] = [];
     const retainedDependencyReadKeys = new Set<string>();
+    const retainedDependencyOutputs: KernelPublicationEntryDescriptor[] = [];
     for (const read of previous.candidateReads) {
       const current = this.publications.readStagedRevision(read.surface, read.handle);
       if (read.state === ComputationCandidateReadState.Absent) {
@@ -1400,6 +1403,7 @@ export class ComputationRun implements KernelPublicationContext {
       }
       if (
         current == null
+        || read.actualKind == null
         || current.writerId !== read.producerChildId
         || current.actualKind !== read.actualKind
       ) {
@@ -1407,26 +1411,24 @@ export class ComputationRun implements KernelPublicationContext {
       }
       rebasedCandidateReads.push(current);
       retainedDependencyReadKeys.add(read.readKey);
+      retainedDependencyOutputs.push({
+        surface: read.surface,
+        handle: read.handle,
+        detailKind: read.actualKind,
+      });
     }
 
-    const preview = this.registry.previewRunPublicationDecisions(
-      this,
+    for (const output of previous.outputs) {
+      if (this.registry.childProducerFor(output.readKey) !== previous.childId) return null;
+    }
+    const preview = this.previewCarryDecisions(
       this.publications.toDecisionPreviewCandidate(
         `preview:${this.computationId}:run:${this.runSequence}:child:${child.childId}`,
+        [...retainedDependencyOutputs, ...previous.outputs],
         previous.outputs,
       ),
     );
-    const previewByReadKey = new Map(preview.map((decision) => [
-      computationOutputReadKey(decision.surface, decision.handle),
-      decision,
-    ]));
-    for (const readKey of retainedDependencyReadKeys) {
-      if (previewByReadKey.get(readKey)?.decision !== KernelPublicationDecisionKind.Retain) return null;
-    }
-    for (const output of previous.outputs) {
-      if (this.registry.childProducerFor(output.readKey) !== previous.childId) return null;
-      if (previewByReadKey.get(output.readKey)?.decision !== KernelPublicationDecisionKind.Retain) return null;
-    }
+    if (preview.some((decision) => decision.decision !== KernelPublicationDecisionKind.Retain)) return null;
 
     // Complete every fallible map merge before carry mutates the staged publication. A caught conflict must not leave
     // commit-capable carried outputs without the dependency evidence that justified them.
@@ -1476,6 +1478,20 @@ export class ComputationRun implements KernelPublicationContext {
       );
     } finally {
       this.carryReadRebaseActive = false;
+    }
+  }
+
+  private previewCarryDecisions(
+    candidate: KernelPublicationDecisionPreviewCandidate,
+  ): readonly KernelPublicationDecision[] {
+    if (this.carryDecisionPreviewActive) {
+      throw new Error(`Computation run ${this.computationId}@${this.runSequence} is already previewing child carry.`);
+    }
+    this.carryDecisionPreviewActive = true;
+    try {
+      return this.registry.previewRunPublicationDecisions(this, candidate);
+    } finally {
+      this.carryDecisionPreviewActive = false;
     }
   }
 
@@ -1611,6 +1627,11 @@ export class ComputationRun implements KernelPublicationContext {
     if (this.carryReadRebaseActive) {
       throw new Error(
         `Computation run ${this.computationId}@${this.runSequence} cannot be used while a carry read is rebasing.`,
+      );
+    }
+    if (this.carryDecisionPreviewActive) {
+      throw new Error(
+        `Computation run ${this.computationId}@${this.runSequence} cannot be used during child-carry decision preview.`,
       );
     }
   }

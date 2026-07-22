@@ -964,7 +964,8 @@
         "Rebase exact reads through their owning current authorities. Candidate-local dependencies must still come from the same producer and preview as Retain; otherwise rerun the child.",
         "Finish all fallible read-map and staged-revision merges before mutating carried publication. A caught conflict must leave no commit-capable output behind.",
         "Preview and final replacement use distinct runtime-branded staged-publication capabilities. Output handles, copied structural objects, and preview authority are not commit authority.",
-        "Use the store's decision preview only to complete the partial candidate for comparison. Final omission still means withdrawal, and final commit revalidates ordinary reads, currentness, references, envelopes, and producers.",
+        "Use the store's decision preview only for the prior child outputs and positive candidate dependencies whose Retain decisions gate carry. Resolve that bounded closure lazily through the staged-first, prior-fallback projection; never complete or preflight the whole candidate at each child. Final omission still means withdrawal, and final commit revalidates ordinary reads, currentness, references, envelopes, and producers.",
+        "Targeted preview must preserve manifest lineage and callback ordering: validate the exact lifetime of every touched prior entry, snapshot decision descriptors, and seal staged records before slot comparators observe them.",
         "Run domain read rebasers under carry quiescence: they may inspect the supplied preview context but may not read, publish, enter children, commit, or abort through the owning run. Decline carry when another child already staged a prior output.",
         "Finish every external validator and currentness callback before the callback-free descriptor and structural-closure recheck. No callback may run after dependency closure is certified.",
         "Keep structural-reference closure exact and distinct from value consumption. Structural target presence and slot compatibility govern link carry; target value changes activate a consumer only when that consumer also registered an exact or candidate semantic read.",
@@ -983,8 +984,8 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/kernel/publication.ts",
-          "symbolName": "KernelPublicationDecisionCandidate",
-          "summary": "Runtime-branded final staged-publication authority, distinct from preview authority."
+          "symbolName": "KernelPublicationDecisionPreviewCandidate",
+          "summary": "Runtime-branded targeted retention-preview authority, distinct from final replacement authority."
         },
         {
           "kind": "source",
