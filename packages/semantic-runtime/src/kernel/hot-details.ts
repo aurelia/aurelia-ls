@@ -12,8 +12,7 @@ import {
 } from './materialization.js';
 import type { ProductKindKey } from './vocabulary.js';
 import {
-  mergeKernelDetailReferences,
-  type KernelDetailReference,
+  type KernelDetailReferenceClosure,
   type KernelDetailReferenceProjector,
 } from './detail-references.js';
 import type { HotDetailDescriptor } from './detail-descriptors.js';
@@ -72,9 +71,9 @@ export class HotDetailSlot<
     return this.descriptor.summary;
   }
 
-  /** Freeze the slot-owned structural closure before publication admits the detail. */
-  referencesFor(detail: TDetail): readonly KernelDetailReference[] {
-    return mergeKernelDetailReferences(this.referenceProjector(detail));
+  /** Project the canonical structural closure before publication admits the detail. */
+  referencesFor(detail: TDetail): KernelDetailReferenceClosure {
+    return this.referenceProjector(detail);
   }
 
   compare(
@@ -103,7 +102,7 @@ export class HotDetailEntry<TDetail> {
     /** Rich in-memory model for materializer and inquiry use. */
     readonly detail: TDetail,
     /** Frozen non-owner kernel closure projected by the typed slot. */
-    readonly references: readonly KernelDetailReference[],
+    readonly references: KernelDetailReferenceClosure,
   ) {
     Object.freeze(this);
   }
@@ -345,7 +344,7 @@ export class HotDetailCatalog {
     owner: MaterializedProduct,
     handle: HotDetailHandle,
     detail: TDetail,
-    references: readonly KernelDetailReference[] = slot.referencesFor(detail),
+    references: KernelDetailReferenceClosure = slot.referencesFor(detail),
   ): PreparedHotDetailEntry<TDetail> {
     if (owner.productKindKey !== slot.ownerProductKindKey) {
       throw new Error(

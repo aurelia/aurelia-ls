@@ -5,7 +5,7 @@ import {
   kernelProductDetailReference,
   kernelRecordReferences,
   mergeKernelDetailReferences,
-  type KernelDetailReference,
+  type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import { ResourceDetailDescriptors } from '../resources/detail-descriptors.js';
@@ -25,7 +25,7 @@ import { RouteRecognizerModelKind } from './model.js';
 function productDetailReferences(
   descriptor: ProductDetailDescriptor<unknown>,
   ...handles: readonly (ProductHandle | null | undefined)[]
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(...handles),
     handles.map((handle) => kernelProductDetailReference(descriptor, handle)),
@@ -34,9 +34,9 @@ function productDetailReferences(
 
 function routeableComponentReferences(
   component: RouteableComponentReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return component == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         kernelRecordReferences(
           component.productHandle,
@@ -50,7 +50,7 @@ function routeableComponentReferences(
 
 function routeConfigReferenceReferences(
   route: RouteConfigReference,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     productDetailReferences(RouterDetailDescriptors.RouteConfig, route.productHandle),
     kernelRecordReferences(route.identityHandle, route.sourceAddressHandle),
@@ -59,7 +59,7 @@ function routeConfigReferenceReferences(
 
 function contributionReferenceReferences(
   contribution: RouteConfigContributionReference,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     productDetailReferences(RouterDetailDescriptors.RouteConfigContribution, contribution.productHandle),
     kernelRecordReferences(contribution.identityHandle, contribution.sourceAddressHandle),
@@ -68,9 +68,9 @@ function contributionReferenceReferences(
 
 function routeRecognizerReferenceReferences(
   reference: RouteRecognizerReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return reference == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         reference.recognizerKind === RouteRecognizerModelKind.Endpoint
           ? productDetailReferences(RouterDetailDescriptors.Endpoint, reference.productHandle)
@@ -81,7 +81,7 @@ function routeRecognizerReferenceReferences(
 
 function routeConfigContributionReferences(
   contribution: RouteConfigContributionModel,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     routeableComponentReferences(contribution.component),
     contribution.childRoutes.flatMap(contributionReferenceReferences),
@@ -96,7 +96,7 @@ function routeConfigContributionReferences(
 
 function routeConfigReferences(
   route: RouteConfigModel,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     routeableComponentReferences(route.component),
     route.childRoutes.flatMap(routeConfigReferenceReferences),
@@ -114,7 +114,7 @@ function routeConfigReferences(
 
 function endpointReferences(
   endpoint: EndpointModel,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     routeRecognizerReferenceReferences(endpoint.recognizer),
     routeRecognizerReferenceReferences(endpoint.configurableRoute),
@@ -126,7 +126,7 @@ function endpointReferences(
 
 function routeContextParameterReadReferences(
   read: RouteContextParameterReadModel,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     routeableComponentReferences(read.component),
     read.routeConfigs.flatMap(routeConfigReferenceReferences),

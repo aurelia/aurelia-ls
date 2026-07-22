@@ -10,11 +10,13 @@ import { FrameworkDetailDescriptors } from './detail-descriptors.js';
 export const FrameworkProductDetails = {
   ServiceRoot: defineProductDetailSlot(
     FrameworkDetailDescriptors.ServiceRoot,
-    (root) => kernelRecordReferences(
-      root.serviceKeyIdentityHandle,
-      root.evidenceSourceAddressHandle,
-      root.ownerIdentityHandle,
-      root.ownerProductHandle,
+    (root) => mergeKernelDetailReferences(
+      kernelRecordReferences(
+        root.serviceKeyIdentityHandle,
+        root.evidenceSourceAddressHandle,
+        root.ownerIdentityHandle,
+        root.ownerProductHandle,
+      ),
     ),
   ),
   CapabilityDemand: defineProductDetailSlot(

@@ -2,7 +2,7 @@ import {
   kernelProductDetailReference,
   kernelRecordReferences,
   mergeKernelDetailReferences,
-  type KernelDetailReference,
+  type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
 import type { ProductDetailDescriptor } from '../kernel/detail-descriptors.js';
 import type { RuntimeBindingValueChannelReference } from './runtime-binding-observation.js';
@@ -19,9 +19,9 @@ type ObservationProductReference = {
 function observationProductReferenceReferences(
   reference: ObservationProductReference | null,
   descriptor: ProductDetailDescriptor<unknown>,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return reference == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         kernelRecordReferences(reference.productHandle, reference.identityHandle, reference.addressHandle),
         [kernelProductDetailReference(descriptor, reference.productHandle)],
@@ -30,7 +30,7 @@ function observationProductReferenceReferences(
 
 export function runtimeBindingValueChannelReferenceReferences(
   reference: RuntimeBindingValueChannelReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return observationProductReferenceReferences(
     reference,
     ObservationDetailDescriptors.RuntimeBindingValueChannel,
@@ -39,12 +39,12 @@ export function runtimeBindingValueChannelReferenceReferences(
 
 export function computedObserverSourceReferenceReferences(
   reference: ComputedObserverSourceReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return observationProductReferenceReferences(reference, ObservationDetailDescriptors.ComputedObserverSource);
 }
 
 export function runtimeEffectReferenceReferences(
   reference: RuntimeEffectReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return observationProductReferenceReferences(reference, ObservationDetailDescriptors.RuntimeEffect);
 }

@@ -2,7 +2,7 @@ import {
   kernelProductDetailReference,
   kernelRecordReferences,
   mergeKernelDetailReferences,
-  type KernelDetailReference,
+  type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
 import { TypeSystemDetailDescriptors } from './detail-descriptors.js';
 import type { CheckerTypeReference } from './type-shape.js';
@@ -11,9 +11,9 @@ import type { CheckerTypeReference } from './type-shape.js';
 export function checkerTypeReferenceKernelReferences(
   reference: CheckerTypeReference | null,
   includeTypeShape = true,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   if (reference == null) {
-    return [];
+    return mergeKernelDetailReferences();
   }
   return mergeKernelDetailReferences(
     // A compact reference may carry a logical identity before any identity record exists.

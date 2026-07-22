@@ -393,10 +393,12 @@ association. Detail classes may expose `productHandle`, `identityHandle`, `sourc
 also envelope-backed when they exactly equal the product address. Catalog admission normalizes own fields that exactly
 echo the envelope into non-enumerable shared getters. That keeps retained hot details from storing duplicate handle
 strings while preserving the public in-process shape. Cross-product handles such as instruction, syntax, declaration,
-or binding links remain explicit detail payload and should not be hidden as envelope facts. Every executable slot
-projects those links into a frozen structural closure at publication. Record references, product-detail occupancies, and
-hot-detail occupancies are distinct surfaces: an envelope handle is not evidence that a particular sidecar exists or has
-the same revision. Validation, child-edge derivation, retention, and withdrawal safety all consume the same closure.
+or binding links remain explicit detail payload and should not be hidden as envelope facts. Every executable projector
+owns a nominal `KernelDetailReferenceClosure`: it deduplicates, sorts, and freezes those links before the slot preserves
+the exact closure for publication. Record references, product-detail occupancies, and hot-detail occupancies are distinct
+surfaces: an envelope handle is not evidence that a particular sidecar exists or has the same revision. Validation,
+child-edge derivation, retention, and withdrawal safety all consume the same closure. Final replacement independently
+reprojects that closure after external callbacks; it does not defensively renormalize a projector's result.
 `FieldProvenance` remains epistemic lineage for fields; it does not replace structural dependency edges. Likewise,
 compact logical references may be projected as exact occupancy only when their producer contract guarantees that
 sidecar is published in the same atomic plan.

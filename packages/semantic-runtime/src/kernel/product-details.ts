@@ -17,8 +17,7 @@ import {
 import type { ProductKindKey } from './vocabulary.js';
 import { DetailCatalog } from './detail-catalog.js';
 import {
-  mergeKernelDetailReferences,
-  type KernelDetailReference,
+  type KernelDetailReferenceClosure,
   type KernelDetailReferenceProjector,
 } from './detail-references.js';
 import type { ProductDetailDescriptor } from './detail-descriptors.js';
@@ -73,9 +72,9 @@ export class ProductDetailSlot<
     return this.descriptor.summary;
   }
 
-  /** Freeze the slot-owned structural closure before publication admits the detail. */
-  referencesFor(detail: TDetail): readonly KernelDetailReference[] {
-    return mergeKernelDetailReferences(this.referenceProjector(detail));
+  /** Project the canonical structural closure before publication admits the detail. */
+  referencesFor(detail: TDetail): KernelDetailReferenceClosure {
+    return this.referenceProjector(detail);
   }
 
   compare(
@@ -108,7 +107,7 @@ export class ProductDetailEntry<
     /** Rich in-memory product model for materializer and inquiry use. */
     readonly detail: TDetail,
     /** Frozen non-owner kernel closure projected by the typed slot. */
-    readonly references: readonly KernelDetailReference[],
+    readonly references: KernelDetailReferenceClosure,
   ) {
     Object.freeze(this);
   }
@@ -424,7 +423,7 @@ export class ProductDetailCatalog {
     slot: ProductDetailSlot<TDetail, TProductKind>,
     product: MaterializedProduct,
     detail: TDetail,
-    references: readonly KernelDetailReference[] = slot.referencesFor(detail),
+    references: KernelDetailReferenceClosure = slot.referencesFor(detail),
   ): PreparedProductDetailEntry<TDetail, TProductKind> {
     if (product.productKindKey !== slot.productKindKey) {
       throw new Error(

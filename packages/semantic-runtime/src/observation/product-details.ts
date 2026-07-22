@@ -4,7 +4,7 @@ import {
   kernelProductDetailReference,
   kernelRecordReferences,
   mergeKernelDetailReferences,
-  type KernelDetailReference,
+  type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
 import type { TemplateVisibleResourceReference } from '../template/compiler-world-reference.js';
@@ -33,20 +33,22 @@ import {
 
 function visibleResourceReferenceRecords(
   reference: TemplateVisibleResourceReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return reference == null
-    ? kernelRecordReferences()
-    : kernelRecordReferences(
-      reference.resourceProductHandle,
-      reference.resourceIdentityHandle,
-      reference.definitionProductHandle,
-      reference.sourceAddressHandle,
-    );
+    ? mergeKernelDetailReferences()
+    : mergeKernelDetailReferences(
+        kernelRecordReferences(
+          reference.resourceProductHandle,
+          reference.resourceIdentityHandle,
+          reference.definitionProductHandle,
+          reference.sourceAddressHandle,
+        ),
+      );
 }
 
 function valueConverterWritebackStageRecords(
   stage: RuntimeBindingDataFlowValueConverterWritebackStage,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     runtimeValueConverterApplicationReferenceReferences(stage.application),
     visibleResourceReferenceRecords(stage.application.resource),
@@ -59,7 +61,7 @@ function valueConverterWritebackStageRecords(
 function computedObserverDependencyRecords(
   dependency: ComputedObserverObservedDependency,
   includeObserverBackReference: boolean,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     includeObserverBackReference
       ? computedObserverSourceReferenceReferences(dependency.computedObserver)
@@ -71,7 +73,7 @@ function computedObserverDependencyRecords(
 function runtimeEffectDependencyRecords(
   dependency: RuntimeEffectObservedDependency,
   includeEffectBackReference: boolean,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     includeEffectBackReference
       ? runtimeEffectReferenceReferences(dependency.effect)
@@ -83,7 +85,7 @@ function runtimeEffectDependencyRecords(
 
 function runtimeBindingObservedDependencyReferences(
   dependency: RuntimeBindingObservedDependency,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     runtimeBindingReferenceReferences(dependency.binding),
     kernelRecordReferences(
@@ -106,7 +108,7 @@ function runtimeBindingObservedDependencyReferences(
 
 function computedObserverSourceReferences(
   observer: ComputedObserverSource,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     ...observer.observedDependencies.map((dependency) => mergeKernelDetailReferences(
       kernelRecordReferences(
@@ -126,7 +128,7 @@ function computedObserverSourceReferences(
 
 function runtimeEffectReferences(
   effect: RuntimeEffect,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     ...effect.observedDependencies.map((dependency) => mergeKernelDetailReferences(
       kernelRecordReferences(
@@ -226,7 +228,9 @@ export const ObservationProductDetails = {
   ),
   ComputedObservationDefinition: defineProductDetailSlot(
     ObservationDetailDescriptors.ComputedObservationDefinition,
-    (definition) => kernelFieldProvenanceReferences(definition.fieldProvenance),
+    (definition) => mergeKernelDetailReferences(
+      kernelFieldProvenanceReferences(definition.fieldProvenance),
+    ),
   ),
   RuntimeEffect: defineProductDetailSlot(
     ObservationDetailDescriptors.RuntimeEffect,
@@ -238,6 +242,6 @@ export const ObservationProductDetails = {
   ),
   ProxyObservableEscape: defineProductDetailSlot(
     ObservationDetailDescriptors.ProxyObservableEscape,
-    (escape) => kernelFieldProvenanceReferences(escape.fieldProvenance),
+    (escape) => mergeKernelDetailReferences(kernelFieldProvenanceReferences(escape.fieldProvenance)),
   ),
 } as const;

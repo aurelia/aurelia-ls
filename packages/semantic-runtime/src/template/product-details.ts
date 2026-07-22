@@ -9,7 +9,7 @@ import {
   kernelProductDetailReference,
   kernelRecordReferences,
   mergeKernelDetailReferences,
-  type KernelDetailReference,
+  type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
 import {
@@ -244,7 +244,7 @@ export const TemplateProductDetails = {
 function detailReferences(
   slot: ProductDetailDescriptor<unknown>,
   handle: ProductHandle | null | undefined,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(handle),
     [kernelProductDetailReference(slot, handle)],
@@ -254,7 +254,7 @@ function detailReferences(
 function detailsReferences(
   slot: ProductDetailDescriptor<unknown>,
   handles: readonly (ProductHandle | null | undefined)[],
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(...handles.map((handle) => detailReferences(slot, handle)));
 }
 
@@ -263,7 +263,7 @@ function productIdentityAddressReferences(
   identityHandle: KernelRecordHandle | null | undefined,
   addressHandle: KernelRecordHandle | null | undefined,
   slot: ProductDetailDescriptor<unknown> | null = null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(productHandle, identityHandle, addressHandle),
     slot == null ? [] : [kernelProductDetailReference(slot, productHandle)],
@@ -272,23 +272,27 @@ function productIdentityAddressReferences(
 
 function containerReferenceReferences(
   container: ContainerReference,
-): readonly KernelDetailReference[] {
-  return kernelRecordReferences(container.productHandle, container.identityHandle, container.addressHandle);
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(container.productHandle, container.identityHandle, container.addressHandle),
+  );
 }
 
 function appRootReferenceReferences(
   appRoot: AppRootReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return appRoot == null
-    ? []
-    : kernelRecordReferences(appRoot.productHandle, appRoot.identityHandle, appRoot.addressHandle);
+    ? mergeKernelDetailReferences()
+    : mergeKernelDetailReferences(
+        kernelRecordReferences(appRoot.productHandle, appRoot.identityHandle, appRoot.addressHandle),
+      );
 }
 
 function controllerReferenceReferences(
   controller: ControllerReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return controller == null
-    ? []
+    ? mergeKernelDetailReferences()
     : productIdentityAddressReferences(
         controller.productHandle,
         controller.identityHandle,
@@ -299,9 +303,9 @@ function controllerReferenceReferences(
 
 function resourceTargetReferenceReferences(
   target: ResourceTargetReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return target == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         kernelRecordReferences(
           target.identityHandle,
@@ -314,15 +318,17 @@ function resourceTargetReferenceReferences(
 
 function referencesForTemplateSourceOwner(
   owner: TemplateSourceOwnerReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return owner == null
-    ? []
-    : kernelRecordReferences(owner.productHandle, owner.identityHandle, owner.addressHandle);
+    ? mergeKernelDetailReferences()
+    : mergeKernelDetailReferences(
+        kernelRecordReferences(owner.productHandle, owner.identityHandle, owner.addressHandle),
+      );
 }
 
 function referencesForTemplateSource(
   source: TemplateSource,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     referencesForTemplateSourceOwner(source.owner),
     kernelRecordReferences(source.templateAddressHandle),
@@ -330,26 +336,26 @@ function referencesForTemplateSource(
   );
 }
 
-function inquiryLocusReferences(locus: InquiryLocus | null): readonly KernelDetailReference[] {
+function inquiryLocusReferences(locus: InquiryLocus | null): KernelDetailReferenceClosure {
   if (locus == null) {
-    return [];
+    return mergeKernelDetailReferences();
   }
   switch (locus.kind) {
     case InquiryLocusKind.Workspace:
     case InquiryLocusKind.Project:
-      return [];
+      return mergeKernelDetailReferences();
     case InquiryLocusKind.SourceFile:
     case InquiryLocusKind.SourceCursor:
     case InquiryLocusKind.SourceRange:
-      return kernelRecordReferences(locus.addressHandle);
+      return mergeKernelDetailReferences(kernelRecordReferences(locus.addressHandle));
     case InquiryLocusKind.KernelRecord:
-      return kernelRecordReferences(locus.handle);
+      return mergeKernelDetailReferences(kernelRecordReferences(locus.handle));
   }
 }
 
 function templateParseFrontierReferences(
   frontier: TemplateParseFrontier,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     inquiryLocusReferences(frontier.locus),
     kernelRecordReferences(frontier.addressHandle),
@@ -358,7 +364,7 @@ function templateParseFrontierReferences(
 
 function referencesForTemplateParseContext(
   context: TemplateParseContext,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     templateParseFrontierReferences(context.frontier),
     kernelFieldProvenanceReferences(context.fieldProvenance),
@@ -367,7 +373,7 @@ function referencesForTemplateParseContext(
 
 function templateSourceReferenceReferences(
   source: TemplateSourceReference,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     productIdentityAddressReferences(
       source.productHandle,
@@ -381,7 +387,7 @@ function templateSourceReferenceReferences(
 
 function templateCompilerWorldReferenceReferences(
   world: TemplateCompilerWorldReference,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     productIdentityAddressReferences(
       world.productHandle,
@@ -395,9 +401,9 @@ function templateCompilerWorldReferenceReferences(
 
 function templateCompilationContextReferenceReferences(
   context: TemplateCompilationContextReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return context == null
-    ? []
+    ? mergeKernelDetailReferences()
     : productIdentityAddressReferences(
         context.productHandle,
         context.identityHandle,
@@ -408,7 +414,7 @@ function templateCompilationContextReferenceReferences(
 
 function templateResourceScopeReferenceReferences(
   scope: TemplateResourceScopeReference,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     productIdentityAddressReferences(
       scope.productHandle,
@@ -422,7 +428,7 @@ function templateResourceScopeReferenceReferences(
 
 function templateParseContextReferenceReferences(
   context: TemplateCompilationUnit['parseContext'],
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     productIdentityAddressReferences(
       context.productHandle,
@@ -436,7 +442,7 @@ function templateParseContextReferenceReferences(
 
 function referencesForTemplateCompilationUnit(
   unit: TemplateCompilationUnit,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     templateSourceReferenceReferences(unit.templateSource),
     templateCompilerWorldReferenceReferences(unit.compilerWorld),
@@ -448,7 +454,7 @@ function referencesForTemplateCompilationUnit(
 
 function referencesForTemplateCompilationContext(
   context: TemplateCompilationContext,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     detailReferences(TemplateDetailDescriptors.CompilationUnit, context.compilationUnitProductHandle),
     templateCompilerWorldReferenceReferences(context.compilerWorld),
@@ -464,7 +470,7 @@ function referencesForTemplateCompilationContext(
 
 function referencesForTemplateCompilerWorld(
   world: TemplateCompilerWorld,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     appRootReferenceReferences(world.appRoot),
     containerReferenceReferences(world.container),
@@ -476,7 +482,7 @@ function referencesForTemplateCompilerWorld(
 
 function referencesForTemplateResourceScope(
   scope: TemplateResourceScope,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     containerReferenceReferences(scope.container),
     ...scope.resources.map(templateVisibleResourceReferences),
@@ -487,7 +493,7 @@ function referencesForTemplateResourceScope(
 
 function referencesForTemplateCompilerService(
   service: TemplateCompilerService,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     containerReferenceReferences(service.container),
     kernelFieldProvenanceReferences(service.fieldProvenance),
@@ -496,7 +502,7 @@ function referencesForTemplateCompilerService(
 
 function referencesForTemplateResourceResolverService(
   service: TemplateResourceResolverService,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     containerReferenceReferences(service.container),
     ...service.resources.map(templateVisibleResourceReferences),
@@ -506,7 +512,7 @@ function referencesForTemplateResourceResolverService(
 
 function referencesForTemplateExpressionParserService(
   service: TemplateExpressionParserService,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     containerReferenceReferences(service.container),
     kernelFieldProvenanceReferences(service.fieldProvenance),
@@ -515,7 +521,7 @@ function referencesForTemplateExpressionParserService(
 
 function referencesForTemplateAttributeMapperService(
   service: TemplateAttributeMapperService,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     containerReferenceReferences(service.container),
     kernelFieldProvenanceReferences(service.fieldProvenance),
@@ -524,7 +530,7 @@ function referencesForTemplateAttributeMapperService(
 
 function referencesForTemplateRenderingService(
   service: TemplateRenderingService,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     containerReferenceReferences(service.container),
     ...service.renderers.map((renderer) => detailReferences(TemplateDetailDescriptors.RuntimeRenderer, renderer.productHandle)),
@@ -534,7 +540,7 @@ function referencesForTemplateRenderingService(
 
 function templateCompilerServiceReferenceReferences(
   service: TemplateCompilerServiceReference,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   let slot: ProductDetailDescriptor<unknown>;
   switch (service.serviceKind) {
     case TemplateCompilerServiceKind.TemplateCompiler:
@@ -569,7 +575,7 @@ function templateCompilerServiceReferenceReferences(
 
 function templateVisibleResourceReferences(
   resource: TemplateVisibleResource,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   const definitionProductHandle = resource.definitionProductHandle;
   return mergeKernelDetailReferences(
     kernelRecordReferences(
@@ -589,9 +595,9 @@ function templateVisibleResourceReferences(
 
 function templateVisibleResourceReferenceReferences(
   resource: TemplateVisibleResourceReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return resource == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         kernelRecordReferences(
           resource.resourceProductHandle,
@@ -612,10 +618,10 @@ function visibleResourceProductDetailReferences(
   resourceKind: ResourceDefinitionKind,
   productHandle: ProductHandle | null,
   definitionProductHandle: ProductHandle | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   // App definitions reuse the definition handle; built-ins retain a distinct header; syntax resources use executables.
   if (productHandle === definitionProductHandle) {
-    return [];
+    return mergeKernelDetailReferences();
   }
   switch (resourceKind) {
     case ResourceDefinitionKind.BindingCommand:
@@ -628,14 +634,14 @@ function visibleResourceProductDetailReferences(
     case ResourceDefinitionKind.ValueConverter:
     case ResourceDefinitionKind.BindingBehavior:
       return definitionProductHandle == null
-        ? []
+        ? mergeKernelDetailReferences()
         : detailReferences(ResourceDetailDescriptors.DefinitionHeader, productHandle);
   }
 }
 
 function bindableDefinitionReferences(
   bindable: BindableDefinition,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(
       bindable.sourceAddressHandle,
@@ -654,7 +660,7 @@ function bindableDefinitionReferences(
 
 function bindableDefinitionReferenceReferences(
   bindable: BindableDefinitionReference,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     detailReferences(ResourceDetailDescriptors.Definition, bindable.ownerDefinitionProductHandle),
     kernelRecordReferences(
@@ -668,9 +674,9 @@ function bindableDefinitionReferenceReferences(
 
 function templateBindableReferenceReferences(
   bindable: TemplateBindableReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return bindable == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         bindableDefinitionReferences(bindable.definition),
         bindableDefinitionReferenceReferences(bindable.reference),
@@ -679,15 +685,17 @@ function templateBindableReferenceReferences(
 
 function attributePatternDefinitionEntryReferences(
   definition: AttributePatternDefinitionEntry | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return definition == null
-    ? []
-    : kernelRecordReferences(definition.addressHandle, definition.provenanceHandle);
+    ? mergeKernelDetailReferences()
+    : mergeKernelDetailReferences(
+        kernelRecordReferences(definition.addressHandle, definition.provenanceHandle),
+      );
 }
 
 function referencesForCompiledAttributePattern(
   pattern: CompiledAttributePattern,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     attributePatternDefinitionEntryReferences(pattern.definition),
     detailReferences(TemplateDetailDescriptors.AttributePatternExecutable, pattern.executableProductHandle),
@@ -696,7 +704,7 @@ function referencesForCompiledAttributePattern(
 
 function referencesForAttributePatternExecutable(
   executable: AttributePatternExecutable,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     detailReferences(ResourceDetailDescriptors.Definition, executable.definitionProductHandle),
     resourceTargetReferenceReferences(executable.target),
@@ -707,7 +715,7 @@ function referencesForAttributePatternExecutable(
 
 function referencesForBindingCommandExecutable(
   executable: BindingCommandExecutable,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     detailReferences(ResourceDetailDescriptors.Definition, executable.definitionProductHandle),
     resourceTargetReferenceReferences(executable.target),
@@ -717,7 +725,7 @@ function referencesForBindingCommandExecutable(
 
 function referencesForAttributeParserMachine(
   machine: AttributeParserMachine,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     ...machine.compiledPatterns.map((pattern) =>
       productIdentityAddressReferences(
@@ -733,7 +741,7 @@ function referencesForAttributeParserMachine(
 
 function referencesForAttributeParserService(
   service: AttributeParserService,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     ...service.patternExecutables.map((executable) =>
       productIdentityAddressReferences(
@@ -757,7 +765,7 @@ function referencesForAttributeParserService(
 
 function referencesForBindingCommandResolver(
   resolver: BindingCommandResolverService,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     ...resolver.commands.map((command) =>
       productIdentityAddressReferences(
@@ -773,7 +781,7 @@ function referencesForBindingCommandResolver(
 
 function referencesForBuiltInSyntaxCatalog(
   catalog: BuiltInSyntaxCatalog,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     ...catalog.attributePatterns.map((pattern) =>
       productIdentityAddressReferences(
@@ -797,7 +805,7 @@ function referencesForBuiltInSyntaxCatalog(
 
 function referencesForConfiguredBuiltInSyntaxCatalogSelection(
   selection: ConfiguredBuiltInSyntaxCatalogSelection,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(selection.registrationAdmissionProductHandle),
     detailsReferences(TemplateDetailDescriptors.BuiltInSyntaxCatalog, selection.catalogProductHandles),
@@ -807,7 +815,7 @@ function referencesForConfiguredBuiltInSyntaxCatalogSelection(
 
 function referencesForBuiltInRuntimeRendererCatalog(
   catalog: BuiltInRuntimeRendererCatalog,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     ...catalog.renderers.map((renderer) =>
       productIdentityAddressReferences(
@@ -823,7 +831,7 @@ function referencesForBuiltInRuntimeRendererCatalog(
 
 function referencesForConfiguredBuiltInRuntimeRendererCatalogSelection(
   selection: ConfiguredBuiltInRuntimeRendererCatalogSelection,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(selection.registrationAdmissionProductHandle),
     detailsReferences(TemplateDetailDescriptors.BuiltInRuntimeRendererCatalog, selection.catalogProductHandles),
@@ -833,15 +841,15 @@ function referencesForConfiguredBuiltInRuntimeRendererCatalogSelection(
 
 function referencesForRuntimeRenderer(
   renderer: RuntimeRenderer,
-): readonly KernelDetailReference[] {
-  return kernelFieldProvenanceReferences(renderer.fieldProvenance);
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(kernelFieldProvenanceReferences(renderer.fieldProvenance));
 }
 
 function htmlNodeReferenceReferences(
   node: HtmlNodeReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return node == null
-    ? []
+    ? mergeKernelDetailReferences()
     : productIdentityAddressReferences(
         node.productHandle,
         node.identityHandle,
@@ -854,9 +862,9 @@ function htmlNodeReferenceReferences(
 
 function htmlAttributeReferenceReferences(
   attribute: HtmlAttributeReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return attribute == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         kernelRecordReferences(attribute.productHandle, attribute.addressHandle),
         [kernelProductDetailReference(TemplateDetailDescriptors.HtmlAttribute, attribute.productHandle)],
@@ -865,13 +873,15 @@ function htmlAttributeReferenceReferences(
 
 function htmlRecoveryReferences(
   recovery: HtmlRecovery,
-): readonly KernelDetailReference[] {
-  return kernelRecordReferences(recovery.addressHandle, recovery.provenanceHandle);
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(recovery.addressHandle, recovery.provenanceHandle),
+  );
 }
 
 function referencesForHtmlDocument(
   document: HtmlDocument,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     ...document.rootNodes.map(htmlNodeReferenceReferences),
     ...document.recoveries.map(htmlRecoveryReferences),
@@ -881,7 +891,7 @@ function referencesForHtmlDocument(
 
 function referencesForHtmlNode(
   node: HtmlIrNode,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   switch (node.nodeKind) {
     case HtmlIrNodeKind.Document:
       return referencesForHtmlDocument(node);
@@ -899,7 +909,7 @@ function referencesForHtmlNode(
         kernelFieldProvenanceReferences(node.fieldProvenance),
       );
     case HtmlIrNodeKind.Text:
-      return kernelFieldProvenanceReferences(node.fieldProvenance);
+      return mergeKernelDetailReferences(kernelFieldProvenanceReferences(node.fieldProvenance));
     case HtmlIrNodeKind.Comment:
       return mergeKernelDetailReferences(
         ...node.recoveries.map(htmlRecoveryReferences),
@@ -912,7 +922,7 @@ function referencesForHtmlNode(
 
 function referencesForHtmlAttribute(
   attribute: HtmlAttribute,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(attribute.nameAddressHandle, attribute.valueAddressHandle),
     ...attribute.recoveries.map(htmlRecoveryReferences),
@@ -922,9 +932,9 @@ function referencesForHtmlAttribute(
 
 function bindingCommandExecutableReferenceReferences(
   command: BindingCommandExecutableReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return command == null
-    ? []
+    ? mergeKernelDetailReferences()
     : productIdentityAddressReferences(
         command.productHandle,
         command.identityHandle,
@@ -935,7 +945,7 @@ function bindingCommandExecutableReferenceReferences(
 
 function referencesForAttributeSyntax(
   syntax: AttributeSyntax,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(
       syntax.nameSourceAddressHandle,
@@ -953,7 +963,7 @@ function referencesForAttributeSyntax(
 
 function referencesForAttributeClassification(
   classification: AttributeClassification,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     detailReferences(TemplateDetailDescriptors.AttributeSyntax, classification.syntaxProductHandle),
     htmlNodeReferenceReferences(classification.ownerNode),
@@ -967,7 +977,7 @@ function referencesForAttributeClassification(
 
 function templateValueSiteReferenceReferences(
   site: TemplateValueSiteReference,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return productIdentityAddressReferences(
     site.productHandle,
     site.identityHandle,
@@ -978,7 +988,7 @@ function templateValueSiteReferenceReferences(
 
 function referencesForTemplateValueSite(
   site: TemplateValueSite,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     htmlNodeReferenceReferences(site.node),
     htmlAttributeReferenceReferences(site.attribute),
@@ -1006,7 +1016,7 @@ function referencesForTemplateValueSite(
 
 function referencesForTemplateExpressionParse(
   parse: TemplateExpressionParse,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     templateValueSiteReferenceReferences(parse.site),
     detailReferences(TemplateDetailDescriptors.ExpressionParserService, parse.parserProductHandle),
@@ -1016,7 +1026,7 @@ function referencesForTemplateExpressionParse(
 
 function referencesForBindingCommandBuildInput(
   input: BindingCommandBuildInput,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     htmlNodeReferenceReferences(input.node),
     htmlAttributeReferenceReferences(input.attribute),
@@ -1029,7 +1039,7 @@ function referencesForBindingCommandBuildInput(
 
 function referencesForBindingCommandLowering(
   lowering: BindingCommandLowering,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     bindingCommandExecutableReferenceReferences(lowering.command),
     detailReferences(TemplateDetailDescriptors.BindingCommandBuildInput, lowering.inputProductHandle),
@@ -1040,7 +1050,7 @@ function referencesForBindingCommandLowering(
 
 function referencesForTemplateCompilerIssue(
   issue: TemplateCompilerIssue,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelFieldProvenanceReferences(issue.fieldProvenance),
     kernelRecordReferences(...issue.relatedInformation.map((related) => related.sourceAddressHandle)),
@@ -1049,7 +1059,7 @@ function referencesForTemplateCompilerIssue(
 
 function referencesForMultiBindingSegment(
   segment: MultiBindingSegment,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     templateValueSiteReferenceReferences(segment.site),
     htmlAttributeReferenceReferences(segment.attribute),
@@ -1063,7 +1073,7 @@ function referencesForMultiBindingSegment(
 
 function referencesForMultiBindingLowering(
   lowering: MultiBindingLowering,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     templateValueSiteReferenceReferences(lowering.site),
     detailsReferences(TemplateDetailDescriptors.MultiBindingSegment, lowering.segmentProductHandles),
@@ -1074,7 +1084,7 @@ function referencesForMultiBindingLowering(
 
 function referencesForCompiledTemplate(
   template: CompiledTemplate,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     detailReferences(TemplateDetailDescriptors.HtmlDocument, template.htmlDocumentProductHandle),
     ...template.targets.map((target) =>
@@ -1099,7 +1109,7 @@ function referencesForCompiledTemplate(
 
 function referencesForTemplateRenderTarget(
   target: TemplateRenderTarget,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     htmlNodeReferenceReferences(target.htmlNode),
     detailReferences(TemplateDetailDescriptors.InstructionSequence, target.instructionSequenceProductHandle),
@@ -1109,7 +1119,7 @@ function referencesForTemplateRenderTarget(
 
 function templateInstructionReferenceReferences(
   instruction: TemplateInstructionReference,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return productIdentityAddressReferences(
     instruction.productHandle,
     instruction.identityHandle,
@@ -1120,13 +1130,13 @@ function templateInstructionReferenceReferences(
 
 function expressionReferences(
   ...handles: readonly (ProductHandle | null | undefined)[]
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return detailsReferences(TemplateDetailDescriptors.ExpressionParse, handles);
 }
 
 function referencesForTemplateInstructionSequence(
   sequence: TemplateInstructionSequence,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(sequence.ownerProductHandle),
     ...sequence.instructions.map(templateInstructionReferenceReferences),
@@ -1135,7 +1145,7 @@ function referencesForTemplateInstructionSequence(
 
 function referencesForTemplateInstruction(
   instruction: TemplateInstruction,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   const common = mergeKernelDetailReferences(
     htmlNodeReferenceReferences(instruction.node),
     kernelFieldProvenanceReferences(instruction.fieldProvenance),
@@ -1287,9 +1297,9 @@ function referencesForTemplateInstruction(
 
 function runtimeRendererReferenceReferences(
   renderer: RuntimeRendererReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return renderer == null
-    ? []
+    ? mergeKernelDetailReferences()
     : productIdentityAddressReferences(
         renderer.productHandle,
         renderer.identityHandle,
@@ -1300,7 +1310,7 @@ function runtimeRendererReferenceReferences(
 
 function runtimeBindingScopeEffectReferenceReferences(
   effect: RuntimeBindingScopeEffectReference,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return productIdentityAddressReferences(
     effect.productHandle,
     effect.identityHandle,
@@ -1312,7 +1322,7 @@ function runtimeBindingScopeEffectReferenceReferences(
 function runtimeControllerReferences(
   productHandle: ProductHandle | null | undefined,
   identityHandle: KernelRecordHandle | null | undefined = null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     detailReferences(ConfigurationDetailDescriptors.Controller, productHandle),
     kernelRecordReferences(identityHandle),
@@ -1321,7 +1331,7 @@ function runtimeControllerReferences(
 
 function referencesForRuntimeBinding(
   binding: RuntimeBinding,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   const common = mergeKernelDetailReferences(
     detailReferences(TemplateDetailDescriptors.Instruction, binding.instructionProductHandle),
     runtimeRendererReferenceReferences(binding.renderer),
@@ -1403,7 +1413,7 @@ function referencesForRuntimeBinding(
 
 function referencesForRuntimeBindingScopeEffect(
   effect: RuntimeBindingScopeEffect,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   const common = mergeKernelDetailReferences(
     runtimeBindingReferenceReferences(effect.binding),
     detailReferences(TemplateDetailDescriptors.Instruction, effect.ownerInstructionProductHandle),
@@ -1426,13 +1436,13 @@ function referencesForRuntimeBindingScopeEffect(
 
 function watchPropertyKeyReferences(
   key: WatchPropertyKeyDefinition | null,
-): readonly KernelDetailReference[] {
-  return key == null ? [] : resourceTargetReferenceReferences(key.target);
+): KernelDetailReferenceClosure {
+  return key == null ? mergeKernelDetailReferences() : resourceTargetReferenceReferences(key.target);
 }
 
 function watchExpressionReferences(
   expression: WatchExpressionDefinition,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     watchPropertyKeyReferences(expression.propertyKey),
     resourceTargetReferenceReferences(expression.target),
@@ -1441,7 +1451,7 @@ function watchExpressionReferences(
 
 function watchCallbackReferences(
   callback: WatchCallbackDefinition,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     watchPropertyKeyReferences(callback.methodName),
     resourceTargetReferenceReferences(callback.target),
@@ -1450,7 +1460,7 @@ function watchCallbackReferences(
 
 function runtimeWatcherObservedDependencyReferences(
   dependency: RuntimeWatcherObservedDependency,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return productIdentityAddressReferences(
     dependency.productHandle,
     dependency.identityHandle,
@@ -1461,7 +1471,7 @@ function runtimeWatcherObservedDependencyReferences(
 
 function referencesForRuntimeWatcher(
   watcher: RuntimeWatcher,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     runtimeControllerReferences(watcher.controllerProductHandle, watcher.controllerIdentityHandle),
     detailReferences(ResourceDetailDescriptors.Definition, watcher.definitionProductHandle),
@@ -1474,7 +1484,7 @@ function referencesForRuntimeWatcher(
 
 function referencesForRuntimeBindingTargetAccess(
   access: RuntimeBindingTargetAccess,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     runtimeBindingReferenceReferences(access.binding),
     htmlNodeReferenceReferences(access.targetNode),
@@ -1487,7 +1497,7 @@ function referencesForRuntimeBindingTargetAccess(
 
 function referencesForRuntimeBindingTargetOperation(
   operation: RuntimeBindingTargetOperation,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     runtimeBindingReferenceReferences(operation.binding),
     runtimeRendererReferenceReferences(operation.renderer),
@@ -1500,7 +1510,7 @@ function referencesForRuntimeBindingTargetOperation(
 
 function referencesForRuntimeBindingSourceOperation(
   operation: RuntimeBindingSourceOperation,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     runtimeBindingReferenceReferences(operation.binding),
     detailReferences(TemplateDetailDescriptors.Instruction, operation.instructionProductHandle),
@@ -1513,7 +1523,7 @@ function referencesForRuntimeBindingSourceOperation(
 
 function referencesForRuntimeBindingIssue(
   issue: RuntimeBindingIssue,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     runtimeBindingReferenceReferences(issue.binding),
     kernelFieldProvenanceReferences(issue.fieldProvenance),
@@ -1522,7 +1532,7 @@ function referencesForRuntimeBindingIssue(
 
 function referencesForRuntimeRendererIssue(
   issue: RuntimeRendererIssue,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     runtimeRendererReferenceReferences(issue.renderer),
     detailReferences(TemplateDetailDescriptors.Instruction, issue.instructionProductHandle),
@@ -1533,7 +1543,7 @@ function referencesForRuntimeRendererIssue(
 
 function referencesForRuntimeBindingBehaviorApplication(
   application: RuntimeBindingBehaviorApplication,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     runtimeBindingReferenceReferences(application.binding),
     templateVisibleResourceReferenceReferences(application.resource),
@@ -1545,7 +1555,7 @@ function referencesForRuntimeBindingBehaviorApplication(
 
 function referencesForRuntimeBindingBehaviorIssue(
   issue: RuntimeBindingBehaviorIssue,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     productIdentityAddressReferences(
       issue.application.productHandle,
@@ -1561,7 +1571,7 @@ function referencesForRuntimeBindingBehaviorIssue(
 
 function referencesForRuntimeValueConverterApplication(
   application: RuntimeValueConverterApplication,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     runtimeBindingReferenceReferences(application.binding),
     templateVisibleResourceReferenceReferences(application.resource),
@@ -1572,7 +1582,7 @@ function referencesForRuntimeValueConverterApplication(
 
 function referencesForRuntimeValueConverterIssue(
   issue: RuntimeValueConverterIssue,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     productIdentityAddressReferences(
       issue.application.productHandle,
@@ -1587,7 +1597,7 @@ function referencesForRuntimeValueConverterIssue(
 
 function referencesForRuntimeBindingScopeIssue(
   issue: RuntimeBindingScopeIssue,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     detailReferences(
       TemplateDetailDescriptors.RuntimeBindingScopeEffect,
@@ -1600,7 +1610,7 @@ function referencesForRuntimeBindingScopeIssue(
 
 function referencesForRuntimeControllerIssue(
   issue: RuntimeControllerIssue,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     runtimeControllerReferences(issue.controllerProductHandle, issue.controllerIdentityHandle),
     detailReferences(TemplateDetailDescriptors.Instruction, issue.instructionProductHandle),
@@ -1610,9 +1620,9 @@ function referencesForRuntimeControllerIssue(
 
 function compositionActivationModelHandoffReferences(
   handoff: CompositionActivationModelHandoff | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return handoff == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         checkerTypeReferenceKernelReferences(handoff.activationParameterType),
         checkerTypeReferenceKernelReferences(handoff.modelType),
@@ -1621,7 +1631,7 @@ function compositionActivationModelHandoffReferences(
 
 function compositionResolvedComponentReferences(
   component: CompositionResolvedComponent,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     detailReferences(ResourceDetailDescriptors.Definition, component.definitionProductHandle),
     detailReferences(TemplateDetailDescriptors.CompiledTemplate, component.compiledTemplateProductHandle),
@@ -1632,7 +1642,7 @@ function compositionResolvedComponentReferences(
 
 function compositionContextReferenceReferences(
   context: CompositionContextReference,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return productIdentityAddressReferences(
     context.productHandle,
     context.identityHandle,
@@ -1643,7 +1653,7 @@ function compositionContextReferenceReferences(
 
 function referencesForCompositionContext(
   context: CompositionContext,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     runtimeControllerReferences(context.hostControllerProductHandle),
     runtimeControllerReferences(context.parentControllerProductHandle),
@@ -1666,7 +1676,7 @@ function referencesForCompositionContext(
 
 function referencesForCompositionController(
   controller: CompositionController,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     compositionContextReferenceReferences(controller.context),
     runtimeControllerReferences(controller.hostControllerProductHandle),

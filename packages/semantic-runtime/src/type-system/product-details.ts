@@ -5,7 +5,7 @@ import {
   kernelFieldProvenanceReferences,
   kernelRecordReferences,
   mergeKernelDetailReferences,
-  type KernelDetailReference,
+  type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
 import type {
   CheckerTypeMember,
@@ -23,7 +23,7 @@ import {
 
 function checkerTypeShapeReferences(
   shape: CheckerTypeShape,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     shape.members.map((member) => kernelHotDetailReference(
       TypeSystemHotDetailDescriptors.TypeMember,
@@ -40,7 +40,7 @@ function checkerTypeShapeReferences(
 
 function checkerTypeMemberReferences(
   member: CheckerTypeMember,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     checkerTypeReferenceKernelReferences(member.ownerType, false),
     checkerTypeReferenceKernelReferences(member.valueType),

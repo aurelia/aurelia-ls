@@ -7,7 +7,7 @@ import {
   kernelRecordReferences,
   mergeKernelDetailReferences,
   noKernelDetailReferences,
-  type KernelDetailReference,
+  type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import type { ContainerReference } from '../di/container-reference.js';
@@ -36,7 +36,7 @@ import { bindingScopeReferenceKernelReferences } from './structural-references.j
 function productDetailReferences(
   descriptor: ProductDetailDescriptor<unknown>,
   ...handles: readonly (ProductHandle | null | undefined)[]
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(...handles),
     handles.map((handle) => kernelProductDetailReference(descriptor, handle)),
@@ -45,19 +45,21 @@ function productDetailReferences(
 
 function containerReferenceReferences(
   reference: ContainerReference,
-): readonly KernelDetailReference[] {
-  return kernelRecordReferences(
-    reference.productHandle,
-    reference.identityHandle,
-    reference.addressHandle,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(
+      reference.productHandle,
+      reference.identityHandle,
+      reference.addressHandle,
+    ),
   );
 }
 
 function resourceTargetReferenceReferences(
   reference: ResourceTargetReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return reference == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         kernelRecordReferences(
           reference.identityHandle,
@@ -70,9 +72,9 @@ function resourceTargetReferenceReferences(
 
 function controllerReferenceReferences(
   reference: ControllerReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return reference == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         productDetailReferences(ConfigurationDetailDescriptors.Controller, reference.productHandle),
         kernelRecordReferences(reference.identityHandle, reference.addressHandle),
@@ -81,7 +83,7 @@ function controllerReferenceReferences(
 
 function bindingContextSlotReferences(
   slot: BindingContextSlot,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(slot.targetIdentityHandle, slot.sourceAddressHandle),
     checkerTypeReferenceKernelReferences(slot.targetType),
@@ -99,7 +101,7 @@ function bindingContextSlotReferences(
 
 function bindingContextReferences(
   context: BindingContext | OverrideContext,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(context.ownerProductHandle),
     checkerTypeReferenceKernelReferences(context.contextType),
@@ -110,9 +112,9 @@ function bindingContextReferences(
 
 function bindingScopeDetailReference(
   scope: BindingScope | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return scope == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         productDetailReferences(ConfigurationDetailDescriptors.BindingScope, scope.productHandle),
         kernelRecordReferences(scope.identityHandle, scope.sourceAddressHandle),
@@ -121,7 +123,7 @@ function bindingScopeDetailReference(
 
 function bindingContextDetailReference(
   context: BindingContext,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     productDetailReferences(ConfigurationDetailDescriptors.BindingContext, context.productHandle),
     kernelRecordReferences(context.identityHandle, context.sourceAddressHandle),
@@ -130,7 +132,7 @@ function bindingContextDetailReference(
 
 function overrideContextDetailReference(
   context: OverrideContext,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     productDetailReferences(ConfigurationDetailDescriptors.OverrideContext, context.productHandle),
     kernelRecordReferences(context.identityHandle, context.sourceAddressHandle),
@@ -139,7 +141,7 @@ function overrideContextDetailReference(
 
 function scopeCreatorReferences(
   creator: BindingScopeCreator,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   const detailSlot = (() => {
     switch (creator.creatorKind) {
       case BindingScopeCreatorKind.RuntimeBindingScopeEffect:
@@ -161,7 +163,7 @@ function scopeCreatorReferences(
 
 function bindingScopeReferences(
   scope: BindingScope,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     bindingScopeDetailReference(scope.runtimeParent),
     bindingContextDetailReference(scope.bindingContext),
@@ -174,7 +176,7 @@ function bindingScopeReferences(
 
 function controllerReferences(
   controller: ControllerProduct,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   const common = mergeKernelDetailReferences(
     containerReferenceReferences(controller.container),
     bindingScopeReferenceKernelReferences(controller.scope),
@@ -256,7 +258,7 @@ function controllerReferences(
 
 function viewFactoryReferences(
   viewFactory: ViewFactory,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     containerReferenceReferences(viewFactory.container),
     productDetailReferences(ResourceDetailDescriptors.Definition, viewFactory.definitionProductHandle),

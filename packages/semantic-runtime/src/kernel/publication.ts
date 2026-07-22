@@ -50,13 +50,8 @@ import {
 import { readSemanticRuntimeDetailDensityRows } from '../telemetry/detail-density.js';
 import type { GenerationAuthority } from './generation-authority.js';
 import { KernelPublicationSurface } from './publication-surface.js';
-import type { KernelDetailReference } from './detail-references.js';
-import {
-  KernelPublicationDecisionKind,
-  type KernelComparablePublicationDecision,
-  type KernelDetailComparator,
-  type KernelPublicationComparisonContext,
-} from './publication-comparison.js';
+import type { KernelDetailReferenceClosure } from './detail-references.js';
+import type { KernelPublicationDecisionKind } from './publication-comparison.js';
 
 export {
   KernelPublicationDecisionKind,
@@ -75,7 +70,7 @@ export const enum KernelDetailAdmission {
 
 /** One typed product-detail attachment staged beside its kernel product envelope. */
 export class KernelProductDetailPublication<TDetail> {
-  readonly references: readonly KernelDetailReference[];
+  readonly references: KernelDetailReferenceClosure;
 
   constructor(
     readonly slot: ProductDetailSlot<TDetail>,
@@ -90,7 +85,7 @@ export class KernelProductDetailPublication<TDetail> {
 
 /** One typed epoch-local hot detail staged beside a computation publication. */
 export class KernelHotDetailPublication<TDetail> {
-  readonly references: readonly KernelDetailReference[];
+  readonly references: KernelDetailReferenceClosure;
 
   constructor(
     readonly slot: HotDetailSlot<TDetail>,
@@ -132,7 +127,7 @@ export function publishProductDetail<TDetail>(
     productHandle,
     detail,
     admission,
-  ) as unknown as KernelProductDetailPublication<unknown>;
+  );
 }
 
 export function publishHotDetail<TDetail>(
@@ -148,7 +143,7 @@ export function publishHotDetail<TDetail>(
     handle,
     detail,
     admission,
-  ) as unknown as KernelHotDetailPublication<unknown>;
+  );
 }
 
 export function publishProductDetails<TDetail extends { readonly productHandle: ProductHandle }>(

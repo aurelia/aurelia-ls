@@ -3,7 +3,7 @@ import {
   kernelProductDetailReference,
   kernelRecordReferences,
   mergeKernelDetailReferences,
-  type KernelDetailReference,
+  type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
 import { TemplateDetailDescriptors } from './detail-descriptors.js';
 import type {
@@ -24,9 +24,9 @@ type TemplateProductReference = {
 function templateProductReferenceReferences(
   reference: TemplateProductReference | null,
   descriptor: ProductDetailDescriptor<unknown>,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return reference == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         kernelRecordReferences(reference.productHandle, reference.identityHandle, reference.addressHandle),
         [kernelProductDetailReference(descriptor, reference.productHandle)],
@@ -35,36 +35,36 @@ function templateProductReferenceReferences(
 
 export function runtimeBindingReferenceReferences(
   reference: RuntimeBindingReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return templateProductReferenceReferences(reference, TemplateDetailDescriptors.RuntimeBinding);
 }
 
 export function runtimeBindingTargetAccessReferenceReferences(
   reference: RuntimeBindingTargetAccessReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return templateProductReferenceReferences(reference, TemplateDetailDescriptors.RuntimeBindingTargetAccess);
 }
 
 export function runtimeBindingTargetOperationReferenceReferences(
   reference: RuntimeBindingTargetOperationReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return templateProductReferenceReferences(reference, TemplateDetailDescriptors.RuntimeBindingTargetOperation);
 }
 
 export function runtimeBindingSourceOperationReferenceReferences(
   reference: RuntimeBindingSourceOperationReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return templateProductReferenceReferences(reference, TemplateDetailDescriptors.RuntimeBindingSourceOperation);
 }
 
 export function runtimeWatcherReferenceReferences(
   reference: RuntimeWatcherReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return templateProductReferenceReferences(reference, TemplateDetailDescriptors.RuntimeWatcher);
 }
 
 export function runtimeValueConverterApplicationReferenceReferences(
   reference: RuntimeValueConverterApplicationReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return templateProductReferenceReferences(reference, TemplateDetailDescriptors.RuntimeValueConverterApplication);
 }

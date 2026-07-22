@@ -6,7 +6,7 @@ import {
   kernelRecordReferences,
   mergeKernelDetailReferences,
   sameKernelDetailReferences,
-  type KernelDetailReference,
+  type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
 import {
   KernelPublicationDecisionKind,
@@ -65,7 +65,7 @@ export type { ResourceDefinitionHeaderDetail } from './detail-descriptors.js';
 function productDetailReferences(
   descriptor: ProductDetailDescriptor<unknown>,
   ...handles: readonly (ProductHandle | null | undefined)[]
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(...handles),
     handles.map((handle) => kernelProductDetailReference(descriptor, handle)),
@@ -74,9 +74,9 @@ function productDetailReferences(
 
 function resourceTargetReferenceReferences(
   target: ResourceTargetReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return target == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         kernelRecordReferences(
           target.identityHandle,
@@ -89,31 +89,31 @@ function resourceTargetReferenceReferences(
 
 function resourceAliasReferences(
   alias: ResourceAliasDefinition,
-): readonly KernelDetailReference[] {
-  return kernelRecordReferences(alias.addressHandle, alias.provenanceHandle);
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(kernelRecordReferences(alias.addressHandle, alias.provenanceHandle));
 }
 
 function resourceDependencyReferences(
   dependency: ResourceDependencyReference,
-): readonly KernelDetailReference[] {
-  return kernelRecordReferences(dependency.identityHandle);
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(kernelRecordReferences(dependency.identityHandle));
 }
 
 function instructionReferences(
   instruction: InstructionReference,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return productDetailReferences(TemplateDetailDescriptors.Instruction, instruction.productHandle);
 }
 
 function bindableSetterReferences(
   setter: BindableSetterDefinition | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return resourceTargetReferenceReferences(setter?.target ?? null);
 }
 
 function bindableReferences(
   bindable: BindableDefinition,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(
       bindable.sourceAddressHandle,
@@ -132,7 +132,7 @@ function bindableReferences(
 
 function bindableContributionReferences(
   bindable: BindableDefinitionContribution,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(
       bindable.sourceAddressHandle,
@@ -149,15 +149,15 @@ function bindableContributionReferences(
 
 function watchPropertyKeyReferences(
   propertyKey: WatchPropertyKeyDefinition | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return resourceTargetReferenceReferences(propertyKey?.target ?? null);
 }
 
 function watchExpressionReferences(
   expression: WatchExpressionDefinition | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return expression == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         watchPropertyKeyReferences(expression.propertyKey),
         resourceTargetReferenceReferences(expression.target),
@@ -166,9 +166,9 @@ function watchExpressionReferences(
 
 function watchCallbackReferences(
   callback: WatchCallbackDefinition | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return callback == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         watchPropertyKeyReferences(callback.methodName),
         resourceTargetReferenceReferences(callback.target),
@@ -177,7 +177,7 @@ function watchCallbackReferences(
 
 function watchReferences(
   watch: WatchDefinition,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     watchExpressionReferences(watch.expression),
     watchCallbackReferences(watch.callback),
@@ -187,7 +187,7 @@ function watchReferences(
 
 function watchContributionReferences(
   watch: WatchDefinitionContribution,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     watchExpressionReferences(watch.expression),
     watchCallbackReferences(watch.callback),
@@ -197,19 +197,19 @@ function watchContributionReferences(
 
 function captureReferences(
   capture: CustomElementCaptureDefinition | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return resourceTargetReferenceReferences(capture?.predicateTarget ?? null);
 }
 
 function templateReferences(
   template: CustomElementTemplateDefinition | null,
-): readonly KernelDetailReference[] {
-  return kernelRecordReferences(template?.addressHandle);
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(kernelRecordReferences(template?.addressHandle));
 }
 
 function customElementContributionReferences(
   contribution: CustomElementDefinitionContribution,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     resourceTargetReferenceReferences(contribution.target),
     contribution.aliases.flatMap(resourceAliasReferences),
@@ -228,7 +228,7 @@ function customElementContributionReferences(
 
 function customElementReferences(
   definition: CustomElementDefinition,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     resourceTargetReferenceReferences(definition.target),
     definition.aliases.flatMap(resourceAliasReferences),
@@ -249,7 +249,7 @@ function customElementReferences(
 
 function customAttributeContributionReferences(
   contribution: CustomAttributeDefinitionContribution,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     resourceTargetReferenceReferences(contribution.target),
     contribution.aliases.flatMap(resourceAliasReferences),
@@ -262,7 +262,7 @@ function customAttributeContributionReferences(
 
 function customAttributeReferences(
   definition: CustomAttributeDefinition,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     resourceTargetReferenceReferences(definition.target),
     definition.aliases.flatMap(resourceAliasReferences),
@@ -281,7 +281,7 @@ function thinNamedDefinitionReferences(
       | ResourceDefinitionKind.BindingBehavior
       | ResourceDefinitionKind.BindingCommand;
   }>,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     resourceTargetReferenceReferences(definition.target),
     definition.aliases.flatMap(resourceAliasReferences),
@@ -297,8 +297,8 @@ function thinNamedDefinitionReferences(
 
 function resourceDefinitionReferences(
   definition: FullResourceDefinition,
-): readonly KernelDetailReference[] {
-  let definitionReferences: readonly KernelDetailReference[];
+): KernelDetailReferenceClosure {
+  let definitionReferences: KernelDetailReferenceClosure;
   switch (definition.type) {
     case ResourceDefinitionKind.CustomElement:
       definitionReferences = customElementReferences(definition);
@@ -337,22 +337,23 @@ function resourceDefinitionReferences(
 }
 
 class ResourceDefinitionReferenceProjection {
-  readonly semantic: readonly KernelDetailReference[];
-  readonly witness: readonly KernelDetailReference[];
+  readonly semantic: KernelDetailReferenceClosure;
+  readonly witness: KernelDetailReferenceClosure;
 
   constructor(
-    all: readonly KernelDetailReference[],
-    witness: readonly KernelDetailReference[],
+    all: KernelDetailReferenceClosure,
+    witness: KernelDetailReferenceClosure,
   ) {
-    const normalizedWitness = mergeKernelDetailReferences(witness);
     const allKeys = new Set(all.map((reference) => reference.key));
-    const unownedWitness = normalizedWitness.find((reference) => !allKeys.has(reference.key)) ?? null;
+    const unownedWitness = witness.find((reference) => !allKeys.has(reference.key)) ?? null;
     if (unownedWitness != null) {
       throw new Error(`Resource witness reference ${unownedWitness.key} is absent from its structural closure.`);
     }
-    const witnessKeys = new Set(normalizedWitness.map((reference) => reference.key));
-    this.semantic = Object.freeze(all.filter((reference) => !witnessKeys.has(reference.key)));
-    this.witness = normalizedWitness;
+    const witnessKeys = new Set(witness.map((reference) => reference.key));
+    this.semantic = mergeKernelDetailReferences(
+      all.filter((reference) => !witnessKeys.has(reference.key)),
+    );
+    this.witness = witness;
     Object.freeze(this);
   }
 }
@@ -368,19 +369,19 @@ function resourceDefinitionReferenceProjection(
 
 function resourceTargetWitnessReferences(
   target: ResourceTargetReference | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return target == null
-    ? []
-    : kernelRecordReferences(
+    ? mergeKernelDetailReferences()
+    : mergeKernelDetailReferences(kernelRecordReferences(
         target.addressHandle,
         target.declarationSourceAddressHandle,
         target.targetType?.sourceAddressHandle,
-      );
+      ));
 }
 
 function bindableWitnessReferences(
   bindable: BindableDefinition | BindableDefinitionContribution,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(
       bindable.sourceAddressHandle,
@@ -403,15 +404,15 @@ function bindableWitnessReferences(
 
 function watchPropertyKeyWitnessReferences(
   propertyKey: WatchPropertyKeyDefinition | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return resourceTargetWitnessReferences(propertyKey?.target ?? null);
 }
 
 function watchExpressionWitnessReferences(
   expression: WatchExpressionDefinition | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return expression == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         watchPropertyKeyWitnessReferences(expression.propertyKey),
         resourceTargetWitnessReferences(expression.target),
@@ -420,9 +421,9 @@ function watchExpressionWitnessReferences(
 
 function watchCallbackWitnessReferences(
   callback: WatchCallbackDefinition | null,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return callback == null
-    ? []
+    ? mergeKernelDetailReferences()
     : mergeKernelDetailReferences(
         watchPropertyKeyWitnessReferences(callback.methodName),
         resourceTargetWitnessReferences(callback.target),
@@ -431,7 +432,7 @@ function watchCallbackWitnessReferences(
 
 function watchWitnessReferences(
   watch: WatchDefinition | WatchDefinitionContribution,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     watchExpressionWitnessReferences(watch.expression),
     watchCallbackWitnessReferences(watch.callback),
@@ -441,7 +442,7 @@ function watchWitnessReferences(
 
 function customElementContributionWitnessReferences(
   contribution: CustomElementDefinitionContribution,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     resourceTargetWitnessReferences(contribution.target),
     contribution.aliases.flatMap(resourceAliasReferences),
@@ -456,7 +457,7 @@ function customElementContributionWitnessReferences(
 
 function customAttributeContributionWitnessReferences(
   contribution: CustomAttributeDefinitionContribution,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     resourceTargetWitnessReferences(contribution.target),
     contribution.aliases.flatMap(resourceAliasReferences),
@@ -468,7 +469,7 @@ function customAttributeContributionWitnessReferences(
 
 function resourceDefinitionWitnessReferences(
   definition: FullResourceDefinition,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   const shared = mergeKernelDetailReferences(
     kernelRecordReferences(definition.sourceAddressHandle),
     resourceTargetWitnessReferences(definition.target),
@@ -539,8 +540,8 @@ class ResourceDefinitionComparisonProjection {
   constructor(
     readonly semantic: ResourceDefinitionComparisonValue,
     readonly witness: ResourceDefinitionComparisonValue,
-    readonly semanticReferences: readonly KernelDetailReference[],
-    readonly witnessReferences: readonly KernelDetailReference[],
+    readonly semanticReferences: KernelDetailReferenceClosure,
+    readonly witnessReferences: KernelDetailReferenceClosure,
   ) {}
 }
 
@@ -608,8 +609,8 @@ export function compareResourceDefinitionDetails(
 }
 
 function compareResourceDefinitionRecordReferences(
-  previous: readonly KernelDetailReference[],
-  next: readonly KernelDetailReference[],
+  previous: KernelDetailReferenceClosure,
+  next: KernelDetailReferenceClosure,
   context: KernelPublicationComparisonContext,
 ): KernelComparablePublicationDecision {
   let decision: KernelComparablePublicationDecision = KernelPublicationDecisionKind.Retain;
@@ -1114,27 +1115,33 @@ function sameResourceDefinitionComparisonValue(
   previous: ResourceDefinitionComparisonValue,
   next: ResourceDefinitionComparisonValue,
 ): boolean {
-  if (!Array.isArray(previous) || !Array.isArray(next)) {
+  if (!isResourceDefinitionComparisonValues(previous) || !isResourceDefinitionComparisonValues(next)) {
     return previous === next;
   }
   return previous.length === next.length
     && previous.every((value, index) => sameResourceDefinitionComparisonValue(value, next[index]!));
 }
 
+function isResourceDefinitionComparisonValues(
+  value: ResourceDefinitionComparisonValue,
+): value is readonly ResourceDefinitionComparisonValue[] {
+  return Array.isArray(value);
+}
+
 function definitionHeaderReferences(
   header: ResourceDefinitionHeaderDetail,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return header instanceof ResourceDefinitionHeaderEmission
     ? mergeKernelDetailReferences(
         resourceTargetReferenceReferences(header.targetReference),
         kernelRecordReferences(...header.lookupNameSourceAddressHandles, ...header.claimHandles),
       )
-    : kernelFieldProvenanceReferences(header.fieldProvenance);
+    : mergeKernelDetailReferences(kernelFieldProvenanceReferences(header.fieldProvenance));
 }
 
 function resourceIssueReferences(
   issue: ResourceIssue,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(
       issue.ownerDefinitionIdentityHandle,
@@ -1146,7 +1153,7 @@ function resourceIssueReferences(
 
 function builtInCatalogReferences(
   catalog: BuiltInResourceCatalog,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     catalog.resources.flatMap((resource) => mergeKernelDetailReferences(
       productDetailReferences(ResourceDetailDescriptors.DefinitionHeader, resource.productHandle),
@@ -1159,7 +1166,7 @@ function builtInCatalogReferences(
 
 function configuredCatalogSelectionReferences(
   selection: ConfiguredBuiltInResourceCatalogSelection,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(selection.registrationAdmissionProductHandle),
     productDetailReferences(ResourceDetailDescriptors.BuiltInCatalog, ...selection.catalogProductHandles),

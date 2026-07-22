@@ -2,7 +2,7 @@ import {
   kernelProductDetailReference,
   kernelRecordReferences,
   mergeKernelDetailReferences,
-  type KernelDetailReference,
+  type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
 import { checkerTypeReferenceKernelReferences } from '../type-system/structural-references.js';
@@ -11,7 +11,7 @@ import type { StateGetterBinding } from './model.js';
 
 function stateGetterBindingReferences(
   binding: StateGetterBinding,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     kernelRecordReferences(
       binding.selectorSourceAddressHandle,
@@ -48,6 +48,6 @@ export const StateProductDetails = {
   ),
   Issue: defineProductDetailSlot(
     StateDetailDescriptors.Issue,
-    (issue) => kernelRecordReferences(issue.ownerIdentityHandle),
+    (issue) => mergeKernelDetailReferences(kernelRecordReferences(issue.ownerIdentityHandle)),
   ),
 } as const;

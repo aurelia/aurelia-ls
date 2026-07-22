@@ -1,4 +1,4 @@
-import { kernelRecordReferences } from '../kernel/detail-references.js';
+import { kernelRecordReferences, mergeKernelDetailReferences } from '../kernel/detail-references.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
 import {
   DiIssueSubjectKind,
@@ -26,9 +26,9 @@ function diIssueSubjectRecords(subject: DiIssueSubject) {
 export const DiProductDetails = {
   Issue: defineProductDetailSlot(
     DiDetailDescriptors.Issue,
-    (issue) => [
-      ...kernelRecordReferences(issue.containerIdentityHandle, issue.containerProductHandle),
-      ...diIssueSubjectRecords(issue.subject),
-    ],
+    (issue) => mergeKernelDetailReferences(
+      kernelRecordReferences(issue.containerIdentityHandle, issue.containerProductHandle),
+      diIssueSubjectRecords(issue.subject),
+    ),
   ),
 } as const;

@@ -217,6 +217,27 @@ function defineTestHotDetailSlot<TDetail>(
 }
 
 describe("computation lifecycle", () => {
+  test("preserves projector-owned canonical structural reference closures", () => {
+    const detail = { target: "canonical-target" };
+    const closure = mergeKernelDetailReferences();
+    const productSlot = defineTestProductDetailSlot<typeof detail>(
+      KernelVocabulary.Template.Source.key,
+      "test.canonical-product-detail-closure",
+      "Product detail with a projector-owned canonical closure.",
+      () => closure,
+    );
+    const hotSlot = defineTestHotDetailSlot<typeof detail>(
+      KernelVocabulary.Template.Source.key,
+      "test.canonical-hot-detail-closure",
+      "Hot detail with a projector-owned canonical closure.",
+      () => closure,
+    );
+
+    expect(productSlot.referencesFor(detail)).toBe(closure);
+    expect(hotSlot.referencesFor(detail)).toBe(closure);
+    expect(Object.isFrozen(closure)).toBe(true);
+  });
+
   test("shares logical read validation only within one synchronous proof", () => {
     let revision = "1";
     let validationCount = 0;
@@ -1083,7 +1104,7 @@ describe("computation lifecycle", () => {
       KernelVocabulary.Template.Source.key,
       "test.child-carry-mutated-closure",
       "Carried detail whose exact structural closure must remain unchanged.",
-      (value) => kernelRecordReferences(value.target),
+      (value) => mergeKernelDetailReferences(kernelRecordReferences(value.target)),
     );
     store.commit(new KernelStoreBatch([
       new SourceFileAddress(targetA, "test", "src/a.html", SourceLanguage.Html),
@@ -4035,13 +4056,13 @@ describe("computation lifecycle", () => {
       KernelVocabulary.Template.Source.key,
       "test.rich-detail-retention-target",
       "Target detail with its own record dependency.",
-      (detail) => kernelRecordReferences(detail.nested),
+      (detail) => mergeKernelDetailReferences(kernelRecordReferences(detail.nested)),
     );
     const targetHotSlot = defineTestHotDetailSlot<{ readonly nested: AddressHandle }>(
       KernelVocabulary.Template.Source.key,
       "test.rich-detail-retention-hot",
       "Target hot detail with its own record dependency.",
-      (detail) => kernelRecordReferences(detail.nested),
+      (detail) => mergeKernelDetailReferences(kernelRecordReferences(detail.nested)),
     );
     const sourceSlot = defineTestProductDetailSlot<{
       readonly direct: AddressHandle;
@@ -6352,7 +6373,7 @@ describe("computation lifecycle", () => {
       KernelVocabulary.Template.Source.key,
       "test.final-currentness-reference-mutation",
       "Detail whose dependency must remain stable through the last external callback.",
-      (detail) => kernelRecordReferences(detail.addressHandle),
+      (detail) => mergeKernelDetailReferences(kernelRecordReferences(detail.addressHandle)),
     );
     store.commit(new KernelStoreBatch([
       new SourceFileAddress(firstAddressHandle, "test", "src/first.html", SourceLanguage.Html),
@@ -6399,7 +6420,7 @@ describe("computation lifecycle", () => {
       KernelVocabulary.Template.Source.key,
       "test.hot-detail-reference-mutation",
       "Hot detail whose dependency must survive final validation unchanged.",
-      (detail) => kernelRecordReferences(detail.addressHandle),
+      (detail) => mergeKernelDetailReferences(kernelRecordReferences(detail.addressHandle)),
     );
     store.commit(new KernelStoreBatch([
       new SourceFileAddress(firstAddressHandle, "test", "src/first.html", SourceLanguage.Html),

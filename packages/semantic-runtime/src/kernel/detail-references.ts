@@ -65,17 +65,24 @@ export type KernelDetailReference =
   | KernelProductDetailReference
   | KernelHotDetailReference;
 
-/** Typed detail-to-kernel dependency projection owned by one detail slot. */
+declare const kernelDetailReferenceClosureBrand: unique symbol;
+
+/** Canonical deduplicated, sorted, and frozen structural closure for one rich detail. */
+export type KernelDetailReferenceClosure = readonly KernelDetailReference[] & {
+  readonly [kernelDetailReferenceClosureBrand]: true;
+};
+
+/** Typed detail-to-kernel dependency projection that owns normalization for one detail slot. */
 export type KernelDetailReferenceProjector<TDetail> = (
   detail: TDetail,
-) => readonly KernelDetailReference[];
+) => KernelDetailReferenceClosure;
 
-const noDetailReferences: readonly KernelDetailReference[] = Object.freeze([]);
+const noDetailReferences = Object.freeze([]) as unknown as KernelDetailReferenceClosure;
 
 /** Explicit projector for a detail contract that carries no non-owner kernel links. */
 export function noKernelDetailReferences<TDetail>(
   _detail: TDetail,
-): readonly KernelDetailReference[] {
+): KernelDetailReferenceClosure {
   return noDetailReferences;
 }
 
@@ -118,28 +125,35 @@ export function kernelHotDetailReference(
 /** Merge explicit reference groups into one deduplicated, frozen closure. */
 export function mergeKernelDetailReferences(
   ...groups: readonly (readonly (KernelDetailReference | null | undefined)[])[]
-): readonly KernelDetailReference[] {
-  const byKey = new Map<string, KernelDetailReference>();
-  for (const reference of groups.flat()) {
-    if (reference == null) {
-      continue;
-    }
-    const existing = byKey.get(reference.key);
-    if (existing != null && existing.detailKind !== reference.detailKind) {
-      throw new Error(
-        `Kernel detail reference ${reference.key} expects both ${String(existing.detailKind)} and `
-        + `${String(reference.detailKind)}.`,
-      );
-    }
-    byKey.set(reference.key, reference);
+): KernelDetailReferenceClosure {
+  if (groups.length === 0) {
+    return noDetailReferences;
   }
-  return Object.freeze([...byKey.values()].sort((left, right) => left.key.localeCompare(right.key)));
+  const byKey = new Map<string, KernelDetailReference>();
+  for (const group of groups) {
+    for (const reference of group) {
+      if (reference == null) {
+        continue;
+      }
+      const existing = byKey.get(reference.key);
+      if (existing != null && existing.detailKind !== reference.detailKind) {
+        throw new Error(
+          `Kernel detail reference ${reference.key} expects both ${String(existing.detailKind)} and `
+          + `${String(reference.detailKind)}.`,
+        );
+      }
+      byKey.set(reference.key, reference);
+    }
+  }
+  return Object.freeze(
+    [...byKey.values()].sort((left, right) => left.key.localeCompare(right.key)),
+  ) as unknown as KernelDetailReferenceClosure;
 }
 
 /** Compare two already-normalized structural closures without inspecting rich payload objects. */
 export function sameKernelDetailReferences(
-  left: readonly KernelDetailReference[],
-  right: readonly KernelDetailReference[],
+  left: KernelDetailReferenceClosure,
+  right: KernelDetailReferenceClosure,
 ): boolean {
   return left.length === right.length && left.every((reference, index) => {
     const candidate = right[index];
