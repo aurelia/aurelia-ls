@@ -66,7 +66,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   create a flat sibling rather than hierarchy. Compiler resource reads revise over the facts consumed by each operation:
   lookup/capture/lowering metadata, bindables, and owner facts are distinct projections rather than one hash of the full
   definition. Scope and closure remain currentness witnesses, while an equal operation result permits exact family carry
-  after those witnesses rebase. Runtime/checker analysis remains project-owned because its SCC schedule,
+  after those witnesses rebase. Fresh and carried observations in one compiler scope share a scope/closure snapshot at
+  the kernel projection revision; staged or committed publication movement invalidates that snapshot before the next
+  validation. This preserves per-operation result reads without re-enumerating the same owner closure for every lookup.
+  Runtime/checker analysis remains project-owned because its SCC schedule,
   expression world, and bound-controller values cross family boundaries; the explicit post-template child records that
   boundary honestly instead of assigning unsupported family ownership. Before crossing that boundary, post-template
   re-observes the compiler-world authority reads and consumes the exact resource definition, compiled-template

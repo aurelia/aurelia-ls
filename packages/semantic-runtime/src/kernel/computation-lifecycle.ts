@@ -33,6 +33,8 @@ import {
   type KernelStoreDetailDensityDelta,
   type KernelStoreDisposalContext,
   type KernelStoreObservationMarker,
+  type KernelReadProjectionRevision,
+  type KernelReadProjectionRevisionView,
   type KernelStoreReadView,
   type KernelStoreRecord,
   type KernelStoreRetentionCollector,
@@ -161,7 +163,7 @@ export interface ComputationRead {
  * Side-effect-free value projection used to derive one domain-owned computation read.
  * The resulting read must account for every value consumed through this view.
  */
-export interface ComputationDomainReadProjection extends ProductDetailReadView {
+export interface ComputationDomainReadProjection extends ProductDetailReadView, KernelReadProjectionRevisionView {
   readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[];
 }
 
@@ -928,6 +930,10 @@ class StagedComputationReadRebaseContext implements ComputationReadRebaseContext
     private readonly prospectiveOutputs: readonly ComputationOutput[],
   ) {}
 
+  readProjectionRevision(): KernelReadProjectionRevision {
+    return this.publications.readProjectionRevision();
+  }
+
   readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[] {
     return this.publications.previewMaterializationsByOwnerAfterCarry(
       ownerHandle,
@@ -1022,6 +1028,7 @@ export class ComputationRun implements KernelPublicationContext {
       this.remainderChild.childId,
     );
     this.domainReadProjection = Object.freeze({
+      readProjectionRevision: () => this.publications.readProjectionRevision(),
       readMaterializationsByOwner: (ownerHandle: MaterializationOwnerHandle) =>
         this.readProjectedMaterializationsByOwner(ownerHandle),
       readProductDetail: <TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle) =>

@@ -147,6 +147,24 @@ export interface KernelStoreObservationMarker {
   readonly nextMutationOrdinal: number;
 }
 
+/** Technical revision of one committed-plus-candidate read projection; never a semantic dependency by itself. */
+export class KernelReadProjectionRevision {
+  constructor(
+    readonly committedMutationOrdinal: number,
+    readonly candidateMutationOrdinal: number,
+  ) {}
+
+  equals(other: KernelReadProjectionRevision): boolean {
+    return this.committedMutationOrdinal === other.committedMutationOrdinal
+      && this.candidateMutationOrdinal === other.candidateMutationOrdinal;
+  }
+}
+
+/** Snapshot-revision boundary for memoizing repeated reads from one unchanged kernel projection. */
+export interface KernelReadProjectionRevisionView {
+  readProjectionRevision(): KernelReadProjectionRevision;
+}
+
 export interface KernelStoreDisposalSummary {
   readonly records: number;
   readonly productDetails: number;
@@ -426,6 +444,10 @@ export class KernelStore {
 
   private allocateMutationOrdinal(): number {
     return this.nextMutationOrdinal++;
+  }
+
+  readProjectionRevision(): KernelReadProjectionRevision {
+    return new KernelReadProjectionRevision(this.nextMutationOrdinal, 0);
   }
 
   /** Add a normalized kernel record and update cheap navigation indexes. */

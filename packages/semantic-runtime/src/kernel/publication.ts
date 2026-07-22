@@ -18,16 +18,18 @@ import {
   type ProductDetailReadView,
   type ProductDetailSlot,
 } from './product-details.js';
-import type {
-  KernelStore,
-  KernelMaterializationReadView,
-  KernelRecordCollectionReadView,
-  KernelSourceFileReadView,
-  KernelStoreDensityDelta,
-  KernelStoreDetailDensityDelta,
-  KernelStoreObservationMarker,
-  KernelStoreRecord,
-  KernelTelemetryReadView,
+import {
+  KernelReadProjectionRevision,
+  type KernelReadProjectionRevisionView,
+  type KernelStore,
+  type KernelMaterializationReadView,
+  type KernelRecordCollectionReadView,
+  type KernelSourceFileReadView,
+  type KernelStoreDensityDelta,
+  type KernelStoreDetailDensityDelta,
+  type KernelStoreObservationMarker,
+  type KernelStoreRecord,
+  type KernelTelemetryReadView,
 } from './store.js';
 import { SourceFileAddress } from './address.js';
 import {
@@ -606,7 +608,7 @@ export class GenerationBoundKernelPublicationContext implements KernelPublicatio
 }
 
 /** Run-local collector that keeps every materializer write invisible until lifecycle commit. */
-export class StagedKernelPublicationContext implements KernelPublicationContext {
+export class StagedKernelPublicationContext implements KernelPublicationContext, KernelReadProjectionRevisionView {
   private records = new Map<KernelRecordHandle, KernelStoreRecord>();
   private productDetails = new Map<ProductHandle, KernelProductDetailPublication<unknown>>();
   private hotDetails = new Map<HotDetailHandle, KernelHotDetailPublication<unknown>>();
@@ -654,6 +656,13 @@ export class StagedKernelPublicationContext implements KernelPublicationContext 
   get handles(): KernelHandleFactory {
     this.requireCurrent();
     return this.store.handles;
+  }
+
+  readProjectionRevision(): KernelReadProjectionRevision {
+    return new KernelReadProjectionRevision(
+      this.store.readProjectionRevision().committedMutationOrdinal,
+      this.nextMutationOrdinal,
+    );
   }
 
   isCurrent(): boolean {

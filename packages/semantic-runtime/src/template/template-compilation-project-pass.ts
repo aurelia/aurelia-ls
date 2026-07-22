@@ -343,6 +343,10 @@ export class TemplateCompilationFamilyFrontDoorEmission {
 class TemplateCompilationFamilyCarryRebaser {
   private readonly worldsByScope = new Map<IdentityHandle, TemplateCompilerWorldEmission>();
   private readonly containersByIdentity = new Map<IdentityHandle, TemplateCompilerWorldEmission['container']>();
+  private readonly readRebasersByScope = new Map<
+    IdentityHandle,
+    (read: TemplateCompilerReadObservation) => TemplateCompilerReadObservation | null
+  >();
 
   constructor(
     private readonly owner: TemplateCompilationOwnerPlan,
@@ -367,9 +371,18 @@ class TemplateCompilationFamilyCarryRebaser {
       return undefined;
     }
     const world = this.worldsByScope.get(read.compilerScopeIdentityHandle) ?? null;
-    return world == null
-      ? null
-      : read.tryRebaseTo(context, TemplateCompilerWorldAuthority.fixed(world));
+    if (world == null) {
+      return null;
+    }
+    let rebase = this.readRebasersByScope.get(read.compilerScopeIdentityHandle);
+    if (rebase == null) {
+      rebase = TemplateCompilerReadObservation.createRebaser(
+        context,
+        TemplateCompilerWorldAuthority.fixed(world),
+      );
+      this.readRebasersByScope.set(read.compilerScopeIdentityHandle, rebase);
+    }
+    return rebase(read);
   };
 
   rebase(carry: ComputationChildCarry): TemplateCompilationFamilyFrontDoorEmission {

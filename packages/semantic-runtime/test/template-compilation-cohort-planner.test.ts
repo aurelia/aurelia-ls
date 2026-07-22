@@ -9,7 +9,18 @@ import {
   type KernelPublicationWriterId,
   StagedKernelPublicationContext,
 } from '../src/kernel/publication.js';
+import type { ProductDetailSlot } from '../src/kernel/product-details.js';
+import type { ProductHandle } from '../src/kernel/handles.js';
 import {
+  KernelReadProjectionRevision,
+  type KernelStore,
+} from '../src/kernel/store.js';
+import type {
+  MaterializationOwnerHandle,
+  MaterializationRecord,
+} from '../src/kernel/materialization.js';
+import {
+  TemplateCompilerReadObservation,
   TemplateCompilerReadView,
   TemplateCompilerWorldAuthority,
 } from '../src/template/compiler-read-view.js';
@@ -164,6 +175,52 @@ describe('template compilation cohort planning', () => {
     expect(new Set(overlayFileNames).size).toBe(overlayFileNames.length);
   }, 30_000);
 
+  test('shares compiler-scope closure validation until the kernel projection revision advances', async () => {
+    const fixtureRoot = fixturePath('router-configuration-root-ownership');
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:template-compiler-read-shared-validation',
+    });
+    const app = await runtime.openApp({ includeAuthoringTemplates: true });
+    const world = owner(app.emission.templates.cohortPlan, 'first-child').cohorts[0]?.parentCompilerWorld ?? null;
+    expect(world).not.toBeNull();
+    if (world == null) {
+      throw new Error('Expected a compiler world for first-child.');
+    }
+
+    const observedStore = new CountingTemplateCompilerReadStore(runtime.workspace.store);
+    const observedView = new TemplateCompilerReadView(
+      observedStore,
+      TemplateCompilerWorldAuthority.fixed(world),
+    );
+    observedView.element('first-child');
+    observedView.resolveResources();
+    const reads = observedView.readAll();
+    expect(reads.length).toBeGreaterThan(1);
+    expect(observedStore.ownerReadCount).toBeGreaterThan(0);
+
+    const currentStore = new CountingTemplateCompilerReadStore(runtime.workspace.store);
+    const rebase = TemplateCompilerReadObservation.createRebaser(
+      currentStore,
+      TemplateCompilerWorldAuthority.fixed(world),
+    );
+    const rebased = reads.map((read) => rebase(read));
+    expect(rebased.every((read) => read != null)).toBe(true);
+    const readsPerSnapshot = currentStore.ownerReadCount;
+    expect(readsPerSnapshot).toBeGreaterThan(0);
+
+    for (const read of rebased) {
+      expect(read?.validate().isCurrent).toBe(true);
+    }
+    expect(currentStore.ownerReadCount).toBe(readsPerSnapshot);
+
+    currentStore.advanceCandidateRevision();
+    for (const read of rebased) {
+      expect(read?.validate().isCurrent).toBe(true);
+    }
+    expect(currentStore.ownerReadCount).toBe(readsPerSnapshot * 2);
+  }, 30_000);
+
   test('indexes immutable owner plans and rejects duplicate owner or cohort identities', async () => {
     const fixtureRoot = fixturePath('router-configuration-root-ownership');
     const runtime = await createSemanticRuntime({
@@ -205,6 +262,34 @@ describe('template compilation cohort planning', () => {
     expect(sharedChild.cohorts).toContain(removedCohort);
   }, 30_000);
 });
+
+class CountingTemplateCompilerReadStore {
+  private candidateMutationOrdinal = 0;
+  ownerReadCount = 0;
+
+  constructor(private readonly store: KernelStore) {}
+
+  readProjectionRevision(): KernelReadProjectionRevision {
+    const committed = this.store.readProjectionRevision();
+    return new KernelReadProjectionRevision(
+      committed.committedMutationOrdinal,
+      this.candidateMutationOrdinal,
+    );
+  }
+
+  readMaterializationsByOwner(ownerHandle: MaterializationOwnerHandle): readonly MaterializationRecord[] {
+    this.ownerReadCount += 1;
+    return this.store.readMaterializationsByOwner(ownerHandle);
+  }
+
+  readProductDetail<TDetail>(slot: ProductDetailSlot<TDetail>, productHandle: ProductHandle): TDetail | null {
+    return this.store.readProductDetail(slot, productHandle);
+  }
+
+  advanceCandidateRevision(): void {
+    this.candidateMutationOrdinal += 1;
+  }
+}
 
 function fixturePath(name: string): string {
   const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));

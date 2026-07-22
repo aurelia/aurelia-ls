@@ -3,7 +3,11 @@ import { createHash } from 'node:crypto';
 import type { ComputationRead, ComputationReadValidation } from '../kernel/computation-lifecycle.js';
 import type { IdentityHandle, OpenSeamHandle, ProductHandle } from '../kernel/handles.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
-import type { KernelMaterializationReadView } from '../kernel/store.js';
+import type {
+  KernelMaterializationReadView,
+  KernelReadProjectionRevision,
+  KernelReadProjectionRevisionView,
+} from '../kernel/store.js';
 import type { Container } from '../di/container.js';
 import type { ExpressionType } from '../expression/ast.js';
 import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
@@ -38,7 +42,9 @@ import type { TemplateAttributeMapperNode } from './attribute-mapper.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
 
 type TemplateCompilerClosureReadView = Pick<KernelMaterializationReadView, 'readMaterializationsByOwner'>;
-type TemplateCompilerReadStore = TemplateCompilerClosureReadView & ProductDetailReadView;
+type TemplateCompilerReadStore = TemplateCompilerClosureReadView
+  & ProductDetailReadView
+  & KernelReadProjectionRevisionView;
 type TemplateCompilerResultReader = (
   store: TemplateCompilerReadStore,
   world: TemplateCompilerWorldEmission,
@@ -166,17 +172,25 @@ export class TemplateCompilerReadObservation implements ComputationRead {
     return null;
   }
 
-  tryRebaseTo(
+  /** Create one shared current-state reader for every observation in the same carried compiler scope. */
+  static createRebaser(
     store: TemplateCompilerReadStore,
     authority: TemplateCompilerWorldAuthority,
+  ): (read: TemplateCompilerReadObservation) => TemplateCompilerReadObservation | null {
+    const currentState = new TemplateCompilerReadValidationStateAuthority(store, authority);
+    return (read) => read.tryRebaseToState(currentState);
+  }
+
+  private tryRebaseToState(
+    currentState: TemplateCompilerReadValidationStateAuthority,
   ): TemplateCompilerReadObservation | null {
-    const world = authority.readCurrent();
+    const state = currentState.read();
+    const world = state.world;
     if (world == null || world.resourceScope.identityHandle !== this.compilerScopeIdentityHandle) {
       return null;
     }
-    const closure = compilerScopeClosure(store, world);
-    const resultParts = this.readCurrentResult(store, world);
-    const observed = readRevision(compilerScopeRevision(world), closure, resultParts);
+    const resultParts = this.readCurrentResult(currentState.store, world);
+    const observed = readRevision(state.scopeRevision, state.closure, resultParts);
     // Scope and closure are currentness/explanation witnesses. Carry is sound when the exact compiler operation still
     // returns the same result; the returned observation adopts the current witnesses for the next validation cycle.
     if (observed.result !== this.observed.result) {
@@ -188,9 +202,9 @@ export class TemplateCompilerReadObservation implements ComputationRead {
       this.canonicalKey,
       this.compilerScopeIdentityHandle,
       resultParts,
-      closure,
+      state.closure,
       observed,
-      () => currentTemplateCompilerReadRevision(store, authority, this.readCurrentResult),
+      () => currentState.readRevision(this.readCurrentResult),
       this.readCurrentResult,
     );
   }
@@ -206,15 +220,17 @@ export class TemplateCompilerReadView {
   private readonly readsByKey = new Map<string, TemplateCompilerReadObservation>();
   private readonly observedScopeRevision: string;
   private readonly observedClosure: TemplateCompilerScopeClosure;
-  private currentValidationState: TemplateCompilerReadValidationState | null = null;
+  private readonly currentState: TemplateCompilerReadValidationStateAuthority;
 
   constructor(
     private readonly store: TemplateCompilerReadStore,
-    private readonly authority: TemplateCompilerWorldAuthority,
+    authority: TemplateCompilerWorldAuthority,
   ) {
     this.world = authority.current();
-    this.observedScopeRevision = compilerScopeRevision(this.world);
-    this.observedClosure = compilerScopeClosure(store, this.world);
+    this.currentState = new TemplateCompilerReadValidationStateAuthority(store, authority);
+    const observed = this.currentState.read();
+    this.observedScopeRevision = observed.scopeRevision;
+    this.observedClosure = observed.closure;
     this.observe(
       TemplateCompilerReadKind.CompilerWorld,
       this.world.world.identityHandle,
@@ -412,14 +428,7 @@ export class TemplateCompilerReadView {
       resultParts,
       this.observedClosure,
       observed,
-      () => {
-        const current = this.readCurrentValidationState();
-        return readRevision(
-          current.scopeRevision,
-          current.closure,
-          current.world == null ? ['compiler-world-absent'] : readCurrentResult(this.store, current.world),
-        );
-      },
+      () => this.currentState.readRevision(readCurrentResult),
       readCurrentResult,
     );
     const existing = this.readsByKey.get(readKey);
@@ -428,54 +437,6 @@ export class TemplateCompilerReadView {
     }
     this.readsByKey.set(readKey, observation);
   }
-
-  private readCurrentValidationState(): TemplateCompilerReadValidationState {
-    if (this.currentValidationState != null) {
-      return this.currentValidationState;
-    }
-    const world = this.authority.readCurrent();
-    if (world == null) {
-      return this.currentValidationState = new TemplateCompilerReadValidationState(
-        null,
-        'compiler-world-absent',
-        new TemplateCompilerScopeClosure(
-          TemplateCompilerScopeClosureState.Open,
-          [],
-          [],
-          [],
-          [],
-        ),
-      );
-    }
-    return this.currentValidationState = new TemplateCompilerReadValidationState(
-      world,
-      compilerScopeRevision(world),
-      compilerScopeClosure(this.store, world),
-    );
-  }
-}
-
-function currentTemplateCompilerReadRevision(
-  store: TemplateCompilerReadStore,
-  authority: TemplateCompilerWorldAuthority,
-  readCurrentResult: TemplateCompilerResultReader,
-): TemplateCompilerReadRevision {
-  const world = authority.readCurrent();
-  if (world == null) {
-    return readRevision(
-      'compiler-world-absent',
-      new TemplateCompilerScopeClosure(
-        TemplateCompilerScopeClosureState.Open,
-        [],
-        [],
-        [],
-        [],
-      ),
-      ['compiler-world-absent'],
-    );
-  }
-  const closure = compilerScopeClosure(store, world);
-  return readRevision(compilerScopeRevision(world), closure, readCurrentResult(store, world));
 }
 
 class TemplateCompilerReadValidationState {
@@ -483,8 +444,64 @@ class TemplateCompilerReadValidationState {
     readonly world: TemplateCompilerWorldEmission | null,
     readonly scopeRevision: string,
     readonly closure: TemplateCompilerScopeClosure,
+    readonly projectionRevision: KernelReadProjectionRevision,
   ) {}
+
+  matches(
+    world: TemplateCompilerWorldEmission | null,
+    projectionRevision: KernelReadProjectionRevision,
+  ): boolean {
+    return this.world === world && this.projectionRevision.equals(projectionRevision);
+  }
 }
+
+/** Shares one scope/closure projection across all reads at the same committed-plus-candidate revision. */
+class TemplateCompilerReadValidationStateAuthority {
+  private current: TemplateCompilerReadValidationState | null = null;
+
+  constructor(
+    readonly store: TemplateCompilerReadStore,
+    private readonly authority: TemplateCompilerWorldAuthority,
+  ) {}
+
+  read(): TemplateCompilerReadValidationState {
+    const world = this.authority.readCurrent();
+    const projectionRevision = this.store.readProjectionRevision();
+    if (this.current?.matches(world, projectionRevision) === true) {
+      return this.current;
+    }
+    return this.current = world == null
+      ? new TemplateCompilerReadValidationState(
+          null,
+          'compiler-world-absent',
+          openCompilerScopeClosure,
+          projectionRevision,
+        )
+      : new TemplateCompilerReadValidationState(
+          world,
+          compilerScopeRevision(world),
+          compilerScopeClosure(this.store, world),
+          projectionRevision,
+        );
+  }
+
+  readRevision(readCurrentResult: TemplateCompilerResultReader): TemplateCompilerReadRevision {
+    const current = this.read();
+    return readRevision(
+      current.scopeRevision,
+      current.closure,
+      current.world == null ? ['compiler-world-absent'] : readCurrentResult(this.store, current.world),
+    );
+  }
+}
+
+const openCompilerScopeClosure = new TemplateCompilerScopeClosure(
+  TemplateCompilerScopeClosureState.Open,
+  [],
+  [],
+  [],
+  [],
+);
 
 function compilerScopeClosure(
   store: TemplateCompilerClosureReadView,
