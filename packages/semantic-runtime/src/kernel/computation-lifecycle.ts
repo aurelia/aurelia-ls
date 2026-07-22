@@ -13,7 +13,6 @@ import {
   KernelPublicationPlan,
   type KernelPublicationContext,
   type KernelPublicationEntryDescriptor,
-  type KernelPublicationDecisionCandidate,
   type KernelPublicationDecisionPreviewCandidate,
   type KernelPublicationReplacement,
   type KernelPublicationWriterId,
@@ -2500,8 +2499,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     let replacement: KernelPublicationReplacement;
     try {
       replacement = this.store.replaceOwnedPublicationCandidate(
-        previousState?.publication ?? KernelPublicationManifest.empty,
-        candidate.publication.withMinimumLifetimeOrdinal(minimumLifetimeOrdinal),
+        candidate,
         this.publicationOwner,
         {
           validate: (decisions) => {
@@ -2549,6 +2547,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
             ...currentnessGuards.map((guard) => guard.currentnessWitness),
           ]),
         },
+        minimumLifetimeOrdinal,
       );
     } catch (error) {
       if (

@@ -222,7 +222,6 @@ export class KernelPublicationPlan {
   readonly hotDetails: readonly KernelHotDetailPublication<unknown>[];
   readonly productDetailAdmissionSnapshots: readonly KernelProductDetailAdmissionSnapshot[];
   readonly hotDetailAdmissionSnapshots: readonly KernelHotDetailAdmissionSnapshot[];
-  readonly minimumLifetimeOrdinal: number | null;
 
   constructor(
     batch: KernelStoreBatch,
@@ -232,31 +231,15 @@ export class KernelPublicationPlan {
     productDetailAdmissionSnapshots: readonly KernelProductDetailAdmissionSnapshot[] = [],
     /** Foreign hot-detail admission decisions observed by a staged run. */
     hotDetailAdmissionSnapshots: readonly KernelHotDetailAdmissionSnapshot[] = [],
-    /** Youngest kernel lifetime consumed through a registered computation read. */
-    minimumLifetimeOrdinal: number | null = null,
   ) {
     this.batch = batch;
     this.productDetails = Object.freeze([...productDetails]);
     this.hotDetails = Object.freeze([...hotDetails]);
     this.productDetailAdmissionSnapshots = Object.freeze([...productDetailAdmissionSnapshots]);
     this.hotDetailAdmissionSnapshots = Object.freeze([...hotDetailAdmissionSnapshots]);
-    this.minimumLifetimeOrdinal = minimumLifetimeOrdinal;
     Object.freeze(this);
   }
 
-  withMinimumLifetimeOrdinal(minimumLifetimeOrdinal: number | null): KernelPublicationPlan {
-    const effective = maxLifetimeOrdinal(this.minimumLifetimeOrdinal, minimumLifetimeOrdinal);
-    return effective === this.minimumLifetimeOrdinal
-      ? this
-      : new KernelPublicationPlan(
-          this.batch,
-          this.productDetails,
-          this.hotDetails,
-          this.productDetailAdmissionSnapshots,
-          this.hotDetailAdmissionSnapshots,
-          effective,
-        );
-  }
 }
 
 /** One exact publication entry named by carry or decision-preview authority. */
@@ -272,7 +255,9 @@ export class KernelCommittedEntryRevision {
     readonly actualKind: string | null,
     readonly mutationOrdinal: number | null,
     readonly lifetimeOrdinal: number | null,
-  ) {}
+  ) {
+    Object.freeze(this);
+  }
 }
 
 declare const kernelPublicationWriterIdBrand: unique symbol;
@@ -289,7 +274,9 @@ export class KernelStagedEntryRevision {
     readonly handle: string,
     readonly actualKind: string | null,
     readonly mutationOrdinal: number | null,
-  ) {}
+  ) {
+    Object.freeze(this);
+  }
 
   static absent(surface: KernelPublicationSurface, handle: string): KernelStagedEntryRevision {
     return new KernelStagedEntryRevision(null, surface, handle, null, null);
@@ -438,7 +425,9 @@ export class KernelProductDetailAdmissionSnapshot {
     readonly detailKind: string,
     readonly expectedEntry: ProductDetailEntry<unknown> | null,
     readonly committedRevision: KernelCommittedEntryRevision,
-  ) {}
+  ) {
+    Object.freeze(this);
+  }
 }
 
 /** Exact foreign hot-detail entry, or absence, used by one staged admission decision. */
@@ -448,7 +437,9 @@ export class KernelHotDetailAdmissionSnapshot {
     readonly detailKind: string,
     readonly expectedEntry: HotDetailEntry<unknown> | null,
     readonly committedRevision: KernelCommittedEntryRevision,
-  ) {}
+  ) {
+    Object.freeze(this);
+  }
 }
 
 /** Child writer whose `IfAbsent` publication consumed one exact committed product-detail decision. */
@@ -456,7 +447,9 @@ export class KernelProductDetailAdmissionAttempt {
   constructor(
     readonly writerId: KernelPublicationWriterId,
     readonly snapshot: KernelProductDetailAdmissionSnapshot,
-  ) {}
+  ) {
+    Object.freeze(this);
+  }
 }
 
 /** Child writer whose `IfAbsent` publication consumed one exact committed hot-detail decision. */
@@ -464,7 +457,9 @@ export class KernelHotDetailAdmissionAttempt {
   constructor(
     readonly writerId: KernelPublicationWriterId,
     readonly snapshot: KernelHotDetailAdmissionSnapshot,
-  ) {}
+  ) {
+    Object.freeze(this);
+  }
 }
 
 /** Exact store entries currently owned by one committed computation. */
@@ -516,9 +511,13 @@ export class KernelPublicationReplacement {
   }
 }
 
-const kernelPublicationDecisionCandidateAuthority = Object.freeze({});
+const sealedKernelPublicationCandidateAuthority = Object.freeze({});
 const kernelPublicationDecisionPreviewCandidateAuthority = Object.freeze({});
-const kernelPublicationDecisionCandidates = new WeakSet<object>();
+const sealedKernelPublicationCandidateLineages = new WeakMap<object, {
+  readonly store: KernelStore;
+  readonly previousPublication: KernelPublicationManifest;
+}>();
+const spentSealedKernelPublicationCandidates = new WeakSet<object>();
 const kernelPublicationDecisionPreviewCandidates = new WeakSet<object>();
 
 function publicationEntriesByKey(
@@ -538,7 +537,54 @@ function publicationEntriesByKey(
     }
     entriesByKey.set(key, snapshot);
   }
-  return entriesByKey;
+  return new ImmutableMapView(entriesByKey);
+}
+
+/** Read-only ownership transfer over a map that its producer will no longer mutate. */
+class ImmutableMapView<TKey, TValue> implements ReadonlyMap<TKey, TValue> {
+  readonly #source: ReadonlyMap<TKey, TValue>;
+
+  constructor(source: ReadonlyMap<TKey, TValue>) {
+    this.#source = source;
+    Object.freeze(this);
+  }
+
+  get size(): number {
+    return this.#source.size;
+  }
+
+  get(key: TKey): TValue | undefined {
+    return this.#source.get(key);
+  }
+
+  has(key: TKey): boolean {
+    return this.#source.has(key);
+  }
+
+  forEach(
+    callbackfn: (value: TValue, key: TKey, map: ReadonlyMap<TKey, TValue>) => void,
+    thisArg?: unknown,
+  ): void {
+    for (const [key, value] of this.#source) {
+      callbackfn.call(thisArg, value, key, this);
+    }
+  }
+
+  entries(): MapIterator<[TKey, TValue]> {
+    return this.#source.entries();
+  }
+
+  keys(): MapIterator<TKey> {
+    return this.#source.keys();
+  }
+
+  values(): MapIterator<TValue> {
+    return this.#source.values();
+  }
+
+  [Symbol.iterator](): MapIterator<[TKey, TValue]> {
+    return this.entries();
+  }
 }
 
 function publicationEntryFromIndexes(
@@ -552,20 +598,44 @@ function publicationEntryFromIndexes(
   return null;
 }
 
-/** Final replacement candidate minted only by sealing staged publication, including explicit carry authority. */
-export class KernelPublicationDecisionCandidate {
+/** Final run-local publication authority minted only by sealing one exact staged store lineage. */
+export class SealedKernelPublicationCandidate {
   readonly #retainedOutputsByKey: ReadonlyMap<string, KernelPublicationEntryDescriptor>;
+  readonly #recordRevisions: ReadonlyMap<KernelRecordHandle, KernelStagedEntryRevision>;
+  readonly #productDetailRevisions: ReadonlyMap<ProductHandle, KernelStagedEntryRevision>;
+  readonly #hotDetailRevisions: ReadonlyMap<HotDetailHandle, KernelStagedEntryRevision>;
+  readonly recordsByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>;
+  readonly productDetailsByHandle: ReadonlyMap<ProductHandle, KernelProductDetailPublication<unknown>>;
+  readonly hotDetailsByHandle: ReadonlyMap<HotDetailHandle, KernelHotDetailPublication<unknown>>;
 
   constructor(
     authority: object,
+    store: KernelStore,
+    previousPublication: KernelPublicationManifest,
     readonly plan: KernelPublicationPlan,
-    retainedOutputs: readonly KernelPublicationEntryDescriptor[],
+    retainedOutputsByKey: ReadonlyMap<string, KernelPublicationEntryDescriptor>,
+    recordsByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
+    productDetailsByHandle: ReadonlyMap<ProductHandle, KernelProductDetailPublication<unknown>>,
+    hotDetailsByHandle: ReadonlyMap<HotDetailHandle, KernelHotDetailPublication<unknown>>,
+    recordRevisions: ReadonlyMap<KernelRecordHandle, KernelStagedEntryRevision>,
+    productDetailRevisions: ReadonlyMap<ProductHandle, KernelStagedEntryRevision>,
+    hotDetailRevisions: ReadonlyMap<HotDetailHandle, KernelStagedEntryRevision>,
+    readonly productDetailAdmissionAttempts: readonly KernelProductDetailAdmissionAttempt[],
+    readonly hotDetailAdmissionAttempts: readonly KernelHotDetailAdmissionAttempt[],
   ) {
-    if (authority !== kernelPublicationDecisionCandidateAuthority) {
-      throw new Error('Kernel publication decision candidates can only be minted by staged publication.');
+    if (authority !== sealedKernelPublicationCandidateAuthority) {
+      throw new Error('Kernel publication candidates can only be minted by sealing staged publication.');
     }
-    this.#retainedOutputsByKey = publicationEntriesByKey(retainedOutputs);
-    kernelPublicationDecisionCandidates.add(this);
+    this.#retainedOutputsByKey = new ImmutableMapView(retainedOutputsByKey);
+    this.recordsByHandle = new ImmutableMapView(recordsByHandle);
+    this.productDetailsByHandle = new ImmutableMapView(productDetailsByHandle);
+    this.hotDetailsByHandle = new ImmutableMapView(hotDetailsByHandle);
+    this.#recordRevisions = recordRevisions;
+    this.#productDetailRevisions = productDetailRevisions;
+    this.#hotDetailRevisions = hotDetailRevisions;
+    this.productDetailAdmissionAttempts = Object.freeze([...productDetailAdmissionAttempts]);
+    this.hotDetailAdmissionAttempts = Object.freeze([...hotDetailAdmissionAttempts]);
+    sealedKernelPublicationCandidateLineages.set(this, Object.freeze({ store, previousPublication }));
     Object.freeze(this);
   }
 
@@ -577,31 +647,68 @@ export class KernelPublicationDecisionCandidate {
     return this.#retainedOutputsByKey.get(stagedRevisionKey(surface, handle))?.detailKind === detailKind;
   }
 
-  withMinimumLifetimeOrdinal(minimumLifetimeOrdinal: number | null): KernelPublicationDecisionCandidate {
-    const plan = this.plan.withMinimumLifetimeOrdinal(minimumLifetimeOrdinal);
-    return plan === this.plan
-      ? this
-      : mintKernelPublicationDecisionCandidate(plan, [...this.#retainedOutputsByKey.values()]);
+  readStagedRevision(
+    surface: KernelPublicationSurface,
+    handle: string,
+  ): KernelStagedEntryRevision | null {
+    switch (surface) {
+      case KernelPublicationSurface.Record:
+        return this.#recordRevisions.get(handle as KernelRecordHandle) ?? null;
+      case KernelPublicationSurface.ProductDetail:
+        return this.#productDetailRevisions.get(handle as ProductHandle) ?? null;
+      case KernelPublicationSurface.HotDetail:
+        return this.#hotDetailRevisions.get(handle as HotDetailHandle) ?? null;
+    }
   }
 }
 
-/** Assert that final replacement received authority minted by sealing staged publication. */
-export function assertKernelPublicationDecisionCandidate(
-  candidate: KernelPublicationDecisionCandidate,
-): void {
-  if (!kernelPublicationDecisionCandidates.has(candidate)) {
+/** Consume one final candidate only against the exact store and prior manifest that minted it. */
+export function consumeSealedKernelPublicationCandidate(
+  candidate: SealedKernelPublicationCandidate,
+  store: KernelStore,
+): KernelPublicationManifest {
+  const lineage = sealedKernelPublicationCandidateLineages.get(candidate) ?? null;
+  if (lineage == null) {
     throw new Error('Kernel publication decision candidate authority was not minted by sealed staged publication.');
   }
+  if (lineage.store !== store) {
+    throw new Error('Kernel publication decision candidate belongs to a different kernel store.');
+  }
+  if (spentSealedKernelPublicationCandidates.has(candidate)) {
+    throw new Error('Kernel publication decision candidate has already been spent.');
+  }
+  spentSealedKernelPublicationCandidates.add(candidate);
+  return lineage.previousPublication;
 }
 
-function mintKernelPublicationDecisionCandidate(
+function mintSealedKernelPublicationCandidate(
+  store: KernelStore,
+  previousPublication: KernelPublicationManifest,
   plan: KernelPublicationPlan,
-  retainedOutputs: readonly KernelPublicationEntryDescriptor[],
-): KernelPublicationDecisionCandidate {
-  return new KernelPublicationDecisionCandidate(
-    kernelPublicationDecisionCandidateAuthority,
+  retainedOutputsByKey: ReadonlyMap<string, KernelPublicationEntryDescriptor>,
+  recordsByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
+  productDetailsByHandle: ReadonlyMap<ProductHandle, KernelProductDetailPublication<unknown>>,
+  hotDetailsByHandle: ReadonlyMap<HotDetailHandle, KernelHotDetailPublication<unknown>>,
+  recordRevisions: ReadonlyMap<KernelRecordHandle, KernelStagedEntryRevision>,
+  productDetailRevisions: ReadonlyMap<ProductHandle, KernelStagedEntryRevision>,
+  hotDetailRevisions: ReadonlyMap<HotDetailHandle, KernelStagedEntryRevision>,
+  productDetailAdmissionAttempts: readonly KernelProductDetailAdmissionAttempt[],
+  hotDetailAdmissionAttempts: readonly KernelHotDetailAdmissionAttempt[],
+): SealedKernelPublicationCandidate {
+  return new SealedKernelPublicationCandidate(
+    sealedKernelPublicationCandidateAuthority,
+    store,
+    previousPublication,
     plan,
-    retainedOutputs,
+    retainedOutputsByKey,
+    recordsByHandle,
+    productDetailsByHandle,
+    hotDetailsByHandle,
+    recordRevisions,
+    productDetailRevisions,
+    hotDetailRevisions,
+    productDetailAdmissionAttempts,
+    hotDetailAdmissionAttempts,
   );
 }
 
@@ -704,38 +811,6 @@ function mintKernelPublicationDecisionPreviewCandidate(
     hasStagedRecord,
     assertCurrent,
   );
-}
-
-/** Immutable run-local publication snapshot used by validation and child-manifest admission. */
-export class SealedKernelPublicationCandidate {
-  private readonly revisionsByKey: ReadonlyMap<string, KernelStagedEntryRevision>;
-
-  constructor(
-    readonly publication: KernelPublicationDecisionCandidate,
-    revisions: readonly KernelStagedEntryRevision[],
-    readonly productDetailAdmissionAttempts: readonly KernelProductDetailAdmissionAttempt[],
-    readonly hotDetailAdmissionAttempts: readonly KernelHotDetailAdmissionAttempt[],
-  ) {
-    this.revisionsByKey = new Map(revisions.map((revision) => [
-      stagedRevisionKey(revision.surface, revision.handle),
-      revision,
-    ]));
-  }
-
-  get plan(): KernelPublicationPlan {
-    return this.publication.plan;
-  }
-
-  readStagedRevision(
-    surface: KernelPublicationSurface,
-    handle: string,
-  ): KernelStagedEntryRevision | null {
-    return this.revisionsByKey.get(stagedRevisionKey(surface, handle)) ?? null;
-  }
-}
-
-function maxLifetimeOrdinal(left: number | null, right: number | null): number | null {
-  return left == null ? right : right == null ? left : Math.max(left, right);
 }
 
 /** Required read/write boundary used by materializers in immediate or staged mode. */
@@ -1485,16 +1560,17 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
   seal(label: string): SealedKernelPublicationCandidate {
     this.assertPreparing();
     this.sealed = true;
-    return new SealedKernelPublicationCandidate(
-      mintKernelPublicationDecisionCandidate(
-        this.toPlanUnchecked(label),
-        [...this.carriedOutputsByKey.values()],
-      ),
-      [
-        ...this.recordRevisions.values(),
-        ...this.productDetailRevisions.values(),
-        ...this.hotDetailRevisions.values(),
-      ],
+    return mintSealedKernelPublicationCandidate(
+      this.store,
+      this.previousPublication,
+      this.toPlanUnchecked(label),
+      this.carriedOutputsByKey,
+      this.records,
+      this.productDetails,
+      this.hotDetails,
+      this.recordRevisions,
+      this.productDetailRevisions,
+      this.hotDetailRevisions,
       admissionAttempts(
         this.productDetailAdmissionSnapshots,
         this.productDetailAdmissionWriters,
@@ -1506,11 +1582,6 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
         KernelHotDetailAdmissionAttempt,
       ),
     );
-  }
-
-  toPlan(label: string): KernelPublicationPlan {
-    this.assertPreparing();
-    return this.toPlanUnchecked(label);
   }
 
   /** Describe only the candidate decisions that must retain before one prior child can be carried. */
@@ -1698,7 +1769,6 @@ export class StagedKernelPublicationContext implements KernelPublicationContext,
       [...this.hotDetails.values()],
       [...this.productDetailAdmissionSnapshots.values()],
       [...this.hotDetailAdmissionSnapshots.values()],
-      null,
     );
   }
 

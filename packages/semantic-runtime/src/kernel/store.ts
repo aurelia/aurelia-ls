@@ -68,11 +68,10 @@ import {
   requireGenerationCurrentness,
 } from './generation-authority.js';
 import {
-  assertKernelPublicationDecisionCandidate,
   assertKernelPublicationDecisionPreviewCandidate,
+  consumeSealedKernelPublicationCandidate,
   KernelDetailAdmission,
   KernelPublicationDecision,
-  type KernelPublicationDecisionCandidate,
   type KernelPublicationDecisionPreviewCandidate,
   type KernelPublicationEntryDescriptor,
   KernelPublicationManifest,
@@ -81,6 +80,7 @@ import {
   type KernelProductDetailPublication,
   type KernelPublicationPlan,
   KernelPublicationReplacement,
+  type SealedKernelPublicationCandidate,
 } from './publication.js';
 import {
   KernelPublicationDecisionKind,
@@ -99,7 +99,7 @@ import {
 export { KernelStoreBatch } from './publication.js';
 
 type KernelPublicationComparisonAuthority =
-  | KernelPublicationDecisionCandidate
+  | SealedKernelPublicationCandidate
   | KernelPublicationDecisionPreviewCandidate;
 
 interface KernelStoreCommitIndex {
@@ -557,13 +557,21 @@ export class KernelStore {
 
   /** Replace one lifecycle-owned staged candidate while preserving its unforgeable explicit-carry authority. */
   replaceOwnedPublicationCandidate(
-    previous: KernelPublicationManifest,
-    next: KernelPublicationDecisionCandidate,
+    next: SealedKernelPublicationCandidate,
     owner: object,
     preflight: KernelPublicationReplacementPreflight,
+    minimumLifetimeOrdinal: number | null = null,
   ): KernelPublicationReplacement {
-    assertKernelPublicationDecisionCandidate(next);
-    return this.replacePublicationForOwner(previous, next.plan, next, owner, preflight);
+    this.assertStoreMutationAllowed('replace a staged publication candidate');
+    const previous = consumeSealedKernelPublicationCandidate(next, this);
+    return this.replacePublicationForOwner(
+      previous,
+      next.plan,
+      next,
+      owner,
+      preflight,
+      minimumLifetimeOrdinal,
+    );
   }
 
   /** Compute candidate decisions through the same comparators used by final replacement, without mutating the store. */
@@ -638,9 +646,10 @@ export class KernelStore {
   private replacePublicationForOwner(
     previous: KernelPublicationManifest,
     next: KernelPublicationPlan,
-    decisionCandidate: KernelPublicationDecisionCandidate | null,
+    decisionCandidate: SealedKernelPublicationCandidate | null,
     owner: object,
     preflight: KernelPublicationReplacementPreflight,
+    minimumLifetimeOrdinal: number | null = null,
   ): KernelPublicationReplacement {
     this.assertStoreMutationAllowed('replace a publication');
     this.mutationPhase = KernelStoreMutationPhase.PreparingPublication;
@@ -708,6 +717,7 @@ export class KernelStore {
       const dependencyLifetimeOrdinal = this.publicationDependencyLifetimeOrdinal(
         next,
         recordsByHandle,
+        minimumLifetimeOrdinal,
       );
       const normalizations = [
         ...preparedDetails.productDetails.flatMap((entry) => entry.binding.normalizations),
@@ -826,7 +836,7 @@ export class KernelStore {
     previous: KernelPublicationManifest,
     next: KernelPublicationPlan,
     owner: object,
-    decisionCandidate: KernelPublicationDecisionCandidate | null = null,
+    decisionCandidate: SealedKernelPublicationCandidate | null = null,
   ): PreparedKernelPublicationDecisions {
     if (decisionCandidate != null && decisionCandidate.plan !== next) {
       throw new Error('Kernel publication carry authority does not belong to the candidate being compared.');
@@ -845,9 +855,13 @@ export class KernelStore {
     );
     this.validatePublicationAdmissionSnapshots(next, label);
 
-    const recordsByHandle = this.publicationRecordsByHandle(next.batch.records, previousRecordHandles, label);
-    const productDetailsByHandle = normalizedProductDetailPublications(next.productDetails, label);
-    const hotDetailsByHandle = normalizedHotDetailPublications(next.hotDetails, label);
+    const recordsByHandle = decisionCandidate?.recordsByHandle
+      ?? normalizedPublicationRecords(next.batch.records, label);
+    const productDetailsByHandle = decisionCandidate?.productDetailsByHandle
+      ?? normalizedProductDetailPublications(next.productDetails, label);
+    const hotDetailsByHandle = decisionCandidate?.hotDetailsByHandle
+      ?? normalizedHotDetailPublications(next.hotDetails, label);
+    this.validatePublicationRecordOwnership(recordsByHandle, previousRecordHandles, label);
     const borrowedProductDetailHandles = new Set(
       next.productDetailAdmissionSnapshots
         .filter((snapshot) => snapshot.expectedEntry != null)
@@ -1128,23 +1142,16 @@ export class KernelStore {
     }
   }
 
-  private publicationRecordsByHandle(
-    records: readonly KernelStoreRecord[],
+  private validatePublicationRecordOwnership(
+    recordsByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
     previousRecordHandles: ReadonlySet<KernelRecordHandle>,
     label: string,
-  ): ReadonlyMap<KernelRecordHandle, KernelStoreRecord> {
-    const byHandle = new Map<KernelRecordHandle, KernelStoreRecord>();
-    for (const record of records) {
-      const handle = record.handle;
-      if (byHandle.has(handle)) {
-        throw new Error(`Duplicate kernel record handle within ${label}: ${handle}.`);
-      }
+  ): void {
+    for (const handle of recordsByHandle.keys()) {
       if (this.records.has(handle) && !previousRecordHandles.has(handle)) {
         throw new Error(`Publication ${label} cannot claim record ${handle}; another owner already published it.`);
       }
-      byHandle.set(handle, record);
     }
-    return byHandle;
   }
 
   private validatePublicationReferences(
@@ -1283,8 +1290,9 @@ export class KernelStore {
   private publicationDependencyLifetimeOrdinal(
     plan: KernelPublicationPlan,
     nextByHandle: ReadonlyMap<KernelRecordHandle, KernelStoreRecord>,
+    minimumLifetimeOrdinal: number | null = null,
   ): number | null {
-    let lifetimeOrdinal = plan.minimumLifetimeOrdinal;
+    let lifetimeOrdinal = minimumLifetimeOrdinal;
     const borrowedProductDetailHandles = new Set(
       plan.productDetailAdmissionSnapshots
         .filter((snapshot) => snapshot.expectedEntry != null)
@@ -2979,6 +2987,20 @@ export class KernelStore {
 
 function maxOptionalOrdinal(left: number | null, right: number | null): number | null {
   return left == null ? right : right == null ? left : Math.max(left, right);
+}
+
+function normalizedPublicationRecords(
+  records: readonly KernelStoreRecord[],
+  label: string,
+): ReadonlyMap<KernelRecordHandle, KernelStoreRecord> {
+  const byHandle = new Map<KernelRecordHandle, KernelStoreRecord>();
+  for (const record of records) {
+    if (byHandle.has(record.handle)) {
+      throw new Error(`Duplicate kernel record handle within ${label}: ${record.handle}.`);
+    }
+    byHandle.set(record.handle, record);
+  }
+  return byHandle;
 }
 
 function normalizedProductDetailPublications(

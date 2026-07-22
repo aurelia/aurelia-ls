@@ -170,8 +170,8 @@ stable computation ID; each run stages a complete read set and publication closu
 before replacing the prior state. `publication.ts` is the required materializer write boundary for immediate and staged
 execution. `KernelStore.replacePublication(...)` prevalidates ownership, references, detail envelopes, and unsupported
 sidecar participation before one synchronous replacement. Computation-owned replacement uses
-`replaceOwnedPublication(...)`, which admits source/input validation and the owner's fallible producer-index preflight
-inside the same store mutation barrier. External read and owner validators run before reversible descriptor
+`replaceOwnedPublicationCandidate(...)`, which consumes the exact sealed staged candidate and admits source/input
+validation plus the owner's fallible producer-index preflight inside the same store mutation barrier. External read and owner validators run before reversible descriptor
 revalidation and rich-detail structural-closure reprojection; those candidate-owned operations may themselves invoke
 JavaScript. The lifecycle therefore carries one nominal `GenerationCurrentnessWitness` over the exact run and every
 guarded input generation. Kernel-private monotonic clocks recheck that witness after descriptor and projector callbacks,
@@ -179,7 +179,10 @@ immediately before the truly callback-free mutation tail. The witness proves gen
 equality: exact source/configuration values remain typed computation reads, and an editor or host source event must
 advance project-input authority before admission. Transient publication views expose operational currentness but do not
 implement `GenerationAuthority`, so a finished run, poisoned staging context, or eternal store cannot masquerade as a
-witnessed durable generation. Normalized records, publication plans, manifests, decisions, and their
+witnessed durable generation. The final candidate is a single-use capability bound to the exact store and prior
+manifest that minted it; dependency lifetime is commit evidence, not permission to mint a second candidate. Raw
+`KernelPublicationPlan` replacement remains available for genuinely non-staged operations such as exact generation
+retirement. Normalized records, publication plans, manifests, decisions, and their
 structural arrays are sealed before any external validator runs. Normalized records are sealed earlier, when their
 `KernelStoreBatch` takes ownership, so staged revisions and sibling reads always name one immutable record value. A
 failed or stale run leaves the previous records, details, read index, producer index, and manifest intact. Sidecar indexes remain
@@ -207,7 +210,9 @@ detail. Retained committed bindings refresh only in the callback-free successful
 poisons the run so an accepted prefix can never become a commit payload. Candidate-owned maps therefore mutate in
 place instead of retaining an unreachable per-write rollback image; abort and rejected commit still close every
 reversible detail-binding lease before the run finishes. Each staged entry mints one exact writer-and-mutation revision
-that is reused by candidate reads and final sealing instead of being reconstructed from parallel indexes. Rich typed
+that is frozen and reused by candidate reads and final sealing instead of being reconstructed from parallel indexes.
+Final replacement consumes immutable views over the exact normalized staging maps rather than rebuilding record and
+detail indexes from a flattened plan. Rich typed
 detail payloads remain domain objects and are not recursively frozen by the kernel. Ordinary republication of the same
 mutable object conservatively
 advances its revision; only explicit exact child carry may preserve object identity. Producers still own the stronger
@@ -230,7 +235,8 @@ The next run at a locus reads through a candidate view that hides every record a
 Still-current outputs must be restaged as part of the complete next closure; otherwise commit withdraws them. This
 prevents a materializer from mistaking its own old output for upstream truth and then publishing a partial replacement.
 The staged record/detail maps are both the read-your-writes authority and the final commit payload, so duplicate
-`IfAbsent` admission cannot resolve one way during construction and reappear as duplicate rows at commit.
+`IfAbsent` admission cannot resolve one way during construction and reappear as duplicate rows at commit. Sealing closes
+their producer, exposes mutation-free map views, and spends the resulting candidate exactly once.
 
 `ComputationRun.withChild(...)` partitions one still-atomic outer candidate into logical read/output manifests. Child
 scopes are synchronous preparation scopes: they cannot commit or abort the run, and a thrown or asynchronous callback

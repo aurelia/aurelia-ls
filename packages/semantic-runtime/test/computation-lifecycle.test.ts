@@ -53,10 +53,10 @@ import { ProvenanceRecord } from "../src/kernel/provenance.js";
 import {
   KernelDetailAdmission,
   KernelPublicationDecisionKind,
-  KernelPublicationDecisionCandidate,
   type KernelPublicationDecisionPreviewCandidate,
   KernelPublicationManifest,
   KernelPublicationPlan,
+  SealedKernelPublicationCandidate,
   type KernelPublicationWriterId,
   StagedKernelPublicationContext,
   publishHotDetail,
@@ -1144,26 +1144,37 @@ describe("computation lifecycle", () => {
     replacement.abort();
   });
 
-  test("keeps explicit carry authority out of caller-constructed publication candidates", () => {
-    expect(() => new KernelPublicationDecisionCandidate(
+  test("keeps final publication authority out of caller-constructed publication candidates", () => {
+    const store = new KernelStore("forged-final-candidate");
+    expect(() => new SealedKernelPublicationCandidate(
       {},
+      store,
+      KernelPublicationManifest.empty,
       new KernelPublicationPlan(new KernelStoreBatch([], "forged-carry-candidate")),
+      new Map(),
+      new Map(),
+      new Map(),
+      new Map(),
+      new Map(),
+      new Map(),
+      new Map(),
       [],
-    )).toThrow(/only be minted by staged publication/);
+      [],
+    )).toThrow(/only be minted by sealing staged publication/);
   });
 
-  test("rejects forged and preview-only authority at final publication replacement", () => {
+  test("rejects forged, preview-only, and foreign-store authority at final publication replacement", () => {
     const store = new KernelStore("publication-candidate-authority-boundaries");
+    const foreignStore = new KernelStore("publication-candidate-authority-foreign-store");
     const owner = {};
     const plan = new KernelPublicationPlan(new KernelStoreBatch([], "forged-carry-candidate"));
     const preflight = { validate(): void {}, validateCurrent(): void {}, finalAuthority: emptyGenerationCurrentnessWitness };
     const forged = {
       plan,
       explicitlyRetains: () => true,
-    } as unknown as KernelPublicationDecisionCandidate;
+    } as unknown as SealedKernelPublicationCandidate;
 
     expect(() => store.replaceOwnedPublicationCandidate(
-      KernelPublicationManifest.empty,
       forged,
       owner,
       preflight,
@@ -1176,11 +1187,17 @@ describe("computation lifecycle", () => {
     );
     const preview = staged.toDecisionPreviewCandidate("preview-candidate-authority", []);
     expect(() => store.replaceOwnedPublicationCandidate(
-      KernelPublicationManifest.empty,
-      preview as unknown as KernelPublicationDecisionCandidate,
+      preview as unknown as SealedKernelPublicationCandidate,
       owner,
       preflight,
     )).toThrow(/authority was not minted by sealed staged publication/);
+
+    const finalCandidate = staged.seal("foreign-store-final-candidate");
+    expect(() => foreignStore.replaceOwnedPublicationCandidate(
+      finalCandidate,
+      owner,
+      preflight,
+    )).toThrow(/belongs to a different kernel store/);
   });
 
   test("rejects final publication authority at the preview boundary", () => {
@@ -1190,13 +1207,76 @@ describe("computation lifecycle", () => {
       KernelPublicationManifest.empty,
       "test:final-candidate-authority" as KernelPublicationWriterId,
     );
-    const finalCandidate = staged.seal("final-candidate-authority").publication;
+    const finalCandidate = staged.seal("final-candidate-authority");
 
     expect(() => store.previewOwnedPublicationCandidateDecisions(
       KernelPublicationManifest.empty,
       finalCandidate as unknown as KernelPublicationDecisionPreviewCandidate,
       {},
     )).toThrow(/preview authority was not minted by staged publication/);
+  });
+
+  test("rejects a sealed candidate after its exact prior manifest is replaced", () => {
+    const store = new KernelStore("stale-final-candidate-lineage");
+    const owner = {};
+    const preflight = { validate(): void {}, validateCurrent(): void {}, finalAuthority: emptyGenerationCurrentnessWitness };
+    const firstHandle = store.handles.address("stale-final-candidate:first");
+    const secondHandle = store.handles.address("stale-final-candidate:second");
+    const initial = store.replaceOwnedPublication(
+      KernelPublicationManifest.empty,
+      publication("stale-final-candidate:initial", [
+        new SourceFileAddress(firstHandle, "test", "src/first.html", SourceLanguage.Html),
+      ]),
+      owner,
+      preflight,
+    );
+    const staged = new StagedKernelPublicationContext(
+      store,
+      initial.manifest,
+      "test:stale-final-candidate" as KernelPublicationWriterId,
+    );
+    staged.publish(publication("stale-final-candidate:staged", [
+      new SourceFileAddress(firstHandle, "test", "src/first.html", SourceLanguage.Html),
+    ]));
+    const staleCandidate = staged.seal("stale-final-candidate:sealed");
+    const stagedRecord = staleCandidate.recordsByHandle.get(firstHandle);
+    const stagedRevision = staleCandidate.readStagedRevision(KernelPublicationSurface.Record, firstHandle);
+    expect(stagedRecord).toBe(staleCandidate.plan.batch.records[0]);
+    expect((staleCandidate.recordsByHandle as { readonly set?: unknown }).set).toBeUndefined();
+    expect(stagedRevision).not.toBeNull();
+    expect(Object.isFrozen(stagedRevision)).toBe(true);
+    store.replaceOwnedPublication(
+      initial.manifest,
+      publication("stale-final-candidate:replacement", [
+        new SourceFileAddress(secondHandle, "test", "src/second.html", SourceLanguage.Html),
+      ]),
+      owner,
+      preflight,
+    );
+
+    expect(() => store.replaceOwnedPublicationCandidate(
+      staleCandidate,
+      owner,
+      preflight,
+    )).toThrow(/stale or foreign publication manifest/);
+    expect(store.read(firstHandle)).toBeNull();
+    expect(store.read(secondHandle)).not.toBeNull();
+  });
+
+  test("spends a final publication candidate exactly once even when its prior manifest is empty", () => {
+    const store = new KernelStore("single-spend-final-candidate");
+    const owner = {};
+    const preflight = { validate(): void {}, validateCurrent(): void {}, finalAuthority: emptyGenerationCurrentnessWitness };
+    const staged = new StagedKernelPublicationContext(
+      store,
+      KernelPublicationManifest.empty,
+      "test:single-spend-final-candidate" as KernelPublicationWriterId,
+    );
+    const candidate = staged.seal("single-spend-final-candidate");
+
+    const replacement = store.replaceOwnedPublicationCandidate(candidate, owner, preflight);
+    expect(() => store.replaceOwnedPublicationCandidate(candidate, owner, preflight)).toThrow(/already been spent/);
+    store.retirePublicationManifest(replacement.manifest, owner);
   });
 
   test("distinguishes prospective carry projections over the same staged base", () => {
