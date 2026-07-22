@@ -805,7 +805,7 @@
         "Signal add/remove effects belong only to reached bind/unbind rows. Conversion rows must not duplicate them, and ordinary connectable dependencies remain owned by binding data flow.",
         "Read app converter signals through RuntimeBindingSourceValueEvaluator.readValueConverterInstanceProperty. Do not add a converter-local TypeScript evaluator or widen ValueConverterDefinition with instance behavior.",
         "Closed evaluator instances prove missing properties absent. Preserve each known signal array element and source when an imported spread or dynamic tail keeps the overall array open.",
-        "Spend resolved built-in header lineage before applying framework signal constants or built-in semantics; app resources shadowing built-in names must not inherit them.",
+        "Spend the compiler-selected built-in catalog header before applying framework signal constants or built-in semantics; app resources shadowing built-in names must not inherit them. Do not reconstruct catalog origin from the converged definition.",
         "Retain unresolved applications with resource: null and publish ast_converter_not_found / AUR0103 during bind. Source application and issue products to the exact converter-name span when possible.",
         "Template overlays should call checker-visible converter toView methods directly so TypeScript owns overload resolution; dynamic withContext emits both runtime call branches. Keep this paired with direct checker expression projection.",
         "SanitizeValueConverter.toView claims runtime-html method_not_implemented / AUR0099 only when the selected resource has built-in lineage and the active container has no app ISanitizer resolver.",
@@ -832,9 +832,9 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/resources/resource-definition-lineage.ts",
-          "symbolName": "readBuiltInResourceForDefinition",
-          "summary": "Recovers built-in catalog identity only through actual converged header lineage."
+          "filePath": "packages/semantic-runtime/src/template/compiler-resource-lookup.ts",
+          "symbolName": "readBuiltInVisibleTemplateResource",
+          "summary": "Reads built-in catalog identity from the compiler-selected visible header."
         },
         {
           "kind": "source",
@@ -880,12 +880,12 @@
         },
         {
           "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/resources/resource-definition-lineage.ts",
-          "symbolName": "readBuiltInResourceForDefinition"
+          "filePath": "packages/semantic-runtime/src/template/compiler-resource-lookup.ts",
+          "symbolName": "readBuiltInVisibleTemplateResource"
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-07-14"
+      "updatedAt": "2026-07-22"
     },
     {
       "id": "frontier:binding-command-lowering-materializer",

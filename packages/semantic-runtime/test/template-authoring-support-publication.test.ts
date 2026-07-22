@@ -20,8 +20,12 @@ import { KernelStore } from '../src/kernel/store.js';
 import { RuntimeHtmlBuiltInResourceCatalogs } from '../src/resources/built-in-resources.js';
 import { BuiltInResourceTargetProjectionMaterializer } from '../src/resources/built-in-resource-catalog-materializer.js';
 import { ResourceProductDetails } from '../src/resources/product-details.js';
-import { readBuiltInResourceForDefinition } from '../src/resources/resource-definition-lineage.js';
 import { RuntimeHtmlBuiltInSyntaxCatalogs } from '../src/template/built-in-syntax.js';
+import { readBuiltInVisibleTemplateResource } from '../src/template/compiler-resource-lookup.js';
+import {
+  TemplateResourceVisibilityKind,
+  TemplateVisibleResource,
+} from '../src/template/compiler-world-reference.js';
 import {
   RuntimeHtmlDefaultRenderers,
   RuntimeRendererGroup,
@@ -50,12 +54,38 @@ describe('template authoring support publication', () => {
     });
 
     const resources = support.materializeResourceCatalogs(Object.values(RuntimeHtmlBuiltInResourceCatalogs));
-    const definition = resources.resources.find((resource) => resource.definition != null)?.definition ?? null;
-    expect(definition).not.toBeNull();
-    expect(readBuiltInResourceForDefinition(
+    const builtIn = resources.resources.find((resource) => resource.definition != null) ?? null;
+    if (builtIn?.definition == null) {
+      throw new Error('Expected one built-in catalog resource with a converged definition.');
+    }
+    const definition = builtIn.definition;
+    const visibleBuiltIn = new TemplateVisibleResource(
+      builtIn.resource.resourceKind,
+      builtIn.resource.name,
+      builtIn.resource.aliases,
+      builtIn.resource.productHandle,
+      builtIn.resource.identityHandle,
+      definition.productHandle,
+      TemplateResourceVisibilityKind.Configured,
+      builtIn.resource.sourceAddressHandle,
+    );
+    expect(readBuiltInVisibleTemplateResource(
       store,
-      definition!.productHandle,
-    )).toBe(resources.resources.find((resource) => resource.definition === definition)!.resource);
+      visibleBuiltIn,
+    )).toBe(builtIn.resource);
+    expect(readBuiltInVisibleTemplateResource(
+      store,
+      new TemplateVisibleResource(
+        visibleBuiltIn.resourceKind,
+        visibleBuiltIn.name,
+        visibleBuiltIn.aliases,
+        definition.productHandle,
+        definition.identityHandle,
+        definition.productHandle,
+        visibleBuiltIn.visibilityKind,
+        definition.sourceAddressHandle,
+      ),
+    )).toBeNull();
 
     const appRun = lifecycle.begin({
       kind: 'template-authoring-support-consumer',

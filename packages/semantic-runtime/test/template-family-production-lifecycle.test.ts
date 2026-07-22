@@ -35,6 +35,7 @@ import {
   CustomElementDefinition,
   CustomElementTemplateKind,
 } from '../src/resources/custom-element-definition.js';
+import { BuiltInBindingBehaviorName } from '../src/resources/built-in-resources.js';
 import { ResourceProductDetails } from '../src/resources/product-details.js';
 import {
   TemplateCompilerReadKind,
@@ -702,6 +703,56 @@ describe('production template-family lifecycle', () => {
       TemplateProductDetails.Source,
       sourceHandle,
     )?.markup).toBe(expandedText);
+  }, 90_000);
+
+  test('carries built-in binding-behavior analysis from its compiler-selected catalog header', async () => {
+    const fixtureRoot = pressureFixtureRoot('app-pattern-routed-catalog-storefront');
+    const inputAuthority = new SemanticRuntimeProjectInputAuthority(
+      new NodeSemanticRuntimeProjectInputHost(),
+    );
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:production-template-built-in-resource-carry',
+      projectInputAuthority: inputAuthority,
+    });
+    const baseline = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const debounce = baseline.emission.templates.resources.flatMap((resource) =>
+      resource.runtimeAnalysis.expressionResourcePlan.behaviorEntries
+    ).find((entry) => entry.builtInResource?.name === BuiltInBindingBehaviorName.Debounce) ?? null;
+    expect(debounce).not.toBeNull();
+    const baselineRuntimeAnalysisByLocalKey = new Map(
+      baseline.emission.templates.resources.map((resource) => [
+        resource.compilation.localKey,
+        resource.runtimeAnalysis,
+      ]),
+    );
+
+    const carried = await reopenApp(runtime, inputAuthority, baseline);
+    const transition = latestTransition(runtime, carried);
+    expect(transition.children).toContainEqual(expect.objectContaining({
+      locus: expect.objectContaining({
+        reconciliationKey: JSON.stringify([
+          carried.project.projectKey,
+          AureliaAppAnalysisPhase.PostTemplate,
+        ]),
+      }),
+      kind: ComputationChildTransitionKind.Carried,
+    }));
+    const postTemplate = currentAppState(runtime, carried.project.projectKey).children.find((child) =>
+      child.locus.kind === 'aurelia-app-analysis-phase'
+      && child.locus.reconciliationKey === JSON.stringify([
+        carried.project.projectKey,
+        AureliaAppAnalysisPhase.PostTemplate,
+      ])
+    ) ?? null;
+    expect(postTemplate?.openReads).toEqual([]);
+    for (const resource of carried.emission.templates.resources) {
+      const previous = baselineRuntimeAnalysisByLocalKey.get(resource.compilation.localKey) ?? null;
+      expect(previous).not.toBeNull();
+      if (previous != null) {
+        expectCarriedRuntimeAnalysis(previous, resource.runtimeAnalysis);
+      }
+    }
   }, 90_000);
 
   test('rebinds retained template families to current DI state before runtime value-converter analysis', async () => {

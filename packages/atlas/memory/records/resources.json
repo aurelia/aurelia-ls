@@ -303,6 +303,7 @@
       "guidance": [
         "Start here when framework built-ins, configured resource catalogs, i18n/state/runtime-html/validation-html resource visibility, or built-in full definitions are involved.",
         "Keep catalog grouping and configured catalog selection distinct from per-resource publication and built-in full-definition construction.",
+        "Keep the selected built-in catalog header in TemplateVisibleResource.resourceProductHandle and the converged full definition in definitionProductHandle. Built-in identity consumers must read the selected header directly; never reconstruct catalog origin from a definition by scanning convergence claims, because that loses compiler visibility and app-shadowing authority.",
         "ValidationHtmlConfiguration admits a default validation-html catalog with ValidateBindingBehavior, ValidationErrorsCustomAttribute, and ValidationContainerCustomElement; option-sensitive subscriber toggles are still a future customization frontier.",
         "Atlas resource convergence now sees nested framework definition calls such as CustomElement.define({ ...defaultContainerDefinition, template }, ValidationContainerCustomElement); use the convergence lens before assuming framework resources must be decorator/static-$au carriers.",
         "Use `framework:resources -- --projection=convergence` and framework.discovery bundle rows before assuming StandardConfiguration is the only source of built-in resource visibility."
@@ -328,6 +329,12 @@
           "symbolName": "BuiltInResourcePublicationMaterializer",
           "line": 151,
           "summary": "Per-resource built-in publication companion."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/compiler-resource-lookup.ts",
+          "symbolName": "readBuiltInVisibleTemplateResource",
+          "summary": "Reads built-in identity from the compiler-selected catalog header without rebuilding lineage."
         },
         {
           "kind": "doc",
@@ -365,7 +372,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-22"
     },
     {
       "id": "frontier:resource-recognition-project-pass",

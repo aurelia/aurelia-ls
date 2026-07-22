@@ -704,7 +704,10 @@ classification, expression parsing, and instruction lowering converge on the sam
 - built-in resource headers from `resources/built-in-resources.ts` become ordinary visible resources after DI has
   spent them into container resource slots. Compiler-world visibility should preserve the header/resource slot for
   lookup while preferring a converged full definition when one exists, because bindable maps and compiler-consumable
-  metadata live on definitions rather than headers.
+  metadata live on definitions rather than headers. `TemplateVisibleResource.resourceProductHandle` therefore retains
+  the selected catalog header while `definitionProductHandle` names the full definition. Consumers that need built-in
+  identity must read the selected header directly; recovering origin from the definition by scanning convergence claims
+  discards the visibility decision, misrepresents app shadowing, and creates an unrevisioned whole-kernel dependency.
 - Attribute patterns and binding commands are modeled as one configured syntax surface for compiler-world purposes.
   Runtime stores them differently for efficient attribute parsing and command lookup, but tooling should not let that
   implementation split make syntax visibility fundamentally container-specific unless a custom extension materializer
