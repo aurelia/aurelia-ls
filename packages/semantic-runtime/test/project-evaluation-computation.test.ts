@@ -53,7 +53,7 @@ describe('reusable project evaluation computations', () => {
 
     const firstAppAccess = runtime.projectEvaluations.acquire(project, aureliaAppProjectEvaluationProfile);
     expect(firstAppAccess.kind).toBe(StaticProjectEvaluationAcquisitionKind.Reused);
-    const baseline = firstAppAccess.generation.readBaseline();
+    const baseline = firstAppAccess.readBaseline();
     expect(new Set(baseline.readEvaluatedSources().map((source) => source.evaluation.runtimeHost))).toHaveLength(1);
     const app = await runtime.openApp({ projectKey: project.projectKey });
     expect(app.emission.evaluation).not.toBe(baseline);
@@ -99,12 +99,12 @@ describe('reusable project evaluation computations', () => {
     expect(toolingAccess.kind).toBe(StaticProjectEvaluationAcquisitionKind.Reused);
     expect(toolingAccess.generation).not.toBe(firstAppAccess.generation);
     expect(toolingAccess.generation.profileKey).toBe('aurelia-vite-convention-tooling');
-    expect(toolingAccess.generation.readBaseline().sources.map((source) => source.admission.path))
+    expect(toolingAccess.readBaseline().sources.map((source) => source.admission.path))
       .toContain('vite.config.ts');
     expect(baseline.sources.map((source) => source.admission.path))
       .not.toContain('vite.config.ts');
     const appInputKeys = baseline.readRegisteredInputs().map((read) => read.readKey);
-    const toolingInputKeys = toolingAccess.generation.readBaseline().readRegisteredInputs().map((read) => read.readKey);
+    const toolingInputKeys = toolingAccess.readBaseline().readRegisteredInputs().map((read) => read.readKey);
     expect(appInputKeys.some((key) => key.includes('entry.ts'))).toBe(true);
     expect(appInputKeys.some((key) => key.includes('vite.config.ts'))).toBe(false);
     expect(toolingInputKeys.some((key) => key.includes('vite.config.ts'))).toBe(true);

@@ -13,6 +13,7 @@ import {
 import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
   ComputationCommitState,
+  ComputationReadValidationScope,
   type ComputationGenerationAuthority,
   type ComputationLifecycleRegistry,
   type ComputationLocus,
@@ -276,6 +277,7 @@ export class StaticProjectEvaluationAccess<TContext> {
     readonly generation: StaticProjectEvaluationGeneration<TContext>,
     readonly kind: StaticProjectEvaluationAcquisitionKind,
     readonly milliseconds: number,
+    private readonly validationScope: ComputationReadValidationScope,
   ) {}
 
   readProfile(): StaticProjectEvaluationAcquisitionProfile {
@@ -283,8 +285,20 @@ export class StaticProjectEvaluationAccess<TContext> {
       this.generation.profileKey,
       this.kind,
       this.milliseconds,
-      this.generation.readConstructionProfile().totalMilliseconds,
+      this.generation.readConstructionProfile(this.validationScope).totalMilliseconds,
     );
+  }
+
+  readBaseline(): StaticProjectEvaluationResult {
+    return this.generation.readBaseline(this.validationScope);
+  }
+
+  forkSession(): StaticProjectEvaluationResult {
+    return this.generation.forkSession(this.validationScope);
+  }
+
+  readBaselineContext(): TContext {
+    return this.generation.readBaselineContext(this.validationScope);
   }
 }
 
@@ -315,10 +329,13 @@ class StaticEvaluationAmbientGlobalAuthority {
 
   constructor(readonly projectKey: string) {}
 
-  current(project: ProjectBootFrame): StaticEvaluationAmbientGlobalGeneration | null {
+  current(
+    project: ProjectBootFrame,
+    validationScope: ComputationReadValidationScope,
+  ): StaticEvaluationAmbientGlobalGeneration | null {
     const generation = this.committedGeneration();
     return generation?.project.observedRevision === project.observedRevision
-        && generation.validate().isCurrent
+        && validationScope.validate(generation).isCurrent
       ? generation
       : null;
   }
@@ -375,19 +392,26 @@ class StaticEvaluationAmbientGlobalGeneration implements ComputationRead {
     this.observedRevision = `${project.observedRevision}:${computationAuthority.key}`;
   }
 
-  readDeclarations(): StaticEvaluationAmbientGlobalDeclarations {
-    if (!this.isCurrent()) {
+  readDeclarations(scope?: ComputationReadValidationScope): StaticEvaluationAmbientGlobalDeclarations {
+    if (!this.isCurrent(scope)) {
       throw new Error(`Ambient-global generation ${this.readKey}@${this.observedRevision} is no longer current.`);
     }
     return this.declarations;
   }
 
-  validate(): ComputationReadValidation {
+  validate(scope?: ComputationReadValidationScope): ComputationReadValidation {
+    if (scope == null) {
+      return new ComputationReadValidationScope().validate(this);
+    }
     const generationAdmitted = this.owner.isAdmitted(this);
-    const invalidInputs = [
-      ...this.project.readRegisteredInputs().map((read) => read.validate()),
-      ...this.inputReadScope.readRegisteredInputs().map((read) => read.validate()),
-    ].filter((validation) => !validation.isCurrent);
+    const invalidInputs = generationAdmitted
+      ? [
+          ...this.project.readRegisteredInputs(),
+          ...this.inputReadScope.readRegisteredInputs(),
+        ]
+          .map((read) => scope.validate(read))
+          .filter((validation) => !validation.isCurrent)
+      : [];
     const isCurrent = generationAdmitted && invalidInputs.length === 0;
     return {
       isCurrent,
@@ -408,8 +432,8 @@ class StaticEvaluationAmbientGlobalGeneration implements ComputationRead {
     return this.validate().isCurrent ? this : null;
   }
 
-  isCurrent(): boolean {
-    return this.validate().isCurrent;
+  isCurrent(scope?: ComputationReadValidationScope): boolean {
+    return (scope ?? new ComputationReadValidationScope()).validate(this).isCurrent;
   }
 }
 
@@ -418,7 +442,12 @@ class StaticEvaluationAmbientGlobalAccess {
     readonly generation: StaticEvaluationAmbientGlobalGeneration,
     readonly kind: StaticProjectEvaluationAcquisitionKind,
     readonly milliseconds: number,
+    private readonly validationScope: ComputationReadValidationScope,
   ) {}
+
+  readDeclarations(): StaticEvaluationAmbientGlobalDeclarations {
+    return this.generation.readDeclarations(this.validationScope);
+  }
 }
 
 /** Stable replacement locus for one project and evaluation-profile family. */
@@ -447,11 +476,12 @@ class StaticProjectEvaluationAuthority {
   current<TContext>(
     project: ProjectBootFrame,
     profile: StaticProjectEvaluationComputationProfile<TContext>,
+    validationScope: ComputationReadValidationScope,
   ): StaticProjectEvaluationGeneration<TContext> | null {
     const generation = this.committedGeneration();
     return generation?.project.observedRevision === project.observedRevision
         && generation.profileRevision === profile.revision
-        && generation.validate().isCurrent
+        && validationScope.validate(generation).isCurrent
       ? generation as StaticProjectEvaluationGeneration<TContext>
       : null;
   }
@@ -515,12 +545,12 @@ export class StaticProjectEvaluationGeneration<TContext> implements ComputationR
     this.observedRevision = `${project.observedRevision}:${profile.revision}:${computationAuthority.key}`;
   }
 
-  isCurrent(): boolean {
-    return this.validate().isCurrent;
+  isCurrent(scope?: ComputationReadValidationScope): boolean {
+    return (scope ?? new ComputationReadValidationScope()).validate(this).isCurrent;
   }
 
-  requireCurrent(): void {
-    if (!this.isCurrent()) {
+  requireCurrent(scope?: ComputationReadValidationScope): void {
+    if (!this.isCurrent(scope)) {
       throw new Error(`Static project evaluation ${this.readKey}@${this.observedRevision} is no longer current.`);
     }
   }
@@ -537,31 +567,42 @@ export class StaticProjectEvaluationGeneration<TContext> implements ComputationR
    * This is only for consumers that inspect evaluator facts without executing evaluator functions or mutating values.
    * Candidate analyses must use {@link forkSession}.
    */
-  readBaseline(): StaticProjectEvaluationResult {
-    this.requireCurrent();
+  readBaseline(scope?: ComputationReadValidationScope): StaticProjectEvaluationResult {
+    this.requireCurrent(scope);
     return this.baseline;
   }
 
   /** Fork one candidate-owned evaluator graph from the admitted reusable baseline. */
-  forkSession(): StaticProjectEvaluationResult {
-    this.requireCurrent();
+  forkSession(scope?: ComputationReadValidationScope): StaticProjectEvaluationResult {
+    this.requireCurrent(scope);
     return this.baseline.forkSession();
   }
 
-  readConstructionProfile(): StaticProjectEvaluationPerformanceProfile {
-    this.requireCurrent();
+  readConstructionProfile(scope?: ComputationReadValidationScope): StaticProjectEvaluationPerformanceProfile {
+    this.requireCurrent(scope);
     return this.baseline.profile;
   }
 
   /** Read profile-owned interpretation state only alongside the admitted baseline graph it indexes. */
-  readBaselineContext(): TContext {
-    this.requireCurrent();
+  readBaselineContext(scope?: ComputationReadValidationScope): TContext {
+    this.requireCurrent(scope);
     return this.context;
   }
 
-  validate(): ComputationReadValidation {
+  validate(scope?: ComputationReadValidationScope): ComputationReadValidation {
+    if (scope == null) {
+      return new ComputationReadValidationScope().validate(this);
+    }
     const generationAdmitted = this.owner.isAdmitted(this as StaticProjectEvaluationGeneration<unknown>);
-    const invalidInputs = this.inputClosureValidations().filter((validation) => !validation.isCurrent);
+    const invalidInputs = generationAdmitted
+      ? [
+          ...this.project.readRegisteredInputs(),
+          this.profile,
+          ...this.baseline.readRegisteredInputs(),
+        ]
+          .map((read) => scope.validate(read))
+          .filter((validation) => !validation.isCurrent)
+      : [];
     const isCurrent = generationAdmitted && invalidInputs.length === 0;
     return {
       isCurrent,
@@ -580,14 +621,6 @@ export class StaticProjectEvaluationGeneration<TContext> implements ComputationR
 
   tryRebaseCurrent(): ComputationRead | null {
     return this.validate().isCurrent ? this : null;
-  }
-
-  private inputClosureValidations(): readonly ComputationReadValidation[] {
-    return [
-      ...this.project.readRegisteredInputs().map((read) => read.validate()),
-      this.profile.validate(),
-      ...this.baseline.readRegisteredInputs().map((read) => read.validate()),
-    ];
   }
 }
 
@@ -631,21 +664,23 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
   acquire<TContext>(
     project: ProjectBootFrame,
     profile: StaticProjectEvaluationComputationProfile<TContext>,
+    validationScope: ComputationReadValidationScope = new ComputationReadValidationScope(),
   ): StaticProjectEvaluationAccess<TContext> {
     project.requireCurrent();
     this.requireProfileOwnership(profile);
     const started = performance.now();
     const authority = this.authorityFor(project.projectKey, profile.key);
-    const current = authority.current(project, profile);
+    const current = authority.current(project, profile, validationScope);
     if (current != null) {
       return new StaticProjectEvaluationAccess(
         current,
         StaticProjectEvaluationAcquisitionKind.Reused,
         performance.now() - started,
+        validationScope,
       );
     }
 
-    const ambientAccess = this.acquireAmbientGlobals(project);
+    const ambientAccess = this.acquireAmbientGlobals(project, validationScope);
     const run = this.lifecycle.begin(new StaticProjectEvaluationLocus(project.projectKey, profile.key));
     let finished = false;
     try {
@@ -689,6 +724,7 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
         generation,
         StaticProjectEvaluationAcquisitionKind.Computed,
         performance.now() - started,
+        validationScope,
       );
     } catch (error) {
       if (!finished) {
@@ -725,15 +761,19 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
     return retired;
   }
 
-  private acquireAmbientGlobals(project: ProjectBootFrame): StaticEvaluationAmbientGlobalAccess {
+  private acquireAmbientGlobals(
+    project: ProjectBootFrame,
+    validationScope: ComputationReadValidationScope,
+  ): StaticEvaluationAmbientGlobalAccess {
     const started = performance.now();
     const authority = this.ambientAuthorityFor(project.projectKey);
-    const current = authority.current(project);
+    const current = authority.current(project, validationScope);
     if (current != null) {
       return new StaticEvaluationAmbientGlobalAccess(
         current,
         StaticProjectEvaluationAcquisitionKind.Reused,
         performance.now() - started,
+        validationScope,
       );
     }
 
@@ -770,6 +810,7 @@ export class StaticProjectEvaluationComputationService implements KernelStoreSid
         generation,
         StaticProjectEvaluationAcquisitionKind.Computed,
         performance.now() - started,
+        validationScope,
       );
     } catch (error) {
       if (!finished) {
@@ -904,7 +945,7 @@ class StaticProjectEvaluationFrame {
     if (access == null) {
       throw new Error('Static project evaluation has no admitted ambient-global generation.');
     }
-    const declarations = access.generation.readDeclarations();
+    const declarations = access.readDeclarations();
     this.phases.push({
       name: 'ambient-globals',
       milliseconds: access.milliseconds,

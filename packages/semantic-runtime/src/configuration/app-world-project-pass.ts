@@ -5,6 +5,7 @@ import type {
 
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type {
+  StaticProjectEvaluationAccess,
   StaticProjectEvaluationAcquisitionProfile,
   StaticProjectEvaluationGeneration,
   StaticProjectEvaluationResult,
@@ -468,7 +469,8 @@ export class AureliaAppWorldProjectPass {
     evaluationGeneration: StaticProjectEvaluationGeneration<null>,
     evaluation: StaticProjectEvaluationResult,
     typeSystemProject: TypeSystemProjectGeneration,
-    conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
+    typeSystem: TypeSystemProject,
+    conventionToolingEvaluation: StaticProjectEvaluationAccess<ResourceConventionToolingEvaluationContext>,
     evaluationAcquisitions: readonly StaticProjectEvaluationAcquisitionProfile[],
     typeSystemAcquisition: TypeSystemProjectAcquisitionProfile,
     upstreamReads: readonly ComputationRead[],
@@ -483,6 +485,7 @@ export class AureliaAppWorldProjectPass {
       evaluationGeneration,
       evaluation,
       typeSystemProject,
+      typeSystem,
       conventionToolingEvaluation,
       evaluationAcquisitions,
       typeSystemAcquisition,
@@ -510,7 +513,8 @@ class AureliaAppWorldProjectConstructionFrame {
     private readonly evaluationGeneration: StaticProjectEvaluationGeneration<null>,
     private readonly evaluation: StaticProjectEvaluationResult,
     private readonly typeSystemProject: TypeSystemProjectGeneration,
-    private readonly conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
+    private readonly typeSystem: TypeSystemProject,
+    private readonly conventionToolingEvaluation: StaticProjectEvaluationAccess<ResourceConventionToolingEvaluationContext>,
     private readonly evaluationAcquisitions: readonly StaticProjectEvaluationAcquisitionProfile[],
     private readonly typeSystemAcquisition: TypeSystemProjectAcquisitionProfile,
     private readonly upstreamReads: readonly ComputationRead[],
@@ -581,7 +585,7 @@ class AureliaAppWorldProjectConstructionFrame {
     templatePass: TemplateCompilationProjectPass,
   ): AureliaAppWorldPreTemplateEmission {
     const evaluation = this.evaluation;
-    const typeSystem = this.typeSystemProject.readProject();
+    const typeSystem = this.typeSystem;
     const evaluationIssues = this.materializeEvaluationIssues(evaluation, typeSystem);
     const sourceObservation = this.materializeObservationSourceIssues(typeSystem);
     const computedObservation = this.materializeComputedObservationDefinitions(typeSystem);
@@ -629,7 +633,7 @@ class AureliaAppWorldProjectConstructionFrame {
       this.analysisDepth,
       this.project,
       this.evaluationGeneration,
-      this.conventionToolingEvaluation,
+      this.conventionToolingEvaluation.generation,
       this.typeSystemProject,
       evaluation,
       typeSystem,

@@ -167,6 +167,13 @@ unannounced host write therefore makes the private incumbent unavailable to publ
 exact revert can make it serviceable again, and a changed candidate can replace it atomically. The outer app generation
 still fails closed whenever its captured project-input event is no longer current, even if an upstream evaluator is
 semantically reusable.
+Acquisition returns a `StaticProjectEvaluationAccess` bound to the synchronous validation proof that admitted or reused
+the generation. Profile, baseline, context, and session-fork reads spend that access instead of reopening the same
+project/profile/baseline closure independently. App preparation may share one proof across its app-evaluation,
+convention-tooling, and TypeSystem acquisitions because those generations repeat exact leaves; final commit and every
+later public currentness check use fresh proofs. The operation-local proof does not replace the evaluator generation's
+domain-owned serviceability roots or the lifecycle's broader transition read set. The access is not a retained
+generation handle and must not escape the synchronous operation that acquired it.
 Ambient value declarations are a separate project/compiler computation shared by all evaluator profiles. It reads the
 configured TypeScript libraries and admitted project declaration files once, retains their exact positive and negative
 input reads, and is observed transitively by the app and Vite evaluation generations. This is intentionally upstream of

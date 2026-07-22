@@ -174,6 +174,13 @@ publication plans, manifests, decisions, and their structural arrays are sealed 
 leaves the previous records, details, read index, producer index, and manifest intact. Sidecar indexes remain
 acceleration structures; replacing a detail they index is rejected until that index registers an explicit lifecycle
 participant.
+The retained lifecycle read set is transition evidence, not automatically the public serviceability contract of the
+result. It may include broad execution, carry, and explanation witnesses whose authority legitimately changes when the
+run publishes its own outputs even though the admitted domain result remains usable. Each domain generation therefore
+owns the exact smaller root set that decides whether its public result can still be served. A
+`ComputationReadValidationScope` may share validation of one logical `(domain, readKey, observedRevision)` across nested
+generations inside one synchronous proof. It is not a cache, epoch, read manifest, or publication authority. Every
+independent public check and final commit starts a fresh scope.
 Manifest authority requires the exact frozen manifest object currently admitted by the store and the same owner that
 created its lineage; a copied handle list, an earlier manifest, or an exact lifecycle manifest presented through the
 store-owned lane is stale. The manifest's monotone lifetime then proves that every listed record and detail still belongs

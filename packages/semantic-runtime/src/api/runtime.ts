@@ -866,7 +866,7 @@ export class SemanticRuntime {
     let evaluationAccess: StaticProjectEvaluationAccess<null> | null = null;
     const readEvaluation = (): StaticProjectEvaluationResult => {
       evaluationAccess ??= this.projectEvaluations.acquire(plan.project, aureliaAppProjectEvaluationProfile);
-      return evaluationAccess.generation.readBaseline();
+      return evaluationAccess.readBaseline();
     };
     const result = this.answerRuntimeQuery(
       {
@@ -1122,7 +1122,7 @@ export class SemanticRuntime {
       () => {
         const readEvaluation = (): StaticProjectEvaluationResult => {
           evaluationAccess ??= this.projectEvaluations.acquire(plan.project, aureliaAppProjectEvaluationProfile);
-          return evaluationAccess.generation.readBaseline();
+          return evaluationAccess.readBaseline();
         };
         const rows = canonicalQueries.map((query, index) =>
           this.appWorldFreeBatchRow(plan, query, index, inquiryProfile, readEvaluation)
@@ -1598,13 +1598,19 @@ export class SemanticRuntime {
     }
     this.retireStaleCachedApps(QueryClaimDisposalReason.AppEpochDisposed);
     const kernelMarker = this.workspace.store.markLifetime();
-    const app = new SemanticApp(this, project, result.committedGeneration, {
-      analysisDepth,
-      includeAuthoringTemplates,
-      authoringTemplateSourceFileCount: authoringTemplateSourceFiles.length,
-      authoringTemplateLimit,
-      kernelMarker,
-    });
+    const app = new SemanticApp(
+      this,
+      project,
+      result.committedGeneration,
+      result.committedGeneration.readCommittedEmission(),
+      {
+        analysisDepth,
+        includeAuthoringTemplates,
+        authoringTemplateSourceFileCount: authoringTemplateSourceFiles.length,
+        authoringTemplateLimit,
+        kernelMarker,
+      },
+    );
     this.appsByCacheKey.set(
       appCacheKey(
         project.projectKey,
@@ -2488,7 +2494,7 @@ function semanticRuntimeAppWorldFreeProfileSummary(
   access: StaticProjectEvaluationAccess<null>,
   rowLimit: number,
 ): SemanticRuntimeAppWorldFreeProfileSummary {
-  const evaluation = access.generation.readBaseline();
+  const evaluation = access.readBaseline();
   return {
     acquisitionKind: access.kind,
     acquisitionMilliseconds: roundMilliseconds(access.milliseconds),
@@ -2513,9 +2519,9 @@ export class SemanticApp {
     readonly runtime: SemanticRuntime,
     readonly project: ProjectBootFrame,
     private readonly appGeneration: AureliaAppWorldProjectGeneration,
+    appEmission: AureliaAppWorldProjectEmission,
     private readonly cacheRequest: SemanticAppCacheRequest,
   ) {
-    const appEmission = appGeneration.emission;
     this.defaultQueryClaims = this.queryClaimsForProfile(appEmission.profile.inquiryProfile);
     this.routeQueries = new SemanticAppRouteQueries(appEmission, runtime.workspace.store);
     this.currentTemplateQueries = new SemanticAppTemplateQueries(

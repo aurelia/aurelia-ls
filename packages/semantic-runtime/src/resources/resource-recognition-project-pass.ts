@@ -9,7 +9,7 @@ import type {
 import type { EvaluationModuleResolutionOpen } from '../evaluation/module-host.js';
 import {
   isEvaluatedProjectSource,
-  type StaticProjectEvaluationGeneration,
+  type StaticProjectEvaluationAccess,
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
 import type { TypeSystemProject } from '../type-system/project.js';
@@ -204,7 +204,7 @@ export class ResourceRecognitionProjectPass {
     store: KernelStore,
     project: ProjectBootFrame,
     evaluation: StaticProjectEvaluationResult,
-    conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
+    conventionToolingEvaluation: StaticProjectEvaluationAccess<ResourceConventionToolingEvaluationContext>,
     typeSystem: TypeSystemProject | null,
     publication: KernelPublicationContext,
   ): ResourceRecognitionProjectResult {

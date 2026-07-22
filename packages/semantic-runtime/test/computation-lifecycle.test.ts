@@ -19,6 +19,7 @@ import {
   ComputationChildTransitionKind,
   ComputationCommitState,
   ComputationRetirementCause,
+  ComputationReadValidationScope,
   computationHotDetailReadKey,
   ComputationLifecycleRegistry,
   computationMaterializationOwnerReadKey,
@@ -215,6 +216,39 @@ function defineTestHotDetailSlot<TDetail>(
 }
 
 describe("computation lifecycle", () => {
+  test("shares logical read validation only within one synchronous proof", () => {
+    let revision = "1";
+    let validationCount = 0;
+    const read = (): ComputationRead => ({
+      readKey: "proof-scoped-read",
+      domain: "test-input",
+      observedRevision: "1",
+      validate: () => {
+        validationCount += 1;
+        return {
+          isCurrent: revision === "1",
+          currentRevision: revision,
+          changedFacets: revision === "1" ? [] : ["revision"],
+        };
+      },
+      tryRebaseCurrent: () => null,
+    });
+    const scope = new ComputationReadValidationScope();
+
+    expect(scope.validate(read()).isCurrent).toBe(true);
+    expect(scope.validate(read()).isCurrent).toBe(true);
+    expect(validationCount).toBe(1);
+
+    revision = "2";
+    expect(scope.validate(read()).isCurrent).toBe(true);
+    expect(new ComputationReadValidationScope().validate(read())).toEqual(expect.objectContaining({
+      isCurrent: false,
+      currentRevision: "2",
+      changedFacets: ["revision"],
+    }));
+    expect(validationCount).toBe(2);
+  });
+
   test("enforces one computation registry per store", () => {
     const store = new KernelStore("computation-registry-owner");
     new ComputationLifecycleRegistry(store);
@@ -1680,6 +1714,40 @@ describe("computation lifecycle", () => {
     });
     expect(replacement.commit().state).toBe(ComputationCommitState.Committed);
     expect(store.read(materializationHandle)).toBeInstanceOf(MaterializationRecord);
+  });
+
+  test("reuses a current candidate read for carry but revalidates it at final commit", () => {
+    const store = new KernelStore("computation-child-carry-current-candidate-read");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const revisions = new MutableRevisionAuthority();
+    const family = childLocus("carry-current-candidate-read-family");
+    const outputHandle = store.handles.address("carry-current-candidate-read:output");
+    const readKey = "source:carry-current-candidate-read";
+    revisions.set(readKey, "1");
+
+    const initial = lifecycle.begin(locus("child-carry-current-candidate-read"));
+    initial.withChildPartition(() => initial.withChild(family, () => {
+      initial.observe(revisions.observe(readKey, "test-domain"));
+      initial.publish(publication("carry-current-candidate-read:initial", [
+        new SourceFileAddress(outputHandle, "test", "src/output.html", SourceLanguage.Html),
+      ]));
+    }));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    let rebaseCalls = 0;
+    const replacement = lifecycle.begin(locus("child-carry-current-candidate-read"));
+    replacement.observe(revisions.observe(readKey, "test-domain"));
+    replacement.withChildPartition(() => {
+      expect(replacement.tryCarryChild(family, () => {
+        rebaseCalls += 1;
+        return null;
+      })).not.toBeNull();
+    });
+    revisions.set(readKey, "2");
+
+    expect(rebaseCalls).toBe(0);
+    expect(replacement.commit().state).toBe(ComputationCommitState.RejectedInputsChanged);
+    expect(store.read(outputHandle)).toBeInstanceOf(SourceFileAddress);
   });
 
   test("keeps domain rebase previews side-effect-free when carry is rejected", () => {

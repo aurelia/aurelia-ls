@@ -146,6 +146,42 @@ export interface ComputationReadValidation {
 }
 
 /**
+ * One synchronous proof of logical computation-read currentness.
+ *
+ * Nested generations often share exact leaves. The scope validates each logical revision once for this proof without
+ * becoming a cache, epoch, semantic edge, or publication authority. Independent public checks and final commit create
+ * fresh scopes so source changes cannot cross operation boundaries unnoticed.
+ */
+export class ComputationReadValidationScope {
+  private readonly validationsByIdentity = new Map<string, ComputationReadValidation>();
+  private readonly activeIdentities = new Set<string>();
+
+  validate(read: ComputationRead): ComputationReadValidation {
+    const identity = computationReadValidationIdentity(read);
+    const existing = this.validationsByIdentity.get(identity);
+    if (existing != null) {
+      return existing;
+    }
+    if (this.activeIdentities.has(identity)) {
+      throw new Error(`Computation read currentness contains a cycle through ${read.domain}:${read.readKey}.`);
+    }
+    this.activeIdentities.add(identity);
+    try {
+      const current = read.validate(this);
+      const validation: ComputationReadValidation = Object.freeze({
+        isCurrent: current.isCurrent,
+        currentRevision: current.currentRevision,
+        changedFacets: Object.freeze([...current.changedFacets]),
+      });
+      this.validationsByIdentity.set(identity, validation);
+      return validation;
+    } finally {
+      this.activeIdentities.delete(identity);
+    }
+  }
+}
+
+/**
  * One positive or negative input read captured by a computation run.
  *
  * The lifecycle stores only inspection summaries. The read implementation retains the typed revision and owns its
@@ -155,7 +191,7 @@ export interface ComputationRead {
   readonly readKey: string;
   readonly domain: string;
   readonly observedRevision: string;
-  validate(): ComputationReadValidation;
+  validate(scope?: ComputationReadValidationScope): ComputationReadValidation;
   /** Re-capture the same observed value through its current authority, or refuse when that authority cannot rebase. */
   tryRebaseCurrent(): ComputationRead | null;
 }
@@ -422,15 +458,18 @@ class SealedComputationRead implements ComputationRead {
     readonly readKey: string,
     readonly domain: string,
     readonly observedRevision: string,
-    private readonly validateCurrent: () => ComputationReadValidation,
+    private readonly validateCurrent: (scope: ComputationReadValidationScope) => ComputationReadValidation,
     readonly retainedKernelInput: ComputationKernelInput | null,
     private readonly source: ComputationRead,
   ) {
     Object.freeze(this);
   }
 
-  validate(): ComputationReadValidation {
-    const current = this.validateCurrent();
+  validate(scope?: ComputationReadValidationScope): ComputationReadValidation {
+    if (scope == null) {
+      return new ComputationReadValidationScope().validate(this);
+    }
+    const current = this.validateCurrent(scope);
     const validation: ComputationReadValidation = {
       isCurrent: current.isCurrent,
       currentRevision: current.currentRevision,
@@ -469,7 +508,10 @@ class SealedComputationRead implements ComputationRead {
     if (typeof validate !== 'function') {
       throw new Error(`Computation read ${read.readKey} has no validation callback.`);
     }
-    const validateCurrent = validate as (this: ComputationRead) => ComputationReadValidation;
+    const validateCurrent = validate as (
+      this: ComputationRead,
+      scope?: ComputationReadValidationScope,
+    ) => ComputationReadValidation;
     const retainedKernelInput = (
       read instanceof ComputationRecordRead
       || read instanceof ComputationProductDetailRead
@@ -479,7 +521,7 @@ class SealedComputationRead implements ComputationRead {
       read.readKey,
       read.domain,
       read.observedRevision,
-      () => Reflect.apply(validateCurrent, read, []),
+      (scope) => Reflect.apply(validateCurrent, read, [scope]),
       retainedKernelInput,
       read,
     );
@@ -1467,6 +1509,13 @@ export class ComputationRun implements KernelPublicationContext {
     rebaseRead: ComputationReadRebaser | null,
     context: ComputationReadRebaseContext,
   ): SealedComputationRead | null {
+    const currentCandidateRead = this.readsByKey.get(read.readKey) ?? null;
+    if (
+      currentCandidateRead?.domain === read.domain
+      && currentCandidateRead.observedRevision === read.observedRevision
+    ) {
+      return SealedComputationRead.from(currentCandidateRead);
+    }
     if (this.carryReadRebaseActive) {
       throw new Error(`Computation run ${this.computationId}@${this.runSequence} is already rebasing a carry read.`);
     }
@@ -2342,9 +2391,10 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
           validate: (decisions) => {
             this.requireLatestRunForCommit(entry, run);
             requireCurrentnessGuards(currentnessGuards);
+            const validationScope = new ComputationReadValidationScope();
             const invalidReads: ComputationInvalidRead[] = [];
             for (const read of reads) {
-              const validation = read.validate();
+              const validation = validationScope.validate(read);
               this.requireLatestRunForCommit(entry, run);
               if (!validation.isCurrent) {
                 invalidReads.push(new ComputationInvalidRead(
@@ -2759,6 +2809,10 @@ function registerComputationRead(
     throw new Error(`${owner} observed conflicting revisions for ${read.readKey}.`);
   }
   readsByKey.set(read.readKey, read);
+}
+
+function computationReadValidationIdentity(read: ComputationRead): string {
+  return JSON.stringify([read.domain, read.readKey, read.observedRevision]);
 }
 
 function registerStagedEntryRevision(

@@ -1,6 +1,7 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
   ComputationCommitState,
+  ComputationReadValidationScope,
   type ComputationGenerationAuthority,
   type ComputationLifecycleRegistry,
   type ComputationLocus,
@@ -41,14 +42,19 @@ export class TypeSystemProjectAccess {
     readonly generation: TypeSystemProjectGeneration,
     readonly kind: TypeSystemProjectAcquisitionKind,
     readonly milliseconds: number,
+    private readonly validationScope: ComputationReadValidationScope,
   ) {}
 
   readProfile(): TypeSystemProjectAcquisitionProfile {
     return new TypeSystemProjectAcquisitionProfile(
       this.kind,
       this.milliseconds,
-      this.generation.readProject().profile.totalMilliseconds,
+      this.readProject().profile.totalMilliseconds,
     );
+  }
+
+  readProject(): TypeSystemProject {
+    return this.generation.readProject(this.validationScope);
   }
 }
 
@@ -72,9 +78,10 @@ class TypeSystemProjectAuthority {
   current(
     project: ProjectBootFrame,
     evaluation: StaticProjectEvaluationGeneration<null>,
+    validationScope: ComputationReadValidationScope,
   ): TypeSystemProjectGeneration | null {
     const generation = this.committed();
-    return generation?.tryRebaseFor(project, evaluation) === true ? generation : null;
+    return generation?.tryRebaseFor(project, evaluation, validationScope) === true ? generation : null;
   }
 
   /** Retain an invalid incumbent privately so TypeScript may use its Program during atomic replacement. */
@@ -120,13 +127,16 @@ class TypeSystemEvaluationSourceRead implements ComputationRead {
   constructor(
     projectKey: string,
     private evaluation: StaticProjectEvaluationGeneration<null>,
+    validationScope: ComputationReadValidationScope,
   ) {
     this.readKey = `type-system-evaluated-sources:${projectKey}`;
-    this.observedRevision = typeSystemEvaluatedSourceSnapshot(evaluation.readBaseline()).revision;
+    this.observedRevision = typeSystemEvaluatedSourceSnapshot(evaluation.readBaseline(validationScope)).revision;
   }
 
-  validate(): ComputationReadValidation {
-    const isCurrent = this.evaluation.isCurrent();
+  validate(scope?: ComputationReadValidationScope): ComputationReadValidation {
+    const isCurrent = scope == null
+      ? this.evaluation.isCurrent()
+      : scope.validate(this.evaluation).isCurrent;
     return {
       isCurrent,
       currentRevision: isCurrent ? this.observedRevision : `${this.observedRevision}:evaluation-stale`,
@@ -138,15 +148,15 @@ class TypeSystemEvaluationSourceRead implements ComputationRead {
     return this.validate().isCurrent ? this : null;
   }
 
-  canRebaseTo(evaluation: StaticProjectEvaluationGeneration<null>): boolean {
-    return evaluation.isCurrent()
-      && typeSystemEvaluatedSourceSnapshot(evaluation.readBaseline()).revision === this.observedRevision;
+  canRebaseTo(
+    evaluation: StaticProjectEvaluationGeneration<null>,
+    validationScope: ComputationReadValidationScope,
+  ): boolean {
+    return validationScope.validate(evaluation).isCurrent
+      && typeSystemEvaluatedSourceSnapshot(evaluation.readBaseline(validationScope)).revision === this.observedRevision;
   }
 
   rebaseTo(evaluation: StaticProjectEvaluationGeneration<null>): void {
-    if (!this.canRebaseTo(evaluation)) {
-      throw new Error(`Type-system evaluated-source read ${this.readKey} cannot rebase to a changed source set.`);
-    }
     this.evaluation = evaluation;
   }
 }
@@ -168,18 +178,18 @@ export class TypeSystemProjectGeneration implements ComputationRead {
     this.observedRevision = `${project.observedRevision}:${evaluationSources.observedRevision}:${computationAuthority.key}`;
   }
 
-  isCurrent(): boolean {
-    return this.validate().isCurrent;
+  isCurrent(scope?: ComputationReadValidationScope): boolean {
+    return (scope ?? new ComputationReadValidationScope()).validate(this).isCurrent;
   }
 
-  requireCurrent(): void {
-    if (!this.isCurrent()) {
+  requireCurrent(scope?: ComputationReadValidationScope): void {
+    if (!this.isCurrent(scope)) {
       throw new Error(`Type-system project ${this.readKey}@${this.observedRevision} is no longer current.`);
     }
   }
 
-  readProject(): TypeSystemProject {
-    this.requireCurrent();
+  readProject(scope?: ComputationReadValidationScope): TypeSystemProject {
+    this.requireCurrent(scope);
     return this.typeSystem;
   }
 
@@ -189,9 +199,20 @@ export class TypeSystemProjectGeneration implements ComputationRead {
     return this.typeSystem;
   }
 
-  validate(): ComputationReadValidation {
+  validate(scope?: ComputationReadValidationScope): ComputationReadValidation {
+    if (scope == null) {
+      return new ComputationReadValidationScope().validate(this);
+    }
     const generationAdmitted = this.owner.isAdmitted(this);
-    const invalidInputs = this.inputClosureValidations().filter((validation) => !validation.isCurrent);
+    const invalidInputs = generationAdmitted
+      ? [
+          ...this.project.readRegisteredInputs(),
+          this.evaluationSources,
+          ...this.typeSystem.readRegisteredInputs(),
+        ]
+          .map((read) => scope.validate(read))
+          .filter((validation) => !validation.isCurrent)
+      : [];
     const isCurrent = generationAdmitted && invalidInputs.length === 0;
     return {
       isCurrent,
@@ -215,12 +236,14 @@ export class TypeSystemProjectGeneration implements ComputationRead {
   tryRebaseFor(
     project: ProjectBootFrame,
     evaluation: StaticProjectEvaluationGeneration<null>,
+    validationScope: ComputationReadValidationScope,
   ): boolean {
     if (
       project.projectKey !== this.project.projectKey
       || project.observedRevision !== this.project.observedRevision
-      || !this.ownInputsAreCurrent()
-      || !this.evaluationSources.canRebaseTo(evaluation)
+      || !this.owner.isAdmitted(this)
+      || !this.project.readRegisteredInputs().every((read) => validationScope.validate(read).isCurrent)
+      || !this.evaluationSources.canRebaseTo(evaluation, validationScope)
     ) {
       return false;
     }
@@ -228,21 +251,7 @@ export class TypeSystemProjectGeneration implements ComputationRead {
       return false;
     }
     this.evaluationSources.rebaseTo(evaluation);
-    return this.isCurrent();
-  }
-
-  private inputClosureValidations(): readonly ComputationReadValidation[] {
-    return [
-      ...this.project.readRegisteredInputs().map((read) => read.validate()),
-      this.evaluationSources.validate(),
-      ...this.typeSystem.readRegisteredInputs().map((read) => read.validate()),
-    ];
-  }
-
-  private ownInputsAreCurrent(): boolean {
-    return this.owner.isAdmitted(this)
-      && this.project.readRegisteredInputs().every((read) => read.validate().isCurrent)
-      && this.typeSystem.readRegisteredInputs().every((read) => read.validate().isCurrent);
+    return true;
   }
 }
 
@@ -280,17 +289,19 @@ export class TypeSystemProjectComputationService implements KernelStoreSidecarIn
   acquire(
     project: ProjectBootFrame,
     evaluation: StaticProjectEvaluationGeneration<null>,
+    validationScope: ComputationReadValidationScope = new ComputationReadValidationScope(),
   ): TypeSystemProjectAccess {
     project.requireCurrent();
-    evaluation.requireCurrent();
+    evaluation.requireCurrent(validationScope);
     const started = performance.now();
     const authority = this.authorityFor(project.projectKey);
-    const current = authority.current(project, evaluation);
+    const current = authority.current(project, evaluation, validationScope);
     if (current != null) {
       return new TypeSystemProjectAccess(
         current,
         TypeSystemProjectAcquisitionKind.Reused,
         performance.now() - started,
+        validationScope,
       );
     }
 
@@ -299,14 +310,14 @@ export class TypeSystemProjectComputationService implements KernelStoreSidecarIn
     let finished = false;
     try {
       run.guardCurrent(project.inputGeneration.currentnessGuardKey, project.inputGeneration);
-      const evaluationSources = new TypeSystemEvaluationSourceRead(project.projectKey, evaluation);
+      const evaluationSources = new TypeSystemEvaluationSourceRead(project.projectKey, evaluation, validationScope);
       run.observe(evaluationSources);
       for (const read of project.readRegisteredInputs()) {
         run.observe(read);
       }
       const typeSystem = new TypeSystemProjectBuilder(this.programSources).build(
         project,
-        evaluation.readBaseline(),
+        evaluation.readBaseline(validationScope),
         { previousProject: incumbent },
       );
       for (const read of typeSystem.readRegisteredInputs()) {
@@ -331,6 +342,7 @@ export class TypeSystemProjectComputationService implements KernelStoreSidecarIn
         generation,
         TypeSystemProjectAcquisitionKind.Computed,
         performance.now() - started,
+        validationScope,
       );
     } catch (error) {
       if (!finished) {

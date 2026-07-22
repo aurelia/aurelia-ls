@@ -1,5 +1,6 @@
 import {
   ComputationCommitState,
+  ComputationReadValidationScope,
   type ComputationCommitResult,
   type ComputationGenerationAuthority,
   type ComputationId,
@@ -14,21 +15,10 @@ import type {
   KernelStoreSidecarIndex,
 } from '../kernel/store.js';
 import type { ProjectBootFrame } from '../boot/frames.js';
-import {
-  type StaticProjectEvaluationAccess,
-  type StaticProjectEvaluationComputationService,
-  type StaticProjectEvaluationGeneration,
-} from '../evaluation/project-evaluation.js';
+import type { StaticProjectEvaluationComputationService } from '../evaluation/project-evaluation.js';
 import type { SemanticRuntimeSupport } from '../framework/framework-support-authority.js';
-import {
-  type TypeSystemProjectAccess,
-  type TypeSystemProjectComputationService,
-  type TypeSystemProjectGeneration,
-} from '../type-system/project-computation.js';
-import {
-  resourceConventionToolingEvaluationProfile,
-  type ResourceConventionToolingEvaluationContext,
-} from '../resources/resource-convention-transform-admission.js';
+import type { TypeSystemProjectComputationService } from '../type-system/project-computation.js';
+import { resourceConventionToolingEvaluationProfile } from '../resources/resource-convention-transform-admission.js';
 import {
   AureliaAppWorldProjectPass,
   type AureliaAppWorldProjectEmission,
@@ -55,9 +45,6 @@ export class AureliaAppWorldProjectGeneration {
   constructor(
     private readonly authority: ComputationGenerationAuthority,
     private readonly currentEmission: AureliaAppWorldProjectEmission,
-    private readonly appEvaluation: StaticProjectEvaluationGeneration<null>,
-    private readonly conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
-    private readonly typeSystemProject: TypeSystemProjectGeneration,
   ) {
     this.key = authority.key;
   }
@@ -71,11 +58,12 @@ export class AureliaAppWorldProjectGeneration {
   }
 
   isCurrent(): boolean {
+    const validationScope = new ComputationReadValidationScope();
     return this.isAdmitted()
       && this.currentEmission.project.inputGeneration.isCurrent()
-      && this.appEvaluation.isCurrent()
-      && this.conventionToolingEvaluation.isCurrent()
-      && this.typeSystemProject.isCurrent();
+      && validationScope.validate(this.currentEmission.preTemplate.evaluationGeneration).isCurrent
+      && validationScope.validate(this.currentEmission.preTemplate.conventionToolingEvaluationGeneration).isCurrent
+      && validationScope.validate(this.currentEmission.preTemplate.typeSystemGeneration).isCurrent;
   }
 
   /** Whether the atomic app publication remains the private committed incumbent. */
@@ -84,11 +72,9 @@ export class AureliaAppWorldProjectGeneration {
   }
 
   requireCurrent(): void {
-    this.authority.requireCurrent();
-    this.currentEmission.project.inputGeneration.requireCurrent();
-    this.appEvaluation.requireCurrent();
-    this.conventionToolingEvaluation.requireCurrent();
-    this.typeSystemProject.requireCurrent();
+    if (!this.isCurrent()) {
+      throw new Error(`Aurelia app generation ${this.key} is no longer current.`);
+    }
   }
 
   get emission(): AureliaAppWorldProjectEmission {
@@ -96,7 +82,7 @@ export class AureliaAppWorldProjectGeneration {
     return this.currentEmission;
   }
 
-  /** Private replacement input; unlike the public emission it may be read while source inputs are temporarily stale. */
+  /** Internal committed handoff; unlike the public emission it may be read while source inputs are temporarily stale. */
   readCommittedEmission(): AureliaAppWorldProjectEmission {
     this.authority.requireCurrent();
     return this.currentEmission;
@@ -129,9 +115,6 @@ export class AureliaAppWorldProjectAuthority {
     computationId: ComputationId,
     runSequence: number,
     candidate: AureliaAppWorldProjectEmission,
-    appEvaluation: StaticProjectEvaluationGeneration<null>,
-    conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
-    typeSystemProject: TypeSystemProjectGeneration,
   ): AureliaAppWorldProjectGeneration {
     const state = this.lifecycle.readState(computationId);
     if (state?.committedRunSequence !== runSequence) {
@@ -156,9 +139,6 @@ export class AureliaAppWorldProjectAuthority {
     const generation = new AureliaAppWorldProjectGeneration(
       generationAuthority,
       candidate.forCommittedGeneration(generationAuthority),
-      appEvaluation,
-      conventionToolingEvaluation,
-      typeSystemProject,
     );
     this.generation = generation;
     return generation;
@@ -171,9 +151,6 @@ export class AureliaAppWorldProjectComputationAttempt {
     private readonly run: ComputationRun,
     private readonly authority: AureliaAppWorldProjectAuthority,
     readonly locus: AureliaAppAnalysisLocus,
-    readonly appEvaluationAccess: StaticProjectEvaluationAccess<null>,
-    readonly conventionToolingEvaluationAccess: StaticProjectEvaluationAccess<ResourceConventionToolingEvaluationContext>,
-    readonly typeSystemProjectAccess: TypeSystemProjectAccess,
     readonly candidateEmission: AureliaAppWorldProjectEmission,
   ) {}
 
@@ -192,9 +169,6 @@ export class AureliaAppWorldProjectComputationAttempt {
           this.run.computationId,
           this.run.runSequence,
           this.candidateEmission,
-          this.appEvaluationAccess.generation,
-          this.conventionToolingEvaluationAccess.generation,
-          this.typeSystemProjectAccess.generation,
         )
       : null;
     return new AureliaAppWorldProjectComputationResult(
@@ -202,7 +176,7 @@ export class AureliaAppWorldProjectComputationAttempt {
       this.candidateEmission,
       commit,
       committedGeneration,
-      this.authority.current(),
+      committedGeneration ?? this.authority.current(),
     );
   }
 }
@@ -270,12 +244,22 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
     options: AureliaAppWorldProjectOptions = {},
   ): AureliaAppWorldProjectComputationAttempt {
     project.requireCurrent();
-    const appEvaluationAccess = this.projectEvaluations.acquire(project, aureliaAppProjectEvaluationProfile);
+    const validationScope = new ComputationReadValidationScope();
+    const appEvaluationAccess = this.projectEvaluations.acquire(
+      project,
+      aureliaAppProjectEvaluationProfile,
+      validationScope,
+    );
     const conventionToolingEvaluationAccess = this.projectEvaluations.acquire(
       project,
       resourceConventionToolingEvaluationProfile,
+      validationScope,
     );
-    const typeSystemProjectAccess = this.typeSystemProjects.acquire(project, appEvaluationAccess.generation);
+    const typeSystemProjectAccess = this.typeSystemProjects.acquire(
+      project,
+      appEvaluationAccess.generation,
+      validationScope,
+    );
     const appEvaluationProfile = appEvaluationAccess.readProfile();
     const conventionToolingEvaluationProfile = conventionToolingEvaluationAccess.readProfile();
     const locus = new AureliaAppAnalysisLocus(project.projectKey);
@@ -289,9 +273,10 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
         run,
         project,
         appEvaluationAccess.generation,
-        appEvaluationAccess.generation.forkSession(),
+        appEvaluationAccess.forkSession(),
         typeSystemProjectAccess.generation,
-        conventionToolingEvaluationAccess.generation,
+        typeSystemProjectAccess.readProject(),
+        conventionToolingEvaluationAccess,
         [
           appEvaluationProfile,
           conventionToolingEvaluationProfile,
@@ -309,9 +294,6 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
         run,
         authority,
         locus,
-        appEvaluationAccess,
-        conventionToolingEvaluationAccess,
-        typeSystemProjectAccess,
         candidate,
       );
     } catch (error) {

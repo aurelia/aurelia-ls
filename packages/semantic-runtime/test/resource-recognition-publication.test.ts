@@ -5,7 +5,10 @@ import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import { aureliaAppProjectEvaluationProfile } from '../src/configuration/aurelia-project-evaluation.js';
-import { ComputationCommitState } from '../src/kernel/computation-lifecycle.js';
+import {
+  ComputationCommitState,
+  ComputationReadValidationScope,
+} from '../src/kernel/computation-lifecycle.js';
 import { KernelPublicationDecisionKind } from '../src/kernel/publication.js';
 import { KernelStore } from '../src/kernel/store.js';
 import {
@@ -32,11 +35,17 @@ describe('resource recognition publication', () => {
       throw new Error('Expected the fixture to boot one project.');
     }
     const store = runtime.workspace.store;
-    const evaluation = runtime.projectEvaluations.acquire(project, aureliaAppProjectEvaluationProfile).generation.readBaseline();
+    const validationScope = new ComputationReadValidationScope();
+    const evaluation = runtime.projectEvaluations.acquire(
+      project,
+      aureliaAppProjectEvaluationProfile,
+      validationScope,
+    ).readBaseline();
     const conventionToolingEvaluation = runtime.projectEvaluations.acquire(
       project,
       resourceConventionToolingEvaluationProfile,
-    ).generation;
+      validationScope,
+    );
     const typeSystem = new TypeSystemProjectBuilder(runtime.frameworkSupport).build(project, evaluation);
     const locus = {
       kind: 'resource-recognition-project-test',

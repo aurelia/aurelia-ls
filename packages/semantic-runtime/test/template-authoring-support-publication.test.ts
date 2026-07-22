@@ -133,7 +133,7 @@ describe('template authoring support publication', () => {
     }
     expect(canonicalResource.definition.target?.targetType).toBeNull();
 
-    const evaluation = runtime.projectEvaluations.acquire(project, aureliaAppProjectEvaluationProfile).generation.readBaseline();
+    const evaluation = runtime.projectEvaluations.acquire(project, aureliaAppProjectEvaluationProfile).readBaseline();
     const typeSystems = new TypeSystemProjectBuilder(runtime.frameworkSupport);
     const firstTypeSystem = typeSystems.build(project, evaluation);
     const secondTypeSystem = typeSystems.build(project, evaluation);

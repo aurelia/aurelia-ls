@@ -38,9 +38,9 @@ import {
 import { EvaluationValueEvidence } from '../evaluation/value-pressure.js';
 import {
   isEvaluatedProjectSource,
+  type StaticProjectEvaluationAccess,
   StaticProjectEvaluationComputationPreparation,
   StaticProjectEvaluationComputationProfile,
-  type StaticProjectEvaluationGeneration,
   StaticProjectEvaluationOptions,
 } from '../evaluation/project-evaluation.js';
 import {
@@ -398,15 +398,14 @@ export class ResourceConventionTransformAdmissionMaterializer {
   materializeAndEmit(
     store: KernelStore,
     project: ProjectBootFrame,
-    evaluationGeneration: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
+    evaluationAccess: StaticProjectEvaluationAccess<ResourceConventionToolingEvaluationContext>,
     publication: KernelPublicationContext,
   ): ResourceConventionTransformAdmissionIndex {
-    evaluationGeneration.requireCurrent();
-    if (!evaluationGeneration.belongsToProject(project)) {
+    if (!evaluationAccess.generation.belongsToProject(project)) {
       throw new Error(`Convention-tooling evaluation belongs to another project semantic frame.`);
     }
-    const evaluation = evaluationGeneration.readBaseline();
-    const toolingHost = evaluationGeneration.readBaselineContext();
+    const evaluation = evaluationAccess.readBaseline();
+    const toolingHost = evaluationAccess.readBaselineContext();
     const emissions: ResourceConventionTransformEmission[] = [];
     const openRecords: KernelStoreRecord[] = [];
     for (const source of evaluation.sources) {
