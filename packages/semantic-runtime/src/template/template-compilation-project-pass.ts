@@ -34,7 +34,7 @@ import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { KernelStore, KernelTelemetryReadView } from '../kernel/store.js';
 import { authoredSourceHostPathCandidates } from '../kernel/authored-source-text.js';
 import { sourceFileAddressForAddress } from '../kernel/source-address.js';
-import { sourceTextContentRevision } from '../kernel/source-text-snapshot.js';
+import { sourceTextContentRevision } from '../kernel/source-text-revision.js';
 import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
 import type { GenerationAuthority } from '../kernel/generation-authority.js';
 import type {

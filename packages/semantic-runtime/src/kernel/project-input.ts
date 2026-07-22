@@ -20,7 +20,7 @@ import {
   type GenerationAuthority,
   type GenerationCurrentnessWitness,
 } from './generation-authority.js';
-import { sourceTextContentRevision } from './source-text-snapshot.js';
+import { sourceTextContentRevision } from './source-text-revision.js';
 
 /** Optional non-filesystem source values layered over the host filesystem, such as open editor documents. */
 export interface SemanticRuntimeSourceTextOverlay {
@@ -152,31 +152,19 @@ export class SemanticRuntimeProjectInputRead implements ComputationRead {
   }
 
   validate(): ComputationReadValidation {
-    const currentRevision = projectInputValueRevision(this.readCurrent());
+    const currentValue = freezeProjectInputReadValue(this.readCurrent());
+    const isCurrent = sameProjectInputReadValue(this.value, currentValue);
+    const currentRevision = isCurrent ? this.observedRevision : projectInputValueRevision(currentValue);
     return {
-      isCurrent: currentRevision === this.observedRevision,
+      isCurrent,
       currentRevision,
-      changedFacets: currentRevision === this.observedRevision ? [] : [this.kind],
+      changedFacets: isCurrent ? [] : [this.kind],
     };
   }
 
   tryRebaseCurrent(): SemanticRuntimeProjectInputRead | null {
-    const current = this.captureCurrent();
-    if (current.observedRevision !== this.observedRevision) {
-      return null;
-    }
-    return current;
-  }
-
-  /** Capture this exact host operation through the same authority for a newer project-input generation. */
-  captureCurrent(): SemanticRuntimeProjectInputRead {
-    return new SemanticRuntimeProjectInputRead(
-      this.authority,
-      this.kind,
-      this.readKey,
-      this.readCurrent,
-      freezeProjectInputReadValue(this.readCurrent()),
-    );
+    const currentValue = freezeProjectInputReadValue(this.readCurrent());
+    return sameProjectInputReadValue(this.value, currentValue) ? this : null;
   }
 
   /** Owning authority, exposed only for generation-coherence assertions. */
@@ -401,7 +389,11 @@ class CapturedSemanticRuntimeProjectInputHost implements SemanticRuntimeProjectI
     }
     let current = this.readsByKey.get(read.readKey);
     if (current == null) {
-      current = read.captureCurrent();
+      const rebased = read.tryRebaseCurrent();
+      if (rebased == null) {
+        return null;
+      }
+      current = rebased;
       this.valuesByReadKey.set(read.readKey, current.value);
       this.readsByKey.set(read.readKey, current);
     }
@@ -551,16 +543,6 @@ export class SemanticRuntimeProjectInputGeneration implements GenerationAuthorit
       scope.observe(read);
     }
   }
-
-  /** Read the live effective file value when validating an exact source snapshot. */
-  readCurrentFile(fileName: string): string | undefined {
-    return this.authority.readLiveFile(resolveProjectInputPath(fileName));
-  }
-
-  /** Read live effective existence when validating an exact source snapshot. */
-  currentFileExists(fileName: string): boolean {
-    return this.authority.liveFileExists(resolveProjectInputPath(fileName));
-  }
 }
 
 /** Runtime-owned authority for capturing coherent project source/config generations. */
@@ -660,7 +642,23 @@ function projectInputPathKey(fileName: string): string {
 }
 
 function freezeProjectInputReadValue(value: ProjectInputReadValue): ProjectInputReadValue {
-  return Array.isArray(value) ? Object.freeze([...value]) : value;
+  return typeof value === 'object' && value != null ? Object.freeze([...value]) : value;
+}
+
+function sameProjectInputReadValue(left: ProjectInputReadValue, right: ProjectInputReadValue): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (
+    typeof left !== 'object'
+    || left == null
+    || typeof right !== 'object'
+    || right == null
+    || left.length !== right.length
+  ) {
+    return false;
+  }
+  return left.every((value, index) => value === right[index]);
 }
 
 function projectInputValueRevision(value: ProjectInputReadValue): string {

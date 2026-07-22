@@ -64,15 +64,6 @@ import {
   type KernelDetailComparator,
 } from "../src/kernel/publication.js";
 import { KernelPublicationSurface } from "../src/kernel/publication-surface.js";
-import {
-  SourceTextSnapshotAuthority,
-  SourceTextSnapshotState,
-} from "../src/kernel/source-text-snapshot.js";
-import {
-  NodeSemanticRuntimeProjectInputHost,
-  SemanticRuntimeProjectInputAuthority,
-  type SemanticRuntimeSourceTextOverlay,
-} from "../src/kernel/project-input.js";
 import { KernelStore, KernelStoreBatch } from "../src/kernel/store.js";
 import {
   kernelHotDetailReference,
@@ -141,34 +132,6 @@ class MutableGenerationAuthority {
       throw new Error("Generation authority is no longer current.");
     }
   }
-}
-
-class MutableSourceHost {
-  private readonly sourceTextByFileName = new Map<string, string>();
-
-  write(fileName: string, sourceText: string): void {
-    this.sourceTextByFileName.set(path.resolve(fileName), sourceText);
-  }
-
-  remove(fileName: string): void {
-    this.sourceTextByFileName.delete(path.resolve(fileName));
-  }
-
-  readFile(fileName: string): string | undefined {
-    return this.sourceTextByFileName.get(path.resolve(fileName));
-  }
-
-  fileExists(fileName: string): boolean {
-    return this.sourceTextByFileName.has(path.resolve(fileName));
-  }
-}
-
-function sourceTextSnapshotAuthority(overlay: SemanticRuntimeSourceTextOverlay): SourceTextSnapshotAuthority {
-  const inputs = new SemanticRuntimeProjectInputAuthority(new NodeSemanticRuntimeProjectInputHost(overlay));
-  return new SourceTextSnapshotAuthority(inputs.capture({
-    projectKey: "source-text-snapshot-test",
-    rootDir: "C:/virtual",
-  }));
 }
 
 function locus(owner: string, cohort = "app-root:default"): ComputationLocus {
@@ -7804,64 +7767,6 @@ describe("computation lifecycle", () => {
 
     expect(pending.commit().state).toBe(ComputationCommitState.RejectedSuperseded);
     expect(store.read(outputHandle)).toBeNull();
-  });
-});
-
-describe("source text snapshots", () => {
-  test("keeps one admitted source value immutable while reporting a later content revision", () => {
-    const fileName = "C:/virtual/src/app.html";
-    const provider = new MutableSourceHost();
-    const authority = sourceTextSnapshotAuthority(provider);
-    provider.write(fileName, "<p>first</p>");
-
-    const admitted = authority.capture(fileName);
-    provider.write(fileName, "<p>second</p>");
-
-    expect(admitted.state).toBe(SourceTextSnapshotState.Present);
-    expect(admitted.requireText()).toBe("<p>first</p>");
-    expect(admitted.validate()).toEqual(expect.objectContaining({
-      isCurrent: false,
-      changedFacets: ["content"],
-    }));
-    expect(authority.capture(fileName).requireText()).toBe("<p>second</p>");
-  });
-
-  test("distinguishes an authoritative absence from a later present source", () => {
-    const fileName = "C:/virtual/src/late.html";
-    const provider = new MutableSourceHost();
-    const authority = sourceTextSnapshotAuthority(provider);
-
-    const absent = authority.capture(fileName);
-    expect(absent.state).toBe(SourceTextSnapshotState.Absent);
-
-    provider.write(fileName, "<template></template>");
-    expect(absent.validate()).toEqual(expect.objectContaining({
-      isCurrent: false,
-      changedFacets: ["existence", "content"],
-    }));
-  });
-
-  test("does not fall through to disk after the source provider proves absence", () => {
-    const provider = new MutableSourceHost();
-    const authority = sourceTextSnapshotAuthority(provider);
-    const existingFileName = fileURLToPath(import.meta.url);
-
-    const snapshot = authority.capture(existingFileName);
-
-    expect(snapshot.state).toBe(SourceTextSnapshotState.Absent);
-    expect(snapshot.text).toBeNull();
-  });
-
-  test("keeps a provider-claimed file without readable text distinct from absence", () => {
-    const authority = sourceTextSnapshotAuthority({
-      readFile: () => undefined,
-      fileExists: () => true,
-    });
-
-    const snapshot = authority.capture("C:/virtual/src/unavailable.html");
-
-    expect(snapshot.state).toBe(SourceTextSnapshotState.Unavailable);
-    expect(() => snapshot.requireText()).toThrow(/is unavailable/);
   });
 });
 

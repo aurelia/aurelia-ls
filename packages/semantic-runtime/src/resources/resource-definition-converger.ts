@@ -2,7 +2,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import type { SourceFileAdmission } from '../boot/frames.js';
 import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
-import { sourceTextContentRevision } from '../kernel/source-text-snapshot.js';
+import { sourceTextContentRevision } from '../kernel/source-text-revision.js';
 import {
   SourceSpanRole,
 } from '../kernel/address.js';

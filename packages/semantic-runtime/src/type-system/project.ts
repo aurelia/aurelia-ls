@@ -22,7 +22,7 @@ import type {
   SemanticRuntimeProjectInputRead,
   SemanticRuntimeProjectInputReadScope,
 } from '../kernel/project-input.js';
-import { sourceTextContentRevision } from '../kernel/source-text-snapshot.js';
+import { sourceTextContentRevision } from '../kernel/source-text-revision.js';
 import { typeSystemProjectOptions } from './project-options.js';
 import {
   diffCompilerHostSourceFileCacheStats,

@@ -341,10 +341,10 @@ inputs and positive committed rows retained by active aggregate reads, in additi
 references. It may reclaim unrelated young rows, but never the live input closure of a retained computation.
 
 The first production partition is the complete recursive authored-template compiler front door across all app and
-authoring cohorts for one stable owner. It owns source snapshots, compiler observations, and compilation/parsing/
-lowering products. Project-wide runtime and TypeChecker analysis owns a separate explicit `template-runtime` child
-because its evaluator session, schedule, expression world, and bound-controller values currently cross family
-boundaries. The downstream `post-template` child records a whole-result dependency on that runtime child before
+authoring cohorts for one stable owner. It owns exact authored-source input reads, compiler observations, and
+compilation/parsing/lowering products. Project-wide runtime and TypeChecker analysis owns a separate explicit
+`template-runtime` child because its evaluator session, schedule, expression world, and bound-controller values
+currently cross family boundaries. The downstream `post-template` child records a whole-result dependency on that runtime child before
 observation, state, capability, and router fan-in. This edge prevents downstream carry whenever runtime analysis had to
 execute even when every staged kernel output retained an equal value. Do not promote runtime products to family
 ownership until evaluator-realm and cross-family result edges are explicit.
@@ -396,15 +396,18 @@ escalated to `Replace`. An unsupported detail comparison conservatively replaces
 `project-input.ts` owns coherent, revocable source/configuration generations and their captured host reads. The event
 generation is a currentness guard; it is not itself a computation read. A boot frame's semantic revision therefore
 describes structural project admissions and compiler options rather than the event sequence that happened to capture
-them. `source-text-snapshot.ts` validates exact per-file source values within one such generation when a computation
-needs a source-specific witness. These technical lifecycle products do not replace semantic claims, materialization
-records, evidence, or provenance.
+them. Exact per-file source values are ordinary file-content and file-existence reads in that generation-owned table;
+do not wrap them in a second source-snapshot authority. `source-text-revision.ts` hashes text only when a semantic
+product must retain a compact content identity beyond an exact project-input read. These technical lifecycle products
+do not replace semantic claims, materialization records, evidence, or provenance.
 Each project-input generation also owns the memoized immutable value table used to rebase independently admitted
 consumer read scopes. Equivalent consumers must re-capture retained reads through that target generation rather than
 constructing private retained-value hosts or rereading the live host independently. One operation-local
 `ComputationReadValidationScope` may share exact validation while those scopes rebase, but candidate acquisition and
 final atomic commit remain separate proofs. The default host is still pull-validated; an event generation does not by
-itself prove that unannounced file-system values stayed unchanged.
+itself prove that unannounced file-system values stayed unchanged. Exact pull validation compares the newly read value
+with the retained immutable value and computes a new content revision only when they differ; hashing every unchanged
+file would discard the stronger witness already owned by the read.
 
 The store indexes normalized kernel records first. A `MaterializedProduct` is an envelope that names kind, identity,
 address, and provenance. Claims are indexed by subject/object handles in the store instead of being duplicated on the

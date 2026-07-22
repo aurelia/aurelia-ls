@@ -228,6 +228,27 @@ describe('SemanticRuntimeProjectInputAuthority', () => {
     expect(targetOwnerScope.readRegisteredInputs()).toEqual([sharedRead]);
   });
 
+  test('rebases exact directory and matched-file lists and rejects later membership changes', () => {
+    const rootDir = normalize('C:/workspace/app');
+    const sourceDir = normalize(`${rootDir}/src`);
+    const host = new MutableProjectInputHost();
+    host.write(`${sourceDir}/app.ts`, 'export class App {}');
+    host.write(`${sourceDir}/other.ts`, 'export const other = true;');
+    const authority = new SemanticRuntimeProjectInputAuthority(host);
+    const first = authority.capture({ projectKey: 'app', rootDir });
+    const scope = first.createReadScope('source-membership');
+
+    expect(scope.host.readDirectory(sourceDir)).toEqual(['app.ts', 'other.ts']);
+    expect(scope.host.matchFiles(rootDir)).toHaveLength(2);
+
+    authority.advance();
+    const second = authority.capture({ projectKey: 'app', rootDir });
+    expect(scope.tryRebaseCurrent(second)).toBe(true);
+
+    host.write(`${sourceDir}/later.ts`, 'export const later = true;');
+    expect(scope.tryRebaseCurrent(second)).toBe(false);
+  });
+
   test('refuses read-scope rebase when a prior positive or negative read changed', () => {
     const rootDir = normalize('C:/workspace/app');
     const sourceFile = normalize(`${rootDir}/src/app.ts`);

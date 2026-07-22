@@ -55,9 +55,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   compilation-unit materialization, HTML parsing, attribute syntax parsing, attribute classification, compiler-owned
   value-site selection, binding-command lowering, compiled-template handoff materialization, and runtime analysis.
   The production app computation enters one logical child per stable authored owner and compiles every app/authoring
-  cohort plus recursive local template under that family. Source snapshots and exact compiler reads join the same child
-  manifest as its compiler-front-door outputs. Compiler-scope closure reads exact materialization membership for each
-  participating container/resource owner; unrelated owners no longer create an open whole-kernel dependency, while
+  cohort plus recursive local template under that family. Exact authored-source input reads and compiler reads join the
+  same child manifest as its compiler-front-door outputs. Compiler-scope closure reads exact materialization membership
+  for each participating container/resource owner; unrelated owners no longer create an open whole-kernel dependency, while
   candidate local definitions become ordinary producer-to-consumer child edges. The production activation layer is a
   deterministic star: pre-template executes first, each independent owner family then either carries its exact prior
   closure or compiles afresh in plan order, one project-wide template-runtime child analyzes the complete front door,
@@ -97,8 +97,8 @@ classification, expression parsing, and instruction lowering converge on the sam
   prepared emission remains run-bound and invisible; commit installs one generation-guarded, store-backed expression
   world shared by every retained resource. Replacement or disposal revokes retained checker reads and lazy projections
   together with the kernel closure. Resource convergence records the complete authored-file revision that produced each inline
-  or external template, and preparation requires the current source snapshot to match that producer revision before it
-  can certify the candidate. Commit then revalidates the same immutable snapshots, closing both pre-prepare and
+  or external template, and preparation requires the current authored-source input to match that producer revision
+  before it can certify the candidate. Commit then revalidates the same immutable input values, closing both pre-prepare and
   prepare-to-commit source races.
   App component compiler-world materialization and standalone authoring compiler-world materialization are separate
   profile phases (`component-compiler-world` and `authoring-compiler-world`) so broad app-root cost and LSP/resource

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { SemanticRuntimeProjectInputHost } from './project-input.js';
-import { sourceTextContentRevision } from './source-text-snapshot.js';
+import { sourceTextContentRevision } from './source-text-revision.js';
 
 /** Authored file text plus line metadata for source spans that must refer back to user-written files. */
 export interface AuthoredSourceText {
