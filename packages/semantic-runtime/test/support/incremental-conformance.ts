@@ -270,7 +270,7 @@ function latestTransition(runtime: SemanticRuntime, app: SemanticApp): Computati
   if (generation == null) {
     throw new Error(`Expected a current app generation for ${app.project.projectKey}.`);
   }
-  const transition = runtime.computationLifecycle.readTransitions(generation.computationId).at(-1) ?? null;
+  const transition = runtime.computationLifecycle.readLatestTransition(generation.computationId);
   if (transition == null) {
     throw new Error(`Expected a computation transition for ${generation.computationId}.`);
   }

@@ -735,49 +735,6 @@ export class ComputationTransition {
   }
 }
 
-export const enum ComputationRetirementCause {
-  /** Domain authority explicitly retired one exact committed generation. */
-  Explicit = 'explicit',
-  /** Kernel lifetime disposal reclaimed the generation's complete publication. */
-  LifetimeDisposal = 'lifetime-disposal',
-}
-
-/** Stable polling position immediately before the next retirement event ordinal. */
-export class ComputationRetirementEventMarker {
-  constructor(readonly nextEventOrdinal: number) {
-    Object.freeze(this);
-  }
-}
-
-/** One exact output withdrawn while retiring a committed computation generation. */
-export class ComputationRetiredOutput {
-  constructor(
-    readonly output: ComputationOutput,
-    readonly decision: KernelPublicationDecision,
-    readonly childId: ComputationChildId | null,
-    readonly childRole: ComputationChildRole | null,
-    readonly childScc: ComputationChildScc | null,
-  ) {
-    Object.freeze(this);
-  }
-}
-
-/** Causal retirement event retained after the corresponding producer/read indexes have been cleared. */
-export class ComputationRetirementEvent {
-  readonly withdrawnOutputs: readonly ComputationRetiredOutput[];
-
-  constructor(
-    readonly ordinal: number,
-    readonly cause: ComputationRetirementCause,
-    readonly computationId: ComputationId,
-    readonly runSequence: number,
-    withdrawnOutputs: readonly ComputationRetiredOutput[],
-  ) {
-    this.withdrawnOutputs = Object.freeze([...withdrawnOutputs]);
-    Object.freeze(this);
-  }
-}
-
 /** Result returned by every lifecycle commit attempt. */
 export class ComputationCommitResult {
   constructor(
@@ -983,15 +940,18 @@ export class ComputationChildPreparation {
   readonly states: readonly ComputationChildState[];
   readonly transitions: readonly ComputationChildTransition[];
   readonly invalidReads: readonly ComputationInvalidRead[];
+  readonly outputs: readonly ComputationOutput[];
 
   constructor(
     states: readonly ComputationChildState[],
     transitions: readonly ComputationChildTransition[],
     invalidReads: readonly ComputationInvalidRead[],
+    outputs: readonly ComputationOutput[],
   ) {
     this.states = Object.freeze([...states]);
     this.transitions = Object.freeze([...transitions]);
     this.invalidReads = Object.freeze([...invalidReads]);
+    this.outputs = Object.freeze([...outputs]);
     Object.freeze(this);
   }
 }
@@ -1066,7 +1026,7 @@ interface MutableComputationEntry {
   latestFinishedRunSequence: number;
   state: ComputationState | null;
   readonly admittedGenerationDomains: Set<string>;
-  readonly transitions: ComputationTransition[];
+  latestTransition: ComputationTransition | null;
 }
 
 /** Run-local transaction. Reads and writes stay private until `commit()` succeeds. */
@@ -1813,6 +1773,7 @@ export class ComputationRun implements KernelPublicationContext {
     ]));
     const outputsByChild = new Map<ComputationChildId, ComputationOutput[]>();
     const outputOwnerByReadKey = new Map<string, ComputationChildId>();
+    const outputs: ComputationOutput[] = [];
     for (const decision of decisions) {
       if (decision.decision === KernelPublicationDecisionKind.Withdraw) {
         continue;
@@ -1822,6 +1783,7 @@ export class ComputationRun implements KernelPublicationContext {
         throw new Error(`Admitted output ${decision.handle} has no coherent staged writer revision.`);
       }
       const output = new ComputationOutput(decision.surface, decision.handle, decision.detailKind);
+      outputs.push(output);
       const child = this.childrenById.get(revision.writerId);
       if (child == null) {
         throw new Error(`Admitted output ${output.readKey} names unknown child writer ${revision.writerId}.`);
@@ -1831,9 +1793,9 @@ export class ComputationRun implements KernelPublicationContext {
         throw new Error(`Admitted output ${output.readKey} has multiple child writers.`);
       }
       outputOwnerByReadKey.set(output.readKey, child.childId);
-      const outputs = outputsByChild.get(child.childId) ?? [];
-      outputs.push(output);
-      outputsByChild.set(child.childId, outputs);
+      const childOutputs = outputsByChild.get(child.childId) ?? [];
+      childOutputs.push(output);
+      outputsByChild.set(child.childId, childOutputs);
     }
 
     const invalidReads: ComputationInvalidRead[] = [];
@@ -2013,6 +1975,7 @@ export class ComputationRun implements KernelPublicationContext {
       states,
       transitions,
       invalidReads,
+      outputs.sort((left, right) => left.readKey.localeCompare(right.readKey)),
     );
   }
 
@@ -2238,8 +2201,6 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
   private readonly childReadersByKey = new Map<string, Set<ComputationChildId>>();
   private readonly childProducerByKey = new Map<string, ComputationChildId>();
   private nextComputationOrdinal = 1;
-  private nextRetirementEventOrdinal = 1;
-  private readonly retirementEvents: ComputationRetirementEvent[] = [];
   private readonly publicationOwner = {};
 
   constructor(private readonly store: KernelStore) {
@@ -2260,7 +2221,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
         latestFinishedRunSequence: 0,
         state: null,
         admittedGenerationDomains: new Set(),
-        transitions: [],
+        latestTransition: null,
       };
       this.entriesByLocus.set(registryKey, entry);
       this.entriesById.set(computationId, entry);
@@ -2328,20 +2289,18 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     if (entry == null || state?.committedRunSequence !== runSequence) {
       return false;
     }
-    let retiredOutputs: readonly ComputationRetiredOutput[] = [];
     const replacement = this.store.replaceOwnedPublication(
       state.publication,
       new KernelPublicationPlan(new KernelStoreBatch([], `retire:${computationId}@${runSequence}`)),
       this.publicationOwner,
       {
-        validate: (decisions) => {
+        validate: () => {
           this.validateProducerReplacement(
             state.outputs,
-            computationOutputsFromDecisions(decisions),
+            [],
             computationId,
           );
           this.validateChildReplacement(state.children, []);
-          retiredOutputs = this.prepareRetiredOutputs(state, decisions);
         },
         validateCurrent: () => {
           if (entry.state !== state) {
@@ -2360,11 +2319,6 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     entry.admittedGenerationDomains.clear();
     entry.runCurrentness.advance();
     entry.latestFinishedRunSequence = entry.runCurrentness.currentOrdinal;
-    this.appendRetirementEvent(
-      state,
-      ComputationRetirementCause.Explicit,
-      retiredOutputs,
-    );
     return true;
   }
 
@@ -2391,16 +2345,9 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     return this.childProducerByKey.get(readKey) ?? null;
   }
 
-  readTransitions(computationId: ComputationId): readonly ComputationTransition[] {
-    return [...(this.entriesById.get(computationId)?.transitions ?? [])];
-  }
-
-  markRetirementEvents(): ComputationRetirementEventMarker {
-    return new ComputationRetirementEventMarker(this.nextRetirementEventOrdinal);
-  }
-
-  readRetirementEventsSince(marker: ComputationRetirementEventMarker): readonly ComputationRetirementEvent[] {
-    return this.retirementEvents.filter((event) => event.ordinal >= marker.nextEventOrdinal);
+  /** Read the latest commit attempt without turning the kernel into an unbounded transition journal. */
+  readLatestTransition(computationId: ComputationId): ComputationTransition | null {
+    return this.entriesById.get(computationId)?.latestTransition ?? null;
   }
 
   retainActiveDependencies(retention: KernelStoreRetentionCollector): void {
@@ -2433,15 +2380,6 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       if (state == null || lifetimeOrdinal == null || lifetimeOrdinal < context.marker.nextLifetimeOrdinal) {
         continue;
       }
-      const retiredOutputs = this.prepareRetiredOutputs(
-        state,
-        state.outputs.map((output) => new KernelPublicationDecision(
-          output.handle,
-          output.surface,
-          output.detailKind,
-          KernelPublicationDecisionKind.Withdraw,
-        )),
-      );
       this.replaceReadIndex(state.reads, [], entry.computationId);
       this.commitProducerReplacement(state.outputs, [], entry.computationId);
       this.commitChildReplacement(state.children, []);
@@ -2451,11 +2389,6 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       entry.admittedGenerationDomains.clear();
       // Any run prepared against the reclaimed closure must not resurrect it after disposal.
       entry.runCurrentness.advance();
-      this.appendRetirementEvent(
-        state,
-        ComputationRetirementCause.LifetimeDisposal,
-        retiredOutputs,
-      );
     }
   }
 
@@ -2495,7 +2428,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     }
 
     const previousState = entry.state;
-    let childPreparation = new ComputationChildPreparation([], [], []);
+    let childPreparation = new ComputationChildPreparation([], [], [], []);
     let replacement: KernelPublicationReplacement;
     try {
       replacement = this.store.replaceOwnedPublicationCandidate(
@@ -2531,7 +2464,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
             }
             this.validateProducerReplacement(
               previousState?.outputs ?? [],
-              computationOutputsFromDecisions(decisions),
+              childPreparation.outputs,
               entry.computationId,
             );
             this.validateChildReplacement(previousState?.children ?? [], childPreparation.states);
@@ -2585,7 +2518,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       }
       throw error;
     }
-    const outputs = computationOutputsFromDecisions(replacement.decisions);
+    const outputs = childPreparation.outputs;
     const outputKeys = new Set(outputs.map((output) => output.readKey));
     const committedReads = reads.filter((read) => !outputKeys.has(read.readKey));
     const changedReads = compareReadSets(previousState?.reads ?? [], committedReads);
@@ -2616,7 +2549,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       replacement.decisions,
       childPreparation.transitions,
     );
-    entry.transitions.push(transition);
+    entry.latestTransition = transition;
     return new ComputationCommitResult(ComputationCommitState.Committed, transition);
   }
 
@@ -2646,7 +2579,7 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
       [],
       [],
     );
-    entry.transitions.push(transition);
+    entry.latestTransition = transition;
     return new ComputationCommitResult(state, transition);
   }
 
@@ -2781,57 +2714,6 @@ export class ComputationLifecycleRegistry implements KernelStoreComputationLifec
     }
   }
 
-  private prepareRetiredOutputs(
-    state: ComputationState,
-    decisions: readonly KernelPublicationDecision[],
-  ): readonly ComputationRetiredOutput[] {
-    const outputByReadKey = new Map(state.outputs.map((output) => [output.readKey, output]));
-    const childByOutputReadKey = new Map<string, ComputationChildState>();
-    for (const child of state.children) {
-      for (const output of child.outputs) {
-        childByOutputReadKey.set(output.readKey, child);
-      }
-    }
-    const withdrawnOutputs = decisions.flatMap((decision) => {
-      if (decision.decision !== KernelPublicationDecisionKind.Withdraw) {
-        return [];
-      }
-      const readKey = computationOutputReadKey(decision.surface, decision.handle);
-      const output = outputByReadKey.get(readKey) ?? null;
-      if (output == null) {
-        throw new Error(`Retirement withdrew ${readKey} outside the committed computation output manifest.`);
-      }
-      const child = childByOutputReadKey.get(readKey) ?? null;
-      return [new ComputationRetiredOutput(
-        output,
-        decision,
-        child?.childId ?? null,
-        child?.role ?? null,
-        child?.scc ?? null,
-      )];
-    });
-    if (withdrawnOutputs.length !== state.outputs.length) {
-      throw new Error(
-        `Retirement of ${state.computationId}@${state.committedRunSequence} withdrew `
-        + `${withdrawnOutputs.length} of ${state.outputs.length} committed outputs.`,
-      );
-    }
-    return withdrawnOutputs.sort((left, right) => left.output.readKey.localeCompare(right.output.readKey));
-  }
-
-  private appendRetirementEvent(
-    state: ComputationState,
-    cause: ComputationRetirementCause,
-    withdrawnOutputs: readonly ComputationRetiredOutput[],
-  ): void {
-    this.retirementEvents.push(new ComputationRetirementEvent(
-      this.nextRetirementEventOrdinal++,
-      cause,
-      state.computationId,
-      state.committedRunSequence,
-      withdrawnOutputs,
-    ));
-  }
 }
 
 function preparedComputationChildHasContent(child: PreparedComputationChild): boolean {
@@ -3207,19 +3089,6 @@ function mergeComputationOpenRead(
     maxOptionalOrdinal(left.minimumLifetimeOrdinal, right.minimumLifetimeOrdinal),
     [...new Set([...left.positiveRecordHandles, ...right.positiveRecordHandles])].sort(),
   );
-}
-
-function computationOutputsFromDecisions(
-  decisions: readonly KernelPublicationDecision[],
-): readonly ComputationOutput[] {
-  return decisions
-    .filter((decision) => decision.decision !== KernelPublicationDecisionKind.Withdraw)
-    .map((decision) => new ComputationOutput(
-      decision.surface,
-      decision.handle,
-      decision.detailKind,
-    ))
-    .sort((left, right) => left.readKey.localeCompare(right.readKey));
 }
 
 export function computationOutputReadKey(

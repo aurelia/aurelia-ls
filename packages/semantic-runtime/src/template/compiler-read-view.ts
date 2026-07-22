@@ -196,6 +196,8 @@ export class TemplateCompilerReadObservation implements ComputationRead {
     if (observed.result !== this.observed.result) {
       return null;
     }
+    // Capture the callback, not this observation: carried reads must not retain predecessor staging contexts.
+    const readCurrentResult = this.readCurrentResult;
     return new TemplateCompilerReadObservation(
       this.readKind,
       this.readKey,
@@ -204,8 +206,8 @@ export class TemplateCompilerReadObservation implements ComputationRead {
       resultParts,
       state.closure,
       observed,
-      () => currentState.readRevision(this.readCurrentResult),
-      this.readCurrentResult,
+      () => currentState.readRevision(readCurrentResult),
+      readCurrentResult,
     );
   }
 }

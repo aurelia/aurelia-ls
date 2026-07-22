@@ -308,7 +308,14 @@ Commit seals the publication graph before preparation enters the store replaceme
 binding preparation, and reversible descriptor normalization finish first; then one frozen decision set reaches the final input, child-read, and producer-
 ownership preflight immediately before the callback-free mutation tail. Admitted transitions classify each
 prior/current child as executed, carried, or withdrawn so conformance and later schedulers can inspect how the atomic
-result was obtained without retaining domain payloads. After every external validation and currentness
+result was obtained without retaining domain payloads. The commit result carries that transition and the registry keeps
+only the latest attempt at a stable computation locus; consumers that need history own an explicitly bounded telemetry
+log rather than turning the kernel into an unbounded journal. Child preparation constructs each admitted output
+descriptor once. The complete outer closure and retained child manifests share those immutable descriptors, while an
+unpartitioned run still retains its complete outer closure without inventing a public child state. Retirement consumes
+the authoritative withdrawal decisions synchronously and retains no causal event journal; a future independent
+scheduler must own an explicit bounded delivery contract rather than polling kernel history. After every external
+validation and currentness
 callback, the store revalidates normalized descriptors and reprojects structural closures, so a validator cannot mutate
 provisional metadata or dependency shape unnoticed. Validators may re-read the frozen candidate through the run during the committing phase, but cannot
 observe new dependencies, enter children, publish, or mutate any store or detail-catalog surface. Rejection restores
