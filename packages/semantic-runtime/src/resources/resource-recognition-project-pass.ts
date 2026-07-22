@@ -77,8 +77,18 @@ export interface ResourceRecognitionProjectProfile {
   readonly phases: readonly ResourceRecognitionProjectPhaseTiming[];
 }
 
+/** One framework-effective resource definition and the observed carrier variants it superseded. */
+export class EffectiveResourceDefinitionSelection {
+  constructor(
+    readonly definition: FullResourceDefinition,
+    readonly supersededDefinitions: readonly FullResourceDefinition[],
+  ) {}
+}
+
 /** Resource-recognition result for one booted project frame. */
 export class ResourceRecognitionProjectResult {
+  readonly definitionSelections: readonly EffectiveResourceDefinitionSelection[];
+
   constructor(
     /** Project frame whose source files were recognized. */
     readonly project: ProjectBootFrame,
@@ -86,7 +96,11 @@ export class ResourceRecognitionProjectResult {
     readonly sources: readonly ResourceRecognitionSourceResult[],
     /** Aggregate resource-recognition timings for app-world pressure. */
     readonly profile: ResourceRecognitionProjectProfile,
-  ) {}
+  ) {
+    this.definitionSelections = effectiveResourceDefinitionSelections(
+      sources.flatMap((source) => source.convergence.definitions),
+    );
+  }
 
   readObservations(): readonly ResourceRecognitionObservation[] {
     return this.sources.flatMap((source) => source.observations);
@@ -97,9 +111,11 @@ export class ResourceRecognitionProjectResult {
   }
 
   readDefinitions(): readonly FullResourceDefinition[] {
-    return effectiveResourceDefinitions(
-      this.sources.flatMap((source) => source.convergence.definitions),
-    );
+    return this.definitionSelections.map((selection) => selection.definition);
+  }
+
+  readSupersededDefinitions(): readonly FullResourceDefinition[] {
+    return this.definitionSelections.flatMap((selection) => selection.supersededDefinitions);
   }
 
   readUnresolvedModules(): readonly EvaluationModuleResolutionOpen[] {
@@ -107,29 +123,38 @@ export class ResourceRecognitionProjectResult {
   }
 }
 
-function effectiveResourceDefinitions(
+interface EffectiveResourceDefinitionSelectionFrame {
+  definition: FullResourceDefinition;
+  readonly candidates: FullResourceDefinition[];
+}
+
+function effectiveResourceDefinitionSelections(
   definitions: readonly FullResourceDefinition[],
-): readonly FullResourceDefinition[] {
-  const selected: FullResourceDefinition[] = [];
+): readonly EffectiveResourceDefinitionSelection[] {
+  const selected: EffectiveResourceDefinitionSelectionFrame[] = [];
   const selectedIndexByTarget = new Map<string, number>();
   for (const definition of definitions) {
     const key = effectiveResourceDefinitionKey(definition);
     if (key == null) {
-      selected.push(definition);
+      selected.push({ definition, candidates: [definition] });
       continue;
     }
     const selectedIndex = selectedIndexByTarget.get(key);
     if (selectedIndex == null) {
       selectedIndexByTarget.set(key, selected.length);
-      selected.push(definition);
+      selected.push({ definition, candidates: [definition] });
       continue;
     }
-    const current = selected[selectedIndex]!;
-    if (resourceDefinitionSupersedes(definition, current)) {
-      selected[selectedIndex] = definition;
+    const selection = selected[selectedIndex]!;
+    selection.candidates.push(definition);
+    if (resourceDefinitionSupersedes(definition, selection.definition)) {
+      selection.definition = definition;
     }
   }
-  return selected;
+  return selected.map((selection) => new EffectiveResourceDefinitionSelection(
+    selection.definition,
+    selection.candidates.filter((candidate) => candidate !== selection.definition),
+  ));
 }
 
 function effectiveResourceDefinitionKey(definition: FullResourceDefinition): string | null {
@@ -137,8 +162,7 @@ function effectiveResourceDefinitionKey(definition: FullResourceDefinition): str
   if (registrationKind == null) {
     return null;
   }
-  const targetKey = definition.target.targetType?.identityHandle
-    ?? definition.target.identityHandle
+  const targetKey = definition.target.identityHandle
     ?? (definition.target.moduleKey != null && definition.target.localName != null
       ? `${definition.target.moduleKey}\0${definition.target.localName}`
       : null);

@@ -450,6 +450,9 @@
         "Resource-name lookup includes primary resource names and converged alias names; use it for template/compiler-world lookup instead of rebuilding consumer-local alias maps.",
         "Router string routeables should use ResourceDefinitionIndex custom-element-only lookup and dependency-scoped custom-element lookup so parent component dependencies can disambiguate same-named resources without router-local maps.",
         "For an authored TypeScript expression, remap the node into the current Program, resolve aliases to declarations, and spend each declaration source file's module key plus local name. Never treat an imported identifier as a declaration in the consumer module or build a consumer-local symbol map.",
+        "Resource target identity is canonical TypeScript declaration identity. Keep carrier occurrences and checker type-shape identity separate; effective-definition joins use registration kind plus target declaration identity, never type-shape identity.",
+        "ResourceRecognitionProjectResult.definitionSelections owns framework-effective carrier precedence and retains superseded definitions as evidence. Active consumers use readDefinitions() rather than reselecting or indexing every carrier.",
+        "Configuration registration enrichment must try the authored TypeScript expression lookup before evaluator carrier/value fallbacks so generated CustomElement.define(...) results and imported aliases retain declaration ownership.",
         "Keep ambiguous local-name/resource-name lookups explicit; do not pick a definition by name when multiple definitions are visible.",
         "If a new lookup path appears, add it to the index rather than adding local resource-definition maps inside DI, configuration, or template code."
       ],
@@ -460,6 +463,18 @@
           "symbolName": "ResourceDefinitionIndex",
           "line": 32,
           "summary": "Converged resource definition lookup index."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-recognition-publication.ts",
+          "symbolName": "ResourceRecognitionPublicationSupport",
+          "summary": "Publishes canonical target declaration identity separately from carrier evidence and checker type projections."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-recognition-project-pass.ts",
+          "symbolName": "EffectiveResourceDefinitionSelection",
+          "summary": "Project-level effective definition and superseded carrier authority."
         },
         {
           "kind": "source",
@@ -477,7 +492,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-20"
+      "updatedAt": "2026-07-22"
     },
     {
       "id": "frontier:resource-definition-api-issues",

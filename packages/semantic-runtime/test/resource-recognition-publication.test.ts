@@ -9,6 +9,7 @@ import {
   ComputationCommitState,
   ComputationReadValidationScope,
 } from '../src/kernel/computation-lifecycle.js';
+import { TypeScriptDeclarationIdentity } from '../src/kernel/identity.js';
 import { KernelPublicationDecisionKind } from '../src/kernel/publication.js';
 import { KernelStore } from '../src/kernel/store.js';
 import {
@@ -96,6 +97,51 @@ describe('resource recognition publication', () => {
       decision: KernelPublicationDecisionKind.Retain,
     }));
     expect(store.productDetails.read(ResourceProductDetails.Definition, firstDefinition.productHandle)).toBe(firstDefinition);
+  }, 30_000);
+
+  test('converges carrier variants through canonical declaration identity and retains superseded evidence', async () => {
+    const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+    const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/resource-registration-effective-definitions');
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:resource-effective-definition-identity',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const resources = app.emission.resources;
+    const candidates = resources.sources.flatMap((source) => source.convergence.definitions);
+
+    const assertSelection = (
+      targetName: string,
+      effectiveName: string,
+      supersededName: string,
+    ): void => {
+      const targetCandidates = candidates.filter((definition) =>
+        definition.target.localName === targetName
+      );
+      expect(targetCandidates).toHaveLength(2);
+      const targetIdentities = new Set(targetCandidates.map((definition) => definition.target.identityHandle));
+      expect(targetIdentities.size).toBe(1);
+      const targetIdentity = targetCandidates[0]?.target.identityHandle ?? null;
+      expect(targetIdentity).not.toBeNull();
+      expect(targetIdentity == null ? null : runtime.workspace.store.read(targetIdentity))
+        .toBeInstanceOf(TypeScriptDeclarationIdentity);
+
+      const selection = resources.definitionSelections.find((candidate) =>
+        candidate.definition.target.localName === targetName
+      );
+      expect(selection == null || !('name' in selection.definition) ? null : selection.definition.name)
+        .toBe(effectiveName);
+      expect(selection?.supersededDefinitions.map((definition) =>
+        'name' in definition ? definition.name : null
+      )).toEqual([supersededName]);
+    };
+
+    assertSelection('DecoratorOverStatic', 'decorator-effective', 'static-shadowed');
+    assertSelection('DefineOverDecorator', 'define-effective', 'decorator-shadowed');
+    expect(resources.readSupersededDefinitions()).toHaveLength(6);
+    expect(resources.readDefinitions().some((definition) =>
+      'name' in definition && definition.name === 'anonymous-card'
+    )).toBe(true);
   }, 30_000);
 
   test('distinguishes semantic resource links from witness-only source links', () => {

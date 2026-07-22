@@ -68,6 +68,10 @@ instructions. Decorators, static `$au`, and imperative `.define(...)` calls keep
 they share the same named-definition field reader for `name`, `aliases`, header creation, and carrier-owned open seams.
 Do not reintroduce carrier-local name/alias parsing unless a framework carrier genuinely diverges from the shared
 runtime definition shape.
+Carrier identity is not declaration identity. When a TypeScript target is provable, target publication resolves the
+Program-owned alias-normalized symbol and reuses the canonical declaration-source identity. Distinct decorators,
+static metadata, and define calls can therefore retain separate source observations and products while joining on one
+declaration. Checker type-shape identity remains an owned type projection and must not be used as declaration equality.
 
 Definition models sit beyond headers. Recognition observations are the AST-bearing layer; definition models use
 kernel handles, scalar fields, entry-level source handles, and field provenance rather than retaining TypeScript
@@ -87,6 +91,11 @@ or template compilation. Template controllers currently converge through the cus
 registration identity still uses the custom-attribute key space; use `registrationResourceKindFor(...)` for joins
 that mirror runtime lookup. Convergence is the operation that turns headers and source metadata into full definitions; it is recorded through
 materialization/provenance rather than being baked into the product name.
+The project result then selects framework-effective definitions by registration kind, canonical target declaration,
+carrier precedence, and execution order. `definitionSelections` retains the superseded carrier definitions beside the
+effective definition, while `readDefinitions()` exposes only the active set to configuration, DI, compiler-world, and
+query consumers. Do not reconstruct precedence in an answer or discard the losing carrier products; they remain the
+source/provenance evidence for why the selected definition won.
 
 Framework-owned built-ins enter the resource layer as resource headers. `built-in-resources.ts` records the runtime-html,
 i18n, state, router, and validation-html default resource catalogs as concrete, runtime-linked model classes so compiler worlds can see
@@ -220,6 +229,10 @@ disambiguate same-named resources without making the router maintain its own res
 TypeScript expression lookup remaps evaluator/source AST nodes into the current Program, resolves import aliases to the
 declaration, and then spends the declaration source file's module key plus local name. Consumers must not interpret an
 imported identifier as though its declaration belonged to the consuming module, or build a second symbol-to-resource map.
+Configuration registration enrichment spends this authored-expression lookup before evaluator-derived carrier/value
+fallbacks. That ordering is required for values such as `const Card = CustomElement.define(...)`: resource recognition
+owns the definition, while the authored `register(Card)` expression supplies the declaration join that an evaluator
+object alone cannot honestly reconstruct.
 
 Open seams are part of the product here. A carrier with an open kind, name, alias, pattern, or target should still
 produce kernel pressure rather than disappearing or pretending to be complete.

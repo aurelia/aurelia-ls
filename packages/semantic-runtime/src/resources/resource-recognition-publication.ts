@@ -21,7 +21,6 @@ import type {
 import {
   AureliaAttributePatternIdentity,
   AureliaResourceIdentity,
-  TypeScriptDeclarationIdentity,
 } from '../kernel/identity.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
@@ -38,6 +37,11 @@ import {
   CheckerTypeProjector,
   type CheckerTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
+import {
+  appendDeclarationSourceRecords,
+  sourceSpanForCheckerDeclaration,
+  type DeclarationSourcePublication,
+} from '../type-system/declaration-source.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   CheckerTypeProjectionOrigin,
@@ -106,6 +110,8 @@ type ResourceRecognitionPublicationPhaseRecorder = <TValue>(
 
 /** Publishes target, resource-identity, alias, pattern, and open-seam records for recognized resource carriers. */
 export class ResourceRecognitionPublicationSupport {
+  private readonly stagedRecordHandles = new Set<string>();
+
   constructor(
     readonly store: KernelStore,
     private readonly publication: KernelPublicationContext,
@@ -122,13 +128,16 @@ export class ResourceRecognitionPublicationSupport {
       return new ResourceTargetPublication([], null, null);
     }
 
-    const targetSource = sourceSpanAddressForNode(
-      this.store,
-      context,
-      target.node,
-      `resource-target:${local}`,
-      SourceSpanRole.Name,
-    );
+    const declarationIdentity = this.targetDeclarationIdentity(context, target);
+    const targetSource = declarationIdentity == null
+      ? sourceSpanAddressForNode(
+          this.store,
+          context,
+          target.node,
+          `resource-target:${local}`,
+          SourceSpanRole.Name,
+        )
+      : null;
     const declarationSource = sourceSpanAddressForNode(
       this.store,
       context,
@@ -136,23 +145,32 @@ export class ResourceRecognitionPublicationSupport {
       `resource-target-declaration:${local}`,
       SourceSpanRole.Range,
     );
-    const identityHandle = this.targetIdentityHandle(target, local);
+    const records = [
+      ...(targetSource?.records ?? []),
+      ...(declarationSource?.records ?? []),
+    ];
+    const addressHandle = declarationIdentity?.address.handle
+      ?? targetSource?.addressHandle
+      ?? null;
+    const identityHandle = declarationIdentity?.identity.handle ?? null;
     const moduleKey = this.targetModuleKey(context, target);
     const targetReference = this.targetReferenceForObservation(
       context,
       target,
       local,
-      targetSource?.addressHandle ?? null,
+      addressHandle,
       declarationSource?.addressHandle ?? null,
       identityHandle,
       moduleKey,
     );
+    appendDeclarationSourceRecords(
+      this.publication,
+      records,
+      declarationIdentity,
+      this.stagedRecordHandles,
+    );
     return new ResourceTargetPublication(
-      [
-        ...(targetSource?.records ?? []),
-        ...(declarationSource?.records ?? []),
-        ...this.recordsForTargetIdentity(target, targetSource?.addressHandle ?? null, identityHandle, moduleKey),
-      ],
+      records,
       targetReference,
       identityHandle,
     );
@@ -215,13 +233,26 @@ export class ResourceRecognitionPublicationSupport {
     return new ResourceOpenSeamPublicationSet(result.records, result.handles);
   }
 
-  private targetIdentityHandle(
+  private targetDeclarationIdentity(
+    context: ResourceRecognitionContext,
     target: ResourceTargetObservation,
-    local: string,
-  ): IdentityHandle | null {
-    return target.localName == null || target.declarationNode == null
-      ? null
-      : this.store.handles.identity(`resource-target:${local}`);
+  ): DeclarationSourcePublication | null {
+    if (context.typeSystem == null || target.localName == null || target.declarationNode == null) {
+      return null;
+    }
+    const symbol = context.typeSystem.readProgramAliasedSymbolAtLocation(target.node);
+    if (symbol == null) {
+      return null;
+    }
+    const declarations = symbol.declarations
+      ?? (symbol.valueDeclaration == null ? [] : [symbol.valueDeclaration]);
+    return sourceSpanForCheckerDeclaration(
+      this.publication,
+      context.typeSystem.checker,
+      symbol,
+      declarations,
+      SourceSpanRole.Name,
+    );
   }
 
   private targetModuleKey(
@@ -273,25 +304,6 @@ export class ResourceRecognitionPublicationSupport {
           target.localName,
         )
     );
-  }
-
-  private recordsForTargetIdentity(
-    target: ResourceTargetObservation,
-    addressHandle: AddressHandle | null,
-    identityHandle: IdentityHandle | null,
-    moduleKey: string | null,
-  ): readonly TypeScriptDeclarationIdentity[] {
-    return identityHandle == null
-      ? []
-      : [
-        new TypeScriptDeclarationIdentity(
-          identityHandle,
-          moduleKey,
-          null,
-          target.localName,
-          addressHandle,
-        ),
-      ];
   }
 
   private recordsForNamedResourceIdentities(

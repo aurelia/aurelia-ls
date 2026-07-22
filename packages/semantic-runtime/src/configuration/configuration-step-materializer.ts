@@ -1005,7 +1005,7 @@ export class ConfigurationStepMaterializer {
     }
     const enriched = observation.registrationAdmissions.map((admission) => {
       const appTaskEnriched = enrichAppTaskRegistration(admission, appTaskEmissions);
-      return enrichResourceRegistration(appTaskEnriched, resources);
+      return enrichResourceRegistration(appTaskEnriched, context, resources);
     }).flatMap((admission) => [
       admission,
       ...aliasedResourcesRegistryBodyRegistrations(admission, context, resources),
@@ -1463,9 +1463,10 @@ function enrichAppTaskRegistration(
 
 function enrichResourceRegistration(
   observation: RegistrationAdmissionObservation,
+  context: ConfigurationRecognitionContext,
   resources: ResourceDefinitionIndex | null,
 ): RegistrationAdmissionObservation {
-  const definition = resourceDefinitionForRegistrationValue(observation, resources);
+  const definition = resourceDefinitionForRegistrationValue(observation, context, resources);
   if (definition == null || observation.registeredValue == null) {
     return observation;
   }
@@ -1499,6 +1500,7 @@ function enrichResourceRegistration(
 
 function resourceDefinitionForRegistrationValue(
   observation: RegistrationAdmissionObservation,
+  context: ConfigurationRecognitionContext,
   resources: ResourceDefinitionIndex | null,
 ): FullResourceDefinition | null {
   if (resources == null || observation.registeredValue == null) {
@@ -1513,6 +1515,12 @@ function resourceDefinitionForRegistrationValue(
       observation.registeredValue.moduleKey,
       observation.registeredValue.localName,
     );
+    if (definition?.productHandle != null) {
+      return definition;
+    }
+  }
+  if (context.typeSystem != null && ts.isExpression(observation.sourceNode)) {
+    const definition = resources.lookupByTypeScriptExpression(context.typeSystem, observation.sourceNode);
     if (definition?.productHandle != null) {
       return definition;
     }
