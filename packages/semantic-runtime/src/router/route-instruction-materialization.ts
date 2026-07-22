@@ -212,7 +212,6 @@ interface MutableRouteParameterEndpointPlan {
 /** Router instruction products created before route-tree transition compilation. */
 export class RouteInstructionMaterializationProjectResult {
   constructor(
-    readonly project: ProjectBootFrame,
     readonly typedNavigationInstructions: readonly TypedNavigationInstructionModel[],
     readonly viewportInstructions: readonly ViewportInstructionModel[],
     readonly viewportInstructionTrees: readonly ViewportInstructionTreeModel[],
@@ -275,7 +274,6 @@ export class RouteInstructionMaterializationProjectPass {
       new KernelStoreBatch(records, `router-instructions:${project.projectKey}`),
     ));
     return new RouteInstructionMaterializationProjectResult(
-      project,
       state.emissions.flatMap((emission) => emission.typedNavigationInstructions),
       state.emissions.flatMap((emission) => emission.viewportInstructions),
       state.emissions.map((emission) => emission.viewportInstructionTree),

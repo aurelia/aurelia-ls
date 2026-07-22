@@ -187,8 +187,8 @@ export class TemplateRuntimeAnalysisEmission {
     readonly profile: TemplateRuntimeAnalysisProfile,
   ) {}
 
-  /** Rebind this immutable product graph to the store-backed expression world installed after commit. */
-  forCommittedGeneration(expressionWorld: CheckerExpressionTypeWorld): TemplateRuntimeAnalysisEmission {
+  /** Rebind this immutable product graph to another expression-world authority for the same semantic generation. */
+  forExpressionWorld(expressionWorld: CheckerExpressionTypeWorld): TemplateRuntimeAnalysisEmission {
     return new TemplateRuntimeAnalysisEmission(
       this.analysisDepth,
       this.runtimeRendering,
@@ -204,6 +204,34 @@ export class TemplateRuntimeAnalysisEmission {
       expressionWorld,
       this.profile,
     );
+  }
+
+  /** Reuse retained semantic products while reporting that this app generation performed no runtime-analysis work. */
+  forCarriedExpressionWorld(expressionWorld: CheckerExpressionTypeWorld): TemplateRuntimeAnalysisEmission {
+    return new TemplateRuntimeAnalysisEmission(
+      this.analysisDepth,
+      this.runtimeRendering,
+      this.expressionResourcePlan,
+      this.scopes,
+      this.controllerBind,
+      this.i18nTranslationBinding,
+      this.bindingBehavior,
+      this.valueConverter,
+      this.bindingValueChannel,
+      this.bindingDataFlow,
+      this.runtimeComposition,
+      expressionWorld,
+      {
+        totalMilliseconds: 0,
+        phases: [],
+        expressionTypeCache: expressionWorld.cacheSnapshot(),
+      },
+    );
+  }
+
+  /** Rebind this immutable product graph to the store-backed expression world installed after commit. */
+  forCommittedGeneration(expressionWorld: CheckerExpressionTypeWorld): TemplateRuntimeAnalysisEmission {
+    return this.forExpressionWorld(expressionWorld);
   }
 
   /** Runtime binding lifecycle issues across creation, renderer admission, bind, and plugin-owned bind phases. */

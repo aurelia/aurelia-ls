@@ -257,15 +257,16 @@ The current spending path is intentionally narrow but end-to-end:
   from builder contributions so plugin-backed state is queryable before the deferred task executes;
 - every spent admission produces a `ContainerRegistrationOperation` product and a `di.accepts-registration` claim;
 - AppTask admissions additionally retain `RegisteredAppTask` evidence only when spent. Source-created tasks preserve
-  the exact evaluator slot/key/callback value for that occurrence; framework-minted tasks remain explicit definitions
-  without fabricated source evaluation. Neither form executes the lifecycle callback during world construction;
+  the exact evaluator slot/key/callback value and receiving container for that occurrence; framework-minted tasks remain
+  explicit definitions without fabricated source evaluation. Neither form executes the lifecycle callback during world
+  construction;
 - registration operations point at their emitted resolver, registry, AppTask, and slot products through `di.produces-product`
   claims;
 - resolver products, resolver slots, and resource slots produce `di.provides-key` claims;
-- `container-chain.ts` is the read-only chain helper for consumers that need provider visibility. It treats
-  `DiProductIdentity.containerHandle` as the canonical product-to-container owner and joins that with
-  `di.provides-key`; do not introduce another slot/container membership predicate unless the kernel vocabulary is being
-  intentionally redesigned.
+- `container-chain.ts` is the read-only chain helper for consumers that need provider visibility. It projects the typed
+  `Container` frames and their resolver/resource slots from the exact `DiWorldConstructionEmission`, then extends that
+  immutable projection with runtime child containers as later phases create them. It must not reconstruct those facts by
+  scanning generic identity, claim, or materialization records;
 - duplicate source/static `$au` resource-key publication produces a `DiIssue` product and skips the incoming slot,
   matching the framework's kernel warning path for `AUR0007`; duplicate runtime-html definition registration produces
   `ResourceIssue` warnings (`AUR0153`-`AUR0156`) instead;
@@ -286,7 +287,9 @@ The current spending path is intentionally narrow but end-to-end:
 - `Registration.defer(...)` and generic `IRegistry` admissions become runtime-shaped registry products. Path-proven
   evaluator-known bodies spend recursively against the receiving container; unresolved bodies retain open seams.
 - open registration admissions produce only the container operation and an open DI seam. They are preserved as
-  registration pressure rather than being treated as resolver rows.
+  registration pressure rather than being treated as resolver rows. Each seam also retains its exact admission and
+  receiving-container locus so later capability admission can distinguish chain-local uncertainty from world-wide
+  uncertainty without reconstructing publication topology.
 
 `world-constructor.ts` remains the typed emission envelope for callers that need the live container emulator frames,
 operation products, produced slots, resolver products, and open seams before inquiry projections exist.

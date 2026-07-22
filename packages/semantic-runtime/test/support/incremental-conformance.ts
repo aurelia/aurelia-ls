@@ -191,6 +191,7 @@ export class IncrementalConformanceHarness {
       throw new Error('Cold conformance runtime unexpectedly shares the incremental kernel store.');
     }
     const cold = await this.openAndSnapshot(coldRuntime);
+    coldRuntime.clearAnalysisCache({ typeSystemDependencyCacheClearPolicy: 'preserve' });
 
     this.currentApp = incremental.app;
     this.currentState = nextState;

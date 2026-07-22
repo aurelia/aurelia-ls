@@ -301,6 +301,13 @@
           "minMethodCount": 8
         },
         {
+          "kind": "product-large-class",
+          "className": "TypeSystemProjectComputationService",
+          "filePath": "packages/semantic-runtime/src/type-system/project-computation.ts",
+          "minLineCount": 80,
+          "minMethodCount": 4
+        },
+        {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/type-system/diagnostics.ts",
           "symbolName": "readTypeSystemProjectDiagnostics"

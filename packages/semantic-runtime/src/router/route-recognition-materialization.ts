@@ -112,7 +112,6 @@ interface ChildRecognitionContext {
 /** RecognizedRoute products from static ViewportInstruction paths, before RouteNode transition compilation. */
 export class RouteRecognitionMaterializationProjectResult {
   constructor(
-    readonly project: ProjectBootFrame,
     readonly recognizedRoutes: readonly RecognizedRouteModel[],
     readonly issues: readonly RouterIssueModel[],
   ) {}
@@ -146,7 +145,6 @@ export class RouteRecognitionMaterializationProjectPass {
       new KernelStoreBatch(records, `router-recognition:${project.projectKey}`),
     ));
     return new RouteRecognitionMaterializationProjectResult(
-      project,
       emissions.flatMap((emission) => emission.recognizedRoutes),
       emissions.flatMap((emission) => emission.issues),
     );

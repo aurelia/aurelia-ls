@@ -323,6 +323,7 @@ function aggregateConfigurationEmission(
     emissions.flatMap((emission) => emission.appTasks),
     emissions.flatMap((emission) => emission.optionContributions),
     emissions.flatMap((emission) => emission.registrationAdmissions),
+    emissions.flatMap((emission) => emission.openSeamScopes),
     mergeConfigurationEvaluationBindings(emissions.map((emission) => emission.evaluationBindings)),
     emissions.flatMap((emission) => emission.records),
   );

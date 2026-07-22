@@ -54,6 +54,28 @@ describe('checker projection lifecycle', () => {
     expect(firstMember).not.toBeNull();
     expect(firstRun.commit().state).toBe(ComputationCommitState.Committed);
 
+    const retainedRun = lifecycle.begin(locus('stable-carrier'));
+    const retained = new CheckerTypeProjector(store, retainedRun).ensureProjection({
+      localKey: 'view-model',
+      checker: firstFixture.checker,
+      type: firstFixture.checker.getTypeAtLocation(firstFixture.declaration.name),
+      sourceNode: firstFixture.declaration,
+    });
+    const retainedMember = retained.members.find((member) => member.name === 'item') ?? null;
+    expect(retained).not.toBe(first);
+    expect(retainedMember).not.toBe(firstMember);
+    const retainedCommit = retainedRun.commit();
+    expect(retainedCommit.state).toBe(ComputationCommitState.Committed);
+    expect(retainedCommit.transition.publications).toContainEqual(expect.objectContaining({
+      handle: retained.productHandle,
+      decision: KernelPublicationDecisionKind.Retain,
+    }));
+    expect(retainedCommit.transition.publications).toContainEqual(expect.objectContaining({
+      handle: retainedMember?.detailHandle,
+      decision: KernelPublicationDecisionKind.Retain,
+    }));
+    expect(store.readProductDetail(TypeSystemProductDetails.TypeShape, retained.productHandle)).toBe(first);
+
     const abortedFixture = checkerFixture(sourceText, 'stable-projection-project', programSources);
     const abortedRun = lifecycle.begin(locus('stable-carrier'));
     const aborted = new CheckerTypeProjector(store, abortedRun).ensureProjection({

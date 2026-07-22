@@ -229,7 +229,7 @@ function readAnswerValue<TValue>(
   app: FixtureVerificationAppSnapshotSource,
   kind: SemanticAppQueryKind,
 ): TValue {
-  const answer = app.ask({ kind });
+  const answer = app.ask({ kind, inquiryProfile: 'fixture' });
   assertVerificationSnapshotAnswerSupported(answer, kind);
   return answer.value as TValue;
 }
@@ -244,6 +244,7 @@ function readPagedRows<TRow>(
   do {
     const answer = app.ask({
       kind,
+      inquiryProfile: 'fixture',
       page: { size: pageSize, cursor },
     });
     assertVerificationSnapshotAnswerSupported(answer, kind);

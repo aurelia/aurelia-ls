@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import type { SourceFileAdmission } from '../boot/frames.js';
 import {
   SourceFileAddress,
   SourceFileRole,
@@ -15,6 +16,7 @@ import {
   projectTypeSystemProgramSources,
   type TypeSystemProgramSourceCatalog,
 } from './program-source-authority.js';
+import { canonicalTypeSystemPath } from './source-file-path.js';
 
 export interface DeclarationSourcePublication {
   readonly address: SourceSpanAddress;
@@ -70,12 +72,17 @@ export class CheckerDeclarationSourceContext {
     readonly projectKey: string,
     readonly programSources: TypeSystemProgramSourceCatalog,
     overlaySourcePaths: ReadonlySet<string>,
+    private readonly admittedSourcesByPath: ReadonlyMap<string, SourceFileAdmission> = new Map(),
   ) {
     this.overlaySourcePaths = new Set([...overlaySourcePaths].map(normalizeHostPath));
   }
 
   isOverlaySource(fileName: string): boolean {
     return this.overlaySourcePaths.has(normalizeHostPath(fileName));
+  }
+
+  admittedSource(fileName: string): SourceFileAdmission | null {
+    return this.admittedSourcesByPath.get(canonicalTypeSystemPath(fileName)) ?? null;
   }
 }
 
@@ -249,15 +256,13 @@ function sourceFileAddressForDeclaration(
   context: CheckerDeclarationSourceContext,
   sourceFile: ts.SourceFile,
 ): SourceFileAddressPublication {
-  // App source is project-qualified even when another logical project admits the same physical path.
-  const existing = publication.readSourceFileAddressesByFileName(sourceFile.fileName)
-    .map((candidate) => publication.read(candidate.handle))
-    .find((candidate): candidate is SourceFileAddress =>
-      candidate instanceof SourceFileAddress && candidate.workspaceKey === context.projectKey
-    )
-    ?? null;
-  if (existing != null) {
-    return { address: existing, records: [] };
+  const admittedSource = context.admittedSource(sourceFile.fileName);
+  if (admittedSource != null) {
+    const admittedAddress = publication.read(admittedSource.addressHandle);
+    if (!(admittedAddress instanceof SourceFileAddress)) {
+      throw new Error(`Checker source ${sourceFile.fileName} refers to missing admission ${admittedSource.addressHandle}.`);
+    }
+    return { address: admittedAddress, records: [] };
   }
   if (context.isOverlaySource(sourceFile.fileName)) {
     return projectTypeSystemProgramSources.sourceFile(

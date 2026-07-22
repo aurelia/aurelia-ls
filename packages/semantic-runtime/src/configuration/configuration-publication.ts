@@ -113,6 +113,7 @@ export class ConfigurationProductHandles {
 export interface ConfigurationOpenSeamEmission {
   readonly records: readonly KernelStoreRecord[];
   readonly handle: OpenSeamHandle;
+  readonly seam: OpenSeam;
 }
 
 /** Read claims that directly explain one produced configuration product. */
@@ -192,6 +193,7 @@ export class ConfigurationKernelPublication {
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly handles: readonly OpenSeamHandle[];
+    readonly seams: readonly OpenSeam[];
   } {
     const emissions = seams.map((seam, index) =>
       this.recordsForOpenSeam(context, seam, `${local}:open:${index}`)
@@ -199,6 +201,7 @@ export class ConfigurationKernelPublication {
     return {
       records: emissions.flatMap((emission) => emission.records),
       handles: emissions.map((emission) => emission.handle),
+      seams: emissions.map((emission) => emission.seam),
     };
   }
 
@@ -302,19 +305,21 @@ export class ConfigurationKernelPublication {
       SourceSpanRole.Range,
     );
     const openSeamHandle = this.store.handles.openSeam(local);
+    const openSeam = new OpenSeam(
+      openSeamHandle,
+      seam.openKind,
+      seam.summary,
+      source.addressHandle,
+      source.evidenceHandle,
+      seam.reasonKinds,
+    );
     return {
       records: [
         ...source.records,
-        new OpenSeam(
-          openSeamHandle,
-          seam.openKind,
-          seam.summary,
-          source.addressHandle,
-          source.evidenceHandle,
-          seam.reasonKinds,
-        ),
+        openSeam,
       ],
       handle: openSeamHandle,
+      seam: openSeam,
     };
   }
 

@@ -54,14 +54,10 @@ import { uniqueStrings } from '../kernel/collections.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
 import type { AppTaskDefinition } from '../configuration/app-task.js';
-import type {
-  ConfigurationSequence,
-  ConfigurationStep,
-} from '../configuration/configuration-sequence.js';
 import {
-  readDiContainerChainFacts,
   type DiContainerChainFacts,
 } from '../di/container-chain.js';
+import type { DiWorldConstructionEmission } from '../di/world-construction.js';
 import {
   FrameworkRegistrationCapability,
   frameworkRegistrationAdmissionCarriesCapability,
@@ -134,6 +130,7 @@ import {
   FrameworkServiceRootKind,
   frameworkServiceRootBasisResolvesDiKey,
 } from './service-root.js';
+import type { FrameworkServiceRootEnrichmentProjectResult } from './service-root-enrichment-materializer.js';
 
 interface CapabilityDemandSite {
   readonly siteKind: FrameworkCapabilityDemandSiteKind;
@@ -173,13 +170,23 @@ export class FrameworkCapabilityDemandMaterializer {
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
     templates: TemplateCompilationProjectEmission,
-    configuration: ConfigurationKernelEmission | null = null,
-    serviceRoots: readonly FrameworkServiceRoot[] = [],
+    configuration: ConfigurationKernelEmission,
+    diWorld: DiWorldConstructionEmission,
+    containerChainFacts: DiContainerChainFacts,
+    serviceRoots: readonly FrameworkServiceRoot[],
+    serviceRootEnrichment: FrameworkServiceRootEnrichmentProjectResult,
   ): FrameworkCapabilityDemandProjectResult {
     const availability = readCapabilityAvailabilityEvidence(project, typeSystem);
-    const publications = capabilityDemandSites(this.publication, typeSystem, templates, configuration, serviceRoots).map((site, index) =>
-      this.publishDemand(project, site, availability, index)
-    );
+    const publications = capabilityDemandSites(
+      this.publication,
+      typeSystem,
+      templates,
+      configuration,
+      diWorld,
+      containerChainFacts,
+      serviceRoots,
+      serviceRootEnrichment,
+    ).map((site, index) => this.publishDemand(project, site, availability, index));
     const records = publications.flatMap((publication) => publication.records);
     this.publication.publish(new KernelPublicationPlan(
       new KernelStoreBatch(records, `framework-capability-demands:${project.projectKey}`),
@@ -272,8 +279,11 @@ function capabilityDemandSites(
   publication: KernelPublicationContext,
   typeSystem: TypeSystemProject,
   templates: TemplateCompilationProjectEmission,
-  configuration: ConfigurationKernelEmission | null,
+  configuration: ConfigurationKernelEmission,
+  diWorld: DiWorldConstructionEmission,
+  containerChainFacts: DiContainerChainFacts,
   serviceRoots: readonly FrameworkServiceRoot[],
+  serviceRootEnrichment: FrameworkServiceRootEnrichmentProjectResult,
 ): readonly CapabilityDemandSite[] {
   return uniqueDemandSites([
     ...templates.resources,
@@ -283,22 +293,37 @@ function capabilityDemandSites(
     ...bindingCommandCapabilityDemandSites(resource),
     ...resourceCapabilityDemandSites(resource),
     ...expressionResourceCapabilityDemandSites(publication, resource),
-  ]).concat(sourceServiceApiCapabilityDemandSites(publication, typeSystem, templates, configuration, serviceRoots)));
+  ]).concat(sourceServiceApiCapabilityDemandSites(
+    publication,
+    typeSystem,
+    templates,
+    configuration,
+    diWorld,
+    containerChainFacts,
+    serviceRoots,
+    serviceRootEnrichment,
+  )));
 }
 
 function sourceServiceApiCapabilityDemandSites(
   publication: KernelPublicationContext,
   typeSystem: TypeSystemProject,
   templates: TemplateCompilationProjectEmission,
-  configuration: ConfigurationKernelEmission | null,
+  configuration: ConfigurationKernelEmission,
+  diWorld: DiWorldConstructionEmission,
+  containerChainFacts: DiContainerChainFacts,
   serviceRoots: readonly FrameworkServiceRoot[],
+  serviceRootEnrichment: FrameworkServiceRootEnrichmentProjectResult,
 ): readonly CapabilityDemandSite[] {
   const admissionContext = new SourceServiceApiAdmissionContext(
     publication,
     typeSystem,
     templates,
     configuration,
+    diWorld,
+    containerChainFacts,
     serviceRoots,
+    serviceRootEnrichment,
   );
   return serviceRoots.flatMap((root): readonly CapabilityDemandSite[] => {
     if (!frameworkServiceRootBasisResolvesDiKey(root.basis)) {
@@ -345,8 +370,6 @@ class SourceServiceApiAdmission {
 
 class SourceServiceApiAdmissionContext {
   private readonly chainFacts: DiContainerChainFacts;
-  private readonly resolvedDiKeyClaimsByRoot: ReadonlyMap<ProductHandle, readonly IdentityHandle[]>;
-  private readonly diContainerProductsByRoot: ReadonlyMap<ProductHandle, ProductHandle>;
   private readonly registrationHidingOpenSeams: readonly OpenSeam[];
   private readonly constrainedRegistrationHidingOpenSeamAdmissions: ReadonlyMap<
     OpenSeamHandle,
@@ -354,6 +377,7 @@ class SourceServiceApiAdmissionContext {
   >;
   private readonly registrationHidingOpenSeamContainerScopes: ReadonlyMap<OpenSeamHandle, readonly IdentityHandle[]>;
   private readonly serviceRootsByProduct: ReadonlyMap<ProductHandle, FrameworkServiceRoot>;
+  private readonly appTaskContainerIdentitiesByTask: ReadonlyMap<ProductHandle, readonly IdentityHandle[]>;
   private readonly consultingContainerCache = new Map<ProductHandle, IdentityHandle | null>();
   private readonly consultingContainerStack = new Set<ProductHandle>();
 
@@ -361,23 +385,22 @@ class SourceServiceApiAdmissionContext {
     private readonly publication: KernelPublicationContext,
     private readonly typeSystem: TypeSystemProject,
     private readonly templates: TemplateCompilationProjectEmission,
-    private readonly configuration: ConfigurationKernelEmission | null,
+    private readonly configuration: ConfigurationKernelEmission,
+    diWorld: DiWorldConstructionEmission,
+    chainFacts: DiContainerChainFacts,
     serviceRoots: readonly FrameworkServiceRoot[],
+    private readonly serviceRootEnrichment: FrameworkServiceRootEnrichmentProjectResult,
   ) {
-    this.chainFacts = readDiContainerChainFacts(publication);
-    this.resolvedDiKeyClaimsByRoot = rootResolvedDiKeyClaimsByRoot(publication);
-    this.diContainerProductsByRoot = diContainerProductsByFrameworkRoot(publication);
-    this.registrationHidingOpenSeams = registrationHidingOpenSeams(publication);
-    this.constrainedRegistrationHidingOpenSeamAdmissions = constrainedRegistrationHidingOpenSeamAdmissions(
-      publication,
+    this.chainFacts = chainFacts;
+    const openSeamFacts = registrationHidingOpenSeamFacts(
+      diWorld,
       configuration,
     );
-    this.registrationHidingOpenSeamContainerScopes = registrationHidingOpenSeamContainerScopes(
-      publication,
-      configuration,
-      this.chainFacts,
-    );
+    this.registrationHidingOpenSeams = openSeamFacts.seams;
+    this.constrainedRegistrationHidingOpenSeamAdmissions = openSeamFacts.constrainedAdmissions;
+    this.registrationHidingOpenSeamContainerScopes = openSeamFacts.containerScopes;
     this.serviceRootsByProduct = new Map(serviceRoots.map((root) => [root.productHandle, root]));
+    this.appTaskContainerIdentitiesByTask = appTaskContainerIdentitiesByTask(diWorld);
   }
 
   admissionForRoot(
@@ -387,7 +410,7 @@ class SourceServiceApiAdmissionContext {
     if (!frameworkServiceRootBasisResolvesDiKey(root.basis)) {
       return new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.NotAdmitted);
     }
-    const resolvedKeyHandles = this.resolvedDiKeyClaimsByRoot.get(root.productHandle) ?? [];
+    const resolvedKeyHandles = root.serviceKeyIdentityHandle == null ? [] : [root.serviceKeyIdentityHandle];
     const consultingContainer = this.consultingContainerIdentityForRoot(root);
     if (
       consultingContainer != null
@@ -477,7 +500,7 @@ class SourceServiceApiAdmissionContext {
         return this.resourceActivationConsultingContainerIdentity(root);
       case FrameworkServiceRootBasis.DirectConstructor:
         return this.chainFacts.containerIdentityHandleForProduct(
-          this.diContainerProductsByRoot.get(root.productHandle) ?? null,
+          this.serviceRootEnrichment.directContainerProductHandleForRoot(root.productHandle),
         );
       case FrameworkServiceRootBasis.FrameworkTypeAnnotation:
       case FrameworkServiceRootBasis.DeclarationSourceMatched:
@@ -497,9 +520,6 @@ class SourceServiceApiAdmissionContext {
   }
 
   private appTaskConsultingContainerIdentity(root: FrameworkServiceRoot): IdentityHandle | null {
-    if (this.configuration == null) {
-      return null;
-    }
     const rootSpan = sourceSpanAddressForAddress(this.publication, root.sourceAddressHandle);
     if (rootSpan == null) {
       return null;
@@ -508,26 +528,9 @@ class SourceServiceApiAdmissionContext {
       if (!appTaskContainsRoot(this.publication, appTask, rootSpan)) {
         return [];
       }
-      const appRootContainerProductHandle = this.appRootContainerProductHandleForAppTask(appTask);
-      const containerIdentityHandle = this.chainFacts.containerIdentityHandleForProduct(appRootContainerProductHandle);
-      return containerIdentityHandle == null ? [] : [containerIdentityHandle];
+      return this.appTaskContainerIdentitiesByTask.get(appTask.productHandle) ?? [];
     });
     return uniqueIdentityHandleOrNull(containerHandles);
-  }
-
-  private appRootContainerProductHandleForAppTask(appTask: AppTaskDefinition): ProductHandle | null {
-    if (this.configuration == null) {
-      return null;
-    }
-    const step = this.configuration.steps.find((candidate) => stepContainsAppTask(candidate, appTask)) ?? null;
-    const sequence = step == null
-      ? null
-      : sequenceForStep(this.configuration.sequences, step);
-    const appRootProductHandle = sequence?.appRoot?.productHandle ?? null;
-    const appRoot = appRootProductHandle == null
-      ? null
-      : this.configuration.appRoots.find((candidate) => candidate.productHandle === appRootProductHandle) ?? null;
-    return appRoot?.container.productHandle ?? null;
   }
 
   private resourceActivationConsultingContainerIdentity(root: FrameworkServiceRoot): IdentityHandle | null {
@@ -570,21 +573,23 @@ function appTaskContainsRoot(
     || spanContains(taskSpan, rootSpan);
 }
 
-function stepContainsAppTask(
-  step: ConfigurationStep,
-  appTask: AppTaskDefinition,
-): boolean {
-  return step.appTasks.some((reference) => reference.productHandle === appTask.productHandle);
-}
-
-function sequenceForStep(
-  sequences: readonly ConfigurationSequence[],
-  step: ConfigurationStep,
-): ConfigurationSequence | null {
-  const sequenceProductHandle = step.sequence?.productHandle ?? null;
-  return sequenceProductHandle == null
-    ? null
-    : sequences.find((sequence) => sequence.productHandle === sequenceProductHandle) ?? null;
+function appTaskContainerIdentitiesByTask(
+  world: DiWorldConstructionEmission,
+): ReadonlyMap<ProductHandle, readonly IdentityHandle[]> {
+  const result = new Map<ProductHandle, Set<IdentityHandle>>();
+  for (const registration of world.registeredAppTasks) {
+    const containerIdentityHandle = registration.container.identityHandle;
+    if (containerIdentityHandle == null) {
+      continue;
+    }
+    let containers = result.get(registration.task.productHandle);
+    if (containers == null) {
+      containers = new Set();
+      result.set(registration.task.productHandle, containers);
+    }
+    containers.add(containerIdentityHandle);
+  }
+  return new Map([...result].map(([handle, containers]) => [handle, [...containers]]));
 }
 
 function resourceDefinitionContainsSpan(
@@ -1192,289 +1197,91 @@ function frameworkCapabilityDemandLocalKey(
   ].join(':');
 }
 
-function rootResolvedDiKeyClaimsByRoot(
-  publication: KernelPublicationContext,
-): ReadonlyMap<ProductHandle, readonly IdentityHandle[]> {
-  const result = new Map<ProductHandle, IdentityHandle[]>();
-  for (const record of publication.readAllRecords()) {
-    if (
-      record.kind !== 'semantic-claim'
-      || record.predicateKey !== KernelVocabulary.Framework.RootResolvesDiKey.key
-    ) {
-      continue;
-    }
-    const existing = result.get(record.subjectHandle as ProductHandle);
-    if (existing == null) {
-      result.set(record.subjectHandle as ProductHandle, [record.objectHandle as IdentityHandle]);
-    } else {
-      existing.push(record.objectHandle as IdentityHandle);
-    }
-  }
-  return result;
-}
-
-function diContainerProductsByFrameworkRoot(
-  publication: KernelPublicationContext,
-): ReadonlyMap<ProductHandle, ProductHandle> {
-  return new Map(publication.readAllRecords().flatMap((record) =>
-    record.kind === 'semantic-claim'
-      && record.predicateKey === KernelVocabulary.Framework.ContainerRootDenotesContainer.key
-      ? [[record.subjectHandle as ProductHandle, record.objectHandle as ProductHandle]]
-      : []
-  ));
-}
-
-function registrationHidingOpenSeams(
-  publication: KernelPublicationContext,
-): readonly OpenSeam[] {
-  return publication.readAllRecords()
-    .filter((record): record is OpenSeam => record.kind === 'open-seam')
-    .filter(isRegistrationHidingOpenSeam);
+interface RegistrationHidingOpenSeamFacts {
+  readonly seams: readonly OpenSeam[];
+  readonly constrainedAdmissions: ReadonlyMap<OpenSeamHandle, readonly RegistrationAdmissionProduct[]>;
+  readonly containerScopes: ReadonlyMap<OpenSeamHandle, readonly IdentityHandle[]>;
 }
 
 /**
- * Restrict a seam only when every admission that caused it is a known framework package.
- * Unknown and user-authored registrations can still hide any DI key, so absence from this
- * index deliberately means unconstrained rather than irrelevant.
+ * Project registration uncertainty from the exact DI spending loci that produced it.
+ * A missing or user-authored admission leaves the seam unconstrained; a missing container
+ * leaves it world-scoped. Neither uncertainty is reconstructed from publication topology.
  */
-function constrainedRegistrationHidingOpenSeamAdmissions(
-  publication: KernelPublicationContext,
-  configuration: ConfigurationKernelEmission | null,
-): ReadonlyMap<OpenSeamHandle, readonly RegistrationAdmissionProduct[]> {
+function registrationHidingOpenSeamFacts(
+  world: DiWorldConstructionEmission,
+  configuration: ConfigurationKernelEmission,
+): RegistrationHidingOpenSeamFacts {
+  const seamsByHandle = new Map(
+    [
+      ...world.openSeams,
+      ...configuration.openSeamScopes.map((scope) => scope.seam),
+    ]
+      .filter(isRegistrationHidingOpenSeam)
+      .map((seam) => [seam.handle, seam] as const),
+  );
   const admissionsByProduct = new Map<ProductHandle, RegistrationAdmissionProduct>(
-    (configuration?.registrationAdmissions ?? []).map((admission) => [admission.productHandle, admission]),
+    configuration.registrationAdmissions.map((admission) => [admission.productHandle, admission]),
   );
-  if (admissionsByProduct.size === 0) {
-    return new Map();
+  const admissionsBySeam = new Map<OpenSeamHandle, Map<ProductHandle, RegistrationAdmissionProduct>>();
+  const admissionUnconstrainedSeams = new Set<OpenSeamHandle>();
+  const containersBySeam = new Map<OpenSeamHandle, Set<IdentityHandle>>();
+  const containerUnconstrainedSeams = new Set<OpenSeamHandle>();
+
+  const recordScope = (
+    seam: OpenSeam,
+    admissionProductHandle: ProductHandle | null,
+    containerIdentityHandle: IdentityHandle | null,
+  ): void => {
+    if (!seamsByHandle.has(seam.handle)) {
+      return;
+    }
+    const admission = admissionProductHandle == null
+      ? null
+      : admissionsByProduct.get(admissionProductHandle) ?? null;
+    if (admission == null || frameworkRegistrationKindForAdmission(admission) == null) {
+      admissionUnconstrainedSeams.add(seam.handle);
+    } else {
+      let admissions = admissionsBySeam.get(seam.handle);
+      if (admissions == null) {
+        admissions = new Map();
+        admissionsBySeam.set(seam.handle, admissions);
+      }
+      admissions.set(admission.productHandle, admission);
+    }
+
+    if (containerIdentityHandle == null) {
+      containerUnconstrainedSeams.add(seam.handle);
+    } else {
+      let containers = containersBySeam.get(seam.handle);
+      if (containers == null) {
+        containers = new Set();
+        containersBySeam.set(seam.handle, containers);
+      }
+      containers.add(containerIdentityHandle);
+    }
+  };
+
+  for (const scope of configuration.openSeamScopes) {
+    recordScope(scope.seam, null, scope.containerIdentityHandle);
   }
-  const recordsByHandle = new Map(publication.readAllRecords().map((record) => [record.handle, record] as const));
-  const mutable = new Map<OpenSeamHandle, {
-    readonly admissions: Map<ProductHandle, RegistrationAdmissionProduct>;
-    unconstrained: boolean;
-  }>();
-
-  for (const materialization of publication.readMaterializations()) {
-    if (materialization.openSeamHandles.length === 0) {
-      continue;
-    }
-    const admissionProductHandles = new Set<ProductHandle>(
-      materialization.productHandles.filter((handle) => admissionsByProduct.has(handle)),
-    );
-    for (const claimHandle of materialization.claimHandles) {
-      const claim = recordsByHandle.get(claimHandle);
-      if (
-        claim?.kind === 'semantic-claim'
-        && claim.predicateKey === KernelVocabulary.Di.AcceptsRegistration.key
-        && admissionsByProduct.has(claim.objectHandle as ProductHandle)
-      ) {
-        admissionProductHandles.add(claim.objectHandle as ProductHandle);
-      }
-    }
-    if (admissionProductHandles.size === 0) {
-      continue;
-    }
-
-    for (const seamHandle of materialization.openSeamHandles) {
-      let scope = mutable.get(seamHandle);
-      if (scope == null) {
-        scope = { admissions: new Map(), unconstrained: false };
-        mutable.set(seamHandle, scope);
-      }
-      for (const admissionProductHandle of admissionProductHandles) {
-        const admission = admissionsByProduct.get(admissionProductHandle)!;
-        const frameworkKind = frameworkRegistrationKindForAdmission(admission);
-        if (frameworkKind == null) {
-          scope.unconstrained = true;
-          continue;
-        }
-        scope.admissions.set(admission.productHandle, admission);
-      }
-    }
+  for (const scope of world.registrationOpenSeamScopes) {
+    recordScope(scope.seam, scope.admissionProductHandle, scope.containerIdentityHandle);
   }
 
-  return new Map(
-    [...mutable]
-      .filter(([, scope]) => !scope.unconstrained)
-      .map(([handle, scope]) => [handle, [...scope.admissions.values()]] as const),
-  );
-}
-
-function registrationHidingOpenSeamContainerScopes(
-  publication: KernelPublicationContext,
-  configuration: ConfigurationKernelEmission | null,
-  chainFacts: DiContainerChainFacts,
-): ReadonlyMap<OpenSeamHandle, readonly IdentityHandle[]> {
-  const sequencesByProduct = new Map(
-    (configuration?.sequences ?? []).map((sequence) => [sequence.productHandle, sequence] as const),
-  );
-  const stepsByProduct = new Map(
-    (configuration?.steps ?? []).map((step) => [step.productHandle, step] as const),
-  );
-  const stepsByRegistrationAdmissionProduct = configurationStepsByRegistrationAdmissionProduct(configuration?.steps ?? []);
-  const appRootContainerProductsByAppRootProduct = new Map(
-    (configuration?.appRoots ?? []).flatMap((appRoot) =>
-      appRoot.container.productHandle == null
-        ? []
-        : [[appRoot.productHandle, appRoot.container.productHandle] as const]
+  return {
+    seams: [...seamsByHandle.values()],
+    constrainedAdmissions: new Map(
+      [...admissionsBySeam]
+        .filter(([handle]) => !admissionUnconstrainedSeams.has(handle))
+        .map(([handle, admissions]) => [handle, [...admissions.values()]] as const),
     ),
-  );
-  const containerProductsByAureliaProduct = new Map(
-    (configuration?.aurelias ?? []).flatMap((aurelia) =>
-      aurelia.container.productHandle == null
-        ? []
-        : [[aurelia.productHandle, aurelia.container.productHandle] as const]
+    containerScopes: new Map(
+      [...containersBySeam]
+        .filter(([handle]) => !containerUnconstrainedSeams.has(handle))
+        .map(([handle, containers]) => [handle, [...containers]] as const),
     ),
-  );
-  const result = new Map<OpenSeamHandle, IdentityHandle[]>();
-  for (const materialization of publication.readMaterializations()) {
-    if (materialization.openSeamHandles.length === 0) {
-      continue;
-    }
-    const containers = uniqueIdentityHandles(materialization.productHandles.flatMap((productHandle) =>
-      scopedContainerIdentityHandlesForProduct(
-        productHandle,
-        stepsByProduct,
-        stepsByRegistrationAdmissionProduct,
-        sequencesByProduct,
-        appRootContainerProductsByAppRootProduct,
-        containerProductsByAureliaProduct,
-        chainFacts,
-      )
-    ));
-    if (containers.length === 0) {
-      continue;
-    }
-    for (const seamHandle of materialization.openSeamHandles) {
-      appendIdentityHandles(result, seamHandle, containers);
-    }
-  }
-  return new Map([...result].map(([handle, containers]) => [handle, uniqueIdentityHandles(containers)]));
-}
-
-function scopedContainerIdentityHandlesForProduct(
-  productHandle: ProductHandle,
-  stepsByProduct: ReadonlyMap<ProductHandle, ConfigurationStep>,
-  stepsByRegistrationAdmissionProduct: ReadonlyMap<ProductHandle, readonly ConfigurationStep[]>,
-  sequencesByProduct: ReadonlyMap<ProductHandle, ConfigurationSequence>,
-  appRootContainerProductsByAppRootProduct: ReadonlyMap<ProductHandle, ProductHandle>,
-  containerProductsByAureliaProduct: ReadonlyMap<ProductHandle, ProductHandle>,
-  chainFacts: DiContainerChainFacts,
-): readonly IdentityHandle[] {
-  const containers: IdentityHandle[] = [];
-  const diOwner = chainFacts.owningContainerIdentityHandleForProduct(productHandle);
-  if (diOwner != null) {
-    containers.push(diOwner);
-  }
-
-  const step = stepsByProduct.get(productHandle) ?? null;
-  const stepContainer = step == null
-    ? null
-    : containerIdentityHandleForConfigurationStep(
-        step,
-        sequencesByProduct,
-        appRootContainerProductsByAppRootProduct,
-        containerProductsByAureliaProduct,
-        chainFacts,
-      );
-  if (stepContainer != null) {
-    containers.push(stepContainer);
-  }
-
-  const sequence = sequencesByProduct.get(productHandle) ?? null;
-  const sequenceContainer = sequence == null
-    ? null
-    : containerIdentityHandleForConfigurationSequence(
-        sequence,
-        appRootContainerProductsByAppRootProduct,
-        containerProductsByAureliaProduct,
-        chainFacts,
-      );
-  if (sequenceContainer != null) {
-    containers.push(sequenceContainer);
-  }
-
-  for (const admissionStep of stepsByRegistrationAdmissionProduct.get(productHandle) ?? []) {
-    const admissionStepContainer = containerIdentityHandleForConfigurationStep(
-      admissionStep,
-      sequencesByProduct,
-      appRootContainerProductsByAppRootProduct,
-      containerProductsByAureliaProduct,
-      chainFacts,
-    );
-    if (admissionStepContainer != null) {
-      containers.push(admissionStepContainer);
-    }
-  }
-
-  return uniqueIdentityHandles(containers);
-}
-
-function configurationStepsByRegistrationAdmissionProduct(
-  steps: readonly ConfigurationStep[],
-): ReadonlyMap<ProductHandle, readonly ConfigurationStep[]> {
-  const result = new Map<ProductHandle, ConfigurationStep[]>();
-  for (const step of steps) {
-    for (const admissionProductHandle of step.registrationAdmissionProductHandles) {
-      const existing = result.get(admissionProductHandle);
-      if (existing == null) {
-        result.set(admissionProductHandle, [step]);
-      } else {
-        existing.push(step);
-      }
-    }
-  }
-  return result;
-}
-
-function containerIdentityHandleForConfigurationStep(
-  step: ConfigurationStep,
-  sequencesByProduct: ReadonlyMap<ProductHandle, ConfigurationSequence>,
-  appRootContainerProductsByAppRootProduct: ReadonlyMap<ProductHandle, ProductHandle>,
-  containerProductsByAureliaProduct: ReadonlyMap<ProductHandle, ProductHandle>,
-  chainFacts: DiContainerChainFacts,
-): IdentityHandle | null {
-  const sequenceProductHandle = step.sequence?.productHandle ?? null;
-  const sequence = sequenceProductHandle == null
-    ? null
-    : sequencesByProduct.get(sequenceProductHandle) ?? null;
-  return sequence == null
-    ? null
-    : containerIdentityHandleForConfigurationSequence(
-        sequence,
-        appRootContainerProductsByAppRootProduct,
-        containerProductsByAureliaProduct,
-        chainFacts,
-      );
-}
-
-function containerIdentityHandleForConfigurationSequence(
-  sequence: ConfigurationSequence,
-  appRootContainerProductsByAppRootProduct: ReadonlyMap<ProductHandle, ProductHandle>,
-  containerProductsByAureliaProduct: ReadonlyMap<ProductHandle, ProductHandle>,
-  chainFacts: DiContainerChainFacts,
-): IdentityHandle | null {
-  const appRootProductHandle = sequence.appRoot?.productHandle ?? null;
-  const aureliaProductHandle = sequence.aurelia?.productHandle ?? null;
-  return chainFacts.containerIdentityHandleForProduct(
-    appRootProductHandle != null
-      ? appRootContainerProductsByAppRootProduct.get(appRootProductHandle) ?? null
-      : aureliaProductHandle == null
-        ? null
-        : containerProductsByAureliaProduct.get(aureliaProductHandle) ?? null,
-  );
-}
-
-function appendIdentityHandles(
-  map: Map<OpenSeamHandle, IdentityHandle[]>,
-  key: OpenSeamHandle,
-  values: readonly IdentityHandle[],
-): void {
-  const existing = map.get(key);
-  if (existing == null) {
-    map.set(key, [...values]);
-  } else {
-    existing.push(...values);
-  }
+  };
 }
 
 function isRegistrationHidingOpenSeam(

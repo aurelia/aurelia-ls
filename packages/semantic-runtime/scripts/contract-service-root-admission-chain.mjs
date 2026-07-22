@@ -4,7 +4,6 @@ import {
   createSemanticRuntime,
   SemanticAppQueryKind,
 } from '../out/index.js';
-import { readDiContainerChainFacts } from '../out/di/container-chain.js';
 import { FrameworkProductDetails } from '../out/framework/product-details.js';
 import { KernelVocabulary } from '../out/kernel/vocabulary.js';
 
@@ -186,7 +185,7 @@ const chainValidationDemands = sourceServiceDemands(chain, 'validation.service-r
 const chainDiagnostics = sourceServiceDiagnostics(chain);
 const chainDialogOwnerRoots = chainDialogDemands.map((demand) => ownerRootForDemand(chain, demand)).filter(Boolean);
 const chainValidationOwnerRoots = chainValidationDemands.map((demand) => ownerRootForDemand(chain, demand)).filter(Boolean);
-const chainWalkProof = chainParentWalkProof(chain.store);
+const chainWalkProof = chainParentWalkProof(chain);
 
 if (chainValidationDemands.length !== 1) {
   failures.push(`Expected one validation source-service demand in chain fixture, observed ${chainValidationDemands.length}.`);
@@ -327,7 +326,7 @@ function ownerRootForDemand(fixture, demand) {
 }
 
 function directContainerProviderProof(fixture, containerRoot, interfaceName) {
-  const chainFacts = readDiContainerChainFacts(fixture.store);
+  const chainFacts = fixture.app.emission.containerChainFacts;
   const denotation = containerRoot == null
     ? null
     : fixture.store.readClaims().find((claim) =>
@@ -379,8 +378,9 @@ function childContainerIdentityCount(store) {
   ).length;
 }
 
-function chainParentWalkProof(store) {
-  const chainFacts = readDiContainerChainFacts(store);
+function chainParentWalkProof(fixture) {
+  const { store } = fixture;
+  const chainFacts = fixture.app.emission.containerChainFacts;
   const validationKey = interfaceKeyIdentityHandle(store, 'IValidationRules');
   const dialogKey = interfaceKeyIdentityHandle(store, 'IDialogService');
   const validationProvider = validationKey == null

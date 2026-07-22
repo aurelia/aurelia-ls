@@ -1122,6 +1122,10 @@ applications, runtime watcher rows, watcher observed-dependency rows, runtime co
 value-channel rows, and data-flow rows must travel together with summary, topology, source files, and open seams.
 Unsupported row-backed projections fail at snapshot construction time, so callers do not mistake a too-shallow analysis
 depth for absence of the expected semantic facts.
+The helper uses the `fixture` inquiry profile for every constituent query. A snapshot is one batch operation over one app
+epoch, so its answer-local products remain available across the related query set instead of being reconstructed after
+every row family. A harness that creates a fresh cold runtime for comparison should retire that runtime after reading the
+snapshot; this keeps batch-local reuse distinct from cross-fixture retention.
 `runtime-watcher`, `runtime-watcher-observed-dependency`, `binding-observed-dependency`,
 `computed-observer-source`, and `computed-observer-observed-dependency` expected effects form the first route-scoped
 semantic-contract lane for observation pressure. Focused fixtures assert controller-owned watcher admission, proxy

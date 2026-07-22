@@ -44,6 +44,7 @@ import type {
   ComputationChildCarry,
   ComputationRead,
   ComputationReadRebaseContext,
+  ComputationReadRebaser,
   ComputationRun,
 } from '../kernel/computation-lifecycle.js';
 import type { TypeSystemProject } from '../type-system/project.js';
@@ -263,12 +264,31 @@ export class TemplateResourceRuntimeAnalysisEmission {
     readonly runtimeAnalysis: TemplateRuntimeAnalysisEmission,
   ) {}
 
+  /** Preserve runtime/checker products while adopting the current front-door and expression-world authorities. */
+  forGeneration(
+    compilation: TemplateResourceCompilationEmission,
+    expressionWorld: CheckerExpressionTypeWorld,
+  ): TemplateResourceRuntimeAnalysisEmission {
+    return new TemplateResourceRuntimeAnalysisEmission(
+      compilation,
+      this.runtimeAnalysis.forExpressionWorld(expressionWorld),
+    );
+  }
+
+  /** Reuse retained semantic products under current front-door authorities without replaying runtime analysis. */
+  forCarriedGeneration(
+    compilation: TemplateResourceCompilationEmission,
+    expressionWorld: CheckerExpressionTypeWorld,
+  ): TemplateResourceRuntimeAnalysisEmission {
+    return new TemplateResourceRuntimeAnalysisEmission(
+      compilation,
+      this.runtimeAnalysis.forCarriedExpressionWorld(expressionWorld),
+    );
+  }
+
   /** Preserve the analyzed products while replacing their closed run-bound expression world. */
   forCommittedGeneration(expressionWorld: CheckerExpressionTypeWorld): TemplateResourceRuntimeAnalysisEmission {
-    return new TemplateResourceRuntimeAnalysisEmission(
-      this.compilation,
-      this.runtimeAnalysis.forCommittedGeneration(expressionWorld),
-    );
+    return this.forGeneration(this.compilation, expressionWorld);
   }
 }
 
@@ -433,6 +453,7 @@ export class TemplateCompilationFrontDoorEmission {
   readonly appCompilations: readonly TemplateResourceCompilationEmission[];
   readonly authoringCompilations: readonly TemplateResourceCompilationEmission[];
   private readonly familiesByOwnerHandle: ReadonlyMap<IdentityHandle | ProductHandle, TemplateCompilationFamilyFrontDoorEmission>;
+  private readonly membershipRevision: string;
 
   constructor(
     readonly plan: TemplateCompilationProjectPlan,
@@ -443,6 +464,7 @@ export class TemplateCompilationFrontDoorEmission {
     this.appCompilations = Object.freeze(families.flatMap((family) => family.appCompilations));
     this.authoringCompilations = Object.freeze(families.flatMap((family) => family.authoringCompilations));
     this.familiesByOwnerHandle = new Map(families.map((family) => [family.ownerHandle, family]));
+    this.membershipRevision = templateFrontDoorMembershipRevision(families);
     if (this.familiesByOwnerHandle.size !== families.length) {
       throw new Error('Template front-door emission contains duplicate family owners.');
     }
@@ -453,6 +475,49 @@ export class TemplateCompilationFrontDoorEmission {
   ): TemplateCompilationFamilyFrontDoorEmission | null {
     return this.familiesByOwnerHandle.get(ownerHandle) ?? null;
   }
+
+  hasSameMembershipAs(other: TemplateCompilationFrontDoorEmission): boolean {
+    return this.membershipRevision === other.membershipRevision;
+  }
+}
+
+/** Rebase candidate-owned compiler reads through the current complete front-door compiler scopes. */
+export function templateCompilerReadRebaserForFrontDoor(
+  frontDoor: TemplateCompilationFrontDoorEmission,
+): ComputationReadRebaser {
+  const worldsByScope = new Map(uniqueCompilerWorlds([
+    ...frontDoor.plan.appWorld.compilerWorlds,
+    ...frontDoor.appCompilations.flatMap((compilation) => [
+      compilation.parentCompilerWorld,
+      compilation.compilerWorld,
+    ]),
+    ...frontDoor.authoringCompilations.flatMap((compilation) => [
+      compilation.parentCompilerWorld,
+      compilation.compilerWorld,
+    ]),
+  ]).map((world) => [world.resourceScope.identityHandle, world]));
+  const rebasers = new Map<
+    IdentityHandle,
+    (read: TemplateCompilerReadObservation) => TemplateCompilerReadObservation | null
+  >();
+  return (read, context) => {
+    if (!(read instanceof TemplateCompilerReadObservation)) {
+      return undefined;
+    }
+    const world = worldsByScope.get(read.compilerScopeIdentityHandle) ?? null;
+    if (world == null) {
+      return null;
+    }
+    let rebase = rebasers.get(read.compilerScopeIdentityHandle);
+    if (rebase == null) {
+      rebase = TemplateCompilerReadObservation.createRebaser(
+        context,
+        TemplateCompilerWorldAuthority.fixed(world),
+      );
+      rebasers.set(read.compilerScopeIdentityHandle, rebase);
+    }
+    return rebase(read);
+  };
 }
 
 class TemplateCompilationPhaseRecorder {
@@ -695,6 +760,49 @@ export class TemplateCompilationProjectPass {
         frontDoor.profile,
         templateCompilationProfile(started, phaseRecorder.phases),
       ),
+    );
+  }
+
+  /** Rebind one lifecycle-carried runtime-analysis graph to the current equivalent front door. */
+  rebaseAnalyzedFrontDoors(
+    frontDoor: TemplateCompilationFrontDoorEmission,
+    previous: TemplateCompilationProjectEmission,
+    options: TemplateCompilationProjectOptions = {},
+  ): TemplateCompilationProjectEmission | null {
+    const runtimeAnalysisDepth = options.runtimeAnalysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH;
+    if (
+      !frontDoor.hasSameMembershipAs(previous.frontDoor)
+      || [...previous.resources, ...previous.authoringResources].some(
+        (resource) => resource.runtimeAnalysis.analysisDepth !== runtimeAnalysisDepth,
+      )
+    ) {
+      return null;
+    }
+    const expressionWorld = new CheckerExpressionTypeWorld(
+      this.store,
+      new CheckerTypeProjector(this.store, this.publication),
+      undefined,
+      options.stateStores ?? [],
+    );
+    const resources = rebaseRuntimeAnalysisResources(
+      frontDoor.appCompilations,
+      previous.resources,
+      expressionWorld,
+    );
+    const authoringResources = rebaseRuntimeAnalysisResources(
+      frontDoor.authoringCompilations,
+      previous.authoringResources,
+      expressionWorld,
+    );
+    if (resources == null || authoringResources == null) {
+      return null;
+    }
+    return new TemplateCompilationProjectEmission(
+      frontDoor,
+      resources,
+      authoringResources,
+      expressionWorld,
+      frontDoor.profile,
     );
   }
 
@@ -1530,6 +1638,62 @@ function uniqueCompilerWorlds(
     result.push(compilerWorld);
   }
   return result;
+}
+
+function templateFrontDoorMembershipRevision(
+  families: readonly TemplateCompilationFamilyFrontDoorEmission[],
+): string {
+  return JSON.stringify(families.map((family) => [
+    family.ownerHandle,
+    family.cohortKeys,
+    family.appCompilations.map(templateCompilationMembership),
+    family.authoringCompilations.map(templateCompilationMembership),
+  ]));
+}
+
+function templateCompilationMembership(
+  compilation: TemplateResourceCompilationEmission,
+): readonly (string | null)[] {
+  return [
+    compilation.localKey,
+    compilation.familyOwnerHandle,
+    compilation.analysisContextProductHandle,
+    compilation.appRootDefinitionProductHandle,
+    compilation.definition.productHandle,
+    compilation.definition.key,
+    compilation.definition.name,
+    compilation.parentCompilerWorld.resourceScope.identityHandle,
+    compilation.compilerWorld.resourceScope.identityHandle,
+    compilation.unit.compilationUnit.productHandle,
+    compilation.compiledTemplate.compiledTemplate.productHandle,
+  ];
+}
+
+function rebaseRuntimeAnalysisResources(
+  compilations: readonly TemplateResourceCompilationEmission[],
+  previous: readonly TemplateResourceRuntimeAnalysisEmission[],
+  expressionWorld: CheckerExpressionTypeWorld,
+): readonly TemplateResourceRuntimeAnalysisEmission[] | null {
+  if (compilations.length !== previous.length) {
+    return null;
+  }
+  const compilationsByLocalKey = new Map<string, TemplateResourceCompilationEmission>();
+  for (const compilation of compilations) {
+    if (compilationsByLocalKey.has(compilation.localKey)) {
+      return null;
+    }
+    compilationsByLocalKey.set(compilation.localKey, compilation);
+  }
+  const rebased: TemplateResourceRuntimeAnalysisEmission[] = [];
+  for (const resource of previous) {
+    const compilation = compilationsByLocalKey.get(resource.compilation.localKey) ?? null;
+    if (compilation == null) {
+      return null;
+    }
+    compilationsByLocalKey.delete(compilation.localKey);
+    rebased.push(resource.forCarriedGeneration(compilation, expressionWorld));
+  }
+  return compilationsByLocalKey.size === 0 ? rebased : null;
 }
 
 function templateSourceKind(template: CustomElementTemplateDefinition | null): TemplateSourceKind | null {

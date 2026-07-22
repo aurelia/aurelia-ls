@@ -133,7 +133,6 @@ interface RouteNodeMaterializationFields extends Omit<RouteNodeModelFields, 'pro
 /** RouteTree products materialized for initial state and closed pre-activation transition compilation. */
 export class RouteTreeMaterializationProjectResult {
   constructor(
-    readonly project: ProjectBootFrame,
     readonly routeTrees: readonly RouteTreeModel[],
     readonly routeNodes: readonly RouteNodeModel[],
     readonly issues: readonly RouterIssueModel[],
@@ -179,7 +178,6 @@ export class RouteTreeMaterializationProjectPass {
       new KernelStoreBatch(records, `router-route-tree:${project.projectKey}`),
     ));
     return new RouteTreeMaterializationProjectResult(
-      project,
       emissions.map((emission) => emission.routeTree),
       emissions.flatMap((emission) => emission.routeNodes),
       frame.readIssues(),

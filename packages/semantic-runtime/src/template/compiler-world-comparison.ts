@@ -4,6 +4,8 @@ import type { KernelRecordHandle } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import {
   KernelPublicationDecisionKind,
+  sameKernelFieldProvenance,
+  sameKernelRecordWitness,
   type KernelComparablePublicationDecision,
   type KernelPublicationComparisonContext,
 } from '../kernel/publication-comparison.js';
@@ -67,12 +69,12 @@ export function compareTemplateCompilerWorldDetails(
   }
   return witnessDecision(
     sameNullable(previous.appRoot, next.appRoot, (left, right) =>
-      sameRecordWitness(left.addressHandle, right.addressHandle, context))
+      sameKernelRecordWitness(left.addressHandle, right.addressHandle, context))
       && sameContainerWitness(previous.container, next.container, context)
       && sameArrays(previous.services, next.services, (left, right) =>
-        sameRecordWitness(left.addressHandle, right.addressHandle, context))
-      && sameRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
-      && sameFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
+        sameKernelRecordWitness(left.addressHandle, right.addressHandle, context))
+      && sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+      && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
   );
 }
 
@@ -95,8 +97,8 @@ export function compareTemplateResourceScopeDetails(
       compareTemplateVisibleResource(left, right, context)),
     witnessDecision(
       sameContainerWitness(previous.container, next.container, context)
-        && sameRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
-        && sameFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
+        && sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+        && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
     ),
   );
 }
@@ -173,8 +175,8 @@ export function compareAttributeParserServiceDetails(
     compareNullableDetails(previous.machine, next.machine, (left, right) =>
       compareAttributeParserMachineDetails(left, right, context)),
     witnessDecision(
-      sameRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
-        && sameFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
+      sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+        && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
     ),
   );
 }
@@ -191,8 +193,8 @@ export function compareAttributeParserMachineDetails(
     compareArrays(previous.compiledPatterns, next.compiledPatterns, (left, right) =>
       compareCompiledAttributePatternDetails(left, right, context)),
     witnessDecision(
-      sameRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
-        && sameFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
+      sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+        && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
     ),
   );
 }
@@ -209,8 +211,8 @@ export function compareBindingCommandResolverDetails(
     compareArrays(previous.commands, next.commands, (left, right) =>
       compareBindingCommandExecutableDetails(left, right, context)),
     witnessDecision(
-      sameRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
-        && sameFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
+      sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+        && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
     ),
   );
 }
@@ -248,7 +250,7 @@ export function compareCompiledAttributePatternDetails(
   }
   return witnessDecision(
     sameAttributePatternDefinitionWitness(previous.definition, next.definition, context)
-      && sameRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context),
+      && sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context),
   );
 }
 
@@ -279,8 +281,8 @@ export function compareAttributePatternExecutableDetails(
       sameResourceTargetWitness(left, right, context))
       && sameArrays(previous.patterns, next.patterns, (left, right) =>
         sameAttributePatternDefinitionWitness(left, right, context))
-      && sameRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
-      && sameFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
+      && sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+      && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
   );
 }
 
@@ -315,8 +317,8 @@ export function compareBindingCommandExecutableDetails(
   return witnessDecision(
     sameNullable(previous.target, next.target, (left, right) =>
       sameResourceTargetWitness(left, right, context))
-      && sameRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
-      && sameFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
+      && sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+      && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
   );
 }
 
@@ -350,8 +352,8 @@ export function compareRuntimeRendererDetails(
     return KernelPublicationDecisionKind.Replace;
   }
   return witnessDecision(
-    sameRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
-      && sameFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
+    sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+      && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
   );
 }
 
@@ -380,10 +382,10 @@ export function compareTemplateCompilerIssueDetails(
     return KernelPublicationDecisionKind.Replace;
   }
   return witnessDecision(
-    sameRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
-      && sameFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context)
+    sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+      && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context)
       && sameArrays(previous.relatedInformation, next.relatedInformation, (left, right) =>
-        sameRecordWitness(left.sourceAddressHandle, right.sourceAddressHandle, context)),
+        sameKernelRecordWitness(left.sourceAddressHandle, right.sourceAddressHandle, context)),
   );
 }
 
@@ -410,8 +412,8 @@ function compareContainerService<
   }
   return witnessDecision(
     sameContainerWitness(previous.container, next.container, context)
-      && sameRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
-      && sameFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
+      && sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+      && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
   );
 }
 
@@ -439,7 +441,7 @@ function compareTemplateVisibleResource(
   ) {
     return KernelPublicationDecisionKind.Replace;
   }
-  return witnessDecision(sameRecordWitness(
+  return witnessDecision(sameKernelRecordWitness(
     previous.sourceAddressHandle,
     next.sourceAddressHandle,
     context,
@@ -487,7 +489,7 @@ function sameContainerWitness(
   next: ContainerReference,
   context: KernelPublicationComparisonContext,
 ): boolean {
-  return sameRecordWitness(previous.addressHandle, next.addressHandle, context);
+  return sameKernelRecordWitness(previous.addressHandle, next.addressHandle, context);
 }
 
 function sameResourceTargetSemantics(
@@ -509,14 +511,14 @@ function sameResourceTargetWitness(
   next: ResourceTargetReference,
   context: KernelPublicationComparisonContext,
 ): boolean {
-  return sameRecordWitness(previous.addressHandle, next.addressHandle, context)
-    && sameRecordWitness(
+  return sameKernelRecordWitness(previous.addressHandle, next.addressHandle, context)
+    && sameKernelRecordWitness(
       previous.declarationSourceAddressHandle,
       next.declarationSourceAddressHandle,
       context,
     )
     && sameNullable(previous.targetType, next.targetType, (left, right) =>
-      sameRecordWitness(left.sourceAddressHandle, right.sourceAddressHandle, context));
+      sameKernelRecordWitness(left.sourceAddressHandle, right.sourceAddressHandle, context));
 }
 
 function sameCheckerTypeReferenceSemantics(
@@ -551,8 +553,8 @@ function sameAttributePatternDefinitionWitness(
   next: AttributePatternDefinitionEntry,
   context: KernelPublicationComparisonContext,
 ): boolean {
-  return sameRecordWitness(previous.addressHandle, next.addressHandle, context)
-    && sameRecordWitness(previous.provenanceHandle, next.provenanceHandle, context);
+  return sameKernelRecordWitness(previous.addressHandle, next.addressHandle, context)
+    && sameKernelRecordWitness(previous.provenanceHandle, next.provenanceHandle, context);
 }
 
 function sameAttributeMapperConfiguration(
@@ -614,28 +616,6 @@ function sameRuntimeNodeObserverConfig(
     previous.fieldStates.default,
     next.fieldStates.default,
   ) && sameArrays(previous.eventNames, next.eventNames, (left, right) => left === right);
-}
-
-function sameFieldProvenance(
-  previous: readonly FieldProvenance[],
-  next: readonly FieldProvenance[],
-  context: KernelPublicationComparisonContext,
-): boolean {
-  return sameArrays(previous, next, (left, right) =>
-    left.field === right.field
-      && sameRecordWitness(left.provenanceHandle, right.provenanceHandle, context));
-}
-
-function sameRecordWitness(
-  previousHandle: KernelRecordHandle | null,
-  nextHandle: KernelRecordHandle | null,
-  context: KernelPublicationComparisonContext,
-): boolean {
-  if (previousHandle == null || nextHandle == null) {
-    return previousHandle === nextHandle;
-  }
-  return previousHandle === nextHandle
-    && context.compareRecordHandles(previousHandle, nextHandle) === KernelPublicationDecisionKind.Retain;
 }
 
 function compareNullableDetails<TValue>(

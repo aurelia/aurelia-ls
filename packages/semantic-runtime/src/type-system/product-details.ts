@@ -16,6 +16,10 @@ import {
   TypeSystemHotDetailDescriptors,
 } from './detail-descriptors.js';
 import { checkerTypeReferenceKernelReferences } from './structural-references.js';
+import {
+  compareCheckerTypeMemberDetails,
+  compareCheckerTypeShapeDetails,
+} from './type-shape-comparison.js';
 
 function checkerTypeShapeReferences(
   shape: CheckerTypeShape,
@@ -53,6 +57,7 @@ export const TypeSystemProductDetails = {
   TypeShape: defineProductDetailSlot(
     TypeSystemDetailDescriptors.TypeShape,
     checkerTypeShapeReferences,
+    compareCheckerTypeShapeDetails,
   ),
 } as const;
 
@@ -61,5 +66,6 @@ export const TypeSystemHotDetails = {
   TypeMember: defineHotDetailSlot(
     TypeSystemHotDetailDescriptors.TypeMember,
     checkerTypeMemberReferences,
+    compareCheckerTypeMemberDetails,
   ),
 } as const;

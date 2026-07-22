@@ -48,7 +48,6 @@ import {
 /** State products recovered from @aurelia/state configuration and source-level API usage. */
 export class StateProjectResult {
   constructor(
-    readonly configuration: ConfigurationRecognitionProjectResult,
     readonly stores: readonly StateStoreConfiguration[],
     readonly getterBindings: readonly StateGetterBinding[],
     readonly issues: readonly StateIssue[],
@@ -99,7 +98,6 @@ export class StateStoreConfigurationMaterializationProjectPass {
       ],
     ));
     return new StateProjectResult(
-      configuration,
       emissions.map((emission) => emission.store),
       [],
       issuePublications.map((publication) => publication.issue),

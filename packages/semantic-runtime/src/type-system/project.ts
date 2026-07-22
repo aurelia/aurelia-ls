@@ -53,6 +53,7 @@ import {
   registerCheckerDeclarationSourceContext,
 } from './declaration-source.js';
 import type { TypeSystemProgramSourceCatalog } from './program-source-authority.js';
+import { typeSystemSourceAdmissionIndex } from './source-path-index.js';
 export {
   clearTypeSystemCompilerHostSourceFileCache,
   readTypeSystemCompilerHostSourceFileCacheOverview,
@@ -210,6 +211,7 @@ export class TypeSystemProject {
   private programNodeRemapSpanHits = 0;
   private programNodeRemapSourceFileMisses = 0;
   private programNodeRemapSpanMisses = 0;
+  private readonly sourceAdmissionsByPath: ReadonlyMap<string, SourceFileAdmission>;
 
   constructor(
     /** Technical identity of the Program/checker objects retained by this project. */
@@ -241,9 +243,15 @@ export class TypeSystemProject {
     private readonly diagnosticSourcePaths: ReadonlySet<string> | null,
     private readonly inputReadScope: SemanticRuntimeProjectInputReadScope,
   ) {
+    this.sourceAdmissionsByPath = typeSystemSourceAdmissionIndex(project);
     registerCheckerDeclarationSourceContext(
       checker,
-      new CheckerDeclarationSourceContext(project.projectKey, programSources, overlaySourcePaths),
+      new CheckerDeclarationSourceContext(
+        project.projectKey,
+        programSources,
+        overlaySourcePaths,
+        this.sourceAdmissionsByPath,
+      ),
     );
   }
 
@@ -315,7 +323,7 @@ export class TypeSystemProject {
       return null;
     }
     const normalized = canonicalTypeSystemPath(sourceFile.fileName);
-    const admitted = sourceAdmissionForTypeSystemPath(this.project, normalized);
+    const admitted = this.sourceAdmissionsByPath.get(normalized) ?? null;
     if (admitted != null) {
       return admitted.role;
     }
@@ -1171,17 +1179,6 @@ function typeSystemProgramSourceFileRole(
     return SourceFileRole.Unknown;
   }
   return SourceFileRole.ExternalSource;
-}
-
-function sourceAdmissionForTypeSystemPath(
-  project: ProjectBootFrame,
-  normalizedFileName: string,
-): SourceFileAdmission | null {
-  return project.sourceFiles.find((source) => {
-    const projectPath = canonicalTypeSystemPath(resolveProjectPath(project.rootDir, source.path));
-    const workspacePath = canonicalTypeSystemPath(resolveWorkspacePath(project.workspaceRootDir, source.path));
-    return projectPath === normalizedFileName || workspacePath === normalizedFileName;
-  }) ?? null;
 }
 
 function typeSystemNodeModulePackageName(normalizedFileName: string): string | null {

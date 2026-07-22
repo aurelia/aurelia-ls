@@ -18,13 +18,14 @@ accusation without provider proof; and `not-admitted` is the only state that sho
 `framework-capability-not-registered`. Known sibling/off-chain providers are not admission evidence for a mapped
 consulting container.
 
-Consulting-container proof is intentionally derived from existing substrate facts: AppTask roots map through
-configuration sequence membership to the app-root container, activation-backed roots map through resource/class or
-app-root ownership, and `container.get(...)` roots recurse through their owning container-root product. A direct source
-container root joins to the exact `DI.createContainer()` product through
-`framework.container-root-denotes-container`; ambiguous source spans prove nothing. DI slot membership should be read
-through `DiProductIdentity.containerHandle` plus `di.provides-key`, not through a parallel membership predicate or
-world-global provider presence.
+Consulting-container proof spends typed producer results rather than reconstructing their generic records: spent AppTask
+rows retain the receiving container, activation-backed roots map through current resource/compiler worlds, and
+`container.get(...)` roots recurse through their owning container-root product. A direct source container root joins to
+the exact `DI.createContainer()` product through service-root enrichment and the corresponding
+`framework.container-root-denotes-container` claim; ambiguous source spans prove nothing. Provider visibility comes from
+the exact `Container` frames and resolver/resource slots in the current DI/runtime world, never from world-global
+presence. Registration-hiding seams retain their admission/container loci; unknown loci remain conservatively
+unconstrained.
 
 Keep recognizers pure where possible, but do not let shared positive facts stay as projection-local state. If a fact is
 consumed by more than one domain, or justifies a framework-coded positive diagnostic, promote it into a kernel product,

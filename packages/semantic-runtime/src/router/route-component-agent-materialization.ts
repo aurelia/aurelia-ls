@@ -71,7 +71,6 @@ import type { TypeSystemProject } from '../type-system/project.js';
 /** ComponentAgent products created by pre-activation route-tree compilation. */
 export class RouteComponentAgentMaterializationProjectResult {
   constructor(
-    readonly project: ProjectBootFrame,
     readonly componentAgents: readonly ComponentAgentModel[],
     readonly controllers: readonly RuntimeControllerFrame[],
   ) {}
@@ -106,7 +105,6 @@ export class RouteComponentAgentMaterializationProjectPass {
     const emissions = this.componentAgentEmissions(routeRuntime, routeTree, templates, typeSystem);
     this.publishComponentAgents(project, emissions);
     return new RouteComponentAgentMaterializationProjectResult(
-      project,
       emissions.map((emission) => emission.componentAgent),
       emissions.flatMap((emission) => emission.controller == null ? [] : [emission.controller]),
     );

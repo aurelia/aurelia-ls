@@ -9,6 +9,7 @@ import {
 } from '../kernel/evidence.js';
 import type {
   ClaimHandle,
+  ProductHandle,
 } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { MaterializationRecord } from '../kernel/materialization.js';
@@ -27,7 +28,7 @@ import {
   type ClaimPredicateKey,
 } from '../kernel/vocabulary.js';
 import { sourceSpanAddressForAddress } from '../kernel/source-address.js';
-import { readDiContainerChainFacts, type DiContainerChainFacts } from '../di/container-chain.js';
+import type { DiContainerChainFacts } from '../di/container-chain.js';
 import {
   FrameworkServiceRoot,
   FrameworkServiceRootBasis,
@@ -39,7 +40,18 @@ export class FrameworkServiceRootEnrichmentProjectResult {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly claimHandles: readonly ClaimHandle[],
+    private readonly directContainerProductsByRoot: ReadonlyMap<ProductHandle, ProductHandle>,
   ) {}
+
+  directContainerProductHandleForRoot(rootProductHandle: ProductHandle): ProductHandle | null {
+    return this.directContainerProductsByRoot.get(rootProductHandle) ?? null;
+  }
+}
+
+interface FrameworkServiceRootEnrichment {
+  readonly records: readonly KernelStoreRecord[];
+  readonly claimHandles: readonly ClaimHandle[];
+  readonly directContainerProductHandle: ProductHandle | null;
 }
 
 /** Adds post-DI-world claim edges for source-backed framework service-root products. */
@@ -52,27 +64,36 @@ export class FrameworkServiceRootEnrichmentMaterializer {
   materializeAndEmit(
     projectKey: string,
     roots: readonly FrameworkServiceRoot[],
+    containerFacts: DiContainerChainFacts,
   ): FrameworkServiceRootEnrichmentProjectResult {
     const records: KernelStoreRecord[] = [];
     const claimHandles: ClaimHandle[] = [];
-    const containerFacts = readDiContainerChainFacts(this.publication);
+    const directContainerProductsByRoot = new Map<ProductHandle, ProductHandle>();
     for (const root of roots) {
       const enrichment = this.recordsForRoot(projectKey, root, containerFacts);
       records.push(...enrichment.records);
       claimHandles.push(...enrichment.claimHandles);
+      if (enrichment.directContainerProductHandle != null) {
+        directContainerProductsByRoot.set(root.productHandle, enrichment.directContainerProductHandle);
+      }
     }
     this.publication.publish(new KernelPublicationPlan(
       new KernelStoreBatch(records, `framework-service-root-enrichment:${projectKey}`),
     ));
-    return new FrameworkServiceRootEnrichmentProjectResult(records, claimHandles);
+    return new FrameworkServiceRootEnrichmentProjectResult(
+      records,
+      claimHandles,
+      directContainerProductsByRoot,
+    );
   }
 
   private recordsForRoot(
     projectKey: string,
     root: FrameworkServiceRoot,
     containerFacts: DiContainerChainFacts,
-  ): FrameworkServiceRootEnrichmentProjectResult {
+  ): FrameworkServiceRootEnrichment {
     const claimSpecs: ClaimSpec[] = [];
+    let directContainerProductHandle: ProductHandle | null = null;
     if (frameworkServiceRootBasisResolvesDiKey(root.basis) && root.serviceKeyIdentityHandle != null) {
       claimSpecs.push({
         localSuffix: `resolves-key:${localKeyPart(root.serviceKeyIdentityHandle)}`,
@@ -89,6 +110,7 @@ export class FrameworkServiceRootEnrichmentMaterializer {
         ? null
         : containerFacts.containerProductHandleForSourceSpan(source.fileHandle, source.start, source.end);
       if (containerProductHandle != null) {
+        directContainerProductHandle = containerProductHandle;
         claimSpecs.push({
           localSuffix: `denotes-container:${localKeyPart(containerProductHandle)}`,
           predicateKey: KernelVocabulary.Framework.ContainerRootDenotesContainer.key,
@@ -111,7 +133,7 @@ export class FrameworkServiceRootEnrichmentMaterializer {
       });
     }
     if (claimSpecs.length === 0) {
-      return new FrameworkServiceRootEnrichmentProjectResult([], []);
+      return { records: [], claimHandles: [], directContainerProductHandle: null };
     }
 
     const local = [
@@ -147,10 +169,11 @@ export class FrameworkServiceRootEnrichmentMaterializer {
         claims.map((claim) => claim.handle),
       ),
     ];
-    return new FrameworkServiceRootEnrichmentProjectResult(
+    return {
       records,
-      claims.map((claim) => claim.handle),
-    );
+      claimHandles: claims.map((claim) => claim.handle),
+      directContainerProductHandle,
+    };
   }
 }
 

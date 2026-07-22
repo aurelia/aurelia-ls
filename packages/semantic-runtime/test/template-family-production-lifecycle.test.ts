@@ -14,6 +14,7 @@ import {
   type AureliaAppWorldProjectEmission,
 } from '../src/configuration/app-world-project-pass.js';
 import {
+  ComputationChildTransitionKind,
   ComputationCommitState,
   computationProductDetailReadKey,
   computationRecordReadKey,
@@ -45,6 +46,7 @@ import { TemplateCompilerFrameworkErrorCode } from '../src/template/framework-er
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import { TemplateCompilationLocus } from '../src/template/template-compilation-cohort.js';
 import type { TemplateResourceCompilationEmission } from '../src/template/template-compilation-project-pass.js';
+import type { TemplateRuntimeAnalysisEmission } from '../src/template/template-runtime-analysis.js';
 import { resourceLocalRuntimeBindings } from '../src/template/runtime-resource-ownership.js';
 import { RuntimeValueConverterIssueKind } from '../src/template/runtime-value-converter.js';
 import { MutableProjectSourceOverlay } from './support/incremental-conformance.js';
@@ -596,6 +598,13 @@ describe('production template-family lifecycle', () => {
           TemplateProductDetails.World,
           baselineRootWorld.world.productHandle,
         );
+    const baselineRuntimeAnalysisByLocalKey = new Map(
+      baseline.emission.templates.resources.map((resource) => [
+        resource.compilation.localKey,
+        resource.runtimeAnalysis,
+      ]),
+    );
+    const baselinePostTemplate = baseline.emission.postTemplate;
     const equal = await reopenApp(runtime, inputAuthority, baseline);
     const equalCompilation = requireNamedCompilation(equal.emission, 'app');
     const equalRootWorld = equal.emission.appWorld.compilerWorlds[0];
@@ -614,6 +623,23 @@ describe('production template-family lifecycle', () => {
       expect(equalRead?.validate().isCurrent).toBe(true);
     }
     const equalTransition = latestTransition(runtime, equal);
+    expect(equalTransition.children).toContainEqual(expect.objectContaining({
+      locus: expect.objectContaining({
+        reconciliationKey: JSON.stringify([
+          equal.project.projectKey,
+          AureliaAppAnalysisPhase.PostTemplate,
+        ]),
+      }),
+      kind: ComputationChildTransitionKind.Carried,
+    }));
+    expect(equal.emission.postTemplate).not.toBe(baselinePostTemplate);
+    for (const resource of equal.emission.templates.resources) {
+      const previousRuntimeAnalysis = baselineRuntimeAnalysisByLocalKey.get(resource.compilation.localKey) ?? null;
+      expect(previousRuntimeAnalysis).not.toBeNull();
+      if (previousRuntimeAnalysis != null) {
+        expectCarriedRuntimeAnalysis(previousRuntimeAnalysis, resource.runtimeAnalysis);
+      }
+    }
     if (baselineRootWorld == null) {
       throw new Error('Expected an app-root compiler world.');
     }
@@ -1220,6 +1246,30 @@ function outputKeys(outputs: readonly ComputationOutput[]): readonly string[] {
   return outputs
     .map((output) => `${output.surface}:${output.detailKind}:${output.handle}`)
     .sort();
+}
+
+function expectCarriedRuntimeAnalysis(
+  previous: TemplateRuntimeAnalysisEmission,
+  current: TemplateRuntimeAnalysisEmission,
+): void {
+  expect(current).not.toBe(previous);
+  for (const key of [
+    'runtimeRendering',
+    'expressionResourcePlan',
+    'scopes',
+    'controllerBind',
+    'i18nTranslationBinding',
+    'bindingBehavior',
+    'valueConverter',
+    'bindingValueChannel',
+    'bindingDataFlow',
+    'runtimeComposition',
+  ] as const) {
+    expect(current[key]).toBe(previous[key]);
+  }
+  expect(current.expressionWorld).not.toBe(previous.expressionWorld);
+  expect(current.profile.totalMilliseconds).toBe(0);
+  expect(current.profile.phases).toEqual([]);
 }
 
 function expectFamilyClosureWithdrawn(

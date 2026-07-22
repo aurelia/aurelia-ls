@@ -1,10 +1,10 @@
-import type { FieldProvenance } from '../kernel/provenance.js';
 import {
   KernelPublicationDecisionKind,
+  sameKernelFieldProvenance,
+  sameKernelRecordWitness,
   type KernelComparablePublicationDecision,
   type KernelPublicationComparisonContext,
 } from '../kernel/publication-comparison.js';
-import type { KernelRecordHandle } from '../kernel/handles.js';
 import type { HtmlNodeReference } from './html-ir.js';
 import type {
   TemplateInstructionReference,
@@ -34,8 +34,8 @@ export function compareCompiledTemplateDetails(
     return KernelPublicationDecisionKind.Replace;
   }
 
-  const witness = sameRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
-    && sameFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context)
+  const witness = sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+    && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context)
     && sameArrays(previous.targets, next.targets, (left, right) =>
       sameRenderTargetWitnesses(left, right, context))
     && sameNullable(previous.surrogateSequence, next.surrogateSequence, (left, right) =>
@@ -63,8 +63,8 @@ function sameRenderTargetWitnesses(
   next: TemplateRenderTarget,
   context: KernelPublicationComparisonContext,
 ): boolean {
-  return sameRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
-    && sameFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context)
+  return sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+    && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context)
     && sameNullable(previous.htmlNode, next.htmlNode, (left, right) =>
       sameHtmlNodeWitnesses(left, right, context));
 }
@@ -85,7 +85,7 @@ function sameHtmlNodeWitnesses(
   next: HtmlNodeReference,
   context: KernelPublicationComparisonContext,
 ): boolean {
-  return sameRecordWitness(previous.addressHandle, next.addressHandle, context);
+  return sameKernelRecordWitness(previous.addressHandle, next.addressHandle, context);
 }
 
 function sameInstructionSequenceSemantics(
@@ -107,7 +107,7 @@ function sameInstructionSequenceWitnesses(
   next: TemplateInstructionSequence,
   context: KernelPublicationComparisonContext,
 ): boolean {
-  return sameRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
+  return sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
     && sameArrays(previous.instructions, next.instructions, (left, right) =>
       sameInstructionReferenceWitnesses(left, right, context));
 }
@@ -131,32 +131,7 @@ function sameInstructionReferenceWitnesses(
   next: TemplateInstructionReference,
   context: KernelPublicationComparisonContext,
 ): boolean {
-  return sameRecordWitness(previous.addressHandle, next.addressHandle, context);
-}
-
-function sameFieldProvenance(
-  previous: readonly FieldProvenance[],
-  next: readonly FieldProvenance[],
-  context: KernelPublicationComparisonContext,
-): boolean {
-  return sameArrays(previous, next, (left, right) =>
-    left.field === right.field
-      && sameRecordWitness(left.provenanceHandle, right.provenanceHandle, context)
-  );
-}
-
-function sameRecordWitness(
-  previousHandle: KernelRecordHandle | null,
-  nextHandle: KernelRecordHandle | null,
-  context: KernelPublicationComparisonContext,
-): boolean {
-  if (previousHandle == null || nextHandle == null) {
-    return previousHandle === nextHandle;
-  }
-  if (previousHandle !== nextHandle) {
-    return false;
-  }
-  return context.compareRecordHandles(previousHandle, nextHandle) === KernelPublicationDecisionKind.Retain;
+  return sameKernelRecordWitness(previous.addressHandle, next.addressHandle, context);
 }
 
 function sameNullable<TValue>(

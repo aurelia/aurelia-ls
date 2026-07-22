@@ -2,7 +2,9 @@ import type {
   KernelStoreRecord,
 } from '../kernel/store.js';
 import type { OpenSeam } from '../kernel/open-seam.js';
+import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import type { Container } from './container.js';
+import type { ContainerReference } from './container-reference.js';
 import type { ContainerRegistrationOperation } from './container-registration.js';
 import type {
   ContainerFactorySlot,
@@ -24,10 +26,21 @@ import type { ResourceIssue } from '../resources/resource-issue.js';
 /** Runtime resolver objects that can occupy a container resolver slot. */
 export type DiResolverProduct = Resolver | InstanceProvider;
 
+/** Registration and container locus at which one DI open seam can hide a provider. */
+export class DiRegistrationOpenSeamScope {
+  constructor(
+    readonly seam: OpenSeam,
+    readonly admissionProductHandle: ProductHandle | null,
+    readonly containerIdentityHandle: IdentityHandle | null,
+  ) {}
+}
+
 /** One AppTask registry value that was actually spent into a modeled container. */
 export class RegisteredAppTask {
   constructor(
     readonly task: AppTaskDefinition,
+    /** Container into which this task registration was spent. */
+    readonly container: ContainerReference,
     /** Exact call-time evaluator evidence, absent for framework-minted tasks. */
     readonly evaluation: AureliaAppTaskEvaluation | null,
   ) {}
@@ -58,6 +71,8 @@ export class DiWorldConstructionEmission {
     readonly registeredAppTasks: readonly RegisteredAppTask[],
     /** Open seams left by registration spending. */
     readonly openSeams: readonly OpenSeam[],
+    /** Exact registration/container scopes for open seams retained or produced while spending. */
+    readonly registrationOpenSeamScopes: readonly DiRegistrationOpenSeamScope[],
     /** Source-backed DI/container issues discovered while spending registrations. */
     readonly issues: readonly DiIssue[],
     /** Source-backed resource registration issues discovered while spending resource definitions. */

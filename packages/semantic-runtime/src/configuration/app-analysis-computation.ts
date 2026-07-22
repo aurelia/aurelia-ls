@@ -288,6 +288,7 @@ export class AureliaAppWorldProjectComputationService implements KernelStoreSide
         this.store,
         run,
         project,
+        appEvaluationAccess.generation,
         appEvaluationAccess.generation.forkSession(),
         typeSystemProjectAccess.generation,
         conventionToolingEvaluationAccess.generation,

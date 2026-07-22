@@ -10,6 +10,12 @@ Verification is intentionally neutral: it should not infer taste, generate sourc
 live next to pressure fixtures to describe semantic contracts that should survive refactors, while app-builder remains
 the future owner of recommendable app generation.
 
+`readFixtureVerificationSnapshot(...)` issues its related public queries under the existing `fixture` inquiry profile.
+One verification snapshot deliberately reads many row families from the same app epoch, so disposing answer-local state
+after every query would repeatedly reconstruct the same deep products. Harnesses that create cold oracle runtimes remain
+responsible for retiring those runtimes after the completed snapshot; the profile retains work within one snapshot, not
+across unrelated fixtures.
+
 App-bearing fixtures must prove the resource definition that the framework itself requires. A class passed to
 `.app({ component })` is an app-root target, not an implicit custom-element definition; use explicit metadata and an
 authored template unless the fixture is specifically exercising a modeled convention transform. Negative or zero-count

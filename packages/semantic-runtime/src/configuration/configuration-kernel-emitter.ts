@@ -21,6 +21,7 @@ import {
   type KernelPublicationContext,
 } from '../kernel/publication.js';
 import { projectModuleSourceNodeOrdinalLocalKey } from '../kernel/local-key.js';
+import type { OpenSeam } from '../kernel/open-seam.js';
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
@@ -32,6 +33,7 @@ import {
 import {
   AppRoot,
 } from './app-root.js';
+
 import {
   AppTaskDefinition,
 } from './app-task.js';
@@ -64,6 +66,14 @@ import {
   ConfigurationEvaluationBindings,
 } from './configuration-evaluation-bindings.js';
 
+/** Configuration uncertainty together with the app/container locus that can be affected by it. */
+export class ConfigurationOpenSeamScope {
+  constructor(
+    readonly seam: OpenSeam,
+    readonly containerIdentityHandle: IdentityHandle | null,
+  ) {}
+}
+
 /** Result of emitting configuration observations into the kernel. */
 export class ConfigurationKernelEmission {
   constructor(
@@ -83,6 +93,8 @@ export class ConfigurationKernelEmission {
     readonly optionContributions: readonly ConfigurationOptionContribution[],
     /** Registration admissions emitted while materializing configuration steps. */
     readonly registrationAdmissions: readonly RegistrationAdmissionProduct[],
+    /** Open configuration recognition seams retained with their exact app/container scope. */
+    readonly openSeamScopes: readonly ConfigurationOpenSeamScope[],
     /** Project-run links from evaluator facade/container identity to emitted configuration products. */
     readonly evaluationBindings: ConfigurationEvaluationBindings,
     /** Kernel records published for configuration products and registration admissions by this emission. */
@@ -100,6 +112,7 @@ interface ConfigurationSequenceEmission {
   readonly appTasks: readonly AppTaskDefinition[];
   readonly optionContributions: readonly ConfigurationOptionContribution[];
   readonly registrationAdmissions: readonly RegistrationAdmissionProduct[];
+  readonly openSeamScopes: readonly ConfigurationOpenSeamScope[];
 }
 
 class ConfigurationKernelEmissionFrame {
@@ -112,6 +125,7 @@ class ConfigurationKernelEmissionFrame {
   readonly appTasks: AppTaskDefinition[] = [];
   readonly optionContributions: ConfigurationOptionContribution[] = [];
   readonly registrationAdmissions: RegistrationAdmissionProduct[] = [];
+  readonly openSeamScopes: ConfigurationOpenSeamScope[] = [];
 
   recordSequence(emission: ConfigurationSequenceEmission): void {
     this.records.push(...emission.records);
@@ -123,6 +137,7 @@ class ConfigurationKernelEmissionFrame {
     this.appTasks.push(...emission.appTasks);
     this.optionContributions.push(...emission.optionContributions);
     this.registrationAdmissions.push(...emission.registrationAdmissions);
+    this.openSeamScopes.push(...emission.openSeamScopes);
   }
 
   toEmission(evaluationBindings: ConfigurationEvaluationBindings): ConfigurationKernelEmission {
@@ -135,6 +150,7 @@ class ConfigurationKernelEmissionFrame {
       this.appTasks,
       this.optionContributions,
       this.registrationAdmissions,
+      this.openSeamScopes,
       evaluationBindings,
       this.records,
     );
@@ -250,6 +266,9 @@ export class ConfigurationKernelEmitter {
       openSeams.handles,
     );
     records.push(...sequenceEmission.records);
+    const openSeamContainerIdentityHandle = stepSet.sequenceAppRoot?.container.identityHandle
+      ?? stepSet.sequenceAurelia?.container.identityHandle
+      ?? uniqueContainerIdentityHandle(stepSet.containers);
 
     return {
       records,
@@ -261,6 +280,10 @@ export class ConfigurationKernelEmitter {
       appTasks: stepSet.appTasks,
       optionContributions: stepSet.optionContributions,
       registrationAdmissions: stepSet.registrationAdmissions,
+      openSeamScopes: openSeams.seams.map((seam) => new ConfigurationOpenSeamScope(
+        seam,
+        openSeamContainerIdentityHandle,
+      )),
     };
   }
 
@@ -383,4 +406,9 @@ export class ConfigurationKernelEmitter {
     });
   }
 
+}
+
+function uniqueContainerIdentityHandle(containers: readonly Container[]): IdentityHandle | null {
+  const handles = [...new Set(containers.map((container) => container.identityHandle))];
+  return handles.length === 1 ? handles[0]! : null;
 }

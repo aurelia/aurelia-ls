@@ -11475,7 +11475,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "admitted-chain-unproven",
       "admission-unknown",
       "container-chain",
-      "DiProductIdentity.containerHandle",
+      "typed DI world container slots",
       "source service admission chain",
       "framework.open-service-root-candidate",
       "unregistered shorthand syntax",
@@ -11621,9 +11621,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         query:
-          "source service admission chain DiProductIdentity.containerHandle di.provides-key admitted-chain-unproven",
+          "source service admission chain typed DI world container slots admitted-chain-unproven",
         summary:
-          "Source-service capability admission should use the DI container-chain helper over existing product identity and provides-key facts, not world-global provider checks or new membership predicates.",
+          "Source-service capability admission should use the DI container-chain helper over exact world-construction containers and slots, not whole-kernel reconstruction or world-global provider checks.",
       },
       {
         query: "custom configuration bundle",
@@ -11962,7 +11962,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "DiContainerChainFacts",
         role: "primary",
         summary:
-          "Read-only DI chain helper that joins DiProductIdentity.containerHandle with di.provides-key for provider visibility without new membership vocabulary.",
+          "Read-only DI chain helper over exact world-construction and runtime child containers for chain-local provider visibility.",
       },
       {
         kind: "source",

@@ -185,6 +185,10 @@ Projection convergence uses the ordinary product-detail catalog. A fresh Program
 shape/member details at stable project-scoped handles through the same computation owner; a visible projection from a
 different checker generation is rejected rather than borrowed. Query-local projections can still be reclaimed through
 the kernel lifetime boundary without a store-local type-shape sidecar.
+Repeated projection through the exact same checker generation is different: slot-owned shape/member comparison may
+retain the incumbent object when semantic fields, declaration identity, carrier object references, and ordered witnesses
+are unchanged. A new Program necessarily changes those carrier references and therefore replaces the detail atomically,
+even when its semantic key remains stable.
 
 This layer is also the named split between evaluation-backed world construction and checker-backed authoring help.
 DI/configuration/resource materializers should prefer evaluation when they are deciding what the app constructed. Template

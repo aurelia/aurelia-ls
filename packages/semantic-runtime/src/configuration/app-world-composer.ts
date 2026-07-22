@@ -87,6 +87,8 @@ export class AureliaAppWorldEmission {
     readonly configuration: ConfigurationKernelEmission,
     /** Abstract DI container state produced from configuration-owned registration admissions. */
     readonly diWorld: DiWorldConstructionEmission,
+    /** Container ancestry, provider, and source-locus facts projected from this exact DI world. */
+    readonly containerChainFacts: DiContainerChainFacts,
     /** Framework-owned syntax catalogs admitted by recognized framework registrations. */
     readonly configuredSyntax: ConfiguredBuiltInSyntaxCatalogEmission,
     /** Framework-owned resource header catalogs admitted by recognized framework registrations. */
@@ -145,6 +147,7 @@ export class AureliaAppWorldComposer {
       typeSystem,
       configuration.evaluation,
     );
+    const containerChainFacts = readDiContainerChainFacts(this.publication, diWorld);
     const frameworkServiceCustomizations = new FrameworkServiceCustomizationRecognitionPass(
       this.store,
       this.publication,
@@ -152,6 +155,7 @@ export class AureliaAppWorldComposer {
     const compilerWorlds = this.constructCompilerWorlds(
       kernelConfiguration,
       diWorld,
+      containerChainFacts,
       configuredSyntax,
       configuredResources,
       configuredRenderers,
@@ -162,6 +166,7 @@ export class AureliaAppWorldComposer {
     return new AureliaAppWorldEmission(
       kernelConfiguration,
       diWorld,
+      containerChainFacts,
       configuredSyntax,
       configuredResources,
       configuredRenderers,
@@ -213,6 +218,7 @@ export class AureliaAppWorldComposer {
   private constructCompilerWorlds(
     configuration: ConfigurationKernelEmission,
     diWorld: DiWorldConstructionEmission,
+    containerChainFacts: DiContainerChainFacts,
     configuredSyntax: ConfiguredBuiltInSyntaxCatalogEmission,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
@@ -225,6 +231,7 @@ export class AureliaAppWorldComposer {
       this.resourceVisibilityComposer,
       configuration,
       diWorld,
+      containerChainFacts,
       configuredSyntax,
       configuredResources,
       configuredRenderers,
@@ -255,6 +262,7 @@ function appendDiSourceIssues(
     diWorld.resourceSlots,
     diWorld.registeredAppTasks,
     diWorld.openSeams,
+    diWorld.registrationOpenSeamScopes,
     [...diWorld.issues, ...issues],
     diWorld.resourceIssues,
     [...diWorld.records, ...records],
@@ -270,7 +278,6 @@ type DiSourceIssueMaterialization =
 class AppRootCompilerWorldFrame {
   private readonly containersByProduct: ReadonlyMap<Container['productHandle'], Container>;
   private readonly registeredSyntaxResourceMaterializer: RegisteredSyntaxResourceMaterializer;
-  private readonly containerChainFacts: DiContainerChainFacts;
   private readonly templateCompilerKeyIdentityHandle: IdentityHandle;
 
   constructor(
@@ -279,6 +286,7 @@ class AppRootCompilerWorldFrame {
     private readonly resourceVisibilityComposer: AppWorldResourceVisibilityComposer,
     private readonly configuration: ConfigurationKernelEmission,
     private readonly diWorld: DiWorldConstructionEmission,
+    private readonly containerChainFacts: DiContainerChainFacts,
     private readonly configuredSyntax: ConfiguredBuiltInSyntaxCatalogEmission,
     private readonly configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     private readonly configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
@@ -287,7 +295,6 @@ class AppRootCompilerWorldFrame {
   ) {
     this.containersByProduct = new Map(configuration.containers.map((container) => [container.productHandle, container]));
     this.registeredSyntaxResourceMaterializer = new RegisteredSyntaxResourceMaterializer(publication);
-    this.containerChainFacts = readDiContainerChainFacts(publication);
     this.templateCompilerKeyIdentityHandle = publication.handles.identity(
       frameworkIntrinsicDiKeyLocal(FrameworkIntrinsicDiKey.ITemplateCompiler),
     );

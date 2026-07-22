@@ -114,6 +114,7 @@ describe('template compilation cohort planning', () => {
     const reorderedAppWorld = new AureliaAppWorldEmission(
       app.emission.appWorld.configuration,
       app.emission.appWorld.diWorld,
+      app.emission.appWorld.containerChainFacts,
       app.emission.appWorld.configuredSyntax,
       app.emission.appWorld.configuredResources,
       app.emission.appWorld.configuredRenderers,

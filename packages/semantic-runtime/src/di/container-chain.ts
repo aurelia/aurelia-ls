@@ -3,37 +3,53 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import type {
-  ContainerIdentity,
-  DiProductIdentity,
-} from '../kernel/identity.js';
-import type { KernelRecordCollectionReadView } from '../kernel/store.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
+import type { KernelStoreReadView } from '../kernel/store.js';
+import type { Container } from './container.js';
+import type { DiWorldConstructionEmission } from './world-construction.js';
 
 /** Read-only projection of existing DI container and slot facts. */
 export class DiContainerChainFacts {
   constructor(
-    private readonly containersByIdentity: ReadonlyMap<IdentityHandle, ContainerIdentity>,
+    private readonly containersByIdentity: ReadonlyMap<IdentityHandle, Container>,
     private readonly containerIdentitiesByProduct: ReadonlyMap<ProductHandle, IdentityHandle>,
-    private readonly owningContainerIdentitiesByProduct: ReadonlyMap<ProductHandle, IdentityHandle>,
     private readonly providerContainerIdentitiesByKey: ReadonlyMap<IdentityHandle, readonly IdentityHandle[]>,
     private readonly containerProductHandlesBySourceSpan: ReadonlyMap<string, ProductHandle | null>,
   ) {}
 
-  containerIdentity(handle: IdentityHandle): ContainerIdentity | null {
-    return this.containersByIdentity.get(handle) ?? null;
+  /** Extend this immutable projection with runtime child containers created after app-world DI spending. */
+  withContainers(
+    store: KernelStoreReadView,
+    containers: readonly Container[],
+  ): DiContainerChainFacts {
+    const containersByIdentity = new Map(this.containersByIdentity);
+    const containerIdentitiesByProduct = new Map(this.containerIdentitiesByProduct);
+    const providerContainerIdentitiesByKey = new Map<IdentityHandle, Set<IdentityHandle>>(
+      [...this.providerContainerIdentitiesByKey].map(([key, providers]) => [key, new Set(providers)]),
+    );
+    const containerProductHandlesBySourceSpan = new Map(this.containerProductHandlesBySourceSpan);
+    for (const container of containers) {
+      containersByIdentity.set(container.identityHandle, container);
+      containerIdentitiesByProduct.set(container.productHandle, container.identityHandle);
+      for (const slot of container.readResolverSlots()) {
+        recordProviderContainer(providerContainerIdentitiesByKey, slot.keyIdentityHandle, slot.container.identityHandle);
+      }
+      for (const slot of container.readResourceSlots()) {
+        recordProviderContainer(providerContainerIdentitiesByKey, slot.keyIdentityHandle, slot.container.identityHandle);
+      }
+      recordContainerSourceSpan(store, containerProductHandlesBySourceSpan, container);
+    }
+    return new DiContainerChainFacts(
+      containersByIdentity,
+      containerIdentitiesByProduct,
+      freezeSetMap(providerContainerIdentitiesByKey),
+      containerProductHandlesBySourceSpan,
+    );
   }
 
   containerIdentityHandleForProduct(productHandle: ProductHandle | null): IdentityHandle | null {
     return productHandle == null
       ? null
       : this.containerIdentitiesByProduct.get(productHandle) ?? null;
-  }
-
-  owningContainerIdentityHandleForProduct(productHandle: ProductHandle | null): IdentityHandle | null {
-    return productHandle == null
-      ? null
-      : this.owningContainerIdentitiesByProduct.get(productHandle) ?? null;
   }
 
   providerContainerIdentityHandlesForKey(keyIdentityHandle: IdentityHandle): readonly IdentityHandle[] {
@@ -71,96 +87,55 @@ export class DiContainerChainFacts {
     while (currentHandle != null && !seen.has(currentHandle)) {
       seen.add(currentHandle);
       chain.push(currentHandle);
-      const current: ContainerIdentity | null = this.containersByIdentity.get(currentHandle) ?? null;
+      const current: Container | null = this.containersByIdentity.get(currentHandle) ?? null;
       if (current == null) {
         break;
       }
-      currentHandle = current.parentHandle;
-      if (
-        currentHandle == null
-        && current.rootHandle != null
-        && !seen.has(current.rootHandle)
-      ) {
-        currentHandle = current.rootHandle;
+      currentHandle = current.readParentReference()?.identityHandle ?? null;
+      const rootIdentityHandle: IdentityHandle | null = current.readRootReference().identityHandle;
+      if (currentHandle == null && rootIdentityHandle != null && !seen.has(rootIdentityHandle)) {
+        currentHandle = rootIdentityHandle;
       }
     }
     return chain;
   }
 }
 
-export function readDiContainerChainFacts(store: KernelRecordCollectionReadView): DiContainerChainFacts {
-  const containersByIdentity = new Map<IdentityHandle, ContainerIdentity>();
-  const containerIdentitiesByProduct = new Map<ProductHandle, IdentityHandle>();
-  const containerProductsByIdentity = new Map<IdentityHandle, ProductHandle>();
-  const diProductIdentitiesByIdentity = new Map<IdentityHandle, DiProductIdentity>();
-  const diProductIdentitiesByProduct = new Map<ProductHandle, DiProductIdentity>();
-  const providerContainerIdentitiesByKey = new Map<IdentityHandle, Set<IdentityHandle>>();
+export function readDiContainerChainFacts(
+  store: KernelStoreReadView,
+  world: DiWorldConstructionEmission,
+): DiContainerChainFacts {
+  return new DiContainerChainFacts(new Map(), new Map(), new Map(), new Map())
+    .withContainers(store, world.containers);
+}
 
-  const records = store.readAllRecords();
-  for (const record of records) {
-    if (record.kind === 'container-identity') {
-      containersByIdentity.set(record.handle, record);
-    } else if (record.kind === 'di-product-identity') {
-      diProductIdentitiesByIdentity.set(record.handle, record);
-    }
+function recordContainerSourceSpan(
+  store: KernelStoreReadView,
+  productsBySourceSpan: Map<string, ProductHandle | null>,
+  container: Container,
+): void {
+  const source = container.sourceAddressHandle == null
+    ? null
+    : store.read(container.sourceAddressHandle);
+  if (source?.kind !== 'source-span-address') {
+    return;
   }
-
-  for (const record of records) {
-    if (record.kind === 'materialized-product' && record.identityHandle != null) {
-      if (
-        record.productKindKey === KernelVocabulary.Di.Container.key
-        && containersByIdentity.has(record.identityHandle)
-      ) {
-        containerIdentitiesByProduct.set(record.handle, record.identityHandle);
-        containerProductsByIdentity.set(record.identityHandle, record.handle);
-      }
-      const productIdentity = diProductIdentitiesByIdentity.get(record.identityHandle) ?? null;
-      if (productIdentity != null) {
-        diProductIdentitiesByProduct.set(record.handle, productIdentity);
-      }
-    }
-  }
-
-  for (const record of records) {
-    if (record.kind !== 'semantic-claim' || record.predicateKey !== KernelVocabulary.Di.ProvidesKey.key) {
-      continue;
-    }
-    const productIdentity = diProductIdentitiesByProduct.get(record.subjectHandle as ProductHandle) ?? null;
-    if (productIdentity?.containerHandle != null) {
-      addToSet(
-        providerContainerIdentitiesByKey,
-        record.objectHandle as IdentityHandle,
-        productIdentity.containerHandle,
-      );
-    }
-  }
-
-  const containerProductHandlesBySourceSpan = new Map<string, ProductHandle | null>();
-  for (const container of containersByIdentity.values()) {
-    const source = container.sourceAddressHandle == null
-      ? null
-      : store.read(container.sourceAddressHandle);
-    const productHandle = containerProductsByIdentity.get(container.handle) ?? null;
-    if (source?.kind !== 'source-span-address' || productHandle == null) {
-      continue;
-    }
-    const key = containerSourceSpanKey(source.fileHandle, source.start, source.end);
-    const existing = containerProductHandlesBySourceSpan.get(key);
-    containerProductHandlesBySourceSpan.set(
-      key,
-      existing === undefined || existing === productHandle ? productHandle : null,
-    );
-  }
-
-  return new DiContainerChainFacts(
-    containersByIdentity,
-    containerIdentitiesByProduct,
-    new Map([...diProductIdentitiesByProduct].flatMap(([productHandle, identity]) =>
-      identity.containerHandle == null ? [] : [[productHandle, identity.containerHandle]]
-    )),
-    freezeSetMap(providerContainerIdentitiesByKey),
-    containerProductHandlesBySourceSpan,
+  const key = containerSourceSpanKey(source.fileHandle, source.start, source.end);
+  const existing = productsBySourceSpan.get(key);
+  productsBySourceSpan.set(
+    key,
+    existing === undefined || existing === container.productHandle ? container.productHandle : null,
   );
+}
+
+function recordProviderContainer(
+  providers: Map<IdentityHandle, Set<IdentityHandle>>,
+  keyIdentityHandle: IdentityHandle,
+  containerIdentityHandle: IdentityHandle | null,
+): void {
+  if (containerIdentityHandle != null) {
+    addToSet(providers, keyIdentityHandle, containerIdentityHandle);
+  }
 }
 
 function containerSourceSpanKey(

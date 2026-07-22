@@ -43,6 +43,10 @@ import {
   type ResourceRecognitionProjectResult,
 } from '../resources/resource-recognition-project-pass.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import type { DiContainerChainFacts } from '../di/container-chain.js';
+import type { Container } from '../di/container.js';
+import type { DiWorldConstructionEmission } from '../di/world-construction.js';
+import type { ConfigurationKernelEmission } from './configuration-kernel-emitter.js';
 import type {
   TypeSystemProjectAcquisitionProfile,
   TypeSystemProjectGeneration,
@@ -72,6 +76,7 @@ import {
 } from '../telemetry/phase.js';
 import {
   TemplateCompilationProjectPass,
+  templateCompilerReadRebaserForFrontDoor,
   type TemplateCompilationFrontDoorEmission,
   type TemplateCompilationProjectPlan,
   type TemplateCompilationProjectEmission,
@@ -326,6 +331,9 @@ export class AureliaAppWorldPreTemplateEmission {
   constructor(
     readonly analysisDepth: SemanticAppAnalysisDepth,
     readonly project: ProjectBootFrame,
+    readonly evaluationGeneration: StaticProjectEvaluationGeneration<null>,
+    readonly conventionToolingEvaluationGeneration: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
+    readonly typeSystemGeneration: TypeSystemProjectGeneration,
     readonly evaluation: StaticProjectEvaluationResult,
     readonly typeSystem: TypeSystemProject,
     readonly evaluationIssues: EvaluationIssueProjectResult,
@@ -350,6 +358,7 @@ export class AureliaAppWorldPreTemplateEmission {
     readonly dialog: DialogSourceIssueProjectResult,
     readonly appWorld: AureliaAppWorldEmission,
     readonly serviceRoots: FrameworkServiceRootMaterializationResult,
+    readonly serviceRootEnrichment: FrameworkServiceRootEnrichmentProjectResult,
     readonly templatePlan: TemplateCompilationProjectPlan,
   ) {}
 }
@@ -358,6 +367,7 @@ export class AureliaAppWorldPreTemplateEmission {
 export class AureliaAppWorldPostTemplateEmission {
   constructor(
     readonly templates: TemplateCompilationProjectEmission,
+    readonly containerChainFacts: DiContainerChainFacts,
     readonly observation: ObservationSourceIssueProjectResult,
     readonly state: StateProjectResult,
     readonly capabilityDemands: FrameworkCapabilityDemandProjectResult,
@@ -371,6 +381,7 @@ export class AureliaAppWorldPostTemplateEmission {
   forCommittedGeneration(authority: GenerationAuthority): AureliaAppWorldPostTemplateEmission {
     return new AureliaAppWorldPostTemplateEmission(
       this.templates.forCommittedGeneration(authority),
+      this.containerChainFacts,
       this.observation,
       this.state,
       this.capabilityDemands,
@@ -417,6 +428,7 @@ export class AureliaAppWorldProjectEmission {
   get dialog(): DialogSourceIssueProjectResult { return this.preTemplate.dialog; }
   get appWorld(): AureliaAppWorldEmission { return this.preTemplate.appWorld; }
   get templates(): TemplateCompilationProjectEmission { return this.postTemplate.templates; }
+  get containerChainFacts(): DiContainerChainFacts { return this.postTemplate.containerChainFacts; }
   get capabilityDemands(): FrameworkCapabilityDemandProjectResult { return this.postTemplate.capabilityDemands; }
   get routeRuntimeTopology(): RouteRuntimeTopologyProjectResult { return this.postTemplate.routeRuntimeTopology; }
   get routeInstructions(): RouteInstructionMaterializationProjectResult { return this.postTemplate.routeInstructions; }
@@ -453,6 +465,7 @@ export class AureliaAppWorldProjectPass {
     store: KernelStore,
     publication: ComputationRun,
     project: ProjectBootFrame,
+    evaluationGeneration: StaticProjectEvaluationGeneration<null>,
     evaluation: StaticProjectEvaluationResult,
     typeSystemProject: TypeSystemProjectGeneration,
     conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
@@ -467,6 +480,7 @@ export class AureliaAppWorldProjectPass {
       publication,
       project,
       this.support,
+      evaluationGeneration,
       evaluation,
       typeSystemProject,
       conventionToolingEvaluation,
@@ -493,6 +507,7 @@ class AureliaAppWorldProjectConstructionFrame {
     readonly publication: ComputationRun,
     readonly project: ProjectBootFrame,
     private readonly support: SemanticRuntimeSupport,
+    private readonly evaluationGeneration: StaticProjectEvaluationGeneration<null>,
     private readonly evaluation: StaticProjectEvaluationResult,
     private readonly typeSystemProject: TypeSystemProjectGeneration,
     private readonly conventionToolingEvaluation: StaticProjectEvaluationGeneration<ResourceConventionToolingEvaluationContext>,
@@ -546,17 +561,14 @@ class AureliaAppWorldProjectConstructionFrame {
       this.project,
       this.incumbent?.templates.frontDoor ?? null,
     );
-    const postTemplateInputs = this.project.inputGeneration.createReadScope('aurelia-app-analysis:post-template');
-    const postTemplate = this.publication.withChild(postTemplateLocus, () => {
-      const emission = this.project.inputGeneration.withReadScope(
-        postTemplateInputs,
-        () => this.constructPostTemplate(templatePass, preTemplate, frontDoor),
-      );
-      for (const read of postTemplateInputs.readRegisteredInputs()) {
-        this.publication.observe(read);
-      }
-      return emission;
-    });
+    const carriedPostTemplate = this.prepareCarriedPostTemplate(templatePass, preTemplate, frontDoor);
+    const postTemplate = carriedPostTemplate != null
+      && this.publication.tryCarryChild(
+        postTemplateLocus,
+        templateCompilerReadRebaserForFrontDoor(frontDoor),
+      ) != null
+        ? carriedPostTemplate
+        : this.executePostTemplate(postTemplateLocus, templatePass, preTemplate, frontDoor);
 
     return new AureliaAppWorldProjectEmission(
       preTemplate,
@@ -602,7 +614,10 @@ class AureliaAppWorldProjectConstructionFrame {
     const validation = this.materializeValidationSourceIssues(typeSystem, configuration, sourceApiRoots);
     const fetchClient = this.materializeFetchClientSourceIssues(typeSystem, sourceApiRoots);
     const dialog = this.materializeDialogSourceIssues(typeSystem, sourceApiRoots);
-    this.enrichFrameworkServiceRoots(serviceRoots);
+    const serviceRootEnrichment = this.enrichFrameworkServiceRoots(
+      serviceRoots,
+      appWorld.containerChainFacts,
+    );
     const templatePlan = templatePass.plan(
       appWorld,
       typeSystem,
@@ -613,6 +628,9 @@ class AureliaAppWorldProjectConstructionFrame {
     return new AureliaAppWorldPreTemplateEmission(
       this.analysisDepth,
       this.project,
+      this.evaluationGeneration,
+      this.conventionToolingEvaluation,
+      this.typeSystemProject,
       evaluation,
       typeSystem,
       evaluationIssues,
@@ -637,8 +655,82 @@ class AureliaAppWorldProjectConstructionFrame {
       dialog,
       appWorld,
       serviceRoots,
+      serviceRootEnrichment,
       templatePlan,
     );
+  }
+
+  private prepareCarriedPostTemplate(
+    templatePass: TemplateCompilationProjectPass,
+    preTemplate: AureliaAppWorldPreTemplateEmission,
+    frontDoor: TemplateCompilationFrontDoorEmission,
+  ): AureliaAppWorldPostTemplateEmission | null {
+    const previous = this.incumbent;
+    if (
+      previous == null
+      || preTemplate.analysisDepth !== previous.analysisDepth
+      || preTemplate.evaluationGeneration !== previous.preTemplate.evaluationGeneration
+      || preTemplate.conventionToolingEvaluationGeneration
+        !== previous.preTemplate.conventionToolingEvaluationGeneration
+      || preTemplate.typeSystemGeneration !== previous.preTemplate.typeSystemGeneration
+    ) {
+      return null;
+    }
+    const templates = templatePass.rebaseAnalyzedFrontDoors(
+      frontDoor,
+      previous.templates,
+      this.templateCompilationOptions(preTemplate.evaluation, preTemplate.stateBase),
+    );
+    if (templates == null) {
+      return null;
+    }
+    const templateContainerChainFacts = preTemplate.appWorld.containerChainFacts.withContainers(
+      this.store,
+      templateRuntimeChildContainers(templates),
+    );
+    const containerChainFacts = templateContainerChainFacts.withContainers(
+      this.store,
+      uniqueContainers([
+        ...previous.routeRuntimeTopology.readRouteContextContainers(),
+        ...previous.routeComponentAgents.readControllers().flatMap((controller) =>
+          controller.containerFrame == null ? [] : [controller.containerFrame]
+        ),
+      ]),
+    );
+    return new AureliaAppWorldPostTemplateEmission(
+      templates,
+      containerChainFacts,
+      previous.observation,
+      previous.state,
+      previous.capabilityDemands,
+      previous.routeRuntimeTopology,
+      previous.routeInstructions,
+      previous.routeRecognition,
+      previous.routeTree,
+      previous.routeComponentAgents,
+    );
+  }
+
+  private executePostTemplate(
+    locus: AureliaAppAnalysisPhaseLocus,
+    templatePass: TemplateCompilationProjectPass,
+    preTemplate: AureliaAppWorldPreTemplateEmission,
+    frontDoor: TemplateCompilationFrontDoorEmission,
+  ): AureliaAppWorldPostTemplateEmission {
+    const inputs = this.project.inputGeneration.createReadScope('aurelia-app-analysis:post-template');
+    return this.publication.withChild(locus, () => {
+      const emission = this.project.inputGeneration.withReadScope(
+        inputs,
+        () => this.constructPostTemplate(templatePass, preTemplate, frontDoor),
+      );
+      for (const read of this.upstreamReads) {
+        this.publication.observe(read);
+      }
+      for (const read of inputs.readRegisteredInputs()) {
+        this.publication.observe(read);
+      }
+      return emission;
+    });
   }
 
   private constructPostTemplate(
@@ -657,16 +749,28 @@ class AureliaAppWorldProjectConstructionFrame {
       stateBase,
       appWorld,
       serviceRoots,
+      serviceRootEnrichment,
       sourceObservation,
     } = preTemplate;
-    this.publication.observe(this.typeSystemProject);
     const templates = this.measure('template-compilation', () => templatePass.analyzeFrontDoors(
       frontDoor,
       typeSystem,
       resourceIndex,
       this.templateCompilationOptions(evaluation, stateBase),
     ));
-    const capabilityDemands = this.materializeFrameworkCapabilityDemands(typeSystem, templates, configuration, serviceRoots);
+    const templateContainerChainFacts = appWorld.containerChainFacts.withContainers(
+      this.publication,
+      templateRuntimeChildContainers(templates),
+    );
+    const capabilityDemands = this.materializeFrameworkCapabilityDemands(
+      typeSystem,
+      templates,
+      appWorld.configuration,
+      appWorld.diWorld,
+      templateContainerChainFacts,
+      serviceRoots,
+      serviceRootEnrichment,
+    );
     const bindingObservation = this.materializeBindingObservationIssues(typeSystem, templates);
     const observation = mergeObservationSourceIssueProjectResults([sourceObservation, bindingObservation]);
     const state = this.materializeStateStoreLookupIssues(stateBase, templates, typeSystem);
@@ -714,8 +818,18 @@ class AureliaAppWorldProjectConstructionFrame {
       templates,
       typeSystem,
     );
+    const containerChainFacts = templateContainerChainFacts.withContainers(
+      this.publication,
+      uniqueContainers([
+        ...routeRuntimeTopology.readRouteContextContainers(),
+        ...routeComponentAgents.readControllers().flatMap((controller) =>
+          controller.containerFrame == null ? [] : [controller.containerFrame]
+        ),
+      ]),
+    );
     return new AureliaAppWorldPostTemplateEmission(
       templates,
+      containerChainFacts,
       observation,
       state,
       capabilityDemands,
@@ -781,16 +895,22 @@ class AureliaAppWorldProjectConstructionFrame {
   private materializeFrameworkCapabilityDemands(
     typeSystem: TypeSystemProject,
     templates: TemplateCompilationProjectEmission,
-    configuration: ConfigurationRecognitionProjectResult,
+    configuration: ConfigurationKernelEmission,
+    diWorld: DiWorldConstructionEmission,
+    containerChainFacts: DiContainerChainFacts,
     serviceRoots: FrameworkServiceRootMaterializationResult,
+    serviceRootEnrichment: FrameworkServiceRootEnrichmentProjectResult,
   ): FrameworkCapabilityDemandProjectResult {
     return this.measure('framework-capability-demands', () =>
       new FrameworkCapabilityDemandMaterializer(this.store, this.publication).materializeAndEmit(
         this.project,
         typeSystem,
         templates,
-        configuration.readConfiguration(),
+        configuration,
+        diWorld,
+        containerChainFacts,
         serviceRoots.readRoots(),
+        serviceRootEnrichment,
       )
     );
   }
@@ -1011,7 +1131,6 @@ class AureliaAppWorldProjectConstructionFrame {
     const sourceIssues = this.materializeStateSourceIssues(typeSystem);
     const getterBindings = this.materializeStateGetterBindings(stores, typeSystem);
     return new StateProjectResult(
-      stores.configuration,
       stores.stores,
       getterBindings.bindings,
       [
@@ -1035,7 +1154,6 @@ class AureliaAppWorldProjectConstructionFrame {
       )
     );
     return new StateProjectResult(
-      state.configuration,
       state.stores,
       state.getterBindings,
       [
@@ -1113,11 +1231,13 @@ class AureliaAppWorldProjectConstructionFrame {
 
   private enrichFrameworkServiceRoots(
     serviceRoots: FrameworkServiceRootMaterializationResult,
+    containerChainFacts: DiContainerChainFacts,
   ): FrameworkServiceRootEnrichmentProjectResult {
     return this.measure('framework-service-root-enrichment', () =>
       new FrameworkServiceRootEnrichmentMaterializer(this.store, this.publication).materializeAndEmit(
         this.project.projectKey,
         serviceRoots.readRoots(),
+        containerChainFacts,
       )
     );
   }
@@ -1286,6 +1406,19 @@ class AureliaAppWorldProjectConstructionFrame {
   ): TValue {
     return measureAppWorldProjectPhase(this.phases, name, this.publication, this.telemetry, read);
   }
+}
+
+function templateRuntimeChildContainers(
+  templates: TemplateCompilationProjectEmission,
+): readonly Container[] {
+  return uniqueContainers([
+    ...templates.resources,
+    ...templates.authoringResources,
+  ].flatMap((resource) => resource.runtimeAnalysis.readRuntimeChildContainers()));
+}
+
+function uniqueContainers(containers: readonly Container[]): readonly Container[] {
+  return [...new Map(containers.map((container) => [container.identityHandle, container])).values()];
 }
 
 function measureAppWorldProjectPhase<TValue>(

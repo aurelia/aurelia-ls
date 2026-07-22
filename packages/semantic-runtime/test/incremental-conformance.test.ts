@@ -4,8 +4,12 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'vitest';
 
+import { AureliaAppAnalysisPhase } from '../src/configuration/app-world-project-pass.js';
 import { ComputationChildTransitionKind } from '../src/kernel/computation-lifecycle.js';
-import { IncrementalConformanceHarness } from './support/incremental-conformance.js';
+import {
+  IncrementalConformanceHarness,
+  type IncrementalConformanceChildTrace,
+} from './support/incremental-conformance.js';
 
 describe('incremental production conformance', () => {
   test('matches cold semantic truth while retaining unaffected template families', async () => {
@@ -46,12 +50,10 @@ describe('incremental production conformance', () => {
       'secondary-host',
     ]);
     expect(noOpFamilies.every((child) => child.transition === ComputationChildTransitionKind.Carried)).toBe(true);
-    expect(noOp.trace.children).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        locusKind: 'aurelia-app-analysis-phase',
-        transition: ComputationChildTransitionKind.Executed,
-      }),
-    ]));
+    expect(analysisPhaseTransition(noOp.trace.children, AureliaAppAnalysisPhase.PreTemplate))
+      .toBe(ComputationChildTransitionKind.Executed);
+    expect(analysisPhaseTransition(noOp.trace.children, AureliaAppAnalysisPhase.PostTemplate))
+      .toBe(ComputationChildTransitionKind.Carried);
     expect(noOp.trace.children.some((child) => child.locusKind === 'app-root-compiler-world')).toBe(false);
 
     const changed = await harness.advance('one template family source edit', (overlay) => {
@@ -75,6 +77,8 @@ describe('incremental production conformance', () => {
     expect(changedFamilies.every((child) =>
       child.dependencyChildIds.length === 1
       && child.dependencyChildIds[0] === preTemplate.childId)).toBe(true);
+    expect(analysisPhaseTransition(changed.trace.children, AureliaAppAnalysisPhase.PostTemplate))
+      .toBe(ComputationChildTransitionKind.Executed);
 
     const semanticChange = await harness.advance('consumed element-definition facet edit', (overlay) => {
       overlay.write(resourceFileName, containerlessResource);
@@ -93,6 +97,8 @@ describe('incremental production conformance', () => {
         ComputationChildTransitionKind.Withdrawn,
       ],
     });
+    expect(analysisPhaseTransition(semanticChange.trace.children, AureliaAppAnalysisPhase.PostTemplate))
+      .toBe(ComputationChildTransitionKind.Executed);
 
     const dependencyChange = await harness.advance('runtime dependency edit with stable compiler semantics', (overlay) => {
       overlay.write(resourceFileName, dependencyResource);
@@ -109,6 +115,8 @@ describe('incremental production conformance', () => {
     });
     expect(dependencyChange.trace.runtimeAnalysisSubjects.indexOf('SecondaryHost'))
       .toBeLessThan(dependencyChange.trace.runtimeAnalysisSubjects.indexOf('GlobalLocalChip'));
+    expect(analysisPhaseTransition(dependencyChange.trace.children, AureliaAppAnalysisPhase.PostTemplate))
+      .toBe(ComputationChildTransitionKind.Executed);
 
     const settled = await harness.advance('event-only generation after edit', () => {});
     expect(settled.equivalent).toBe(true);
@@ -119,8 +127,58 @@ describe('incremental production conformance', () => {
       'local-templates-app': [ComputationChildTransitionKind.Carried],
       'secondary-host': [ComputationChildTransitionKind.Carried],
     });
+    expect(analysisPhaseTransition(settled.trace.children, AureliaAppAnalysisPhase.PostTemplate))
+      .toBe(ComputationChildTransitionKind.Carried);
+  }, 300_000);
+
+  test('matches cold semantic truth across template withdrawal and reintroduction', async () => {
+    const fixtureRoot = pressureFixtureRoot('resource-registration-local-templates');
+    const resourceFileName = path.join(fixtureRoot, 'src/secondary-host.ts');
+    const originalResource = readFileSync(resourceFileName, 'utf8');
+    const harness = await IncrementalConformanceHarness.open({
+      fixtureRoot,
+      scenarioKey: 'resource-template-family-withdrawal',
+    });
+
+    const withdrawn = await harness.advance('template resource source withdrawal', (overlay) => {
+      overlay.remove(resourceFileName);
+    });
+    expect(withdrawn.equivalent).toBe(true);
+    expect(withdrawn.trace.children).toContainEqual(expect.objectContaining({
+      locusKind: 'template-compilation',
+      previousSubject: 'secondary-host',
+      transition: ComputationChildTransitionKind.Withdrawn,
+    }));
+    expect(analysisPhaseTransition(withdrawn.trace.children, AureliaAppAnalysisPhase.PostTemplate))
+      .toBe(ComputationChildTransitionKind.Executed);
+
+    const reintroduced = await harness.advance('template resource source reintroduction', (overlay) => {
+      overlay.write(resourceFileName, originalResource);
+    });
+    expect(reintroduced.equivalent).toBe(true);
+    expect(reintroduced.trace.children).toContainEqual(expect.objectContaining({
+      locusKind: 'template-compilation',
+      currentSubject: 'secondary-host',
+      transition: ComputationChildTransitionKind.Executed,
+    }));
+    expect(analysisPhaseTransition(reintroduced.trace.children, AureliaAppAnalysisPhase.PostTemplate))
+      .toBe(ComputationChildTransitionKind.Executed);
   }, 180_000);
 });
+
+function analysisPhaseTransition(
+  children: readonly IncrementalConformanceChildTrace[],
+  phase: AureliaAppAnalysisPhase,
+): ComputationChildTransitionKind {
+  const child = children.find((candidate) =>
+    candidate.locusKind === 'aurelia-app-analysis-phase'
+      && candidate.summary.startsWith(`${phase} `)
+  ) ?? null;
+  if (child == null) {
+    throw new Error(`Expected ${phase} app-analysis trace.`);
+  }
+  return child.transition;
+}
 
 function familyTransitions(
   families: readonly {

@@ -3096,12 +3096,13 @@
         "incrementality"
       ],
       "summary": "A semantic app pins one atomic generation whose pre-template, family, and post-template children expose exact dependency ownership and explicit carry decisions.",
-      "rationale": "Static evaluation, resources, configuration, DI, compiler/runtime/checker rows, observation, state, capability, router products, and retained TypeScript-backed carriers form one public generation. The outer computation commits that closure atomically. Explicit pre-template, authored-family, and post-template children preserve causal ownership; eligible family children may be carried only after exact rebase and authoritative decision preview, while every other child reruns inside the same candidate.",
+      "rationale": "Static evaluation, resources, configuration, DI, compiler/runtime/checker rows, observation, state, capability, router products, and retained TypeScript-backed carriers form one public generation. The outer computation commits that closure atomically. Explicit pre-template, authored-family, and post-template children preserve causal ownership; eligible family and broad post-template children may be carried only after exact rebase and authoritative decision preview, while failed gates rerun inside the same candidate.",
       "guidance": [
         "One project app-analysis locus owns the current generation regardless of analysis depth or authoring policy. Those policies are replacement inputs, not parallel owners of stable handles.",
         "A prepared AureliaAppWorldProjectEmission is run-bound and never public current state. Promote only after successful lifecycle commit; rejected, stale, superseded, or throwing attempts preserve the incumbent.",
         "After commit, bind retained template/checker state to one generation authority. Replacement and disposal revoke retained evaluator reads and lazy projections.",
         "Keep pre-template, stable authored-family, and post-template ownership explicit beneath one atomic transaction. Phase-local input scopes and immutable carriers replace app-wide read replay.",
+        "Post-template carry requires identical analysis depth, app and convention-tooling evaluator generations, TypeSystem generation, complete front-door membership, zero open reads, and successful compiler-read rebase. Rebuild current orchestration/expression-world envelopes around retained immutable products; never retain a stale ProjectBootFrame or checker carrier across generations.",
         "Carry exact authored-file revisions with template metadata and let each family validate its own current source. Do not restore a global source-snapshot backup.",
         "Keep one AureliaAppWorldProjectComputationService and one ComputationLifecycleRegistry per SemanticRuntime/KernelStore. Do not add feature-local registries or independently committing family producers.",
         "Selective activation is a technical child-plan decision, not a second public generation. Carry only after exact rebase and Retain preview; open closure, RefreshWitness, nontrivial SCCs, and incomplete dependencies rerun conservatively.",
@@ -3152,7 +3153,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-21"
+      "updatedAt": "2026-07-22"
     }
   ]
 }

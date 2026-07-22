@@ -171,7 +171,6 @@ export class RouteRuntimeTopologyProjectResult {
   private readonly containerByRouteContextIdentity: ReadonlyMap<IdentityHandle, Container>;
 
   constructor(
-    readonly project: ProjectBootFrame,
     readonly routeContexts: readonly RouteContextModel[],
     readonly viewports: readonly ViewportCustomElementModel[],
     readonly viewportAgents: readonly ViewportAgentModel[],
@@ -195,6 +194,10 @@ export class RouteRuntimeTopologyProjectResult {
 
   readViewportAgents(): readonly ViewportAgentModel[] {
     return this.viewportAgents;
+  }
+
+  readRouteContextContainers(): readonly Container[] {
+    return [...new Set(this.containerByRouteContextIdentity.values())];
   }
 
   routeContextsForRouteConfigContext(identityHandle: IdentityHandle | null): readonly RouteContextModel[] {
@@ -302,7 +305,6 @@ export class RouteRuntimeTopologyProjectPass {
       new KernelStoreBatch(records, `router-runtime-topology:${project.projectKey}`),
     ));
     return new RouteRuntimeTopologyProjectResult(
-      project,
       state.routeContexts.map((emission) => emission.routeContext),
       state.viewports.map((emission) => emission.viewport),
       state.viewports.map((emission) => emission.viewportAgent),
