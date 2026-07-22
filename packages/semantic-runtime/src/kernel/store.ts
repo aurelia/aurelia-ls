@@ -94,7 +94,6 @@ import {
 import {
   compareKernelRecords,
   referencedKernelRecordHandles,
-  sealKernelRecord,
 } from './record-comparison.js';
 
 export { KernelStoreBatch } from './publication.js';
@@ -484,9 +483,6 @@ export class KernelStore {
     this.assertStoreMutationAllowed('commit a record batch');
     const batchLabel = batch.label ?? '(unnamed batch)';
     const batchHandles = new Set<KernelRecordHandle>();
-    for (const record of batch.records) {
-      sealKernelRecord(record);
-    }
     const pending = this.buildCommitIndex(batch.records);
     for (const record of batch.records) {
       const handle = record.handle;
@@ -848,9 +844,6 @@ export class KernelStore {
       label,
     );
     this.validatePublicationAdmissionSnapshots(next, label);
-    for (const record of next.batch.records) {
-      sealKernelRecord(record);
-    }
 
     const recordsByHandle = this.publicationRecordsByHandle(next.batch.records, previousRecordHandles, label);
     const productDetailsByHandle = normalizedProductDetailPublications(next.productDetails, label);
@@ -1564,9 +1557,7 @@ export class KernelStore {
         validatedPreviousEntries,
       );
     }
-    const record = candidate.readRecord(handle);
-    if (record != null) sealKernelRecord(record);
-    return record;
+    return candidate.readRecord(handle);
   }
 
   private productForDecisionPreview(

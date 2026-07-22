@@ -99,6 +99,67 @@ export class KernelHotDetailPublication<TDetail> {
   }
 }
 
+/** Seal one normalized record and every embedded collection at its publication boundary. */
+function sealKernelRecord<TRecord extends KernelStoreRecord>(record: TRecord): TRecord {
+  switch (record.kind) {
+    case 'template-node-address':
+      Object.freeze(record.path);
+      break;
+    case 'evidence-record':
+      Object.freeze(record.roles);
+      break;
+    case 'provenance-record':
+      Object.freeze(record.evidenceHandles);
+      break;
+    case 'open-seam':
+      Object.freeze(record.reasonKinds);
+      for (const source of record.reasonSources) {
+        Object.freeze(source);
+      }
+      Object.freeze(record.reasonSources);
+      break;
+    case 'materialization-record':
+      Object.freeze(record.productHandles);
+      Object.freeze(record.claimHandles);
+      Object.freeze(record.openSeamHandles);
+      break;
+    case 'source-file-address':
+    case 'source-span-address':
+    case 'template-address':
+    case 'generated-address':
+    case 'external-address':
+    case 'typescript-declaration-identity':
+    case 'aurelia-resource-identity':
+    case 'aurelia-attribute-pattern-identity':
+    case 'container-identity':
+    case 'di-product-identity':
+    case 'di-key-identity':
+    case 'registration-identity':
+    case 'resource-product-identity':
+    case 'evaluation-identity':
+    case 'observation-identity':
+    case 'configuration-identity':
+    case 'framework-identity':
+    case 'router-identity':
+    case 'route-recognizer-identity':
+    case 'i18n-identity':
+    case 'state-identity':
+    case 'validation-identity':
+    case 'fetch-client-identity':
+    case 'dialog-identity':
+    case 'compiler-identity':
+    case 'template-identity':
+    case 'template-node-identity':
+    case 'binding-identity':
+    case 'instruction-identity':
+    case 'type-system-identity':
+    case 'semantic-claim':
+    case 'materialized-product':
+      break;
+  }
+  return Object.freeze(record);
+}
+
 /** Coherent normalized-record emission carried by an immediate or staged publication. */
 export class KernelStoreBatch {
   readonly records: readonly KernelStoreRecord[];
@@ -110,7 +171,7 @@ export class KernelStoreBatch {
     /** Optional non-semantic label for debugging and inquiry traces. */
     label: string | null = null,
   ) {
-    this.records = Object.freeze([...records]);
+    this.records = Object.freeze(records.map(sealKernelRecord));
     this.label = label;
     Object.freeze(this);
   }

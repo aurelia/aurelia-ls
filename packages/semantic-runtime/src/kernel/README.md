@@ -130,7 +130,10 @@ record links.
 
 `store.ts` defines the hot in-memory `KernelStore`, batch commit surface, missing-record commit guard, handle expansion,
 cheap navigation indexes, and typed detail catalogs. Batches are record-emission units, not durable transactions,
-vocabulary mutations, or semantic boundaries. The store also validates controlled vocabulary usage at commit time: product kinds
+vocabulary mutations, or semantic boundaries. `KernelStoreBatch` takes ownership of each normalized record by sealing
+its identity, classification, and embedded structural collections before immediate or staged publication can capture a
+revision or expose it to another computation. Rich detail payloads remain under their separate projection and
+revalidation protocol. The store also validates controlled vocabulary usage at commit time: product kinds
 must be declared as product-kind vocabulary, claim predicates must be declared as claim-predicate vocabulary, and claim
 endpoints must match the predicate's directional signature.
 `KernelStore.markLifetime()` / `disposeSince(...)` is the app-session reclamation primitive for answer-local work. A
@@ -177,8 +180,9 @@ equality: exact source/configuration values remain typed computation reads, and 
 advance project-input authority before admission. Transient publication views expose operational currentness but do not
 implement `GenerationAuthority`, so a finished run, poisoned staging context, or eternal store cannot masquerade as a
 witnessed durable generation. Normalized records, publication plans, manifests, decisions, and their
-structural arrays are sealed before any external validator runs. A failed or stale run leaves the previous records,
-details, read index, producer index, and manifest intact. Sidecar indexes remain
+structural arrays are sealed before any external validator runs. Normalized records are sealed earlier, when their
+`KernelStoreBatch` takes ownership, so staged revisions and sibling reads always name one immutable record value. A
+failed or stale run leaves the previous records, details, read index, producer index, and manifest intact. Sidecar indexes remain
 acceleration structures; replacing a detail they index is rejected until that index registers an explicit lifecycle
 participant.
 The retained lifecycle read set is transition evidence, not automatically the public serviceability contract of the
@@ -262,9 +266,10 @@ and rich-detail slot compatibility, so replacing a target value under the same i
 consumer that only retains the link. The store-owned preview classifies only the prior child outputs and positive
 candidate dependencies whose `Retain` decisions gate carry. Its lazy projection may read an omitted prior entry as the
 committed value while resolving that bounded comparison closure; omission in the final plan still means withdrawal.
-Every touched prior entry must retain the exact manifest lifetime, and staged records are sealed before a comparator can
-observe them. Carry declines before preview when any sibling has already staged one of the prior outputs. Domain
-read-rebase callbacks may inspect only the supplied preview context; the owning run rejects reads, writes, child entry,
+Every touched prior entry must retain the exact manifest lifetime. Staged records were already sealed at normalized
+batch emission before revision capture or sibling visibility; comparators cannot observe a later identity or
+classification behind an earlier revision. Carry declines before preview when any sibling has already staged one of
+the prior outputs. Domain read-rebase callbacks may inspect only the supplied preview context; the owning run rejects reads, writes, child entry,
 commit, and abort while a rebaser executes. Carry preflights every read-map merge before it mutates staged publication,
 then installs exact prior
 entries. Preview and final replacement spend distinct runtime-branded capabilities: arbitrary structural lookalikes and

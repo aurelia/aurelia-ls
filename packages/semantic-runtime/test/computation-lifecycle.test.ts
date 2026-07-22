@@ -3189,6 +3189,64 @@ describe("computation lifecycle", () => {
     expect(store.read(nodeHandle)).toBeNull();
   });
 
+  test("seals staged record identity and structure before sibling reads", () => {
+    const store = new KernelStore("computation-staged-record-sealing");
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const fileHandle = store.handles.address("staged-record-sealing:file");
+    const forgedFileHandle = store.handles.address("staged-record-sealing:forged-file");
+    const templateHandle = store.handles.address("staged-record-sealing:template");
+    const nodeHandle = store.handles.address("staged-record-sealing:node");
+    const initial = lifecycle.begin(locus("staged-record-sealing"));
+    initial.publish(publication("staged-record-sealing:initial", [
+      new SourceFileAddress(fileHandle, "test", "src/initial.html", SourceLanguage.Html),
+    ]));
+    expect(initial.commit().state).toBe(ComputationCommitState.Committed);
+
+    const incumbent = store.read(fileHandle);
+    const incumbentState = lifecycle.readState(initial.computationId);
+    const lifetime = store.markLifetime();
+    const observation = store.markObservation();
+    const candidateFile = new SourceFileAddress(
+      fileHandle,
+      "test",
+      "src/candidate.html",
+      SourceLanguage.Html,
+    );
+    const nodePath = [0];
+    const candidateNode = new TemplateNodeAddress(nodeHandle, templateHandle, nodePath);
+    const replacement = lifecycle.begin(locus("staged-record-sealing"));
+    replacement.withChild(childLocus("producer"), () => {
+      replacement.publish(publication("staged-record-sealing:candidate", [
+        candidateFile,
+        new TemplateAddress(templateHandle, "staged-record-sealing"),
+        candidateNode,
+      ]));
+    });
+
+    expect(Object.isFrozen(candidateFile)).toBe(true);
+    expect(Object.isFrozen(candidateNode)).toBe(true);
+    expect(Object.isFrozen(nodePath)).toBe(true);
+    expect(() => Object.defineProperty(candidateFile, "handle", { value: forgedFileHandle })).toThrow();
+    expect(() => Object.defineProperty(candidateFile, "kind", { value: "generated-address" })).toThrow();
+    expect(() => nodePath.push(1)).toThrow();
+    replacement.withChild(childLocus("consumer"), () => {
+      expect(replacement.read(fileHandle)).toBe(candidateFile);
+      expect(replacement.read(nodeHandle)).toBe(candidateNode);
+    });
+
+    expect(store.read(fileHandle)).toBe(incumbent);
+    expect(store.read(forgedFileHandle)).toBeNull();
+    expect(lifecycle.readState(initial.computationId)).toBe(incumbentState);
+    expect(store.markLifetime()).toEqual(lifetime);
+    expect(store.markObservation()).toEqual(observation);
+    replacement.abort();
+    expect(store.read(fileHandle)).toBe(incumbent);
+    expect(store.read(forgedFileHandle)).toBeNull();
+    expect(lifecycle.readState(initial.computationId)).toBe(incumbentState);
+    expect(store.markLifetime()).toEqual(lifetime);
+    expect(store.markObservation()).toEqual(observation);
+  });
+
   test("exposes normalized staged detail envelopes to sibling children", () => {
     const store = new KernelStore("computation-staged-detail-envelopes");
     const lifecycle = new ComputationLifecycleRegistry(store);
