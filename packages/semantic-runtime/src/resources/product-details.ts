@@ -122,6 +122,8 @@ function bindableReferences(
       bindable.callbackSourceAddressHandle,
       bindable.modeSourceAddressHandle,
       bindable.setSourceAddressHandle,
+      bindable.typeSourceAddressHandle,
+      bindable.nullableSourceAddressHandle,
     ),
     bindableSetterReferences(bindable.set),
     resourceTargetReferenceReferences(bindable.propertyTarget),
@@ -141,6 +143,8 @@ function bindableContributionReferences(
       bindable.callbackSourceAddressHandle,
       bindable.modeSourceAddressHandle,
       bindable.setSourceAddressHandle,
+      bindable.typeSourceAddressHandle,
+      bindable.nullableSourceAddressHandle,
     ),
     bindableSetterReferences(bindable.set),
     kernelFieldProvenanceReferences(bindable.fieldProvenance),
@@ -390,6 +394,8 @@ function bindableWitnessReferences(
       bindable.callbackSourceAddressHandle,
       bindable.modeSourceAddressHandle,
       bindable.setSourceAddressHandle,
+      bindable.typeSourceAddressHandle,
+      bindable.nullableSourceAddressHandle,
     ),
     resourceTargetWitnessReferences(bindable.set?.target ?? null),
     bindable instanceof BindableDefinition
@@ -859,6 +865,7 @@ function bindableSemanticValue(
     bindable.name,
     bindable.set.kind,
     resourceTargetSemanticValue(bindable.set.target),
+    bindable.set.nullable,
     resourceTargetSemanticValue(bindable.propertyTarget),
     resourceTargetSemanticValue(bindable.callbackTarget),
   ];
@@ -874,6 +881,8 @@ function bindableWitnessValue(
     bindable.callbackSourceAddressHandle,
     bindable.modeSourceAddressHandle,
     bindable.setSourceAddressHandle,
+    bindable.typeSourceAddressHandle,
+    bindable.nullableSourceAddressHandle,
     resourceTargetWitnessValue(bindable.set.target),
     resourceTargetWitnessValue(bindable.propertyTarget),
     resourceTargetWitnessValue(bindable.callbackTarget),
@@ -893,7 +902,7 @@ function bindableContributionSemanticValue(
     bindable.name,
     bindable.set == null
       ? null
-      : [bindable.set.kind, resourceTargetSemanticValue(bindable.set.target)],
+      : [bindable.set.kind, resourceTargetSemanticValue(bindable.set.target), bindable.set.nullable],
   ];
 }
 
@@ -907,6 +916,8 @@ function bindableContributionWitnessValue(
     bindable.callbackSourceAddressHandle,
     bindable.modeSourceAddressHandle,
     bindable.setSourceAddressHandle,
+    bindable.typeSourceAddressHandle,
+    bindable.nullableSourceAddressHandle,
     resourceTargetWitnessValue(bindable.set?.target ?? null),
     fieldProvenanceComparisonValue(bindable.fieldProvenance),
   ];

@@ -6,13 +6,13 @@ import {
 } from '../seams.js';
 import {
   EvaluationBoundaryKind,
-  EvaluationBoundaryObjectValue,
   EvaluationBoundaryValue,
   EvaluationPromiseSettlementKind,
   EvaluationPromiseValue,
   EvaluationUndefined,
   EvaluationUnknownValue,
   EvaluationValueKind,
+  readEvaluationCallability,
   type EvaluationValue,
 } from '../values.js';
 import type { StaticIntrinsicEvaluationHost } from './contracts.js';
@@ -213,10 +213,7 @@ function openPromiseReaction(
 }
 
 function isDefinitelyNonCallable(value: EvaluationValue): boolean {
-  return value.kind !== EvaluationValueKind.Function
-    && !(value instanceof EvaluationBoundaryObjectValue && value.callable)
-    && value.kind !== EvaluationValueKind.BoundaryValue
-    && value.kind !== EvaluationValueKind.Unknown;
+  return readEvaluationCallability(value) === false;
 }
 
 function promiseHandlerMayExecute(handler: EvaluationValueEvidence | null): boolean {

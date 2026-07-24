@@ -5,6 +5,7 @@ import {
   SourceFileRole,
   SourceLanguage,
 } from '../kernel/address.js';
+import { isStaticEvaluationGlobalName } from '../expression/global-names.js';
 import type { SemanticRuntimeProjectInputHost } from '../kernel/project-input.js';
 import { EvaluationBoundaryKind, EvaluationBoundaryValue } from './values.js';
 import type { StaticEvaluationRuntimeHost } from './evaluator.js';
@@ -21,7 +22,7 @@ export class StaticEvaluationAmbientGlobalDeclarations {
   resolveIdentifier(
     identifier: ts.Identifier,
   ): EvaluationBoundaryValue | null {
-    return this.names.has(identifier.text)
+    return this.names.has(identifier.text) && !isStaticEvaluationGlobalName(identifier.text)
       ? new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, identifier.text, identifier)
       : null;
   }

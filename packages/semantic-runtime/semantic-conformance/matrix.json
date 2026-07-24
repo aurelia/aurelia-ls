@@ -2611,8 +2611,22 @@
               "rows": [
                 {
                   "rowPath": "value.rows[].bindables",
-                  "fields": { "name": "strictQuantity", "setterKind": "type-coercion", "nullable": false },
+                  "fields": { "name": "strictQuantity", "setterKind": "type-coercion", "setterTargetName": "Number", "nullable": false },
                   "source": { "sourceFile": "src/profile-card.ts", "marker": "strictQuantity: number | null", "token": "strictQuantity" },
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "strictQuantity" },
+                  "sourceField": "typeSource",
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "@bindable({ type: Number, nullable: false })", "token": "Number" },
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "strictQuantity" },
+                  "sourceField": "nullableSource",
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "@bindable({ type: Number, nullable: false })", "token": "false" },
                   "count": 1
                 }
               ]
@@ -2642,13 +2656,13 @@
               "rows": [
                 {
                   "rowPath": "value.rows[].bindables",
-                  "fields": { "name": "stringifiedLabel", "attribute": "stringified-label", "mode": "toView", "setterKind": "function" },
+                  "fields": { "name": "stringifiedLabel", "attribute": "stringified-label", "mode": "toView", "setterKind": "function", "setterTargetName": "String" },
                   "source": { "sourceFile": "src/profile-card.ts", "marker": "stringifiedLabel = ''", "token": "stringifiedLabel" },
                   "count": 1
                 },
                 {
                   "rowPath": "value.rows[].bindables",
-                  "fields": { "name": "status", "attribute": "status-text", "callback": "statusDidChange", "mode": "fromView", "setterKind": "function" },
+                  "fields": { "name": "status", "attribute": "status-text", "callback": "statusDidChange", "mode": "fromView", "setterKind": "function", "setterTargetName": "String" },
                   "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "status: {", "token": "status" },
                   "count": 1
                 }
@@ -2682,6 +2696,13 @@
                   "rowPath": "value.rows[].bindables",
                   "fields": { "name": "status" },
                   "sourceField": "setSource",
+                  "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "set: String", "token": "String" },
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "status", "setterTargetName": "String" },
+                  "sourceField": "setterTargetSource",
                   "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "set: String", "token": "String" },
                   "count": 1
                 }

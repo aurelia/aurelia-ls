@@ -86,6 +86,7 @@ import {
 import { readRouterIssues } from './route-projections.js';
 import { semanticTypeScriptDiagnosticSeverity } from './typescript-diagnostics.js';
 import { TypeSystemProjectBuilder, type TypeSystemProject } from '../type-system/project.js';
+import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import {
   checkerPropertySymbol,
   checkerSymbolValueType,
@@ -133,6 +134,10 @@ import {
   SemanticRuntimeDetail,
   type SemanticRuntimeAnswer,
 } from './contracts.js';
+import {
+  projectBindableDefinitionSources,
+  projectBindableDefinitionSurface,
+} from './bindable-projection.js';
 import {
   describeAddress,
   semanticSourceReferenceContainsOffset,
@@ -2317,7 +2322,12 @@ function templateCursorInfoResult(
       cursorContext.selectedDefinitionMatchedName,
       includeHandles,
     ),
-    selectedBindable: cursorBindableRow(store, cursorContext.selectedBindable, includeHandles),
+    selectedBindable: cursorBindableRow(
+      store,
+      selection.resource.runtimeAnalysis.expressionWorld.projector,
+      cursorContext.selectedBindable,
+      includeHandles,
+    ),
     selectedMemberName: cursorContext.selectedMemberName,
     selectedMember,
     memberOwnerType,
@@ -2478,17 +2488,26 @@ function definitionNameSourceAddressHandle(
 
 function cursorBindableRow(
   store: KernelStore,
+  projector: CheckerTypeProjector,
   bindable: TemplateBindableReference | null,
   includeHandles: boolean,
 ): SemanticTemplateCursorBindableRow | null {
   if (bindable == null) {
     return null;
   }
+  const ownerDefinition = bindable.reference.ownerDefinitionProductHandle == null
+    ? null
+    : store.productDetails.read(
+        ResourceProductDetails.Definition,
+        bindable.reference.ownerDefinitionProductHandle,
+      );
   return {
     name: bindable.reference.name,
     attribute: bindable.reference.attribute,
     callback: bindable.definition.callback,
     mode: bindable.definition.mode,
+    ...projectBindableDefinitionSurface(store, projector, bindable.definition, ownerDefinition?.target ?? null),
+    ...projectBindableDefinitionSources(store, bindable.definition),
     ownerDefinitionProductHandle: bindable.reference.ownerDefinitionProductHandle,
     source: describeAddress(store, bindable.reference.sourceAddressHandle),
     nameSource: describeAddress(store, bindable.reference.nameSourceAddressHandle),
@@ -2511,6 +2530,10 @@ function cursorBindableRow(
         callbackTargetAddressHandle: bindable.definition.callbackTarget?.addressHandle ?? null,
         modeSourceAddressHandle: bindable.definition.modeSourceAddressHandle,
         setSourceAddressHandle: bindable.definition.setSourceAddressHandle,
+        setterTargetIdentityHandle: bindable.definition.set.target?.identityHandle ?? null,
+        setterTargetAddressHandle: bindable.definition.set.target?.addressHandle ?? null,
+        typeSourceAddressHandle: bindable.definition.typeSourceAddressHandle,
+        nullableSourceAddressHandle: bindable.definition.nullableSourceAddressHandle,
       },
     } : {}),
   };

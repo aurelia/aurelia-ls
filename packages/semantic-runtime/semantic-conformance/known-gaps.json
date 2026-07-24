@@ -45,34 +45,6 @@
       "rationale": "Framework With substitutes an empty object only for undefined; null becomes the child binding context and later scope lookup can throw. Semantic-runtime erases null with getNonNullableType and reports the reachable runtime hazard as clean."
     },
     {
-      "assertionId": "bindable-contract-metadata-depth/coercion-nullability-policy-is-preserved",
-      "status": "known-gap",
-      "failureBucket": "bindable-coercion-policy-data-loss",
-      "firstObserved": "2026-07-09",
-      "rationale": "Aurelia's nullable flag changes the runtime coercer wrapper, but semantic-runtime collapses type coercion to setterKind=type-coercion and drops nullable from both BindableDefinition and the public resource row."
-    },
-    {
-      "assertionId": "bindable-contract-metadata-depth/custom-attribute-no-multi-bindings-policy-is-public",
-      "status": "known-gap",
-      "failureBucket": "custom-attribute-compiler-policy-public-projection-data-loss",
-      "firstObserved": "2026-07-09",
-      "rationale": "CustomAttributeDefinition retains noMultiBindings and template lowering honors it, but SemanticResourceDefinitionRow does not project the policy for MCP, IDE, or future AOT consumers."
-    },
-    {
-      "assertionId": "bindable-contract-metadata-depth/known-interceptor-function-references-close",
-      "status": "known-gap",
-      "failureBucket": "bindable-setter-function-reference-convergence",
-      "firstObserved": "2026-07-09",
-      "rationale": "The framework accepts set: String as a closed bindable interceptor, but semantic-runtime classifies the global function reference as open through both decorator and static-record metadata while inline function expressions close."
-    },
-    {
-      "assertionId": "bindable-contract-locus-and-completion-depth/bindable-cursor-preserves-value-type-facts",
-      "status": "known-gap",
-      "failureBucket": "bindable-cursor-type-projection-data-loss",
-      "firstObserved": "2026-07-09",
-      "rationale": "Resource definition rows preserve bindable value type and call-signature facts, but SemanticTemplateCursorBindableRow drops them before hover and other cursor consumers can present the selected bindable's type."
-    },
-    {
       "assertionId": "template-native-target-precedence/conditional-app-two-way-predicate",
       "status": "known-gap",
       "failureBucket": "attr-mapper-predicate-execution-open",

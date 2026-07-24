@@ -31,7 +31,10 @@ import type {
   SemanticResourceIssueRow,
   SemanticResourceIssuesResult,
 } from './contracts.js';
-import { projectBindableTypeSurface } from './bindable-type-projection.js';
+import {
+  projectBindableDefinitionSources,
+  projectBindableDefinitionSurface,
+} from './bindable-projection.js';
 
 export function readResourceDefinitionRows(
   emission: AureliaAppWorldProjectEmission,
@@ -96,6 +99,7 @@ function resourceDefinitionRow(
     isTemplateController: 'isTemplateController' in definition ? definition.isTemplateController : null,
     containerStrategy: 'containerStrategy' in definition ? definition.containerStrategy : null,
     defaultProperty: 'defaultProperty' in definition ? definition.defaultProperty : null,
+    noMultiBindings: 'noMultiBindings' in definition ? definition.noMultiBindings : null,
     containerless: 'containerless' in definition ? definition.containerless : null,
     shadowMode: 'shadowOptions' in definition ? definition.shadowOptions?.mode ?? null : null,
     hasSlots: 'hasSlots' in definition ? definition.hasSlots : null,
@@ -265,16 +269,8 @@ function bindableRows(
       attribute: bindable.attribute,
       callback: bindable.callback,
       mode: bindable.mode,
-      setterKind: bindable.set.kind,
-      ...projectBindableTypeSurface(store, projector, target, bindable),
-      source: describeAddress(store, bindable.sourceAddressHandle),
-      nameSource: describeAddress(store, bindable.nameSourceAddressHandle),
-      attributeSource: describeAddress(store, bindable.attributeSourceAddressHandle),
-      propertySource: describeAddress(store, bindable.propertyTarget?.addressHandle ?? null),
-      callbackSource: describeAddress(store, bindable.callbackSourceAddressHandle),
-      callbackTargetSource: describeAddress(store, bindable.callbackTarget?.addressHandle ?? null),
-      modeSource: describeAddress(store, bindable.modeSourceAddressHandle),
-      setSource: describeAddress(store, bindable.setSourceAddressHandle),
+      ...projectBindableDefinitionSurface(store, projector, bindable, target),
+      ...projectBindableDefinitionSources(store, bindable),
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
 }

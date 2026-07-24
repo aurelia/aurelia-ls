@@ -1,6 +1,7 @@
 import ts from 'typescript';
 import { SourceSpanRole } from '../kernel/address.js';
 import type {
+  AddressHandle,
   IdentityHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -30,6 +31,7 @@ import {
 import {
   EvaluationObjectPropertyState,
   EvaluationValueKind,
+  readEvaluationCallability,
   type EvaluationObjectValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
@@ -611,12 +613,18 @@ function bindableEntry(
   const mode = readBindableMode(modeRead == null ? null : closedStaticValueMemberValue(modeRead))
     ?? defaultBindableMode(partial);
   const name = readObjectString(partial, 'name') ?? propertyName;
-  const setter = setterOverride ?? readBindableSetter(partial);
   const nameSource = readObjectStringFieldSource(store, context, `${local}:name`, partial, 'name') ?? source;
   const attributeSource = readObjectStringFieldSource(store, context, `${local}:attribute`, partial, 'attribute');
   const callbackSource = readObjectStringFieldSource(store, context, `${local}:callback`, partial, 'callback');
   const modeSource = readObjectFieldSource(store, context, `${local}:mode`, partial, 'mode');
   const setSource = readObjectFieldSource(store, context, `${local}:set`, partial, 'set');
+  const typeSource = readObjectFieldSource(store, context, `${local}:type`, partial, 'type');
+  const nullableSource = readObjectFieldSource(store, context, `${local}:nullable`, partial, 'nullable');
+  const setter = setterOverride ?? readBindableSetter(
+    partial,
+    setSource?.addressHandle ?? null,
+    typeSource?.addressHandle ?? null,
+  );
   const fieldProvenance = bindableFieldProvenance(
     source,
     nameSource,
@@ -624,6 +632,8 @@ function bindableEntry(
     callbackSource,
     modeSource,
     setSource,
+    typeSource,
+    nullableSource,
   );
   return {
     bindable: new BindableDefinition(
@@ -639,6 +649,10 @@ function bindableEntry(
       callbackSource?.addressHandle ?? null,
       modeSource?.addressHandle ?? null,
       setSource?.addressHandle ?? null,
+      null,
+      null,
+      typeSource?.addressHandle ?? null,
+      nullableSource?.addressHandle ?? null,
     ),
     contribution: new BindableDefinitionContribution(
       contributionKind,
@@ -655,9 +669,20 @@ function bindableEntry(
       callbackSource?.addressHandle ?? null,
       modeSource?.addressHandle ?? null,
       setSource?.addressHandle ?? null,
+      typeSource?.addressHandle ?? null,
+      nullableSource?.addressHandle ?? null,
     ),
     open: null,
-    records: bindableSourceRecords(source, nameSource, attributeSource, callbackSource, modeSource, setSource),
+    records: bindableSourceRecords(
+      source,
+      nameSource,
+      attributeSource,
+      callbackSource,
+      modeSource,
+      setSource,
+      typeSource,
+      nullableSource,
+    ),
     issues: [],
   };
 }
@@ -717,6 +742,8 @@ function bindableFieldProvenance(
   callbackSource: SourceSpanEvidencePublication | null,
   modeSource: SourceSpanEvidencePublication | null,
   setSource: SourceSpanEvidencePublication | null,
+  typeSource: SourceSpanEvidencePublication | null,
+  nullableSource: SourceSpanEvidencePublication | null,
 ): readonly FieldProvenance<BindableDefinitionField>[] {
   return compactFieldProvenance<BindableDefinitionField>([
     nameSource == null || nameSource.provenanceHandle === source?.provenanceHandle
@@ -734,6 +761,12 @@ function bindableFieldProvenance(
     setSource == null
       ? null
       : new FieldProvenance('set', setSource.provenanceHandle),
+    typeSource == null
+      ? null
+      : new FieldProvenance('type', typeSource.provenanceHandle),
+    nullableSource == null
+      ? null
+      : new FieldProvenance('nullable', nullableSource.provenanceHandle),
   ]);
 }
 
@@ -758,6 +791,8 @@ function bindableWithMemberTargets(
     bindable.setSourceAddressHandle,
     bindableMemberTarget(store, publication, ownerTarget, bindable.name),
     bindableMemberTarget(store, publication, ownerTarget, bindable.callback),
+    bindable.typeSourceAddressHandle,
+    bindable.nullableSourceAddressHandle,
   );
 }
 
@@ -797,7 +832,11 @@ function defaultBindableMode(
     : BindableBindingMode.ToView;
 }
 
-function readBindableSetter(partial: EvaluationObjectValue | null): BindableSetterDefinition {
+function readBindableSetter(
+  partial: EvaluationObjectValue | null,
+  setSourceAddressHandle: AddressHandle | null,
+  typeSourceAddressHandle: AddressHandle | null,
+): BindableSetterDefinition {
   if (partial == null) {
     return new BindableSetterDefinition(BindableSetterKind.Default);
   }
@@ -807,8 +846,11 @@ function readBindableSetter(partial: EvaluationObjectValue | null): BindableSett
     return new BindableSetterDefinition(BindableSetterKind.Open);
   }
   const set = setValue.kind === EvaluationValueKind.Undefined ? null : setValue;
-  if (set?.kind === EvaluationValueKind.Function) {
-    return new BindableSetterDefinition(BindableSetterKind.Function, targetReferenceForFunction(set, null));
+  if (set != null && readEvaluationCallability(set) === true) {
+    return new BindableSetterDefinition(
+      BindableSetterKind.Function,
+      bindablePolicyTarget(set, setSourceAddressHandle),
+    );
   }
   if (set != null) {
     return new BindableSetterDefinition(BindableSetterKind.Open);
@@ -819,12 +861,46 @@ function readBindableSetter(partial: EvaluationObjectValue | null): BindableSett
     return new BindableSetterDefinition(BindableSetterKind.Open);
   }
   if (typeValue.kind !== EvaluationValueKind.Undefined) {
-    return new BindableSetterDefinition(BindableSetterKind.TypeCoercion);
+    const nullableValue = closedStaticValueMemberValue(
+      readStaticValueProperty(partial, 'nullable', partial.node),
+    );
+    if (nullableValue == null) {
+      return new BindableSetterDefinition(BindableSetterKind.Open);
+    }
+    const nullable = nullableValue.kind === EvaluationValueKind.Boolean
+      ? nullableValue.value
+      : nullableValue.kind === EvaluationValueKind.Undefined || nullableValue.kind === EvaluationValueKind.Null
+        ? null
+        : undefined;
+    return nullable === undefined
+      ? new BindableSetterDefinition(BindableSetterKind.Open)
+      : new BindableSetterDefinition(
+          BindableSetterKind.TypeCoercion,
+          bindablePolicyTarget(typeValue, typeSourceAddressHandle),
+          nullable,
+        );
   }
   if (partial.mayHaveUnknownProperties) {
     return new BindableSetterDefinition(BindableSetterKind.Open);
   }
   return new BindableSetterDefinition(BindableSetterKind.Default);
+}
+
+function bindablePolicyTarget(
+  value: EvaluationValue,
+  addressHandle: AddressHandle | null,
+): ResourceTargetReference | null {
+  switch (value.kind) {
+    case EvaluationValueKind.Function:
+    case EvaluationValueKind.Class:
+      return targetReferenceForFunction(value, addressHandle);
+    case EvaluationValueKind.BoundaryObject:
+      return new ResourceTargetReference(null, addressHandle, value.path);
+    default:
+      return addressHandle == null
+        ? null
+        : new ResourceTargetReference(null, addressHandle, null);
+  }
 }
 
 function readCheckerBindableSetter(

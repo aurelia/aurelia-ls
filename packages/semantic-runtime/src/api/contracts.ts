@@ -1751,12 +1751,15 @@ export interface SemanticEvaluationIssuesResult {
   readonly rows: readonly SemanticEvaluationIssueRow[];
 }
 
-export interface SemanticResourceDefinitionBindableRow {
+export interface SemanticBindableDefinitionRow {
   readonly name: string;
   readonly attribute: string;
   readonly callback: string;
   readonly mode: BindableBindingMode | `${BindableBindingMode}`;
   readonly setterKind: BindableSetterKind | `${BindableSetterKind}`;
+  readonly setterTargetName: string | null;
+  /** Explicit nullish-coercion policy; null means absent or inapplicable. */
+  readonly nullable: boolean | null;
   readonly valueType: string | null;
   readonly valueTypeShapeKind: CheckerTypeShapeKind | `${CheckerTypeShapeKind}` | null;
   readonly effectiveValueTypeShapeKind: CheckerTypeShapeKind | `${CheckerTypeShapeKind}` | null;
@@ -1771,7 +1774,12 @@ export interface SemanticResourceDefinitionBindableRow {
   readonly callbackTargetSource: SemanticSourceReference | null;
   readonly modeSource: SemanticSourceReference | null;
   readonly setSource: SemanticSourceReference | null;
+  readonly setterTargetSource: SemanticSourceReference | null;
+  readonly typeSource: SemanticSourceReference | null;
+  readonly nullableSource: SemanticSourceReference | null;
 }
+
+export type SemanticResourceDefinitionBindableRow = SemanticBindableDefinitionRow;
 
 export interface SemanticResourceDefinitionWatchRow {
   readonly expressionKind: WatchExpressionKind | `${WatchExpressionKind}`;
@@ -1870,6 +1878,7 @@ export interface SemanticResourceDefinitionRow {
   readonly isTemplateController: boolean | null;
   readonly containerStrategy: CustomAttributeContainerStrategy | `${CustomAttributeContainerStrategy}` | null;
   readonly defaultProperty: string | null;
+  readonly noMultiBindings: boolean | null;
   readonly containerless: boolean | null;
   readonly shadowMode: ShadowRootMode | `${ShadowRootMode}` | null;
   readonly hasSlots: boolean | null;
@@ -3650,20 +3659,8 @@ export interface SemanticTemplateCursorDefinitionRow {
   };
 }
 
-export interface SemanticTemplateCursorBindableRow {
-  readonly name: string;
-  readonly attribute: string;
-  readonly callback: string;
-  readonly mode: BindableBindingMode | `${BindableBindingMode}`;
+export interface SemanticTemplateCursorBindableRow extends SemanticBindableDefinitionRow {
   readonly ownerDefinitionProductHandle: ProductHandle | null;
-  readonly source: SemanticSourceReference | null;
-  readonly nameSource: SemanticSourceReference | null;
-  readonly attributeSource: SemanticSourceReference | null;
-  readonly propertySource: SemanticSourceReference | null;
-  readonly callbackSource: SemanticSourceReference | null;
-  readonly callbackTargetSource: SemanticSourceReference | null;
-  readonly modeSource: SemanticSourceReference | null;
-  readonly setSource: SemanticSourceReference | null;
   readonly handles?: {
     readonly ownerDefinitionProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
@@ -3676,6 +3673,10 @@ export interface SemanticTemplateCursorBindableRow {
     readonly callbackTargetAddressHandle: AddressHandle | null;
     readonly modeSourceAddressHandle: AddressHandle | null;
     readonly setSourceAddressHandle: AddressHandle | null;
+    readonly setterTargetIdentityHandle: IdentityHandle | null;
+    readonly setterTargetAddressHandle: AddressHandle | null;
+    readonly typeSourceAddressHandle: AddressHandle | null;
+    readonly nullableSourceAddressHandle: AddressHandle | null;
   };
 }
 

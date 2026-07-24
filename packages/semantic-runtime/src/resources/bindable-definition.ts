@@ -27,13 +27,17 @@ export type BindableDefinitionField =
   | 'callback'
   | 'mode'
   | 'name'
+  | 'nullable'
   | 'set'
-  | 'source';
+  | 'source'
+  | 'type';
 
 export class BindableSetterDefinition {
   constructor(
     readonly kind: BindableSetterKind,
     readonly target: ResourceTargetReference | null = null,
+    /** Explicit nullish-coercion policy; null means absent or inapplicable. */
+    readonly nullable: boolean | null = null,
   ) {}
 }
 
@@ -62,6 +66,10 @@ export class BindableDefinition {
     readonly propertyTarget: ResourceTargetReference | null = null,
     /** TypeScript callback member targeted by this bindable metadata, when the owner type proves one. */
     readonly callbackTarget: ResourceTargetReference | null = null,
+    /** Source address for an explicitly authored coercion type expression, when known. */
+    readonly typeSourceAddressHandle: AddressHandle | null = null,
+    /** Source address for an explicitly authored nullable coercion policy, when known. */
+    readonly nullableSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }
 
@@ -118,5 +126,9 @@ export class BindableDefinitionContribution {
     readonly modeSourceAddressHandle: AddressHandle | null = null,
     /** Source address for an explicitly authored setter/interceptor expression, when known. */
     readonly setSourceAddressHandle: AddressHandle | null = null,
+    /** Source address for an explicitly authored coercion type expression, when known. */
+    readonly typeSourceAddressHandle: AddressHandle | null = null,
+    /** Source address for an explicitly authored nullable coercion policy, when known. */
+    readonly nullableSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }

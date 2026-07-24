@@ -103,7 +103,7 @@ Transient verdict state lives in `known-gaps.json`:
 
 This keeps the north-star requirements durable while making today's implementation gaps explicit.
 
-Current matrix scale, as of 2026-07-13:
+Current matrix scale, as of 2026-07-24:
 
 - public app-query catalog boundary assertions;
 - source precision and cross-query agreement canaries;
@@ -129,10 +129,10 @@ Current matrix scale, as of 2026-07-13:
 - code-action edit-plan provenance, including safe no-action cases;
 - framework capability demand rows before diagnostic/code-action projection.
 
-Current default output: 587 active assertions pass with 18 known gaps. Domain totals are: template expression typing
+Current default output: 594 active assertions pass with 14 known gaps. Domain totals are: template expression typing
 102/102 active, runtime API boundary 24/24, plugin capability admission 18/18, resource registration 92/92, runtime
-composition 6/6, router composition 110/110, observation/data flow 7/7, bindable contracts 82/86, template-controller
-scope 73/79, and template binding syntax 73/81. Known gaps remain requirement witnesses rather than weakened
+composition 6/6, router composition 110/110, observation/data flow 10/10, bindable contracts 86/86,
+template-controller scope 73/79, and template binding syntax 73/81. Known gaps remain requirement witnesses rather than weakened
 expectations; their current causal buckets live only in `known-gaps.json`.
 
 The matrix is intentionally structural rather than exhaustive. New assertion families should be added when they expose

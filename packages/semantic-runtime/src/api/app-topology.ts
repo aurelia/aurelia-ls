@@ -51,7 +51,7 @@ import {
   resolvedRouteableComponentName,
   type RouteConfigModel,
 } from '../router/model.js';
-import { projectBindableTypeSurface } from './bindable-type-projection.js';
+import { projectBindableTypeSurface } from './bindable-projection.js';
 import {
   readBindingObservedDependencyRows,
   readBindingTargetAccessRows,
@@ -1096,8 +1096,8 @@ function applicationComponentReference(
         ? projectBindableTypeSurface(
             store,
             emission.templates.expressionWorld.projector,
-            definition.target,
             bindable,
+            definition.target,
           )
         : nullBindableTypeSurface();
       return {

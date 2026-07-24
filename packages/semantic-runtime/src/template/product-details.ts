@@ -650,6 +650,8 @@ function bindableDefinitionReferences(
       bindable.callbackSourceAddressHandle,
       bindable.modeSourceAddressHandle,
       bindable.setSourceAddressHandle,
+      bindable.typeSourceAddressHandle,
+      bindable.nullableSourceAddressHandle,
     ),
     resourceTargetReferenceReferences(bindable.set.target),
     resourceTargetReferenceReferences(bindable.propertyTarget),

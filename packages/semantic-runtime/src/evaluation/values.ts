@@ -1700,6 +1700,41 @@ export type EvaluationValue =
   | EvaluationModuleNamespaceValue
   | EvaluationPromiseValue;
 
+/**
+ * Returns whether ECMAScript call semantics are provably available for an evaluated value.
+ *
+ * `null` means the value belongs to an unresolved boundary and must not be treated as either callable or non-callable.
+ */
+export function readEvaluationCallability(value: EvaluationValue): boolean | null {
+  switch (value.kind) {
+    case EvaluationValueKind.Function:
+      return true;
+    case EvaluationValueKind.BoundaryObject:
+      return value.callable;
+    case EvaluationValueKind.Unknown:
+    case EvaluationValueKind.BoundaryValue:
+      return null;
+    case EvaluationValueKind.Undefined:
+    case EvaluationValueKind.Null:
+    case EvaluationValueKind.Boolean:
+    case EvaluationValueKind.Number:
+    case EvaluationValueKind.BigInt:
+    case EvaluationValueKind.String:
+    case EvaluationValueKind.StringPattern:
+    case EvaluationValueKind.RegularExpression:
+    case EvaluationValueKind.Date:
+    case EvaluationValueKind.Array:
+    case EvaluationValueKind.Set:
+    case EvaluationValueKind.Map:
+    case EvaluationValueKind.Object:
+    case EvaluationValueKind.Class:
+    case EvaluationValueKind.Instance:
+    case EvaluationValueKind.ModuleNamespace:
+    case EvaluationValueKind.Promise:
+      return false;
+  }
+}
+
 /** Return parts for values that can participate in string-pattern concatenation. */
 export function readEvaluationStringLikeParts(
   value: EvaluationValue,
