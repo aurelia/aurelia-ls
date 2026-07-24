@@ -5,6 +5,7 @@ import type {
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import { auLink } from '../kernel/au-link.js';
+import type { StaticCallableSlot } from '../evaluation/function-execution.js';
 import type { BindableDefinition, BindableDefinitionContribution } from './bindable-definition.js';
 import { ResourceDefinitionKind } from './resource-kind.js';
 import type { ComponentResourceDefinitionContributionKind } from './resource-kind.js';
@@ -60,6 +61,8 @@ export class CustomElementCaptureDefinition {
   constructor(
     readonly kind: CustomElementCaptureKind,
     readonly predicateTarget: ResourceTargetReference | null = null,
+    /** Stable slot resolved by the current app-analysis callable authority. */
+    readonly predicateSlot: StaticCallableSlot | null = null,
   ) {}
 }
 

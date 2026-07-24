@@ -83,6 +83,7 @@ import {
   type TemplateVisibleResource,
 } from './compiler-world-reference.js';
 import type { RuntimeKeyMappingConfiguration } from './runtime-event-modifier.js';
+import type { StaticCallableExecutionBindings } from '../evaluation/function-execution.js';
 
 export const enum TemplateCompilerWorldKind {
   /** Compiler world for an app root or app-level container. */
@@ -652,9 +653,14 @@ export class TemplateAttributeMapperService {
   }
 
   /** Runtime `IAttrMapper.isTwoWay(node, attrName)` shape over product-authored HTML nodes. */
-  isTwoWay(node: TemplateAttributeMapperNode, attrName: string): boolean {
+  isTwoWay(
+    node: TemplateAttributeMapperNode,
+    attrName: string,
+    callables: StaticCallableExecutionBindings,
+  ): boolean | null {
     return shouldDefaultToTwoWay(node, attrName)
-      || this.configuration.isTwoWay(node, attrName);
+      ? true
+      : this.configuration.isTwoWay(node, attrName, callables);
   }
 
   toReference(): TemplateCompilerServiceReference {

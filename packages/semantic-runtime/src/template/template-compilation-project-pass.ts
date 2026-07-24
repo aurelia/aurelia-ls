@@ -360,6 +360,10 @@ export class TemplateCompilationFamilyFrontDoorEmission {
 class TemplateCompilationFamilyCarryRebaser {
   private readonly worldsByScope = new Map<IdentityHandle, TemplateCompilerWorldEmission>();
   private readonly containersByIdentity = new Map<IdentityHandle, TemplateCompilerWorldEmission['container']>();
+  private readonly callableBindingsByContainerIdentity = new Map<
+    IdentityHandle,
+    TemplateCompilerWorldEmission['callableBindings']
+  >();
   private readonly readRebasersByScope = new Map<
     IdentityHandle,
     (read: TemplateCompilerReadObservation) => TemplateCompilerReadObservation | null
@@ -372,6 +376,7 @@ class TemplateCompilationFamilyCarryRebaser {
     for (const cohort of owner.cohorts) {
       const world = cohort.parentCompilerWorld;
       this.containersByIdentity.set(world.container.identityHandle, world.container);
+      this.callableBindingsByContainerIdentity.set(world.container.identityHandle, world.callableBindings);
       this.worldsByScope.set(world.resourceScope.identityHandle, world);
     }
     for (const compilation of [...previous.appCompilations, ...previous.authoringCompilations]) {
@@ -438,7 +443,11 @@ class TemplateCompilationFamilyCarryRebaser {
     if (container == null) {
       return null;
     }
-    const rebased = previous.forContainerGeneration(container);
+    const callableBindings = this.callableBindingsByContainerIdentity.get(container.identityHandle) ?? null;
+    if (callableBindings == null) {
+      return null;
+    }
+    const rebased = previous.forContainerGeneration(container, callableBindings);
     this.worldsByScope.set(scopeIdentityHandle, rebased);
     return rebased;
   }

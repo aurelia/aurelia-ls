@@ -426,7 +426,7 @@
         "NodeObserverLocator.useConfig(...) service state is spent only when template/runtime binding semantics ask for an observer. Plain to-view .bind host-node access may still close through getAccessor/ElementPropertyAccessor unless an accessor override exists; two-way/from-view paths reach the configured observer.",
         "IKeyMapping mutations execute through the same evaluator-owned AppTask callback path. Preserve exact known meta/key membership and authored key sources, but keep dynamic computed membership open and never claim arbitrary IModifiedEventHandlerCreator modifier vocabularies are enumerable.",
         "AttrMapper useMapping/useGlobalMapping/useTwoWay keys are exact app-authored runtime keys. Project the template node and attribute through runtime-dom-name before lookup; never case-fold the app configuration into aliases that the framework would not spend.",
-        "Static AttrMapper useTwoWay recognition may spend only fully understood predicates. Reject unsupported conjunction terms rather than widening a conditional predicate; arbitrary predicate execution remains an explicit open capability.",
+        "AttrMapper useTwoWay retains a stable callable slot in compiler-service state and the original evaluator closure in candidate-local execution bindings. Compiler-world lookup executes the current target through evaluateStaticCallableTruthiness with browser-normalized node/attribute inputs and a narrowly modeled Element.hasAttribute operation; open DOM access, pressure, abrupt completion, or mutation keeps the mode open rather than widening the predicate.",
         "Attach ConfigurationIssue product details only after the issue kernel records are committed; sidecar details without materialized products are invalid.",
         "Execute each DI-spent framework-service AppTask in an isolated evaluator fork under PathProvenEffects. Dead branches contribute no mutation; runtime-dependent branches remain explicit pressure; arbitrary lifecycle and async continuation execution stay outside this frontier.",
         "Use evaluation-owned executeStaticFunctionEffects for side-effectful retained functions so registry and AppTask consumers cannot diverge on branch semantics. The domain host still owns exact arguments, callable operations, and projection.",
@@ -454,8 +454,8 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/function-execution.ts",
-          "symbolName": "executeStaticFunctionEffects",
-          "summary": "Shared path-proven function-effect execution boundary used by DI registries and bounded AppTask callbacks."
+          "symbolName": "evaluateStaticCallableTruthiness",
+          "summary": "Shared isolated truthiness boundary used by retained framework policy predicates."
         },
         {
           "kind": "auLink",
@@ -512,7 +512,7 @@
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance -- --id template-native-target-precedence",
-          "summary": "AttrMapper exact-key, DOM-name, native-mode, SVG-type, inlay, and edit-refusal evidence with conditional predicate closure kept explicit."
+          "summary": "AttrMapper exact-key, DOM-name, native-mode, SVG-type, inlay, edit-refusal, and retained predicate-execution evidence."
         },
         {
           "kind": "lens",
@@ -533,7 +533,7 @@
         {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/evaluation/function-execution.ts",
-          "symbolName": "executeStaticFunctionEffects"
+          "symbolName": "evaluateStaticCallableTruthiness"
         },
         {
           "kind": "product-large-class",
@@ -575,7 +575,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-07-20"
+      "updatedAt": "2026-07-24"
     },
     {
       "id": "frontier:aurelia-app-world-composer",

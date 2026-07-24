@@ -73,6 +73,11 @@ import {
   frameworkIntrinsicDiKeyLocal,
 } from '../di/framework-intrinsic-di-key.js';
 import type { IdentityHandle } from '../kernel/handles.js';
+import type { CurrentnessAuthority } from '../kernel/generation-authority.js';
+import {
+  mergeStaticCallableExecutionBindings,
+  type StaticCallableExecutionBindings,
+} from '../evaluation/function-execution.js';
 
 /**
  * Current app-world composition envelope.
@@ -97,6 +102,8 @@ export class AureliaAppWorldEmission {
     readonly configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
     /** App-authored mutations of framework compiler/observer services recognized from AppTasks. */
     readonly frameworkServiceCustomizations: FrameworkServiceCustomizationProjectResult,
+    /** Project-resource predicate closures retained under the current evaluation generation. */
+    readonly resourceCallableBindings: StaticCallableExecutionBindings,
     /** Compiler worlds created for app roots with modeled containers. */
     readonly compilerWorlds: readonly TemplateCompilerWorldEmission[],
   ) {}
@@ -132,6 +139,8 @@ export class AureliaAppWorldComposer {
   construct(
     configuration: ConfigurationRecognitionProjectResult,
     resources: ResourceDefinitionIndex,
+    resourceCallableBindings: StaticCallableExecutionBindings,
+    evaluationAuthority: CurrentnessAuthority,
     typeSystem: TypeSystemProject,
     project: ProjectBootFrame,
   ): AureliaAppWorldEmission {
@@ -160,6 +169,10 @@ export class AureliaAppWorldComposer {
       this.store,
       this.publication,
     ).recognize(configuration, diWorld, appRootContainers);
+    const currentResourceCallableBindings = mergeStaticCallableExecutionBindings(
+      [resourceCallableBindings],
+      () => evaluationAuthority.requireCurrent(),
+    );
     const compilerWorlds = this.constructCompilerWorlds(
       kernelConfiguration,
       diWorld,
@@ -168,6 +181,8 @@ export class AureliaAppWorldComposer {
       configuredResources,
       configuredRenderers,
       frameworkServiceCustomizations,
+      currentResourceCallableBindings,
+      evaluationAuthority,
       resources,
     );
 
@@ -179,6 +194,7 @@ export class AureliaAppWorldComposer {
       configuredResources,
       configuredRenderers,
       frameworkServiceCustomizations,
+      currentResourceCallableBindings,
       compilerWorlds,
     );
   }
@@ -231,6 +247,8 @@ export class AureliaAppWorldComposer {
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
     frameworkServiceCustomizations: FrameworkServiceCustomizationProjectResult,
+    resourceCallableBindings: StaticCallableExecutionBindings,
+    evaluationAuthority: CurrentnessAuthority,
     resourceDefinitions: ResourceDefinitionIndex | null,
   ): readonly TemplateCompilerWorldEmission[] {
     return new AppRootCompilerWorldFrame(
@@ -244,6 +262,8 @@ export class AureliaAppWorldComposer {
       configuredResources,
       configuredRenderers,
       frameworkServiceCustomizations,
+      resourceCallableBindings,
+      evaluationAuthority,
       resourceDefinitions,
     ).construct();
   }
@@ -299,6 +319,8 @@ class AppRootCompilerWorldFrame {
     private readonly configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     private readonly configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
     private readonly frameworkServiceCustomizations: FrameworkServiceCustomizationProjectResult,
+    private readonly resourceCallableBindings: StaticCallableExecutionBindings,
+    private readonly evaluationAuthority: CurrentnessAuthority,
     private readonly resourceDefinitions: ResourceDefinitionIndex | null,
   ) {
     this.containersByProduct = new Map(configuration.containers.map((container) => [container.productHandle, container]));
@@ -345,6 +367,13 @@ class AppRootCompilerWorldFrame {
       resourceDefinitions: this.resourceDefinitions,
     });
     const frameworkServiceCustomization = this.frameworkServiceCustomizations.forContainer(container);
+    const callableBindings = mergeStaticCallableExecutionBindings(
+      [
+        this.resourceCallableBindings,
+        frameworkServiceCustomization.callableBindings,
+      ],
+      () => this.evaluationAuthority.requireCurrent(),
+    );
     const request = new TemplateCompilerWorldConstructionRequest(
       `app-root:${appRoot.productHandle}`,
       TemplateCompilerWorldKind.AppRoot,
@@ -356,6 +385,7 @@ class AppRootCompilerWorldFrame {
       runtimeRenderers,
       TemplateResourceVisibilityKind.Configured,
       appRoot.sourceAddressHandle,
+      callableBindings,
       frameworkServiceCustomization.attributeMapper,
       frameworkServiceCustomization.nodeObserverLocator,
       frameworkServiceCustomization.runtimeKeyMapping,

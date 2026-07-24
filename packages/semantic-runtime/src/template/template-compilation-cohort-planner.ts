@@ -118,6 +118,7 @@ export class TemplateCompilationCohortPlanner {
           projectKey: request.projectKey,
           resourceDefinitions: request.resourceDefinitions?.entries.map((entry) => entry.definition) ?? [],
           typeSystem: request.typeSystem,
+          callableBindings: request.appWorld.resourceCallableBindings,
         })
       );
     if (authoringCompilerWorld != null) {

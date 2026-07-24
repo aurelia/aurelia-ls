@@ -221,7 +221,13 @@ classification, expression parsing, and instruction lowering converge on the sam
 - `attribute-classification-materializer.ts` spends `AttrSyntax` products through the compiler world's resource resolver
   and binding-command resolver. It stops before instruction lowering, preserving the selected resource, bindable,
   command, capture, spread, and compiler-control lane as separate facts. Framework-thrown classification failures
-  publish `TemplateCompilerIssue` products instead of flowing into later lowering phases.
+  publish `TemplateCompilerIssue` products instead of flowing into later lowering phases. Custom-element capture
+  predicates execute here, before ignore-command, bindable, and template-controller exclusions, matching Aurelia's
+  per-attribute compiler order. Closed false rejects capture; closed true continues through the ordinary exclusions;
+  missing/open/stateful callable execution publishes an open classification instead of silently treating the component
+  as `capture: true`. Execution is registered through `TemplateCompilerReadView`: the resource definition supplies a
+  stable slot, the current compiler-world sidecar supplies the closure, and incremental reuse compares the observed
+  truthiness rather than evaluator object identity.
 - `value-site.ts` and `value-site-materializer.ts` model the compiler-owned handoff from authored template
   values into expression parser publications. They preserve value-site provenance above the parser and deliberately
   transfer ownership away from the parser for binding-command values and secondary grammars that need command/compiler

@@ -718,7 +718,11 @@ class RuntimeSpreadCommandBuildContext implements BindingCommandBuildContext {
     return this.world.attributeMapper.map(this.targetNode, attr);
   }
 
-  isTwoWay(_node: HtmlNodeReference, attr: string): boolean {
-    return this.world.attributeMapper.isTwoWay(this.targetNode, attr);
+  isTwoWay(_node: HtmlNodeReference, attr: string): boolean | null {
+    return this.world.attributeMapper.isTwoWay(
+      this.targetNode,
+      attr,
+      this.world.callableBindings,
+    );
   }
 }

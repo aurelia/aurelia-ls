@@ -24,6 +24,7 @@
         "Member @bindable(...) invocation follows runtime-html's property-decorator default-config path for known primitive/nullish/string arguments; keep the bindable and only leave an open seam for unknown or object-like values that may carry runtime config properties.",
         "Class-level @bindable(...) runs through ClassBindableDecoratorFrame: string or object-with-static-string-name closes to a bindable, while bare/nullish/name-less configurations publish the framework-backed class-decorator configuration issues instead of becoming silent open seams.",
         "Resource metadata annotations live in resource-metadata-annotations.ts: shared @alias(...) annotation values feed all named resources, while custom-element @containerless, @useShadowDOM(...), @capture(...), and member @children/@slotted registry dependencies feed full-definition convergence before definition-object and static class fallbacks.",
+        "Function-valued custom-element capture metadata keeps durable ResourceTargetReference identity and StaticCallableSlot addresses separate from candidate-local StaticCallableTarget closures. Resource recognition emits exact execution bindings, compiler worlds re-authorize them under the current evaluation generation, and compiler reads compare predicate outcomes; both definition-object and @capture(...) forms use the same boundary.",
         "Inherited metadata nodes belong to their declaring source file. Use ResourceRecognitionContextIndex/readNodeContext so imported decorator configuration is evaluated in the declaring module environment instead of the subclass module environment.",
         "Resource source spans should use sourceFileAddressHandleForNode/readAdmittedNodeContext over contexts admitted by the resource-recognition pass. Do not re-resolve node source file names through KernelStore from resource convergence helpers.",
         "Resource dependency uncertainty should carry resource-specific reason kinds through ConvergenceOpen and recordsForSourceOpenSeam. Vite-style `import.meta.env` optional dependency spreads should keep known dependency entries while reporting `resource-definition-dependencies-open`, not evaluator unsupported-expression noise.",
@@ -90,6 +91,12 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/function-execution.ts",
+          "symbolName": "StaticCallableExecutionBindings",
+          "summary": "Candidate-local evaluator authority resolving durable capture predicate slots."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-recognition-kernel-emitter.ts",
           "summary": "Header publication stage before convergence."
         },
@@ -124,7 +131,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-07-24"
     },
     {
       "id": "frontier:resource-metadata-diagnostics",

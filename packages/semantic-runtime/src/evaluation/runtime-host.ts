@@ -32,21 +32,24 @@ export function delegateStaticEvaluationRuntimeHost(
   baseHost: StaticEvaluationRuntimeHost,
   evaluateInvocation: NonNullable<StaticEvaluationRuntimeHost['evaluateInvocation']>,
 ): StaticEvaluationRuntimeHost {
-  return {
-    evaluationValueGraph: baseHost.evaluationValueGraph,
-    transferValueMetadata: (source, target, transfer) =>
-      baseHost.transferValueMetadata?.(source, target, transfer),
-    resolveIdentifier: (identifier, environment, moduleKey) =>
-      baseHost.resolveIdentifier?.(identifier, environment, moduleKey) ?? null,
-    resolveCommonJsRequire: (moduleKey, moduleSpecifier, node) =>
-      baseHost.resolveCommonJsRequire?.(moduleKey, moduleSpecifier, node) ?? null,
-    resolveDynamicImport: (moduleKey, moduleSpecifier, node) =>
-      baseHost.resolveDynamicImport?.(moduleKey, moduleSpecifier, node) ?? null,
-    evaluateInvocation: (frame, host) => {
+  const delegatedInvocation = (
+    baseEvaluateInvocation: StaticEvaluationRuntimeHostOperations['evaluateInvocation'],
+  ): NonNullable<StaticEvaluationRuntimeHostOperations['evaluateInvocation']> =>
+    (frame, host) => {
       const result = evaluateInvocation(frame, host);
       return result.kind === StaticInvocationDispatchKind.NotApplicable
-        ? baseHost.evaluateInvocation?.(frame, host) ?? StaticInvocationNotApplicable
+        ? baseEvaluateInvocation?.(frame, host) ?? StaticInvocationNotApplicable
         : result;
-    },
+    };
+  const branchOperations = baseHost.graphIsolatedBranchOperations;
+  return {
+    ...baseHost,
+    graphIsolatedBranchOperations: branchOperations == null
+      ? undefined
+      : {
+          ...branchOperations,
+          evaluateInvocation: delegatedInvocation(branchOperations.evaluateInvocation),
+        },
+    evaluateInvocation: delegatedInvocation(baseHost.evaluateInvocation),
   };
 }

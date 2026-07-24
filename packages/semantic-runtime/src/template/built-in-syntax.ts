@@ -158,9 +158,15 @@ function buildDefaultPropertyBinding(
   context: BindingCommandBuildContext,
 ): BindingCommandBuildResult {
   const expression = expressionValueOrTargetCamelCase(info);
-  const plainMode = context.isTwoWay(info.node, info.syntax.target)
-    ? TemplateBindingMode.TwoWay
-    : TemplateBindingMode.ToView;
+  const isTwoWay = info.bindable == null
+    ? context.isTwoWay(info.node, info.syntax.target)
+    : false;
+  if (isTwoWay == null) {
+    return BindingCommandBuildResult.open(
+      `IAttrMapper.isTwoWay('${info.syntax.target}') retained open predicate execution.`,
+    );
+  }
+  const plainMode = isTwoWay ? TemplateBindingMode.TwoWay : TemplateBindingMode.ToView;
   const mode = info.bindable == null
     ? plainMode
     : modeFromBindable(info.bindable.mode);

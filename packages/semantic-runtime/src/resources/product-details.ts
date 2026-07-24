@@ -662,7 +662,11 @@ function resourceDefinitionComparisonProjection(
           definition.name,
           definition.aliases.map((alias) => alias.name),
           definition.key,
-          [definition.capture.kind, resourceTargetSemanticValue(definition.capture.predicateTarget)],
+          [
+            definition.capture.kind,
+            resourceTargetSemanticValue(definition.capture.predicateTarget),
+            definition.capture.predicateSlot?.key ?? null,
+          ],
           templateSemanticValue(definition.template),
           definition.instructions.map(instructionSemanticValue),
           definition.dependencies.map(dependencySemanticValue),
@@ -1040,7 +1044,11 @@ function customElementContributionSemanticValue(
     contribution.key,
     contribution.capture == null
       ? null
-      : [contribution.capture.kind, resourceTargetSemanticValue(contribution.capture.predicateTarget)],
+        : [
+          contribution.capture.kind,
+          resourceTargetSemanticValue(contribution.capture.predicateTarget),
+          contribution.capture.predicateSlot?.key ?? null,
+        ],
     templateSemanticValue(contribution.template),
     contribution.instructions.map(instructionSemanticValue),
     contribution.dependencies.map(dependencySemanticValue),

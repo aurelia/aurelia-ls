@@ -6,6 +6,7 @@ import {
 } from '../evaluation/expression-reader.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { EvaluationValueKind } from '../evaluation/values.js';
+import { StaticCallableTarget } from '../evaluation/function-execution.js';
 import {
   CustomElementCaptureDefinition,
   CustomElementCaptureKind,
@@ -43,6 +44,8 @@ export interface CustomElementMetadataAnnotationRead {
   readonly aliases: readonly ResourceAliasObservation[];
   /** `@capture(...)` / `@capture()` metadata, when statically visible. */
   readonly capture: CustomElementCaptureDefinition | null;
+  /** Exact candidate-local closure retained while reading a capture predicate annotation. */
+  readonly captureCallableTarget: StaticCallableTarget | null;
   /** Source node for the capture annotation that supplied the current value. */
   readonly captureSourceNode: ts.Node | null;
   /** `@containerless` / `@containerless()` metadata, when present. */
@@ -167,6 +170,7 @@ export function readCustomElementMetadataAnnotations(
   const aliases = readAliasMetadataAnnotations(context, targetClass);
   const open: ConvergenceOpen[] = [...aliases.open];
   let capture: CustomElementCaptureDefinition | null = null;
+  let captureCallableTarget: StaticCallableTarget | null = null;
   let captureSourceNode: ts.Node | null = null;
   let containerless: boolean | null = null;
   let containerlessSourceNode: ts.Node | null = null;
@@ -196,6 +200,7 @@ export function readCustomElementMetadataAnnotations(
     if (captureCall != null) {
       const captureRead = readCaptureAnnotation(context, captureCall);
       capture = captureRead.capture;
+      captureCallableTarget = captureRead.callableTarget;
       captureSourceNode = captureRead.sourceNode ?? decorator;
       if (captureRead.open != null) {
         open.push(captureRead.open);
@@ -206,6 +211,7 @@ export function readCustomElementMetadataAnnotations(
   return {
     aliases: aliases.aliases,
     capture,
+    captureCallableTarget,
     captureSourceNode,
     containerless,
     containerlessSourceNode,
@@ -220,6 +226,7 @@ function emptyCustomElementMetadataAnnotationRead(): CustomElementMetadataAnnota
   return {
     aliases: [],
     capture: null,
+    captureCallableTarget: null,
     captureSourceNode: null,
     containerless: null,
     containerlessSourceNode: null,
@@ -346,6 +353,7 @@ function readCaptureAnnotation(
   call: ts.CallExpression,
 ): {
   readonly capture: CustomElementCaptureDefinition | null;
+  readonly callableTarget: StaticCallableTarget | null;
   readonly sourceNode: ts.Node | null;
   readonly open: ConvergenceOpen | null;
 } {
@@ -353,6 +361,7 @@ function readCaptureAnnotation(
   if (argument == null) {
     return {
       capture: new CustomElementCaptureDefinition(CustomElementCaptureKind.All),
+      callableTarget: null,
       sourceNode: call,
       open: null,
     };
@@ -365,13 +374,23 @@ function readCaptureAnnotation(
         CustomElementCaptureKind.Predicate,
         targetReferenceForFunction(value, null) satisfies ResourceTargetReference,
       ),
+      callableTarget: new StaticCallableTarget(
+        value,
+        context.evaluation.policy,
+        context.evaluation.runtimeHost,
+        read.openSeams,
+      ),
       sourceNode: argument,
-      open: null,
+      open: convergenceOpenForReadPressure(
+        '@capture(...) predicate retained open evaluator pressure.',
+        read,
+      )[0] ?? null,
     };
   }
   if (value == null || value.kind === EvaluationValueKind.Unknown || value.kind === EvaluationValueKind.BoundaryValue) {
     return {
       capture: new CustomElementCaptureDefinition(CustomElementCaptureKind.Open),
+      callableTarget: null,
       sourceNode: argument,
       open: new ConvergenceOpen(
         '@capture(...) predicate did not close to a static function or non-function value.',
@@ -382,6 +401,7 @@ function readCaptureAnnotation(
   }
   return {
     capture: new CustomElementCaptureDefinition(CustomElementCaptureKind.All),
+    callableTarget: null,
     sourceNode: argument,
     open: null,
   };

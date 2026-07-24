@@ -237,8 +237,13 @@ renderer, or observation materializers.
 `AttrMapper` configuration keys remain exact, as they do in the framework service. Template compilation projects
 authored HTML/SVG/MathML names into the browser's runtime `nodeName` and attribute spelling before lookup; it does not
 case-fold the app's `useMapping(...)`, `useGlobalMapping(...)`, or `useTwoWay(...)` constants into aliases that would be
-inert at runtime. Static `useTwoWay(...)` recognition admits only fully understood equality conjunctions. An unsupported
-predicate term rejects the static rule rather than widening a conditional predicate into a confident match.
+inert at runtime. `useTwoWay(...)` retains the original evaluator function and captured environment instead of reducing
+its body to a configuration-local predicate grammar. Compiler-world lookup invokes that callable through the shared
+isolated truthiness boundary with the browser-normalized node and attribute plus a narrowly modeled
+`Element.hasAttribute(...)`; unsupported DOM reads, open closure state, abrupt completion, or mutation keep the binding
+mode open rather than widening the predicate into a confident match. The immutable AttrMapper configuration stores
+stable callable slots. Exact evaluator closures live in the current app-analysis sidecar and are generation-checked
+before compiler lookup, rather than entering compiler-service product identity.
 This does not mean every host-node binding consults the node observer configuration. The renderer still asks the
 framework-shaped binding for an accessor or observer according to binding mode and instruction kind. Custom
 `NodeObserverLocator.useConfig(...)` entries are spent by observer lookup paths such as `.two-way` / `.from-view`, while

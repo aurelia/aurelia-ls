@@ -196,7 +196,7 @@ export interface BindingCommandBuildContext {
   isTwoWay(
     node: HtmlNodeReference,
     attr: string,
-  ): boolean;
+  ): boolean | null;
 }
 
 export class BindingCommandBuildResult {

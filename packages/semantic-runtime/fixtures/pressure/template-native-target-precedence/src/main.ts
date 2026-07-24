@@ -58,6 +58,13 @@ const closedAfterRuntimeNodeObserverConfig = {
   default: false,
 };
 
+const guardedSliderTagName = 'GUARDED-SLIDER';
+const guardedSliderLiveAttribute = 'live';
+const guardedSliderPositionIsTwoWay = (element: Element, property: string): boolean => {
+  const targetsGuardedPosition = element.tagName === guardedSliderTagName && property === 'position';
+  return targetsGuardedPosition && element.hasAttribute(guardedSliderLiveAttribute);
+};
+
 new Aurelia()
   .register(
     StandardConfiguration,
@@ -75,11 +82,7 @@ new Aurelia()
       mapper.useTwoWay((element, property) =>
         element.tagName === 'inert-slider' && property === 'position'
       );
-      mapper.useTwoWay((element, property) =>
-        element.tagName === 'GUARDED-SLIDER'
-        && property === 'position'
-        && element.hasAttribute('live')
-      );
+      mapper.useTwoWay(guardedSliderPositionIsTwoWay);
     }),
     AppTask.creating(NodeObserverLocator, (locator) => {
       locator.useConfig('NATIVE-OBSERVER-SLIDER', 'position', appNodeObserverConfig);

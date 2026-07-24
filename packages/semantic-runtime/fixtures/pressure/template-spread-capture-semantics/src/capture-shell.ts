@@ -2,6 +2,10 @@ import { bindable, customElement, valueConverter } from '@aurelia/runtime-html';
 import template from './capture-shell.html';
 import { InnerGate, InputMark } from './capture-resources';
 
+const captureExcludedAttribute = 'class';
+const captureApplicationAttribute = (attribute: string): boolean =>
+  attribute !== captureExcludedAttribute;
+
 @customElement({
   name: 'capture-shell',
   template,
@@ -15,7 +19,7 @@ export class CaptureShell {
 @customElement({
   name: 'filtered-capture-shell',
   template: '<template><input ...$attrs></template>',
-  capture: (attribute) => attribute !== 'class',
+  capture: captureApplicationAttribute,
 })
 export class FilteredCaptureShell {}
 

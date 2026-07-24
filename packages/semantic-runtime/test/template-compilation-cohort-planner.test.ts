@@ -119,6 +119,7 @@ describe('template compilation cohort planning', () => {
       app.emission.appWorld.configuredResources,
       app.emission.appWorld.configuredRenderers,
       app.emission.appWorld.frameworkServiceCustomizations,
+      app.emission.appWorld.resourceCallableBindings,
       [...app.emission.appWorld.compilerWorlds].reverse(),
     );
     const committedRecordCount = runtime.workspace.store.readAllRecords().length;

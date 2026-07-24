@@ -13,7 +13,10 @@ import type { ExpressionType } from '../expression/ast.js';
 import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
 import type { ExpressionParseResult } from '../expression/parse-result-algebra.js';
 import type { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
-import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
+import {
+  CustomElementCaptureKind,
+  type CustomElementDefinition,
+} from '../resources/custom-element-definition.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
 import type {
   FullResourceDefinition,
@@ -40,6 +43,12 @@ import type {
 } from './attribute-syntax.js';
 import type { TemplateAttributeMapperNode } from './attribute-mapper.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
+import {
+  evaluateStaticCallableTruthiness,
+  StaticCallableTruthinessKind,
+  StaticCallableTruthinessResult,
+} from '../evaluation/function-execution.js';
+import { EvaluationStringValue } from '../evaluation/values.js';
 
 type TemplateCompilerClosureReadView = Pick<KernelMaterializationReadView, 'readMaterializationsByOwner'>;
 type TemplateCompilerReadStore = TemplateCompilerClosureReadView
@@ -69,6 +78,8 @@ export const enum TemplateCompilerReadKind {
   ExpressionParser = 'expression-parser',
   /** AttrMapper result used by binding-command and plain-attribute lowering. */
   AttributeMapper = 'attribute-mapper',
+  /** Custom-element capture predicate result used before capture exclusions. */
+  CapturePredicate = 'capture-predicate',
   /** TemplateCompiler options that alter instruction references. */
   TemplateCompiler = 'template-compiler',
 }
@@ -387,14 +398,43 @@ export class TemplateCompilerReadView {
     return result;
   }
 
-  isTwoWay(node: TemplateAttributeMapperNode, attributeName: string): boolean {
-    const result = this.world.attributeMapper.isTwoWay(node, attributeName);
+  isTwoWay(node: TemplateAttributeMapperNode, attributeName: string): boolean | null {
+    const result = this.world.attributeMapper.isTwoWay(
+      node,
+      attributeName,
+      this.world.callableBindings,
+    );
     const canonical = attributeMapperReadKey('two-way', node, attributeName);
     this.observe(
       TemplateCompilerReadKind.AttributeMapper,
       canonical,
       attributeMapperResultParts(this.world, result),
-      (_store, current) => attributeMapperResultParts(current, current.attributeMapper.isTwoWay(node, attributeName)),
+      (_store, current) => attributeMapperResultParts(
+        current,
+        current.attributeMapper.isTwoWay(node, attributeName, current.callableBindings),
+      ),
+    );
+    return result;
+  }
+
+  capturePredicate(
+    definition: CustomElementDefinition,
+    attributeName: string,
+  ): StaticCallableTruthinessResult {
+    const canonical = `${definition.productHandle ?? definition.identityHandle ?? definition.name}|${attributeName}`;
+    const result = evaluateCapturePredicateInWorld(this.world, definition, attributeName);
+    this.observe(
+      TemplateCompilerReadKind.CapturePredicate,
+      canonical,
+      callableTruthinessResultParts(result),
+      (store, current) => {
+        const currentDefinition = matchingDefinition(store, current, definition);
+        return callableTruthinessResultParts(
+          currentDefinition?.type === ResourceDefinitionKind.CustomElement
+            ? evaluateCapturePredicateInWorld(current, currentDefinition, attributeName)
+            : openCallableTruthiness('Capture predicate owner is no longer visible.'),
+        );
+      },
     );
     return result;
   }
@@ -815,9 +855,48 @@ function attributeMapperResultParts(
       mapping.tagName ?? '', mapping.attributeName, mapping.propertyName,
     ]),
     ...world.attributeMapper.configuration.twoWayRules.flatMap((rule) => [
-      rule.tagName ?? '', rule.propertyName ?? '',
+      rule.predicateSlot.key,
     ]),
     scalarPart(result),
+  ];
+}
+
+function evaluateCapturePredicateInWorld(
+  world: TemplateCompilerWorldEmission,
+  definition: CustomElementDefinition,
+  attributeName: string,
+): StaticCallableTruthinessResult {
+  const capture = definition.capture;
+  if (capture.kind !== CustomElementCaptureKind.Predicate) {
+    return openCallableTruthiness('Custom-element capture is no longer predicate-backed.');
+  }
+  if (capture.predicateSlot == null) {
+    return openCallableTruthiness('Custom-element capture predicate has no executable slot.');
+  }
+  const target = world.callableBindings.target(capture.predicateSlot);
+  if (target == null) {
+    return openCallableTruthiness('Custom-element capture predicate has no current executable target.');
+  }
+  return evaluateStaticCallableTruthiness(
+    target,
+    [new EvaluationStringValue(attributeName, target.value.declaration)],
+  );
+}
+
+function openCallableTruthiness(reason: string): StaticCallableTruthinessResult {
+  return new StaticCallableTruthinessResult(
+    StaticCallableTruthinessKind.Open,
+    null,
+    reason,
+  );
+}
+
+function callableTruthinessResultParts(
+  result: StaticCallableTruthinessResult,
+): readonly string[] {
+  return [
+    result.kind,
+    result.reason ?? '',
   ];
 }
 

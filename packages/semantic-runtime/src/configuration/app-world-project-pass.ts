@@ -614,7 +614,7 @@ class AureliaAppWorldProjectConstructionFrame {
     const configuration = this.recognizeConfiguration(evaluation, typeSystem, resourceIndex);
     const routes = this.convergeRouteConfigs(routeConfigContributions, resourceIndex, configuration);
     this.materializeConfigurationOptionShapeIssues(configuration);
-    const appWorld = this.composeAppWorld(configuration, resourceIndex, typeSystem);
+    const appWorld = this.composeAppWorld(configuration, resources, resourceIndex, typeSystem);
     const routerOptions = this.materializeRouterOptions(configuration, appWorld);
     const routeContexts = this.materializeRouteContexts(routes, routerOptions, configuration);
     const routeRecognizer = this.materializeRouteRecognizer(routeContexts);
@@ -1331,12 +1331,20 @@ class AureliaAppWorldProjectConstructionFrame {
 
   private composeAppWorld(
     configuration: ConfigurationRecognitionProjectResult,
+    resources: ResourceRecognitionProjectResult,
     resourceIndex: ResourceDefinitionIndex,
     typeSystem: TypeSystemProject,
   ): AureliaAppWorldEmission {
     return this.measure('app-world-composition', () =>
       new AureliaAppWorldComposer(this.store, this.publication, this.support)
-        .construct(configuration, resourceIndex, typeSystem, this.project)
+        .construct(
+          configuration,
+          resourceIndex,
+          resources.callableBindings,
+          this.evaluationGeneration,
+          typeSystem,
+          this.project,
+        )
     );
   }
 

@@ -6,14 +6,20 @@ import {
 } from '../evaluation/boundary-open-reason.js';
 import {
   EvaluationRead,
-  readStaticSourceLiteralValue,
   readStaticStringValue,
   StaticInvocationEvidenceExpressionReader,
   StaticSourceLiteralExpressionReader,
   type StaticExpressionEvaluationReader,
 } from '../evaluation/expression-reader.js';
 import type { StaticEvaluationRuntimeHost } from '../evaluation/evaluator.js';
-import { executeStaticFunctionEffects } from '../evaluation/function-execution.js';
+import {
+  executeStaticFunctionEffects,
+  StaticCallableExecutionBinding,
+  StaticCallableExecutionBindings,
+  StaticCallableSlot,
+  StaticCallableTarget,
+} from '../evaluation/function-execution.js';
+import type { StaticEvaluationPolicy } from '../evaluation/policy.js';
 import type { StaticIntrinsicEvaluationHost } from '../evaluation/intrinsics.js';
 import {
   StaticInvocationKind,
@@ -91,7 +97,6 @@ import {
   authoredPropertyNameSpan,
   authoredPropertyNameNode,
   readReferenceName,
-  unwrapExpression,
 } from '../evaluation/ts-syntax.js';
 import {
   readSourceFileAddressHandlesByFileName,
@@ -202,12 +207,14 @@ export class FrameworkServiceCustomization {
     AttributeMapperConfiguration.empty,
     NodeObserverLocatorConfiguration.empty,
     RuntimeKeyMappingConfiguration.frameworkDefault,
+    StaticCallableExecutionBindings.empty,
   );
 
   constructor(
     readonly attributeMapper: AttributeMapperConfiguration,
     readonly nodeObserverLocator: NodeObserverLocatorConfiguration,
     readonly runtimeKeyMapping: RuntimeKeyMappingConfiguration,
+    readonly callableBindings: StaticCallableExecutionBindings,
   ) {}
 }
 
@@ -250,6 +257,7 @@ class FrameworkServiceCustomizationDraft {
   readonly globalAccessorOverrides: string[] = [];
   readonly issues: ConfigurationIssue[] = [];
   readonly records: KernelStoreRecord[] = [];
+  private readonly callableBindings: StaticCallableExecutionBinding[] = [];
   nodeObserverLocatorAllowDirtyCheck: boolean | null = null;
   runtimeKeyMapping = RuntimeKeyMappingConfiguration.frameworkDefault;
 
@@ -260,6 +268,7 @@ class FrameworkServiceCustomizationDraft {
   private issueOrdinal = 0;
   private openOrdinal = 0;
   private runtimeKeyMappingSourceOrdinal = 0;
+  private callableOrdinal = 0;
 
   constructor(
     private readonly issuePublisher: ConfigurationIssuePublisher,
@@ -351,7 +360,26 @@ class FrameworkServiceCustomizationDraft {
         this.nodeObserverLocatorAllowDirtyCheck,
       ),
       this.runtimeKeyMapping,
+      new StaticCallableExecutionBindings(this.callableBindings),
     );
+  }
+
+  addAttributeTwoWayRule(
+    context: ConfigurationRecognitionContext,
+    node: ts.Node,
+    target: StaticCallableTarget,
+  ): void {
+    const slot = new StaticCallableSlot(
+      `framework-service-customization:${this.scopeLocalKey}:attr-mapper-two-way:${projectModuleSourceNodeOrdinalLocalKey({
+        projectKey: context.projectKey,
+        moduleKey: context.moduleKey,
+        sourceFile: node.getSourceFile(),
+        node,
+        index: this.callableOrdinal++,
+      })}`,
+    );
+    this.attributeTwoWayRules.push(new AttributeMapperTwoWayRule(slot));
+    this.callableBindings.push(new StaticCallableExecutionBinding(slot, target));
   }
 
   sourceForRuntimeKeyMappingEntry(
@@ -677,7 +705,15 @@ function executeAppTaskServiceCustomizations(
     const reader = new StaticInvocationEvidenceExpressionReader(invocation.moduleKey, [invocation]);
     switch (service) {
       case FrameworkServiceKind.AttrMapper:
-        recognizeAttrMapperCall(context, invocation.propertyKey, invocation.node, reader, draft);
+        recognizeAttrMapperCall(
+          context,
+          invocation.propertyKey,
+          invocation.node,
+          reader,
+          draft,
+          evaluation.policy,
+          runtimeHost,
+        );
         break;
       case FrameworkServiceKind.NodeObserverLocator:
         recognizeNodeObserverLocatorCall(context, invocation.propertyKey, invocation.node, reader, draft);
@@ -713,6 +749,8 @@ function recognizeAttrMapperCall(
   call: ts.CallExpression,
   reader: StaticExpressionEvaluationReader,
   draft: FrameworkServiceCustomizationDraft,
+  policy: StaticEvaluationPolicy,
+  runtimeHost: StaticEvaluationRuntimeHost,
 ): void {
   switch (methodName) {
     case 'useTwoWay': {
@@ -726,23 +764,32 @@ function recognizeAttrMapperCall(
         );
         return;
       }
-      const read = readTwoWayRule(argument, reader);
-      for (const evaluation of read.evaluations) {
-        draft.addEvaluationPressure(
+      const read = reader.evaluateExpression(argument);
+      draft.addEvaluationPressure(
+        context,
+        read,
+        read.node ?? argument,
+        'Attribute-mapper two-way predicate retained open or abrupt static-evaluation pressure.',
+      );
+      if (read.value?.kind === EvaluationValueKind.Function && read.abruptCompletion == null) {
+        draft.addAttributeTwoWayRule(
           context,
-          evaluation,
-          evaluation.node ?? argument,
-          'Attribute-mapper two-way predicate retained open or abrupt static-evaluation pressure.',
+          argument,
+          new StaticCallableTarget(
+            read.value,
+            policy,
+            runtimeHost,
+            read.openSeams,
+          ),
         );
-      }
-      if (read.rule != null) {
-        draft.attributeTwoWayRules.push(read.rule);
       } else {
         draft.addDomainPressure(
           context,
           argument,
-          'Attribute-mapper useTwoWay predicate could not be reduced without widening its runtime behavior.',
-          [],
+          'Attribute-mapper useTwoWay argument did not retain an executable static function.',
+          read.value == null
+            ? []
+            : frameworkServiceReasonKindsForValue(read.value, read.openSeams),
         );
       }
       return;
@@ -1579,143 +1626,6 @@ function frameworkServiceReasonKindsForValue(
     ...openSeamReasonKindsForEvaluationValue(value),
     ...openSeamReasonKindsForEvaluationPressure(openSeams, null),
   ])];
-}
-
-function readTwoWayRule(
-  expression: ts.Expression,
-  reader: StaticExpressionEvaluationReader,
-): FrameworkTwoWayRuleRead {
-  const evaluations: EvaluationRead<EvaluationValue>[] = [];
-  const current = unwrapExpression(expression);
-  if (!ts.isArrowFunction(current) && !ts.isFunctionExpression(current)) {
-    return new FrameworkTwoWayRuleRead(null, evaluations);
-  }
-  const elementParameter = parameterIdentifierName(current.parameters[0]);
-  const propertyParameter = parameterIdentifierName(current.parameters[1]);
-  if (elementParameter == null && propertyParameter == null) {
-    return new FrameworkTwoWayRuleRead(null, evaluations);
-  }
-  const bodyExpression = functionReturnExpression(current);
-  if (bodyExpression == null) {
-    return new FrameworkTwoWayRuleRead(null, evaluations);
-  }
-  const facts = readTwoWayPredicateFacts(
-    bodyExpression,
-    reader,
-    elementParameter,
-    propertyParameter,
-    evaluations,
-  );
-  return new FrameworkTwoWayRuleRead(
-    facts == null || (facts.tagName == null && facts.propertyName == null)
-      ? null
-      : new AttributeMapperTwoWayRule(facts.tagName, facts.propertyName),
-    evaluations,
-  );
-}
-
-class FrameworkTwoWayRuleRead {
-  constructor(
-    readonly rule: AttributeMapperTwoWayRule | null,
-    readonly evaluations: readonly EvaluationRead<EvaluationValue>[],
-  ) {}
-}
-
-function functionReturnExpression(
-  fn: ts.ArrowFunction | ts.FunctionExpression,
-): ts.Expression | null {
-  if (ts.isExpression(fn.body)) {
-    return fn.body;
-  }
-  for (const statement of fn.body.statements) {
-    if (ts.isReturnStatement(statement) && statement.expression != null) {
-      return statement.expression;
-    }
-  }
-  return null;
-}
-
-function readTwoWayPredicateFacts(
-  expression: ts.Expression,
-  reader: StaticExpressionEvaluationReader,
-  elementParameter: string | null,
-  propertyParameter: string | null,
-  evaluations: EvaluationRead<EvaluationValue>[],
-): { readonly tagName: string | null; readonly propertyName: string | null } | null {
-  const current = unwrapExpression(expression);
-  if (ts.isBinaryExpression(current) && current.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
-    const left = readTwoWayPredicateFacts(current.left, reader, elementParameter, propertyParameter, evaluations);
-    const right = readTwoWayPredicateFacts(current.right, reader, elementParameter, propertyParameter, evaluations);
-    // Spending only part of a conjunction would widen the runtime predicate.
-    if (
-      left == null
-      || right == null
-      || (left.tagName != null && right.tagName != null && left.tagName !== right.tagName)
-      || (left.propertyName != null && right.propertyName != null && left.propertyName !== right.propertyName)
-    ) {
-      return null;
-    }
-    return {
-      tagName: left.tagName ?? right.tagName,
-      propertyName: left.propertyName ?? right.propertyName,
-    };
-  }
-  if (!ts.isBinaryExpression(current) || !isEqualityOperator(current.operatorToken.kind)) {
-    return null;
-  }
-  return readTwoWayEqualityFact(current.left, current.right, reader, elementParameter, propertyParameter, evaluations)
-    ?? readTwoWayEqualityFact(current.right, current.left, reader, elementParameter, propertyParameter, evaluations);
-}
-
-function readTwoWayEqualityFact(
-  subject: ts.Expression,
-  value: ts.Expression,
-  reader: StaticExpressionEvaluationReader,
-  elementParameter: string | null,
-  propertyParameter: string | null,
-  evaluations: EvaluationRead<EvaluationValue>[],
-): { readonly tagName: string | null; readonly propertyName: string | null } | null {
-  const current = unwrapExpression(subject);
-  if (propertyParameter != null && ts.isIdentifier(current) && current.text === propertyParameter) {
-    const propertyName = readStaticString(value, reader, evaluations);
-    return propertyName == null ? null : { tagName: null, propertyName };
-  }
-  if (
-    elementParameter != null
-    && ts.isPropertyAccessExpression(current)
-    && (current.name.text === 'tagName' || current.name.text === 'nodeName')
-    && ts.isIdentifier(unwrapExpression(current.expression))
-    && (unwrapExpression(current.expression) as ts.Identifier).text === elementParameter
-  ) {
-    const tagName = readStaticString(value, reader, evaluations);
-    return tagName == null ? null : { tagName, propertyName: null };
-  }
-  return null;
-}
-
-function readStaticString(
-  expression: ts.Expression,
-  reader: StaticExpressionEvaluationReader,
-  evaluations: EvaluationRead<EvaluationValue>[],
-): string | null {
-  const literalValue = readStaticSourceLiteralValue(expression);
-  if (literalValue != null) {
-    return readStaticStringValue(literalValue);
-  }
-  const read = reader.evaluateExpression(expression);
-  evaluations.push(read);
-  return read.value == null ? null : readStaticStringValue(read.value);
-}
-
-function parameterIdentifierName(parameter: ts.ParameterDeclaration | undefined): string | null {
-  return parameter != null && ts.isIdentifier(parameter.name)
-    ? parameter.name.text
-    : null;
-}
-
-function isEqualityOperator(kind: ts.SyntaxKind): boolean {
-  return kind === ts.SyntaxKind.EqualsEqualsEqualsToken
-    || kind === ts.SyntaxKind.EqualsEqualsToken;
 }
 
 function nodeConfigKey(tagName: string, propertyName: string): string {

@@ -581,7 +581,7 @@ function sameAttributeMapperConfiguration(
       right.propertyName,
     ))
     && sameArrays(previous.twoWayRules, next.twoWayRules, (left, right) =>
-      sameValues(left.tagName, right.tagName, left.propertyName, right.propertyName));
+      left.predicateSlot.key === right.predicateSlot.key);
 }
 
 function sameNodeObserverLocatorConfiguration(

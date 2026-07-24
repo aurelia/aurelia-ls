@@ -88,6 +88,7 @@ import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
 import { TemplateProductDetails } from './product-details.js';
 import { mergeVisibleResourceScopes } from './resource-scope-builder.js';
+import type { StaticCallableExecutionBindings } from '../evaluation/function-execution.js';
 
 export class TemplateCompilerWorldConstructionRequest {
   constructor(
@@ -111,6 +112,8 @@ export class TemplateCompilerWorldConstructionRequest {
     readonly syntaxVisibilityKind: TemplateResourceVisibilityKind,
     /** Address of the app/root/component boundary that owns this world. */
     readonly sourceAddressHandle: AddressHandle | null,
+    /** Current app-analysis callable authority used by executable compiler policy slots. */
+    readonly callableBindings: StaticCallableExecutionBindings,
     /** App-authored AttrMapper service state visible to this compiler world. */
     readonly attributeMapperConfiguration: AttributeMapperConfiguration = AttributeMapperConfiguration.empty,
     /** App-authored NodeObserverLocator service state visible to runtime binding analysis for this world. */
@@ -149,14 +152,18 @@ export class TemplateCompilerWorldEmission {
     readonly attributePatterns: readonly CompilerAttributePatternResource[],
     readonly bindingCommands: readonly CompilerBindingCommandResource[],
     readonly runtimeRenderers: readonly BuiltInRuntimeRendererEmission[],
+    readonly callableBindings: StaticCallableExecutionBindings,
     readonly issues: readonly TemplateCompilerIssue[],
     readonly syntaxResources: readonly TemplateVisibleResource[],
     readonly records: readonly KernelStoreRecord[],
   ) {}
 
   /** Preserve immutable compiler products while attaching the current generation's live DI container frame. */
-  forContainerGeneration(container: Container): TemplateCompilerWorldEmission {
-    return container === this.container
+  forContainerGeneration(
+    container: Container,
+    callableBindings: StaticCallableExecutionBindings,
+  ): TemplateCompilerWorldEmission {
+    return container === this.container && callableBindings === this.callableBindings
       ? this
       : new TemplateCompilerWorldEmission(
           container,
@@ -173,6 +180,7 @@ export class TemplateCompilerWorldEmission {
           this.attributePatterns,
           this.bindingCommands,
           this.runtimeRenderers,
+          callableBindings,
           this.issues,
           this.syntaxResources,
           this.records,
@@ -318,6 +326,7 @@ class CompilerWorldProducts {
       input.attributePatterns,
       input.bindingCommands,
       input.runtimeRenderers,
+      input.callableBindings,
       this.issues,
       this.syntaxResources,
       [...records, ...this.issueRecords],
@@ -395,6 +404,7 @@ export class TemplateCompilerWorldMaterializer {
       parent.runtimeRenderers,
       input.syntaxVisibilityKind,
       input.sourceAddressHandle,
+      parent.callableBindings,
       parent.attributeMapper.configuration,
       parent.world.nodeObserverLocatorConfiguration,
       parent.world.runtimeKeyMappingConfiguration,

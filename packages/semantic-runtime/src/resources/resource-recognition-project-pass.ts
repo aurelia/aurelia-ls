@@ -8,6 +8,10 @@ import type {
 } from '../boot/frames.js';
 import type { EvaluationModuleResolutionOpen } from '../evaluation/module-host.js';
 import {
+  mergeStaticCallableExecutionBindings,
+  StaticCallableExecutionBindings,
+} from '../evaluation/function-execution.js';
+import {
   isEvaluatedProjectSource,
   type StaticProjectEvaluationAccess,
   type StaticProjectEvaluationResult,
@@ -88,6 +92,7 @@ export class EffectiveResourceDefinitionSelection {
 /** Resource-recognition result for one booted project frame. */
 export class ResourceRecognitionProjectResult {
   readonly definitionSelections: readonly EffectiveResourceDefinitionSelection[];
+  readonly callableBindings: StaticCallableExecutionBindings;
 
   constructor(
     /** Project frame whose source files were recognized. */
@@ -99,6 +104,9 @@ export class ResourceRecognitionProjectResult {
   ) {
     this.definitionSelections = effectiveResourceDefinitionSelections(
       sources.flatMap((source) => source.convergence.definitions),
+    );
+    this.callableBindings = mergeStaticCallableExecutionBindings(
+      sources.map((source) => source.convergence.callableBindings),
     );
   }
 
@@ -362,7 +370,12 @@ function emptyResourceEmission(): ResourceRecognitionKernelEmission {
 }
 
 function emptyDefinitionConvergence(): ResourceDefinitionConvergenceEmission {
-  return new ResourceDefinitionConvergenceEmission([], [], []);
+  return new ResourceDefinitionConvergenceEmission(
+    [],
+    [],
+    [],
+    StaticCallableExecutionBindings.empty,
+  );
 }
 
 function emptyResourceRecognitionProfile(): ResourceRecognitionProfile {

@@ -5,6 +5,14 @@ import { EvaluationBindingKind, ModuleEnvironmentRecord } from '../src/evaluatio
 import { StaticEvaluationSessionFork } from '../src/evaluation/evaluation-session.js';
 import { StaticEvaluator, type StaticEvaluationRuntimeHost } from '../src/evaluation/evaluator.js';
 import { evaluationValueGraphOwner } from '../src/evaluation/evaluation-graph.js';
+import {
+  evaluateStaticCallableTruthiness,
+  StaticCallableExecutionBinding,
+  StaticCallableExecutionBindings,
+  StaticCallableSlot,
+  StaticCallableTarget,
+  StaticCallableTruthinessKind,
+} from '../src/evaluation/function-execution.js';
 import { delegateStaticEvaluationRuntimeHost } from '../src/evaluation/runtime-host.js';
 import {
   StaticInvocationKind,
@@ -36,6 +44,7 @@ import {
   EvaluationPromiseValue,
   EvaluationSetElement,
   EvaluationSetValue,
+  EvaluationStringValue,
   EvaluationUnknownValue,
   EvaluationValueKind,
   type EvaluationValue,
@@ -57,6 +66,116 @@ import {
 import { FrameworkRegistrationKind } from '../src/registration/registration-reference.js';
 
 describe('static evaluation sessions', () => {
+  test('revokes candidate-local callable bindings before exposing stale closure targets', () => {
+    const source = ts.createSourceFile(
+      'src/callable-currentness.ts',
+      'const predicate = value => value === true;',
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const evaluator = new StaticEvaluator();
+    const evaluation = evaluator.evaluateSourceFile(source);
+    const predicate = requireValueKind(
+      evaluation.environment.readValue('predicate'),
+      EvaluationValueKind.Function,
+    );
+    const slot = new StaticCallableSlot('test:predicate');
+    let current = true;
+    const bindings = new StaticCallableExecutionBindings(
+      [new StaticCallableExecutionBinding(
+        slot,
+        new StaticCallableTarget(predicate, evaluator.policy, evaluation.runtimeHost),
+      )],
+      () => {
+        if (!current) {
+          throw new Error('Callable candidate is no longer current.');
+        }
+      },
+    );
+
+    expect(bindings.target(slot)?.value).toBe(predicate);
+    current = false;
+    expect(() => bindings.target(slot)).toThrow('Callable candidate is no longer current.');
+    expect(() => bindings.readBindings()).toThrow('Callable candidate is no longer current.');
+  });
+
+  test('executes referenced closure-bearing predicates through an isolated session', () => {
+    const source = ts.createSourceFile(
+      'src/predicate.ts',
+      [
+        "const excluded = 'class';",
+        'const predicate = (name) => {',
+        '  const candidate = name;',
+        '  return candidate !== excluded;',
+        '};',
+      ].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const evaluator = new StaticEvaluator();
+    const evaluation = evaluator.evaluateSourceFile(source);
+    const predicate = requireValueKind(
+      evaluation.environment.readValue('predicate'),
+      EvaluationValueKind.Function,
+    );
+    const target = new StaticCallableTarget(
+      predicate,
+      evaluator.policy,
+      evaluation.runtimeHost,
+    );
+
+    expect(evaluateStaticCallableTruthiness(
+      target,
+      [new EvaluationStringValue('data-note', source)],
+    ).kind).toBe(StaticCallableTruthinessKind.True);
+    expect(evaluateStaticCallableTruthiness(
+      target,
+      [new EvaluationStringValue('class', source)],
+    ).kind).toBe(StaticCallableTruthinessKind.False);
+  });
+
+  test('keeps stateful predicate writes open and out of the retained graph', () => {
+    const source = ts.createSourceFile(
+      'src/stateful-predicate.ts',
+      [
+        'const state = { calls: 0 };',
+        'function predicate(value) {',
+        '  state.calls = state.calls + 1;',
+        '  return value === state.calls;',
+        '}',
+      ].join('\n'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const evaluator = new StaticEvaluator();
+    const evaluation = evaluator.evaluateSourceFile(source);
+    const predicate = requireValueKind(
+      evaluation.environment.readValue('predicate'),
+      EvaluationValueKind.Function,
+    );
+    const state = requireValueKind(
+      evaluation.environment.readValue('state'),
+      EvaluationValueKind.Object,
+    );
+    const target = new StaticCallableTarget(
+      predicate,
+      evaluator.policy,
+      evaluation.runtimeHost,
+    );
+
+    expect(evaluateStaticCallableTruthiness(
+      target,
+      [new EvaluationNumberValue(1, source)],
+    ).kind).toBe(StaticCallableTruthinessKind.Open);
+    expect(state.properties.get('calls')?.value).toEqual(expect.objectContaining({
+      kind: EvaluationValueKind.Number,
+      value: 0,
+    }));
+  });
+
   test('maps fork snapshots to their immediate parent graph', () => {
     const source = ts.createSourceFile(
       'src/fork-lineage.ts',

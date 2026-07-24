@@ -558,7 +558,7 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
   isTwoWay(
     _node: HtmlNodeReference,
     attr: string,
-  ): boolean {
+  ): boolean | null {
     return this.compilerReads.isTwoWay(this.owner, attr);
   }
 

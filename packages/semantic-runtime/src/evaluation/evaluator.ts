@@ -314,6 +314,8 @@ export class StaticExpressionEvaluationResult {
     readonly executionTopology: StaticEvaluationExecutionTopology,
     /** Every seam observed while evaluating the expression, including non-causal nested pressure. */
     auditOpenSeams: readonly EvaluationOpenSeam[] = openSeams,
+    /** Number of modeled writes reached while evaluating this expression. */
+    readonly mutationCount: number = 0,
   ) {
     this.openSeams = compactEvaluationOpenSeams(openSeams);
     this.auditOpenSeams = compactEvaluationOpenSeams(auditOpenSeams);
@@ -421,6 +423,7 @@ export class StaticEvaluator {
   private readonly executionEvents: StaticEvaluationExecutionEvent[] = [];
   private nextExecutionOrdinal = 0;
   private statementCount = 0;
+  private mutationCount = 0;
   private executionBudget = new StaticEvaluationExecutionBudget();
 
   constructor(
@@ -621,6 +624,7 @@ export class StaticEvaluator {
           this.causalOpenSeams.slice(checkpoint.openSeamCount),
           this.orderedExecutionTopologySince(checkpoint.executionEventCount),
           this.auditOpenSeams.slice(checkpoint.auditOpenSeamCount),
+          this.mutationCount - checkpoint.mutationCount,
         );
       } catch (error) {
         if (!(error instanceof EvaluationAbruptCompletionSignal)) {
@@ -631,6 +635,7 @@ export class StaticEvaluator {
           this.causalOpenSeams.slice(checkpoint.openSeamCount),
           this.orderedExecutionTopologySince(checkpoint.executionEventCount),
           this.auditOpenSeams.slice(checkpoint.auditOpenSeamCount),
+          this.mutationCount - checkpoint.mutationCount,
         );
       } finally {
         this.restoreEvaluationCheckpoint(checkpoint);
@@ -1437,7 +1442,9 @@ export class StaticEvaluator {
       }
     }
     if (ts.isIdentifier(initializer)) {
-      if (!environment.setBinding(initializer.text, evidence.value, evidence.openSeams)) {
+      if (environment.setBinding(initializer.text, evidence.value, evidence.openSeams)) {
+        this.mutationCount++;
+      } else {
         environment.initializeBinding(
           initializer.text,
           evidence.value,
@@ -2463,12 +2470,16 @@ export class StaticEvaluator {
         this.open(seamKind, summary, node, currentModuleKey, reasonKinds),
       unknown: (reason, node, currentModuleKey, seamKind) =>
         this.unknown(reason, node, currentModuleKey, seamKind),
+      recordMutation: () => {
+        this.mutationCount++;
+      },
       checkpoint: () => ({
         auditOpenSeamCount: this.auditOpenSeams.length,
         openSeamCount: this.causalOpenSeams.length,
         executionEventCount: this.executionEvents.length,
         nextExecutionOrdinal: this.nextExecutionOrdinal,
         statementCount: this.statementCount,
+        mutationCount: this.mutationCount,
       }),
       restore: (checkpoint) => {
         this.restoreEvaluationCheckpoint(checkpoint);
@@ -3047,7 +3058,9 @@ export class StaticEvaluator {
   ): void {
     const value = evidence.value;
     if (ts.isIdentifier(target)) {
-      if (!environment.setBinding(target.text, value, evidence.openSeams)) {
+      if (environment.setBinding(target.text, value, evidence.openSeams)) {
+        this.mutationCount++;
+      } else {
         this.open(EvaluationOpenSeamKind.DynamicMutation, `Assignment target '${target.text}' is not a known mutable binding.`, target, moduleKey);
       }
       return;
@@ -3055,6 +3068,7 @@ export class StaticEvaluator {
     if (ts.isPropertyAccessExpression(target)) {
       const receiver = this.evaluateExpression(target.expression, environment, moduleKey, depth + 1);
       if (writeStaticOwnProperty(receiver, target.name.text, value, node, evidence.openSeams) || receiver.kind === EvaluationValueKind.BoundaryValue) {
+        this.mutationCount++;
         return;
       }
       if (receiver.kind === EvaluationValueKind.Unknown) {
@@ -3070,11 +3084,13 @@ export class StaticEvaluator {
         ? null
         : this.evaluateExpression(target.argumentExpression, environment, moduleKey, depth + 1);
       if (receiver.kind === EvaluationValueKind.BoundaryValue) {
+        this.mutationCount++;
         return;
       }
       const name = argument == null ? null : evaluationPropertyKeyString(argument);
       if (name != null) {
         if (writeStaticOwnProperty(receiver, name, value, node, evidence.openSeams)) {
+          this.mutationCount++;
           return;
         }
       }
@@ -3214,6 +3230,7 @@ export class StaticEvaluator {
       executionEventCount: this.executionEvents.length,
       nextExecutionOrdinal: this.nextExecutionOrdinal,
       statementCount: this.statementCount,
+      mutationCount: this.mutationCount,
     };
   }
 
@@ -3222,6 +3239,7 @@ export class StaticEvaluator {
     this.executionEvents.splice(checkpoint.executionEventCount);
     this.nextExecutionOrdinal = checkpoint.nextExecutionOrdinal;
     this.statementCount = checkpoint.statementCount;
+    this.mutationCount = checkpoint.mutationCount;
   }
 
   private orderedExecutionTopologySince(index: number): StaticEvaluationExecutionTopology {

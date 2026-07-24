@@ -13619,14 +13619,14 @@
           ]
         },
         {
-          "id": "capture-predicate-open-boundary-is-explicit",
+          "id": "capture-predicate-closes-without-lane-specific-seams",
           "expectations": [
             {
               "name": "predicate seams",
               "query": { "kind": "open-seams", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "summary": "Custom-element capture predicate execution is not yet projected into attribute classification." }, "source": { "marker": "class=\"host-class\"", "token": "class=\"host-class\"" }, "count": 1 },
-                { "fields": { "summary": "Custom-element capture predicate execution is not yet projected into attribute classification." }, "source": { "marker": "data-note=\"filtered-note\"", "token": "data-note=\"filtered-note\"" }, "count": 1 }
+                { "source": { "marker": "class=\"host-class\"", "token": "class=\"host-class\"" }, "absent": true },
+                { "source": { "marker": "data-note=\"filtered-note\"", "token": "data-note=\"filtered-note\"" }, "absent": true }
               ]
             }
           ]

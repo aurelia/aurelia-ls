@@ -34,7 +34,11 @@ import {
   publishProductDetails,
 } from '../kernel/publication.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
-import { CustomElementCaptureKind } from '../resources/custom-element-definition.js';
+import {
+  CustomElementCaptureKind,
+  type CustomElementCaptureDefinition,
+} from '../resources/custom-element-definition.js';
+import { StaticCallableTruthinessKind } from '../evaluation/function-execution.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
   AttributeClassification,
@@ -415,7 +419,7 @@ function classifySyntax(
 
   const captureDecision = elementDefinition == null || elementResolution == null
     ? null
-    : classifyCapture(syntax, elementDefinition.capture.kind, elementResolution, bindingCommand != null, reads);
+    : classifyCapture(syntax, elementDefinition.capture, elementResolution, bindingCommand != null, reads);
   if (captureDecision != null) {
     return captureDecision;
   }
@@ -486,13 +490,31 @@ function classifySyntax(
 
 function classifyCapture(
   syntax: AttributeSyntax,
-  captureKind: CustomElementCaptureKind,
+  capture: CustomElementCaptureDefinition,
   elementResolution: TemplateResolvedResource,
   hasBindingCommand: boolean,
   reads: TemplateCompilerReadView,
 ): ClassificationDecision | null {
-  if (captureKind === CustomElementCaptureKind.None) {
+  if (capture.kind === CustomElementCaptureKind.None) {
     return null;
+  }
+  const elementDefinition = elementResolution.definition?.type === ResourceDefinitionKind.CustomElement
+    ? elementResolution.definition
+    : null;
+  if (elementDefinition == null) {
+    return null;
+  }
+  if (capture.kind === CustomElementCaptureKind.Predicate) {
+    const result = reads.capturePredicate(elementDefinition, syntax.target);
+    if (result.kind === StaticCallableTruthinessKind.False) {
+      return null;
+    }
+    if (result.kind === StaticCallableTruthinessKind.Open) {
+      return openDecision(
+        null,
+        `Custom-element capture predicate remained open. ${result.reason ?? ''}`.trim(),
+      );
+    }
   }
   const target = syntax.target.toLowerCase();
   if (hasBindingCommand && commandIgnoresAttributeName(syntax.command?.toLowerCase() ?? null, reads)) {
@@ -510,22 +532,10 @@ function classifyCapture(
   if (!canCapture) {
     return null;
   }
-  const elementDefinition = elementResolution.definition?.type === ResourceDefinitionKind.CustomElement
-    ? elementResolution.definition
-    : null;
-  if (elementDefinition == null) {
-    return null;
-  }
   const bindable = reads.bindables(elementDefinition).attr(target);
   const templateController = reads.attribute(target);
   if (bindable != null || templateController?.resource?.resourceKind === ResourceDefinitionKind.TemplateController) {
     return null;
-  }
-  if (captureKind === CustomElementCaptureKind.Predicate) {
-    return openDecision(
-      null,
-      'Custom-element capture predicate execution is not yet projected into attribute classification.',
-    );
   }
   return new ClassificationDecision(
     AttributeClassificationKind.Captured,

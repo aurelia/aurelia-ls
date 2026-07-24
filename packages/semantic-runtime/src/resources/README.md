@@ -186,6 +186,12 @@ annotations sit in the same priority position as the framework metadata helpers:
 definition-object fields, and static class fields remain own-type
 fallbacks unless the framework source names an inheritance exception. If an annotation exists but cannot close to a
 static fact, convergence should surface an open seam rather than erasing the decorator or inventing a default.
+Function-valued custom-element `capture` metadata preserves three deliberately separated carriers: a durable
+source-backed target reference for resource identity/provenance, a stable callable slot in the converged definition,
+and a candidate-local `StaticCallableTarget` in resource-recognition execution bindings. Both definition-object and
+`@capture(...)` forms use the same boundary. Compiler worlds receive the current binding sidecar under evaluation
+generation authority; durable definition comparison spends only the slot, never an evaluator value. This keeps kernel
+products serializable and prevents obsolete closure graphs from becoming resource identity.
 `resource-definition-converger.ts` owns convergence orchestration, product publication, aliases, open seams, and the
 custom-element definition assembly path. `CustomElementConvergenceFrame` is the per-definition read epoch for custom
 element metadata; it owns the shared local-key prefix, annotation priority, bindable/watch/template/dependency reads,

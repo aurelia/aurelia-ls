@@ -268,6 +268,7 @@ function evaluateStaticIntrinsicCall(
       : argumentRead.evidence[0]?.value ?? null;
   }
   if (calleeText === 'Object.assign') {
+    host.recordMutation();
     return evaluateObjectAssign(frame, host);
   }
   if (calleeText === 'Object.values') {
@@ -337,16 +338,22 @@ function evaluatePrototypeIntrinsicCall(
     case 'flat':
       return evaluateArrayFlat(frame, host);
     case 'fill':
+      host.recordMutation();
       return evaluateArrayFill(frame, host);
     case 'push':
+      host.recordMutation();
       return evaluateArrayPush(frame, host);
     case 'unshift':
+      host.recordMutation();
       return evaluateArrayUnshift(frame, host);
     case 'pop':
+      host.recordMutation();
       return evaluateArrayPop(frame, host);
     case 'shift':
+      host.recordMutation();
       return evaluateArrayShift(frame, host);
     case 'reverse':
+      host.recordMutation();
       return evaluateArrayReverse(frame, host);
     case 'toReversed':
       return evaluateArrayToReversed(frame, host);
@@ -355,6 +362,7 @@ function evaluatePrototypeIntrinsicCall(
     case 'with':
       return evaluateArrayWith(frame, host);
     case 'splice':
+      host.recordMutation();
       return evaluateArraySplice(frame, host);
     case 'slice':
       return evaluateArrayOrStringSlice(frame, host);
@@ -386,6 +394,7 @@ function evaluatePrototypeIntrinsicCall(
     case 'replaceAll':
       return evaluateStringReplace(frame, host, methodName);
     case 'sort':
+      host.recordMutation();
       return evaluateArraySort(frame, host);
     case 'toSorted':
       return evaluateArrayToSorted(frame, host);
@@ -394,14 +403,18 @@ function evaluatePrototypeIntrinsicCall(
     case 'get':
       return evaluateMapGet(frame, host);
     case 'set':
+      host.recordMutation();
       return evaluateMapSet(frame, host);
     case 'has':
       return evaluateCollectionHas(frame, host);
     case 'add':
+      host.recordMutation();
       return evaluateSetAdd(frame, host);
     case 'delete':
+      host.recordMutation();
       return evaluateCollectionDelete(frame, host);
     case 'clear':
+      host.recordMutation();
       return evaluateCollectionClear(frame, host);
     case 'then':
       return evaluatePromiseThen(frame, host);

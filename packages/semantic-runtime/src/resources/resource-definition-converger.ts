@@ -51,6 +51,12 @@ import {
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { readStaticStringValue } from '../evaluation/expression-reader.js';
 import {
+  StaticCallableExecutionBinding,
+  StaticCallableExecutionBindings,
+  StaticCallableSlot,
+  StaticCallableTarget,
+} from '../evaluation/function-execution.js';
+import {
   closedStaticValueMemberValue,
   readStaticValueProperty,
 } from '../evaluation/property-access.js';
@@ -210,6 +216,8 @@ export class ResourceDefinitionConvergenceEmission {
     readonly issues: readonly ResourceIssue[],
     /** Kernel records committed by this convergence pass. */
     readonly records: readonly KernelStoreRecord[],
+    /** Candidate-local executable closures addressed by stable slots in converged definitions. */
+    readonly callableBindings: StaticCallableExecutionBindings,
   ) {}
 }
 
@@ -218,6 +226,7 @@ class ResourceDefinitionConvergenceProduct {
     readonly records: readonly KernelStoreRecord[],
     readonly definition: FullResourceDefinition | null,
     readonly issues: readonly ResourceIssue[] = [],
+    readonly callableBindings: readonly StaticCallableExecutionBinding[] = [],
   ) {}
 }
 
@@ -227,6 +236,7 @@ class ConvergedResourceDefinition {
     readonly open: readonly ConvergenceOpen[],
     readonly records: readonly KernelStoreRecord[] = [],
     readonly issues: readonly ResourceIssue[] = [],
+    readonly callableBindings: readonly StaticCallableExecutionBinding[] = [],
   ) {}
 }
 
@@ -266,6 +276,7 @@ class TemplateDefinitionRead {
 class CustomElementCaptureRead {
   constructor(
     readonly capture: CustomElementCaptureDefinition,
+    readonly callableBinding: StaticCallableExecutionBinding | null,
     readonly open: readonly ConvergenceOpen[],
   ) {}
 }
@@ -327,6 +338,7 @@ interface CustomElementConvergenceFacts {
   readonly aliasRecords: readonly KernelStoreRecord[];
   readonly key: string;
   readonly capture: CustomElementCaptureDefinition;
+  readonly callableBindings: readonly StaticCallableExecutionBinding[];
   readonly template: TemplateDefinitionRead;
   readonly dependencies: ResourceDependenciesRead;
   readonly bindables: BindableRead;
@@ -355,6 +367,7 @@ class CustomElementConvergenceFrame {
     private readonly definition: CustomElementDefinitionHeader,
     private readonly observation: ResourceRecognitionObservation,
     private readonly header: ResourceDefinitionHeaderEmission,
+    private readonly productHandle: ProductHandle,
     private readonly provenanceHandle: ProvenanceHandle,
     private readonly sourceTextCache: AuthoredSourceTextCache,
     private readonly publication: KernelPublicationContext,
@@ -381,9 +394,14 @@ class CustomElementConvergenceFrame {
       this.definition.aliases,
       staticAliases.aliases,
     );
+    const captureSlot = new StaticCallableSlot(`resource-definition:${this.productHandle}:capture`);
     const captureRead = this.annotations.capture == null
-      ? readCustomElementCapture(this.context, this.definitionExpression, this.targetClass)
-      : new CustomElementCaptureRead(this.annotations.capture, []);
+      ? readCustomElementCapture(this.context, this.definitionExpression, this.targetClass, captureSlot)
+      : captureReadForAnnotation(
+          this.annotations.capture,
+          this.annotations.captureCallableTarget,
+          captureSlot,
+        );
     const capture = captureRead.capture;
     const template = this.readTemplate();
     const dependencies = this.readDependencies(template);
@@ -449,6 +467,7 @@ class CustomElementConvergenceFrame {
       aliasRecords: aliasMaterialization.records,
       key,
       capture,
+      callableBindings: captureRead.callableBinding == null ? [] : [captureRead.callableBinding],
       template,
       dependencies,
       bindables,
@@ -807,6 +826,7 @@ export class ResourceDefinitionConverger {
     const records: KernelStoreRecord[] = [];
     const definitions: FullResourceDefinition[] = [];
     const issues: ResourceIssue[] = [];
+    const callableBindings: StaticCallableExecutionBinding[] = [];
 
     for (const header of headerEmission.definitions) {
       const observation = observations[header.observationIndex] ?? null;
@@ -816,6 +836,7 @@ export class ResourceDefinitionConverger {
       const product = this.recordsForDefinition(context, observation, header);
       records.push(...product.records);
       issues.push(...product.issues);
+      callableBindings.push(...product.callableBindings);
       if (product.definition != null) {
         definitions.push(product.definition);
       }
@@ -831,7 +852,12 @@ export class ResourceDefinitionConverger {
       ],
     ));
 
-    return new ResourceDefinitionConvergenceEmission(definitions, issues, records);
+    return new ResourceDefinitionConvergenceEmission(
+      definitions,
+      issues,
+      records,
+      new StaticCallableExecutionBindings(callableBindings),
+    );
   }
 
   private recordsForDefinition(
@@ -877,7 +903,12 @@ export class ResourceDefinitionConverger {
         ...aliasClaims.claimHandles,
       ], openSeams.handles),
     ];
-    return new ResourceDefinitionConvergenceProduct(records, definition, converged.issues);
+    return new ResourceDefinitionConvergenceProduct(
+      records,
+      definition,
+      converged.issues,
+      converged.callableBindings,
+    );
   }
 
   private convergenceClaimForDefinition(
@@ -987,6 +1018,7 @@ export class ResourceDefinitionConverger {
       definition,
       observation,
       header,
+      productHandle,
       provenanceHandle,
       this.sourceTextCache,
       this.publication,
@@ -1008,6 +1040,7 @@ export class ResourceDefinitionConverger {
         ...facts.issueRecords,
       ],
       facts.issues,
+      facts.callableBindings,
     );
   }
 
@@ -1497,15 +1530,21 @@ function readCustomElementCapture(
   context: ResourceRecognitionContext,
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
+  predicateSlot: StaticCallableSlot,
 ): CustomElementCaptureRead {
   const read = readFieldValue(context, definitionExpression, targetClass, 'capture');
   if (read == null) {
-    return new CustomElementCaptureRead(new CustomElementCaptureDefinition(CustomElementCaptureKind.None), []);
+    return new CustomElementCaptureRead(
+      new CustomElementCaptureDefinition(CustomElementCaptureKind.None),
+      null,
+      [],
+    );
   }
   const value = read?.value;
   if (value == null) {
     return new CustomElementCaptureRead(
       new CustomElementCaptureDefinition(CustomElementCaptureKind.Open),
+      null,
       convergenceOpenForRead('Custom element capture metadata evaluation did not produce a value.', read, []),
     );
   }
@@ -1514,12 +1553,14 @@ function readCustomElementCapture(
     || (value.kind === EvaluationValueKind.Boolean && !value.value)) {
     return new CustomElementCaptureRead(
       new CustomElementCaptureDefinition(CustomElementCaptureKind.None),
+      null,
       convergenceOpenForReadPressure('Custom element capture metadata evaluation remained open.', read),
     );
   }
   if (value.kind === EvaluationValueKind.Boolean && value.value) {
     return new CustomElementCaptureRead(
       new CustomElementCaptureDefinition(CustomElementCaptureKind.All),
+      null,
       convergenceOpenForReadPressure('Custom element capture metadata evaluation remained open.', read),
     );
   }
@@ -1528,13 +1569,45 @@ function readCustomElementCapture(
       new CustomElementCaptureDefinition(
         CustomElementCaptureKind.Predicate,
         targetReferenceForFunction(value, null),
+        predicateSlot,
+      ),
+      new StaticCallableExecutionBinding(
+        predicateSlot,
+        new StaticCallableTarget(
+          value,
+          context.evaluation.policy,
+          context.evaluation.runtimeHost,
+          read.openSeams,
+        ),
       ),
       convergenceOpenForReadPressure('Custom element capture metadata evaluation remained open.', read),
     );
   }
   return new CustomElementCaptureRead(
     new CustomElementCaptureDefinition(CustomElementCaptureKind.Open),
+    null,
     convergenceOpenForRead('Custom element capture metadata did not close to a boolean or predicate.', read, []),
+  );
+}
+
+function captureReadForAnnotation(
+  capture: CustomElementCaptureDefinition,
+  callableTarget: StaticCallableTarget | null,
+  predicateSlot: StaticCallableSlot,
+): CustomElementCaptureRead {
+  if (capture.kind !== CustomElementCaptureKind.Predicate) {
+    return new CustomElementCaptureRead(capture, null, []);
+  }
+  return new CustomElementCaptureRead(
+    new CustomElementCaptureDefinition(
+      CustomElementCaptureKind.Predicate,
+      capture.predicateTarget,
+      predicateSlot,
+    ),
+    callableTarget == null
+      ? null
+      : new StaticCallableExecutionBinding(predicateSlot, callableTarget),
+    [],
   );
 }
 

@@ -67,6 +67,9 @@ export interface StaticIntrinsicEvaluationHost {
     seamKind: EvaluationOpenSeamKind,
   ): EvaluationUnknownValue;
 
+  /** Record one modeled write so speculative callable consumers can require an effect-free result. */
+  recordMutation(): void;
+
   checkpoint(): StaticIntrinsicEvaluationCheckpoint;
 
   restore(checkpoint: StaticIntrinsicEvaluationCheckpoint): void;
@@ -96,4 +99,5 @@ export interface StaticIntrinsicEvaluationCheckpoint {
   readonly executionEventCount: number;
   readonly nextExecutionOrdinal: number;
   readonly statementCount: number;
+  readonly mutationCount: number;
 }

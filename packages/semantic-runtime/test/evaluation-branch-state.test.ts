@@ -27,7 +27,10 @@ import {
   StaticInvocationOccurrence,
   staticInvocationValue,
 } from '../src/evaluation/invocation.js';
-import { DefaultStaticEvaluationRuntimeHost } from '../src/evaluation/runtime-host.js';
+import {
+  DefaultStaticEvaluationRuntimeHost,
+  delegateStaticEvaluationRuntimeHost,
+} from '../src/evaluation/runtime-host.js';
 import {
   EvaluationOpenSeam,
   EvaluationOpenSeamKind,
@@ -647,6 +650,37 @@ describe('static evaluation branch state', () => {
     const proven = evaluate(['const value = true ? touch() : 0;'], runtimeHost);
     expect(calls).toBe(1);
     expect(primitive(proven.environment.readValue('value'))).toBe(1);
+  });
+
+  test('preserves delegated invocations in graph-isolated sibling arms', () => {
+    let calls = 0;
+    const resolveIdentifier: NonNullable<StaticEvaluationRuntimeHost['resolveIdentifier']> = (identifier) => {
+      if (identifier.text === 'flag') {
+        return new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, 'flag', identifier);
+      }
+      if (identifier.text === 'probe') {
+        return new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, 'probe', identifier);
+      }
+      return null;
+    };
+    const baseHost: StaticEvaluationRuntimeHost = {
+      resolveIdentifier,
+      graphIsolatedBranchOperations: { resolveIdentifier },
+    };
+    const runtimeHost = delegateStaticEvaluationRuntimeHost(baseHost, (frame) => {
+      if (
+        frame.callee.value.kind === EvaluationValueKind.BoundaryValue
+        && frame.callee.value.path === 'probe'
+      ) {
+        calls++;
+        return staticInvocationValue(new EvaluationNumberValue(1, frame.node));
+      }
+      return StaticInvocationNotApplicable;
+    });
+    const result = evaluate(['const value = flag ? probe() : probe();'], runtimeHost);
+
+    expect(calls).toBe(2);
+    expect(primitive(result.environment.readValue('value'))).toBe(1);
   });
 });
 

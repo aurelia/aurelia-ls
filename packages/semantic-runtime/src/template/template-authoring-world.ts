@@ -32,6 +32,9 @@ import {
 import { visibleResourceForDefinition } from './resource-scope-builder.js';
 import { RuntimeRendererCatalogs } from './runtime-renderer-catalog-materializer.js';
 import type { FrameworkSupportCatalogs } from '../framework/framework-support-authority.js';
+import {
+  type StaticCallableExecutionBindings,
+} from '../evaluation/function-execution.js';
 
 interface AuthoringContainerSourceSet {
   readonly records: readonly KernelStoreRecord[];
@@ -47,6 +50,8 @@ export interface TemplateAuthoringCompilerWorldRequest {
   readonly resourceDefinitions: readonly FullResourceDefinition[];
   /** TypeChecker epoch used to project framework-owned built-in target types. */
   readonly typeSystem: TypeSystemProject | null;
+  /** Candidate-local resource predicate closures available to authoring-only compilation. */
+  readonly callableBindings: StaticCallableExecutionBindings;
 }
 
 /**
@@ -102,6 +107,7 @@ export class TemplateAuthoringCompilerWorldMaterializer {
       renderers.renderers,
       TemplateResourceVisibilityKind.Configured,
       sourceAddressHandle,
+      request.callableBindings,
     ));
   }
 
