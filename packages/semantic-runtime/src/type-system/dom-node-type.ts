@@ -10,6 +10,10 @@ import {
 } from './checker-projector.js';
 import type { TypeSystemProject } from './project.js';
 import {
+  CheckerTypeWitnessName,
+  TYPE_SYSTEM_CHECKER_TYPE_WITNESS_ORIGIN_KEY,
+} from './overlay.js';
+import {
   CheckerTypeProjectionOrigin,
   type CheckerTypeReference,
   type CheckerTypeShape,
@@ -134,12 +138,32 @@ export function resolveCheckerDomEventType(
     }
   }
   for (const fallbackName of CHECKER_DOM_EVENT_FALLBACK_TYPE_NAMES) {
-    const fallbackType = globalDeclaredType(typeSystem, fallbackName, location);
+    const fallbackType = checkerDomEventFallbackType(typeSystem, fallbackName, location);
     if (fallbackType != null) {
       return fallbackType;
     }
   }
   return null;
+}
+
+function checkerDomEventFallbackType(
+  typeSystem: TypeSystemProject,
+  fallbackName: typeof CHECKER_DOM_EVENT_FALLBACK_TYPE_NAMES[number],
+  location: ts.Node,
+): ts.Type | null {
+  if (fallbackName !== 'CustomEvent') {
+    return globalDeclaredType(typeSystem, fallbackName, location);
+  }
+  if (globalDeclaredType(typeSystem, fallbackName, location) == null) {
+    return null;
+  }
+  const witness = typeSystem.readOverlayTypeAlias(
+    TYPE_SYSTEM_CHECKER_TYPE_WITNESS_ORIGIN_KEY,
+    CheckerTypeWitnessName.CustomEventUnknown,
+  );
+  return witness == null || (witness.flags & ts.TypeFlags.Any) !== 0
+    ? null
+    : witness;
 }
 
 /** Project the lib.dom event maps used by listener typing into enumerable completion products. */

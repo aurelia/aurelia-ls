@@ -14,6 +14,14 @@ export type TypeSystemOverlaySourceSegmentRole =
   | 'semantic-surface'
   | 'contract-proof';
 
+export const TYPE_SYSTEM_CHECKER_TYPE_WITNESS_ORIGIN_KEY =
+  'semantic-runtime:checker-type-witnesses';
+
+export const enum CheckerTypeWitnessName {
+  /** Concrete CustomEvent instance whose unproven detail payload remains unknown. */
+  CustomEventUnknown = 'CustomEventUnknown',
+}
+
 export interface TypeSystemOverlaySourceSegment {
   readonly role: TypeSystemOverlaySourceSegmentRole;
   readonly generatedStart: number;
@@ -105,6 +113,7 @@ export class TypeSystemOverlaySourceBuilder {
 export function buildInitialTypeSystemOverlaySources(rootDir: string): readonly TypeSystemOverlaySource[] {
   return [
     htmlModuleDeclarationOverlaySource(rootDir),
+    checkerTypeWitnessOverlaySource(rootDir),
   ];
 }
 
@@ -145,6 +154,23 @@ function htmlModuleDeclarationOverlaySource(rootDir: string): TypeSystemOverlayS
       {
         role: 'module-declaration',
         label: '*.html module declaration',
+      },
+    )
+    .build();
+}
+
+function checkerTypeWitnessOverlaySource(rootDir: string): TypeSystemOverlaySource {
+  const fileName = path.join(rootDir, '.semantic-runtime', 'overlays', 'checker-type-witnesses.d.ts');
+  return new TypeSystemOverlaySourceBuilder({
+    kind: 'semantic-checker-surface',
+    fileName,
+    originKey: TYPE_SYSTEM_CHECKER_TYPE_WITNESS_ORIGIN_KEY,
+  })
+    .appendSegment(
+      `export type ${CheckerTypeWitnessName.CustomEventUnknown} = InstanceType<typeof globalThis.CustomEvent>;\n`,
+      {
+        role: 'semantic-surface',
+        label: 'checker-owned standard-library type witnesses',
       },
     )
     .build();

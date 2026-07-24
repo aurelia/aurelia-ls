@@ -311,6 +311,21 @@ export class TypeSystemProject {
     return this.overlaySourcesByPath.get(canonicalTypeSystemPath(sourceFile.fileName)) ?? null;
   }
 
+  /** Read a concrete type alias from a checker-owned overlay in this exact Program epoch. */
+  readOverlayTypeAlias(
+    originKey: string,
+    aliasName: string,
+  ): ts.Type | null {
+    const overlay = [...this.overlaySourcesByPath.values()].find((source) =>
+      source.originKey === originKey
+    ) ?? null;
+    const sourceFile = overlay == null ? null : this.readProgramSourceFileByPath(overlay.fileName);
+    const declaration = sourceFile?.statements.find((statement): statement is ts.TypeAliasDeclaration =>
+      ts.isTypeAliasDeclaration(statement) && statement.name.text === aliasName
+    ) ?? null;
+    return declaration == null ? null : this.checker.getTypeFromTypeNode(declaration.type);
+  }
+
   /** Read the overlay segment covering a generated source position, when one was declared. */
   readOverlaySourceSegmentAt(
     fileName: string,

@@ -5,7 +5,12 @@ import { describe, expect, test } from 'vitest';
 
 import { createSemanticRuntime } from '../src/api/runtime.js';
 import { TemplateTypeSystemOverlayBuilder } from '../src/template/template-type-system-overlay.js';
-import type { TypeSystemOverlaySource } from '../src/type-system/overlay.js';
+import { resolveCheckerDomEventType } from '../src/type-system/dom-node-type.js';
+import {
+  CheckerTypeWitnessName,
+  TYPE_SYSTEM_CHECKER_TYPE_WITNESS_ORIGIN_KEY,
+  type TypeSystemOverlaySource,
+} from '../src/type-system/overlay.js';
 import { TypeSystemProjectBuilder } from '../src/type-system/project.js';
 
 describe('type-system overlay identity', () => {
@@ -55,6 +60,19 @@ describe('type-system overlay identity', () => {
         fileName: source.fileName.replace(/\.ts$/u, '.other.ts'),
       }],
     })).toThrow(/overlay origin .* maps to both/u);
+  }, 30_000);
+
+  test('resolves unknown event types through a checker-instantiated standard-library witness', async () => {
+    const { app } = await openFixture('checker-type-witness');
+    const typeSystem = app.emission.typeSystem;
+    const witness = typeSystem.readOverlayTypeAlias(
+      TYPE_SYSTEM_CHECKER_TYPE_WITNESS_ORIGIN_KEY,
+      CheckerTypeWitnessName.CustomEventUnknown,
+    );
+    const eventType = resolveCheckerDomEventType(typeSystem, 'aurelia-app-event');
+
+    expect(witness == null ? null : typeSystem.checker.typeToString(witness)).toBe('CustomEvent<unknown>');
+    expect(eventType).toBe(witness);
   }, 30_000);
 });
 

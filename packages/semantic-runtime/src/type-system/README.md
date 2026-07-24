@@ -306,10 +306,12 @@ directly; matching display text does not make pre-converter member provenance tr
 `dom-node-type.ts` owns DOM tag-name and event-map vocabulary. `$event` scope construction, listener handler-reference
 value channels, and generated overlay event helpers should spend that vocabulary instead of spelling
 `GlobalEventHandlersEventMap`/`HTMLElementEventMap` fallback policy locally.
-Known DOM events resolve through those event maps. Unknown names currently reach the generic `CustomEvent` declaration,
-but the unbound declaration type parameter must eventually be instantiated as `unknown`; exposing `CustomEvent<T>` leaks
-a declaration-local type variable, while `any` would erase the uncertainty. Listener expressions themselves remain
-runtime-accepted regardless of their result type because Aurelia invokes the result only when it is callable.
+Known DOM events resolve through those event maps. Unknown names use a hidden Program-owned type witness,
+`InstanceType<typeof globalThis.CustomEvent>`, so TypeScript itself instantiates the active library declaration as
+`CustomEvent<unknown>`. Cursor scope, handler-reference runtime arguments, and generated overlays therefore share one
+checker type without leaking a declaration-local `T`, widening the unknown detail payload to `any`, or maintaining an
+event-specific type printer. Listener expressions themselves remain runtime-accepted regardless of their result type
+because Aurelia invokes the result only when it is callable.
 The template overlay path now has an ownership/selector/expression/plan/emitter split:
 `runtime-resource-ownership.ts` owns source-local expression/value-site/instruction projection from recursive aggregate
 render products; `template-expression-selection.ts` owns expression-parse to runtime-instruction and runtime-scope
