@@ -183,7 +183,8 @@ export class HydrateAttributeInstruction {
     readonly identityHandle: IdentityHandle,
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
-    readonly attributeName: string,
+    /** Effective compiler lookup name authored by the template, including aliases. */
+    readonly resourceLookupName: string,
     /** Compiler-visible resource selected for this instruction, including header and full-definition identity. */
     readonly resource: TemplateVisibleResourceReference | null,
     readonly bindingInstructionProductHandles: readonly ProductHandle[],
@@ -193,6 +194,11 @@ export class HydrateAttributeInstruction {
 
   get definitionProductHandle(): ProductHandle | null {
     return this.resource?.definitionProductHandle ?? null;
+  }
+
+  /** Canonical custom-attribute definition name used by runtime controller and ref identity. */
+  get resourceName(): string {
+    return this.resource?.name ?? this.resourceLookupName;
   }
 }
 

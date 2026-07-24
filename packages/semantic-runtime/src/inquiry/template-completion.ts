@@ -27,6 +27,9 @@ import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import {
+  BINDABLE_BINDING_MODES,
+} from '../resources/bindable-definition.js';
 import { ConfigurationProductDetails } from '../configuration/product-details.js';
 import {
   CustomAttributeController,
@@ -77,6 +80,8 @@ import {
 import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
 import { readOrProjectCheckerTypeMembersInProjection } from '../type-system/checker-type-member-surface.js';
 import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
+import type { TypeSystemProject } from '../type-system/project.js';
+import { projectCheckerDomEventMapTypes } from '../type-system/dom-node-type.js';
 import {
   RouteConfigKind,
   type EndpointModel,
@@ -122,8 +127,19 @@ import {
   type AttributeClassification,
   type AttributeSyntax,
 } from '../template/attribute-syntax.js';
-import { HydrateAttributeInstruction, HydrateElementInstruction } from '../template/instruction-ir.js';
-import { namedRefTargetController } from '../template/runtime-ref-target.js';
+import {
+  HydrateAttributeInstruction,
+  HydrateElementInstruction,
+  ListenerBindingInstruction,
+  RefBindingInstruction,
+} from '../template/instruction-ir.js';
+import {
+  namedRefTargetController,
+  runtimeNamedRefResourceInstruction,
+  runtimeRefTargetNames,
+  sameHtmlNodeReference,
+} from '../template/runtime-ref-target.js';
+import { builtInRuntimeEventModifierNames } from '../template/runtime-event-modifier.js';
 import {
   HtmlAttribute,
   HtmlElement,
@@ -214,6 +230,10 @@ export const enum TemplateCompletionCandidateKind {
   BindingCommand = 'binding-command',
   AttributePattern = 'attribute-pattern',
   TypeMember = 'type-member',
+  RefTarget = 'ref-target',
+  Event = 'event',
+  EventModifier = 'event-modifier',
+  BindableMode = 'bindable-mode',
 }
 
 export const enum TemplateCompletionCandidateSourceKind {
@@ -223,6 +243,28 @@ export const enum TemplateCompletionCandidateSourceKind {
   TypeSystem = 'type-system',
   Router = 'router',
   I18n = 'i18n',
+  Framework = 'framework',
+}
+
+export const enum TemplateCompletionDomainKind {
+  /** Ref target syntax such as `element.ref` or `focus-ring.ref`. */
+  RefTarget = 'ref-target',
+  /** Listener event-name syntax such as `click.trigger`. */
+  ListenerEvent = 'listener-event',
+  /** Listener modifier syntax such as `click.trigger:prevent`. */
+  ListenerModifier = 'listener-modifier',
+  /** Local-template bindable metadata such as `mode="twoWay"`. */
+  BindableMode = 'bindable-mode',
+}
+
+/** Typed authoring domain selected from exact lowered or declaration products at the cursor. */
+export class TemplateCompletionDomain {
+  constructor(
+    readonly domainKind: TemplateCompletionDomainKind,
+    readonly ownerProductHandle: ProductHandle,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly basisProductHandles: readonly ProductHandle[] = [],
+  ) {}
 }
 
 export const enum TemplateCompletionAureliaHookKind {
@@ -295,6 +337,8 @@ export class TemplateCompletionResult {
   constructor(
     /** Classified completion site the answer attempted to spend. */
     readonly siteKind: TemplateCompletionSiteKind,
+    /** Narrow authoring domain selected from lowered/declaration products, when one owns the cursor. */
+    readonly domainKind: TemplateCompletionDomainKind | null,
     /** Candidate rows for this page. */
     readonly candidates: readonly TemplateCompletionCandidate[],
     /** Expression parser frontier, when an expression parse product was supplied. */
@@ -334,6 +378,8 @@ export class TemplateCompletionQuery {
     readonly routeParameterEndpointProductHandles: readonly ProductHandle[] = [],
     /** Static i18n translation keys visible to this app/template context. */
     readonly i18nTranslationKeyProductHandles: readonly ProductHandle[] = [],
+    /** Exact authoring domain selected from lowered instructions or declaration metadata. */
+    readonly completionDomain: TemplateCompletionDomain | null = null,
   ) {}
 
   withPage(page: InquiryPageRequest): TemplateCompletionQuery {
@@ -351,6 +397,7 @@ export class TemplateCompletionQuery {
       this.routeConfigProductHandles,
       this.routeParameterEndpointProductHandles,
       this.i18nTranslationKeyProductHandles,
+      this.completionDomain,
     );
   }
 
@@ -369,6 +416,7 @@ export class TemplateCompletionQuery {
       this.routeConfigProductHandles,
       this.routeParameterEndpointProductHandles,
       this.i18nTranslationKeyProductHandles,
+      this.completionDomain,
     );
   }
 }
@@ -378,6 +426,8 @@ export interface TemplateCompletionCursorContextRequest {
   readonly locus: SourceCursorInquiryLocus;
   /** Horizontal template compilation emission that owns HTML, syntax, value, render, and scope products. */
   readonly resource: TemplateResourceRuntimeAnalysisEmission;
+  /** Current checker epoch used to project framework-owned completion domains such as DOM event maps. */
+  readonly typeSystem: TypeSystemProject;
   /** Page request copied into the resulting completion query. */
   readonly page?: InquiryPageRequest;
   /** Projection copied into the resulting completion query. */
@@ -671,11 +721,15 @@ class TemplateCompletionCursorContextBuilder {
           selectedBindable,
         )
       : null;
+    const completionDomain = this.completionDomainForCursor(offset, selectedBindable);
+    const completionSiteKind = completionDomain?.domainKind === TemplateCompletionDomainKind.BindableMode
+      ? TemplateCompletionSiteKind.AttributeValue
+      : siteKind;
 
     return new TemplateCompletionCursorContext(
       new TemplateCompletionQuery(
         this.input.locus,
-        siteKind,
+        completionSiteKind,
         this.page,
         bindingScope?.productHandle ?? null,
         semanticContextOpen
@@ -689,6 +743,7 @@ class TemplateCompletionCursorContextBuilder {
         this.input.routeConfigProductHandles ?? [],
         routeParameterEndpointProductHandles,
         this.input.i18nTranslationKeyProductHandles ?? [],
+        completionDomain,
       ),
       this.expressionWorld,
       htmlNode?.productHandle ?? null,
@@ -706,6 +761,71 @@ class TemplateCompletionCursorContextBuilder {
       bindingEnvironment?.openReason ?? null,
       uniqueValues(missingInputs),
     );
+  }
+
+  private completionDomainForCursor(
+    offset: number,
+    selectedBindable: TemplateBindableReference | null,
+  ): TemplateCompletionDomain | null {
+    const modeSourceAddressHandle = selectedBindable?.definition.modeSourceAddressHandle ?? null;
+    const definitionProductHandle = selectedBindable?.reference.ownerDefinitionProductHandle ?? null;
+    if (
+      definitionProductHandle != null
+      && cursorTouchesSpan(sourceSpanFor(this.store, modeSourceAddressHandle), offset)
+    ) {
+      return new TemplateCompletionDomain(
+        TemplateCompletionDomainKind.BindableMode,
+        definitionProductHandle,
+        modeSourceAddressHandle,
+      );
+    }
+
+    const instructions = resourceLocalTemplateInstructions(this.store, this.input.resource);
+    for (const instruction of instructions) {
+      if (
+        instruction instanceof ListenerBindingInstruction
+        && cursorTouchesSpan(sourceSpanFor(this.store, instruction.eventModifierSourceAddressHandle), offset)
+      ) {
+        return new TemplateCompletionDomain(
+          TemplateCompletionDomainKind.ListenerModifier,
+          instruction.productHandle,
+          instruction.eventModifierSourceAddressHandle,
+        );
+      }
+      if (
+        instruction instanceof ListenerBindingInstruction
+        && cursorTouchesSpan(sourceSpanFor(this.store, instruction.eventNameSourceAddressHandle), offset)
+      ) {
+        return new TemplateCompletionDomain(
+          TemplateCompletionDomainKind.ListenerEvent,
+          instruction.productHandle,
+          instruction.eventNameSourceAddressHandle,
+          projectCheckerDomEventMapTypes(this.input.typeSystem, this.expressionWorld.projector)
+            .map((shape) => shape.productHandle),
+        );
+      }
+      if (
+        instruction instanceof RefBindingInstruction
+        && cursorTouchesSpan(sourceSpanFor(this.store, instruction.targetSourceAddressHandle), offset)
+      ) {
+        return new TemplateCompletionDomain(
+          TemplateCompletionDomainKind.RefTarget,
+          instruction.productHandle,
+          instruction.targetSourceAddressHandle,
+          instructions
+            .filter((candidate) =>
+              (
+                candidate instanceof HydrateAttributeInstruction
+                || candidate instanceof HydrateElementInstruction
+              )
+              && candidate.definitionProductHandle != null
+              && sameHtmlNodeReference(candidate.node, instruction.node)
+            )
+            .map((candidate) => candidate.productHandle),
+        );
+      }
+    }
+    return null;
   }
 
   private routeParameterEndpointProductHandles(
@@ -1164,12 +1284,185 @@ function createTemplateCompletionAnswerFrame(
 function collectTemplateCompletionCandidates(
   frame: TemplateCompletionAnswerFrame,
 ): void {
+  if (frame.query.completionDomain != null) {
+    collectAuthoredDomainCandidates(frame);
+    return;
+  }
   collectBindingScopeCandidates(frame);
   collectRouterRouteParameterCandidates(frame);
   collectResourceScopeCandidates(frame);
   collectBindableCandidates(frame);
   collectExpressionMemberCandidates(frame);
   collectAttributeValueDomainCandidates(frame);
+}
+
+function collectAuthoredDomainCandidates(
+  frame: TemplateCompletionAnswerFrame,
+): void {
+  const domain = frame.query.completionDomain;
+  if (domain == null) {
+    return;
+  }
+  switch (domain.domainKind) {
+    case TemplateCompletionDomainKind.RefTarget:
+      collectRefTargetCandidates(frame, domain);
+      return;
+    case TemplateCompletionDomainKind.ListenerEvent:
+      collectListenerEventCandidates(frame, domain);
+      return;
+    case TemplateCompletionDomainKind.ListenerModifier:
+      collectListenerModifierCandidates(frame, domain);
+      return;
+    case TemplateCompletionDomainKind.BindableMode:
+      collectBindableModeCandidates(frame, domain);
+      return;
+  }
+}
+
+function collectRefTargetCandidates(
+  frame: TemplateCompletionAnswerFrame,
+  domain: TemplateCompletionDomain,
+): void {
+  const instruction = frame.store.productDetails.read(
+    TemplateProductDetails.Instruction,
+    domain.ownerProductHandle,
+  );
+  if (!(instruction instanceof RefBindingInstruction)) {
+    frame.missingInputs.push('completion-domain:ref-instruction');
+    return;
+  }
+  const basis = domain.basisProductHandles
+    .map((handle) => frame.store.productDetails.read(TemplateProductDetails.Instruction, handle))
+    .filter((candidate): candidate is HydrateAttributeInstruction | HydrateElementInstruction =>
+      candidate instanceof HydrateAttributeInstruction || candidate instanceof HydrateElementInstruction
+    );
+  for (const name of runtimeRefTargetNames(basis, instruction.node)) {
+    const definitionProductHandle = runtimeNamedRefResourceInstruction(
+      basis,
+      instruction.node,
+      name,
+    )?.definitionProductHandle ?? null;
+    const definition = definitionProductHandle == null
+      ? null
+      : frame.store.productDetails.read(ResourceProductDetails.Definition, definitionProductHandle);
+    frame.candidates.push(new TemplateCompletionCandidate(
+      TemplateCompletionCandidateKind.RefTarget,
+      name,
+      definition == null
+        ? TemplateCompletionCandidateSourceKind.Framework
+        : TemplateCompletionCandidateSourceKind.ResourceDefinition,
+      definition?.productHandle ?? instruction.productHandle,
+      definition?.identityHandle ?? instruction.identityHandle,
+      definition == null || !('nameSourceAddressHandle' in definition)
+        ? null
+        : definition.nameSourceAddressHandle,
+      definition == null
+        ? `Aurelia ref target '${name}'.`
+        : `Same-node resource ref target '${name}'.`,
+    ));
+  }
+}
+
+function collectListenerEventCandidates(
+  frame: TemplateCompletionAnswerFrame,
+  domain: TemplateCompletionDomain,
+): void {
+  const instruction = frame.store.productDetails.read(
+    TemplateProductDetails.Instruction,
+    domain.ownerProductHandle,
+  );
+  if (!(instruction instanceof ListenerBindingInstruction)) {
+    frame.missingInputs.push('completion-domain:listener-instruction');
+    return;
+  }
+  const seen = new Set<string>();
+  for (const productHandle of domain.basisProductHandles) {
+    const members = readTypeMembers(
+      frame.store,
+      frame.expressionWorld.projector,
+      productHandle,
+      frame.missingInputs,
+    );
+    if (members == null) {
+      continue;
+    }
+    for (const member of members) {
+      if (seen.has(member.name)) {
+        continue;
+      }
+      seen.add(member.name);
+      frame.candidates.push(new TemplateCompletionCandidate(
+        TemplateCompletionCandidateKind.Event,
+        member.name,
+        TemplateCompletionCandidateSourceKind.TypeSystem,
+        productHandle,
+        checkerTypeMemberReachableIdentityHandle(member),
+        checkerTypeMemberSourceAddressHandle(frame.store, member),
+        member.valueType?.display == null
+          ? 'DOM event from the active TypeScript library.'
+          : `DOM event with type ${member.valueType.display}.`,
+        member.valueType,
+      ));
+    }
+  }
+}
+
+function collectListenerModifierCandidates(
+  frame: TemplateCompletionAnswerFrame,
+  domain: TemplateCompletionDomain,
+): void {
+  const instruction = frame.store.productDetails.read(
+    TemplateProductDetails.Instruction,
+    domain.ownerProductHandle,
+  );
+  if (!(instruction instanceof ListenerBindingInstruction)) {
+    frame.missingInputs.push('completion-domain:listener-instruction');
+    return;
+  }
+  // The default catalog is useful positive evidence, but app DI can replace handlers or mutate IKeyMapping.
+  frame.missingInputs.push('app-effective-event-modifier-registrations');
+  for (const name of builtInRuntimeEventModifierNames(instruction.eventName)) {
+    frame.candidates.push(new TemplateCompletionCandidate(
+      TemplateCompletionCandidateKind.EventModifier,
+      name,
+      TemplateCompletionCandidateSourceKind.Framework,
+      instruction.productHandle,
+      instruction.identityHandle,
+      null,
+      `Built-in Aurelia modifier for '${instruction.eventName}' listeners.`,
+    ));
+  }
+}
+
+function collectBindableModeCandidates(
+  frame: TemplateCompletionAnswerFrame,
+  domain: TemplateCompletionDomain,
+): void {
+  const definition = readSelectedDefinition(
+    frame.store,
+    domain.ownerProductHandle,
+    frame.missingInputs,
+  );
+  const bindable = definition != null && 'bindables' in definition
+    ? definition.bindables.find((candidate) =>
+        candidate.modeSourceAddressHandle === domain.sourceAddressHandle
+      ) ?? null
+    : null;
+  if (definition == null || bindable == null) {
+    frame.missingInputs.push('completion-domain:bindable-mode');
+    return;
+  }
+  for (const mode of BINDABLE_BINDING_MODES) {
+    frame.candidates.push(new TemplateCompletionCandidate(
+      TemplateCompletionCandidateKind.BindableMode,
+      mode,
+      TemplateCompletionCandidateSourceKind.Framework,
+      definition.productHandle,
+      definition.identityHandle,
+      null,
+      `Binding mode for local-template bindable '${bindable.name}'.`,
+    ));
+  }
 }
 
 function collectRouterRouteParameterCandidates(
@@ -1298,7 +1591,10 @@ function templateCompletionAnswer(
   const products = completionCandidateProducts(
     frame.store,
     page.rows,
-    frame.frameworkHookBasisProductHandles,
+    [
+      ...frame.frameworkHookBasisProductHandles,
+      ...completionDomainProductHandles(frame.query.completionDomain),
+    ],
   );
   const missingInputs = uniqueValues(frame.missingInputs);
   return new InquiryAnswer(
@@ -1324,6 +1620,7 @@ function templateCompletionResult(
 ): TemplateCompletionResult {
   return new TemplateCompletionResult(
     frame.query.siteKind,
+    frame.query.completionDomain?.domainKind ?? null,
     rows,
     frame.expressionFrontier,
     missingInputs,
@@ -1405,7 +1702,16 @@ function completionProjectionProductHandles(
     frame.query.expressionParseProductHandle,
     frame.memberOwnerTypeProductHandle,
     ...frame.frameworkHookBasisProductHandles,
+    ...completionDomainProductHandles(frame.query.completionDomain),
   ].filter((handle): handle is ProductHandle => handle != null);
+}
+
+function completionDomainProductHandles(
+  domain: TemplateCompletionDomain | null,
+): readonly ProductHandle[] {
+  return domain == null
+    ? []
+    : [domain.ownerProductHandle, ...domain.basisProductHandles];
 }
 
 function readBindingScope(
@@ -3221,7 +3527,7 @@ function dynamicAttributeDefinitionForCursor(
     return null;
   }
   const instruction = instructions[0]!;
-  return { productHandle: instruction.definitionProductHandle!, matchedName: instruction.attributeName };
+  return { productHandle: instruction.definitionProductHandle!, matchedName: instruction.resourceLookupName };
 }
 
 function namedRefTargetDefinitionForCursor(

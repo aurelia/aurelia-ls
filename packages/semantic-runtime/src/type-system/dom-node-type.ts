@@ -12,6 +12,7 @@ import type { TypeSystemProject } from './project.js';
 import {
   CheckerTypeProjectionOrigin,
   type CheckerTypeReference,
+  type CheckerTypeShape,
 } from './type-shape.js';
 import {
   firstSymbolDeclaration,
@@ -139,6 +140,35 @@ export function resolveCheckerDomEventType(
     }
   }
   return null;
+}
+
+/** Project the lib.dom event maps used by listener typing into enumerable completion products. */
+export function projectCheckerDomEventMapTypes(
+  typeSystem: TypeSystemProject,
+  projector: CheckerTypeProjector,
+): readonly CheckerTypeShape[] {
+  const location = checkerLookupLocation(typeSystem);
+  if (location == null) {
+    return [];
+  }
+  return CHECKER_DOM_EVENT_MAP_TYPE_NAMES.flatMap((mapName) => {
+    const type = globalDeclaredType(typeSystem, mapName, location);
+    return type == null
+      ? []
+      : [projector.ensureProjection({
+          localKey: [
+            'dom-event-map',
+            localKeyPart(typeSystem.project.projectKey),
+            localKeyPart(mapName),
+          ].join(':'),
+          checker: typeSystem.checker,
+          type,
+          origin: CheckerTypeProjectionOrigin.TypeChecker,
+          sourceNode: location,
+          sourceAddressHandle: null,
+          display: mapName,
+        })];
+  });
 }
 
 export function checkerLookupLocation(typeSystem: TypeSystemProject): ts.SourceFile | null {

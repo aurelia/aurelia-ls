@@ -17,25 +17,11 @@
       "rationale": "Unknown listener events fall back to the generic CustomEvent declaration but project its unbound type parameter as CustomEvent<T>. The public cursor type should instantiate the unproven detail payload as unknown rather than leaking a declaration-local type variable or widening it to any."
     },
     {
-      "assertionId": "template-ref-listener-semantics/ref-target-completion-context",
+      "assertionId": "template-ref-listener-semantics/listener-custom-key-mapping-completion-context",
       "status": "known-gap",
-      "failureBucket": "ref-target-completion-vocabulary",
-      "firstObserved": "2026-07-13",
-      "rationale": "Attribute-name completion has no ref-target site/candidate vocabulary. It cannot distinguish special ref API targets from same-node resource controllers without rebuilding the runtime ref relation in a local completion island."
-    },
-    {
-      "assertionId": "template-ref-listener-semantics/listener-event-completion-context",
-      "status": "known-gap",
-      "failureBucket": "listener-event-completion-vocabulary",
-      "firstObserved": "2026-07-13",
-      "rationale": "Attribute-name completion does not expose an event-target context backed by DOM event maps and an honest custom-event fallback, so trigger/capture target completion is absent."
-    },
-    {
-      "assertionId": "template-ref-listener-semantics/listener-modifier-completion-context",
-      "status": "known-gap",
-      "failureBucket": "listener-modifier-completion-vocabulary",
-      "firstObserved": "2026-07-13",
-      "rationale": "The parser and lowered instruction now preserve exact modifier text and source, but completion lacks an event-family/registered-service modifier candidate kind and therefore cannot offer prevent, stop, or keyboard modifiers honestly."
+      "failureBucket": "listener-app-effective-modifier-catalog",
+      "firstObserved": "2026-07-24",
+      "rationale": "Framework-default event modifiers are available as an explicitly partial completion domain, but semantic-runtime does not yet project app-effective IKeyMapping mutations or IModifiedEventHandlerCreator replacement order from DI/AppTask execution. The registered upper_k mapping must join the completion domain without treating arbitrary custom handler implementations as a closed enumerable vocabulary."
     },
     {
       "assertionId": "template-spread-capture-semantics/spread-key-realization-is-conditional",
@@ -50,13 +36,6 @@
       "failureBucket": "capture-predicate-execution-not-projected",
       "firstObserved": "2026-07-13",
       "rationale": "Aurelia executes a custom element's capture predicate for each non-bindable attribute. Semantic-runtime preserves an exact open seam for the callable boundary but does not yet execute or project the known predicate, so it cannot reject class while admitting data-note into dynamic spread compilation."
-    },
-    {
-      "assertionId": "template-local-template-semantics/mode-value-completion-vocabulary",
-      "status": "known-gap",
-      "failureBucket": "local-template-bindable-mode-completion-vocabulary",
-      "firstObserved": "2026-07-13",
-      "rationale": "Local-template materialization preserves the exact authored mode token and selected bindable, but the metadata is removed before ordinary HTML value-site classification and completion has no local-template bindable-mode site or candidate vocabulary. The completion lane must consume that shared declaration product rather than reparsing the stripped metadata."
     }
   ]
 }

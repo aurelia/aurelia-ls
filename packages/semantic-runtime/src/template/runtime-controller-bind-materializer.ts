@@ -807,7 +807,7 @@ export class RuntimeControllerBindMaterializer {
       if (!(instruction instanceof HydrateAttributeInstruction)) {
         continue;
       }
-      if (sameNode(instruction.node, binding.node) && instruction.attributeName === attributeName) {
+      if (sameNode(instruction.node, binding.node) && instruction.resourceName === attributeName) {
         return controller;
       }
     }

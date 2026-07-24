@@ -1237,7 +1237,7 @@ function rendererResourceLookupIssue(
   if (instruction instanceof HydrateAttributeInstruction) {
     return {
       kind: RuntimeControllerIssueKind.AttributeResourceNotFound,
-      message: `Attribute "${instruction.attributeName}" is not registered in the rendering controller container.`,
+      message: `Attribute "${instruction.resourceLookupName}" is not registered in the rendering controller container.`,
       frameworkErrorCode: RuntimeHtmlControllerFrameworkErrorCode.AttributeResourceNotFound,
     };
   }

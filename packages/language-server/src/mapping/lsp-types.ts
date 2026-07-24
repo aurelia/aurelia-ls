@@ -354,6 +354,10 @@ const COMPLETION_KIND_BY_SEMANTIC_RUNTIME_CANDIDATE: Readonly<Record<string, Com
   "binding-command": CompletionItemKind.Keyword,
   "attribute-pattern": CompletionItemKind.Keyword,
   "type-member": CompletionItemKind.Property,
+  "ref-target": CompletionItemKind.Reference,
+  "event": CompletionItemKind.Event,
+  "event-modifier": CompletionItemKind.Keyword,
+  "bindable-mode": CompletionItemKind.EnumMember,
 };
 
 export function mapSemanticRuntimeTemplateCompletions(

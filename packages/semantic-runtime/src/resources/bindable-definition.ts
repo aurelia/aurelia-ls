@@ -11,6 +11,15 @@ export const enum BindableBindingMode {
   TwoWay = 'twoWay',
 }
 
+/** Complete authorable binding-mode vocabulary shared by bindable metadata consumers. */
+export const BINDABLE_BINDING_MODES = [
+  BindableBindingMode.Default,
+  BindableBindingMode.OneTime,
+  BindableBindingMode.ToView,
+  BindableBindingMode.FromView,
+  BindableBindingMode.TwoWay,
+] as const;
+
 export const enum BindableSetterKind {
   /** Runtime default setter with no authored interceptor. */
   Default = 'default',

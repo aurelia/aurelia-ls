@@ -17,7 +17,6 @@ import {
   TemplateRenderTarget,
   TemplateRenderTargetKind,
 } from './compiled-template.js';
-import type { HtmlNodeReference } from './html-ir.js';
 import {
   AttributeBindingInstruction,
   DispatchBindingInstruction,
@@ -77,6 +76,10 @@ import {
   RuntimeTargetOperation,
   RuntimeTargetOperationOwnerKind,
 } from './runtime-binding.js';
+import {
+  hasSameNodeCustomAttributeHydration,
+  hasSameNodeCustomElementHydration,
+} from './runtime-ref-target.js';
 import {
   RuntimeControllerCreationRequest,
   RuntimeControllerCreationKind,
@@ -1650,7 +1653,7 @@ function refTargetIssue(
       };
     case 'controller':
     case 'component': {
-      return hasSameNodeCustomElementController(input, instruction.node)
+      return hasSameNodeCustomElementHydration(input.targetInstructions, instruction.node)
         ? null
         : {
           localSuffix: 'ref-host-not-custom-element',
@@ -1668,10 +1671,10 @@ function namedRefTargetIssue(
   input: RuntimeRendererInvocation,
   instruction: RefBindingInstruction,
 ): RefTargetIssue | null {
-  if (hasSameNodeCustomAttributeController(input, instruction.node, instruction.target)) {
+  if (hasSameNodeCustomAttributeHydration(input.targetInstructions, instruction.node, instruction.target)) {
     return null;
   }
-  if (!hasSameNodeCustomElementController(input, instruction.node)) {
+  if (!hasSameNodeCustomElementHydration(input.targetInstructions, instruction.node)) {
     return {
       localSuffix: 'named-ref-host-not-custom-element',
       issueKind: RuntimeRendererIssueKind.NamedRefHostIsNotCustomElement,
@@ -1679,7 +1682,7 @@ function namedRefTargetIssue(
       frameworkErrorCode: RuntimeHtmlRendererFrameworkErrorCode.NodeIsNotHost2,
     };
   }
-  return hasSameNodeCustomElementController(input, instruction.node, instruction.target)
+  return hasSameNodeCustomElementHydration(input.targetInstructions, instruction.node, instruction.target)
     ? null
     : {
       localSuffix: 'ref-target-not-found',
@@ -1687,42 +1690,6 @@ function namedRefTargetIssue(
       message: `Ref target '${instruction.target}' was not found amongst the target API.`,
       frameworkErrorCode: RuntimeHtmlRendererFrameworkErrorCode.RefNotFound,
     };
-}
-
-function hasSameNodeCustomAttributeController(
-  input: RuntimeRendererInvocation,
-  refHost: HtmlNodeReference,
-  attributeName: string,
-): boolean {
-  return input.targetInstructions.some((instruction) =>
-    instruction instanceof HydrateAttributeInstruction
-    && instruction.attributeName === attributeName
-    && instruction.definitionProductHandle != null
-    && sameHtmlNodeReference(instruction.node, refHost)
-  );
-}
-
-function hasSameNodeCustomElementController(
-  input: RuntimeRendererInvocation,
-  refHost: HtmlNodeReference,
-  elementName: string | null = null,
-): boolean {
-  return input.targetInstructions.some((instruction) =>
-    instruction instanceof HydrateElementInstruction
-    && (elementName == null || instruction.elementName === elementName)
-    && instruction.definitionProductHandle != null
-    && sameHtmlNodeReference(instruction.node, refHost)
-  );
-}
-
-function sameHtmlNodeReference(left: HtmlNodeReference, right: HtmlNodeReference): boolean {
-  if (left.productHandle != null && right.productHandle != null) {
-    return left.productHandle === right.productHandle;
-  }
-  if (left.identityHandle != null && right.identityHandle != null) {
-    return left.identityHandle === right.identityHandle;
-  }
-  return left === right;
 }
 
 function renderContentRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {

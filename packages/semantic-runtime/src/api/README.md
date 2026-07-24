@@ -575,6 +575,16 @@ The API also threads the app emission's modeled `RouteConfig` product handles an
 plans into the completion inquiry. This lets `load="|"` answer from router facts as `router-route` candidates and lets
 `params.bind="{ | }"` answer from selected endpoints as `router-route-parameter` candidates without re-scanning source
 or re-evaluating the route expression.
+The cursor adapter likewise preserves narrower authoring domains that broad HTML site kinds cannot express by
+themselves. Ref-target candidates are host-sensitive and come from the same-node hydration products used by runtime ref
+validation; listener events come from the active TypeScript DOM event-map projections; listener modifiers come from
+the framework-default modifier model; and local-template bindable modes come from the exact declaration product and
+mode source address. The candidate kind records that semantic role while `siteKind` remains the compatible broad
+attribute-name or attribute-value surface expected by IDE clients. Once selected, an exact authoring domain owns the
+candidate list; generic attribute or value collectors do not add unrelated candidates to that syntax position.
+The public result preserves this narrower `domainKind`. Framework-default modifier candidates are explicitly partial
+until the app-effective `IKeyMapping` and `IModifiedEventHandlerCreator` registrations can be projected; custom handler
+implementations do not expose an enumerable modifier vocabulary and must never be presented as a closed list.
 Completion answers own compact `displayText` with site kind, candidate count, template lane/path, frontier/missing-input
 state, and a small candidate preview. Public clients should forward that instead of turning candidate rows into prose in
 the adapter.

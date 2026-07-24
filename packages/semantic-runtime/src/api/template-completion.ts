@@ -330,6 +330,7 @@ function readTemplateCursorInfoValue(
   const cursorContext = templateCompletionQueryForCursor(store, {
     locus: readContext.locus,
     resource: readContext.selection.resource,
+    typeSystem: emission.typeSystem,
     page: new InquiryPageRequest(1, null),
     routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
     routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
@@ -623,6 +624,7 @@ function readTemplateCompletion(
   const cursorContext = templateCompletionQueryForCursor(store, {
     locus: readContext.locus,
     resource: readContext.selection.resource,
+    typeSystem: emission.typeSystem,
     page,
     routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
     routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
@@ -728,7 +730,9 @@ function typeProjectionTemplateDiagnosticRows(
   ) {
     return [];
   }
-  return selections.flatMap((selection) => templateDiagnosticRowsForSelection(store, workspaceRootDir, selection, context));
+  return selections.flatMap((selection) =>
+    templateDiagnosticRowsForSelection(store, workspaceRootDir, emission, selection, context)
+  );
 }
 
 function templateOverlayTypeDiagnosticRows(
@@ -1146,6 +1150,7 @@ function templateDiagnosticSelectionMatchesFile(
 function templateDiagnosticRowsForSelection(
   store: KernelStore,
   workspaceRootDir: string,
+  emission: AureliaAppWorldProjectEmission,
   selection: TemplateCompletionResourceSelection,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
@@ -1154,11 +1159,12 @@ function templateDiagnosticRowsForSelection(
     return [];
   }
   return expressionMemberDiagnosticSites(store, selection.resource)
-    .flatMap((site) => templateDiagnosticRowsForMemberSite(store, selection, source, site, context));
+    .flatMap((site) => templateDiagnosticRowsForMemberSite(store, emission, selection, source, site, context));
 }
 
 function templateDiagnosticRowsForMemberSite(
   store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
   selection: TemplateCompletionResourceSelection,
   source: AuthoredSourceText,
   site: ExpressionMemberDiagnosticSite,
@@ -1176,6 +1182,7 @@ function templateDiagnosticRowsForMemberSite(
       selection.resource.compilation.unit.templateSource.sourceAddressHandle,
     ),
     resource: selection.resource,
+    typeSystem: emission.typeSystem,
     page: new InquiryPageRequest(1, null),
     routeConfigProductHandles: context.routeConfigProductHandles,
     routeParameterEndpointPlans: context.routeParameterEndpointPlans,
@@ -1326,6 +1333,7 @@ function expressionRootDiagnosticRowsForSelection(
         selection.resource.compilation.unit.templateSource.sourceAddressHandle,
       ),
       resource: selection.resource,
+      typeSystem: emission.typeSystem,
       page: new InquiryPageRequest(1, null),
       routeConfigProductHandles: context.routeConfigProductHandles,
       routeParameterEndpointPlans: context.routeParameterEndpointPlans,
@@ -2238,6 +2246,7 @@ function templateCompletionReadResult(
       : inquiryClosure;
   const value: Omit<SemanticTemplateCompletionResult, 'displayText'> = {
     siteKind: answer.value.siteKind,
+    domainKind: answer.value.domainKind,
     candidates: rows,
     expressionFrontier: answer.value.expressionFrontier == null
       ? null
@@ -2299,6 +2308,7 @@ function missingTemplateCompletion(
     value: {
       displayText: semanticTemplateCompletionDisplayText({
         siteKind: TemplateCompletionSiteKind.Unknown,
+        domainKind: null,
         candidates: [],
         expressionFrontier: null,
         missingInputs,
@@ -2308,6 +2318,7 @@ function missingTemplateCompletion(
         },
       }),
       siteKind: TemplateCompletionSiteKind.Unknown,
+      domainKind: null,
       candidates: [],
       expressionFrontier: null,
       missingInputs,

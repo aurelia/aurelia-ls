@@ -13,6 +13,7 @@ import {
   mapSemanticRuntimeTemplateCodeActions,
   mapSemanticRuntimeTemplateDefinition,
   mapSemanticRuntimeTemplateHover,
+  mapSemanticRuntimeTemplateCompletions,
   mapSemanticRuntimeTemplateRenameEdit,
   spanToRange,
   toLspUri,
@@ -369,6 +370,31 @@ describe("createCompletionGapMarker", () => {
     const markerCount = list.items.filter((item) => item.label === COMPLETION_GAP_MARKER_LABEL).length;
     expect(list.isIncomplete).toBe(true);
     expect(markerCount).toBe(1);
+  });
+});
+
+describe("mapSemanticRuntimeTemplateCompletions", () => {
+  test("preserves authorable template-domain roles as specific LSP kinds", () => {
+    const mapped = mapSemanticRuntimeTemplateCompletions({
+      outcome: "hit",
+      value: {
+        candidates: [
+          { name: "component", candidateKind: "ref-target", sourceKind: "framework" },
+          { name: "click", candidateKind: "event", sourceKind: "type-system" },
+          { name: "prevent", candidateKind: "event-modifier", sourceKind: "framework" },
+          { name: "twoWay", candidateKind: "bindable-mode", sourceKind: "framework" },
+        ],
+        missingInputs: [],
+      },
+      page: null,
+    } as never);
+
+    expect(mapped.items.map((item) => [item.label, item.kind])).toEqual([
+      ["component", CompletionItemKind.Reference],
+      ["click", CompletionItemKind.Event],
+      ["prevent", CompletionItemKind.Keyword],
+      ["twoWay", CompletionItemKind.EnumMember],
+    ]);
   });
 });
 

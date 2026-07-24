@@ -15,6 +15,7 @@ export class TemplateRefListenerSemanticsApp {
   panelController: unknown = null;
   legacyPanel: RefPanel | null = null;
   focusRingController: FocusRing | null = null;
+  aliasFocusRingController: FocusRing | null = null;
   namedPanel: RefPanel | null = null;
   unsupportedView: unknown = null;
   missingComponent: unknown = null;

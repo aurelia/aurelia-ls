@@ -13143,7 +13143,7 @@
           "id": "listener-event-types",
           "expectations": [
             { "name": "click event", "query": { "kind": "template-cursor-info", "cursor": { "marker": "click.trigger:prevent=\"handleMouse($event)\"", "token": "$event" } }, "equals": { "value.selectedMemberName": "$event", "value.selectedMember.typeDisplay": "PointerEvent", "value.diagnostics.length": 0 } },
-            { "name": "keyboard event", "query": { "kind": "template-cursor-info", "cursor": { "marker": "handleKeyboard($event)", "token": "$event" } }, "equals": { "value.selectedMemberName": "$event", "value.selectedMember.typeDisplay": "KeyboardEvent", "value.diagnostics.length": 0 } },
+            { "name": "keyboard event", "query": { "kind": "template-cursor-info", "cursor": { "marker": "keydown.trigger:ctrl+enter=\"handleKeyboard($event)\"", "token": "$event" } }, "equals": { "value.selectedMemberName": "$event", "value.selectedMember.typeDisplay": "KeyboardEvent", "value.diagnostics.length": 0 } },
             { "name": "pointer event", "query": { "kind": "template-cursor-info", "cursor": { "marker": "handlePointer($event)", "token": "$event" } }, "equals": { "value.selectedMemberName": "$event", "value.selectedMember.typeDisplay": "PointerEvent", "value.diagnostics.length": 0 } }
           ]
         },
@@ -13246,7 +13246,7 @@
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
               "equals": { "value.selectedMemberName": "focus-ring" },
               "rows": [
-                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/focus-ring.ts", "marker": "@customAttribute('focus-ring')", "token": "focus-ring" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/focus-ring.ts", "marker": "name: 'focus-ring'", "token": "focus-ring" }, "count": 1 },
                 { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-target" }, "source": { "marker": "focus-ring\n  focus-ring.ref", "token": "focus-ring" }, "count": 1 },
                 { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "ref-target" }, "source": { "marker": "focus-ring.ref=\"focusRingController\"", "token": "focus-ring" }, "count": 1 }
               ]
@@ -13256,7 +13256,7 @@
               "query": { "kind": "template-rename", "options": { "newName": "focus-halo" } },
               "equals": { "value.status": "available", "value.selectedMemberName": "focus-ring" },
               "rows": [
-                { "rowPath": "value.edits", "fields": { "editKind": "resource-name-declaration", "oldText": "focus-ring", "newText": "focus-halo" }, "source": { "sourceFile": "src/focus-ring.ts", "marker": "@customAttribute('focus-ring')", "token": "focus-ring" }, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-name-declaration", "oldText": "focus-ring", "newText": "focus-halo" }, "source": { "sourceFile": "src/focus-ring.ts", "marker": "name: 'focus-ring'", "token": "focus-ring" }, "count": 1 },
                 { "rowPath": "value.edits", "fields": { "editKind": "resource-attribute-target", "oldText": "focus-ring", "newText": "focus-halo" }, "source": { "marker": "focus-ring\n  focus-ring.ref", "token": "focus-ring" }, "count": 1 },
                 { "rowPath": "value.edits", "fields": { "editKind": "resource-ref-target", "oldText": "focus-ring", "newText": "focus-halo" }, "source": { "marker": "focus-ring.ref=\"focusRingController\"", "token": "focus-ring" }, "count": 1 }
               ]
@@ -13294,10 +13294,40 @@
           "id": "ref-target-completion-context",
           "expectations": [
             {
-              "name": "ref target completions",
+              "name": "native host ref target completions",
               "query": { "kind": "template-completions", "cursor": { "marker": "element.ref=\"explicitElement\"", "token": "element" }, "options": { "page": { "size": 100 } } },
+              "equals": { "value.domainKind": "ref-target" },
               "rows": [
-                { "rowPath": "value.candidates", "fields": { "name": "component", "candidateKind": "ref-target" }, "count": 1 }
+                { "rowPath": "value.candidates", "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "element", "candidateKind": "ref-target" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "component", "candidateKind": "ref-target" }, "absent": true },
+                { "rowPath": "value.candidates", "fields": { "name": "view", "candidateKind": "ref-target" }, "absent": true }
+              ]
+            },
+            {
+              "name": "custom element host ref target completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "component.ref=\"panelComponent\"", "token": "component" }, "options": { "page": { "size": 100 } } },
+              "equals": { "value.domainKind": "ref-target" },
+              "rows": [
+                { "rowPath": "value.candidates", "count": 5 },
+                { "rowPath": "value.candidates", "fields": { "name": "element", "candidateKind": "ref-target" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "component", "candidateKind": "ref-target" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "controller", "candidateKind": "ref-target" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "focus-ring", "candidateKind": "ref-target" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "focus", "candidateKind": "ref-target" }, "absent": true },
+                { "rowPath": "value.candidates", "fields": { "name": "ref-panel", "candidateKind": "ref-target" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "view", "candidateKind": "ref-target" }, "absent": true },
+                { "rowPath": "value.candidates", "fields": { "name": "view-model", "candidateKind": "ref-target" }, "absent": true }
+              ]
+            },
+            {
+              "name": "aliased custom attribute exposes canonical ref target",
+              "query": { "kind": "template-completions", "cursor": { "marker": "focus-ring.ref=\"aliasFocusRingController\"", "token": "focus-ring" }, "options": { "page": { "size": 100 } } },
+              "equals": { "value.domainKind": "ref-target" },
+              "rows": [
+                { "rowPath": "value.candidates", "count": 5 },
+                { "rowPath": "value.candidates", "fields": { "name": "focus-ring", "candidateKind": "ref-target" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "focus", "candidateKind": "ref-target" }, "absent": true }
               ]
             }
           ]
@@ -13308,8 +13338,13 @@
             {
               "name": "event completions",
               "query": { "kind": "template-completions", "cursor": { "marker": "click.trigger:prevent=\"handleMouse($event)\"", "token": "click" }, "options": { "page": { "size": 100 } } },
+              "equals": { "value.domainKind": "listener-event" },
               "rows": [
-                { "rowPath": "value.candidates", "fields": { "name": "click", "candidateKind": "event" }, "count": 1 }
+                { "rowPath": "value.candidates", "fields": { "name": "click", "candidateKind": "event", "typeDisplay": "PointerEvent" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "keydown", "candidateKind": "event", "typeDisplay": "KeyboardEvent" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "custom-attribute" }, "absent": true },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "template-controller" }, "absent": true },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute" }, "absent": true }
               ]
             }
           ]
@@ -13318,10 +13353,60 @@
           "id": "listener-modifier-completion-context",
           "expectations": [
             {
-              "name": "modifier completions",
+              "name": "mouse modifier completions",
               "query": { "kind": "template-completions", "cursor": { "marker": "click.trigger:pre", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "outcomes": ["partial"],
+              "equals": { "value.domainKind": "listener-modifier", "value.missingInputs.length": 1 },
               "rows": [
-                { "rowPath": "value.candidates", "fields": { "name": "prevent", "candidateKind": "event-modifier" }, "count": 1 }
+                { "rowPath": "value.candidates", "count": 9 },
+                { "rowPath": "value.candidates", "fields": { "name": "prevent", "candidateKind": "event-modifier" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "left", "candidateKind": "event-modifier" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "ctrl", "candidateKind": "event-modifier" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "escape", "candidateKind": "event-modifier" }, "absent": true }
+              ]
+            },
+            {
+              "name": "keyboard modifier completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "keydown.trigger:ctrl+enter", "token": "ctrl" }, "options": { "page": { "size": 100 } } },
+              "outcomes": ["partial"],
+              "equals": { "value.domainKind": "listener-modifier", "value.missingInputs.length": 1 },
+              "rows": [
+                { "rowPath": "value.candidates", "count": 88 },
+                { "rowPath": "value.candidates", "fields": { "name": "prevent", "candidateKind": "event-modifier" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "ctrl", "candidateKind": "event-modifier" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "enter", "candidateKind": "event-modifier" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "escape", "candidateKind": "event-modifier" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "z", "candidateKind": "event-modifier" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "90", "candidateKind": "event-modifier" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "122", "candidateKind": "event-modifier" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "left", "candidateKind": "event-modifier" }, "absent": true }
+              ]
+            },
+            {
+              "name": "generic event modifier completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "pointerdown.capture:stop", "token": "stop" }, "options": { "page": { "size": 100 } } },
+              "outcomes": ["partial"],
+              "equals": { "value.domainKind": "listener-modifier", "value.missingInputs.length": 1 },
+              "rows": [
+                { "rowPath": "value.candidates", "count": 2 },
+                { "rowPath": "value.candidates", "fields": { "name": "prevent", "candidateKind": "event-modifier" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "stop", "candidateKind": "event-modifier" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "left", "candidateKind": "event-modifier" }, "absent": true },
+                { "rowPath": "value.candidates", "fields": { "name": "ctrl", "candidateKind": "event-modifier" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "listener-custom-key-mapping-completion-context",
+          "expectations": [
+            {
+              "name": "app key mapping completion",
+              "query": { "kind": "template-completions", "cursor": { "marker": "keydown.trigger:upper_k", "token": "upper_k" }, "options": { "page": { "size": 100 } } },
+              "outcomes": ["partial"],
+              "equals": { "value.domainKind": "listener-modifier" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "upper_k", "candidateKind": "event-modifier" }, "count": 1 }
               ]
             }
           ]
@@ -13723,13 +13808,14 @@
             {
               "name": "mode candidates",
               "query": { "kind": "template-completions", "cursor": { "marker": "mode=\"oneTime\"", "token": "oneTime" }, "options": { "page": { "size": 100 } } },
-              "equals": { "value.siteKind": "attribute-value" },
+              "equals": { "value.siteKind": "attribute-value", "value.domainKind": "bindable-mode" },
               "rows": [
-                { "rowPath": "value.candidates", "fields": { "name": "oneTime", "candidateKind": "attribute-value" }, "count": 1 },
-                { "rowPath": "value.candidates", "fields": { "name": "toView", "candidateKind": "attribute-value" }, "count": 1 },
-                { "rowPath": "value.candidates", "fields": { "name": "fromView", "candidateKind": "attribute-value" }, "count": 1 },
-                { "rowPath": "value.candidates", "fields": { "name": "twoWay", "candidateKind": "attribute-value" }, "count": 1 },
-                { "rowPath": "value.candidates", "fields": { "name": "default", "candidateKind": "attribute-value" }, "count": 1 }
+                { "rowPath": "value.candidates", "count": 5 },
+                { "rowPath": "value.candidates", "fields": { "name": "oneTime", "candidateKind": "bindable-mode", "sourceKind": "framework" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "toView", "candidateKind": "bindable-mode", "sourceKind": "framework" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "fromView", "candidateKind": "bindable-mode", "sourceKind": "framework" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "twoWay", "candidateKind": "bindable-mode", "sourceKind": "framework" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "default", "candidateKind": "bindable-mode", "sourceKind": "framework" }, "count": 1 }
               ]
             }
           ]

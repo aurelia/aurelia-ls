@@ -4,7 +4,10 @@ import {
 } from '@aurelia/runtime-html';
 import { resolve } from '@aurelia/kernel';
 
-@customAttribute('focus-ring')
+@customAttribute({
+  name: 'focus-ring',
+  aliases: ['focus'],
+})
 export class FocusRing {
   private readonly element = resolve(INode) as HTMLElement;
 

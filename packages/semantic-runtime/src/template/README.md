@@ -845,8 +845,12 @@ rich in-process objects on value-site and command-lowering emissions; durable ex
 be typed explicitly later rather than pushed into generic kernel payloads.
 
 Runtime `DefaultBindingSyntax` also registers `EventModifierRegistration`. That registration is not an attribute
-pattern or binding command, so it is intentionally not part of the built-in syntax catalog yet. Model it as a separate
-renderer/listener modifier surface when instruction lowering or renderer-world materialization needs it.
+pattern or binding command, so it is intentionally separate from the built-in syntax catalog. The finite framework
+defaults live in `runtime-event-modifier.ts`: universal `prevent`/`stop`, mouse button/meta modifiers for the event
+family registered by `ModifiedMouseEventHandler`, and key/meta/character/code modifiers from the default `IKeyMapping`
+for the keyboard family. This vocabulary is not globally closed because applications can register
+`IModifiedEventHandlerCreator` implementations and mutate or replace `IKeyMapping`; completion exposes the default
+catalog as partial until those app-effective DI effects have a semantic product.
 
 Renderer-created child controllers now materialize runtime child containers instead of carrying open container
 references. This covers the common element/attribute hydration path: a child container product, the built-in
@@ -882,6 +886,13 @@ node, attribute name, attribute value, expression frontier, selected definition,
 from template/runtime/scope products. Expression-scope completion also spends the same runtime binding source-expression
 context as overlays and data-flow: if a specific binding expression opts into a source-scope-changing binding behavior,
 the cursor scope reflects that binding source while ordinary child scopes remain unchanged.
+Authorable subdomains that do not fit the broad HTML site kind travel as a typed completion domain. Ref targets read
+the exact `RefBindingInstruction` plus same-node hydration instructions through the shared runtime ref-target authority;
+listener events enumerate TypeScript's current DOM event-map products; listener modifiers read the lowered event name
+against the framework-default modifier semantics; and local-template mode values read the selected bindable declaration
+whose metadata was intentionally removed from ordinary HTML lowering. Do not replace these product handles with
+adapter-local string lists or reparse stripped source. Attribute ref targets spend the selected resource's canonical
+runtime name rather than an authored alias, matching the definition-key lookup used by runtime controller refs.
 
 Framework hook facts on completion members are role classifications, not global name matches. Component lifecycle
 classification requires a callable member on a custom-element controller binding context and uses only names that

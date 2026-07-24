@@ -27,6 +27,7 @@ import type {
 import type {
   TemplateCompletionCandidateKind,
   TemplateCompletionCandidateSourceKind,
+  TemplateCompletionDomainKind,
   TemplateCompletionSiteKind,
 } from '../inquiry/template-completion.js';
 import type { SemanticAppAnalysisDepth } from '../configuration/app-analysis.js';
@@ -3615,6 +3616,7 @@ export interface SemanticTemplateCompletionFrontierRow {
 export interface SemanticTemplateCompletionResult {
   readonly displayText: string;
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
+  readonly domainKind: TemplateCompletionDomainKind | `${TemplateCompletionDomainKind}` | null;
   readonly candidates: readonly SemanticTemplateCompletionCandidateRow[];
   readonly expressionFrontier: SemanticTemplateCompletionFrontierRow | null;
   readonly missingInputs: readonly string[];

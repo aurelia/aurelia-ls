@@ -338,6 +338,7 @@ async function readCursorPressureForRoot(root) {
         const context = templateCompletionQueryForCursor(runtime.workspace.store, {
           locus,
           resource,
+          typeSystem: app.emission.typeSystem,
           page: new InquiryPageRequest(pageSize, null),
           routeConfigProductHandles: app.emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
           i18nTranslationKeyProductHandles: app.emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
