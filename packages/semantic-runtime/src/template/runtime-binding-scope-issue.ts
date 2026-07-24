@@ -26,6 +26,7 @@ export const enum RuntimeBindingScopeIssuePhase {
 
 export const enum RuntimeBindingScopeIssueKind {
   RepeatNonIterable = 'repeat-non-iterable',
+  UnsupportedRepeatDeclaration = 'unsupported-repeat-declaration',
   DestructuringNonObject = 'destructuring-non-object',
   ArrayRestNonArray = 'array-rest-non-array',
   WithNullBindingContext = 'with-null-binding-context',

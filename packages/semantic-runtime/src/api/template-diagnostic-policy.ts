@@ -1211,6 +1211,9 @@ export function runtimeBindingScopeIssueDiagnostic(
   if (issue.issueKind === RuntimeBindingScopeIssueKind.RepeatNonIterable) {
     return repeatNonIterableDiagnostic(issue, source);
   }
+  if (issue.issueKind === RuntimeBindingScopeIssueKind.UnsupportedRepeatDeclaration) {
+    return unsupportedRepeatDeclarationDiagnostic(source);
+  }
   if (issue.issueKind === RuntimeBindingScopeIssueKind.WithNullBindingContext) {
     return withNullBindingContextDiagnostic(issue, source);
   }
@@ -1242,6 +1245,35 @@ export function runtimeBindingScopeIssueDiagnostic(
       summary: 'Ensure the repeat item source is object-shaped before destructuring, or guard the repeat with template control flow.',
       targetMemberName: null,
       ownerTypeDisplay: issue.sourceType?.display ?? null,
+      valueTypeDisplay: null,
+      valueTypeSource: null,
+    },
+  };
+}
+
+function unsupportedRepeatDeclarationDiagnostic(
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorDiagnosticRow {
+  return {
+    diagnosticKind: 'unsupported-repeat-declaration',
+    diagnosticAuthority: 'framework-runtime-behavior',
+    frameworkErrorCode: null,
+    severity: 'error',
+    summary: 'The current Aurelia Repeat controller does not materialize locals from an object binding pattern.',
+    missingInput: 'repeat-declaration:object-binding-pattern-runtime-unsupported',
+    missingInputs: ['repeat-declaration:object-binding-pattern-runtime-unsupported'],
+    source,
+    selectedMemberName: null,
+    ownerTypeDisplay: null,
+    ownerTypeShapeKind: null,
+    ownerTypeOrigin: null,
+    suggestion: {
+      suggestionKind: 'fix-template-syntax',
+      actionKind: 'rewrite-template-syntax',
+      actionTarget: suggestionActionTarget('template-syntax', source, null, null),
+      summary: 'Bind each repeated value to one local and access its properties through that local.',
+      targetMemberName: null,
+      ownerTypeDisplay: null,
       valueTypeDisplay: null,
       valueTypeSource: null,
     },

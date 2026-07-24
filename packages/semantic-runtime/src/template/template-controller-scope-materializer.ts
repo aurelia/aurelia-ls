@@ -2300,6 +2300,25 @@ export class TemplateControllerScopeMaterializer {
       ));
     });
     this.measure(input, 'iterator-local-issues', () => {
+      const declaration = iteratorProjection.parse?.result.kind === ExpressionParseResultKind.IteratorSuccess
+        ? iteratorProjection.parse.result.ast.declaration
+        : null;
+      if (declaration?.$kind === 'ObjectBindingPattern') {
+        frame.addScopeIssue(this.scopeIssuePublisher.publish(
+          `${input.localKey}:scope:${localSuffix}:unsupported-object-binding-pattern`,
+          KernelVocabulary.Binding.ScopeEffect.key,
+          effect.productHandle,
+          effect.identityHandle,
+          RuntimeBindingScopeIssuePhase.IteratorLocalProjection,
+          RuntimeBindingScopeIssueKind.UnsupportedRepeatDeclaration,
+          RuntimeBindingScopeIssueCertainty.Definite,
+          'The Aurelia parser admits object binding patterns, but the current Repeat controller does not materialize their locals',
+          null,
+          effect.sourceAddressHandle,
+          declaration.span,
+          null,
+        ));
+      }
       iteratorProjection.localProjection.runtimeIssues.forEach((issue, index) => {
         frame.addScopeIssue(this.scopeIssuePublisher.publish(
           `${input.localKey}:scope:${localSuffix}:issue:${index}`,

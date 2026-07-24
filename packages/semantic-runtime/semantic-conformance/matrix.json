@@ -9392,7 +9392,15 @@
               "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
               "rows": [
                 {
-                  "fields": { "diagnosticKind": "unsupported-repeat-declaration", "missingInput": "repeat-declaration:object-binding-pattern-runtime-unsupported" },
+                  "fields": {
+                    "diagnosticKind": "unsupported-repeat-declaration",
+                    "diagnosticAuthority": "framework-runtime-behavior",
+                    "frameworkErrorCode": null,
+                    "severity": "error",
+                    "missingInput": "repeat-declaration:object-binding-pattern-runtime-unsupported",
+                    "suggestion.suggestionKind": "fix-template-syntax",
+                    "suggestion.actionKind": "rewrite-template-syntax"
+                  },
                   "source": { "marker": "repeat.for=\"{ id, label } of products\"", "token": "{ id, label }" }
                 }
               ]
@@ -9453,8 +9461,8 @@
               "name": "invalid repeat source consequences are contextual presentation evidence",
               "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
               "equals": {
-                "value.presentation.rawRowCount": 19,
-                "value.presentation.primaryCount": 13,
+                "value.presentation.rawRowCount": 20,
+                "value.presentation.primaryCount": 14,
                 "value.presentation.contextualCount": 6
               }
             }

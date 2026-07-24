@@ -848,6 +848,11 @@ can reach `null`. This row has `framework-runtime-behavior` authority rather tha
 passes `null` into the child `Scope`, and ordinary scope lookup later throws a JavaScript error while applying `in` to
 that binding context. `undefined` is intentionally excluded because `with` replaces it with `{}`. The diagnostic source
 is the exact value expression, and the retained source type drives definite-versus-possible severity.
+`unsupported-repeat-declaration` uses the same authority boundary for object binding patterns. The current framework
+parser admits the pattern, but `Repeat` does not recognize that AST kind as destructuring and therefore creates no
+declared locals at runtime. The row intentionally has no framework error code, targets the exact declaration span, and
+recommends rewriting to one repeated local plus property access. Recovery symbols may remain queryable so IDE
+navigation can help perform that rewrite.
 Repeat option diagnostics are controller-owned. Runtime rendering now publishes `RuntimeControllerIssue` products for
 the `Repeat` constructor failures that inspect iterator tail `MultiAttrInstruction`s: invalid `key` commands
 (`AUR0775`), extraneous option targets (`AUR0776`), and invalid `contextual` commands (`AUR0821`). Template diagnostics

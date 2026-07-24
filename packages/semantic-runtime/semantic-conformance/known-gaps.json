@@ -10,13 +10,6 @@
       "rationale": "The project-local context-scope controller explicitly activates its view with Scope.fromParent(parent, value), but semantic-runtime treats app-owned template controllers as pass-through: the child value binding context is missing and the valid explicit parent lookup silently resolves no symbol, with no open-scope seam."
     },
     {
-      "assertionId": "template-controller-built-ins/unsupported-object-binding-pattern-is-diagnosed",
-      "status": "known-gap",
-      "failureBucket": "repeat-runtime-unsupported-syntax-diagnostic",
-      "firstObserved": "2026-07-09",
-      "rationale": "The parser emits ObjectBindingPattern for repeat.for object syntax, while the checked-in Repeat controller only materializes ArrayDestructuring/ObjectDestructuring and therefore creates no locals. Semantic-runtime currently accepts and types the non-working syntax without a diagnostic."
-    },
-    {
       "assertionId": "template-controller-built-ins/repeat-source-rejection-presentation-cascade-policy",
       "status": "known-gap",
       "failureBucket": "diagnostic-cascade-policy",

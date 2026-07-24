@@ -3723,6 +3723,7 @@ export type SemanticTemplateCursorDiagnosticKind =
   | 'runtime-binding-behavior-framework-error'
   | 'runtime-value-converter-framework-error'
   | 'runtime-binding-scope-framework-error'
+  | 'unsupported-repeat-declaration'
   | 'template-controller-null-binding-context'
   | 'router-framework-error'
   | 'binding-target-access-framework-error'

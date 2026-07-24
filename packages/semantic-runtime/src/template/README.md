@@ -411,6 +411,12 @@ classification, expression parsing, and instruction lowering converge on the sam
   context for `undefined`, but passes `null` to `Scope.fromParent`, after which ordinary `Scope.getContext` lookup throws
   while evaluating `name in bindingContext`. Scope typing may still project the non-null value lane for useful child
   analysis, but it must retain and diagnose reachable `null` at the exact authored value address.
+  Repeat object binding patterns expose a separate parser/controller mismatch. The expression parser admits
+  `ObjectBindingPattern`, but the current `Repeat` controller recognizes only `ArrayDestructuring` and
+  `ObjectDestructuring` when creating locals, and the parser has no object-destructuring construction path. Scope
+  construction therefore publishes a repeat-scope-effect-owned `UnsupportedRepeatDeclaration` issue at the exact
+  declaration span. Recovery locals remain available for navigation and rewriting, but they do not make the
+  declaration runtime-valid.
 - `runtime-controller-issue.ts` owns framework-runtime diagnostics discovered while emulating controller construction or
   hydration. Runtime rendering uses it for renderer resource lookup failures when a lowered instruction carries a
   resource name but the rendering container cannot resolve it: missing custom elements (`AUR0752`), custom attributes
