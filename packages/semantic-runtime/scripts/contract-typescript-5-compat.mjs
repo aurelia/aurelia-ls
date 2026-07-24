@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -10,6 +10,7 @@ const tempRoot = path.join(tmpdir(), 'aurelia-ls2-semantic-runtime-typescript-co
 const tempPackageRoot = path.join(tempRoot, 'semantic-runtime');
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/typescript-program-fidelity-node-types');
 const pnpmCliPath = path.join(path.dirname(process.execPath), 'node_modules/corepack/dist/pnpm.js');
+const packageManifest = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8'));
 
 rmSync(tempRoot, { recursive: true, force: true });
 mkdirSync(tempPackageRoot, { recursive: true });
@@ -19,6 +20,7 @@ writeFileSync(
     private: true,
     type: 'module',
     dependencies: {
+      ...packageManifest.dependencies,
       typescript: '5.9.3',
     },
   }, null, 2),

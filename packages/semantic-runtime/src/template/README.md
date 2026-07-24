@@ -653,16 +653,24 @@ classification, expression parsing, and instruction lowering converge on the sam
   lowered `AttributeBinding`/`InterpolationBinding` products for `.class`, `.style`, `class="${...}"`, and
   `style="${...}"` sites so compiler behavior remains visible as products. It also consumes `RefBinding` source
   operations as `ref-target` channels, keeping source assignment separate from target mutation. `SpreadValueBinding`
-  emits one value channel per statically known target bindable, reflecting the runtime's per-bindable inner
-  `PropertyBinding` creation without creating a second renderer-owned instruction layer.
+  target-access rows enumerate the statically known bindable candidates, but a value channel exists only when the
+  spread source type can pass Aurelia's object and `key in source` guards for that target. The channel carries the
+  guaranteed, conditional, or open realization, the guarded member value type, and any member declaration shared by
+  every admitted lane. Checker object shapes are structural lower bounds, so undeclared keys remain open rather than
+  being rejected; directly synthesized object literals can still prove absence. This reflects runtime per-bindable inner
+  `PropertyBinding` creation without pretending every candidate is realized or creating a second instruction layer.
+  Bind-time target discovery preserves `null` for unresolved target identity and `[]` for a resolved component with no
+  bindables; collapsing those states invents an open `$bindables` target where the runtime has a closed empty fan-out.
 - After scope projection, `observation/binding-data-flow-materializer.ts` materializes a separate source/target flow
   product for each runtime property binding, attribute binding, interpolation, ref binding, and spread value binding with
   target access, target operation, source operation, or explicit open value channel. It spends the instruction's modeled
   `Scope`, the expression parser publication, runtime-side facts, and value-channel facts to record direction, source
   type, raw target property type, runtime target value type, source writability, TypeChecker assignability, and open flow
-  pressure without expanding runtime rendering. For spread value bindings, the flow projects each target bindable key
-  through the spread expression's source type, for example `bindings.productId` into a `product-id`/`productId`
-  bindable.
+  pressure without expanding runtime rendering. For spread value bindings, the flow consumes admitted value channels
+  rather than projecting the candidate set again, for example `bindings.productId` into a
+  `product-id`/`productId` bindable. Every spread also retains a targetless source-read flow for the outer expression,
+  matching the framework's `SpreadValueBinding`; admitted member edges model the generated inner property bindings.
+  This preserves both evaluation layers without fabricating a target write or an authored member token.
 - `template-controller-scope-materializer.ts` spends the controller tree plus runtime binding scope effects into
   runtime-shaped `Scope`, binding-context, and override-context products. Controller and `Scope` model classes own the
   construction shapes; the materializer only preserves template-order effects and commits records.
@@ -975,7 +983,7 @@ teaching the overlay builder to rediscover it from raw template text. `template-
 template expression/value-site selection plus expression-parse to runtime-scope lookup; cursor inquiries, diagnostics,
 and overlays should reuse that selector so they agree on the semantic product locus before TypeScript projection
 starts. Cursor/member-owner reads that need the source expression at an offset should use
-`bindingSourceContextProjectionForTemplateExpressionParseAtOffset(...)` there rather than rebuilding
+`bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset(...)` there rather than rebuilding
 `RuntimeBindingSourceExpressionContextProjector` beside completion or diagnostics code. Runtime binding selectors in
 that module also filter expression bindings through
 `templateScopeCanEvaluateSourceScope(...)`, so a definition-level expression rendered in several controller/scope

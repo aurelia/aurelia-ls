@@ -112,6 +112,7 @@ import {
 } from '../template/runtime-binding.js';
 import {
   RuntimeBindingDataFlow,
+  RuntimeBindingRealization,
   RuntimeBindingDataFlowValueConverterWritebackStage,
   type RuntimeBindingDataFlowField,
   RuntimeBindingDataFlowDirection,
@@ -121,6 +122,8 @@ import {
   RuntimeBindingDataFlowSourceKind,
   RuntimeBindingDataFlowTypeMismatchKind,
   RuntimeBindingObservedDependency,
+  RuntimeObservedDependencyKind,
+  RuntimeObservedMemberSourceRoute,
   type RuntimeBindingValueChannel,
   RuntimeBindingValueChannelKind,
   RuntimeBindingValueChannelTargetMutationKind,
@@ -149,6 +152,7 @@ import {
 import {
   observedMemberSourceForBindingDependency,
   observedMemberSourceStateForBindingDependency,
+  type RuntimeObservedMemberSourceProjection,
 } from './observed-dependency-member-source.js';
 import {
   runtimeObservedDependencyRecords,
@@ -366,6 +370,7 @@ type ObservedExpressionDependencyInput = {
 
 type DataFlowTarget = {
   readonly localSuffix: string;
+  readonly sourceOnly: boolean;
   readonly targetAccess: RuntimeBindingTargetAccess | null;
   readonly targetOperation: RuntimeBindingTargetOperation | null;
   readonly sourceOperation: RuntimeBindingSourceOperation | null;
@@ -376,6 +381,7 @@ type DataFlowDraft = {
   readonly ast: ExpressionAstNode | null;
   readonly bindingScope: BindingScope | null;
   readonly direction: RuntimeBindingDataFlowDirection;
+  readonly realization: RuntimeBindingRealization;
   readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind;
   readonly sourceEvaluationReachability: RuntimeExpressionResourcePhaseReachability;
   readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind;
@@ -384,6 +390,8 @@ type DataFlowDraft = {
   readonly sourceKind: RuntimeBindingDataFlowSourceKind;
   readonly sourceName: string | null;
   readonly sourceRootName: string | null;
+  /** Type of the authored source expression before a spread target selects one guarded member value. */
+  readonly sourceExpressionType: CheckerTypeReference | null;
   readonly sourceType: CheckerTypeReference | null;
   readonly sourceTypeOpenReason: string | null;
   readonly sourceTypeOpenKind: CheckerExpressionTypeOpenKind | null;
@@ -424,6 +432,7 @@ function runtimeBindingDataFlowForDraft(
     draft.expressionProductHandle,
     draft.bindingScope?.toReference() ?? scope?.toReference() ?? null,
     draft.direction,
+    draft.realization,
     draft.sourceEvaluationKind,
     draft.sourceEvaluationReachability,
     draft.targetMutationKind,
@@ -469,6 +478,8 @@ type DataFlowExpressionFacts = {
 type DataFlowSourceProjection = {
   readonly sourceInfo: SourceExpressionInfo;
   readonly sourceScope: BindingScope | null;
+  readonly realization: RuntimeBindingRealization;
+  readonly sourceExpressionType: CheckerTypeReference | null;
   readonly sourceType: CheckerTypeReference | null;
   readonly sourceTypeOpenReason: string | null;
   readonly sourceTypeOpenKind: CheckerExpressionTypeOpenKind | null;
@@ -559,15 +570,17 @@ export class RuntimeBindingDataFlowMaterializer {
       input.controllerBind.readSourceOperationsForBinding(binding.productHandle),
       input.valueChannels.readValueChannelsForBinding(binding.productHandle),
     );
-    targets.forEach((target) => frame.record(this.recordsForDataFlow(
-      input,
-      frame.source,
-      context,
-      binding,
-      index,
-      target,
-      scope,
-    )));
+    for (const target of targets) {
+      frame.record(this.recordsForDataFlow(
+        input,
+        frame.source,
+        context,
+        binding,
+        index,
+        target,
+        scope,
+      ));
+    }
   }
 
   private recordsForDataFlow(
@@ -670,13 +683,22 @@ export class RuntimeBindingDataFlowMaterializer {
     );
     return {
       dataFlow,
-      observedDependencies: this.observedDependenciesForDataFlow(local, binding, dataFlow, scope, draft, context),
+      observedDependencies: this.observedDependenciesForDataFlow(
+        local,
+        binding,
+        target,
+        dataFlow,
+        scope,
+        draft,
+        context,
+      ),
     };
   }
 
   private observedDependenciesForDataFlow(
     local: string,
     binding: RuntimeDataFlowBinding,
+    target: DataFlowTarget,
     dataFlow: RuntimeBindingDataFlow,
     scope: BindingScope | null,
     draft: DataFlowDraft,
@@ -688,6 +710,9 @@ export class RuntimeBindingDataFlowMaterializer {
       || draft.sourceEvaluationReachability !== RuntimeExpressionResourcePhaseReachability.Reached
     ) {
       return [];
+    }
+    if (binding instanceof SpreadValueBinding && !target.sourceOnly) {
+      return this.observedSpreadMemberDependency(local, binding, target, dataFlow, scope, draft);
     }
     const observedDependencyInputs = this.observedExpressionSites(
       binding,
@@ -707,13 +732,6 @@ export class RuntimeBindingDataFlowMaterializer {
       input.dependencies.map((dependency) => {
         const index = dependencyIndex++;
         const dependencyLocal = `${local}:observed-dependency:${index}`;
-        const dependencySource = sourceAddressForRuntimeExpressionBounds(
-          this.publication,
-          dependencyLocal,
-          site.sourceAddressHandle,
-          dependency.spanStart,
-          dependency.spanEnd,
-        );
         const observedMember = input.checkerContext == null
           ? null
           : observedMemberSourceForBindingDependency({
@@ -722,37 +740,126 @@ export class RuntimeBindingDataFlowMaterializer {
             evaluator: context.evaluator,
             localKey: local,
           });
-        const observedMemberSourceState = observedMemberSourceStateForBindingDependency({
-          dependency,
-          scope: input.checkerContext?.scope ?? input.scope,
-          projection: observedMember,
-        });
-        return new RuntimeBindingObservedDependency(
-          this.store.handles.product(dependencyLocal),
-          this.store.handles.identity(dependencyLocal),
-          binding.toReference(),
-          dataFlow.productHandle,
+        return this.observedDependencyForDraft(
+          dependencyLocal,
+          binding,
+          dataFlow,
           site.expressionProductHandle,
-          input.scope?.toReference() ?? null,
-          dependency.dependencyKind,
-          dependency.expressionKind,
-          dependency.sourceName,
-          dependency.sourceRootName,
-          dependency.memberName,
-          dependency.keyExpression,
-          dependency.methodName,
-          observedMember?.observedMemberKind ?? null,
-          observedMember?.observedMemberSourceAddressHandle ?? null,
-          observedMemberSourceState,
-          observedMember?.observedMemberSourceRoute ?? null,
-          dependency.spanStart,
-          dependency.spanEnd,
-          dependency.memberNameSpanStart ?? null,
-          dependency.memberNameSpanEnd ?? null,
-          dependencySource.handle,
-          [],
+          input.checkerContext?.scope ?? input.scope,
+          site.sourceAddressHandle,
+          dependency,
+          observedMember,
         );
       })
+    );
+  }
+
+  /**
+   * Aurelia's outer SpreadValueBinding observes the authored object expression, then each admitted inner
+   * PropertyBinding observes one generated AccessScope member. Project that generated read onto the honest outer
+   * expression locus without inventing a member token that does not exist in source.
+   */
+  private observedSpreadMemberDependency(
+    local: string,
+    binding: SpreadValueBinding,
+    target: DataFlowTarget,
+    dataFlow: RuntimeBindingDataFlow,
+    scope: BindingScope | null,
+    draft: DataFlowDraft,
+  ): readonly RuntimeBindingObservedDependency[] {
+    const targetProperty = target.targetAccess?.targetProperty ?? null;
+    if (targetProperty == null || draft.ast == null) {
+      throw new Error(`Spread data-flow '${dataFlow.productHandle}' did not retain its admitted target member.`);
+    }
+    const memberSourceAddressHandle = target.valueChannel?.admittedSourceMemberSourceAddressHandle ?? null;
+    const ownerSourceAddressHandle = draft.sourceExpressionType?.sourceAddressHandle ?? null;
+    const observedMemberSourceAddressHandle = memberSourceAddressHandle ?? ownerSourceAddressHandle;
+    const observedMemberSourceRoute = memberSourceAddressHandle != null
+      ? RuntimeObservedMemberSourceRoute.MemberDeclaration
+      : ownerSourceAddressHandle != null
+        ? RuntimeObservedMemberSourceRoute.OwnerValue
+        : null;
+    const dependency: RuntimeObservedDependencyDraft = {
+      dependencyKind: RuntimeObservedDependencyKind.TemplateExpressionRead,
+      expressionKind: 'AccessMember',
+      sourceName: dataFlow.sourceName,
+      sourceRootName: dataFlow.sourceRootName,
+      memberName: targetProperty,
+      keyExpression: null,
+      methodName: null,
+      observedMemberKind: target.valueChannel?.admittedSourceMemberKind ?? null,
+      observedMemberSourceAddressHandle,
+      observedMemberSourceRoute,
+      memberNameSpanStart: null,
+      memberNameSpanEnd: null,
+      scopeLookupAncestor: null,
+      spanStart: draft.ast.span.start,
+      spanEnd: draft.ast.span.end,
+    };
+    const parse = readTemplateExpressionParse(this.publication, draft.expressionProductHandle);
+    const memberProjection: RuntimeObservedMemberSourceProjection = {
+      observedMemberKind: target.valueChannel?.admittedSourceMemberKind ?? null,
+      observedMemberSourceAddressHandle,
+      observedMemberSourceRoute,
+    };
+    return [this.observedDependencyForDraft(
+      `${local}:observed-dependency:0`,
+      binding,
+      dataFlow,
+      draft.expressionProductHandle,
+      draft.bindingScope ?? scope,
+      parse?.sourceAddressHandle ?? binding.sourceAddressHandle,
+      dependency,
+      memberProjection,
+    )];
+  }
+
+  private observedDependencyForDraft(
+    dependencyLocal: string,
+    binding: RuntimeDataFlowBinding,
+    dataFlow: RuntimeBindingDataFlow,
+    expressionProductHandle: ProductHandle | null,
+    scope: BindingScope | null,
+    sourceAddressHandle: AddressHandle | null,
+    dependency: RuntimeObservedDependencyDraft,
+    memberProjection: RuntimeObservedMemberSourceProjection | null,
+  ): RuntimeBindingObservedDependency {
+    const dependencySource = sourceAddressForRuntimeExpressionBounds(
+      this.publication,
+      dependencyLocal,
+      sourceAddressHandle,
+      dependency.spanStart,
+      dependency.spanEnd,
+    );
+    return new RuntimeBindingObservedDependency(
+      this.store.handles.product(dependencyLocal),
+      this.store.handles.identity(dependencyLocal),
+      binding.toReference(),
+      dataFlow.productHandle,
+      expressionProductHandle,
+      scope?.toReference() ?? null,
+      dataFlow.realization,
+      dependency.dependencyKind,
+      dependency.expressionKind,
+      dependency.sourceName,
+      dependency.sourceRootName,
+      dependency.memberName,
+      dependency.keyExpression,
+      dependency.methodName,
+      memberProjection?.observedMemberKind ?? null,
+      memberProjection?.observedMemberSourceAddressHandle ?? null,
+      observedMemberSourceStateForBindingDependency({
+        dependency,
+        scope,
+        projection: memberProjection,
+      }),
+      memberProjection?.observedMemberSourceRoute ?? null,
+      dependency.spanStart,
+      dependency.spanEnd,
+      dependency.memberNameSpanStart ?? null,
+      dependency.memberNameSpanEnd ?? null,
+      dependencySource.handle,
+      [],
     );
   }
 
@@ -1035,9 +1142,10 @@ class RuntimeBindingDataFlowDraftMaterializer {
     resourceScope: TemplateResourceScope | null,
     local: string,
   ): DataFlowDraft {
-    const lifecycle = dataFlowLifecycleForBinding(binding, expressionResourcePlan);
-    const targetMutationKind = target.valueChannel?.targetMutationKind
-      ?? RuntimeBindingValueChannelTargetMutationKind.Open;
+    const lifecycle = dataFlowLifecycleForBinding(binding, expressionResourcePlan, target.sourceOnly);
+    const targetMutationKind = target.sourceOnly
+      ? RuntimeBindingValueChannelTargetMutationKind.NoTargetWrite
+      : target.valueChannel?.targetMutationKind ?? RuntimeBindingValueChannelTargetMutationKind.Open;
     const direction = dataFlowDirectionForTargetMutation(lifecycle.direction, targetMutationKind);
     const needsSourceWriteCapability = bindingDataFlowDirectionIncludesTargetToSource(direction);
     const sourceEvaluationConnectable = lifecycle.sourceEvaluationKind === RuntimeBindingSourceEvaluationKind.ConnectableRead;
@@ -1072,7 +1180,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
     });
     const openReason = openReasonForDataFlow({
       direction,
-      sourceOnly: isRuntimeSourceOnlyDataFlowBinding(binding),
+      sourceOnly: target.sourceOnly,
       targetAccess: target.targetAccess,
       targetOperation: target.targetOperation,
       sourceOperation: target.sourceOperation,
@@ -1094,6 +1202,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
       bindingScope: sourceProjection.sourceScope,
       expressionProductHandle: expressionFacts.expressionProductHandle,
       direction,
+      realization: sourceProjection.realization,
       sourceEvaluationKind: lifecycle.sourceEvaluationKind,
       sourceEvaluationReachability: lifecycle.sourceEvaluationReachability,
       targetMutationKind,
@@ -1101,6 +1210,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
       sourceKind: sourceProjection.sourceInfo.sourceKind,
       sourceName: sourceProjection.sourceInfo.sourceName,
       sourceRootName: sourceProjection.sourceInfo.sourceRootName,
+      sourceExpressionType: sourceProjection.sourceExpressionType,
       sourceType: sourceProjection.sourceType,
       sourceTypeOpenReason: sourceProjection.sourceTypeOpenReason,
       sourceTypeOpenKind: sourceProjection.sourceTypeOpenKind,
@@ -1278,7 +1388,7 @@ class BindingDataFlowSourceProjector {
       evaluator,
       needsSourceWriteCapability,
       expressionFacts,
-      targetTypes.targetValueType,
+      binding instanceof SpreadValueBinding ? null : targetTypes.targetValueType,
     );
     const sourceEvaluation = expressionSite == null
       || expressionSite.kind === RuntimeBindingSourceExpressionProjectionKind.Open
@@ -1286,32 +1396,26 @@ class BindingDataFlowSourceProjector {
       : evaluator.evaluate(checkerContextForRuntimeBindingSourceExpressionProjection(
         expressionSite,
         sourceEvaluationConnectable,
-        targetTypes.targetValueType,
+        binding instanceof SpreadValueBinding ? null : targetTypes.targetValueType,
       ));
     const evaluatedSourceType = sourceInfo.sourceTypeHint
       ?? (sourceEvaluation?.kind === CheckerExpressionTypeEvaluationResultKind.Type
         ? sourceEvaluation.typeReference
         : null);
+    const realization = target.valueChannel?.realization ?? RuntimeBindingRealization.Direct;
     const sourceType = targetTypes.spreadTargetProperty == null
       ? evaluatedSourceType
-      : this.typeAccess.memberType(evaluatedSourceType, targetTypes.spreadTargetProperty);
-    const spreadSourceTypeOpenReason = targetTypes.spreadTargetProperty != null
-      && evaluatedSourceType != null
-      && sourceType == null
-      ? `SpreadValueBinding source expression type did not expose bindable property '${targetTypes.spreadTargetProperty}'.`
-      : null;
+      : target.valueChannel?.admittedSourceValueType ?? null;
     const sourceTypeOpenReason = sourceInfo.sourceTypeHint != null
       ? null
       : sourceEvaluation?.kind === CheckerExpressionTypeEvaluationResultKind.Open
         ? sourceEvaluation.summary
-        : spreadSourceTypeOpenReason;
+        : null;
     const sourceTypeOpenKind = sourceInfo.sourceTypeHint != null
       ? null
       : sourceEvaluation?.kind === CheckerExpressionTypeEvaluationResultKind.Open
         ? sourceEvaluation.openKind
-        : spreadSourceTypeOpenReason != null
-          ? CheckerExpressionTypeOpenKind.MissingMember
-          : null;
+        : null;
     const sourceAssignmentValueType = needsSourceWriteCapability
       ? sourceInfo.sourceAssignmentValueTypeHint !== undefined
         ? sourceInfo.sourceAssignmentValueTypeHint
@@ -1329,6 +1433,8 @@ class BindingDataFlowSourceProjector {
       sourceScope: expressionSite?.kind === RuntimeBindingSourceExpressionProjectionKind.Context
         ? expressionSite.scope
         : null,
+      realization,
+      sourceExpressionType: evaluatedSourceType,
       sourceType,
       sourceTypeOpenReason,
       sourceTypeOpenKind,
@@ -1409,21 +1515,6 @@ class BindingDataFlowTypeAccess implements BindingDataFlowAssignabilityTypeAcces
     );
   }
 
-  memberType(
-    reference: CheckerTypeReference | null,
-    propertyName: string,
-  ): CheckerTypeReference | null {
-    const shape = this.readTypeShape(reference);
-    if (shape == null || reference == null) {
-      return null;
-    }
-    return this.shapeAccess.memberValueType(
-      shape,
-      propertyName,
-      `${reference.productHandle ?? reference.semanticKey ?? 'open'}:member:${propertyName}`,
-    )?.toReference() ?? null;
-  }
-
   memberWriteAccess(
     ownerType: CheckerTypeShape,
     memberName: string,
@@ -1481,11 +1572,12 @@ type RuntimeBindingDataFlowLifecycle = {
 function dataFlowLifecycleForBinding(
   binding: RuntimeDataFlowBinding,
   expressionResourcePlan: RuntimeExpressionResourcePlan,
+  sourceOnly: boolean,
 ): RuntimeBindingDataFlowLifecycle {
   const sourceEvaluationReachability = expressionResourcePlan.readSourceEvaluationReachability(
     binding.productHandle,
   );
-  if (isRuntimeSourceOnlyDataFlowBinding(binding)) {
+  if (sourceOnly) {
     return {
       direction: RuntimeBindingDataFlowDirection.SourceRead,
       sourceEvaluationKind: binding instanceof ListenerBinding || binding instanceof StateDispatchBinding
@@ -1538,19 +1630,36 @@ function dataFlowTargetsForBinding(
   sourceOperations: readonly RuntimeBindingSourceOperation[],
   valueChannels: readonly RuntimeBindingValueChannel[],
 ): readonly DataFlowTarget[] {
-  if (binding instanceof SpreadValueBinding && targetAccesses.length > 0) {
-    return targetAccesses.map((targetAccess, index) => ({
-      localSuffix: `:${index}:${targetAccess.targetProperty}`,
-      targetAccess,
+  if (binding instanceof SpreadValueBinding) {
+    const sourceRead: DataFlowTarget = {
+      localSuffix: ':source-read',
+      sourceOnly: true,
+      targetAccess: null,
       targetOperation: null,
       sourceOperation: null,
-      valueChannel: valueChannels.find((candidate) =>
-        candidate.targetAccess?.productHandle === targetAccess.productHandle
-      ) ?? null,
-    }));
+      valueChannel: null,
+    };
+    return [sourceRead, ...valueChannels.map((valueChannel) => {
+      const targetIndex = targetAccesses.findIndex((candidate) =>
+        candidate.productHandle === valueChannel.targetAccess?.productHandle
+      );
+      const targetAccess = targetAccesses[targetIndex] ?? null;
+      if (targetAccess == null || targetIndex < 0) {
+        throw new Error(`Spread value channel '${valueChannel.productHandle}' did not retain its target access.`);
+      }
+      return {
+        localSuffix: `:spread-target:${targetIndex}:${targetAccess.targetProperty}`,
+        sourceOnly: false,
+        targetAccess,
+        targetOperation: null,
+        sourceOperation: null,
+        valueChannel,
+      };
+    })];
   }
   return [{
     localSuffix: '',
+    sourceOnly: isRuntimeSourceOnlyDataFlowBinding(binding),
     targetAccess: targetAccesses[0] ?? null,
     targetOperation: targetOperations[0] ?? null,
     sourceOperation: sourceOperations[0] ?? null,

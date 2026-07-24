@@ -19,7 +19,6 @@ import { TemplateProductDetails } from '../template/product-details.js';
 import {
   PropertyBinding,
   RuntimeBindingTargetKind,
-  SpreadValueBinding,
   type RuntimeBinding,
   type RuntimeBindingTargetAccess,
   type RuntimeBindingTargetOperation,
@@ -53,6 +52,7 @@ import {
 import {
   CheckerTypeShapeAccess,
   readCheckerTypeShape,
+  type CheckerTypeShapeRuntimeObjectMemberAccess,
 } from '../type-system/checker-type-shape-access.js';
 import {
   checkerPrimitiveType,
@@ -393,19 +393,19 @@ export class RuntimeBindingValueChannelTypeSupport {
     return carrier == null ? [] : booleanLiteralValuesForType(carrier.type) ?? [];
   }
 
-  memberType(
+  runtimeObjectMemberAccess(
     reference: CheckerTypeReference | null,
     propertyName: string,
-  ): CheckerTypeReference | null {
+  ): CheckerTypeShapeRuntimeObjectMemberAccess | null {
     const shape = this.readTypeShape(reference);
     if (shape == null) {
       return null;
     }
-    return this.typeAccess.memberValueAccess(
+    return this.typeAccess.runtimeObjectMemberValueAccess(
       shape,
       propertyName,
-      `${reference?.productHandle ?? reference?.semanticKey ?? 'runtime-binding'}:member:${propertyName}`,
-    ).valueReference;
+      `${reference?.productHandle ?? reference?.semanticKey ?? 'runtime-binding'}:runtime-object-member:${propertyName}`,
+    );
   }
 
   checkedSourceShape(
@@ -823,7 +823,7 @@ export class RuntimeBindingValueChannelDraftSupport {
     if (promiseValueBinding == null) {
       return null;
     }
-    const promiseType = this.sourceTypeForBinding(promiseValueBinding, context, 'value');
+    const promiseType = this.sourceTypeForBinding(promiseValueBinding, context);
     return this.types.awaitedTypeReference(
       `${local}:promise-fulfilled-value`,
       promiseType,
@@ -834,7 +834,6 @@ export class RuntimeBindingValueChannelDraftSupport {
   sourceTypeForBinding(
     binding: RuntimeValueChannelBinding,
     context: BindingValueChannelDraftContext,
-    targetProperty: string | null = null,
   ): CheckerTypeReference | null {
     const ast = runtimeBindingSourceExpression(this.typeProjector.publication, binding);
     if (ast == null) {
@@ -855,22 +854,18 @@ export class RuntimeBindingValueChannelDraftSupport {
     if (evaluation.kind !== CheckerExpressionTypeEvaluationResultKind.Type) {
       return null;
     }
-    if (binding instanceof SpreadValueBinding && targetProperty != null) {
-      return this.types.memberType(evaluation.typeReference, targetProperty);
-    }
     return evaluation.typeReference;
   }
 
   sourceTypeReaderForBinding(
     binding: RuntimeValueChannelBinding,
     context: BindingValueChannelDraftContext,
-    targetProperty: string | null = null,
   ): BindingSourceTypeReader {
     let evaluated = false;
     let sourceType: CheckerTypeReference | null = null;
     return () => {
       if (!evaluated) {
-        sourceType = this.sourceTypeForBinding(binding, context, targetProperty);
+        sourceType = this.sourceTypeForBinding(binding, context);
         evaluated = true;
       }
       return sourceType;

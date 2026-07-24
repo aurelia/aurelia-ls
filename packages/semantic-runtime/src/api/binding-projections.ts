@@ -5,6 +5,7 @@ import {
   type RuntimeBindingDataFlow,
   type RuntimeBindingDataFlowValueConverterWritebackStage,
   type RuntimeBindingObservedDependency,
+  RuntimeBindingRealization,
 } from '../observation/runtime-binding-observation.js';
 import {
   runtimeBindingPrimitiveValueApiDisplay,
@@ -385,6 +386,13 @@ export function readBindingValueChannelRows(
         nullishDefaultState: valueChannel.nullishDefaultState,
         rawTargetPropertyType: valueChannel.rawTargetPropertyType?.display ?? null,
         runtimeValueType: valueChannel.runtimeValueType?.display ?? null,
+        realization: valueChannel.realization,
+        admittedSourceValueType: valueChannel.admittedSourceValueType?.display ?? null,
+        admittedSourceMemberKind: valueChannel.admittedSourceMemberKind,
+        admittedSourceMemberSource: describeAddress(
+          store,
+          valueChannel.admittedSourceMemberSourceAddressHandle,
+        ),
         valueDomain: valueChannel.valueDomain,
         primitiveValueDomain: valueChannel.primitiveValueDomain,
         primitiveValueDomainKinds: runtimeBindingPrimitiveValueDomainKinds(valueChannel.primitiveValueDomain),
@@ -404,6 +412,8 @@ export function readBindingValueChannelRows(
             sourceOperationProductHandle: valueChannel.sourceOperation?.productHandle ?? null,
             rawTargetPropertyTypeProductHandle: valueChannel.rawTargetPropertyType?.productHandle ?? null,
             runtimeValueTypeProductHandle: valueChannel.runtimeValueType?.productHandle ?? null,
+            admittedSourceValueTypeProductHandle: valueChannel.admittedSourceValueType?.productHandle ?? null,
+            admittedSourceMemberSourceAddressHandle: valueChannel.admittedSourceMemberSourceAddressHandle,
             sourceAddressHandle: valueChannel.sourceAddressHandle,
           },
         } : {}),
@@ -524,6 +534,7 @@ function summarizeBindingValueChannels(
       row.targetKind ?? '',
       row.targetProperty ?? '',
       row.targetMutationKind,
+      row.realization,
       sortedValues(row.observerCouplings).join(','),
     ].join('|');
     let group = groups.get(key);
@@ -533,6 +544,7 @@ function summarizeBindingValueChannels(
         targetKind: row.targetKind,
         targetProperty: row.targetProperty,
         targetMutationKind: row.targetMutationKind,
+        realization: row.realization,
         count: 0,
         bindingKinds: new Set(),
         authorities: new Set(),
@@ -566,7 +578,9 @@ function summarizeBindingValueChannels(
     if (row.usesCustomMatcher) {
       group.customMatcherCount += 1;
     }
-    if (row.openReason != null || row.openReasonKinds.length > 0) {
+    if (row.realization === RuntimeBindingRealization.Open
+      || row.openReason != null
+      || row.openReasonKinds.length > 0) {
       group.openCount += 1;
     }
     for (const reason of row.openReasonKinds) {
@@ -579,6 +593,7 @@ function summarizeBindingValueChannels(
       targetKind: group.targetKind,
       targetProperty: group.targetProperty,
       targetMutationKind: group.targetMutationKind,
+      realization: group.realization,
       count: group.count,
       bindingKinds: sortedValues(group.bindingKinds),
       authorities: sortedValues(group.authorities),
@@ -594,8 +609,8 @@ function summarizeBindingValueChannels(
       openReasonKinds: sortedValues(group.openReasonKinds),
     }))
     .sort((left, right) =>
-      `${left.channelKind}:${left.targetKind ?? ''}:${left.targetProperty ?? ''}:${left.targetMutationKind}:${left.observerCouplings.join(',')}`
-        .localeCompare(`${right.channelKind}:${right.targetKind ?? ''}:${right.targetProperty ?? ''}:${right.targetMutationKind}:${right.observerCouplings.join(',')}`)
+      `${left.channelKind}:${left.targetKind ?? ''}:${left.targetProperty ?? ''}:${left.targetMutationKind}:${left.realization}:${left.observerCouplings.join(',')}`
+        .localeCompare(`${right.channelKind}:${right.targetKind ?? ''}:${right.targetProperty ?? ''}:${right.targetMutationKind}:${right.realization}:${right.observerCouplings.join(',')}`)
     );
 }
 
@@ -643,6 +658,7 @@ interface BindingValueChannelSummaryAccumulator {
   readonly targetKind: SemanticBindingValueChannelSummaryRow['targetKind'];
   readonly targetProperty: string | null;
   readonly targetMutationKind: SemanticBindingValueChannelSummaryRow['targetMutationKind'];
+  readonly realization: SemanticBindingValueChannelSummaryRow['realization'];
   count: number;
   readonly bindingKinds: Set<SemanticBindingValueChannelSummaryRow['bindingKinds'][number]>;
   readonly authorities: Set<SemanticBindingValueChannelSummaryRow['authorities'][number]>;
@@ -691,6 +707,7 @@ function bindingDataFlowSummaryGroups(
 function bindingDataFlowSummaryKey(row: SemanticBindingDataFlowRow): string {
   return [
     row.direction,
+    row.realization,
     row.sourceEvaluationKind,
     row.sourceEvaluationReachability,
     row.targetMutationKind,
@@ -706,6 +723,7 @@ function bindingDataFlowSummaryAccumulator(
 ): BindingDataFlowSummaryAccumulator {
   return {
     direction: row.direction,
+    realization: row.realization,
     sourceEvaluationKind: row.sourceEvaluationKind,
     sourceEvaluationReachability: row.sourceEvaluationReachability,
     targetMutationKind: row.targetMutationKind,
@@ -789,6 +807,7 @@ function bindingDataFlowSummaryRow(
 ): SemanticBindingDataFlowSummaryRow {
   return {
     direction: group.direction,
+    realization: group.realization,
     sourceEvaluationKind: group.sourceEvaluationKind,
     sourceEvaluationReachability: group.sourceEvaluationReachability,
     targetMutationKind: group.targetMutationKind,
@@ -824,7 +843,7 @@ function bindingDataFlowSummaryRow(
 }
 
 function bindingDataFlowSummarySortKey(row: SemanticBindingDataFlowSummaryRow): string {
-  return `${row.direction}:${row.sourceEvaluationKind}:${row.sourceEvaluationReachability}:${row.targetMutationKind}:${row.valueChannelKind ?? ''}:${row.targetKind ?? ''}:${row.targetProperty ?? ''}:${row.sourceKind}`;
+  return `${row.direction}:${row.realization}:${row.sourceEvaluationKind}:${row.sourceEvaluationReachability}:${row.targetMutationKind}:${row.valueChannelKind ?? ''}:${row.targetKind ?? ''}:${row.targetProperty ?? ''}:${row.sourceKind}`;
 }
 
 function summarizeBindingDataFlowIssues(
@@ -970,6 +989,7 @@ function bindingDataFlowIssueKinds(
 
 interface BindingDataFlowSummaryAccumulator {
   readonly direction: SemanticBindingDataFlowSummaryRow['direction'];
+  readonly realization: SemanticBindingDataFlowSummaryRow['realization'];
   readonly sourceEvaluationKind: SemanticBindingDataFlowSummaryRow['sourceEvaluationKind'];
   readonly sourceEvaluationReachability: SemanticBindingDataFlowSummaryRow['sourceEvaluationReachability'];
   readonly targetMutationKind: SemanticBindingDataFlowSummaryRow['targetMutationKind'];
@@ -1030,6 +1050,7 @@ function summarizeBindingObservedDependencies(
     const key = [
       row.dependencyKind,
       row.bindingKind,
+      row.realization,
       row.observedMemberSourceState,
       row.observedMemberKind ?? '',
       row.sourceRootName ?? '',
@@ -1039,6 +1060,7 @@ function summarizeBindingObservedDependencies(
       group = {
         dependencyKind: row.dependencyKind,
         bindingKind: row.bindingKind,
+        realization: row.realization,
         observedMemberSourceState: row.observedMemberSourceState,
         observedMemberKind: row.observedMemberKind,
         sourceRootName: row.sourceRootName,
@@ -1078,6 +1100,7 @@ function summarizeBindingObservedDependencies(
     .map((group): SemanticBindingObservedDependencySummaryRow => ({
       dependencyKind: group.dependencyKind,
       bindingKind: group.bindingKind,
+      realization: group.realization,
       observedMemberSourceState: group.observedMemberSourceState,
       observedMemberKind: group.observedMemberKind,
       sourceRootName: group.sourceRootName,
@@ -1099,8 +1122,8 @@ function summarizeBindingObservedDependencies(
     }))
     .sort((left, right) =>
       right.count - left.count
-      || `${left.dependencyKind}:${left.bindingKind}:${left.observedMemberSourceState}:${left.observedMemberKind ?? ''}:${left.sourceRootName ?? ''}`
-        .localeCompare(`${right.dependencyKind}:${right.bindingKind}:${right.observedMemberSourceState}:${right.observedMemberKind ?? ''}:${right.sourceRootName ?? ''}`)
+      || `${left.dependencyKind}:${left.bindingKind}:${left.realization}:${left.observedMemberSourceState}:${left.observedMemberKind ?? ''}:${left.sourceRootName ?? ''}`
+        .localeCompare(`${right.dependencyKind}:${right.bindingKind}:${right.realization}:${right.observedMemberSourceState}:${right.observedMemberKind ?? ''}:${right.sourceRootName ?? ''}`)
     );
 }
 
@@ -1155,6 +1178,7 @@ function summarizeBindingObservedDependencyMemberSourceStates(
 interface BindingObservedDependencySummaryAccumulator {
   readonly dependencyKind: SemanticBindingObservedDependencySummaryRow['dependencyKind'];
   readonly bindingKind: SemanticBindingObservedDependencySummaryRow['bindingKind'];
+  readonly realization: SemanticBindingObservedDependencySummaryRow['realization'];
   readonly observedMemberSourceState: SemanticObservedMemberSourceState;
   readonly observedMemberKind: SemanticBindingObservedDependencySummaryRow['observedMemberKind'];
   readonly sourceRootName: string | null;
@@ -1249,6 +1273,7 @@ function bindingObservedDependencySummaryDisplayText(
 function bindingValueChannelClusterLabel(row: SemanticBindingValueChannelSummaryRow): string {
   return [
     row.channelKind,
+    row.realization,
     bindingTargetLabel(row.targetKind, row.targetProperty),
     row.observerCouplings.length === 0 ? 'uncoupled' : row.observerCouplings.join('+'),
   ].join('/');
@@ -1257,6 +1282,7 @@ function bindingValueChannelClusterLabel(row: SemanticBindingValueChannelSummary
 function bindingDataFlowClusterLabel(row: SemanticBindingDataFlowSummaryRow): string {
   return [
     row.direction,
+    row.realization,
     `${row.sourceEvaluationKind}:${row.sourceEvaluationReachability}`,
     row.sourceKind,
     row.valueChannelKind ?? 'no-value-channel',
@@ -1268,6 +1294,7 @@ function bindingObservedDependencyClusterLabel(row: SemanticBindingObservedDepen
   return [
     row.dependencyKind,
     row.bindingKind,
+    row.realization,
     row.observedMemberSourceState,
     row.observedMemberKind ?? 'unknown-member-kind',
     row.sourceRootName ?? 'unknown-root',
@@ -1354,6 +1381,7 @@ function bindingDataFlowRow(
     definitionName,
     bindingKind: dataFlow.binding.bindingKind,
     direction: dataFlow.direction,
+    realization: dataFlow.realization,
     sourceEvaluationKind: dataFlow.sourceEvaluationKind,
     sourceEvaluationReachability: dataFlow.sourceEvaluationReachability,
     targetMutationKind: dataFlow.targetMutationKind,
@@ -1486,6 +1514,7 @@ function bindingObservedDependencyRow(
   return {
     definitionName,
     bindingKind: dependency.binding.bindingKind,
+    realization: dependency.realization,
     dependencyKind: dependency.dependencyKind,
     expressionKind: dependency.expressionKind,
     sourceName: dependency.sourceName,

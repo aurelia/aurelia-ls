@@ -12,6 +12,12 @@ import {
   SpreadIdentityValueConverter,
 } from './spread-card';
 
+class InheritedSpreadState {
+  get title(): string {
+    return 'inherited';
+  }
+}
+
 @customElement({
   name: 'template-spread-capture-semantics-app',
   template,
@@ -58,7 +64,17 @@ export class TemplateSpreadCaptureSemanticsApp {
     title: 'alias-shape',
   };
   nullableSpread: SpreadCardState | null = null;
+  optionalSpread: { title?: string; count: number } = { count: 5 };
+  presentUndefinedSpread: { title: string | undefined } = { title: undefined };
+  unionSpread: { title: string } | { count: number } = { title: 'union' };
+  dynamicSpread: unknown = { tone: 'dynamic' };
+  callableSpread = Object.assign(() => undefined, { title: 'not-an-object' });
+  broadFunctionSpread: Function = () => undefined;
+  broadObjectSpread: Object = { title: 'broad-object' };
+  constructableSpread = InheritedSpreadState;
+  inheritedSpread = new InheritedSpreadState();
   primitiveSpread = 1;
+  noBindableSpread = { title: 'source-only' };
   shellLabel = 'shell';
   capturedValue = 'captured';
   isActive = true;

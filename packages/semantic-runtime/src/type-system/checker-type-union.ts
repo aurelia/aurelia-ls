@@ -49,14 +49,21 @@ export function checkerUnionType(
   const candidate = (checker as TypeCheckerWithUnionFactory).getUnionType;
   return typeof candidate === 'function'
     ? candidate.call(checker, unique)
-    : unique[0]!;
+    : null;
 }
 
 export function checkerUnionTypeOrNever(
   checker: ts.TypeChecker,
   types: readonly ts.Type[],
 ): ts.Type {
-  return checkerUnionType(checker, types) ?? checker.getNeverType();
+  if (types.length === 0) {
+    return checker.getNeverType();
+  }
+  const union = checkerUnionType(checker, types);
+  if (union == null) {
+    throw new Error('The active TypeChecker cannot construct a union for a non-empty type set.');
+  }
+  return union;
 }
 
 export function uniqueCheckerTypes(types: readonly ts.Type[]): readonly ts.Type[] {

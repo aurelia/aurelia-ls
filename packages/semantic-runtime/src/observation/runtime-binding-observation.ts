@@ -180,6 +180,17 @@ export const enum RuntimeBindingDataFlowDirection {
   Open = 'open',
 }
 
+export const enum RuntimeBindingRealization {
+  /** The rendered runtime binding directly owns this channel or data-flow edge. */
+  Direct = 'direct',
+  /** A guarded inner binding is guaranteed whenever source evaluation is reached under the visible source type. */
+  Guaranteed = 'guaranteed',
+  /** A guarded inner binding is created only for some runtime values admitted by the visible source type. */
+  Conditional = 'conditional',
+  /** The visible source type cannot close whether the guarded inner binding is created. */
+  Open = 'open',
+}
+
 /** Runtime `astEvaluate` lifecycle for the binding source expression. */
 export const enum RuntimeBindingSourceEvaluationKind {
   /** Source reads are collected by the binding's active connectable. */
@@ -255,6 +266,7 @@ export type RuntimeBindingDataFlowField =
   | 'expression'
   | 'scope'
   | 'direction'
+  | 'realization'
   | 'sourceEvaluationKind'
   | 'sourceEvaluationReachability'
   | 'targetMutationKind'
@@ -290,6 +302,7 @@ export type RuntimeBindingObservedDependencyField =
   | 'binding'
   | 'dataFlow'
   | 'expression'
+  | 'realization'
   | 'dependencyKind'
   | 'expressionKind'
   | 'sourceName'
@@ -337,6 +350,10 @@ export type RuntimeBindingValueChannelField =
   | 'nullishDefaultState'
   | 'rawTargetPropertyType'
   | 'runtimeValueType'
+  | 'realization'
+  | 'admittedSourceValueType'
+  | 'admittedSourceMemberKind'
+  | 'admittedSourceMemberSource'
   | 'valueDomain'
   | 'primitiveValueDomain'
   | 'isCollection'
@@ -369,6 +386,8 @@ export class RuntimeBindingObservedDependency {
     readonly dataFlowProductHandle: ProductHandle,
     readonly expressionProductHandle: ProductHandle | null,
     readonly bindingScope: BindingScopeReference | null,
+    /** Whether dependency collection is direct or belongs to a guarded runtime-created inner binding. */
+    readonly realization: RuntimeBindingRealization,
     readonly dependencyKind: RuntimeObservedDependencyKind,
     readonly expressionKind: string,
     readonly sourceName: string | null,
@@ -412,6 +431,14 @@ export class RuntimeBindingValueChannel {
     readonly nullishDefaultState: RuntimeNodeObserverConfigFieldState | null,
     readonly rawTargetPropertyType: CheckerTypeReference | null,
     readonly runtimeValueType: CheckerTypeReference | null,
+    /** Whether this channel exists directly or only after a runtime object/member guard succeeds. */
+    readonly realization: RuntimeBindingRealization,
+    /** Source member value on the successful guard branch; null for direct channels. */
+    readonly admittedSourceValueType: CheckerTypeReference | null,
+    /** Member kind shared by every admitted runtime lane, when one can be proven. */
+    readonly admittedSourceMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null,
+    /** Declaration source shared by every admitted runtime lane, when one can be proven. */
+    readonly admittedSourceMemberSourceAddressHandle: AddressHandle | null,
     readonly valueDomain: readonly string[],
     readonly primitiveValueDomain: readonly RuntimeBindingPrimitiveValue[],
     readonly isCollection: boolean | null,
@@ -470,6 +497,8 @@ export class RuntimeBindingDataFlow {
     readonly expressionProductHandle: ProductHandle | null,
     readonly bindingScope: BindingScopeReference | null,
     readonly direction: RuntimeBindingDataFlowDirection,
+    /** Whether this edge is direct or depends on runtime creation of a guarded inner binding. */
+    readonly realization: RuntimeBindingRealization,
     readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind,
     /** Whether expression-resource `astBind(...)` completed far enough for source evaluation to run. */
     readonly sourceEvaluationReachability: RuntimeExpressionResourcePhaseReachability,

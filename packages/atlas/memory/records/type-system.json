@@ -468,6 +468,7 @@
         "Lazy cursor member projection should ask the checker for the owner's non-nullable value lane while preserving the original nullable owner identity and display. Diagnostic policy consumes that member result directly; do not reopen union constituent property walks in API answer code.",
         "Prefer checker-backed union projection from expression-type-support before falling back to synthetic common-member unions when all alternatives came from one checker epoch. This keeps nullable collection, member, and call surfaces available to repeat, source-value, overlay, and diagnostic consumers.",
         "Use memberValueAccess when diagnostics, expression reads, or repairs need to distinguish missing members from checker-visible members whose value type could not be projected.",
+        "Use runtimeObjectMemberValueAccess when framework behavior first guards a value with object admission plus `key in value`. It rejects impossible union lanes and default-library broad function interfaces, marks optional/indexed lanes conditional, and keeps default-library Object, weak lanes, and checker-missing structural object properties open. Directly synthesized object literals may prove key absence. The result returns only the successful branch's member value type and retains an exact member source only when every admitted lane proves the same checker symbol. Match broad runtime categories through default-library declaration provenance, not names, and do not emulate the relation with ordinary member access or silently select one type when a checker-backed union cannot be created.",
         "Use memberWriteAccess when observation or a future policy layer needs TypeChecker writability; downstream code should map the result into framework policy instead of reopening checker symbols locally.",
         "Use checker-node-helpers.ts for low-level TypeChecker property-symbol and symbol-value reads that are intentionally below projected type-shape products. Repeated `getPropertyOfType(type, name) ?? getPropertyOfType(getApparentType(type), name)`, single declared-property probes in feature code, or first-declaration `getTypeOfSymbolAtLocation(...)` patterns are split-brain canaries unless a framework lookup deliberately needs a narrower path.",
         "Recent checker-helper reuse moved observer-locator, template diagnostics, resource bindable/watch convergence, router route-parameter reads, controller creation, and configuration registry-shape property probes through `checkerPropertySymbol(...)`; remaining direct `getPropertyOfType` rows are intentionally concentrated in type-system internals.",
@@ -500,6 +501,18 @@
           "filePath": "packages/semantic-runtime/src/type-system/checker-type-shape-access.ts",
           "symbolName": "CheckerTypeShapeAccess.nonNullishTypeShape",
           "summary": "Shared projected type-shape non-nullish lane for maybe-nullish member/keyed/call reads."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-related-types.ts",
+          "symbolName": "checkerRuntimeObjectMemberAdmission",
+          "summary": "Shared checker relation for framework object plus property-presence guards over union, optional, indexed, weak, and impossible source types."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-type-shape-access.ts",
+          "symbolName": "CheckerTypeShapeAccess.runtimeObjectMemberValueAccess",
+          "summary": "Projected type-shape bridge for guarded runtime member admission and successful-branch value type."
         },
         {
           "kind": "source",
@@ -550,7 +563,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-12"
+      "updatedAt": "2026-07-24"
     },
     {
       "id": "reuse:checker-backed-union-projection",

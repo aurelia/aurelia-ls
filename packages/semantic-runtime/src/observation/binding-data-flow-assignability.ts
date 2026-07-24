@@ -47,6 +47,7 @@ import {
 import {
   RuntimeBindingDataFlowDirection,
   RuntimeBindingDataFlowTypeMismatchKind,
+  RuntimeBindingRealization,
   type RuntimeBindingPrimitiveValue,
   type RuntimeBindingValueChannel,
   RuntimeBindingValueChannelCouplingKind,
@@ -138,6 +139,12 @@ export class BindingDataFlowAssignabilityEvaluator {
     targetType: CheckerTypeReference | null,
     valueChannel: RuntimeBindingValueChannel | null,
   ): boolean | null {
+    if (
+      valueChannel?.realization === RuntimeBindingRealization.Open
+      && this.typeAccess.readTypeShape(sourceType)?.shapeKind === CheckerTypeShapeKind.Unknown
+    ) {
+      return null;
+    }
     const observerSync = this.observerSourceToTargetRuntimeAcceptance(sourceType, targetType, valueChannel);
     if (observerSync != null) {
       return observerSync;

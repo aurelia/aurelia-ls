@@ -78,7 +78,7 @@ import {
 import {
   RuntimeBindingValueChannelDraftMaterializer,
   type BindingValueChannelDraftContext,
-  type RuntimeBindingValueChannelDraft,
+  type RuntimeBindingValueChannelDraftResult,
   type RuntimeValueChannelBinding,
 } from './binding-value-channel-drafts.js';
 
@@ -147,7 +147,7 @@ interface BindingValueChannelOpenSeamEmission {
   readonly openSeams: readonly OpenSeam[];
 }
 
-type ValueChannelDraft = RuntimeBindingValueChannelDraft;
+type ValueChannelDraftResult = RuntimeBindingValueChannelDraftResult;
 
 type BindingValueChannelContext = BindingValueChannelDraftContext;
 
@@ -233,9 +233,18 @@ export class RuntimeBindingValueChannelMaterializer {
     const targetOperations = input.controllerBind.readTargetOperationsForBinding(binding.productHandle);
     const sourceOperations = input.controllerBind.readSourceOperationsForBinding(binding.productHandle);
     const targets = valueChannelTargetsForBinding(binding, targetAccesses, targetOperations, sourceOperations);
-    return targets.map((target) =>
-      this.recordsForValueChannel(input, channelDrafts, source, context, binding, bindingIndex, target)
-    );
+    return targets.flatMap((target) => {
+      const emission = this.recordsForValueChannel(
+        input,
+        channelDrafts,
+        source,
+        context,
+        binding,
+        bindingIndex,
+        target,
+      );
+      return emission == null ? [] : [emission];
+    });
   }
 
   private recordsForValueChannel(
@@ -246,9 +255,9 @@ export class RuntimeBindingValueChannelMaterializer {
     binding: RuntimeValueChannelBinding,
     bindingIndex: number,
     target: ValueChannelTarget,
-  ): BindingValueChannelRecordEmission {
+  ): BindingValueChannelRecordEmission | null {
     const local = `${input.localKey}:binding:${bindingIndex}:${binding.productHandle}:value-channel${target.localSuffix}`;
-    const draft = channelDrafts.valueChannelDraftForBinding(
+    const result = channelDrafts.valueChannelDraftForBinding(
       local,
       binding,
       target.targetAccess,
@@ -256,7 +265,10 @@ export class RuntimeBindingValueChannelMaterializer {
       target.sourceOperation,
       context,
     );
-    const valueChannel = this.valueChannelForTarget(local, binding, target, draft);
+    if (result == null) {
+      return null;
+    }
+    const valueChannel = this.valueChannelForTarget(local, binding, target, result);
     const claim = this.valueChannelClaim(local, binding, valueChannel, source);
     const open = this.openSeamForValueChannel(local, valueChannel, binding, source);
     return {
@@ -308,8 +320,9 @@ export class RuntimeBindingValueChannelMaterializer {
     local: string,
     binding: RuntimeValueChannelBinding,
     target: ValueChannelTarget,
-    draft: ValueChannelDraft,
+    result: ValueChannelDraftResult,
   ): RuntimeBindingValueChannel {
+    const draft = result.draft;
     const targetMutationKind = valueChannelTargetMutationKind(target);
     const nullishDefault = valueAttributeNullishDefault(target.targetAccess);
     return new RuntimeBindingValueChannel(
@@ -326,6 +339,10 @@ export class RuntimeBindingValueChannelMaterializer {
       nullishDefault.state,
       target.targetAccess?.propertyType ?? null,
       draft.runtimeValueType,
+      result.realization,
+      result.admittedSourceValueType,
+      result.admittedSourceMemberKind,
+      result.admittedSourceMemberSourceAddressHandle,
       draft.valueDomain,
       draft.primitiveValueDomain ?? [],
       draft.isCollection,
@@ -452,7 +469,7 @@ function valueChannelTargetsForBinding(
   targetOperations: readonly RuntimeBindingTargetOperation[],
   sourceOperations: readonly RuntimeBindingSourceOperation[],
 ): readonly ValueChannelTarget[] {
-  if (binding instanceof SpreadValueBinding && targetAccesses.length > 0) {
+  if (binding instanceof SpreadValueBinding) {
     return targetAccesses.map((targetAccess, index) => ({
       localSuffix: `:${index}:${targetAccess.targetProperty}`,
       targetAccess,

@@ -1687,9 +1687,9 @@ Treating every non-property binding as to-view-only loses real ref writeback and
 instead of blindly treating the raw DOM property as the transported value. Use `BindingValueChannelSummary` first when
 an MCP/LSP caller needs a low-token explanation of which value-channel and observer-coupling mechanisms are present
 before drilling into exact authored rows. The summary groups by channel kind, target kind/property, and
-`observerCouplings`, and also returns coupling-count rows so form/control answers can say, for example, that the app is
-using select option-list mutation observation, select array mutation, checked collection mutation, or custom matcher
-comparison without listing every binding. Summary set fields are capped and paired with `*Count` fields where large apps
+realization plus `observerCouplings`, and also returns coupling-count rows so form/control answers can say, for example,
+that the app is using select option-list mutation observation, select array mutation, checked collection mutation, or
+custom matcher comparison without listing every binding. Summary set fields are capped and paired with `*Count` fields where large apps
 can have more definitions, target properties, or value types than the compact first read should print; `page.size: 0`
 returns only the non-paged coupling rollup. Detailed rows also carry `usesCustomMatcher` so checked/select channels can
 report that Aurelia runtime comparison is delegated to an app-provided matcher even though the matcher function body
@@ -1727,7 +1727,13 @@ their toggled class names, `style.bind` and style interpolation rule channels, a
 targeted CSS property. Text interpolation through `ContentBinding` reports `text-content` channels backed by
 `text-content-set` target operations. `SpreadValueBinding` reports the target/value shape of its per-bindable inner
 `PropertyBinding` fan-out when the target component's bindable keys are statically known, instead of pretending that
-`...$bindables` is a static DOM property. `SpreadBinding`-owned inner bindings created from captured `...$attrs` are
+`...$bindables` is a static DOM property. Its target-access rows remain the potential candidate set. A value-channel row
+exists only for a key that can pass Aurelia's runtime object/property-presence guards; `realization` distinguishes
+guaranteed, conditional, and open admission, while `admittedSourceValueType` is the member type on the successful guard
+branch. `admittedSourceMemberKind` and `admittedSourceMemberSource` preserve an exact declaration only when every
+admitted lane agrees. Provably impossible keys do not masquerade as inner bindings; a checker-missing property on a
+structural object type remains open because extra runtime properties are valid TypeScript values.
+`SpreadBinding`-owned inner bindings created from captured `...$attrs` are
 reported through the same target-access, target-operation, value-channel, and data-flow projections as ordinary
 bindings, while their ownership remains a binding-to-binding runtime claim under the hood.
 Binding-family public rows are resource-local by authored source ownership, not by whichever recursive aggregate render
@@ -1764,7 +1770,13 @@ suppressed target write does not erase source evaluation or the remaining target
 independent. This is the compact pressure signal for
 two-way form controls, setter-backed state, class/style presentation bindings, template-controller value bindings, and
 future validation/write diagnostics. Direct spread value bindings appear here as source-to-target flow from each spread
-object property into the corresponding target bindable, such as `featuredCardBindings.productId -> productId`.
+object property admitted by its value channel into the corresponding target bindable, such as
+`featuredCardBindings.productId -> productId`. Their `realization` field preserves whether the runtime inner binding is
+guaranteed, conditional, or open. A targetless `source-read` flow is always present for the authored outer expression;
+member flows represent only the generated inner bindings that can pass the runtime object and `key in source` guards.
+Observed-dependency answers use the same outer/member split. Generated member rows may carry a checker declaration
+route, but their template source remains the authored outer spread expression because no generated inner member token
+exists. Structurally open generated reads remain source-open rather than borrowing a declaration from one possible lane.
 For target-to-source edges, `targetToSourceValueType` is the final observer value after Aurelia's outer-to-inner
 `fromView` chain. `valueConverterWritebackStages` retains each target-specific checker input/output and its projection
 state, then links it to the existing runtime converter application for origin, phase order/reachability, exact

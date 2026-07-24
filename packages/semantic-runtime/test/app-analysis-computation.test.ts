@@ -16,6 +16,7 @@ import { SourceFileAddress } from '../src/kernel/address.js';
 import { EvidenceRecord } from '../src/kernel/evidence.js';
 import { ProvenanceRecord } from '../src/kernel/provenance.js';
 import { ObservationProductDetails } from '../src/observation/product-details.js';
+import { RuntimeBindingRealization } from '../src/observation/runtime-binding-observation.js';
 import { TemplateProductDetails } from '../src/template/product-details.js';
 import { StaticProjectEvaluationAcquisitionKind } from '../src/evaluation/project-evaluation.js';
 import { readTypeSystemProjectDiagnostics } from '../src/type-system/diagnostics.js';
@@ -345,6 +346,51 @@ describe('app analysis computation', () => {
     expect(second.emission.profile.typeSystemAcquisition.kind).toBe(TypeSystemProjectAcquisitionKind.Reused);
     expect(secondOverlay?.text).toContain('item.label');
     expect(secondOverlay?.text).not.toContain('item.missingLabel');
+  }, 60_000);
+
+  test('keeps spread-member flow identity stable when an earlier candidate closes from open', async () => {
+    const fixtureRoot = pressureFixtureRoot('template-spread-capture-semantics');
+    const sourceFileName = path.join(fixtureRoot, 'src/template-spread-capture-semantics-app.ts');
+    const originalSource = readFileSync(sourceFileName, 'utf8');
+    const sourceWithoutOptionalTitle = originalSource.replace(
+      'optionalSpread: { title?: string; count: number }',
+      'optionalSpread: { count: number }',
+    );
+    expect(sourceWithoutOptionalTitle).not.toBe(originalSource);
+
+    const sourceOverlay = new MutableSourceOverlay();
+    sourceOverlay.write(sourceFileName, sourceWithoutOptionalTitle);
+    const projectInputAuthority = new SemanticRuntimeProjectInputAuthority(
+      new NodeSemanticRuntimeProjectInputHost(sourceOverlay),
+    );
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: fixtureRoot,
+      storeKey: 'contract:spread-member-flow-stable-candidate-index',
+      projectInputAuthority,
+    });
+    const first = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const spreadDataFlow = (app: typeof first, sourceName: string) =>
+      app.emission.templates.resources
+        .flatMap((resource) => resource.runtimeAnalysis.bindingDataFlow.dataFlows)
+        .find((flow) => flow.binding.bindingKind === 'spread-value' && flow.sourceName === sourceName)
+      ?? null;
+    const firstCountFlow = spreadDataFlow(first, 'optionalSpread.count');
+    const firstTitleFlow = spreadDataFlow(first, 'optionalSpread.title');
+    expect(firstCountFlow).not.toBeNull();
+    expect(firstTitleFlow?.realization).toBe(RuntimeBindingRealization.Open);
+
+    sourceOverlay.write(sourceFileName, originalSource);
+    projectInputAuthority.advance();
+    const second = await runtime.openApp({
+      projectKey: first.project.projectKey,
+      analysisDepth: 'binding-observation',
+    });
+    const secondCountFlow = spreadDataFlow(second, 'optionalSpread.count');
+    const secondTitleFlow = spreadDataFlow(second, 'optionalSpread.title');
+    expect(secondCountFlow).not.toBeNull();
+    expect(secondTitleFlow?.realization).toBe(RuntimeBindingRealization.Conditional);
+    expect(secondCountFlow?.productHandle).toBe(firstCountFlow?.productHandle);
+    expect(secondTitleFlow?.productHandle).toBe(firstTitleFlow?.productHandle);
   }, 60_000);
 
   test('retires the reusable checker when explicit app disposal ends its owning epoch', async () => {

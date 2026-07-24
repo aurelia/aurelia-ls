@@ -217,7 +217,7 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
       this,
       binding instanceof SpreadValueBinding
         ? this.materializer.spreadValueTargetProperties(targetController)
-        : [],
+        : null,
       (propertyBinding) => this.input.expressionResourcePlan.effectivePropertyBindingMode(propertyBinding),
     );
   }
@@ -561,15 +561,15 @@ export class RuntimeControllerBindMaterializer {
 
   spreadValueTargetProperties(
     targetController: RuntimeControllerFrame | null,
-  ): readonly string[] {
+  ): readonly string[] | null {
     const definitionProductHandle = targetController?.definitionProductHandle ?? null;
     if (definitionProductHandle == null) {
-      return [];
+      return null;
     }
     const definition = this.publication.readProductDetail(ResourceProductDetails.Definition, definitionProductHandle);
     return definition instanceof CustomElementDefinition
       ? definition.bindables.map((bindable) => bindable.name)
-      : [];
+      : null;
   }
 
   targetOperationTarget(

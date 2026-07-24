@@ -20,6 +20,7 @@ import { KernelPublicationDecisionKind } from '../src/kernel/publication.js';
 import { KernelStore } from '../src/kernel/store.js';
 import { SourceSpanRole } from '../src/kernel/address.js';
 import { CheckerTypeProjector } from '../src/type-system/checker-projector.js';
+import { CheckerRuntimeObjectMemberAdmissionKind } from '../src/type-system/checker-related-types.js';
 import { CheckerTypeShapeAccess } from '../src/type-system/checker-type-shape-access.js';
 import {
   CheckerDeclarationSourceContext,
@@ -32,6 +33,11 @@ import {
   type TypeSystemProgramSourceCatalog,
 } from '../src/type-system/program-source-authority.js';
 import { TypeSystemProductDetails } from '../src/type-system/product-details.js';
+import {
+  CheckerTypeMemberKind,
+  CheckerTypeProjectionOrigin,
+  CheckerTypeShapeKind,
+} from '../src/type-system/type-shape.js';
 
 describe('checker projection lifecycle', () => {
   test('keeps semantic handles stable while replacing fresh Program carriers atomically', () => {
@@ -206,6 +212,131 @@ describe('checker projection lifecycle', () => {
     expect(store.readProductDetail(TypeSystemProductDetails.TypeShape, root.productHandle)).toBe(root);
   });
 
+  test('classifies runtime object/member guards across unions and weak shapes', () => {
+    const { checker, declaration } = checkerFixture(`
+      class Base {
+        get title(): string {
+          return 'inherited';
+        }
+      }
+      const viewModel = null as unknown as {
+        required: { title: string; count: number };
+        nullable: { title: string } | null;
+        union: { title: string } | { count: number };
+        optional: { title?: string };
+        indexed: { [key: string]: string };
+        primitive: number;
+        dynamic: unknown;
+        callable: (() => void) & { title: string };
+        constructable: typeof Base;
+        inherited: Base;
+        structural: { title: string };
+      };
+    `);
+    const store = new KernelStore('checker-runtime-object-member-admission');
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const run = lifecycle.begin(locus('runtime-object-member-admission'));
+    const projector = new CheckerTypeProjector(store, run);
+    const access = new CheckerTypeShapeAccess(store, projector);
+    const root = projector.ensureProjection({
+      localKey: 'view-model',
+      checker,
+      type: checker.getTypeAtLocation(declaration.name),
+      sourceNode: declaration,
+    });
+    const owner = (name: string) => {
+      const shape = access.memberValueType(root, name, `view-model:${name}`);
+      expect(shape).not.toBeNull();
+      return shape!;
+    };
+    const guarded = (name: string, memberName = 'title') =>
+      access.runtimeObjectMemberValueAccess(owner(name), memberName, `view-model:${name}:${memberName}`);
+
+    const requiredTitle = guarded('required');
+    expect(requiredTitle.admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Guaranteed);
+    expect(requiredTitle.valueType?.display).toBe('string');
+    expect(requiredTitle.memberKind).toBe(CheckerTypeMemberKind.Property);
+    expect(requiredTitle.memberSourceAddressHandle).not.toBeNull();
+    const nullableTitle = guarded('nullable');
+    expect(nullableTitle.admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Conditional);
+    expect(nullableTitle.valueType?.display).toBe('string');
+    expect(nullableTitle.memberKind).toBe(CheckerTypeMemberKind.Property);
+    expect(nullableTitle.memberSourceAddressHandle).not.toBeNull();
+    expect(guarded('union').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Open);
+    expect(guarded('union').valueType?.display).toBe('unknown');
+    expect(guarded('union').memberSourceAddressHandle).toBeNull();
+    expect(guarded('union', 'tone').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Open);
+    expect(guarded('union', 'tone').valueType?.display).toBe('unknown');
+    expect(guarded('optional').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Conditional);
+    expect(guarded('optional', 'tone').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Open);
+    expect(guarded('indexed').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Conditional);
+    expect(guarded('indexed').valueType?.display).toBe('string');
+    expect(guarded('primitive').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Impossible);
+    expect(guarded('dynamic').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Open);
+    expect(guarded('callable').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Impossible);
+    expect(guarded('constructable').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Impossible);
+    expect(guarded('inherited').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Guaranteed);
+    expect(guarded('inherited', 'count').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Open);
+    expect(guarded('structural', 'count').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Open);
+
+    const exactObjectLiteral = projector.ensureSyntheticProjection({
+      localKey: 'exact-object-literal',
+      shapeKind: CheckerTypeShapeKind.Object,
+      display: '{ title: unknown }',
+      members: [{
+        name: 'title',
+        valueType: null,
+        memberKind: CheckerTypeMemberKind.Property,
+      }],
+      origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
+    });
+    expect(access.runtimeObjectMemberValueAccess(
+      exactObjectLiteral,
+      'count',
+      'exact-object-literal:count',
+    ).admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Impossible);
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+  });
+
+  test('classifies broad standard-library function and object interfaces by runtime identity', () => {
+    const { checker, declaration } = checkerFixture(`
+      const viewModel = null as unknown as {
+        broadFunction: Function;
+        callableInterface: CallableFunction;
+        newableInterface: NewableFunction;
+        broadObject: Object;
+      };
+    `, 'checker-standard-library-runtime-identity', projectTypeSystemProgramSources, true);
+    const store = new KernelStore('checker-standard-library-runtime-identity');
+    const lifecycle = new ComputationLifecycleRegistry(store);
+    const run = lifecycle.begin(locus('standard-library-runtime-identity'));
+    const projector = new CheckerTypeProjector(store, run);
+    const access = new CheckerTypeShapeAccess(store, projector);
+    const root = projector.ensureProjection({
+      localKey: 'view-model',
+      checker,
+      type: checker.getTypeAtLocation(declaration.name),
+      sourceNode: declaration,
+    });
+    const guarded = (name: string, memberName = 'title') => {
+      const owner = access.memberValueType(root, name, `view-model:${name}`);
+      expect(owner).not.toBeNull();
+      return access.runtimeObjectMemberValueAccess(
+        owner!,
+        memberName,
+        `view-model:${name}:${memberName}`,
+      );
+    };
+
+    expect(guarded('broadFunction', 'name').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Impossible);
+    expect(guarded('callableInterface', 'name').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Impossible);
+    expect(guarded('newableInterface', 'name').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Impossible);
+    expect(guarded('broadObject').admissionKind).toBe(CheckerRuntimeObjectMemberAdmissionKind.Open);
+
+    expect(run.commit().state).toBe(ComputationCommitState.Committed);
+  });
+
   test('keeps checker declaration sources and derived scopes inside one staged generation', () => {
     const { checker, declaration } = checkerFixture(`
       const viewModel = {
@@ -275,6 +406,7 @@ function checkerFixture(
   sourceText: string,
   projectKey = 'checker-projection-lifecycle',
   programSources: TypeSystemProgramSourceCatalog = projectTypeSystemProgramSources,
+  includeDefaultLibrary = false,
 ): {
   readonly checker: ts.TypeChecker;
   readonly declaration: ts.VariableDeclaration;
@@ -287,13 +419,28 @@ function checkerFixture(
     true,
     ts.ScriptKind.TS,
   );
-  const compilerHost = ts.createCompilerHost({ noLib: true, strict: true });
-  compilerHost.fileExists = (candidate) => path.resolve(candidate) === fileName;
-  compilerHost.readFile = (candidate) => path.resolve(candidate) === fileName ? sourceText : undefined;
-  compilerHost.getSourceFile = (candidate) => path.resolve(candidate) === fileName ? sourceFile : undefined;
+  const options: ts.CompilerOptions = {
+    noLib: !includeDefaultLibrary,
+    strict: true,
+    target: ts.ScriptTarget.ES2022,
+  };
+  const compilerHost = ts.createCompilerHost(options);
+  const fileExists = compilerHost.fileExists.bind(compilerHost);
+  const readFile = compilerHost.readFile.bind(compilerHost);
+  const getSourceFile = compilerHost.getSourceFile.bind(compilerHost);
+  compilerHost.fileExists = (candidate) =>
+    path.resolve(candidate) === fileName || (includeDefaultLibrary && fileExists(candidate));
+  compilerHost.readFile = (candidate) =>
+    path.resolve(candidate) === fileName ? sourceText : includeDefaultLibrary ? readFile(candidate) : undefined;
+  compilerHost.getSourceFile = (candidate, languageVersion, onError, shouldCreateNewSourceFile) =>
+    path.resolve(candidate) === fileName
+      ? sourceFile
+      : includeDefaultLibrary
+        ? getSourceFile(candidate, languageVersion, onError, shouldCreateNewSourceFile)
+        : undefined;
   const program = ts.createProgram({
     rootNames: [fileName],
-    options: { noLib: true, strict: true },
+    options,
     host: compilerHost,
   });
   const statement = sourceFile.statements.find(ts.isVariableStatement);

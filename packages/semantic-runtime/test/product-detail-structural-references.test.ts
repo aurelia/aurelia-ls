@@ -39,6 +39,7 @@ import { ObservationProductDetails } from '../src/observation/product-details.js
 import {
   RuntimeBindingDataFlow,
   RuntimeBindingDataFlowDirection,
+  RuntimeBindingRealization,
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceKind,
   RuntimeBindingObservedDependency,
@@ -259,6 +260,7 @@ describe('product-detail structural references', () => {
       bindingDataFlowProduct,
       expressionParseProduct,
       null,
+      RuntimeBindingRealization.Direct,
       RuntimeObservedDependencyKind.TemplateExpressionRead,
       'AccessMember',
       'value',
@@ -328,6 +330,7 @@ describe('product-detail structural references', () => {
       expressionParseProduct,
       null,
       RuntimeBindingDataFlowDirection.SourceToTarget,
+      RuntimeBindingRealization.Direct,
       RuntimeBindingSourceEvaluationKind.ConnectableRead,
       RuntimeExpressionResourcePhaseReachability.Reached,
       RuntimeBindingValueChannelTargetMutationKind.WritesTarget,

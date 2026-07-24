@@ -28,10 +28,12 @@ import {
   checkerTypeShapeIsPrimitiveDisplay,
 } from './type-shape.js';
 import {
+  CheckerRuntimeObjectMemberAdmissionKind,
   checkerIndexKindForKeyType,
   checkerIterableElementType,
   checkerNumberIndexValueType,
   checkerNullishType,
+  checkerRuntimeObjectMemberAdmission,
   checkerTupleElementType,
 } from './checker-related-types.js';
 import {
@@ -98,6 +100,18 @@ export interface CheckerTypeShapeMemberValueAccess {
   readonly memberSourceAddressHandle: AddressHandle | null;
   /** Source of the accessed value/type; may be a type annotation rather than the member declaration. */
   readonly sourceAddressHandle: AddressHandle | null;
+}
+
+/** Projected value type and certainty for an object/member runtime guard. */
+export class CheckerTypeShapeRuntimeObjectMemberAccess {
+  constructor(
+    readonly admissionKind: CheckerRuntimeObjectMemberAdmissionKind,
+    /** Value type on the branch where the object/member guard succeeds. */
+    readonly valueType: CheckerTypeShape | null,
+    readonly memberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null,
+    /** Declaration source shared by every admitted runtime lane, when one can be proven. */
+    readonly memberSourceAddressHandle: AddressHandle | null,
+  ) {}
 }
 
 export function readCheckerTypeShape(
@@ -235,6 +249,132 @@ export class CheckerTypeShapeAccess {
       null,
       null,
     );
+  }
+
+  /**
+   * Project a member read guarded by `typeof value === 'object' && value !== null && memberName in value`.
+   *
+   * This keeps framework runtime admission separate from ordinary expression member access: rejected union lanes do
+   * not contribute `undefined` or missing-member pressure, while optional/index-signature lanes remain conditional.
+   */
+  runtimeObjectMemberValueAccess(
+    ownerType: CheckerTypeShape,
+    memberName: string,
+    localKey: string,
+  ): CheckerTypeShapeRuntimeObjectMemberAccess {
+    const carrier = ownerType.carrier;
+    if (carrier != null) {
+      const admission = checkerRuntimeObjectMemberAdmission(
+        carrier.checker,
+        carrier.type,
+        memberName,
+        carrier.declarations[0] ?? null,
+      );
+      const memberSource = admission.memberSymbol == null
+        ? null
+        : checkerSymbolMemberSourceProjection(
+            this.projector.publication,
+            carrier.checker,
+            admission.memberSymbol,
+          );
+      const memberValueSource = admission.memberSymbol == null
+        ? null
+        : checkerSymbolMemberValueSourceProjection(
+            this.projector.publication,
+            carrier.checker,
+            admission.memberSymbol,
+          );
+      const valueType = admission.valueType == null
+        ? null
+        : this.projector.ensureProjection({
+          localKey: `${localKey}:guarded-member`,
+          checker: carrier.checker,
+          type: admission.valueType,
+          origin: CheckerTypeProjectionOrigin.TypeChecker,
+          sourceNode: carrier.declarations[0] ?? null,
+          sourceAddressHandle: memberValueSource?.sourceAddressHandle
+            ?? memberSource?.sourceAddressHandle
+            ?? ownerType.sourceAddressHandle,
+          ownerIdentityHandle: ownerType.identityHandle,
+          display: carrier.checker.typeToString(admission.valueType),
+          memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+        } satisfies CheckerTypeProjectionRequest);
+      return new CheckerTypeShapeRuntimeObjectMemberAccess(
+        admission.kind,
+        valueType,
+        memberSource?.memberKind ?? null,
+        memberSource?.sourceAddressHandle ?? null,
+      );
+    }
+
+    const member = ownerType.members.find((candidate) => candidate.name === memberName) ?? null;
+    if (member != null) {
+      return new CheckerTypeShapeRuntimeObjectMemberAccess(
+        member.isOptional
+          ? CheckerRuntimeObjectMemberAdmissionKind.Conditional
+          : CheckerRuntimeObjectMemberAdmissionKind.Guaranteed,
+        this.declaredMemberValueType(member, localKey),
+        member.memberKind,
+        checkerTypeMemberSourceAddressHandle(this.projector.publication, member),
+      );
+    }
+    if (ownerType.indexedValueType != null && checkerIndexedAccessSupportsString(ownerType.indexedAccessKeyKind)) {
+      return new CheckerTypeShapeRuntimeObjectMemberAccess(
+        CheckerRuntimeObjectMemberAdmissionKind.Conditional,
+        this.resolveReference(ownerType.indexedValueType),
+        CheckerTypeMemberKind.IndexSignature,
+        null,
+      );
+    }
+    switch (ownerType.shapeKind) {
+      case CheckerTypeShapeKind.Any:
+        return new CheckerTypeShapeRuntimeObjectMemberAccess(
+          CheckerRuntimeObjectMemberAdmissionKind.Open,
+          ownerType,
+          null,
+          null,
+        );
+      case CheckerTypeShapeKind.Unknown:
+      case CheckerTypeShapeKind.TypeParameter:
+      case CheckerTypeShapeKind.Unclassified:
+      case CheckerTypeShapeKind.Union:
+        return new CheckerTypeShapeRuntimeObjectMemberAccess(
+          CheckerRuntimeObjectMemberAdmissionKind.Open,
+          null,
+          null,
+          null,
+        );
+      case CheckerTypeShapeKind.Object:
+      case CheckerTypeShapeKind.Class:
+      case CheckerTypeShapeKind.Interface:
+      case CheckerTypeShapeKind.Intersection:
+        return new CheckerTypeShapeRuntimeObjectMemberAccess(
+          ownerType.origin === CheckerTypeProjectionOrigin.SyntheticExpressionType
+            ? CheckerRuntimeObjectMemberAdmissionKind.Impossible
+            : CheckerRuntimeObjectMemberAdmissionKind.Open,
+          ownerType.origin === CheckerTypeProjectionOrigin.SyntheticExpressionType
+            ? null
+            : this.projector.ensureSyntheticProjection({
+                localKey: `${localKey}:guarded-member-open`,
+                shapeKind: CheckerTypeShapeKind.Unknown,
+                display: 'unknown',
+                members: [],
+                origin: CheckerTypeProjectionOrigin.Open,
+                sourceAddressHandle: ownerType.sourceAddressHandle,
+              }),
+          null,
+          null,
+        );
+      case CheckerTypeShapeKind.Primitive:
+      case CheckerTypeShapeKind.Function:
+      case CheckerTypeShapeKind.Never:
+        return new CheckerTypeShapeRuntimeObjectMemberAccess(
+          CheckerRuntimeObjectMemberAdmissionKind.Impossible,
+          null,
+          null,
+          null,
+        );
+    }
   }
 
   /** Projects the non-nullish lane of a checker-backed type shape for Aurelia non-strict access/call semantics. */

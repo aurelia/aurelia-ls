@@ -1367,6 +1367,7 @@
         "Generic value-channel publication excludes i18n TranslationBinding products. Translation bindings remain expression-visible for their own lifecycle/source-expression lane, but i18n target writes are not accessor/observer value channels.",
         "Keep draft/type-domain helpers separate from product publication; publication should not rediscover template/node/value-site facts.",
         "RuntimeBindingValueChannelDraftFrame is the per-binding read epoch: it caches the lazy source-type reader and owns source-operation, direct target-operation, target-access, rejected-target-access, and observer-specific handoff decisions before select/checked/direct collaborators take over.",
+        "For SpreadValueBinding, target-access products are the potential bindable-key set and value channels are the runtime-admitted set. Preserve null target resolution separately from a closed empty bindable set: a resolved component with no bindables has zero channels, not an open `$bindables` channel. Spend CheckerTypeShapeAccess.runtimeObjectMemberValueAccess once in the draft frame, omit impossible channels, and retain guaranteed/conditional/open realization plus the successful-branch member type and exact common member source. Data flow and observed dependencies must consume that result instead of reopening the union/member relation through ordinary member access.",
         "Value-channel source-type reads must spend RuntimeBindingSourceExpressionContextProjector before invoking CheckerExpressionTypeEvaluator. This keeps select/checked/template-controller channel facts aligned with binding data-flow and source-value consumers for binding-behavior source scopes, recursive render-context scopes, and rendering-controller strict mode.",
         "Event-handler invocation value channels mirror framework ListenerBinding: when the source expression evaluates to a function, Aurelia invokes it with the DOM event. Handler-reference return typing should spend the shared checker signature runtime-argument substrate plus the `dom-node-type.ts` event-map vocabulary used by `$event` scopes and overlay helpers, not first-signature callReturnType metadata.",
         "Matcher boolean-return checks mirror select/checked observer calls: framework observers invoke matchers with two comparison values. Data-flow source-to-target acceptance for custom-matcher-function channels should spend shared signature runtime-argument narrowing with two runtime values rather than trusting first-signature callReturnType metadata.",
@@ -1431,6 +1432,12 @@
           "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
           "symbolName": "RuntimeBindingValueChannelTargetMutationKind",
           "summary": "Target mutation vocabulary kept separate from transport direction and source evaluation lifecycle."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
+          "symbolName": "RuntimeBindingRealization",
+          "summary": "Shared direct, guaranteed, conditional, and open realization axis for value channels and their data-flow edges."
         },
         {
           "kind": "source",
@@ -1515,7 +1522,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-13"
+      "updatedAt": "2026-07-24"
     },
     {
       "id": "frontier:binding-data-flow-materializer",
@@ -1531,6 +1538,7 @@
       "rationale": "Data-flow products explain how runtime binding spends authored expressions against target operations, value channels, and Scope lookup. Weak typing, synthetic writeback locals, contextual callback typing, and assignability diagnostics should stay here instead of leaking into template parsing or authoring policy.",
       "guidance": [
         "Start here when source/target assignability, source write capability, source expression projection, contextual target typing, or weak-typing diagnostics are involved.",
+        "SpreadValueBinding data flow starts from admitted value channels, not from the broader target-access candidate set. Always publish one targetless source-read row for the outer SpreadValueBinding, then one target edge per admitted inner PropertyBinding with the channel's realization and guarded member type. Observed dependencies mirror those two layers: retain the authored outer token, and publish generated AccessMember identities only for admitted keys, using the channel's exact common checker member-declaration route when available without inventing authored member tokens. Open unknown admitted values keep assignability unknown and must not produce a confident type-mismatch diagnostic.",
         "Generic data-flow publication admits i18n t-params.bind as source-only data flow for parameter object typing, but excludes translation key bindings. If t/t-params create binding.open-data-flow seams for missing accessors/value channels, route the issue back to runtime-binding-expression admission instead of broadening data-flow fallbacks.",
         "Semantic-runtime may split and publish assignability/source-write facts earlier than Aurelia checks them at runtime when that produces cleaner diagnostics, MCP repair routing, or authoring guidance. Keep the facts framework-grounded, but do not force product policy into the framework's combined AST-walk timing when a separate data-flow row is more maintainable.",
         "`binding-data-flow-assignability.ts` owns the observer value-channel plus TypeChecker assignment policy for source-to-target and target-to-source comparisons. Data-flow, diagnostics, overlays, MCP repair planning, and future LSP affordances should consume those published assignability facts rather than reopening primitive/string/collection/nullish checks locally.",
@@ -1615,6 +1623,12 @@
           "symbolName": "BindingDataFlowSourceProjector",
           "line": 1168,
           "summary": "Rendered binding source-scope and source-type projection collaborator."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-data-flow-materializer.ts",
+          "symbolName": "dataFlowTargetsForBinding",
+          "summary": "Target selection boundary that consumes admitted spread value channels and retains source-only evaluation when no candidate can realize."
         },
         {
           "kind": "source",
@@ -1953,7 +1967,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-13"
+      "updatedAt": "2026-07-24"
     },
     {
       "id": "reuse:forms-observation-value-channels",

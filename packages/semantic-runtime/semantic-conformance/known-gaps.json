@@ -1,13 +1,5 @@
 {
   "$schema": "./schema.semantic-conformance-known-gaps.v1.json",
   "schemaVersion": "semantic-conformance-known-gaps.v1",
-  "knownGaps": [
-    {
-      "assertionId": "template-spread-capture-semantics/spread-key-realization-is-conditional",
-      "status": "known-gap",
-      "failureBucket": "spread-value-conditional-realization-vocabulary",
-      "firstObserved": "2026-07-13",
-      "rationale": "Aurelia creates each SpreadValueBinding only when the runtime source is a non-null object and the bindable property key is present. Semantic-runtime currently emits every target bindable as an ordinary flow, loses the non-null member shape of nullable sources, and invents missing-member flows for absent and primitive keys instead of distinguishing potential target enumeration from conditional runtime realization."
-    }
-  ]
+  "knownGaps": []
 }

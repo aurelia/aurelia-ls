@@ -170,6 +170,8 @@ export const ObservationProductDetails = {
       runtimeBindingSourceOperationReferenceReferences(channel.sourceOperation),
       checkerTypeReferenceKernelReferences(channel.rawTargetPropertyType),
       checkerTypeReferenceKernelReferences(channel.runtimeValueType),
+      checkerTypeReferenceKernelReferences(channel.admittedSourceValueType),
+      kernelRecordReferences(channel.admittedSourceMemberSourceAddressHandle),
       kernelFieldProvenanceReferences(channel.fieldProvenance),
     ),
   ),

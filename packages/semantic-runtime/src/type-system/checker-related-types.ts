@@ -4,7 +4,16 @@ import {
   CheckerTypeShapeKind,
   type CheckerTypeShape,
 } from './type-shape.js';
+import {
+  checkerPropertySymbol,
+  checkerSymbolValueType,
+} from './checker-node-helpers.js';
+import { checkerRawTypeAssignable } from './checker-type-assignability.js';
 import { checkerUnionType } from './checker-type-union.js';
+import {
+  isDefaultLibrarySourceFile,
+  normalizeTypeSystemPath,
+} from './source-file-path.js';
 
 export interface CheckerIndexedValueType {
   readonly keyKind: CheckerIndexedAccessKeyKind;
@@ -60,6 +69,32 @@ export const enum CheckerTypeNullishPresence {
   Maybe = 'maybe',
   /** Every visible checker constituent is nullish at runtime. */
   Definitely = 'definitely',
+}
+
+/**
+ * Static admission for a runtime branch shaped as
+ * `typeof value === 'object' && value !== null && propertyName in value`.
+ */
+export const enum CheckerRuntimeObjectMemberAdmissionKind {
+  /** No visible runtime constituent can pass both the object and property-presence guards. */
+  Impossible = 0,
+  /** Every visible runtime constituent passes both guards and exposes the member value type. */
+  Guaranteed = 1,
+  /** Some visible constituents or optional/indexed states pass the guards and some do not. */
+  Conditional = 2,
+  /** Weak or broad checker evidence cannot close whether the guarded member exists. */
+  Open = 3,
+}
+
+/** TypeChecker result for a runtime object/member admission guard. */
+export class CheckerRuntimeObjectMemberAdmission {
+  constructor(
+    readonly kind: CheckerRuntimeObjectMemberAdmissionKind,
+    /** Value type on the branch where the property-presence guard succeeds. */
+    readonly valueType: ts.Type | null,
+    /** Exact member symbol shared by every admitted runtime lane, when one can be proven. */
+    readonly memberSymbol: ts.Symbol | null,
+  ) {}
 }
 
 const repeatableElementInfoByChecker = new WeakMap<ts.TypeChecker, WeakMap<ts.Type, CheckerRepeatableElementTypeInfo>>();
@@ -447,6 +482,109 @@ export function checkerTypeShapeNullishPresence(
     : CheckerTypeNullishPresence.None;
 }
 
+/**
+ * Classify a property read performed only after Aurelia's object and `in` guards succeed.
+ *
+ * Unlike ordinary TypeScript member access, union constituents that do not expose the property are rejected runtime
+ * lanes rather than missing-member errors. Optional and index-signature properties remain conditional because their
+ * type surfaces do not prove that the key exists on the current object.
+ */
+export function checkerRuntimeObjectMemberAdmission(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  propertyName: string,
+  fallbackLocation: ts.Node | null = null,
+): CheckerRuntimeObjectMemberAdmission {
+  if (type.isUnion()) {
+    return unionRuntimeObjectMemberAdmission(
+      checker,
+      type.types.map((constituent) =>
+        checkerRuntimeObjectMemberAdmission(checker, constituent, propertyName, fallbackLocation)
+      ),
+    );
+  }
+
+  if ((type.flags & ts.TypeFlags.TypeParameter) !== 0) {
+    const constraint = checker.getBaseConstraintOfType(type);
+    return constraint == null || constraint === type
+      ? openRuntimeObjectMemberAdmission(checker)
+      : checkerRuntimeObjectMemberAdmission(checker, constraint, propertyName, fallbackLocation);
+  }
+
+  if ((type.flags & ts.TypeFlags.Any) !== 0) {
+    return new CheckerRuntimeObjectMemberAdmission(
+      CheckerRuntimeObjectMemberAdmissionKind.Open,
+      checker.getAnyType(),
+      null,
+    );
+  }
+  if ((type.flags & (ts.TypeFlags.Unknown | ts.TypeFlags.NonPrimitive)) !== 0) {
+    return openRuntimeObjectMemberAdmission(checker);
+  }
+  if ((type.flags & ts.TypeFlags.Never) !== 0 || checkerNullishType(checker, type)) {
+    return impossibleRuntimeObjectMemberAdmission();
+  }
+  if (checkerTypeIsDefinitelyRuntimeFunction(type)) {
+    return impossibleRuntimeObjectMemberAdmission();
+  }
+  if (checkerTypeIsDefaultLibraryObjectInterface(type)) {
+    return openRuntimeObjectMemberAdmission(checker);
+  }
+  if (
+    (type.flags & ts.TypeFlags.Object) === 0
+  ) {
+    return impossibleRuntimeObjectMemberAdmission();
+  }
+
+  const symbol = checkerPropertySymbol(checker, type, propertyName);
+  if (symbol != null) {
+    return new CheckerRuntimeObjectMemberAdmission(
+      (symbol.flags & ts.SymbolFlags.Optional) !== 0
+        ? CheckerRuntimeObjectMemberAdmissionKind.Conditional
+        : CheckerRuntimeObjectMemberAdmissionKind.Guaranteed,
+      checkerSymbolValueType(checker, symbol, fallbackLocation) ?? checker.getUnknownType(),
+      symbol,
+    );
+  }
+
+  const stringIndex = checker.getIndexInfoOfType(type, ts.IndexKind.String)
+    ?? checker.getIndexInfoOfType(checker.getApparentType(type), ts.IndexKind.String)
+    ?? null;
+  if (stringIndex != null) {
+    return new CheckerRuntimeObjectMemberAdmission(
+      CheckerRuntimeObjectMemberAdmissionKind.Conditional,
+      stringIndex.type,
+      null,
+    );
+  }
+
+  // TypeScript object types are structural lower bounds, not sealed runtime shapes. A value assignable to
+  // `{ title: string }` may still carry an undeclared `count` key, so absence from the checker surface cannot reject
+  // the framework's `key in value` branch.
+  return openRuntimeObjectMemberAdmission(checker);
+}
+
+/** True when every runtime value represented by this checker type has JavaScript function identity. */
+export function checkerTypeIsDefinitelyRuntimeFunction(type: ts.Type): boolean {
+  return type.getCallSignatures().length > 0
+    || type.getConstructSignatures().length > 0
+    || checkerTypeIsDefaultLibraryFunctionInterface(type);
+}
+
+/** True for TypeScript's broad standard-library function interfaces, which do not expose concrete signatures. */
+export function checkerTypeIsDefaultLibraryFunctionInterface(type: ts.Type): boolean {
+  return checkerTypeIsDefaultLibraryNamedInterface(type, [
+    'Function',
+    'CallableFunction',
+    'NewableFunction',
+  ]);
+}
+
+/** True for TypeScript's broad `Object` interface, whose values may still be primitive at runtime. */
+export function checkerTypeIsDefaultLibraryObjectInterface(type: ts.Type): boolean {
+  return checkerTypeIsDefaultLibraryNamedInterface(type, ['Object']);
+}
+
 /** Match a checker type or its apparent type against exported/interface-style names and generic display names. */
 export function checkerTypeHasAnyName(
   checker: ts.TypeChecker,
@@ -467,6 +605,84 @@ export function checkerTypeHasAnyName(
   ];
   return candidates.some((candidate) =>
     candidate != null && names.some((name) => candidate === name || candidate.startsWith(`${name}<`))
+  );
+}
+
+function unionRuntimeObjectMemberAdmission(
+  checker: ts.TypeChecker,
+  admissions: readonly CheckerRuntimeObjectMemberAdmission[],
+): CheckerRuntimeObjectMemberAdmission {
+  const possible = admissions.filter((admission) =>
+    admission.kind !== CheckerRuntimeObjectMemberAdmissionKind.Impossible
+  );
+  if (possible.length === 0) {
+    return impossibleRuntimeObjectMemberAdmission();
+  }
+
+  const valueTypes = possible
+    .map((admission) => admission.valueType)
+    .filter((type): type is ts.Type => type != null);
+  const valueType = valueTypes.length === 0
+    ? null
+    : valueTypes.length === 1
+      ? valueTypes[0]!
+      : checkerUnionType(checker, valueTypes) ?? checker.getUnknownType();
+  if (possible.some((admission) => admission.kind === CheckerRuntimeObjectMemberAdmissionKind.Open)) {
+    return new CheckerRuntimeObjectMemberAdmission(
+      CheckerRuntimeObjectMemberAdmissionKind.Open,
+      valueType ?? checker.getUnknownType(),
+      commonRuntimeObjectMemberSymbol(possible),
+    );
+  }
+  return new CheckerRuntimeObjectMemberAdmission(
+    possible.length === admissions.length
+      && possible.every((admission) => admission.kind === CheckerRuntimeObjectMemberAdmissionKind.Guaranteed)
+      ? CheckerRuntimeObjectMemberAdmissionKind.Guaranteed
+      : CheckerRuntimeObjectMemberAdmissionKind.Conditional,
+    valueType,
+    commonRuntimeObjectMemberSymbol(possible),
+  );
+}
+
+function openRuntimeObjectMemberAdmission(
+  checker: ts.TypeChecker,
+): CheckerRuntimeObjectMemberAdmission {
+  return new CheckerRuntimeObjectMemberAdmission(
+    CheckerRuntimeObjectMemberAdmissionKind.Open,
+    checker.getUnknownType(),
+    null,
+  );
+}
+
+function impossibleRuntimeObjectMemberAdmission(): CheckerRuntimeObjectMemberAdmission {
+  return new CheckerRuntimeObjectMemberAdmission(
+    CheckerRuntimeObjectMemberAdmissionKind.Impossible,
+    null,
+    null,
+  );
+}
+
+function commonRuntimeObjectMemberSymbol(
+  admissions: readonly CheckerRuntimeObjectMemberAdmission[],
+): ts.Symbol | null {
+  const first = admissions[0]?.memberSymbol ?? null;
+  return first != null && admissions.every((admission) =>
+    admission.memberSymbol === first
+  )
+    ? first
+    : null;
+}
+
+function checkerTypeIsDefaultLibraryNamedInterface(
+  type: ts.Type,
+  names: readonly string[],
+): boolean {
+  const symbols = [type.aliasSymbol, type.symbol].filter((symbol): symbol is ts.Symbol => symbol != null);
+  return symbols.some((symbol) =>
+    names.includes(symbol.getName())
+    && (symbol.declarations ?? []).some((declaration) =>
+      isDefaultLibrarySourceFile(normalizeTypeSystemPath(declaration.getSourceFile().fileName))
+    )
   );
 }
 
@@ -541,15 +757,10 @@ function checkerArrayLikeAdmission(
     return { admitted: false, elementType: null };
   }
   const elementType = checkerNumberIndexValueType(checker, type);
-  const length = checker.getPropertyOfType(type, 'length')
-    ?? checker.getPropertyOfType(checker.getApparentType(type), 'length')
-    ?? null;
-  const lengthDeclaration = length?.valueDeclaration ?? length?.declarations?.[0] ?? null;
-  const lengthType = length == null || lengthDeclaration == null
-    ? null
-    : checker.getTypeOfSymbolAtLocation(length, lengthDeclaration);
+  const length = checkerPropertySymbol(checker, type, 'length');
+  const lengthType = length == null ? null : checkerSymbolValueType(checker, length);
   return {
-    admitted: lengthType != null && checker.isTypeAssignableTo(lengthType, checker.getNumberType()),
+    admitted: lengthType != null && checkerRawTypeAssignable(checker, lengthType, checker.getNumberType()),
     elementType,
   };
 }
@@ -561,7 +772,7 @@ function checkerCustomRepeatableHandlerElementType(
 ): { readonly matched: boolean; readonly open: boolean; readonly elementType: ts.Type | null } {
   const exactContracts = contracts.filter((contract) => contract.sourceType != null);
   const matched = exactContracts.filter((contract) =>
-    checker.isTypeAssignableTo(sourceType, contract.sourceType!)
+    checkerRawTypeAssignable(checker, sourceType, contract.sourceType!)
   );
   if (matched.length > 0) {
     return {

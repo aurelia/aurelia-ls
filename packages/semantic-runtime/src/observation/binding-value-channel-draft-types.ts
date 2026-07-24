@@ -1,6 +1,10 @@
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import type { AddressHandle } from '../kernel/handles.js';
 import type { CheckerExpressionTypeEvaluator } from '../type-system/expression-type-evaluator.js';
-import type { CheckerTypeReference } from '../type-system/type-shape.js';
+import type {
+  CheckerTypeMemberKind,
+  CheckerTypeReference,
+} from '../type-system/type-shape.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
 import type { TypeSystemProject } from '../type-system/project.js';
@@ -8,6 +12,7 @@ import type { RuntimeValueChannelBinding } from './runtime-binding-expression.js
 import type { RuntimeInstructionScopeLookup } from './runtime-binding-expression.js';
 import type { RuntimeBindingSourceExpressionContextProjector } from './runtime-binding-source-expression-context.js';
 import type {
+  RuntimeBindingRealization,
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelKind,
   RuntimeBindingValueChannelCouplingKind,
@@ -27,6 +32,14 @@ export type RuntimeBindingValueChannelDraft = {
   readonly observerCouplings?: readonly RuntimeBindingValueChannelCouplingKind[];
   readonly openReason: string | null;
   readonly openReasonKinds?: readonly OpenSeamReasonKind[];
+};
+
+export type RuntimeBindingValueChannelDraftResult = {
+  readonly draft: RuntimeBindingValueChannelDraft;
+  readonly realization: RuntimeBindingRealization;
+  readonly admittedSourceValueType: CheckerTypeReference | null;
+  readonly admittedSourceMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
+  readonly admittedSourceMemberSourceAddressHandle: AddressHandle | null;
 };
 
 export interface BindingValueChannelDraftContext {

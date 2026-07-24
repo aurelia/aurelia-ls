@@ -496,6 +496,13 @@
           "filePath": "packages/semantic-runtime/src/template/template-runtime-analysis.ts",
           "minLineCount": 140,
           "minMethodCount": 8
+        },
+        {
+          "kind": "product-large-class",
+          "className": "TemplateRuntimeAnalysisProjectContext",
+          "filePath": "packages/semantic-runtime/src/template/template-runtime-analysis-context.ts",
+          "minLineCount": 80,
+          "minMethodCount": 6
         }
       ],
       "createdAt": "2026-05-12",
@@ -2624,8 +2631,8 @@
         "Runtime-binding overlay source reads should enter through RuntimeBindingSourceExpressionContextProjector rather than a behavior-name precheck. For source-scope-changing binding behaviors, wrap the copied source expression instead of mutating the generated child-view scope. `& state` changes the binding source evaluation scope through framework binding.useScope(...), while a template-controller child view such as repeat still keeps the original view-model parent for `$parent`.",
         "The current copied-source wrapper only synthesizes `StateBinding` replay tails because `& state` is the only modeled bind-time source-scope-changing behavior. If another framework binding behavior calls binding.useScope(...), extend the runtime source-expression projector and shared overlay layer vocabulary first; do not add an overlay-local fallback for arbitrary BindingScopeOwnerKind values.",
         "Runtime-binding overlay source reads also carry strictBinding. Strict-false read/call expressions should generate TypeScript that models non-strict nullish `undefined` results rather than surfacing TS18047 from copied text, while assignment targets stay on the binding data-flow/source-assignment lane.",
-        "Cursor/member-owner reads that need a runtime binding source projection for an expression offset should use bindingSourceContextProjectionForTemplateExpressionParseAtOffset(...) from template-expression-selection.ts, not a completion-local RuntimeBindingSourceExpressionContextProjector fork.",
-        "When cursor completion already has the selected ambient BindingScope, pass it into bindingSourceContextProjectionForTemplateExpressionParseAtOffset(...). That lets repeated controller/rendering applications disambiguate runtime bindings through templateScopeCanEvaluateSourceScope(...) before falling back to a raw known-scope checker context.",
+        "Cursor/member-owner reads that need an exact runtime binding source environment for an expression offset should use bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset(...) from template-expression-selection.ts, not a completion-local RuntimeBindingSourceExpressionContextProjector fork.",
+        "When cursor completion already has the selected ambient BindingScope, pass it into bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset(...). That lets repeated controller/rendering applications disambiguate runtime bindings through templateScopeCanEvaluateSourceScope(...) before falling back to a raw known-scope checker context.",
         "If an overlay source-expression projection produces a source scope unrelated to the ambient overlay scope, keep it as explicit unsupported pressure. Do not recast the projected expression through ambient aliases; the proper fix is lower scope/threading coherence, not a generated-TypeScript fallback.",
         "Runtime binding selection for overlays should be scoped by `templateScopeCanEvaluateSourceScope(...)`. Same-level synthetic scopes may evaluate a source scope only when `templateScopeCanReplaySourceScope(...)` proves the ambient synthetic scope replayed the source creators and visible slots; a shared parent alone is not sufficient. Identity/source-backed slot type differences are valid refinements, but anonymous source-less slots must keep the same projected type before replay can treat them as the same fact.",
         "Plural runtime binding source-context selection must converge explicitly. If candidate bindings project to different source scopes, strictness, binding-behavior lifecycle modes, source addresses, or expression spans, the shared selector should stay open rather than allowing overlays, cursor diagnostics, completions, or future edit surfaces to pick the first compatible runtime binding by emission order.",
@@ -2731,8 +2738,8 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-expression-selection.ts",
-          "symbolName": "bindingSourceContextProjectionForTemplateExpressionParseAtOffset",
-          "summary": "Offset-aware template expression parse to runtime source projection selector for cursor and diagnostic consumers."
+          "symbolName": "bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset",
+          "summary": "Offset-aware template expression parse to exact runtime source environment selector for cursor and diagnostic consumers."
         },
         {
           "kind": "source",

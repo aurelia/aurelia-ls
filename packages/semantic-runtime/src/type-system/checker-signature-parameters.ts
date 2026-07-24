@@ -2,6 +2,7 @@ import ts from 'typescript';
 
 import {
   checkerIterableElementType,
+  checkerTypeIsDefaultLibraryFunctionInterface,
 } from './checker-related-types.js';
 import {
   checkerRawTypeAssignable,
@@ -319,8 +320,7 @@ function computeCheckerValueCallability(
     );
   }
 
-  const typeName = type.aliasSymbol?.getName() ?? type.symbol?.getName() ?? null;
-  if (typeName === 'Function' || typeName === 'CallableFunction' || typeName === 'NewableFunction') {
+  if (checkerTypeIsDefaultLibraryFunctionInterface(type)) {
     return callability(CheckerValueCallabilityKind.Open);
   }
 

@@ -534,6 +534,13 @@ static type surfaces rather than hydrated runtime values.
   runtime expression bindings for source-expression, overlay, i18n lifecycle, and `t-params.bind` source-flow
   consumers, but they do not enter the generic value-channel materializer; `TranslationBinding.create/bind` target
   semantics are owned by the i18n grouping and issue lanes.
+  For `SpreadValueBinding`, target-access rows are the renderer's potential bindable-key fan-out, while value channels
+  are the subset admitted by the framework's object and property-presence guards. Each admitted channel records whether
+  realization is guaranteed, conditional, or open plus the guarded member value type and any exact member declaration
+  shared by every admitted lane. Impossible members publish no channel. A property absent from a TypeScript object
+  surface stays open because structural typing does not prove runtime absence. This is the sole admission boundary; data
+  flow consumes these channels instead of repeating the checker walk. A resolved component with zero bindables
+  publishes zero channels rather than an open synthetic `$bindables` channel, while the outer source read remains real.
 - `binding-value-channel-drafts.ts` owns the per-binding draft frame for the value shape an observer/accessor or direct
   operation actually transports before publication. `RuntimeBindingValueChannelDraftFrame` caches the binding's lazy
   source-type reader and keeps the source-operation, direct target-operation, closed target-access, rejected
@@ -569,6 +576,13 @@ static type surfaces rather than hydrated runtime values.
   distinguish TypeChecker strictness,
   assignment no-ops, and runtime `astEvaluate` callable errors without reparsing or reclassifying the binding
   expression at the API boundary.
+  Spread data flow mirrors the framework's two binding layers. One targetless source-read row preserves evaluation and
+  observation of the authored outer expression. Each admitted value channel then contributes a target edge with its
+  realization and guarded source-member type. Observed dependencies follow the same split: the outer read keeps its
+  authored token, while each admitted key publishes a generated `AccessMember` dependency and the best checker-backed
+  member-declaration route. Generated member reads retain the outer spread expression as their honest template locus;
+  they do not invent an authored member token. An open admitted value is not an assignment mismatch: assignability stays
+  unknown until a concrete successful runtime branch provides a value type.
 - `product-details.ts` owns observation detail slots for those value-channel and data-flow products.
 - `type-system/checker-collection-types.ts` owns shared TypeChecker helpers for string-literal domains and
   collection/map element projection, while `type-system/checker-primitive-types.ts` owns broad primitive assignability

@@ -125,6 +125,14 @@ source, value, expression, or template-local slot.
 - Use `checkerTypeHasAnyName(...)` when a feature needs a generic exported/interface-style checker type-name match.
   Feature materializers should not grow local apparent-type/name/display candidate lists unless they are modeling a
   domain-specific runtime rule such as proxy-observation wrapping.
+- Runtime object/member admission is stricter than a generic checker object test. The standard-library `Function`,
+  `CallableFunction`, and `NewableFunction` interfaces are runtime functions even though TypeScript exposes no concrete
+  signatures for them, while the standard-library `Object` interface can still contain primitive values and therefore
+  stays open. Match those broad interfaces by default-library declaration provenance rather than display text so
+  user-defined names cannot masquerade as runtime categories.
+- A non-empty checker-backed union must remain a real checker union. `checkerUnionTypeOrNever(...)` may return `never`
+  only for an empty input set; an unavailable union factory is an integration failure, not permission to collapse the
+  alternatives to the first constituent or to `never`.
 - Use `checkerArrayOrTupleType(...)` for the low-level checker Array/tuple predicate,
   `checker-collection-types.ts` for checker literal domains, runtime Array/tuple recognition, and collection/map
   element/key/value projection, and `checker-primitive-types.ts` for broad primitive assignability plus callable-return
@@ -837,6 +845,17 @@ callback parameter typing, object-option typing, and nested literal context do n
 - `CheckerExpressionAccessProjector` owns expression-level member/keyed access policy. If a feature needs to classify
   missing members, index signatures, finite literal-key unions, or nullish member/keyed reads, route it through this
   projector and `CheckerTypeShapeAccess` instead of adding another local checker/member walk.
+- `checkerRuntimeObjectMemberAdmission(...)` and
+  `CheckerTypeShapeAccess.runtimeObjectMemberValueAccess(...)` own the distinct runtime relation for reads guarded by
+  `typeof value === 'object' && value !== null && key in value`. This is not ordinary TypeScript member access:
+  rejected union constituents do not contribute missing-member pressure, optional and string-indexed constituents are
+  conditional, and a property absent from a checker object type remains open because TypeScript object types are
+  structural lower bounds rather than sealed runtime schemas. Directly synthesized object literals may close that
+  absence as impossible. Callable/constructable values are rejected because the framework object guard rejects
+  functions. The successful branch carries only the admitted member value union. It also retains a member declaration
+  only when every admitted lane proves the same checker symbol; nullable rejected lanes do not erase that source, while
+  structurally open or disagreeing lanes do. If the checker cannot construct the value union, the projection must stay
+  unknown rather than silently substituting one constituent.
 - `checker-node-helpers.ts` owns low-level TypeChecker node/symbol utilities that are intentionally below projected
   type shapes. Use `checkerPropertySymbol(...)` for the recurring declared-type plus apparent-type property lookup and
   `checkerSymbolValueType(...)` for first-declaration value reads; do not reopen that helper pattern in observation,

@@ -513,7 +513,8 @@ export class RuntimeBindingBindContext {
   constructor(
     readonly localKey: string,
     readonly host: RuntimeBindingBindHost,
-    readonly spreadValueTargetProperties: readonly string[] = [],
+    /** Closed bindable candidates for spread-value binding, or null when target resolution stayed open. */
+    readonly spreadValueTargetProperties: readonly string[] | null = null,
     readonly propertyBindingMode: (binding: PropertyBinding) => TemplateBindingMode = (binding) => binding.bindingMode,
   ) {}
 
@@ -1079,7 +1080,7 @@ export class SpreadValueBinding {
   }
 
   bind(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
-    if (this.target === '$bindables' && input.spreadValueTargetProperties.length > 0) {
+    if (this.target === '$bindables' && input.spreadValueTargetProperties != null) {
       const targetAccesses = input.spreadValueTargetProperties.flatMap((targetProperty, index) =>
         input.targetAccess(
           this,
