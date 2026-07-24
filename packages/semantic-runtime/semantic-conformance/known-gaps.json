@@ -24,13 +24,6 @@
       "rationale": "Raw AUR0777, assignment, checker, and weak-slot rows are all grounded evidence and must remain available. Presentation lacks an explicit causal edge from the rejected iterator projection to its derived repeat-local diagnostics, so the IDE still presents six consequences as independent problems instead of contextual evidence under the two root errors."
     },
     {
-      "assertionId": "template-controller-built-ins/with-null-binding-context-is-diagnosed",
-      "status": "known-gap",
-      "failureBucket": "with-null-runtime-hazard",
-      "firstObserved": "2026-07-09",
-      "rationale": "Framework With substitutes an empty object only for undefined; null becomes the child binding context and later scope lookup can throw. Semantic-runtime erases null with getNonNullableType and reports the reachable runtime hazard as clean."
-    },
-    {
       "assertionId": "template-native-target-precedence/conditional-app-two-way-predicate",
       "status": "known-gap",
       "failureBucket": "attr-mapper-predicate-execution-open",

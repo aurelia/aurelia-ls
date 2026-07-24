@@ -379,24 +379,48 @@ export function checkerTypeNullishPresence(
   checker: ts.TypeChecker | null,
   type: ts.Type,
 ): CheckerTypeNullishPresence {
+  return checkerTypePresence(checker, type, checkerNullishType);
+}
+
+/** Classifies `null` reachability separately from `undefined`/`void` for framework APIs that distinguish them. */
+export function checkerTypeNullPresence(
+  checker: ts.TypeChecker | null,
+  type: ts.Type,
+): CheckerTypeNullishPresence {
+  return checkerTypePresence(checker, type, checkerNullType);
+}
+
+function checkerTypePresence(
+  checker: ts.TypeChecker | null,
+  type: ts.Type,
+  matches: (checker: ts.TypeChecker | null, type: ts.Type) => boolean,
+): CheckerTypeNullishPresence {
   if (type.isUnion()) {
-    let sawNullish = false;
+    let sawMatch = false;
     let sawValue = false;
     for (const constituent of type.types) {
-      const presence = checkerTypeNullishPresence(checker, constituent);
-      sawNullish ||= presence !== CheckerTypeNullishPresence.None;
+      const presence = checkerTypePresence(checker, constituent, matches);
+      sawMatch ||= presence !== CheckerTypeNullishPresence.None;
       sawValue ||= presence !== CheckerTypeNullishPresence.Definitely;
     }
-    if (sawNullish && sawValue) {
+    if (sawMatch && sawValue) {
       return CheckerTypeNullishPresence.Maybe;
     }
-    return sawNullish
+    return sawMatch
       ? CheckerTypeNullishPresence.Definitely
       : CheckerTypeNullishPresence.None;
   }
-  return checkerNullishType(checker, type)
+  return matches(checker, type)
     ? CheckerTypeNullishPresence.Definitely
     : CheckerTypeNullishPresence.None;
+}
+
+function checkerNullType(
+  checker: ts.TypeChecker | null,
+  type: ts.Type,
+): boolean {
+  return (type.getFlags() & ts.TypeFlags.Null) !== 0
+    || checker?.typeToString(type) === 'null';
 }
 
 export function checkerTypeShapeIsDefinitelyNullish(

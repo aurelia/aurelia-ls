@@ -395,7 +395,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   (`AUR0820`): the framework compiler can produce a `.spread`
   `SpreadValueBindingInstruction` with target `$element`, and the runtime renderer rejects anything except
   `$bindables`.
-- `runtime-binding-scope-issue.ts` owns framework-runtime diagnostics discovered while spending binding scope effects.
+- `runtime-binding-scope-issue.ts` owns framework-runtime diagnostics discovered while constructing a modeled binding
+  `Scope`. Each issue preserves the actual owning product kind: repeat issues point back to their scope effect, while
+  template-controller value-scope issues point back to the lowered controller instruction rather than inventing a
+  scope-effect owner.
   Repeat destructuring now publishes `RuntimeBindingScopeIssue` products for `AUR0112` when the checker-backed
   binding-pattern projector can prove or warn that the item shape is not object-compatible, or that an array-rest
   destructuring source is not an actual Array. Repeat source compatibility publishes the same issue product shape for
@@ -404,6 +407,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   exact per-instance views are not materialized, but common object fields and string-pattern prefixes can survive as a
   conservative child-scope value. If a consumer needs correlated alternatives across fields from the same repeated item,
   model that as a bounded value-flow frontier rather than teaching the consumer to special-case `repeat.for`.
+  Built-in `with` uses the same issue lane for a distinct framework hazard: runtime-html substitutes an empty binding
+  context for `undefined`, but passes `null` to `Scope.fromParent`, after which ordinary `Scope.getContext` lookup throws
+  while evaluating `name in bindingContext`. Scope typing may still project the non-null value lane for useful child
+  analysis, but it must retain and diagnose reachable `null` at the exact authored value address.
 - `runtime-controller-issue.ts` owns framework-runtime diagnostics discovered while emulating controller construction or
   hydration. Runtime rendering uses it for renderer resource lookup failures when a lowered instruction carries a
   resource name but the rendering container cannot resolve it: missing custom elements (`AUR0752`), custom attributes

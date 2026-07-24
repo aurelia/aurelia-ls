@@ -112,7 +112,8 @@ source, value, expression, or template-local slot.
   `CheckerTypeNullishPresence` classification, and `CheckerTypeShapeAccess.nonNullishTypeShape(...)` owns the
   non-nullish lane over a projected type shape. Member/keyed/call evaluation should spend those primitives so optional
   or non-strict maybe-nullish reads become the reached value union `undefined`, while strict or unknown strictness stays
-  explicit runtime/open pressure.
+  explicit runtime/open pressure. Framework APIs that distinguish `null` from `undefined`, such as the built-in `with`
+  controller, must use `checkerTypeNullPresence(...)`; do not infer their policy from the combined nullish projection.
 - Keep nullable owner identity separate from the selected member's value surface. Lazy member projection asks the
   checker for the owner's non-nullable value lane while preserving the original union identity and display for cursor
   context. Branch-aware owner projection spends `CheckerExpressionBranchScopeProjector` for short-circuit and

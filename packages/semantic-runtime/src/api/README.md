@@ -843,6 +843,11 @@ with numeric length, while app-owned handlers reuse their DI resolver state, eva
 checker-visible `iterate(value, callback)` contract. A source outside a closed handler value domain remains rejected;
 an admitted custom source stays open when its item contract is unknown. Do not broaden this with generic TypeScript
 iterable heuristics or with registration-presence-only guesses.
+The same scope-issue product family reports `template-controller-null-binding-context` for a built-in `with` value that
+can reach `null`. This row has `framework-runtime-behavior` authority rather than a framework error code: runtime-html
+passes `null` into the child `Scope`, and ordinary scope lookup later throws a JavaScript error while applying `in` to
+that binding context. `undefined` is intentionally excluded because `with` replaces it with `{}`. The diagnostic source
+is the exact value expression, and the retained source type drives definite-versus-possible severity.
 Repeat option diagnostics are controller-owned. Runtime rendering now publishes `RuntimeControllerIssue` products for
 the `Repeat` constructor failures that inspect iterator tail `MultiAttrInstruction`s: invalid `key` commands
 (`AUR0775`), extraneous option targets (`AUR0776`), and invalid `contextual` commands (`AUR0821`). Template diagnostics

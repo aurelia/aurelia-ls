@@ -467,7 +467,7 @@ export const TemplateDetailDescriptors = {
   >(
     KernelVocabulary.Binding.ScopeIssue.key,
     'binding.scope-issue',
-    'Framework-runtime issue discovered while spending a runtime binding scope effect.',
+    'Framework-runtime issue discovered while constructing a runtime binding Scope.',
   ),
   RuntimeControllerIssue: defineProductDetailDescriptor<
     RuntimeControllerIssue,

@@ -535,6 +535,7 @@ export class TemplateControllerScopeMaterializer {
         scopeMaterializer,
         scopeNarrower,
         typeSupport,
+        this.scopeIssuePublisher,
         this.constructScopeEffects.bind(this),
         this.constructRuntimeAssignmentStateForBinding.bind(this),
       ),
@@ -2283,6 +2284,7 @@ export class TemplateControllerScopeMaterializer {
       }
       frame.addScopeIssue(this.scopeIssuePublisher.publish(
         `${input.localKey}:scope:${localSuffix}:repeatable-issue`,
+        KernelVocabulary.Binding.ScopeEffect.key,
         effect.productHandle,
         effect.identityHandle,
         RuntimeBindingScopeIssuePhase.IteratorSourceProjection,
@@ -2301,6 +2303,7 @@ export class TemplateControllerScopeMaterializer {
       iteratorProjection.localProjection.runtimeIssues.forEach((issue, index) => {
         frame.addScopeIssue(this.scopeIssuePublisher.publish(
           `${input.localKey}:scope:${localSuffix}:issue:${index}`,
+          KernelVocabulary.Binding.ScopeEffect.key,
           effect.productHandle,
           effect.identityHandle,
           RuntimeBindingScopeIssuePhase.IteratorLocalProjection,

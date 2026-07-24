@@ -12,6 +12,7 @@ import {
   type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   InquiryLocusKind,
   type InquiryLocus,
@@ -1613,11 +1614,10 @@ function referencesForRuntimeBindingScopeIssue(
   issue: RuntimeBindingScopeIssue,
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
-    detailReferences(
-      TemplateDetailDescriptors.RuntimeBindingScopeEffect,
-      issue.ownerScopeEffectProductHandle,
-    ),
-    kernelRecordReferences(issue.ownerScopeEffectIdentityHandle),
+    issue.ownerProductKindKey === KernelVocabulary.Binding.ScopeEffect.key
+      ? detailReferences(TemplateDetailDescriptors.RuntimeBindingScopeEffect, issue.ownerProductHandle)
+      : detailReferences(TemplateDetailDescriptors.Instruction, issue.ownerProductHandle),
+    kernelRecordReferences(issue.ownerIdentityHandle),
     checkerTypeReferenceKernelReferences(issue.sourceType),
   );
 }

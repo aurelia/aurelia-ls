@@ -46,6 +46,8 @@ import {
   CheckerBindingPatternLocalProjection,
 } from '../type-system/binding-pattern-locals.js';
 import {
+  CheckerTypeNullishPresence,
+  checkerTypeNullPresence,
   NoCheckerRepeatableHandlerAdmission,
   type CheckerRepeatableElementTypeInfo,
 } from '../type-system/checker-related-types.js';
@@ -125,6 +127,16 @@ export class TemplateScopeNonNullishTypeProjection {
   constructor(
     readonly typeReference: CheckerTypeReference,
     readonly mayBeNullish: boolean | null,
+  ) {}
+}
+
+/** `with` value projection preserving the runtime-significant distinction between `null` and `undefined`. */
+export class TemplateControllerObjectBindingContextProjection {
+  constructor(
+    readonly contextType: CheckerTypeReference,
+    readonly sourceType: CheckerTypeReference,
+    readonly nullPresence: CheckerTypeNullishPresence | null,
+    readonly sourceAddressHandle: AddressHandle | null,
   ) {}
 }
 
@@ -414,21 +426,32 @@ export class TemplateScopeTypeProjector {
       : null;
   }
 
-  templateControllerObjectBindingContextType(
+  templateControllerObjectBindingContextProjection(
     input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     instruction: HydrateTemplateControllerInstruction,
     localSuffix: string,
     controller: RuntimeControllerFrame | null = null,
-  ): CheckerTypeReference | null {
-    const valueType = this.templateControllerValueType(input, parent, instruction, localSuffix, controller);
-    return valueType == null
-      ? null
-      : this.nonNullishTypeProjection(
-        valueType,
-        `${input.localKey}:scope:template-controller:${localSuffix}:value-context`,
-        instruction.sourceAddressHandle,
-      ).typeReference;
+  ): TemplateControllerObjectBindingContextProjection | null {
+    const sourceType = this.templateControllerValueType(input, parent, instruction, localSuffix, controller);
+    if (sourceType == null) {
+      return null;
+    }
+    const nonNullish = this.nonNullishTypeProjection(
+      sourceType,
+      `${input.localKey}:scope:template-controller:${localSuffix}:value-context`,
+      instruction.sourceAddressHandle,
+    );
+    const parse = this.readParse(templateControllerValueExpressionProductHandle(this.typeProjector.publication, instruction));
+    const carrier = readCheckerTypeShape(this.typeProjector.publication, sourceType)?.carrier ?? null;
+    return new TemplateControllerObjectBindingContextProjection(
+      nonNullish.typeReference,
+      sourceType,
+      carrier == null
+        ? null
+        : checkerTypeNullPresence(carrier.checker, carrier.type),
+      parse?.site.sourceAddressHandle ?? instruction.sourceAddressHandle,
+    );
   }
 
   templateControllerMatchTypes(

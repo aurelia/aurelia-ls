@@ -9268,6 +9268,17 @@
               "equals": { "value.selectedMemberName": "statusMessage", "value.selectedMember.typeDisplay": "\"Loading product\"", "value.diagnostics.length": 0 }
             },
             {
+              "name": "undefined with value does not inherit the null binding-context diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "diagnosticKind": "template-controller-null-binding-context", "missingInput": "with-binding-context:reachable-null" },
+                  "source": { "marker": "with.bind=\"absentProduct\"", "token": "absentProduct" },
+                  "absent": true
+                }
+              ]
+            },
+            {
               "name": "guarded nullable with value is non-null in the child scope",
               "query": { "kind": "template-cursor-info", "cursor": { "marker": "<div with.bind=\"maybeProduct\">${label}</div>", "token": "label" } },
               "equals": { "value.selectedMemberName": "label", "value.selectedMember.typeDisplay": "string", "value.diagnostics.length": 0 }
@@ -9442,8 +9453,8 @@
               "name": "invalid repeat source consequences are contextual presentation evidence",
               "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
               "equals": {
-                "value.presentation.rawRowCount": 17,
-                "value.presentation.primaryCount": 11,
+                "value.presentation.rawRowCount": 19,
+                "value.presentation.primaryCount": 13,
                 "value.presentation.contextualCount": 6
               }
             }

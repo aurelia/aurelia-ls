@@ -1211,6 +1211,9 @@ export function runtimeBindingScopeIssueDiagnostic(
   if (issue.issueKind === RuntimeBindingScopeIssueKind.RepeatNonIterable) {
     return repeatNonIterableDiagnostic(issue, source);
   }
+  if (issue.issueKind === RuntimeBindingScopeIssueKind.WithNullBindingContext) {
+    return withNullBindingContextDiagnostic(issue, source);
+  }
   return {
     diagnosticKind: 'runtime-binding-scope-framework-error',
     diagnosticAuthority: 'framework-error-code',
@@ -1237,6 +1240,39 @@ export function runtimeBindingScopeIssueDiagnostic(
       actionKind: 'rewrite-expression',
       actionTarget: suggestionActionTarget('expression', source, null, issue.sourceType?.display ?? null),
       summary: 'Ensure the repeat item source is object-shaped before destructuring, or guard the repeat with template control flow.',
+      targetMemberName: null,
+      ownerTypeDisplay: issue.sourceType?.display ?? null,
+      valueTypeDisplay: null,
+      valueTypeSource: null,
+    },
+  };
+}
+
+function withNullBindingContextDiagnostic(
+  issue: RuntimeBindingScopeIssue,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorDiagnosticRow {
+  const definite = issue.certainty === RuntimeBindingScopeIssueCertainty.Definite;
+  return {
+    diagnosticKind: 'template-controller-null-binding-context',
+    diagnosticAuthority: 'framework-runtime-behavior',
+    frameworkErrorCode: null,
+    severity: definite ? 'error' : 'warning',
+    summary: definite
+      ? 'Aurelia with receives null as its child binding context; ordinary scope lookup will throw before reaching the parent scope.'
+      : 'Aurelia with can receive null as its child binding context; ordinary scope lookup will then throw before reaching the parent scope.',
+    missingInput: 'with-binding-context:reachable-null',
+    missingInputs: ['with-binding-context:reachable-null'],
+    source,
+    selectedMemberName: null,
+    ownerTypeDisplay: issue.sourceType?.display ?? null,
+    ownerTypeShapeKind: issue.sourceType?.shapeKind ?? null,
+    ownerTypeOrigin: issue.sourceType?.origin ?? null,
+    suggestion: {
+      suggestionKind: 'guard-nullish-expression',
+      actionKind: 'rewrite-expression',
+      actionTarget: suggestionActionTarget('expression', source, null, issue.sourceType?.display ?? null),
+      summary: 'Guard or narrow the value before entering with; unlike undefined, null is not replaced with an empty binding context.',
       targetMemberName: null,
       ownerTypeDisplay: issue.sourceType?.display ?? null,
       valueTypeDisplay: null,

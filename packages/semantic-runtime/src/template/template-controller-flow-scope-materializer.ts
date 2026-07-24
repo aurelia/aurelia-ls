@@ -11,6 +11,7 @@ import {
 import type { ExpressionAstNode } from '../expression/ast.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   RuntimeBindingExpressionScopeProjector,
 } from '../observation/runtime-binding-expression-scope.js';
@@ -24,6 +25,7 @@ import {
   type CheckerExpressionScopeNarrowingRequest,
   type CheckerExpressionScopeNarrowingResult,
 } from '../type-system/expression-scope-narrower.js';
+import { CheckerTypeNullishPresence } from '../type-system/checker-related-types.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
 import type { RuntimeControllerFrame } from './runtime-controller.js';
 import {
@@ -51,6 +53,12 @@ import type {
   TemplateScopeConstructionFrame,
   TemplateScopeConstructionRequest,
 } from './template-controller-scope-materializer.js';
+import {
+  RuntimeBindingScopeIssueCertainty,
+  RuntimeBindingScopeIssueKind,
+  RuntimeBindingScopeIssuePhase,
+  type RuntimeBindingScopeIssuePublisher,
+} from './runtime-binding-scope-issue.js';
 import { completedTemplateExpressionAstForParse } from './expression-parse-projection.js';
 import type { TemplateScopeTypeProjector } from './template-scope-type-projector.js';
 
@@ -77,6 +85,7 @@ export class TemplateControllerFlowScopeMaterializer {
     private readonly scopeMaterializer: BindingScopeMaterializer,
     private readonly scopeNarrower: CheckerExpressionScopeNarrower,
     private readonly typeSupport: TemplateScopeTypeProjector,
+    private readonly scopeIssuePublisher: RuntimeBindingScopeIssuePublisher,
     private readonly constructScopeEffects: (
       frame: TemplateScopeConstructionFrame,
       parent: BindingScope,
@@ -462,7 +471,7 @@ export class TemplateControllerFlowScopeMaterializer {
     localSuffix: string,
   ): BindingScope {
     frame.flowState.clearBranch(parent);
-    const emission = this.constructWithScope(frame.input, parent, instruction, controller, localSuffix);
+    const emission = this.constructWithScope(frame, parent, instruction, controller, localSuffix);
     return frame.addDerivedScope(emission);
   }
 
@@ -676,19 +685,45 @@ export class TemplateControllerFlowScopeMaterializer {
   }
 
   private constructWithScope(
-    input: TemplateScopeConstructionRequest,
+    frame: TemplateScopeConstructionFrame,
     parent: BindingScope,
     instruction: HydrateTemplateControllerInstruction,
     controller: RuntimeControllerFrame | null,
     localSuffix: string,
   ): BindingScopeConstructionEmission {
+    const input = frame.input;
+    const projection = this.typeSupport.templateControllerObjectBindingContextProjection(
+      input,
+      parent,
+      instruction,
+      localSuffix,
+      controller,
+    );
+    if (projection?.nullPresence != null && projection.nullPresence !== CheckerTypeNullishPresence.None) {
+      frame.addScopeIssue(this.scopeIssuePublisher.publish(
+        `${input.localKey}:scope:${localSuffix}:with-null-binding-context`,
+        KernelVocabulary.Instruction.Instruction.key,
+        instruction.productHandle,
+        instruction.identityHandle,
+        RuntimeBindingScopeIssuePhase.TemplateControllerValueScope,
+        RuntimeBindingScopeIssueKind.WithNullBindingContext,
+        projection.nullPresence === CheckerTypeNullishPresence.Definitely
+          ? RuntimeBindingScopeIssueCertainty.Definite
+          : RuntimeBindingScopeIssueCertainty.Possible,
+        `With can receive null from source type '${projection.sourceType.display ?? 'unknown'}'; runtime Scope lookup cannot inspect a null binding context`,
+        null,
+        projection.sourceAddressHandle,
+        null,
+        projection.sourceType,
+      ));
+    }
     return this.constructObjectScope(
       input,
       parent,
       instruction,
       controller,
       localSuffix,
-      this.typeSupport.templateControllerObjectBindingContextType(input, parent, instruction, localSuffix, controller),
+      projection?.contextType ?? null,
     );
   }
 
