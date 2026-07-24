@@ -29,6 +29,10 @@ import type { FullResourceDefinition } from '../resources/resource-definition.js
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import { ConfigurationProductDetails } from '../configuration/product-details.js';
 import {
+  CustomAttributeController,
+  CustomElementController,
+} from '../configuration/controller.js';
+import {
   BindingContextKind,
   BindingContextSlot,
   BindingScope,
@@ -94,9 +98,14 @@ import {
   findVisibleTemplateResource,
   readVisibleTemplateResourceDefinition,
 } from '../template/compiler-resource-lookup.js';
-import { expressionResourceOccurrences } from '../template/expression-resource-occurrence.js';
+import {
+  expressionResourceOccurrences,
+  isBindingBehaviorOccurrence,
+  isValueConverterOccurrence,
+} from '../template/expression-resource-occurrence.js';
 import {
   TemplateVisibleResource,
+  sameTemplateVisibleResource,
   type TemplateBindableReference,
 } from '../template/compiler-world-reference.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from '../template/template-compilation-project-pass.js';
@@ -125,20 +134,24 @@ import {
 } from '../template/template-controller-semantics.js';
 import { componentLifecycleHookName } from '../template/component-lifecycle-source.js';
 import {
-  bindingSourceContextProjectionForTemplateExpressionParseAtOffset,
-  bindingScopeForTemplateExpressionParse,
+  bindingSourceContextProjectionSelectionForTemplateExpressionParseAtOffset,
+  RuntimeBindingSourceContextProjectionSelectionKind,
+  templateInstructionForExpressionParse,
   templateScopeRangeAddressHandle,
 } from '../template/template-expression-selection.js';
 import {
+  compilerReachesHtmlAttribute,
+  compilerReachesHtmlNode,
   resourceLocalBindingSourceOperations,
   resourceLocalDynamicTemplateInstructions,
-  resourceLocalTemplateExpressionParses,
+  resourceLocalAuthoredTemplateExpressionParses,
+  resourceLocalAuthoredTemplateValueSites,
   resourceLocalTemplateInstructions,
-  resourceLocalTemplateValueSites,
 } from '../template/runtime-resource-ownership.js';
 import { templateScopeChain } from '../template/template-scope-replay.js';
 import {
   checkerContextForRuntimeBindingSourceExpressionProjection,
+  type RuntimeBindingSourceExpressionContextProjection,
 } from '../observation/runtime-binding-source-expression-context.js';
 import {
   InquiryAnswer,
@@ -408,6 +421,8 @@ export class TemplateCompletionCursorContext {
     readonly activeSourceAddressHandle: AddressHandle | null,
     /** Exact parser-owned expression token span selected by the cursor; kept span-only to avoid per-token kernel growth. */
     readonly activeExpressionSpan: SourceSpan | null,
+    /** Why no single rendered binding-source environment could be selected, when the expression is reused ambiguously. */
+    readonly bindingSourceContextOpenReason: string | null,
     /** Extra context gaps found while turning a cursor into product handles. */
     readonly missingInputs: readonly string[] = [],
   ) {}
@@ -447,6 +462,16 @@ interface DerivedMemberOwnerType {
   readonly productHandle: ProductHandle | null;
   readonly openSubject: CheckerExpressionTypeOpenSubject | null;
   readonly sourceAddressHandle: AddressHandle | null;
+}
+
+/** Coupled runtime source environment retained for cursor-driven expression consumers. */
+class TemplateCursorBindingEnvironment {
+  constructor(
+    readonly bindingScope: BindingScope | null,
+    readonly resourceScope: TemplateResourceScope | null,
+    readonly sourceProjection: RuntimeBindingSourceExpressionContextProjection | null,
+    readonly openReason: string | null,
+  ) {}
 }
 
 interface TemplateDefinitionCursorSelection {
@@ -514,6 +539,7 @@ class TemplateCompletionCursorContextBuilder {
       null,
       null,
       null,
+      null,
       ['source-offset'],
     );
   }
@@ -526,6 +552,10 @@ class TemplateCompletionCursorContextBuilder {
     const expressionResult = expressionParse == null
       ? null
       : cursorFocusedExpressionResult(this.store, expressionParse, offset);
+    const effectiveExpressionParse = expressionParse != null
+      && templateInstructionForExpressionParse(this.input.resource, expressionParse) != null
+      ? expressionParse
+      : null;
     const expressionFrontier = expressionResult == null
       ? null
       : expressionCompletionFrontier(expressionResult);
@@ -536,18 +566,38 @@ class TemplateCompletionCursorContextBuilder {
     const multiBindingSegment = this.multiBindingSegmentForCursor(offset, valueSite, nestedSyntax);
     const activeElement = elementForCursorContext(this.input.resource.compilation.html.nodes, htmlNode, classification);
     const siteKind = this.siteKindForCursor(offset, htmlNode, activeElement, htmlAttribute, syntax, valueSite, expressionResult);
+    const expressionSemanticsOpen = siteKindUsesExpressionParse(siteKind)
+      && expressionParse != null
+      && effectiveExpressionParse == null;
+    const compilerReachable = compilerReachesHtmlNode(this.input.resource, htmlNode)
+      && compilerReachesHtmlAttribute(this.input.resource, htmlAttribute);
+    const semanticContextOpen = expressionSemanticsOpen || !compilerReachable;
+    const semanticExpressionResult = semanticContextOpen ? null : expressionResult;
+    const semanticSyntax = semanticContextOpen ? null : syntax;
+    const semanticClassification = semanticContextOpen ? null : classification;
+    const semanticValueSite = semanticContextOpen ? null : valueSite;
+    const semanticMultiBindingSegment = semanticContextOpen ? null : multiBindingSegment;
     const declarationSelection = sourceBackedScopeSlotDeclarationForCursor(
       this.store,
       this.input.resource,
       offset,
     );
-    const bindingScope = declarationSelection?.scope ?? bindingScopeForCursor(
-      this.store,
-      this.input.resource,
-      this.expressionWorld,
-      offset,
-      expressionParse,
-    );
+    const bindingEnvironment = semanticContextOpen
+      ? null
+      : bindingEnvironmentForCursor(
+          this.store,
+          this.input.resource,
+          this.expressionWorld,
+          offset,
+          effectiveExpressionParse,
+        );
+    const bindingScope = declarationSelection?.scope
+      ?? bindingEnvironment?.bindingScope
+      ?? null;
+    const missingInputs: string[] = [];
+    if (bindingEnvironment?.openReason != null) {
+      missingInputs.push('runtime-binding-source-context');
+    }
     const declarationBindable = selectedBindableForDeclarationCursor(
       this.store,
       this.input.resource,
@@ -557,41 +607,51 @@ class TemplateCompletionCursorContextBuilder {
       this.store,
       this.input.resource,
       activeElement,
-      syntax,
-      classification,
+      semanticSyntax,
+      semanticClassification,
       siteKind,
-      expressionResult,
+      semanticExpressionResult,
+      effectiveExpressionParse,
+      semanticValueSite,
       offset,
       declarationBindable,
     );
-    const selectedBindable = selectedBindableForCursor(classification, valueSite, multiBindingSegment)
+    const selectedBindable = selectedBindableForCursor(
+      semanticClassification,
+      semanticValueSite,
+      semanticMultiBindingSegment,
+    )
       ?? declarationBindable;
     const selectedScopeSlot = selectedScopeSlotForCursor(
       siteKind,
-      expressionResult,
+      semanticExpressionResult,
       offset,
       bindingScope,
       declarationSelection,
     );
-    const missingInputs: string[] = [];
     const routeParameterEndpointProductHandles = this.routeParameterEndpointProductHandles(
-      multiBindingSegment,
+      semanticMultiBindingSegment,
       siteKind,
-      expressionResult,
+      semanticExpressionResult,
       offset,
       missingInputs,
     );
-    const memberOwnerType = this.memberOwnerType(
-      offset,
-      siteKind,
-      expressionParse,
-      expressionResult,
-      bindingScope,
-      valueSite,
-      selectedScopeSlot == null ? missingInputs : [],
-    );
+    const memberOwnerType = bindingEnvironment?.openReason == null
+      ? this.memberOwnerType(
+          offset,
+          siteKind,
+          effectiveExpressionParse,
+          semanticExpressionResult,
+          bindingScope,
+          bindingEnvironment,
+          semanticValueSite,
+          selectedScopeSlot == null ? missingInputs : [],
+        )
+      : missingDerivedMemberOwnerType();
     const selectedMemberName = selectedScopeSlot?.slot.name
-      ?? selectedMemberNameForCursor(siteKind, expressionResult, offset);
+      ?? (bindingEnvironment?.openReason == null
+        ? selectedMemberNameForCursor(siteKind, semanticExpressionResult, offset)
+        : null);
     const activeExpressionSpan = expressionResult == null
       ? null
       : ExpressionParseResultInspector.authoredTokenSpanAtOffset(expressionResult, offset);
@@ -614,11 +674,13 @@ class TemplateCompletionCursorContextBuilder {
         siteKind,
         this.page,
         bindingScope?.productHandle ?? null,
-        this.input.resource.compilation.compilerWorld.resourceScope.productHandle,
+        semanticContextOpen
+          ? null
+          : bindingEnvironment?.resourceScope?.productHandle ?? null,
         selectedDefinition?.productHandle ?? null,
-        siteKindUsesExpressionParse(siteKind) ? expressionParse?.productHandle ?? null : null,
+        siteKindUsesExpressionParse(siteKind) ? effectiveExpressionParse?.productHandle ?? null : null,
         memberOwnerType.productHandle,
-        valueSite?.productHandle ?? null,
+        semanticValueSite?.productHandle ?? null,
         this.projection,
         this.input.routeConfigProductHandles ?? [],
         routeParameterEndpointProductHandles,
@@ -637,6 +699,7 @@ class TemplateCompletionCursorContextBuilder {
       memberOwnerType.sourceAddressHandle,
       activeSourceAddressHandle,
       activeExpressionSpan,
+      bindingEnvironment?.openReason ?? null,
       uniqueValues(missingInputs),
     );
   }
@@ -757,7 +820,7 @@ class TemplateCompletionCursorContextBuilder {
     activeAttribute: HtmlAttribute | null,
   ): TemplateValueSite | null {
     const site = smallestContaining(
-      resourceLocalTemplateValueSites(this.store, this.input.resource),
+      resourceLocalAuthoredTemplateValueSites(this.store, this.input.resource),
       offset,
       (site) => sourceSpanFor(this.store, site.sourceAddressHandle),
     );
@@ -770,7 +833,7 @@ class TemplateCompletionCursorContextBuilder {
   private expressionParseForValueSite(valueSite: TemplateValueSite | null): TemplateExpressionParse | null {
     return valueSite == null
       ? null
-      : resourceLocalTemplateExpressionParses(this.store, this.input.resource)
+      : resourceLocalAuthoredTemplateExpressionParses(this.store, this.input.resource)
         .find((parse) => parse.site.productHandle === valueSite.productHandle) ?? null;
   }
 
@@ -817,6 +880,7 @@ class TemplateCompletionCursorContextBuilder {
     expressionParse: TemplateExpressionParse | null,
     expressionResult: ExpressionParseResult | null,
     bindingScope: BindingScope | null,
+    bindingEnvironment: TemplateCursorBindingEnvironment | null,
     valueSite: TemplateValueSite | null,
     missingInputs: string[],
   ): DerivedMemberOwnerType {
@@ -831,8 +895,8 @@ class TemplateCompletionCursorContextBuilder {
         offset,
         expressionParse.sourceAddressHandle,
         bindingScope,
-        this.input.resource,
-        this.input.resource.compilation.compilerWorld.resourceScope,
+        bindingEnvironment?.resourceScope ?? null,
+        bindingEnvironment?.sourceProjection ?? null,
         valueSite == null
           ? null
           : bindableTypeMember(this.store, this.expressionWorld.projector, valueSite)?.valueType ?? null,
@@ -1918,8 +1982,8 @@ function deriveMemberOwnerTypeForCursorExpression(
   offset: number,
   sourceAddressHandle: AddressHandle | null,
   bindingScope: BindingScope,
-  resource: TemplateResourceRuntimeAnalysisEmission,
   resourceScope: TemplateResourceScope | null,
+  sourceProjection: RuntimeBindingSourceExpressionContextProjection | null,
   contextualType: CheckerTypeReference | null,
   expressionWorld: CheckerExpressionTypeWorld,
   missingInputs: string[],
@@ -1932,9 +1996,8 @@ function deriveMemberOwnerTypeForCursorExpression(
     offset,
     sourceAddressHandle,
     bindingScope,
-    resource,
+    sourceProjection,
     contextualType,
-    expressionWorld,
   );
   if (context == null) {
     missingInputs.push('expression-member-owner');
@@ -1967,9 +2030,8 @@ function memberOwnerEvaluationContextForCursorExpression(
   offset: number,
   sourceAddressHandle: AddressHandle | null,
   bindingScope: BindingScope,
-  resource: TemplateResourceRuntimeAnalysisEmission,
+  sourceProjection: RuntimeBindingSourceExpressionContextProjection | null,
   contextualType: CheckerTypeReference | null,
-  expressionWorld: CheckerExpressionTypeWorld,
 ): CheckerExpressionTypeEvaluationContext | null {
   const expression = bindingExpressionAstForProductAtOffset(store, expressionParse.productHandle, offset)
     ?? (result == null ? null : ExpressionParseResultInspector.memberOwnerAtOffset(result, offset));
@@ -1977,15 +2039,7 @@ function memberOwnerEvaluationContextForCursorExpression(
     return null;
   }
 
-  const projection = bindingSourceContextProjectionForTemplateExpressionParseAtOffset(
-    store,
-    resource,
-    expressionWorld,
-    expressionParse,
-    offset,
-    bindingScope,
-  );
-  return projection == null
+  return sourceProjection == null
     ? CheckerExpressionTypeEvaluationContext.knownScope(
       expression,
       bindingScope,
@@ -1994,7 +2048,7 @@ function memberOwnerEvaluationContextForCursorExpression(
       contextualType,
     )
     : checkerContextForRuntimeBindingSourceExpressionProjection(
-      projection,
+      sourceProjection,
       false,
       contextualType,
       memberOwnerLocalKey(locusKey),
@@ -2349,7 +2403,8 @@ function routeConfigForScopeDefinition(
   const controller = controllerProductHandle == null
     ? null
     : store.productDetails.read(ConfigurationProductDetails.Controller, controllerProductHandle);
-  const definitionProductHandle = controller != null && 'definitionProductHandle' in controller
+  const definitionProductHandle = controller instanceof CustomElementController
+    || controller instanceof CustomAttributeController
     ? controller.definitionProductHandle
     : null;
   const definition = definitionProductHandle == null
@@ -2988,22 +3043,44 @@ function isBindingCommandNameOffset(
   return cursorTouchesSpan(sourceSpanFor(store, syntax.commandSourceAddressHandle), offset);
 }
 
-function bindingScopeForCursor(
+function bindingEnvironmentForCursor(
   store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
   expressionWorld: CheckerExpressionTypeWorld,
   offset: number,
   expressionParse: TemplateExpressionParse | null,
-): BindingScope | null {
-  const instructionScope = expressionParse == null
-    ? null
-    : bindingSourceScopeForTemplateExpressionParse(store, resource, expressionWorld, expressionParse, offset)
-      ?? bindingScopeForTemplateExpressionParse(resource, expressionParse);
-  if (instructionScope != null) {
-    return instructionScope;
+): TemplateCursorBindingEnvironment {
+  if (expressionParse == null) {
+    return new TemplateCursorBindingEnvironment(
+      bestBindingScopeForOffset(store, resource, offset)
+        ?? resource.runtimeAnalysis.scopes.rootScope,
+      resource.compilation.compilerWorld.resourceScope,
+      null,
+      null,
+    );
   }
-
-  return bestBindingScopeForOffset(store, resource, offset) ?? resource.runtimeAnalysis.scopes.rootScope;
+  const selection = bindingSourceContextProjectionSelectionForTemplateExpressionParseAtOffset(
+    store,
+    resource,
+    expressionWorld,
+    expressionParse,
+    offset,
+  );
+  if (selection?.kind === RuntimeBindingSourceContextProjectionSelectionKind.Context) {
+    return new TemplateCursorBindingEnvironment(
+      selection.projection.scope,
+      selection.projection.resourceScope,
+      selection.projection,
+      null,
+    );
+  }
+  return new TemplateCursorBindingEnvironment(
+    null,
+    null,
+    null,
+    selection?.openReason
+      ?? 'Runtime binding source expression did not retain a cursor-addressable source context.',
+  );
 }
 
 function bestBindingScopeForOffset(
@@ -3028,22 +3105,6 @@ function bestBindingScopeForOffset(
   return best?.scope ?? null;
 }
 
-function bindingSourceScopeForTemplateExpressionParse(
-  store: KernelStore,
-  resource: TemplateResourceRuntimeAnalysisEmission,
-  expressionWorld: CheckerExpressionTypeWorld,
-  expressionParse: TemplateExpressionParse,
-  offset: number,
-): BindingScope | null {
-  return bindingSourceContextProjectionForTemplateExpressionParseAtOffset(
-    store,
-    resource,
-    expressionWorld,
-    expressionParse,
-    offset,
-  )?.scope ?? null;
-}
-
 function scopeDepth(scope: BindingScope): number {
   return templateScopeChain(scope).length - 1;
 }
@@ -3056,6 +3117,8 @@ function selectedDefinitionForCursor(
   classification: AttributeClassification | null,
   siteKind: TemplateCompletionSiteKind,
   expressionResult: ExpressionParseResult | null,
+  expressionParse: TemplateExpressionParse | null,
+  valueSite: TemplateValueSite | null,
   offset: number,
   declarationBindable: TemplateBindableReference | null,
 ): TemplateDefinitionCursorSelection | null {
@@ -3063,9 +3126,21 @@ function selectedDefinitionForCursor(
     siteKind === TemplateCompletionSiteKind.ExpressionValueConverter
     || siteKind === TemplateCompletionSiteKind.ExpressionBindingBehavior
   ) {
-    return expressionResourceForCursor(resource, siteKind, expressionResult, offset);
+    return expressionResourceForCursor(resource, expressionParse, siteKind, expressionResult, offset);
   }
   if (siteKind === TemplateCompletionSiteKind.BindingCommandName && syntax?.command != null) {
+    const exactCommand = valueSite?.bindingCommand?.productHandle == null
+      ? null
+      : store.productDetails.read(
+          TemplateProductDetails.BindingCommandExecutable,
+          valueSite.bindingCommand.productHandle,
+        );
+    if (exactCommand?.definitionProductHandle != null) {
+      return {
+        productHandle: exactCommand.definitionProductHandle,
+        matchedName: syntax.command,
+      };
+    }
     const command = findVisibleTemplateResource(
       resource.compilation.compilerWorld.resourceScope,
       ResourceDefinitionKind.BindingCommand,
@@ -3215,6 +3290,7 @@ function definitionForDeclarationCursor(
 
 function expressionResourceForCursor(
   resource: TemplateResourceRuntimeAnalysisEmission,
+  expressionParse: TemplateExpressionParse | null,
   siteKind: TemplateCompletionSiteKind.ExpressionValueConverter | TemplateCompletionSiteKind.ExpressionBindingBehavior,
   expressionResult: ExpressionParseResult | null,
   offset: number,
@@ -3232,11 +3308,31 @@ function expressionResourceForCursor(
   if (occurrence == null) {
     return null;
   }
-  const visible = findVisibleTemplateResource(
-    resource.compilation.compilerWorld.resourceScope,
-    resourceKind,
-    occurrence.expression.name.name,
-  );
+  const planEntries = expressionParse == null
+    ? []
+    : isValueConverterOccurrence(occurrence)
+      ? resource.runtimeAnalysis.expressionResourcePlan.readValueConverterEntries(
+          expressionParse.productHandle,
+          occurrence.expression,
+        )
+      : isBindingBehaviorOccurrence(occurrence)
+        ? resource.runtimeAnalysis.expressionResourcePlan.readBindingBehaviorEntries(
+            expressionParse.productHandle,
+            occurrence.expression,
+          )
+        : [];
+  const firstPlanned = planEntries[0]?.resource;
+  const visible = planEntries.length === 0
+    ? findVisibleTemplateResource(
+        resource.compilation.compilerWorld.resourceScope,
+        resourceKind,
+        occurrence.expression.name.name,
+      )
+    : firstPlanned != null && planEntries.every((entry) =>
+        entry.resource != null && sameTemplateVisibleResource(firstPlanned, entry.resource)
+      )
+      ? firstPlanned
+      : null;
   const productHandle = visible?.definitionProductHandle
     ?? visible?.resourceProductHandle
     ?? null;

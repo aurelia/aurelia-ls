@@ -259,7 +259,6 @@ export class AttributeClassificationMaterializer {
       decision.bindingCommand,
       decision.bindable,
       [],
-      [],
       decision.openReason,
     ), new MaterializedProduct(
       productHandle,

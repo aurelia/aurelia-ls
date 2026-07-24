@@ -39,5 +39,5 @@
 
   <no-capture-shell value.bind="capturedValue"></no-capture-shell>
   <filtered-capture-shell class="host-class" data-note="filtered-note"></filtered-capture-shell>
-  <nested-capture-shell value.bind="capturedValue" input-mark="nested-mark"></nested-capture-shell>
+  <nested-capture-shell value.bind="capturedValue | nestedIdentity" input-mark="nested-mark"></nested-capture-shell>
 </template>

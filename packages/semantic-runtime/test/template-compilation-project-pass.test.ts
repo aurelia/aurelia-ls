@@ -270,6 +270,9 @@ describe('template compilation project pass', () => {
       store.handles.product('html'),
       CompiledTemplateState.Complete,
       [],
+      [],
+      false,
+      [],
       null,
       sourceSpanHandle,
     );

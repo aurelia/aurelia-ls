@@ -463,17 +463,26 @@ function materializedRouteContextContainer(
     return null;
   }
   const sourceAddressHandle = routeConfigContext.sourceAddressHandle;
-  return materializer.materializeChild(new ContainerChildMaterializationRequest(
-    `${local}:container`,
-    parentContainer,
+  return materializer.materializeChild(new ContainerChildMaterializationRequest({
+    localKey: `${local}:container`,
+    parent: parentContainer,
     sourceAddressHandle,
-    `${routeConfigContext.friendlyPath}:route-context-container`,
-    [
-      new ContainerContextResolverSlotRequest(FrameworkIntrinsicDiKey.IController, sourceAddressHandle),
-      new ContainerContextResolverSlotRequest(FrameworkIntrinsicDiKey.IRouteContext, sourceAddressHandle),
-      new ContainerContextResolverSlotRequest(FrameworkIntrinsicDiKey.IContextRouter, sourceAddressHandle),
+    localName: `${routeConfigContext.friendlyPath}:route-context-container`,
+    contextResolvers: [
+      new ContainerContextResolverSlotRequest({
+        interfaceName: FrameworkIntrinsicDiKey.IController,
+        sourceAddressHandle,
+      }),
+      new ContainerContextResolverSlotRequest({
+        interfaceName: FrameworkIntrinsicDiKey.IRouteContext,
+        sourceAddressHandle,
+      }),
+      new ContainerContextResolverSlotRequest({
+        interfaceName: FrameworkIntrinsicDiKey.IContextRouter,
+        sourceAddressHandle,
+      }),
     ],
-  ));
+  }));
 }
 
 function materializedRouteContext(

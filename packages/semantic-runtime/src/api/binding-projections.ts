@@ -692,6 +692,7 @@ function bindingDataFlowSummaryKey(row: SemanticBindingDataFlowRow): string {
   return [
     row.direction,
     row.sourceEvaluationKind,
+    row.sourceEvaluationReachability,
     row.targetMutationKind,
     row.targetKind ?? '',
     row.targetProperty ?? '',
@@ -706,6 +707,7 @@ function bindingDataFlowSummaryAccumulator(
   return {
     direction: row.direction,
     sourceEvaluationKind: row.sourceEvaluationKind,
+    sourceEvaluationReachability: row.sourceEvaluationReachability,
     targetMutationKind: row.targetMutationKind,
     targetKind: row.targetKind,
     targetProperty: row.targetProperty,
@@ -788,6 +790,7 @@ function bindingDataFlowSummaryRow(
   return {
     direction: group.direction,
     sourceEvaluationKind: group.sourceEvaluationKind,
+    sourceEvaluationReachability: group.sourceEvaluationReachability,
     targetMutationKind: group.targetMutationKind,
     targetKind: group.targetKind,
     targetProperty: group.targetProperty,
@@ -821,7 +824,7 @@ function bindingDataFlowSummaryRow(
 }
 
 function bindingDataFlowSummarySortKey(row: SemanticBindingDataFlowSummaryRow): string {
-  return `${row.direction}:${row.sourceEvaluationKind}:${row.targetMutationKind}:${row.valueChannelKind ?? ''}:${row.targetKind ?? ''}:${row.targetProperty ?? ''}:${row.sourceKind}`;
+  return `${row.direction}:${row.sourceEvaluationKind}:${row.sourceEvaluationReachability}:${row.targetMutationKind}:${row.valueChannelKind ?? ''}:${row.targetKind ?? ''}:${row.targetProperty ?? ''}:${row.sourceKind}`;
 }
 
 function summarizeBindingDataFlowIssues(
@@ -968,6 +971,7 @@ function bindingDataFlowIssueKinds(
 interface BindingDataFlowSummaryAccumulator {
   readonly direction: SemanticBindingDataFlowSummaryRow['direction'];
   readonly sourceEvaluationKind: SemanticBindingDataFlowSummaryRow['sourceEvaluationKind'];
+  readonly sourceEvaluationReachability: SemanticBindingDataFlowSummaryRow['sourceEvaluationReachability'];
   readonly targetMutationKind: SemanticBindingDataFlowSummaryRow['targetMutationKind'];
   readonly targetKind: SemanticBindingDataFlowSummaryRow['targetKind'];
   readonly targetProperty: string | null;
@@ -1253,6 +1257,7 @@ function bindingValueChannelClusterLabel(row: SemanticBindingValueChannelSummary
 function bindingDataFlowClusterLabel(row: SemanticBindingDataFlowSummaryRow): string {
   return [
     row.direction,
+    `${row.sourceEvaluationKind}:${row.sourceEvaluationReachability}`,
     row.sourceKind,
     row.valueChannelKind ?? 'no-value-channel',
     bindingTargetLabel(row.targetKind, row.targetProperty),
@@ -1350,6 +1355,7 @@ function bindingDataFlowRow(
     bindingKind: dataFlow.binding.bindingKind,
     direction: dataFlow.direction,
     sourceEvaluationKind: dataFlow.sourceEvaluationKind,
+    sourceEvaluationReachability: dataFlow.sourceEvaluationReachability,
     targetMutationKind: dataFlow.targetMutationKind,
     strictBinding: dataFlow.strictBinding,
     expressionParseState: parse?.state ?? null,

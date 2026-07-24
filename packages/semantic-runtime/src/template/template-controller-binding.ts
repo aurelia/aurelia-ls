@@ -26,8 +26,11 @@ export function templateControllerRuntimeValueBinding(
   if (expressionProductHandle == null) {
     return null;
   }
-  const bindings = (controller?.readBindings() ?? runtimeRendering.readBindingsForInstruction(instruction.productHandle))
+  const bindings = runtimeRendering.readBindingsForExpressionProduct(expressionProductHandle)
     .filter(isRuntimeExpressionBinding)
-    .filter((binding) => expressionProductHandleForBinding(binding) === expressionProductHandle);
+    .filter((binding) => expressionProductHandleForBinding(binding) === expressionProductHandle)
+    .filter((binding) => controller == null
+      || runtimeRendering.requireRenderContextForBinding(binding.productHandle).targetController.productHandle
+        === controller.productHandle);
   return bindings.length === 1 ? bindings[0]! : null;
 }

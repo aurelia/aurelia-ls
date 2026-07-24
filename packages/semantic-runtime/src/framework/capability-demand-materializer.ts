@@ -20,6 +20,10 @@ import {
 } from '../kernel/evidence.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import type {
+  BindingBehaviorExpression,
+  ValueConverterExpression,
+} from '../expression/ast.js';
+import type {
   AddressHandle,
   IdentityHandle,
   OpenSeamHandle,
@@ -98,14 +102,19 @@ import type {
   TemplateCompilationProjectEmission,
   TemplateResourceRuntimeAnalysisEmission,
 } from '../template/template-compilation-project-pass.js';
-import { TemplateProductDetails } from '../template/product-details.js';
 import {
   sourceAddressForRuntimeExpressionSpan,
 } from '../template/runtime-expression-source-address.js';
 import type {
   TemplateExpressionParse,
-  TemplateValueSite,
 } from '../template/value-site.js';
+import {
+  resourceLocalCompilerReachableHtmlAttributeProductHandles,
+  resourceLocalCompilerReachableHtmlNodeProductHandles,
+} from '../template/runtime-resource-ownership.js';
+import {
+  resourceLocalEffectiveTemplateExpressionParses,
+} from '../template/template-expression-selection.js';
 import {
   allBuiltInResources,
   BuiltInResourcePackage,
@@ -678,7 +687,14 @@ function admissionStateForBoolean(
 function syntaxCapabilityDemandSites(
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly CapabilityDemandSite[] {
+  const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
   return resource.compilation.authoredAttributeSyntaxes.flatMap((syntax) => {
+    if (
+      syntax.attribute.productHandle == null
+      || !compilerReachableAttributes.has(syntax.attribute.productHandle)
+    ) {
+      return [];
+    }
     const parsed = parseBuiltInAttributeSyntax(syntax.rawName, syntax.rawValue);
     if (parsed.handler == null) {
       return [];
@@ -694,7 +710,14 @@ function syntaxCapabilityDemandSites(
 function bindingCommandCapabilityDemandSites(
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly CapabilityDemandSite[] {
+  const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
   return resource.compilation.authoredAttributeSyntaxes.flatMap((syntax) => {
+    if (
+      syntax.attribute.productHandle == null
+      || !compilerReachableAttributes.has(syntax.attribute.productHandle)
+    ) {
+      return [];
+    }
     const commandName = syntax.command?.toLowerCase() ?? null;
     if (commandName == null) {
       return [];
@@ -720,18 +743,29 @@ function resourceCapabilityDemandSites(
     resource.compilation.html.nodes,
     resource.compilation.html.attributes,
   );
+  const compilerReachableNodes = resourceLocalCompilerReachableHtmlNodeProductHandles(resource);
+  const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
   return [
-    ...elementResourceCapabilityDemandSites(resource, ownersByAttributeProduct),
-    ...attributeResourceCapabilityDemandSites(resource, attributesByProduct, ownersByAttributeProduct),
+    ...elementResourceCapabilityDemandSites(resource, ownersByAttributeProduct, compilerReachableNodes),
+    ...attributeResourceCapabilityDemandSites(
+      resource,
+      attributesByProduct,
+      ownersByAttributeProduct,
+      compilerReachableAttributes,
+    ),
   ];
 }
 
 function elementResourceCapabilityDemandSites(
   resource: TemplateResourceRuntimeAnalysisEmission,
   ownersByAttributeProduct: ReadonlyMap<string, HtmlElementAttributeOwner>,
+  compilerReachableNodes: ReadonlySet<ProductHandle>,
 ): readonly CapabilityDemandSite[] {
   const elementOwners = elementOwnersForResource(resource, ownersByAttributeProduct);
   return elementOwners.flatMap((owner) => {
+    if (!compilerReachableNodes.has(owner.element.productHandle)) {
+      return [];
+    }
     const lookupName = htmlElementLookupName(owner.element, owner);
     const builtIn = builtInResourceFor(ResourceDefinitionKind.CustomElement, lookupName);
     if (builtIn == null) {
@@ -750,8 +784,15 @@ function attributeResourceCapabilityDemandSites(
   resource: TemplateResourceRuntimeAnalysisEmission,
   attributesByProduct: ReadonlyMap<string, HtmlAttribute>,
   ownersByAttributeProduct: ReadonlyMap<string, HtmlElementAttributeOwner>,
+  compilerReachableAttributes: ReadonlySet<ProductHandle>,
 ): readonly CapabilityDemandSite[] {
   return resource.compilation.attributeSyntax.syntaxes.flatMap((syntax) => {
+    if (
+      syntax.attribute.productHandle == null
+      || !compilerReachableAttributes.has(syntax.attribute.productHandle)
+    ) {
+      return [];
+    }
     const attribute = syntax.attribute.productHandle == null
       ? null
       : attributesByProduct.get(syntax.attribute.productHandle) ?? null;
@@ -775,7 +816,7 @@ function expressionResourceCapabilityDemandSites(
   publication: KernelPublicationContext,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly CapabilityDemandSite[] {
-  return publicationLocalTemplateExpressionParses(publication, resource).flatMap((parse, parseIndex) => {
+  return resourceLocalEffectiveTemplateExpressionParses(publication, resource).flatMap((parse, parseIndex) => {
     const expression = runtimeAcceptedBindingExpressionAstForParse(parse);
     if (expression == null) {
       return [];
@@ -786,10 +827,7 @@ function expressionResourceCapabilityDemandSites(
           publication,
           resource,
           parse,
-          FrameworkCapabilityDemandSiteKind.TemplateValueConverter,
-          ResourceDefinitionKind.ValueConverter,
-          converter.name.name,
-          converter.name.span,
+          converter,
           `parse:${parseIndex}:value-converter:${converterIndex}`,
         )
       ),
@@ -798,67 +836,12 @@ function expressionResourceCapabilityDemandSites(
           publication,
           resource,
           parse,
-          FrameworkCapabilityDemandSiteKind.TemplateBindingBehavior,
-          ResourceDefinitionKind.BindingBehavior,
-          behavior.name.name,
-          behavior.name.span,
+          behavior,
           `parse:${parseIndex}:binding-behavior:${behaviorIndex}`,
         )
       ),
     ];
   });
-}
-
-function publicationLocalTemplateExpressionParses(
-  publication: KernelPublicationContext,
-  resource: TemplateResourceRuntimeAnalysisEmission,
-): readonly TemplateExpressionParse[] {
-  return [
-    ...resource.runtimeAnalysis.runtimeRendering.dynamicExpressionParses.filter((parse) =>
-      dynamicExpressionParseBelongsToResource(publication, resource, parse)
-    ),
-    ...resource.compilation.bindingCommandLowering.expressionParses,
-    ...resource.compilation.valueSites.parses,
-  ];
-}
-
-function dynamicExpressionParseBelongsToResource(
-  publication: KernelPublicationContext,
-  resource: TemplateResourceRuntimeAnalysisEmission,
-  parse: TemplateExpressionParse,
-): boolean {
-  const site = publication.readProductDetail(TemplateProductDetails.ValueSite, parse.site.productHandle);
-  return site == null
-    ? sourceAddressBelongsToResourceTemplate(publication, resource, parse.sourceAddressHandle)
-    : dynamicValueSiteBelongsToResource(publication, resource, site);
-}
-
-function dynamicValueSiteBelongsToResource(
-  publication: KernelPublicationContext,
-  resource: TemplateResourceRuntimeAnalysisEmission,
-  site: TemplateValueSite,
-): boolean {
-  if (site.syntax == null) {
-    return sourceAddressBelongsToResourceTemplate(publication, resource, site.sourceAddressHandle);
-  }
-  return resource.compilation.authoredAttributeSyntaxes.some((syntax) =>
-    syntax.productHandle === site.syntax?.productHandle
-  );
-}
-
-function sourceAddressBelongsToResourceTemplate(
-  publication: KernelPublicationContext,
-  resource: TemplateResourceRuntimeAnalysisEmission,
-  addressHandle: AddressHandle | null,
-): boolean {
-  const resourceSpan = sourceSpanAddressForAddress(
-    publication,
-    resource.compilation.unit.templateSource.sourceAddressHandle,
-  );
-  const sourceSpan = sourceSpanAddressForAddress(publication, addressHandle);
-  return resourceSpan != null
-    && sourceSpan != null
-    && sourceSpanContains(resourceSpan, sourceSpan);
 }
 
 function siteForAttributeSyntax(
@@ -902,12 +885,18 @@ function siteForExpressionResource(
   publication: KernelPublicationContext,
   resource: TemplateResourceRuntimeAnalysisEmission,
   parse: TemplateExpressionParse,
-  siteKind: FrameworkCapabilityDemandSiteKind.TemplateValueConverter | FrameworkCapabilityDemandSiteKind.TemplateBindingBehavior,
-  resourceKind: ResourceDefinitionKind.ValueConverter | ResourceDefinitionKind.BindingBehavior,
-  authoredName: string,
-  nameSpan: SourceSpan,
+  expression: ValueConverterExpression | BindingBehaviorExpression,
   localPart: string,
 ): readonly CapabilityDemandSite[] {
+  const isValueConverter = expression.$kind === 'ValueConverter';
+  const siteKind = isValueConverter
+    ? FrameworkCapabilityDemandSiteKind.TemplateValueConverter
+    : FrameworkCapabilityDemandSiteKind.TemplateBindingBehavior;
+  const resourceKind = isValueConverter
+    ? ResourceDefinitionKind.ValueConverter
+    : ResourceDefinitionKind.BindingBehavior;
+  const authoredName = expression.name.name;
+  const nameSpan = expression.name.span;
   const builtIn = builtInResourceFor(resourceKind, authoredName);
   if (builtIn == null) {
     return [];
@@ -928,11 +917,22 @@ function siteForExpressionResource(
     parse.sourceAddressHandle,
     nameSpan,
   );
-  const admitted = findVisibleTemplateResource(
-    resource.compilation.compilerWorld.resourceScope,
-    resourceKind,
-    authoredName,
-  ) != null;
+  const planEntries = isValueConverter
+    ? resource.runtimeAnalysis.expressionResourcePlan.readValueConverterEntries(
+        parse.productHandle,
+        expression,
+      )
+    : resource.runtimeAnalysis.expressionResourcePlan.readBindingBehaviorEntries(
+        parse.productHandle,
+        expression,
+      );
+  const admitted = planEntries.length === 0
+    ? findVisibleTemplateResource(
+        resource.compilation.compilerWorld.resourceScope,
+        resourceKind,
+        authoredName,
+      ) != null
+    : planEntries.every((entry) => entry.resource != null);
   return [{
     siteKind,
     demandKind: demand.demandKind,

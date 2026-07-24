@@ -19,11 +19,15 @@ import {
 } from '../inquiry/page.js';
 import {
   isSourceFileAddress,
+  sourceSpanAddressForAddress,
   sourceFilePathMatches,
   sourcePathMatchesFileName,
 } from '../kernel/source-address.js';
 import type { SourceSpanAddress } from '../kernel/address.js';
-import { sourceSpanContainsOffset } from '../kernel/address.js';
+import {
+  sourceSpanContains,
+  sourceSpanContainsOffset,
+} from '../kernel/address.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import {
   AuthoredSourceTextCache,
@@ -156,8 +160,11 @@ import {
 import {
   resourceLocalBindingDataFlows,
   resourceLocalBindingTargetAccesses,
-  resourceLocalTemplateExpressionParses,
+  resourceLocalCompilerReachableHtmlAttributeProductHandles,
 } from '../template/runtime-resource-ownership.js';
+import {
+  resourceLocalEffectiveTemplateExpressionParses,
+} from '../template/template-expression-selection.js';
 import {
   TemplateTypeSystemOverlayBuilder,
   type TemplateTypeSystemOverlayEmission,
@@ -912,7 +919,7 @@ function memberAccessSpanForDiagnosticRange(
   start: number,
   end: number,
 ): ExpressionMemberAccessSpan | null {
-  const parses = resourceLocalTemplateExpressionParses(store, resource);
+  const parses = resourceLocalEffectiveTemplateExpressionParses(store, resource);
   const preferred = semanticProductHandle == null
     ? []
     : parses.filter((parse) => parse.productHandle === semanticProductHandle);
@@ -1236,7 +1243,11 @@ function expressionRootDiagnosticRowsForSelection(
       context.includeHandles,
       [...new Set(cursorContext.missingInputs)],
     );
-    if (cursorContext.selectedScopeSlot != null || cursorInfo.selectedMember != null) {
+    if (
+      cursorContext.bindingSourceContextOpenReason != null
+      || cursorContext.selectedScopeSlot != null
+      || cursorInfo.selectedMember != null
+    ) {
       return [];
     }
     const source = sourceReferenceForParserSpan(
@@ -1282,7 +1293,7 @@ function expressionRootDiagnosticSites(
 ): readonly ExpressionRootDiagnosticSite[] {
   const sites: ExpressionRootDiagnosticSite[] = [];
   const seen = new Set<string>();
-  for (const parse of resourceLocalTemplateExpressionParses(store, resource)) {
+  for (const parse of resourceLocalEffectiveTemplateExpressionParses(store, resource)) {
     // Frontier subtrees support recovery/completion, but semantic absence would cascade from syntax not yet closed.
     if (!ExpressionParseResultInspector.hasCanonicalAst(parse.result)) {
       continue;
@@ -1380,7 +1391,7 @@ function expressionParseDiagnosticRowsForSelection(
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
-  return resourceLocalTemplateExpressionParses(store, selection.resource).flatMap((parse) => {
+  return resourceLocalEffectiveTemplateExpressionParses(store, selection.resource).flatMap((parse) => {
     const payload = expressionParseDiagnosticPayload(parse);
     if (payload == null) {
       return [];
@@ -1422,7 +1433,7 @@ function templateCompilerIssueDiagnosticRowsForSelection(
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
-  return templateCompilerIssues(selection.resource).flatMap((issue) => {
+  return templateCompilerIssues(store, selection.resource).flatMap((issue) => {
     const source = describeAddress(store, issue.sourceAddressHandle);
     if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
       return [];
@@ -1756,14 +1767,45 @@ function routerIssueDiagnosticRowsForSelection(
 }
 
 function templateCompilerIssues(
+  store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly TemplateCompilerIssue[] {
-  return [
-    ...resource.compilation.compilerWorld.issues,
+  const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
+  const preTraversalIssues = [
     ...resource.compilation.attributeClassification.issues,
     ...resource.compilation.bindingCommandLowering.issues,
+  ].filter((issue) =>
+    compilerIssueBelongsToReachableAttribute(
+      store,
+      resource,
+      compilerReachableAttributes,
+      issue,
+    )
+  );
+  return [
+    ...resource.compilation.compilerWorld.issues,
+    ...preTraversalIssues,
     ...resource.compilation.compiledTemplate.issues,
   ];
+}
+
+function compilerIssueBelongsToReachableAttribute(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  compilerReachableAttributes: ReadonlySet<ProductHandle>,
+  issue: TemplateCompilerIssue,
+): boolean {
+  const issueSpan = sourceSpanAddressForAddress(store, issue.sourceAddressHandle);
+  if (issueSpan == null) {
+    return true;
+  }
+  return resource.compilation.html.attributes.some((attribute) => {
+    if (!compilerReachableAttributes.has(attribute.productHandle)) {
+      return false;
+    }
+    const attributeSpan = sourceSpanAddressForAddress(store, attribute.sourceAddressHandle);
+    return attributeSpan != null && sourceSpanContains(attributeSpan, issueSpan);
+  });
 }
 
 function frameworkCapabilityDemandsForSelection(
@@ -1955,7 +1997,7 @@ function expressionMemberDiagnosticSites(
 ): readonly ExpressionMemberDiagnosticSite[] {
   const sites: ExpressionMemberDiagnosticSite[] = [];
   const seen = new Set<string>();
-  for (const parse of resourceLocalTemplateExpressionParses(store, resource)) {
+  for (const parse of resourceLocalEffectiveTemplateExpressionParses(store, resource)) {
     for (const span of ExpressionParseResultInspector.memberAccessSpans(parse.result)) {
       const key = `${span.subjectKind}:${span.subjectSpan.start}:${span.subjectSpan.end}:${span.nameSpan.start}:${span.nameSpan.end}`;
       if (seen.has(key)) {

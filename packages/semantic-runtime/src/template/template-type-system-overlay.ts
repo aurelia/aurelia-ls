@@ -1,5 +1,8 @@
 import path from 'node:path';
-import type { ExpressionAstNode } from '../expression/ast.js';
+import type {
+  ExpressionAstNode,
+  ValueConverterExpression,
+} from '../expression/ast.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import { TypeScriptDeclarationIdentity } from '../kernel/identity.js';
@@ -82,9 +85,12 @@ import {
   type TemplateTypeSystemOverlayExpressionScopeAliases,
 } from './template-type-system-overlay-expression.js';
 import {
-  findVisibleTemplateResource,
   readVisibleTemplateResourceDefinition,
 } from './compiler-resource-lookup.js';
+import {
+  sameTemplateVisibleResource,
+  type TemplateVisibleResource,
+} from './compiler-world-reference.js';
 import {
   IteratorBindingScopeEffect,
   LetBindingScopeEffect,
@@ -125,11 +131,11 @@ import {
   runtimeExpressionBindingsForTemplateExpressionParseInScope,
   runtimeExpressionBindingsForTemplateExpressionProductHandle,
   runtimeExpressionBindingsForTemplateExpressionProductHandleInScope,
+  resourceLocalEffectiveTemplateExpressionParses,
   selectRuntimeBindingSourceContextProjection,
   templateInstructionForExpressionParse,
   templateInstructionForProductHandle,
 } from './template-expression-selection.js';
-import { resourceLocalTemplateExpressionParses } from './runtime-resource-ownership.js';
 import {
   templateRepeatScopeCurrentAliasExpression,
   templateScopeAliasSupport,
@@ -275,6 +281,16 @@ class TemplateTypeSystemOverlayAliasReplayCursor {
     this.currentOverrideContextLocals = [...overrideContextLocals];
   }
 
+  enterReusedBindingContextScope(overrideContextLocals: readonly string[]): void {
+    this.currentParentBindingContextAlias = this.currentBindingContextAlias == null
+      ? null
+      : '$parent';
+    this.currentParentNamedLookupAlias = this.currentScopeNamedLookupAlias() == null
+      ? null
+      : TEMPLATE_TYPE_SYSTEM_OVERLAY_PARENT_NAMED_LOOKUP_ALIAS;
+    this.currentOverrideContextLocals = [...overrideContextLocals];
+  }
+
   replaceBindingContextAlias(alias: string | null): void {
     this.currentBindingContextAlias = alias;
   }
@@ -287,6 +303,13 @@ class TemplateTypeSystemOverlayAliasReplayCursor {
   }
 
   enterSyntheticView(scope: BindingScope): void {
+    const projectionCreator = scope.scopeCreators.find((creator) =>
+      creator.creatorKind === BindingScopeCreatorKind.ContentProjection
+    );
+    if (projectionCreator != null) {
+      this.enterReusedBindingContextScope(projectionCreator.introducedSlotNames);
+      return;
+    }
     if (templateScopeCreatesCurrentBindingContextAlias(scope)) {
       this.enterBindingContextAlias('$this');
     }
@@ -408,7 +431,7 @@ export class TemplateTypeSystemOverlayBuilder {
     frame: TemplateTypeSystemOverlayBuildFrame,
   ): void {
     let index = 0;
-    for (const parse of resourceLocalTemplateExpressionParses(this.store, frame.resource)) {
+    for (const parse of resourceLocalEffectiveTemplateExpressionParses(this.store, frame.resource)) {
       if (this.expressionParseIsTargetToSourceOnlyBindingTarget(frame.resource, parse)) {
         continue;
       }
@@ -567,6 +590,24 @@ export class TemplateTypeSystemOverlayBuilder {
       : checkerTypeReferenceTypeExpression(this.store, slot.targetType, { generatedFileName: overlayFileName });
   }
 
+  private contentProjectionContextSlotLocals(
+    scope: BindingScope,
+    creator: BindingScopeCreator,
+    overlayFileName: string,
+  ): readonly TemplateTypeSystemOverlayContextSlotLocal[] {
+    const introducedNames = new Set(creator.introducedSlotNames);
+    return scope.overrideContext.slots.flatMap((slot) =>
+      !introducedNames.has(slot.name) || !isIdentifierName(slot.name)
+        ? []
+        : [{
+          name: slot.name,
+          valueKind: 'dynamic',
+          typeExpression: this.slotTypeExpression(slot, overlayFileName),
+          assignmentAccessKind: slot.assignmentAccessKind,
+        }]
+    );
+  }
+
   private expressionProjectionContext(
     resource: TemplateResourceRuntimeAnalysisEmission,
     overlayFileName: string,
@@ -598,11 +639,16 @@ export class TemplateTypeSystemOverlayBuilder {
         if (converterNameSource == null) {
           return null;
         }
-        const visible = findVisibleTemplateResource(
-          resource.compilation.compilerWorld.resourceScope,
-          ResourceDefinitionKind.ValueConverter,
-          expression.name.name,
-        );
+        const visible = semanticProductHandle == null
+          ? undefined
+          : overlayValueConverterResource(
+              resource,
+              semanticProductHandle,
+              expression,
+            );
+        if (visible === undefined) {
+          return null;
+        }
         const definition = readVisibleTemplateResourceDefinition(this.store, visible);
         if (definition == null || definition.type !== ResourceDefinitionKind.ValueConverter) {
           return {
@@ -773,7 +819,7 @@ export class TemplateTypeSystemOverlayBuilder {
       'overlay-binding-behavior-arguments',
     );
     const evaluator = projectors.expressionWorld.evaluator(
-      resource.compilation.compilerWorld.resourceScope,
+      projection.resourceScope,
     );
     const argumentExpressionContext: TemplateTypeSystemOverlayExpressionProjectionContext = {
       ...this.expressionProjectionContextForRuntimeSource(
@@ -1329,6 +1375,16 @@ export class TemplateTypeSystemOverlayBuilder {
           overlayFileName,
           parentAlias,
         );
+      case BindingScopeCreatorKind.ContentProjection:
+        return [{
+          kind: 'reused-binding-context',
+          locals: this.contentProjectionContextSlotLocals(
+            scope,
+            creator,
+            overlayFileName,
+          ),
+          parentAlias,
+        }];
     }
 
     skipped.push(skippedTemplateTypeSystemOverlayExpression(
@@ -2284,6 +2340,28 @@ function repeatPreviousOverlayKind(
 
 function isIdentifierName(value: string): boolean {
   return templateTypeSystemOverlayIdentifierName(value);
+}
+
+function overlayValueConverterResource(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  expressionProductHandle: ProductHandle,
+  expression: ValueConverterExpression,
+): TemplateVisibleResource | null | undefined {
+  const entries = resource.runtimeAnalysis.expressionResourcePlan.readValueConverterEntries(
+    expressionProductHandle,
+    expression,
+  );
+  const first = entries[0]?.resource;
+  if (first === undefined) {
+    return undefined;
+  }
+  return entries.every((entry) =>
+    first == null
+      ? entry.resource == null
+      : sameTemplateVisibleResource(first, entry.resource)
+  )
+    ? first
+    : undefined;
 }
 
 function resourceTargetTypeExpressionFromIdentity(

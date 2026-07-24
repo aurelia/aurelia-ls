@@ -5,6 +5,7 @@ import type {
   AddressHandle,
   ProductHandle,
 } from '../kernel/handles.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import {
   sourceSpanAddressForAddress,
 } from '../kernel/source-address.js';
@@ -23,6 +24,11 @@ import type {
   RuntimeBindingTargetOperation,
 } from './runtime-binding.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
+import {
+  htmlElementAttributeOwnersByAttributeProduct,
+  type HtmlAttribute,
+  type HtmlIrNode,
+} from './html-ir.js';
 import type { TemplateInstruction } from './instruction-ir.js';
 import { TemplateProductDetails } from './product-details.js';
 import type { RuntimeBindingBehaviorApplication } from './runtime-binding-behavior.js';
@@ -34,9 +40,51 @@ import {
 import type { TemplateResourceRuntimeAnalysisEmission } from './template-compilation-project-pass.js';
 import type { TemplateExpressionParse, TemplateValueSite } from './value-site.js';
 
-/** Expression parses authored by this resource, excluding descendant rows from recursive aggregate rendering. */
-export function resourceLocalTemplateExpressionParses(
-  store: KernelStore,
+/** Authored element/text products reached by compiler DOM traversal for this resource. */
+export function resourceLocalCompilerReachableHtmlNodeProductHandles(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): ReadonlySet<ProductHandle> {
+  return new Set(
+    resource.compilation.compiledTemplate.compiledTemplate.compilerReachableNodeProductHandles,
+  );
+}
+
+/** Authored attributes whose owner elements were reached by compiler DOM traversal. */
+export function resourceLocalCompilerReachableHtmlAttributeProductHandles(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): ReadonlySet<ProductHandle> {
+  const reachableNodes = resourceLocalCompilerReachableHtmlNodeProductHandles(resource);
+  const owners = htmlElementAttributeOwnersByAttributeProduct(
+    resource.compilation.html.nodes,
+    resource.compilation.html.attributes,
+  );
+  return new Set(
+    [...owners]
+      .filter(([, owner]) => reachableNodes.has(owner.element.productHandle))
+      .map(([attributeProductHandle]) => attributeProductHandle),
+  );
+}
+
+export function compilerReachesHtmlNode(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  node: Pick<HtmlIrNode, 'productHandle'> | null,
+): boolean {
+  return node == null
+    || resource.compilation.compiledTemplate.compiledTemplate.compilerReachableNodeProductHandles
+      .includes(node.productHandle);
+}
+
+export function compilerReachesHtmlAttribute(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  attribute: Pick<HtmlAttribute, 'productHandle'> | null,
+): boolean {
+  return attribute == null
+    || resourceLocalCompilerReachableHtmlAttributeProductHandles(resource).has(attribute.productHandle);
+}
+
+/** Expression parses authored by this resource, whether or not compiler assembly retained their source subtree. */
+export function resourceLocalAuthoredTemplateExpressionParses(
+  store: KernelStoreReadView & ProductDetailReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly TemplateExpressionParse[] {
   return [
@@ -48,9 +96,9 @@ export function resourceLocalTemplateExpressionParses(
   ];
 }
 
-/** Value sites authored by this resource, excluding descendant rows from recursive aggregate rendering. */
-export function resourceLocalTemplateValueSites(
-  store: KernelStore,
+/** Value sites authored by this resource, whether or not compiler assembly retained their source subtree. */
+export function resourceLocalAuthoredTemplateValueSites(
+  store: KernelStoreReadView & ProductDetailReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly TemplateValueSite[] {
   return [
@@ -199,10 +247,7 @@ function runtimeBindingReferenceBelongsToResource(
   if (binding.productHandle == null) {
     return false;
   }
-  const context = resource.runtimeAnalysis.runtimeRendering.readRenderContextForBinding(binding.productHandle);
-  if (context == null) {
-    return false;
-  }
+  const context = resource.runtimeAnalysis.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
   return controllerTemplateOwnerDefinitionProductHandle(context.renderingController)
     === resource.compilation.definition.productHandle;
 }
@@ -236,18 +281,18 @@ function sourceAddressBelongsToResourceTemplate(
 }
 
 function dynamicExpressionParseBelongsToResource(
-  store: KernelStore,
+  store: KernelStoreReadView & ProductDetailReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
   parse: TemplateExpressionParse,
 ): boolean {
-  const site = store.productDetails.read(TemplateProductDetails.ValueSite, parse.site.productHandle);
+  const site = store.readProductDetail(TemplateProductDetails.ValueSite, parse.site.productHandle);
   return site == null
     ? sourceAddressBelongsToResourceTemplate(store, resource, parse.sourceAddressHandle)
     : dynamicValueSiteBelongsToResource(store, resource, site);
 }
 
 function dynamicValueSiteBelongsToResource(
-  store: KernelStore,
+  store: KernelStoreReadView & ProductDetailReadView,
   resource: TemplateResourceRuntimeAnalysisEmission,
   site: TemplateValueSite,
 ): boolean {

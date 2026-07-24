@@ -10,7 +10,11 @@ import type {
   TemplateInstructionReference,
   TemplateInstructionSequence,
 } from './instruction-ir.js';
-import type { CompiledTemplate, TemplateRenderTarget } from './compiled-template.js';
+import type {
+  CompiledNativeSlotOutlet,
+  CompiledTemplate,
+  TemplateRenderTarget,
+} from './compiled-template.js';
 
 /** Compare the value embedded by one compiled-template detail without reading a mixed old/new store graph. */
 export function compareCompiledTemplateDetails(
@@ -27,7 +31,11 @@ export function compareCompiledTemplateDetails(
     next.htmlDocumentProductHandle,
     previous.state,
     next.state,
+    previous.needsCompile,
+    next.needsCompile,
   )
+    && sameArrays(previous.compilerReachableNodeProductHandles, next.compilerReachableNodeProductHandles, sameValues)
+    && sameArrays(previous.nativeSlotOutlets, next.nativeSlotOutlets, sameNativeSlotOutletSemantics)
     && sameArrays(previous.targets, next.targets, sameRenderTargetSemantics)
     && sameNullable(previous.surrogateSequence, next.surrogateSequence, sameInstructionSequenceSemantics);
   if (!semantic) {
@@ -36,6 +44,8 @@ export function compareCompiledTemplateDetails(
 
   const witness = sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
     && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context)
+    && sameArrays(previous.nativeSlotOutlets, next.nativeSlotOutlets, (left, right) =>
+      sameNativeSlotOutletWitnesses(left, right, context))
     && sameArrays(previous.targets, next.targets, (left, right) =>
       sameRenderTargetWitnesses(left, right, context))
     && sameNullable(previous.surrogateSequence, next.surrogateSequence, (left, right) =>
@@ -43,6 +53,27 @@ export function compareCompiledTemplateDetails(
   return witness
     ? KernelPublicationDecisionKind.Retain
     : KernelPublicationDecisionKind.RefreshWitness;
+}
+
+function sameNativeSlotOutletSemantics(
+  previous: CompiledNativeSlotOutlet,
+  next: CompiledNativeSlotOutlet,
+): boolean {
+  return previous.nameKind === next.nameKind
+    && previous.name === next.name
+    && sameHtmlNodeSemantics(previous.node, next.node);
+}
+
+function sameNativeSlotOutletWitnesses(
+  previous: CompiledNativeSlotOutlet,
+  next: CompiledNativeSlotOutlet,
+  context: KernelPublicationComparisonContext,
+): boolean {
+  return sameKernelRecordWitness(
+    previous.nameSourceAddressHandle,
+    next.nameSourceAddressHandle,
+    context,
+  ) && sameHtmlNodeWitnesses(previous.node, next.node, context);
 }
 
 function sameRenderTargetSemantics(previous: TemplateRenderTarget, next: TemplateRenderTarget): boolean {

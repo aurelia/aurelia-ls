@@ -51,6 +51,11 @@ const aliasedBindableAppTemplateText = fs.readFileSync(aliasedBindableAppTemplat
 const aliasedBindableProductTemplateText = fs.readFileSync(aliasedBindableProductTemplatePath, 'utf8');
 const aliasedBindableProductDefinitionText = fs.readFileSync(aliasedBindableProductDefinitionPath, 'utf8');
 const aliasedBindableDisplayHintDefinitionText = fs.readFileSync(aliasedBindableDisplayHintDefinitionPath, 'utf8');
+const stateScopeRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-state-binding-scope');
+const stateScopeTemplatePath = path.join(stateScopeRoot, 'src/app.html');
+const stateScopeDefinitionPath = path.join(stateScopeRoot, 'src/app.ts');
+const stateScopeTemplateText = fs.readFileSync(stateScopeTemplatePath, 'utf8');
+const stateScopeDefinitionText = fs.readFileSync(stateScopeDefinitionPath, 'utf8');
 
 const catalog = readSemanticAppQueryCatalog({ queryKind: SemanticAppQueryKind.TemplateRename });
 assert.equal(catalog.value.rows.length, 1, 'TemplateRename should be in the public app-query catalog.');
@@ -98,6 +103,57 @@ expectEdit(rename.value.edits, 'template-usage', 'src/app.html', firstTitleStart
 expectEdit(rename.value.edits, 'template-usage', 'src/app.html', secondTitleStart, secondTitleStart + 'title'.length, 'heading');
 expectEdit(rename.value.edits, 'typescript-reference', 'src/app.ts', declarationStart, declarationStart + 'title'.length, 'heading');
 expectEdit(rename.value.edits, 'typescript-reference', 'src/app.ts', tsUsageStart, tsUsageStart + 'title'.length, 'heading');
+
+const stateScopeRuntime = await createSemanticRuntime({
+  workspaceRoot: stateScopeRoot,
+  storeKey: 'contract:template-rename:state-scope-isolation',
+});
+const rootTitleDeclarationStart = stateScopeDefinitionText.indexOf('title');
+const stateOwnedTitleStart = stateScopeTemplateText.indexOf('title & state');
+const parentTitleStart = stateScopeTemplateText.indexOf('$parent.title') + '$parent.'.length;
+const stateScopeRename = await stateScopeRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.TemplateRename,
+  sourceFilePath: stateScopeTemplatePath,
+  cursor: cursorInside(
+    stateScopeTemplateText,
+    stateScopeTemplatePath,
+    '$parent.title',
+    'title',
+    1,
+  ),
+  newName: 'hostTitle',
+  analysisDepth: 'binding-observation',
+  diagnosticProjection: 'type-projection',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+assert.equal(stateScopeRename.outcome, 'hit');
+assert.equal(stateScopeRename.value.status, 'available');
+expectEdit(
+  stateScopeRename.value.edits,
+  'typescript-reference',
+  'src/app.ts',
+  rootTitleDeclarationStart,
+  rootTitleDeclarationStart + 'title'.length,
+  'hostTitle',
+  stateScopeRoot,
+);
+expectEdit(
+  stateScopeRename.value.edits,
+  'template-usage',
+  'src/app.html',
+  parentTitleStart,
+  parentTitleStart + 'title'.length,
+  'hostTitle',
+  stateScopeRoot,
+);
+assert.ok(
+  stateScopeRename.value.edits.every((edit) =>
+    edit.source?.path?.replace(/\\/g, '/') !== 'src/app.html'
+    || edit.source.start !== stateOwnedTitleStart
+  ),
+  'Root member rename must not edit the same-spelled state-owned expression.',
+);
 
 const resourceRuntime = await createSemanticRuntime({
   workspaceRoot: resourceFixtureRoot,
@@ -296,6 +352,7 @@ assert.equal(inlineAliasRename.value.edits.length, 2, 'Inline alias rename shoul
 
 console.log(`Template rename contract passed (${
   rename.value.edits.length
+  + stateScopeRename.value.edits.length
   + resourceRename.value.edits.length
   + attributeRename.value.edits.length
   + templateControllerRename.value.edits.length

@@ -31,6 +31,7 @@ export type TemplateTypeSystemOverlayScopeLayer =
   | TemplateTypeSystemOverlayRepeatLayer
   | TemplateTypeSystemOverlayBindingContextLayer
   | TemplateTypeSystemOverlayTypedBindingContextLayer
+  | TemplateTypeSystemOverlayReusedBindingContextLayer
   | TemplateTypeSystemOverlayContextSlotLayer
   | TemplateTypeSystemOverlayLetLayer
   | TemplateTypeSystemOverlayConditionLayer
@@ -79,6 +80,13 @@ export interface TemplateTypeSystemOverlayTypedBindingContextLayer {
   readonly kind: 'typed-binding-context';
   readonly locals: readonly TemplateTypeSystemOverlayRuntimeAssignmentLocal[];
   readonly parentAlias?: TemplateTypeSystemOverlayScopeAlias | null;
+}
+
+/** Runtime Scope hop that retains the current binding context but introduces a fresh override context. */
+export interface TemplateTypeSystemOverlayReusedBindingContextLayer {
+  readonly kind: 'reused-binding-context';
+  readonly locals: readonly TemplateTypeSystemOverlayContextSlotLocal[];
+  readonly parentAlias: TemplateTypeSystemOverlayScopeAlias | null;
 }
 
 export interface TemplateTypeSystemOverlayLetLayer {
@@ -188,6 +196,9 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
         return;
       case 'typed-binding-context':
         this.appendTypedBindingContextLayer(layer);
+        return;
+      case 'reused-binding-context':
+        this.appendReusedBindingContextLayer(layer);
         return;
       case 'condition':
         this.appendConditionLayer(layer);
@@ -322,6 +333,18 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
       : `${nestedIndent}const $this = { ${layer.locals.map((local) => local.name).join(', ')} };`);
   }
 
+  private appendReusedBindingContextLayer(
+    layer: TemplateTypeSystemOverlayReusedBindingContextLayer,
+  ): void {
+    const indent = this.indent;
+    const capturedParent = this.captureParentAlias(layer.parentAlias, indent);
+    this.builder.append(`${indent}{\n`);
+    this.depth += 1;
+    const nestedIndent = this.indent;
+    this.appendCapturedParentAlias(capturedParent, nestedIndent);
+    this.appendContextSlotDeclarations(layer.locals, nestedIndent);
+  }
+
   private appendConditionLayer(layer: TemplateTypeSystemOverlayConditionLayer): void {
     this.builder.append(`${this.indent}if (`);
     if (layer.negate) {
@@ -412,8 +435,14 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
   }
 
   private appendContextSlotLayer(layer: TemplateTypeSystemOverlayContextSlotLayer): void {
-    const indent = this.indent;
-    for (const local of layer.locals) {
+    this.appendContextSlotDeclarations(layer.locals, this.indent);
+  }
+
+  private appendContextSlotDeclarations(
+    locals: readonly TemplateTypeSystemOverlayContextSlotLocal[],
+    indent: string,
+  ): void {
+    for (const local of locals) {
       const declarationKeyword = contextSlotDeclarationKeyword(local.assignmentAccessKind);
       this.builder.appendLine(local.typeExpression == null
         ? `${indent}${declarationKeyword} ${local.name} = ${contextSlotLocalInitializer(local.valueKind)};`

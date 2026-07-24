@@ -161,6 +161,7 @@ import {
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
 import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
+import { RuntimeExpressionResourcePhaseReachability } from '../template/runtime-expression-resource.js';
 import {
   RuntimeValueConverterApplicationPhase,
 } from '../template/runtime-value-converter.js';
@@ -223,8 +224,6 @@ export class RuntimeBindingDataFlowMaterializationRequest {
     readonly valueChannels: RuntimeBindingValueChannelEmission,
     /** Runtime Scope applications visible to instruction-owned expressions. */
     readonly scopes: TemplateScopeConstructionEmission,
-    /** Compiler resource scope visible to expression semantics such as value converters. */
-    readonly resourceScope: TemplateResourceScope | null = null,
     /** Runtime-analysis expression world shared by scope, value-channel, and data-flow phases. */
     readonly expressionWorld: CheckerExpressionTypeWorld,
   ) {}
@@ -309,7 +308,7 @@ class BindingDataFlowMaterializationFrame {
   constructor(
     readonly source: BindingDataFlowSourceSet,
     readonly instructionScopes: RuntimeInstructionScopeLookup,
-    readonly context: BindingDataFlowContext,
+    readonly context: BindingDataFlowSharedContext,
   ) {
     this.records = [...source.records];
   }
@@ -326,14 +325,17 @@ class BindingDataFlowMaterializationFrame {
   }
 }
 
-type BindingDataFlowContext = {
-  readonly evaluator: CheckerExpressionTypeEvaluator;
+type BindingDataFlowSharedContext = {
   readonly runtimeBindings: RuntimeRenderingEmission;
   readonly instructionScopes: RuntimeInstructionScopeLookup;
   readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjector;
   readonly sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector;
-  readonly resourceScope: TemplateResourceScope | null;
   readonly draftMaterializer: RuntimeBindingDataFlowDraftMaterializer;
+};
+
+type BindingDataFlowContext = BindingDataFlowSharedContext & {
+  readonly evaluator: CheckerExpressionTypeEvaluator;
+  readonly resourceScope: TemplateResourceScope;
 };
 
 type ObservedDependencyInput = {
@@ -375,6 +377,7 @@ type DataFlowDraft = {
   readonly bindingScope: BindingScope | null;
   readonly direction: RuntimeBindingDataFlowDirection;
   readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind;
+  readonly sourceEvaluationReachability: RuntimeExpressionResourcePhaseReachability;
   readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind;
   readonly strictBinding: boolean | null;
   readonly expressionProductHandle: ProductHandle | null;
@@ -422,6 +425,7 @@ function runtimeBindingDataFlowForDraft(
     draft.bindingScope?.toReference() ?? scope?.toReference() ?? null,
     draft.direction,
     draft.sourceEvaluationKind,
+    draft.sourceEvaluationReachability,
     draft.targetMutationKind,
     draft.strictBinding,
     draft.sourceKind,
@@ -511,14 +515,12 @@ export class RuntimeBindingDataFlowMaterializer {
   ): BindingDataFlowMaterializationFrame {
     const source = this.recordsForSource(input.localKey);
     const instructionScopes = instructionScopeLookup(input.scopes.instructionScopes);
-    const evaluator = input.expressionWorld.evaluator(input.resourceScope);
     const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
       this.store,
       input.expressionWorld,
       input.expressionResourcePlan,
     );
     return new BindingDataFlowMaterializationFrame(source, instructionScopes, {
-      evaluator,
       runtimeBindings: input.runtimeBindings,
       instructionScopes,
       bindingExpressionScopes,
@@ -527,7 +529,6 @@ export class RuntimeBindingDataFlowMaterializer {
         instructionScopes,
         bindingExpressionScopes,
       ),
-      resourceScope: input.resourceScope,
       draftMaterializer: new RuntimeBindingDataFlowDraftMaterializer(
         this.store,
         input.expressionWorld.projector,
@@ -544,6 +545,12 @@ export class RuntimeBindingDataFlowMaterializer {
     if (!isRuntimeDataFlowBinding(binding)) {
       return;
     }
+    const renderContext = input.runtimeBindings.requireRenderContextForBinding(binding.productHandle);
+    const context: BindingDataFlowContext = {
+      ...frame.context,
+      evaluator: input.expressionWorld.evaluator(renderContext.resourceScope),
+      resourceScope: renderContext.resourceScope,
+    };
     const scope = frame.instructionScopes.scopeForBinding(input.runtimeBindings, binding);
     const targets = dataFlowTargetsForBinding(
       binding,
@@ -555,7 +562,7 @@ export class RuntimeBindingDataFlowMaterializer {
     targets.forEach((target) => frame.record(this.recordsForDataFlow(
       input,
       frame.source,
-      frame.context,
+      context,
       binding,
       index,
       target,
@@ -637,7 +644,9 @@ export class RuntimeBindingDataFlowMaterializer {
     context: BindingDataFlowContext,
     local: string,
   ): BindingDataFlowProductEmission {
-    const strictBinding = input.runtimeBindings.readRenderContextForBinding(binding.productHandle)?.renderingController.strict ?? null;
+    const strictBinding = input.runtimeBindings
+      .requireRenderContextForBinding(binding.productHandle)
+      .renderingController.strict;
     const draft = context.draftMaterializer.dataFlowDraftForBinding(
       binding,
       target,
@@ -673,7 +682,11 @@ export class RuntimeBindingDataFlowMaterializer {
     draft: DataFlowDraft,
     context: BindingDataFlowContext,
   ): readonly RuntimeBindingObservedDependency[] {
-    if (draft.ast == null || draft.sourceEvaluationKind !== RuntimeBindingSourceEvaluationKind.ConnectableRead) {
+    if (
+      draft.ast == null
+      || draft.sourceEvaluationKind !== RuntimeBindingSourceEvaluationKind.ConnectableRead
+      || draft.sourceEvaluationReachability !== RuntimeExpressionResourcePhaseReachability.Reached
+    ) {
       return [];
     }
     const observedDependencyInputs = this.observedExpressionSites(
@@ -765,8 +778,8 @@ export class RuntimeBindingDataFlowMaterializer {
       return sites;
     }
     const controllerProductHandle = context.runtimeBindings
-      .readRenderContextForBinding(binding.productHandle)
-      ?.renderingController.productHandle ?? null;
+      .requireRenderContextForBinding(binding.productHandle)
+      .sourceController.productHandle;
     for (const handle of instruction.tailInstructionProductHandles) {
       const tail = this.publication.readProductDetail(TemplateProductDetails.Instruction, handle);
       if (!(tail instanceof MultiAttrInstruction)
@@ -1082,6 +1095,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
       expressionProductHandle: expressionFacts.expressionProductHandle,
       direction,
       sourceEvaluationKind: lifecycle.sourceEvaluationKind,
+      sourceEvaluationReachability: lifecycle.sourceEvaluationReachability,
       targetMutationKind,
       strictBinding,
       sourceKind: sourceProjection.sourceInfo.sourceKind,
@@ -1461,18 +1475,23 @@ function dataFlowDirectionForTargetMutation(
 type RuntimeBindingDataFlowLifecycle = {
   readonly direction: RuntimeBindingDataFlowDirection;
   readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind;
+  readonly sourceEvaluationReachability: RuntimeExpressionResourcePhaseReachability;
 };
 
 function dataFlowLifecycleForBinding(
   binding: RuntimeDataFlowBinding,
   expressionResourcePlan: RuntimeExpressionResourcePlan,
 ): RuntimeBindingDataFlowLifecycle {
+  const sourceEvaluationReachability = expressionResourcePlan.readSourceEvaluationReachability(
+    binding.productHandle,
+  );
   if (isRuntimeSourceOnlyDataFlowBinding(binding)) {
     return {
       direction: RuntimeBindingDataFlowDirection.SourceRead,
       sourceEvaluationKind: binding instanceof ListenerBinding || binding instanceof StateDispatchBinding
         ? RuntimeBindingSourceEvaluationKind.UntrackedRead
         : RuntimeBindingSourceEvaluationKind.ConnectableRead,
+      sourceEvaluationReachability,
     };
   }
   if (binding instanceof PropertyBinding) {
@@ -1480,17 +1499,20 @@ function dataFlowLifecycleForBinding(
     return {
       direction: directionForBindingMode(bindingMode),
       sourceEvaluationKind: sourceEvaluationKindForBindingMode(bindingMode),
+      sourceEvaluationReachability,
     };
   }
   if (binding instanceof RefBinding) {
     return {
       direction: RuntimeBindingDataFlowDirection.TargetToSource,
       sourceEvaluationKind: RuntimeBindingSourceEvaluationKind.AssignmentOnly,
+      sourceEvaluationReachability,
     };
   }
   return {
     direction: RuntimeBindingDataFlowDirection.SourceToTarget,
     sourceEvaluationKind: RuntimeBindingSourceEvaluationKind.ConnectableRead,
+    sourceEvaluationReachability,
   };
 }
 

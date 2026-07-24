@@ -24,12 +24,15 @@ import type {
   OverrideContext,
 } from './scope.js';
 import { BindingScopeCreatorKind } from './scope.js';
-import type {
+import {
+  type AuSlotsInfo,
+  CustomElementController,
+  SyntheticViewController,
   ControllerReference,
-  ControllerProduct,
-  ViewFactory,
+  type ControllerProduct,
+  type RuntimeHydrationContext,
+  type ViewFactory,
 } from './controller.js';
-import { ControllerPhase } from './controller.js';
 import { ConfigurationDetailDescriptors } from './detail-descriptors.js';
 import { bindingScopeReferenceKernelReferences } from './structural-references.js';
 
@@ -152,6 +155,7 @@ function scopeCreatorReferences(
       case BindingScopeCreatorKind.TemplateControllerCondition:
       case BindingScopeCreatorKind.TemplateControllerBranch:
       case BindingScopeCreatorKind.TemplateControllerValueScope:
+      case BindingScopeCreatorKind.ContentProjection:
         return TemplateDetailDescriptors.Instruction;
     }
   })();
@@ -185,75 +189,34 @@ function controllerReferences(
     kernelFieldProvenanceReferences(controller.fieldProvenance),
   );
 
-  switch (controller.phase) {
-    case ControllerPhase.Base:
-      return mergeKernelDetailReferences(
-        common,
-        productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
-        productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
-      );
-    case ControllerPhase.Component:
-      return mergeKernelDetailReferences(
-        common,
-        productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
-        resourceTargetReferenceReferences(controller.viewModel),
-        productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
-      );
-    case ControllerPhase.Hydratable:
-      return mergeKernelDetailReferences(
-        common,
-        productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
-        controller.children.flatMap(controllerReferenceReferences),
-        productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
-      );
-    case ControllerPhase.SyntheticView:
-      return mergeKernelDetailReferences(
-        common,
-        controller.children.flatMap(controllerReferenceReferences),
-        productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
-        productDetailReferences(ConfigurationDetailDescriptors.ViewFactory, controller.viewFactoryProductHandle),
-        productDetailReferences(TemplateDetailDescriptors.InstructionSequence, controller.instructionSequenceProductHandle),
-        kernelRecordReferences(
-          controller.locationAddressHandle,
-          controller.shadowRootAddressHandle,
-          controller.nodeSequenceProductHandle,
-        ),
-      );
-    case ControllerPhase.CustomAttribute:
-      return mergeKernelDetailReferences(
-        common,
-        productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
-        resourceTargetReferenceReferences(controller.viewModel),
-      );
-    case ControllerPhase.DryCustomElement:
-    case ControllerPhase.ContextualCustomElement:
-      return mergeKernelDetailReferences(
-        common,
-        productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
-        resourceTargetReferenceReferences(controller.viewModel),
-        productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
-      );
-    case ControllerPhase.CompiledCustomElement:
-      return mergeKernelDetailReferences(
-        common,
-        productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
-        resourceTargetReferenceReferences(controller.viewModel),
-        productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
-        kernelRecordReferences(
-          controller.locationAddressHandle,
-          controller.shadowRootAddressHandle,
-          controller.nodeSequenceProductHandle,
-        ),
-      );
-    case ControllerPhase.HydratedCustomElement:
-      return mergeKernelDetailReferences(
-        common,
-        productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
-        resourceTargetReferenceReferences(controller.viewModel),
-        productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
-        kernelRecordReferences(controller.lifecycleHooksProductHandle),
-      );
+  if (controller instanceof CustomElementController) {
+    return mergeKernelDetailReferences(
+      common,
+      productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
+      resourceTargetReferenceReferences(controller.viewModel),
+      controller.children.flatMap(controllerReferenceReferences),
+      productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
+    );
   }
+  if (controller instanceof SyntheticViewController) {
+    return mergeKernelDetailReferences(
+      common,
+      controller.children.flatMap(controllerReferenceReferences),
+      productDetailReferences(TemplateDetailDescriptors.RuntimeBinding, ...(controller.bindingProductHandles ?? [])),
+      productDetailReferences(ConfigurationDetailDescriptors.ViewFactory, controller.viewFactoryProductHandle),
+      productDetailReferences(TemplateDetailDescriptors.InstructionSequence, controller.instructionSequenceProductHandle),
+      kernelRecordReferences(
+        controller.locationAddressHandle,
+        controller.shadowRootAddressHandle,
+        controller.nodeSequenceProductHandle,
+      ),
+    );
+  }
+  return mergeKernelDetailReferences(
+    common,
+    productDetailReferences(ResourceDetailDescriptors.Definition, controller.definitionProductHandle),
+    resourceTargetReferenceReferences(controller.viewModel),
+  );
 }
 
 function viewFactoryReferences(
@@ -269,6 +232,45 @@ function viewFactoryReferences(
   );
 }
 
+function auSlotsInfoReferences(
+  slotsInfo: AuSlotsInfo,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    slotsInfo.projections.flatMap((projection) => mergeKernelDetailReferences(
+      productDetailReferences(
+        TemplateDetailDescriptors.InstructionSequence,
+        projection.instructionSequenceProductHandle,
+      ),
+      kernelRecordReferences(
+        projection.sourceAddressHandle,
+        ...projection.contributorSourceAddressHandles,
+      ),
+    )),
+    kernelRecordReferences(slotsInfo.sourceAddressHandle),
+  );
+}
+
+function hydrationContextReferences(
+  context: RuntimeHydrationContext,
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    controllerReferenceReferences(context.controller),
+    productDetailReferences(
+      TemplateDetailDescriptors.Instruction,
+      context.instructionProductHandle,
+    ),
+    productDetailReferences(
+      ConfigurationDetailDescriptors.HydrationContext,
+      context.parent?.productHandle,
+    ),
+    kernelRecordReferences(
+      context.parent?.identityHandle,
+      context.parent?.sourceAddressHandle,
+      context.sourceAddressHandle,
+    ),
+  );
+}
+
 /** Typed detail slots for configuration products used by later inquiry and compiler-world passes. */
 export const ConfigurationProductDetails = {
   Controller: defineProductDetailSlot(
@@ -278,6 +280,14 @@ export const ConfigurationProductDetails = {
   ViewFactory: defineProductDetailSlot(
     ConfigurationDetailDescriptors.ViewFactory,
     viewFactoryReferences,
+  ),
+  AuSlotsInfo: defineProductDetailSlot(
+    ConfigurationDetailDescriptors.AuSlotsInfo,
+    auSlotsInfoReferences,
+  ),
+  HydrationContext: defineProductDetailSlot(
+    ConfigurationDetailDescriptors.HydrationContext,
+    hydrationContextReferences,
   ),
   BindingContext: defineProductDetailSlot(
     ConfigurationDetailDescriptors.BindingContext,

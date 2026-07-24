@@ -1266,12 +1266,15 @@
         "rendering",
         "controller"
       ],
-      "summary": "RuntimeRenderingMaterializer is the main pressure point for renderers, controller creation, view factories, and recursive hydration consequences.",
-      "rationale": "The user clarified that hydration is already being emulated, but recursive hydration is gated by runtime-dependent viewmodel state. This materializer should be kept honest against framework rendering phases.",
+      "summary": "RuntimeRenderingMaterializer owns recursive declarative rendering runs and preserves each binding's exact controller, compiler-resource, and DI environment.",
+      "rationale": "Rendering is not one app-root pass: custom-element views, template-controller views, AuSlot selected/fallback projections, and runtime-created spread instructions can each render under distinct controller, Scope, resource-scope, hydration-context, and container authorities. The materializer must retain those authorities per run and per binding so later expression, observation, type, i18n, converter, and API consumers do not reconstruct them from aggregate source containment.",
       "guidance": [
         "Check runtime-view-factory and runtime-controller materializers before adding another rendering handoff.",
         "Use framework.rendering relationships to decide whether a behavior belongs in renderer dispatch, hydration, binding setup, or controller creation.",
         "Root render analysis should mirror AppRoot's child-container boundary, and controller creation should register CustomElement/CustomAttribute local resource dependencies into the controller container before nested renderer lookup.",
+        "Render selected and fallback AuSlot sequences through the ordinary recursive Rendering.render, view-factory, synthetic-controller, Scope, hydration-context, and contextual-DI authorities. Do not create a projection-specific rendering simulator.",
+        "Every RuntimeBinding must retain a RuntimeBindingRenderContext with its exact source controller, rendering controller, compiler resource scope, and active DI container. Downstream consumers spend that context; they must not fall back to the aggregate analysis root.",
+        "A runtime-created spread instruction can render under a descendant while compiling against an ancestor hydration context. Spend RuntimeDynamicInstructionContext requestor-definition and context-controller lineage instead of inferring ownership from the current render run or authored source containment.",
         "When custom-element rendering reaches a repeated definition through controller ancestry, record a controller `recursive-hydration-boundary` lifecycle step and surface `childViewRenderingState=recursive-boundary`; do not publish an open seam merely because the aggregate model refuses unbounded runtime expansion.",
         "Do not reopen runtime-state-specific recursive expansion for overlay/typechecking-only questions. Reopen it when a consumer needs a concrete activation path or exact rendered tree, especially SSR/SSG, router/viewport lifecycle ordering, dynamic composition lifecycle, stateful recursive data components, or binding feedback loops that change later rendering.",
         "Use `contract:recursive-rendering` when changing recursive child-view rendering, synthetic-view scope handoff, parent-to-child bindable flow, or getter observed-dependency provenance.",
@@ -1334,6 +1337,28 @@
           "symbolName": "TemplateRenderingRun",
           "line": 673,
           "summary": "Template rendering run frame."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-rendered-instruction-recorder.ts",
+          "symbolName": "RuntimeBindingRenderContext",
+          "summary": "Binding-owned source/render controller, compiler resource scope, and active container."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-content-projection.ts",
+          "symbolName": "RuntimeContentProjectionView",
+          "summary": "Selected, fallback, and empty AuSlot projection-view relation over ordinary recursive rendering."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/content-projection-topology",
+          "summary": "Nested, duplicate, selected, fallback, native-slot, resource-owner, Scope, and contextual-DI projection pressure."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/template-spread-capture-semantics",
+          "summary": "Nested captured-attribute compiler-scope and DI-owner pressure."
         }
       ],
       "liveChecks": [
@@ -1381,7 +1406,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-23"
+      "updatedAt": "2026-07-23"
     },
     {
       "id": "frontier:runtime-controller-frame",
@@ -2068,26 +2093,26 @@
         "binding",
         "type-system"
       ],
-      "summary": "RuntimeCompositionMaterializer owns dynamic AuCompose CompositionContext and CompositionController products after bind/data-flow facts exist.",
-      "rationale": "Static AuCompose setter/name failures are controller-input diagnostics, but dynamic composition is a runtime composition branch. It needs binding source evaluation, hydration-context container lookup, TypeChecker constructable candidate projection, and API pressure rows so dynamic component candidates do not look closed merely because no open seam was emitted.",
+      "summary": "RuntimeCompositionMaterializer owns finite AuCompose input, settlement, candidate, and composition-controller facts after binding/data-flow facts exist.",
+      "rationale": "AuCompose crosses direct and await-thenable input semantics, runtime value evaluation, TypeChecker candidate projection, child-controller ownership, and user lifecycle execution. The semantic product stays finite by preserving input consumption and settlement separately, refusing to turn exhaustive candidates into a fabricated selected child, and materializing a composition-owned child only when static/evaluator evidence selects one. User lifecycle execution, Promise scheduling, DOM replacement, and stale-result races remain runtime boundaries.",
       "guidance": [
         "Start here when work touches `<au-compose>`, CompositionContext, CompositionController, component/model binding evaluation, or dynamic composition candidate reporting.",
         "Keep static invalid `scopeBehavior`, `flushMode`, and missing static string component diagnostics in the controller issue lane; dynamic component/model resolution belongs to runtime composition after controller bind and binding data-flow.",
         "Use TypeChecker constructable candidates as a semantic fallback when value evaluation stays open but the component binding source type names custom-element classes.",
         "Resource-definition lookup enters through evaluator value identity or `ResourceDefinitionIndex.lookupByTypeScriptDeclaration(...)`, which maps the Program-owned declaration through canonical module identity. Never fall back to a global local-name match; same-named declarations in different modules must remain distinct.",
-        "Runtime composition rows now include the first lifecycle handoff: absent/parameterless `activate` closes as such, and `activate(model)` compares the model binding source type with the activation parameter type through shared checker assignability. The checker-backed activation handoff lives in `runtime-composition-activation.ts`; keep it reusable for future routeable-component activation comparisons rather than burying it in the composition scanner.",
+        "Runtime composition rows now include the first lifecycle handoff: absent/parameterless `activate` closes as such, provably non-callable members are invalid, weak callability stays open, and callable `activate(model)` compares the model binding source type with compatible activation parameter candidates. The checker-backed activation handoff lives in `runtime-composition-activation.ts`; keep it reusable for future routeable-component activation comparisons rather than burying it in the composition scanner.",
         "`activate(model)` parameter projection spends the shared `checker-signature-parameters.ts` overload candidate-basis. Do not regress runtime composition to `getCallSignatures()[0]`; overloaded lifecycle hooks should compare the model against all arity-compatible first-parameter candidates through checker-backed union projection.",
         "AuCompose activation analysis now has explicit method and parameter frames: `activateMethodProjection(...)` owns member discovery, declaration location, value type, and callable signature admission; `activationParameterProjectionFrame(...)` owns candidate-basis and parameter-reference projection; `activationModelHandoffForParameterProjection(...)` owns absent/model-open/assignability handoff folding.",
         "Runtime composition rows now report candidate resource-analysis coverage and candidate resource-controller counts by joining resolved component definitions back to their project-level template/runtime analyses.",
-        "Runtime composition contexts distinguish absent, direct, promise-fulfilled, and open component/template/model inputs so generated fixtures can verify promise-valued `AuCompose` support without inferring it from component resolution alone.",
-        "TypeChecker component candidate coverage is independent from runtime input fulfillment: complete means every finite constituent resolves, partial retains useful candidates plus open pressure, and open means no exhaustive set was proved. A complete multi-candidate set may close identity analysis but must not fabricate one runtime-selected child controller.",
+        "Runtime composition contexts distinguish absent, direct, promise-fulfilled, and open input settlement. Only component and template use await-thenable consumption; model, scopeBehavior, tag, and flushMode are direct inputs even when their values are Promises.",
+        "TypeChecker component candidate coverage is independent from runtime input fulfillment: complete requires a finite exact named-class basis whose every member resolves, partial retains useful candidates when the basis or resource mapping is not exhaustive, and open retains no useful resource identity. Broad construct signatures may contribute return-type candidates but cannot prove complete coverage. A complete multi-candidate set may close identity analysis but must not fabricate one runtime-selected child controller.",
         "Closed static/value custom-element composition branches now materialize an aggregate composed child controller; TypeChecker-only candidate unions remain candidates rather than fake child controllers.",
-        "Closed static/value custom-element child-controller materialization now enters through `ComposedChildControllerMaterializationFrame`: admission owns parent container and resolved definition, then the materialization phase owns child-container emission, runtime controller construction, lifecycle step, host-child claim, and controller publication.",
+        "Closed static/value custom-element child-controller materialization enters through `ComposedChildControllerMaterializationFrame`: admission owns parent container and resolved definition, then the materialization phase owns child-container emission, runtime controller construction, lifecycle step, and controller publication. Do not fabricate renderer Controller.addChild ownership; AuCompose owns its child reference independently.",
         "Parent-to-child component/model closure depends on `RuntimeBoundControllerValueTable` being threaded into child resource analysis and extended with the current resource's rendered controller values during runtime composition. Treat `Array.find receiver did not reduce to a known array` on bound child controller state as binding-source/evaluator pressure before adding AuCompose-local shortcuts.",
         "Broad `Constructable` child composition can still close when the bound controller value table gives the child getter a concrete parent value and the evaluator binds receiver `this` for property method calls such as `entry.isApplicable(id)`. Exact evaluated object literals should read absent properties as `undefined`, not unknown shape.",
-        "`RuntimeCompositions` exposes `renderingContextKind` so definition-local resource analysis can be separated from recursive parent-supplied child instances. A public component's own template may honestly remain open when a required bindable is consumer-supplied even if all observed app use-sites close.",
-        "Do not treat current candidate resolution, candidate resource-analysis coverage, or aggregate composed child-controller handoff as full recursive composition rendering. Child scope handoff, lifecycle run/deactivate errors, template-only runtime template compilation, and per-branch recursive rendering remain controller/composition lifecycle frontiers.",
-        "Runtime-state-specific recursive expansion becomes a prerequisite only when dynamic composition asks for concrete lifecycle/run/deactivate consequences or exact per-activation rendered children. Candidate resolution, activation model type comparison, and aggregate child-controller rows should stay finite.",
+        "`RuntimeCompositions` exposes `renderingContextKind` so definition-local resource analysis can be separated from recursive parent-supplied child instances. Derive it from the composition instruction's exact owner definition, not controller-parent topology: template-controller nesting does not change authored rendering origin. A public component's own template may honestly remain open when a required bindable is consumer-supplied even if all observed app use-sites close.",
+        "Do not treat candidate resolution, candidate resource-analysis coverage, or a closed composed child-controller handoff as user lifecycle execution. Promise queues, activate/deactivate bodies, stale-result cleanup, cancellation races, and DOM mutation remain runtime boundaries.",
+        "Re-enter lifecycle execution only when a bounded product question cannot be answered by compiler/resource/controller/type/candidate/settlement facts and explicit open pressure. Candidate resolution, activation model type comparison, and closed child-controller topology stay finite.",
         "Keep `RuntimeCompositions` and `pressure:app-api` buckets in sync so composition candidates, compiled-template coverage, candidate resource-analysis coverage, input fulfillment, composed child-controller counts, activation handoff kinds, and open composition rows stay visible in aggregate app pressure."
       ],
       "nextActionPolicy": "when-touched",
@@ -2186,6 +2211,16 @@
           "lensId": "framework.rendering",
           "projection": "hydration-flow",
           "summary": "Framework hydration/rendering handoff for dynamic composition and controller ownership."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:runtime-composition-input-semantics",
+          "summary": "Direct versus await-thenable input, settlement, candidate, and selected-child contract."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/template/README.md",
+          "summary": "Owning AuCompose input, child-ownership, projection, and lifecycle-boundary doctrine."
         }
       ],
       "liveChecks": [
@@ -2223,7 +2258,7 @@
         }
       ],
       "createdAt": "2026-05-17",
-      "updatedAt": "2026-07-22"
+      "updatedAt": "2026-07-23"
     },
     {
       "id": "reuse:repeat-scope-value-carriers",
@@ -3155,6 +3190,145 @@
       ],
       "createdAt": "2026-05-12",
       "updatedAt": "2026-07-22"
+    },
+    {
+      "id": "decision:runtime-composition-static-boundary",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "template",
+        "composition",
+        "rendering",
+        "controller",
+        "di",
+        "type-system",
+        "api"
+      ],
+      "summary": "Semantic-runtime models closed composition inputs and declarative view topology, while lifecycle scheduling and DOM mutation remain runtime boundaries.",
+      "rationale": "Aurelia composition spans compiler projection, runtime view/controller/container ownership, dynamic AuCompose inputs, user lifecycle execution, Promise scheduling, and DOM replacement. IDE, MCP, and future AOT need the first three as shared semantic facts, but replaying user lifecycle bodies or the async Controller state machine would create a second runtime with no finite fidelity boundary. The static model is complete only when every recursively rendered binding retains its exact source controller, compiler resource scope, active DI container, and honest settlement/candidate closure.",
+      "guidance": [
+        "Treat compiler-owned content projection, realized projection-view topology, dynamic AuCompose input/candidate analysis, and Controller execution as separate domains.",
+        "Only AuCompose component and template inputs use await-thenable consumption. Model, scopeBehavior, tag, and flushMode are direct inputs even when their values are Promises; preserve consumption and settlement as separate axes.",
+        "A complete TypeChecker candidate set requires a finite exact named-class basis and proves alternatives, not one selected runtime child. Broad structural construct signatures may retain useful candidates only with partial coverage. Materialize a composition-owned child only from a closed static/evaluator value.",
+        "Do not admit an AuCompose child through renderer Controller.addChild. AuCompose owns the child reference and activation parent independently. Derive definition-local versus recursive rendering origin from exact instruction ownership rather than parent-controller topology.",
+        "Render selected and fallback AuSlot sequences through the ordinary recursive Rendering.render, view-factory, synthetic-controller, Scope, hydration-context, and contextual-DI authorities. Do not build a second projection-context simulation.",
+        "Every RuntimeBinding has one RuntimeBindingRenderContext. Expression resources, source-value evaluation, observation/data flow, i18n, converters, bound-controller values, and scope typing must spend its source controller, compiler resource scope, and active container rather than the aggregate analysis root.",
+        "Nested captured-attribute transfer can render under one controller while compiling against an ancestor hydration context. Spend RuntimeDynamicInstructionContext requestor-definition and context-controller facts; do not infer ownership from the render run or source containment.",
+        "Router and composition source-value consumers must select the exact rendered binding for the concrete controller, then spend its RuntimeBindingRenderContext. Do not recover a globally unique instruction binding or fall back to a root resource scope or ancestor container.",
+        "Template-controller sibling flow state must retain concrete controller applications, not definition-level instructions alone. Value and runtime-assignment bindings are selected by exact expression or instruction product plus RuntimeBindingRenderContext.targetController; a target controller does not own the binding rendered against it.",
+        "Keep authored and TypeChecker inspectability separate from expression-resource execution reachability. RuntimeBindingSourceExpressionContextProjection retains post-bind reachability; blocked bindings keep diagnostic/data-flow evidence, while source-value evaluation and connectable observed dependencies must not resurrect the failed chain.",
+        "Re-enter lifecycle execution only for a bounded product question that compiler/resource/controller/type/candidate/settlement facts and explicit open seams cannot answer. Do not emulate user lifecycle bodies, Promise queues, stale-result cleanup, cancellation races, or DOM mutation for general fidelity."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-materializer.ts",
+          "symbolName": "RuntimeCompositionMaterializer",
+          "summary": "Dynamic AuCompose input, candidate, settlement, and composition-owned child boundary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-content-projection.ts",
+          "symbolName": "RuntimeContentProjectionView",
+          "summary": "Realized provider/fallback/empty projection-view relation over shared runtime topology."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-rendered-instruction-recorder.ts",
+          "symbolName": "RuntimeBindingRenderContext",
+          "summary": "Exact binding-owned source controller, compiler resource scope, and active DI container."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-spread-binding-creator.ts",
+          "symbolName": "RuntimeDynamicInstructionContext",
+          "summary": "Runtime-created instruction requestor-definition and hydration-context lineage."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-expression-resource-plan.ts",
+          "symbolName": "RuntimeExpressionResourcePlan",
+          "summary": "Shared expression-resource lifecycle authority, including post-bind source-evaluation reachability."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-controller-flow-state.ts",
+          "symbolName": "TemplateControllerFlowApplication",
+          "summary": "Concrete controller application retained across conditional, promise, and switch sibling flow."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-controller-binding.ts",
+          "symbolName": "templateControllerRuntimeValueBinding",
+          "summary": "Exact expression-product and target-controller selection for template-controller values."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-instruction-materialization.ts",
+          "symbolName": "routerSourceExpressionEvaluationFrame",
+          "summary": "Exact rendered router binding, source-context, resource-scope, and active-container selection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/content-projection-rows.ts",
+          "symbolName": "readTemplateContentProjectionRows",
+          "summary": "Public projection rows derived from shared compiler/runtime/contextual-DI facts."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/template/README.md",
+          "summary": "Owning composition, projection, recursive rendering, and binding-environment doctrine."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/api/README.md",
+          "summary": "RuntimeCompositions and TemplateContentProjections public query contract."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:template-content-projection",
+          "summary": "Projection topology, hydration-context, AuSlotsInfo, Scope, resource, and DI contract."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:runtime-composition-input-semantics",
+          "summary": "AuCompose input consumption, settlement, candidate, and direct-value contract."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/content-projection-topology",
+          "summary": "Selected/fallback/duplicate/nested/native projection and resource-owner forcing fixture."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/template-spread-capture-semantics",
+          "summary": "Nested captured-attribute source-controller, compiler-scope, and DI-container forcing fixture."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/router-dynamic-pattern",
+          "summary": "Repeated router binding realization, child-local converter visibility, and blocked-chain execution forcing fixture."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-rendered-instruction-recorder.ts",
+          "symbolName": "RuntimeBindingRenderContext"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-content-projection.ts",
+          "symbolName": "RuntimeContentProjectionView"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/content-projection-rows.ts",
+          "symbolName": "readTemplateContentProjectionRows"
+        }
+      ],
+      "createdAt": "2026-07-23",
+      "updatedAt": "2026-07-23"
     }
   ]
 }

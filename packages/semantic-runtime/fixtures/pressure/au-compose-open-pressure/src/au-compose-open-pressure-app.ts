@@ -7,6 +7,10 @@ import {
   externalTemplate,
   runtimeCompositionDefaults,
 } from 'au-compose-pressure-inputs';
+import {
+  awaitedPressureWidget,
+  broadPressureWidget,
+} from './awaited-pressure-widget';
 import { PressureWidget, type PressureWidgetModel } from './pressure-widget';
 import { PressureWidget as UnregisteredPressureWidget } from './unregistered-pressure-widget';
 import template from './au-compose-open-pressure-app.html';
@@ -24,6 +28,8 @@ const pressuredComponentCarrier = {
 export class AuComposeOpenPressureApp {
   readonly closedComponent = PressureWidget;
   readonly pressuredComponent = pressuredComponentCarrier.component;
+  readonly awaitedPressureWidget = awaitedPressureWidget;
+  readonly broadPressureWidget = broadPressureWidget;
   readonly closedModel: PressureWidgetModel = { message: 'closed model' };
 
   get partialComponent(): typeof PressureWidget | typeof UnregisteredPressureWidget {

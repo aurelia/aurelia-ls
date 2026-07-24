@@ -1,4 +1,4 @@
-import { bindable, customElement } from '@aurelia/runtime-html';
+import { bindable, customElement, valueConverter } from '@aurelia/runtime-html';
 import template from './capture-shell.html';
 import { InnerGate, InputMark } from './capture-resources';
 
@@ -26,10 +26,17 @@ export class FilteredCaptureShell {}
 })
 export class NoCaptureShell {}
 
+@valueConverter('nestedIdentity')
+export class NestedIdentityValueConverter {
+  toView<T>(value: T): T {
+    return value;
+  }
+}
+
 @customElement({
   name: 'nested-capture-shell',
   template: '<template><capture-shell ...$attrs></capture-shell></template>',
   capture: true,
-  dependencies: [CaptureShell],
+  dependencies: [CaptureShell, NestedIdentityValueConverter],
 })
 export class NestedCaptureShell {}

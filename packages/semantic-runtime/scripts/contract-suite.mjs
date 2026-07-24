@@ -229,6 +229,18 @@ const contractSuites = [
   contract('composition', 'fast', [
     'composition',
     'au-compose',
+    'controller',
+    'topology',
+  ], 'contract-runtime-composition-controller-ownership.mjs', 'Composition-owned controllers retain their activation parent without publishing renderer-owned child admission.'),
+  contract('composition', 'fast', [
+    'composition',
+    'au-compose',
+    'type-system',
+    'evaluation',
+  ], 'contract-runtime-composition-input-semantics.mjs', 'AuCompose distinguishes thenable-aware inputs from direct inputs while retaining fulfilled, rejected, and open value state.'),
+  contract('composition', 'fast', [
+    'composition',
+    'au-compose',
     'open-seams',
     'provenance',
   ], 'contract-runtime-composition-open-pressure.mjs', 'AuCompose retains independent input pressure, useful component candidates, and refused-child causal materializations.'),

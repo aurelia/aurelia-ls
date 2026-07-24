@@ -34,6 +34,7 @@ import { ConfigurationProductDetails } from './product-details.js';
 import { BindingScopeSlotProjector } from './binding-scope-slot-projector.js';
 import type { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import {
+  BindingScopeBindingContextConstructionKind,
   BindingScopeCreatorKind,
   BindingContext,
   BindingContextSlotDraft,
@@ -48,6 +49,8 @@ export class BindingScopeConstructionEmission {
     readonly overrideContext: OverrideContext,
     readonly scope: BindingScope,
     readonly records: readonly KernelStoreRecord[],
+    /** Whether this construction emitted the binding-context product or reused an existing one. */
+    readonly bindingContextMaterialized: boolean,
   ) {}
 }
 
@@ -67,11 +70,12 @@ class BindingScopeHandleSet {
     readonly overrideContextIdentityHandle: IdentityHandle,
     readonly scopeProductHandle: ProductHandle,
     readonly scopeIdentityHandle: IdentityHandle,
+    readonly bindingContextMaterialized: boolean,
   ) {}
 
   get materializedProductHandles(): readonly ProductHandle[] {
     return [
-      this.bindingContextProductHandle,
+      ...(this.bindingContextMaterialized ? [this.bindingContextProductHandle] : []),
       this.overrideContextProductHandle,
       this.scopeProductHandle,
     ];
@@ -83,6 +87,7 @@ class BindingScopeProducts {
     readonly bindingContext: BindingContext,
     readonly overrideContext: OverrideContext,
     readonly scope: BindingScope,
+    readonly bindingContextMaterialized: boolean,
   ) {}
 
   toEmission(records: readonly KernelStoreRecord[]): BindingScopeConstructionEmission {
@@ -91,6 +96,7 @@ class BindingScopeProducts {
       this.overrideContext,
       this.scope,
       records,
+      this.bindingContextMaterialized,
     );
   }
 }
@@ -134,11 +140,13 @@ export class BindingScopeMaterializer {
     return new KernelPublicationPlan(
       new KernelStoreBatch(emissions.flatMap((emission) => emission.records), batchLabel),
       emissions.flatMap((emission) => [
-        publishProductDetail(
-          ConfigurationProductDetails.BindingContext,
-          emission.bindingContext.productHandle,
-          emission.bindingContext,
-        ),
+        ...(emission.bindingContextMaterialized
+          ? [publishProductDetail(
+              ConfigurationProductDetails.BindingContext,
+              emission.bindingContext.productHandle,
+              emission.bindingContext,
+            )]
+          : []),
         publishProductDetail(
           ConfigurationProductDetails.OverrideContext,
           emission.overrideContext.productHandle,
@@ -186,13 +194,17 @@ export class BindingScopeMaterializer {
 
   private handlesForScope(local: string, input: BindingScopeConstructionRequest): BindingScopeHandleSet {
     const predecessor = input.predecessor;
+    const existingBindingContext = input.bindingContext.existingContext;
     return new BindingScopeHandleSet(
-      this.store.handles.product(`binding-context:${local}`),
-      predecessor?.bindingContext.identityHandle ?? this.store.handles.identity(`binding-context:${local}`),
+      existingBindingContext?.productHandle ?? this.store.handles.product(`binding-context:${local}`),
+      existingBindingContext?.identityHandle
+        ?? predecessor?.bindingContext.identityHandle
+        ?? this.store.handles.identity(`binding-context:${local}`),
       this.store.handles.product(`override-context:${local}`),
       predecessor?.overrideContext.identityHandle ?? this.store.handles.identity(`override-context:${local}`),
       this.store.handles.product(`binding-scope:${local}`),
       predecessor?.identityHandle ?? this.store.handles.identity(`binding-scope:${local}`),
+      existingBindingContext == null,
     );
   }
 
@@ -201,15 +213,18 @@ export class BindingScopeMaterializer {
     handles: BindingScopeHandleSet,
     source: BindingScopeSourceSet,
   ): BindingScopeProducts {
-    const bindingContextSlots = this.slotProjector.contextSlotsFor(
-      input.bindingContextSlots,
-      input.bindingContextType,
-    );
+    const bindingContextSlots = input.bindingContext.constructionKind
+      === BindingScopeBindingContextConstructionKind.Materialize
+      ? this.slotProjector.contextSlotsFor(
+          input.bindingContext.slots,
+          input.bindingContext.contextType,
+        )
+      : [];
     const overrideContextSlots = this.slotProjector.contextSlotsFor(
       input.overrideContextSlots,
       input.overrideContextType,
     );
-    const bindingContext = this.bindingContextForScope(
+    const bindingContext = input.bindingContext.existingContext ?? this.bindingContextForScope(
       input,
       handles,
       source,
@@ -228,7 +243,12 @@ export class BindingScopeMaterializer {
       bindingContext,
       overrideContext,
     );
-    return new BindingScopeProducts(bindingContext, overrideContext, scope);
+    return new BindingScopeProducts(
+      bindingContext,
+      overrideContext,
+      scope,
+      handles.bindingContextMaterialized,
+    );
   }
 
   private bindingContextForScope(
@@ -237,12 +257,18 @@ export class BindingScopeMaterializer {
     source: BindingScopeSourceSet,
     bindingContextSlots: readonly BindingContextSlotDraft[],
   ): BindingContext {
+    const contextKind = input.bindingContext.contextKind;
+    if (contextKind == null) {
+      throw new Error(
+        `Binding scope '${input.localKey}' cannot materialize a binding context without a context kind.`,
+      );
+    }
     return new BindingContext(
       handles.bindingContextProductHandle,
       handles.bindingContextIdentityHandle,
-      input.bindingContextKind,
+      contextKind,
       input.predecessor?.bindingContext.ownerProductHandle ?? input.ownerProductHandle,
-      input.bindingContextType,
+      input.bindingContext.contextType,
       bindingContextSlots.map((slot) => slot.toSlot()),
       source.sourceAddressHandle,
       [],
@@ -298,13 +324,17 @@ export class BindingScopeMaterializer {
       return [];
     }
     return [
-      new ConfigurationIdentity(
-        handles.bindingContextIdentityHandle,
-        KernelVocabulary.Configuration.BindingContext.key,
-        input.ownerIdentityHandle,
-        source.sourceAddressHandle,
-        `binding-context:${local}`,
-      ),
+      ...(handles.bindingContextMaterialized
+        ? [
+          new ConfigurationIdentity(
+            handles.bindingContextIdentityHandle,
+            KernelVocabulary.Configuration.BindingContext.key,
+            input.ownerIdentityHandle,
+            source.sourceAddressHandle,
+            `binding-context:${local}`,
+          ),
+        ]
+        : []),
       new ConfigurationIdentity(
         handles.overrideContextIdentityHandle,
         KernelVocabulary.Configuration.OverrideContext.key,
@@ -327,13 +357,17 @@ export class BindingScopeMaterializer {
     source: BindingScopeSourceSet,
   ): readonly MaterializedProduct[] {
     return [
-      new MaterializedProduct(
-        handles.bindingContextProductHandle,
-        KernelVocabulary.Configuration.BindingContext.key,
-        handles.bindingContextIdentityHandle,
-        source.sourceAddressHandle,
-        source.provenanceHandle,
-      ),
+      ...(handles.bindingContextMaterialized
+        ? [
+          new MaterializedProduct(
+            handles.bindingContextProductHandle,
+            KernelVocabulary.Configuration.BindingContext.key,
+            handles.bindingContextIdentityHandle,
+            source.sourceAddressHandle,
+            source.provenanceHandle,
+          ),
+        ]
+        : []),
       new MaterializedProduct(
         handles.overrideContextProductHandle,
         KernelVocabulary.Configuration.OverrideContext.key,

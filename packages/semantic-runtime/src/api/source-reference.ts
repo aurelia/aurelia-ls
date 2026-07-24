@@ -113,7 +113,7 @@ export const PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS = new Set<string>([
   'conflictingEndpoint',
   'state',
   'redirectSourceRouteConfig',
-  'lifecycleSteps',
+  'assemblySteps',
 ]);
 
 /** Collect source references from public answer row DTOs through the bounded carrier vocabulary. */

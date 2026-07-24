@@ -139,6 +139,7 @@ import {
 import { StateProductDetails } from '../state/product-details.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ValueConverterDefinition } from '../resources/value-converter-definition.js';
+import { RuntimeExpressionResourcePhaseReachability } from '../template/runtime-expression-resource.js';
 
 type RuntimeBindingSourceClassValueTarget = {
   readonly classNode: ts.ClassLikeDeclarationBase;
@@ -229,18 +230,6 @@ export class RuntimeBindingSourceValueEvaluator {
   }
 
   /** Returns a source-value evaluator whose root requests default to the supplied DI activation container. */
-  withDefaultActiveContainer(activeContainer: Container | null): RuntimeBindingSourceValueEvaluator {
-    return new RuntimeBindingSourceValueEvaluator(
-      this.kernel,
-      this.projector,
-      this.evaluation,
-      this.evaluationFrame,
-      this.boundControllerValues,
-      this.activationView,
-      activeContainer,
-    );
-  }
-
   /** Read one app-owned converter instance field without collapsing retained values when evaluation remains open. */
   readValueConverterInstanceProperty(
     definition: ValueConverterDefinition,
@@ -299,6 +288,12 @@ export class RuntimeBindingSourceValueEvaluator {
   private evaluateNode(
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
+    if (context.sourceEvaluationReachability !== RuntimeExpressionResourcePhaseReachability.Reached) {
+      return RuntimeBindingSourceValueEvaluation.open(
+        `Runtime binding source evaluation was blocked because its expression-resource bind phase was '${context.sourceEvaluationReachability}'.`,
+        [OpenSeamReasonKind.BindingSourceResourceOpen],
+      );
+    }
     const expression = context.expression;
     const scope = context.scope;
     switch (expression.$kind) {
@@ -926,6 +921,7 @@ export class RuntimeBindingSourceValueEvaluator {
       expression,
       sourceScope,
       bound.sourceBindingExpressionScopes,
+      bound.bindingProductHandle,
       bound.sourceBindingBehavior,
       `bound-controller:${bound.propertyName}:${bound.bindingProductHandle}`,
       bound.sourceAddressHandle,
@@ -1662,6 +1658,7 @@ export class RuntimeBindingSourceValueEvaluator {
       expression,
       bound.sourceScope,
       bound.sourceBindingExpressionScopes,
+      bound.bindingProductHandle,
       bound.sourceBindingBehavior,
       `bound-controller:${bound.propertyName}:${bound.bindingProductHandle}`,
       bound.sourceAddressHandle,

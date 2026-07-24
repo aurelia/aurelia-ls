@@ -1,5 +1,4 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
-import type { BindingScope } from '../configuration/scope.js';
 import type { Container } from '../di/container.js';
 import {
   EvaluationBoundaryKind,
@@ -42,7 +41,7 @@ import {
 } from '../configuration/binding-source-value-evaluation.js';
 import {
   RuntimeBindingSourceValueEvaluationContext,
-  projectRuntimeBindingSourceValueContextInScope,
+  sourceValueContextForRuntimeBindingSourceExpressionProjection,
 } from '../observation/binding-source-value-evaluation-context.js';
 import {
   instructionScopeLookup,
@@ -51,6 +50,10 @@ import {
 import {
   RuntimeBindingExpressionScopeProjector,
 } from '../observation/runtime-binding-expression-scope.js';
+import {
+  RuntimeBindingSourceExpressionContextProjector,
+  RuntimeBindingSourceExpressionProjectionKind,
+} from '../observation/runtime-binding-source-expression-context.js';
 import { HtmlAttribute, HtmlElement } from '../template/html-ir.js';
 import {
   HydrateAttributeInstruction,
@@ -60,7 +63,6 @@ import {
   SetPropertyInstruction,
 } from '../template/instruction-ir.js';
 import { bindingExpressionAstForProduct, readTemplateExpressionParse } from '../template/expression-parse-product.js';
-import type { TemplateResourceScope } from '../template/compiler-world.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import { RuntimeControllerCreationKind } from '../template/runtime-controller.js';
 import type { RuntimeControllerFrame } from '../template/runtime-controller.js';
@@ -132,10 +134,8 @@ interface RouterResourceInstructionSite {
   readonly routeContext: RouteContextModel | null;
   readonly controller: RuntimeControllerFrame;
   readonly instruction: HydrateAttributeInstruction;
-  readonly scope: BindingScope | null;
   readonly runtimeRendering: RuntimeRenderingEmission;
-  readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjector;
-  readonly resourceScope: TemplateResourceScope | null;
+  readonly sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector;
   readonly host: HtmlElement | null;
   readonly sourceAddressHandle: AddressHandle | null;
 }
@@ -527,24 +527,15 @@ function routerResourceInstructionSite(
     routeContext,
     controller,
     instruction,
-    scope: instructionScopes.scopeForInstruction(
-      instruction.productHandle,
-      instructionRenderingControllerProductHandle(controller),
-    ),
     runtimeRendering: runtimeAnalysis.runtimeRendering,
-    bindingExpressionScopes,
-    resourceScope: resource.compilation.compilerWorld.resourceScope,
+    sourceExpressionContexts: new RuntimeBindingSourceExpressionContextProjector(
+      runtimeAnalysis.runtimeRendering,
+      instructionScopes,
+      bindingExpressionScopes,
+    ),
     host,
     sourceAddressHandle: instruction.sourceAddressHandle ?? controller.sourceAddressHandle,
   };
-}
-
-function instructionRenderingControllerProductHandle(
-  controller: RuntimeControllerFrame,
-): ProductHandle | null {
-  // Instruction scope applications are keyed by the controller that rendered the instruction sequence. A custom
-  // attribute controller is created from the instruction but does not own the expression scope; its parent renderer does.
-  return controller.parent?.productHandle ?? controller.productHandle;
 }
 
 function routeContextCandidates(
@@ -618,9 +609,6 @@ function closeRouterResourceInstruction(
   const property = site.kind === RouterResourceInstructionKind.Load
     ? RouterLoadBindableName.Route
     : RouterHrefBindableName.Value;
-  const activeSourceValueEvaluator = state.sourceValueEvaluator.withDefaultActiveContainer(
-    activeContainerForRouterInstructionSite(site),
-  );
   if (site.kind === RouterResourceInstructionKind.Load) {
     const contextOverrideSourceAddressHandle = routerInstructionBindableSourceAddressHandle(
       store,
@@ -652,14 +640,14 @@ function closeRouterResourceInstruction(
       store,
       site,
       RouterLoadBindableName.Route,
-      activeSourceValueEvaluator,
+      state.sourceValueEvaluator,
       state.resourceIndex,
     );
     recordRouteParameterEndpointPlan(site, routeValue, state);
     value = staticLoadRouterResourceValue(
       store,
       site,
-      activeSourceValueEvaluator,
+      state.sourceValueEvaluator,
       routeValue,
     );
   } else {
@@ -667,7 +655,7 @@ function closeRouterResourceInstruction(
         store,
         site,
         RouterHrefBindableName.Value,
-        activeSourceValueEvaluator,
+        state.sourceValueEvaluator,
         state.resourceIndex,
     );
   }
@@ -795,19 +783,6 @@ function retainRouterInstructionPressure(
     state.openRecords,
     sourceAddressHandle,
   )];
-}
-
-function activeContainerForRouterInstructionSite(
-  site: RouterResourceInstructionSite,
-): Container | null {
-  let current: RuntimeControllerFrame | null = site.controller;
-  while (current != null) {
-    if (current.containerFrame != null) {
-      return current.containerFrame;
-    }
-    current = current.parent;
-  }
-  return null;
 }
 
 function materializeInstructionTree(
@@ -1122,6 +1097,7 @@ function recordEagerPathGenerationIssue(
     'router-route-context-issue',
     'eager-path-generation',
     routeConfigContext.identityHandle,
+    closed.site.controller.productHandle,
     localKeyPart(component ?? 'unknown-component'),
     localKeyPart(result.path ?? 'unknown-path'),
   ].join(':');
@@ -1170,6 +1146,7 @@ function recordInvalidInstructionIssue(
     'router-instruction-issue',
     'invalid-instruction',
     ownerHandle,
+    site.controller.productHandle,
     site.kind,
     localKeyPart(value.actual),
   ].join(':');
@@ -1330,6 +1307,7 @@ function recordRouteExpressionParseIssue(
     'router-instruction-issue',
     'route-expression-parse',
     ownerHandle,
+    site.controller.productHandle,
     failure.failureKind,
     localKeyPart(closed.value),
     failure.offset,
@@ -2028,7 +2006,7 @@ function eagerInstructionValue(
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   resourceIndex: ResourceDefinitionIndex,
 ): StaticRouterResourceValue | null {
-  if (site.scope == null || sourceValueEvaluator == null) {
+  if (sourceValueEvaluator == null) {
     return null;
   }
   const instruction = eagerInstructionFromObjectLiteral(expression, site, bindingInstructionProductHandle, sourceValueEvaluator, resourceIndex);
@@ -2173,37 +2151,45 @@ function routerSourceExpressionEvaluationFrame(
   bindingInstructionProductHandle: ProductHandle,
   expression: ExpressionAstNode,
 ): RouterSourceExpressionEvaluationFrame {
-  if (site.scope == null) {
+  const bindings = site.runtimeRendering.readBindingsForInstruction(bindingInstructionProductHandle)
+    .filter(isRuntimeExpressionBinding)
+    .filter((binding) =>
+      site.runtimeRendering.requireRenderContextForBinding(binding.productHandle)
+        .targetController.productHandle === site.controller.productHandle
+    );
+  if (bindings.length !== 1) {
     return {
       state: 'open',
       evaluation: RuntimeBindingSourceValueEvaluation.open(
-        'Router resource binding source did not have a modeled runtime Scope.',
+        bindings.length === 0
+          ? 'Router resource binding source did not retain a rendered binding for its concrete custom-attribute controller.'
+          : 'Router resource binding source retained more than one rendered binding for its concrete custom-attribute controller.',
         [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
       ),
     };
   }
-  const binding = site.runtimeRendering.readBindingForInstruction(bindingInstructionProductHandle);
-  const projection = projectRuntimeBindingSourceValueContextInScope({
-    runtimeBindings: site.runtimeRendering,
-    bindingExpressionScopes: site.bindingExpressionScopes,
-    binding: binding != null && isRuntimeExpressionBinding(binding) ? binding : null,
+  const binding = bindings[0]!;
+  const projection = site.sourceExpressionContexts.projectSource({
+    binding,
     expression,
-    localKey: `router-resource:${binding?.productHandle ?? bindingInstructionProductHandle}:source-value:${expression.span.start}:${expression.span.end}`,
-    sourceScope: site.scope,
-    resourceScope: site.resourceScope,
+    localKey: `router-resource:${binding.productHandle}:source-value:${expression.span.start}:${expression.span.end}`,
   });
-  if (projection.context == null) {
+  if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
     return {
       state: 'open',
       evaluation: RuntimeBindingSourceValueEvaluation.open(
-        projection.openReason ?? 'Router resource binding source could not be projected into a source-value context.',
+        projection.openReason,
         [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
       ),
     };
   }
+  const renderContext = site.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
   return {
     state: 'context',
-    context: projection.context,
+    context: sourceValueContextForRuntimeBindingSourceExpressionProjection(
+      projection,
+      renderContext.requireActiveContainer(),
+    ),
   };
 }
 
@@ -2935,7 +2921,7 @@ function evaluatedRouterResourceValue(
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   resourceIndex: ResourceDefinitionIndex,
 ): StaticRouterResourceValue | null {
-  if (site.scope == null || sourceValueEvaluator == null) {
+  if (sourceValueEvaluator == null) {
     return null;
   }
   const evaluation = evaluateRouterSourceExpression(site, bindingInstructionProductHandle, expression, sourceValueEvaluator);
@@ -2995,7 +2981,7 @@ function evaluatedStringValue(
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   sourceAddressHandle: AddressHandle | null,
 ): StaticStringBindingValue | null {
-  if (expression == null || site.scope == null || sourceValueEvaluator == null) {
+  if (expression == null || sourceValueEvaluator == null) {
     return null;
   }
   const evaluation = evaluateRouterSourceExpression(site, bindingInstructionProductHandle, expression, sourceValueEvaluator);
@@ -3042,7 +3028,7 @@ function invalidClosedRouterInstructionValue(
       sourceAddressHandle,
     };
   }
-  if (site.scope == null || sourceValueEvaluator == null) {
+  if (sourceValueEvaluator == null) {
     return null;
   }
   const evaluation = evaluateRouterSourceExpression(site, bindingInstructionProductHandle, expression, sourceValueEvaluator);
@@ -3135,7 +3121,7 @@ function evaluatedBindingExpressionProduct(
   expressionProductHandle: ProductHandle | null,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
 ): RuntimeBindingSourceValueEvaluation | null {
-  if (expressionProductHandle == null || site.scope == null || sourceValueEvaluator == null) {
+  if (expressionProductHandle == null || sourceValueEvaluator == null) {
     return null;
   }
   const expression = bindingExpressionAstForProduct(store, expressionProductHandle);

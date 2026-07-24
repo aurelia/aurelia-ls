@@ -11,7 +11,19 @@ import { FrameworkIntrinsicDiKey } from '../di/framework-intrinsic-di-key.js';
 import { ContainerLookupState } from '../di/container-lookup.js';
 import { DiKeyIdentityEmitter } from '../di/di-key-identity-emitter.js';
 import { DiResourceSlotPublicationMaterializer } from '../di/world-publication.js';
+import {
+  AuSlotsInfo,
+  AuSlotsInfoProjection,
+  AuSlotsInfoSourceKind,
+  RuntimeHydrationContext,
+} from '../configuration/controller.js';
+import { SemanticClaim } from '../kernel/claim.js';
 import type { AddressHandle, ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
+import { ConfigurationIdentity } from '../kernel/identity.js';
+import {
+  MaterializationRecord,
+  MaterializedProduct,
+} from '../kernel/materialization.js';
 import {
   OpenSeam,
 } from '../kernel/open-seam.js';
@@ -41,6 +53,10 @@ import {
   runtimeResourceKeyForKind,
 } from '../resources/resource-kind.js';
 import {
+  RegistrationValueKind,
+  RegistrationValueReference,
+} from '../registration/registration-reference.js';
+import {
   ObserverLocatorLookupRequest,
   type ObserverLocator,
 } from '../observation/observer-locator.js';
@@ -63,8 +79,8 @@ import {
   RuntimeControllerCreationRequest,
   RuntimeControllerFrame,
   type RuntimeControllerInstruction,
-  RuntimeControllerLifecycleStage,
-  RuntimeControllerLifecycleStepKind,
+  RuntimeControllerAssemblyStage,
+  RuntimeControllerAssemblyStepKind,
 } from './runtime-controller.js';
 import {
   RuntimeBindingTargetAccessLookup,
@@ -151,6 +167,44 @@ export class RuntimeControllerCreationMaterializer {
     );
   }
 
+  createIntrinsicEmptyAuSlotsInfo(
+    localKey: string,
+    source: RuntimeRenderingSourceSet,
+    records: KernelStoreRecord[],
+  ): AuSlotsInfo {
+    const local = `${localKey}:au-slots-info:intrinsic-empty`;
+    const slotsInfo = new AuSlotsInfo(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+      AuSlotsInfoSourceKind.IntrinsicEmpty,
+      [],
+      [],
+      null,
+    );
+    records.push(
+      new ConfigurationIdentity(
+        slotsInfo.identityHandle,
+        KernelVocabulary.Configuration.AuSlotsInfo.key,
+        null,
+        null,
+        FrameworkIntrinsicDiKey.IAuSlotsInfo,
+      ),
+      new MaterializedProduct(
+        slotsInfo.productHandle,
+        KernelVocabulary.Configuration.AuSlotsInfo.key,
+        slotsInfo.identityHandle,
+        null,
+        source.provenanceHandle,
+      ),
+      new MaterializationRecord(
+        this.store.handles.materialization(local),
+        slotsInfo.identityHandle,
+        [slotsInfo.productHandle],
+      ),
+    );
+    return slotsInfo;
+  }
+
   createRootController(
     localKey: string,
     definition: CustomElementDefinition,
@@ -162,14 +216,12 @@ export class RuntimeControllerCreationMaterializer {
     records: KernelStoreRecord[],
     childContainerEmissions: ContainerChildMaterializationEmission[],
   ): RuntimeControllerFrame {
-    const childContainer = this.childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest(
-      `${localKey}:controller:root-container`,
-      rootContainer,
-      definition.sourceAddressHandle,
-      'root-custom-element:container',
-      [],
-      null,
-    ));
+    const childContainer = this.childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest({
+      localKey: `${localKey}:controller:root-container`,
+      parent: rootContainer,
+      sourceAddressHandle: definition.sourceAddressHandle,
+      localName: 'root-custom-element:container',
+    }));
     records.push(...childContainer.records);
     childContainerEmissions.push(childContainer);
     const allocation = this.allocate(`${localKey}:controller:root`);
@@ -189,6 +241,15 @@ export class RuntimeControllerCreationMaterializer {
       definition.strict,
       definition.sourceAddressHandle,
       source.provenanceHandle,
+    );
+    this.installOwnedHydrationContext(
+      `${localKey}:controller:root`,
+      frame,
+      null,
+      null,
+      childContainer,
+      source,
+      records,
     );
     this.recordRootControllerHydration(frame, childContainer);
     this.recordControllerResourceDependencies(
@@ -211,8 +272,11 @@ export class RuntimeControllerCreationMaterializer {
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     childContainerEmissions: ContainerChildMaterializationEmission[],
+    auSlotsInfos: AuSlotsInfo[],
+    intrinsicEmptyAuSlotsInfo: AuSlotsInfo,
     openSeams: OpenSeam[],
     controllerIssues: RuntimeControllerIssue[],
+    readController: (productHandle: ProductHandle) => RuntimeControllerFrame | null,
     measure: RuntimeControllerCreationMeasure = unmeasuredRuntimeControllerCreation,
     projectKey: string | null = null,
     resourceDefinitions: ResourceDefinitionIndex | null = null,
@@ -232,14 +296,34 @@ export class RuntimeControllerCreationMaterializer {
       return null;
     }
     const allocation = this.allocate(`${creation.local}:controller`);
+    const auSlotsInfo = this.materializeAuSlotsInfo(
+      creation,
+      source,
+      records,
+      auSlotsInfos,
+      intrinsicEmptyAuSlotsInfo,
+    );
     const childContainer = measure('child-container', () =>
-      this.materializeChildControllerContainer(creation, parentContainer, measure)
+      this.materializeChildControllerContainer(
+        creation,
+        parentContainer,
+        auSlotsInfo,
+        measure,
+      )
     );
     records.push(...childContainer.records);
     childContainerEmissions.push(childContainer);
     const frame = measure('child-frame', () =>
       this.childControllerFrame(creation, allocation, definition, childContainer, source)
     );
+    frame.attachAuSlotsInfo(auSlotsInfo);
+    const inheritedHydrationContext = creation.parent.readHydrationContext();
+    if (inheritedHydrationContext != null) {
+      frame.attachConstructionHydrationContext(inheritedHydrationContext);
+      if (creation.creationKind !== RuntimeControllerCreationKind.CustomElement) {
+        frame.attachHydrationContext(inheritedHydrationContext);
+      }
+    }
     measure('controller-dependencies', () =>
       this.recordControllerResourceDependencies(
         `${creation.local}:controller-dependencies`,
@@ -254,7 +338,23 @@ export class RuntimeControllerCreationMaterializer {
     measure('watcher-setup', () =>
       this.recordControllerWatchers(`${creation.local}:controller`, frame, definition, typeSystem)
     );
-    measure('child-hydration', () => this.recordChildControllerHydration(frame, childContainer));
+    measure('activation-di-issues', () =>
+      this.recordControllerActivationDiIssues(creation, frame, definition, source, records, controllerIssues)
+    );
+    measure('child-hydration', () => {
+      if (creation.creationKind === RuntimeControllerCreationKind.CustomElement) {
+        this.installOwnedHydrationContext(
+          `${creation.local}:controller`,
+          frame,
+          creation.instruction,
+          inheritedHydrationContext,
+          childContainer,
+          source,
+          records,
+        );
+      }
+      this.recordChildControllerHydration(frame, childContainer);
+    });
     measure('observer-setup', () =>
       this.recordControllerObserverSetupIssues(
         frame,
@@ -266,11 +366,8 @@ export class RuntimeControllerCreationMaterializer {
         controllerIssues,
       )
     );
-    measure('activation-di-issues', () =>
-      this.recordControllerActivationDiIssues(creation, frame, definition, source, records, controllerIssues)
-    );
     measure('au-compose-static-input-issues', () =>
-      this.recordAuComposeStaticInputIssues(creation, frame, definition, source, records, controllerIssues)
+      this.recordAuComposeStaticInputIssues(creation, frame, definition, source, records, controllerIssues, readController)
     );
     measure('template-controller-construction-issues', () =>
       this.recordTemplateControllerConstructionIssues(creation, frame, source, records, controllerIssues)
@@ -282,17 +379,18 @@ export class RuntimeControllerCreationMaterializer {
   createSyntheticViewController(
     local: string,
     viewFactory: RuntimeViewFactoryMaterialization,
+    hydrationContext: RuntimeHydrationContext | null,
     source: RuntimeRenderingSourceSet,
   ): RuntimeControllerFrame {
     const allocation = this.allocate(`${local}:controller`);
-    const controller = viewFactory.templateController;
-    return new RuntimeControllerFrame(
+    const controller = viewFactory.ownerController;
+    const frame = new RuntimeControllerFrame(
       RuntimeControllerCreationKind.SyntheticView,
       allocation.productHandle,
       allocation.identityHandle,
       viewFactory.viewFactory.name == null ? 'synthetic-view' : `${viewFactory.viewFactory.name}:synthetic`,
       viewFactory.viewFactory.container,
-      controller.containerFrame,
+      viewFactory.container,
       null,
       null,
       null,
@@ -306,6 +404,10 @@ export class RuntimeControllerCreationMaterializer {
       viewFactory.instructionSequenceProductHandle,
       viewFactory.viewFactory.instructionProductHandle,
     );
+    if (hydrationContext != null) {
+      frame.attachHydrationContext(hydrationContext);
+    }
+    return frame;
   }
 
   private parentContainerForChildController(
@@ -333,20 +435,176 @@ export class RuntimeControllerCreationMaterializer {
   private materializeChildControllerContainer(
     creation: ClosedRuntimeControllerCreationRequest,
     parentContainer: Container,
+    auSlotsInfo: AuSlotsInfo,
     measure: RuntimeControllerCreationMeasure,
   ): ContainerChildMaterializationEmission {
     return this.childContainerMaterializer.materializeChild(
-      new ContainerChildMaterializationRequest(
-        `${creation.local}:container`,
-        parentContainer,
-        creation.instruction.sourceAddressHandle,
-        `${creation.creationKind}:container`,
-        contextResolverSlotsForController(creation),
-        null,
-        ContainerContextResolverRecordPolicy.ModelOnly,
-      ),
+      new ContainerChildMaterializationRequest({
+        localKey: `${creation.local}:container`,
+        parent: parentContainer,
+        sourceAddressHandle: creation.instruction.sourceAddressHandle,
+        localName: `${creation.creationKind}:container`,
+        contextResolvers: contextResolverSlotsForController(creation, auSlotsInfo),
+        contextResolverRecordPolicy: ContainerContextResolverRecordPolicy.ModelOnly,
+      }),
       (name, read) => measure(`child-container:${name}`, read),
     );
+  }
+
+  private materializeAuSlotsInfo(
+    creation: ClosedRuntimeControllerCreationRequest,
+    source: RuntimeRenderingSourceSet,
+    records: KernelStoreRecord[],
+    auSlotsInfos: AuSlotsInfo[],
+    intrinsicEmptyAuSlotsInfo: AuSlotsInfo,
+  ): AuSlotsInfo {
+    if (!(creation.instruction instanceof HydrateElementInstruction)
+      || creation.instruction.projectionInstructionSequences.length === 0) {
+      return intrinsicEmptyAuSlotsInfo;
+    }
+    const local = `${creation.local}:au-slots-info`;
+    const instructionCreatesSlotsInfo = new SemanticClaim(
+      this.store.handles.claim(`${local}:instruction-creates-au-slots-info`),
+      creation.instruction.productHandle,
+      KernelVocabulary.Configuration.InstructionCreatesAuSlotsInfo.key,
+      this.store.handles.product(local),
+      source.provenanceHandle,
+    );
+    const slotsInfo = new AuSlotsInfo(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+      AuSlotsInfoSourceKind.HydrateElementInstruction,
+      [...new Set(creation.instruction.projectionInstructionSequences.map((projection) =>
+        projection.slotName
+      ))],
+      creation.instruction.projectionInstructionSequences.map((projection) =>
+        new AuSlotsInfoProjection(
+          projection.slotName,
+          projection.instructionSequenceProductHandle,
+          projection.sourceAddressHandle,
+          projection.contributors.map((contributor) =>
+            contributor.slotNameSourceAddressHandle ?? contributor.node.addressHandle
+          ),
+        )
+      ),
+      creation.instruction.sourceAddressHandle,
+    );
+    records.push(
+      new ConfigurationIdentity(
+        slotsInfo.identityHandle,
+        KernelVocabulary.Configuration.AuSlotsInfo.key,
+        creation.instruction.identityHandle,
+        slotsInfo.sourceAddressHandle,
+        FrameworkIntrinsicDiKey.IAuSlotsInfo,
+      ),
+      new MaterializedProduct(
+        slotsInfo.productHandle,
+        KernelVocabulary.Configuration.AuSlotsInfo.key,
+        slotsInfo.identityHandle,
+        slotsInfo.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      new MaterializationRecord(
+        this.store.handles.materialization(local),
+        slotsInfo.identityHandle,
+        [slotsInfo.productHandle],
+        [instructionCreatesSlotsInfo.handle],
+      ),
+      instructionCreatesSlotsInfo,
+    );
+    auSlotsInfos.push(slotsInfo);
+    return slotsInfo;
+  }
+
+  private installOwnedHydrationContext(
+    local: string,
+    frame: RuntimeControllerFrame,
+    instruction: RuntimeControllerInstruction | null,
+    parent: RuntimeHydrationContext | null,
+    childContainer: ContainerChildMaterializationEmission,
+    source: RuntimeRenderingSourceSet,
+    records: KernelStoreRecord[],
+  ): RuntimeHydrationContext {
+    const contextLocal = `${local}:hydration-context`;
+    const context = new RuntimeHydrationContext(
+      this.store.handles.product(contextLocal),
+      this.store.handles.identity(contextLocal),
+      frame.toReference(),
+      instruction?.productHandle ?? null,
+      parent,
+      instruction?.sourceAddressHandle ?? frame.sourceAddressHandle,
+    );
+    const claims = [
+      new SemanticClaim(
+        this.store.handles.claim(`${contextLocal}:uses-controller`),
+        context.productHandle,
+        KernelVocabulary.Configuration.HydrationContextUsesController.key,
+        frame.productHandle,
+        source.provenanceHandle,
+      ),
+      ...(instruction == null
+        ? []
+        : [new SemanticClaim(
+            this.store.handles.claim(`${contextLocal}:uses-instruction`),
+            context.productHandle,
+            KernelVocabulary.Configuration.HydrationContextUsesInstruction.key,
+            instruction.productHandle,
+            source.provenanceHandle,
+          )]),
+      ...(parent == null
+        ? []
+        : [new SemanticClaim(
+            this.store.handles.claim(`${contextLocal}:has-parent`),
+            context.productHandle,
+            KernelVocabulary.Configuration.HydrationContextHasParent.key,
+            parent.productHandle,
+            source.provenanceHandle,
+          )]),
+    ];
+    records.push(
+      new ConfigurationIdentity(
+        context.identityHandle,
+        KernelVocabulary.Configuration.HydrationContext.key,
+        parent?.identityHandle ?? null,
+        context.sourceAddressHandle,
+        FrameworkIntrinsicDiKey.IHydrationContext,
+      ),
+      new MaterializedProduct(
+        context.productHandle,
+        KernelVocabulary.Configuration.HydrationContext.key,
+        context.identityHandle,
+        context.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      new MaterializationRecord(
+        this.store.handles.materialization(contextLocal),
+        context.identityHandle,
+        [context.productHandle],
+        claims.map((claim) => claim.handle),
+      ),
+      ...claims,
+    );
+    frame.attachHydrationContext(context);
+    const provider = this.childContainerMaterializer.installContextResolver(
+      childContainer,
+      `${local}:own-hydration-context`,
+      new ContainerContextResolverSlotRequest({
+        interfaceName: FrameworkIntrinsicDiKey.IHydrationContext,
+        sourceAddressHandle: context.sourceAddressHandle,
+        ownerIdentityHandle: context.identityHandle,
+        instance: new RegistrationValueReference(
+          RegistrationValueKind.Instance,
+          context.identityHandle,
+          context.productHandle,
+          context.sourceAddressHandle,
+          FrameworkIntrinsicDiKey.IHydrationContext,
+        ),
+      }),
+      source.provenanceHandle,
+      ContainerContextResolverRecordPolicy.ModelOnly,
+    );
+    records.push(...provider.records);
+    return context;
   }
 
   private childControllerFrame(
@@ -381,9 +639,9 @@ export class RuntimeControllerCreationMaterializer {
     frame: RuntimeControllerFrame,
     childContainer: ContainerChildMaterializationEmission,
   ): void {
-    frame.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Hydration,
-      RuntimeControllerLifecycleStepKind.CreateChildContainer,
+    frame.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Hydration,
+      RuntimeControllerAssemblyStepKind.CreateChildContainer,
       childContainer.container.productHandle,
       childContainer.container.sourceAddressHandle,
       'Renderer-created controller received a runtime child container and hydration context providers.',
@@ -394,9 +652,9 @@ export class RuntimeControllerCreationMaterializer {
     frame: RuntimeControllerFrame,
     childContainer: ContainerChildMaterializationEmission,
   ): void {
-    frame.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Hydration,
-      RuntimeControllerLifecycleStepKind.CreateChildContainer,
+    frame.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Hydration,
+      RuntimeControllerAssemblyStepKind.CreateChildContainer,
       childContainer.container.productHandle,
       childContainer.container.sourceAddressHandle,
       'AppRoot created a runtime child container for the root custom element controller.',
@@ -463,9 +721,9 @@ export class RuntimeControllerCreationMaterializer {
     if (registered === 0) {
       return;
     }
-    frame.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Hydration,
-      RuntimeControllerLifecycleStepKind.RegisterDependencies,
+    frame.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Hydration,
+      RuntimeControllerAssemblyStepKind.RegisterDependencies,
       definition.productHandle,
       definition.sourceAddressHandle,
       `Controller container registered ${registered} resource dependency slot(s).`,
@@ -769,6 +1027,7 @@ export class RuntimeControllerCreationMaterializer {
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     controllerIssues: RuntimeControllerIssue[],
+    readController: (productHandle: ProductHandle) => RuntimeControllerFrame | null,
   ): void {
     if (!(definition instanceof CustomElementDefinition)
       || definition.name !== AU_COMPOSE_RESOURCE_NAME
@@ -798,6 +1057,7 @@ export class RuntimeControllerCreationMaterializer {
         source,
         records,
         controllerIssues,
+        readController,
       );
     });
   }
@@ -839,8 +1099,9 @@ export class RuntimeControllerCreationMaterializer {
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
     controllerIssues: RuntimeControllerIssue[],
+    readController: (productHandle: ProductHandle) => RuntimeControllerFrame | null,
   ): void {
-    const issue = auComposeComponentLookupIssue(creation, instruction);
+    const issue = auComposeComponentLookupIssue(frame, instruction, readController);
     if (issue == null) {
       return;
     }
@@ -854,7 +1115,7 @@ export class RuntimeControllerCreationMaterializer {
       issue.kind,
       issue.message,
       issue.frameworkErrorCode,
-      instruction.sourceAddressHandle ?? creation.instruction.sourceAddressHandle,
+      instruction.sourceAddressHandle ?? frame.sourceAddressHandle,
     );
     records.push(...publication.records);
     controllerIssues.push(publication.issue);
@@ -1202,8 +1463,9 @@ function auComposeBindableSetIssue(
 }
 
 function auComposeComponentLookupIssue(
-  creation: ClosedRuntimeControllerCreationRequest,
+  controller: RuntimeControllerFrame,
   instruction: SetPropertyInstruction,
+  readController: (productHandle: ProductHandle) => RuntimeControllerFrame | null,
 ): {
   readonly kind: RuntimeControllerIssueKind;
   readonly message: string;
@@ -1213,13 +1475,15 @@ function auComposeComponentLookupIssue(
     return null;
   }
 
-  const lookup = creation.parent.containerFrame?.find('custom-element', instruction.value) ?? null;
+  const hydrationControllerHandle = controller.readConstructionHydrationContext()?.controller.productHandle ?? null;
+  const hydrationController = hydrationControllerHandle == null ? null : readController(hydrationControllerHandle);
+  const lookup = hydrationController?.containerFrame?.find('custom-element', instruction.value) ?? null;
   if (lookup?.state === ContainerLookupState.Hit) {
     return null;
   }
   return {
     kind: RuntimeControllerIssueKind.AuComposeComponentNameNotFound,
-    message: `No au-compose custom element named "${instruction.value}" is registered in the parent hydration context container.`,
+    message: `No au-compose custom element named "${instruction.value}" is registered in the construction hydration context container.`,
     frameworkErrorCode: RuntimeHtmlControllerFrameworkErrorCode.AuComposeComponentNameNotFound,
   };
 }
@@ -1269,21 +1533,63 @@ function isClosedControllerCreationRequest(
 }
 
 function contextResolverSlotsForController(
-  creation: RuntimeControllerCreationRequest,
+  creation: ClosedRuntimeControllerCreationRequest,
+  auSlotsInfo: AuSlotsInfo,
 ): readonly ContainerContextResolverSlotRequest[] {
-  const common = [
+  return [
     FrameworkIntrinsicDiKey.INode,
     FrameworkIntrinsicDiKey.IController,
     FrameworkIntrinsicDiKey.IInstruction,
     FrameworkIntrinsicDiKey.IRenderLocation,
     FrameworkIntrinsicDiKey.IViewFactory,
     FrameworkIntrinsicDiKey.IAuSlotsInfo,
-  ];
-  const names = creation.creationKind === RuntimeControllerCreationKind.CustomElement
-    ? [...common, FrameworkIntrinsicDiKey.IHydrationContext]
-    : common;
-  return names.map((name) => new ContainerContextResolverSlotRequest(
-    name,
-    creation.instruction?.sourceAddressHandle ?? null,
-  ));
+  ].map((name) => {
+    const sourceAddressHandle = creation.instruction.sourceAddressHandle;
+    switch (name) {
+      case FrameworkIntrinsicDiKey.IController:
+        return new ContainerContextResolverSlotRequest({
+          interfaceName: name,
+          sourceAddressHandle,
+          ownerIdentityHandle: creation.parent.identityHandle,
+          instance: new RegistrationValueReference(
+            RegistrationValueKind.Instance,
+            creation.parent.identityHandle,
+            creation.parent.productHandle,
+            creation.parent.sourceAddressHandle,
+            FrameworkIntrinsicDiKey.IController,
+          ),
+        });
+      case FrameworkIntrinsicDiKey.IInstruction:
+        return new ContainerContextResolverSlotRequest({
+          interfaceName: name,
+          sourceAddressHandle,
+          ownerIdentityHandle: creation.instruction.identityHandle,
+          instance: new RegistrationValueReference(
+            RegistrationValueKind.Instance,
+            creation.instruction.identityHandle,
+            creation.instruction.productHandle,
+            creation.instruction.sourceAddressHandle,
+            FrameworkIntrinsicDiKey.IInstruction,
+          ),
+        });
+      case FrameworkIntrinsicDiKey.IAuSlotsInfo:
+        return new ContainerContextResolverSlotRequest({
+          interfaceName: name,
+          sourceAddressHandle,
+          ownerIdentityHandle: auSlotsInfo.identityHandle,
+          instance: new RegistrationValueReference(
+            RegistrationValueKind.Instance,
+            auSlotsInfo.identityHandle,
+            auSlotsInfo.productHandle,
+            auSlotsInfo.sourceAddressHandle,
+            FrameworkIntrinsicDiKey.IAuSlotsInfo,
+          ),
+        });
+      default:
+        return new ContainerContextResolverSlotRequest({
+          interfaceName: name,
+          sourceAddressHandle,
+        });
+    }
+  });
 }

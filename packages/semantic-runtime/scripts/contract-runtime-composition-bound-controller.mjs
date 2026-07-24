@@ -36,12 +36,10 @@ const failures = [
   widgetHostRows.some((row) => row.renderingContextKind === 'definition-resource')
     ? null
     : 'Expected a definition-resource widget-host row from the resource analysis pass.',
-  openRows.length === 0
-    ? null
-    : `Expected complete finite candidate coverage not to publish an open composition row; observed ${openRows.length}.`,
   typeCandidateRows.length === 1
     && typeCandidateRows[0].componentCandidateCoverageKind === 'complete'
-    && typeCandidateRows[0].componentInputFulfillmentKind === 'open'
+    && typeCandidateRows[0].componentInputConsumptionKind === 'await-thenable'
+    && typeCandidateRows[0].componentInputValueStateKind === 'open'
     && typeCandidateRows[0].resolvedComponentClassNames.includes('ChartWidget')
     && typeCandidateRows[0].resolvedComponentClassNames.includes('InventoryWidget')
     && typeCandidateRows[0].composedChildControllerCount === 0
@@ -118,7 +116,8 @@ const summary = {
     renderingDefinitionName: row.renderingDefinitionName,
     source: row.source?.label ?? null,
     componentCandidateCoverageKind: row.componentCandidateCoverageKind,
-    componentInputFulfillmentKind: row.componentInputFulfillmentKind,
+    componentInputConsumptionKind: row.componentInputConsumptionKind,
+    componentInputValueStateKind: row.componentInputValueStateKind,
     resolvedComponentClassNames: row.resolvedComponentClassNames,
     openReason: row.openReason,
   })),

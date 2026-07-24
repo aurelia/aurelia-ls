@@ -130,10 +130,10 @@ export class RuntimeInstructionScopeLookup {
     runtimeBindings: RuntimeRenderingEmission,
     binding: RuntimeBinding,
   ): BindingScope | null {
-    const renderContext = runtimeBindings.readRenderContextForBinding(binding.productHandle);
+    const renderContext = runtimeBindings.requireRenderContextForBinding(binding.productHandle);
     return this.scopeForInstruction(
       binding.instructionProductHandle,
-      renderContext?.renderingController.productHandle ?? null,
+      renderContext.sourceController.productHandle,
     );
   }
 

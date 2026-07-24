@@ -54,8 +54,8 @@ import { routerProductRecords } from './router-product-records.js';
 import {
   RuntimeControllerCreationKind,
   RuntimeControllerFrame,
-  RuntimeControllerLifecycleStage,
-  RuntimeControllerLifecycleStepKind,
+  RuntimeControllerAssemblyStage,
+  RuntimeControllerAssemblyStepKind,
 } from '../template/runtime-controller.js';
 import type { TemplateCompilationProjectEmission } from '../template/template-compilation-project-pass.js';
 import { TemplateProductDetails } from '../template/product-details.js';
@@ -414,19 +414,22 @@ function routedComponentChildContainer(
   routeContextContainer: Container,
 ): ContainerChildMaterializationEmission {
   const sourceAddressHandle = routeNode.sourceAddressHandle;
-  return childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest(
-    local,
-    routeContextContainer,
+  return childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest({
+    localKey: local,
+    parent: routeContextContainer,
     sourceAddressHandle,
-    `${routeNode.path}:routed-component-container`,
-    [
-      new ContainerContextResolverSlotRequest(FrameworkIntrinsicDiKey.INode, sourceAddressHandle),
+    localName: `${routeNode.path}:routed-component-container`,
+    contextResolvers: [
+      new ContainerContextResolverSlotRequest({
+        interfaceName: FrameworkIntrinsicDiKey.INode,
+        sourceAddressHandle,
+      }),
     ],
-    {
+    configuration: {
       inheritParentResources: true,
       sourceAddressHandle,
     } satisfies ContainerConfigurationRequest,
-  ));
+  }));
 }
 
 function routedControllerFrame(
@@ -461,9 +464,9 @@ function recordRoutedControllerHydration(
   childContainer: ContainerChildMaterializationEmission,
   sourceAddressHandle: RouteNodeModel['sourceAddressHandle'],
 ): void {
-  controller.recordLifecycleStep(
-    RuntimeControllerLifecycleStage.Hydration,
-    RuntimeControllerLifecycleStepKind.CreateChildContainer,
+  controller.recordAssemblyStep(
+    RuntimeControllerAssemblyStage.Hydration,
+    RuntimeControllerAssemblyStepKind.CreateChildContainer,
     childContainer.container.productHandle,
     sourceAddressHandle,
     'RouteContext._createComponentAgent created a child container with inherited resources for routed component construction.',

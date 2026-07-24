@@ -1,0 +1,10 @@
+<template>
+  <projection-receiver>
+    <template au-slot="heading">
+      <span>${$host.receiverLabel}</span>
+      <au-slot name="forwarded">
+        <span>Relay fallback for ${relayLabel}</span>
+      </au-slot>
+    </template>
+  </projection-receiver>
+</template>

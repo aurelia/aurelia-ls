@@ -256,6 +256,7 @@ export type RuntimeBindingDataFlowField =
   | 'scope'
   | 'direction'
   | 'sourceEvaluationKind'
+  | 'sourceEvaluationReachability'
   | 'targetMutationKind'
   | 'strictBinding'
   | 'sourceKind'
@@ -470,6 +471,8 @@ export class RuntimeBindingDataFlow {
     readonly bindingScope: BindingScopeReference | null,
     readonly direction: RuntimeBindingDataFlowDirection,
     readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind,
+    /** Whether expression-resource `astBind(...)` completed far enough for source evaluation to run. */
+    readonly sourceEvaluationReachability: RuntimeExpressionResourcePhaseReachability,
     readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind,
     readonly strictBinding: boolean | null,
     readonly sourceKind: RuntimeBindingDataFlowSourceKind,

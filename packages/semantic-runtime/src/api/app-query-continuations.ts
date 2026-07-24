@@ -1043,6 +1043,18 @@ function addRenderingContinuations(
         ),
       );
       break;
+    case SemanticAppQueryKind.TemplateContentProjections:
+      seeds.push(
+        inspect(
+          'Inspect controller topology around realized AuSlot projection views.',
+          rowQuery(SemanticAppQueryKind.RuntimeControllers, query, page),
+        ),
+        inspect(
+          'Inspect compiled-template projection and native-slot counts.',
+          rowQuery(SemanticAppQueryKind.TemplateCompilations, query, page),
+        ),
+      );
+      break;
   }
 }
 

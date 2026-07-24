@@ -21,6 +21,10 @@ import {
   type EvaluationValue,
 } from '../evaluation/values.js';
 import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
+import {
+  checkerValueCallability,
+  CheckerValueCallabilityKind,
+} from '../type-system/checker-signature-parameters.js';
 import { ResourceFrameworkErrorCode } from './framework-error-code.js';
 import {
   ResourceIssue,
@@ -663,12 +667,14 @@ function readMemberCallableState(
   if (type == null) {
     return WatchCallbackResolution.Unknown;
   }
-  if ((type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0) {
-    return WatchCallbackResolution.Unknown;
+  switch (checkerValueCallability(context.typeSystem.checker, type).kind) {
+    case CheckerValueCallabilityKind.Callable:
+      return WatchCallbackResolution.Callable;
+    case CheckerValueCallabilityKind.NonCallable:
+      return WatchCallbackResolution.NonCallable;
+    case CheckerValueCallabilityKind.Open:
+      return WatchCallbackResolution.Unknown;
   }
-  return type.getCallSignatures().length > 0
-    ? WatchCallbackResolution.Callable
-    : WatchCallbackResolution.NonCallable;
 }
 
 function watchPropertyKeyText(propertyKey: WatchPropertyKeyDefinition | null): string | null {

@@ -1,7 +1,9 @@
 import type { BindingScope } from '../configuration/scope.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
+import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
+import type { KernelStore, KernelStoreReadView } from '../kernel/store.js';
 import {
   instructionScopeLookup,
   isRuntimeExpressionBinding,
@@ -23,13 +25,18 @@ import { bindingExpressionAstForProductAtOffset } from './expression-parse-produ
 import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-expression-products.js';
 import {
   expressionProductHandlesForInstruction,
-  IteratorBindingInstruction,
   MultiAttrInstruction,
   type TemplateInstruction,
 } from './instruction-ir.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from './template-compilation-project-pass.js';
 import type { TemplateExpressionParse } from './value-site.js';
-import { templateScopeCanEvaluateSourceScope } from './template-scope-replay.js';
+import {
+  resourceLocalAuthoredTemplateExpressionParses,
+} from './runtime-resource-ownership.js';
+import {
+  templateScopeCanEvaluateSourceScope,
+  templateScopesHaveEquivalentEvaluationContext,
+} from './template-scope-replay.js';
 
 export const enum RuntimeBindingSourceContextProjectionSelectionKind {
   /** All candidate runtime bindings converged to one source-context projection. */
@@ -76,6 +83,21 @@ export function templateInstructionForExpressionParse(
   return templateInstructionForExpressionProductHandle(resource, expressionParse.productHandle);
 }
 
+/**
+ * Authored expression parses whose exact product handles survived compiler assembly into an effective instruction.
+ *
+ * This is deliberately site-granular: aggregate `needsCompile` state cannot distinguish valid siblings from an
+ * opaque `processContent` subtree in the same template.
+ */
+export function resourceLocalEffectiveTemplateExpressionParses(
+  store: KernelStoreReadView & ProductDetailReadView,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): readonly TemplateExpressionParse[] {
+  return resourceLocalAuthoredTemplateExpressionParses(store, resource).filter((parse) =>
+    templateInstructionForExpressionParse(resource, parse) != null
+  );
+}
+
 export function templateInstructionForExpressionProductHandle(
   resource: TemplateResourceRuntimeAnalysisEmission,
   expressionProductHandle: ProductHandle,
@@ -89,32 +111,10 @@ export function runtimeExpressionBindingsForTemplateExpressionProductHandle(
   resource: TemplateResourceRuntimeAnalysisEmission,
   expressionProductHandle: ProductHandle,
 ): readonly RuntimeExpressionBinding[] {
-  const instruction = templateInstructionForExpressionProductHandle(resource, expressionProductHandle);
-  if (instruction == null) {
-    return [];
-  }
-  const bindingOwnerInstruction = runtimeBindingOwnerInstructionForTemplateExpression(
-    resource,
-    instruction,
-  );
   return resource.runtimeAnalysis.runtimeRendering
-    .readBindingsForInstruction(bindingOwnerInstruction.productHandle)
+    .readBindingsForExpressionProduct(expressionProductHandle)
     .filter(isRuntimeExpressionBinding)
-    .filter((binding) => bindingOwnerInstruction !== instruction
-      || expressionProductHandlesForRuntimeBinding(binding).includes(expressionProductHandle));
-}
-
-function runtimeBindingOwnerInstructionForTemplateExpression(
-  resource: TemplateResourceRuntimeAnalysisEmission,
-  instruction: TemplateInstruction,
-): TemplateInstruction {
-  if (!(instruction instanceof MultiAttrInstruction)) {
-    return instruction;
-  }
-  return templateInstructionsInRuntimeAnalysis(resource).find((candidate) =>
-    candidate instanceof IteratorBindingInstruction
-    && candidate.tailInstructionProductHandles.includes(instruction.productHandle)
-  ) ?? instruction;
+    .filter((binding) => expressionProductHandlesForRuntimeBinding(binding).includes(expressionProductHandle));
 }
 
 /** Runtime bindings for one expression product that can be evaluated from the ambient materialized scope. */
@@ -135,8 +135,8 @@ export function runtimeExpressionBindingsForTemplateExpressionProductHandleInSco
         instructionScopes.scopeForInstruction(
           instruction.productHandle,
           resource.runtimeAnalysis.runtimeRendering
-            .readRenderContextForBinding(binding.productHandle)
-            ?.renderingController.productHandle ?? null,
+            .requireRenderContextForBinding(binding.productHandle)
+            .sourceController.productHandle,
         ),
       )
     );
@@ -149,16 +149,17 @@ export function runtimeExpressionBindingsForTemplateExpressionParse(
   return runtimeExpressionBindingsForTemplateExpressionProductHandle(resource, expressionParse.productHandle);
 }
 
-/** Projects the runtime binding source context for a cursor expression, optionally narrowed by ambient template scope. */
-export function bindingSourceContextProjectionForTemplateExpressionParseAtOffset(
+/** Selects the runtime binding source context for a cursor expression, preserving an open result when reuse diverges. */
+export function bindingSourceContextProjectionSelectionForTemplateExpressionParseAtOffset(
   store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
   expressionWorld: CheckerExpressionTypeWorld,
   expressionParse: TemplateExpressionParse,
   offset: number,
   ambientScope: BindingScope | null = null,
-): RuntimeBindingSourceExpressionContextProjection | null {
-  const expression = bindingExpressionAstForProductAtOffset(store, expressionParse.productHandle, offset);
+): RuntimeBindingSourceContextProjectionSelectionResult | null {
+  const expression = bindingExpressionAstForProductAtOffset(store, expressionParse.productHandle, offset)
+    ?? ExpressionParseResultInspector.memberOwnerAtOffset(expressionParse.result, offset);
   if (expression == null) {
     return null;
   }
@@ -170,7 +171,7 @@ export function bindingSourceContextProjectionForTemplateExpressionParseAtOffset
     expressionWorld,
     resource.runtimeAnalysis.expressionResourcePlan,
   );
-  const selection = selectRuntimeBindingSourceContextProjection({
+  return selectRuntimeBindingSourceContextProjection({
     bindings,
     expression,
     localKey: `template-expression-selection:${expressionParse.productHandle}:source-scope`,
@@ -186,9 +187,6 @@ export function bindingSourceContextProjectionForTemplateExpressionParseAtOffset
       binding,
     ),
   });
-  return selection.kind === RuntimeBindingSourceContextProjectionSelectionKind.Context
-    ? selection.projection
-    : null;
 }
 
 export function selectRuntimeBindingSourceContextProjection(
@@ -285,8 +283,11 @@ export function bindingScopeForTemplateExpressionParse(
   expressionParse: TemplateExpressionParse,
 ): BindingScope | null {
   const scopes = bindingScopesForTemplateExpressionParse(resource, expressionParse);
-  return scopes.length === 1
-    ? scopes[0]!
+  const first = scopes[0] ?? null;
+  return first != null && scopes.every((scope) =>
+    templateScopesHaveEquivalentEvaluationContext(first, scope)
+  )
+    ? first
     : null;
 }
 
@@ -377,12 +378,14 @@ function runtimeBindingSourceContextProjectionsMatch(
   left: RuntimeBindingSourceExpressionContextProjection,
   right: RuntimeBindingSourceExpressionContextProjection,
 ): boolean {
-  return left.scope.productHandle === right.scope.productHandle
-    && left.bindScope.productHandle === right.bindScope.productHandle
+  return templateScopesHaveEquivalentEvaluationContext(left.scope, right.scope)
+    && templateScopesHaveEquivalentEvaluationContext(left.bindScope, right.bindScope)
+    && left.resourceScope.identityHandle === right.resourceScope.identityHandle
     && left.strictBinding === right.strictBinding
     && left.sourceAddressHandle === right.sourceAddressHandle
     && left.localKey === right.localKey
     && left.bindingBehavior === right.bindingBehavior
+    && left.sourceEvaluationReachability === right.sourceEvaluationReachability
     && left.expression.$kind === right.expression.$kind
     && expressionSpansMatch(left.expression, right.expression)
     && left.authoredExpression.$kind === right.authoredExpression.$kind

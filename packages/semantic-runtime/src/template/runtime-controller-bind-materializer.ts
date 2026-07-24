@@ -196,7 +196,6 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
   inputForBinding(
     controller: RuntimeControllerFrame,
     binding: RuntimeBinding,
-    index: number,
   ): RuntimeBindingBindContext | null {
     if (this.input.isAppRootDefinition
       && binding instanceof SpreadBinding
@@ -210,13 +209,11 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
       );
       return null;
     }
-    const renderContext = this.input.runtimeRendering.readRenderContextForBinding(binding.productHandle);
+    const renderContext = this.input.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
     const targetController = runtimeBindingTargetController(this.input.runtimeRendering, binding);
     this.targetControllerByBinding.set(binding.productHandle, targetController);
-    const local = renderContext?.local
-      ?? `${this.input.localKey}:controller:${controller.productHandle}:binding:${index}`;
     return new RuntimeBindingBindContext(
-      `${local}:binding:${binding.productHandle}`,
+      `${renderContext.local}:binding:${binding.productHandle}`,
       this,
       binding instanceof SpreadValueBinding
         ? this.materializer.spreadValueTargetProperties(targetController)

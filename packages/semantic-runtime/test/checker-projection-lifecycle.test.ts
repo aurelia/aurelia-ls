@@ -5,6 +5,7 @@ import { describe, expect, test } from 'vitest';
 
 import {
   BindingContextKind,
+  BindingScopeBindingContextConstruction,
   BindingScopeConstructionRequest,
   BindingScopeOwnerKind,
 } from '../src/configuration/scope.js';
@@ -228,9 +229,10 @@ describe('checker projection lifecycle', () => {
       null,
       null,
       null,
-      BindingContextKind.Synthetic,
-      root.toReference(),
-      [],
+      BindingScopeBindingContextConstruction.materialize(
+        BindingContextKind.Synthetic,
+        root.toReference(),
+      ),
       null,
       [],
       true,

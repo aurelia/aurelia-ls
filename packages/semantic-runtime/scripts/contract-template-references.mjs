@@ -36,6 +36,11 @@ const aliasedBindableAppTemplateText = fs.readFileSync(aliasedBindableAppTemplat
 const aliasedBindableProductTemplateText = fs.readFileSync(aliasedBindableProductTemplatePath, 'utf8');
 const aliasedBindableProductDefinitionText = fs.readFileSync(aliasedBindableProductDefinitionPath, 'utf8');
 const aliasedBindableDisplayHintDefinitionText = fs.readFileSync(aliasedBindableDisplayHintDefinitionPath, 'utf8');
+const stateScopeRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-state-binding-scope');
+const stateScopeTemplatePath = path.join(stateScopeRoot, 'src/app.html');
+const stateScopeDefinitionPath = path.join(stateScopeRoot, 'src/app.ts');
+const stateScopeTemplateText = fs.readFileSync(stateScopeTemplatePath, 'utf8');
+const stateScopeDefinitionText = fs.readFileSync(stateScopeDefinitionPath, 'utf8');
 
 const catalog = readSemanticAppQueryCatalog({ queryKind: SemanticAppQueryKind.TemplateReferences });
 assert.equal(catalog.value.rows.length, 1, 'TemplateReferences should be in the public app-query catalog.');
@@ -93,6 +98,55 @@ assert.equal(declaration.source?.end, declarationStart + 'title'.length);
 assert.equal(withDeclaration.value.targetSource?.path?.replace(/\\/g, '/'), 'src/app.ts');
 assert.equal(withDeclaration.value.targetSource?.start, declarationStart);
 assert.equal(withDeclaration.value.targetSource?.end, declarationStart + 'title'.length);
+
+const stateScopeRuntime = await createSemanticRuntime({
+  workspaceRoot: stateScopeRoot,
+  storeKey: 'contract:template-references:state-scope-isolation',
+});
+const rootTitleReferences = await stateScopeRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.TemplateReferences,
+  sourceFilePath: stateScopeDefinitionPath,
+  cursor: cursorInsideSource(
+    stateScopeDefinitionText,
+    stateScopeDefinitionPath,
+    "readonly title = 'Host'",
+    'title',
+    1,
+  ),
+  includeDeclaration: true,
+  detail: 'handles',
+  page: { size: 20 },
+  analysisDepth: 'binding-observation',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+assert.match(rootTitleReferences.outcome, /^(hit|partial)$/u, rootTitleReferences.summary);
+const rootTitleDeclarationStart = stateScopeDefinitionText.indexOf('title');
+const stateOwnedTitleStart = stateScopeTemplateText.indexOf('title & state');
+const parentTitleStart = stateScopeTemplateText.indexOf('$parent.title') + '$parent.'.length;
+expectReference(
+  rootTitleReferences.value.rows,
+  'declaration',
+  'src/app.ts',
+  rootTitleDeclarationStart,
+  rootTitleDeclarationStart + 'title'.length,
+  stateScopeRoot,
+);
+expectReference(
+  rootTitleReferences.value.rows,
+  'template-usage',
+  'src/app.html',
+  parentTitleStart,
+  parentTitleStart + 'title'.length,
+  stateScopeRoot,
+);
+assert.ok(
+  rootTitleReferences.value.rows.every((row) =>
+    row.source?.path?.replace(/\\/g, '/') !== 'src/app.html'
+    || row.source.start !== stateOwnedTitleStart
+  ),
+  'A state-owned title expression must not be reported as a reference to the root view-model member.',
+);
 
 const storefrontRuntime = await createSemanticRuntime({
   workspaceRoot: storefrontRoot,

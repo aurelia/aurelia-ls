@@ -4,6 +4,7 @@ import { TypeSystemHotDetails, TypeSystemProductDetails } from '../type-system/p
 import {
   CheckerTypeMember,
   CheckerTypeProjectionOrigin,
+  type CheckerTypeReference,
   CheckerTypeShape,
 } from '../type-system/type-shape.js';
 import { checkerTypeMemberReachableIdentityHandle } from '../type-system/type-shape.js';
@@ -15,7 +16,6 @@ import {
   type BindingContextSlot,
   BindingContextSlotDraft,
   type BindingScope,
-  type BindingScopeConstructionRequest,
 } from './scope.js';
 import {
   checkerTypeMemberSourceAddressHandle,
@@ -30,7 +30,7 @@ export class BindingScopeSlotProjector {
 
   contextSlotsFor(
     explicitSlots: readonly BindingContextSlotDraft[],
-    contextType: BindingScopeConstructionRequest['bindingContextType'],
+    contextType: CheckerTypeReference | null,
   ): readonly BindingContextSlotDraft[] {
     const slotsByName = explicitContextSlotsByName(explicitSlots);
     const typeShape = this.typeShapeForContext(contextType);
@@ -41,7 +41,7 @@ export class BindingScopeSlotProjector {
   }
 
   private typeShapeForContext(
-    contextType: BindingScopeConstructionRequest['bindingContextType'],
+    contextType: CheckerTypeReference | null,
   ): CheckerTypeShape | null {
     return contextType?.productHandle == null
       ? null
@@ -95,7 +95,7 @@ export function bindingContextSlotDraftForTypeMember(
 
 export function bindingContextSlotDraftForContextTypeMember(
   projector: CheckerTypeProjector,
-  contextType: BindingScopeConstructionRequest['bindingContextType'],
+  contextType: CheckerTypeReference | null,
   memberName: string,
 ): BindingContextSlotDraft | null {
   const typeShape = contextType?.productHandle == null

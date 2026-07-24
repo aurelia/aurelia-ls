@@ -121,8 +121,15 @@ import {
   resourceLocalBindingValueChannels,
   resourceLocalRuntimeBindings,
   resourceLocalDynamicTemplateInstructions,
-  resourceLocalTemplateExpressionParses,
+  resourceLocalCompilerReachableHtmlAttributeProductHandles,
+  resourceLocalAuthoredTemplateValueSites,
 } from '../template/runtime-resource-ownership.js';
+import {
+  bindingSourceContextProjectionSelectionForTemplateExpressionParseAtOffset,
+  RuntimeBindingSourceContextProjectionSelectionKind,
+  resourceLocalEffectiveTemplateExpressionParses,
+  runtimeExpressionBindingsForTemplateExpressionParse,
+} from '../template/template-expression-selection.js';
 import {
   HydrateAttributeInstruction,
   HydrateElementInstruction,
@@ -139,6 +146,7 @@ import {
   PropertyBinding,
 } from '../template/runtime-binding.js';
 import { TemplateProductDetails } from '../template/product-details.js';
+import type { BindingCommandExecutable } from '../template/binding-command-execution.js';
 import { sourceSpanFromBounds } from '../expression/source-span.js';
 import { isAureliaExpressionIdentifier } from '../expression/expression-scanner.js';
 import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
@@ -148,6 +156,7 @@ import {
   ResourceDefinitionKind,
   resourceKindsShareRegistrationIdentity,
 } from '../resources/resource-kind.js';
+import { ResourceProductDetails } from '../resources/product-details.js';
 import { TypeSystemHotDetails } from '../type-system/product-details.js';
 import { checkerTypeMemberValueSourceAddressHandle } from '../type-system/checker-type-member-source.js';
 import {
@@ -156,12 +165,12 @@ import {
 } from '../template/compiler-resource-lookup.js';
 import { TemplateSpecialAttributeName } from '../template/special-attribute-source.js';
 import { namedRefTargetController } from '../template/runtime-ref-target.js';
-import {
-  bindingScopesForTemplateExpressionParse,
-  runtimeExpressionBindingsForTemplateExpressionParseInScope,
-} from '../template/template-expression-selection.js';
 import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
-import { expressionResourceOccurrences } from '../template/expression-resource-occurrence.js';
+import {
+  expressionResourceOccurrences,
+  isBindingBehaviorOccurrence,
+  isValueConverterOccurrence,
+} from '../template/expression-resource-occurrence.js';
 import type { GenerationAuthority } from '../kernel/generation-authority.js';
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
@@ -1213,6 +1222,7 @@ export class SemanticAppTemplateQueries {
     const authoredScopeUsageRows = authoredScopeReferenceRowsForTarget(
       this.store,
       [...this.emission.templates.resources, ...this.emission.templates.authoringResources],
+      this.emission.templates.expressionWorld,
       selectedMemberName,
       targetSource,
       observedTargetSources,
@@ -2501,16 +2511,19 @@ function bindableAttributeReferenceRows(
   const rows: SemanticTemplateReferenceRow[] = [];
   for (const resource of resources) {
     const syntaxByProduct = new Map(resource.compilation.attributeSyntax.syntaxes.map((syntax) => [syntax.productHandle, syntax]));
-    const attributeByProduct = new Map(resource.compilation.html.attributes.map((attribute) => [attribute.productHandle, attribute]));
+    const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
     for (const classification of resource.compilation.attributeClassification.classifications) {
       const bindable = classification.bindable?.reference ?? null;
-      if (bindable == null || !bindableReferenceMatchesTarget(store, bindable, target)) {
+      const syntax = syntaxByProduct.get(classification.syntaxProductHandle) ?? null;
+      if (
+        syntax?.attribute.productHandle == null
+        || !compilerReachableAttributes.has(syntax.attribute.productHandle)
+        || bindable == null
+        || !bindableReferenceMatchesTarget(store, bindable, target)
+      ) {
         continue;
       }
-      const syntax = syntaxByProduct.get(classification.syntaxProductHandle) ?? null;
-      const token = syntax == null
-        ? null
-        : bindableAttributeTokenSource(store, syntax, bindable.attribute);
+      const token = bindableAttributeTokenSource(store, syntax, bindable.attribute);
       const row = token == null
         ? null
         : bindableAttributeReferenceRow(resource, bindable, target, token, handles);
@@ -2520,7 +2533,12 @@ function bindableAttributeReferenceRows(
     }
     for (const segment of resource.compilation.bindingCommandLowering.multiBindingSegments) {
       const bindable = segment.bindable?.reference ?? null;
-      if (bindable == null || !bindableReferenceMatchesTarget(store, bindable, target)) {
+      if (
+        segment.attribute.productHandle == null
+        || !compilerReachableAttributes.has(segment.attribute.productHandle)
+        || bindable == null
+        || !bindableReferenceMatchesTarget(store, bindable, target)
+      ) {
         continue;
       }
       const token = multiBindingSegmentTargetTokenSource(store, segment, bindable.attribute);
@@ -2706,20 +2724,20 @@ function attributeResourceReferenceRows(
     return [];
   }
   const syntaxByProduct = new Map(resource.compilation.attributeSyntax.syntaxes.map((syntax) => [syntax.productHandle, syntax]));
-  const attributeByProduct = new Map(resource.compilation.html.attributes.map((attribute) => [attribute.productHandle, attribute]));
+  const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
   const staticRows = resource.compilation.attributeClassification.classifications.flatMap((classification): readonly SemanticTemplateReferenceRow[] => {
+    const syntax = syntaxByProduct.get(classification.syntaxProductHandle) ?? null;
     if (
-      classification.resource == null
+      syntax?.attribute.productHandle == null
+      || !compilerReachableAttributes.has(syntax.attribute.productHandle)
+      || classification.resource == null
       || classification.resourceKind == null
       || !resourceKindsShareRegistrationIdentity(classification.resourceKind, target.resourceKind)
       || !visibleResourceMatchesTarget(store, classification.resource, target)
     ) {
       return [];
     }
-    const syntax = syntaxByProduct.get(classification.syntaxProductHandle) ?? null;
-    const token = syntax == null
-      ? null
-      : attributeSyntaxTargetTokenSource(store, syntax);
+    const token = attributeSyntaxTargetTokenSource(store, syntax);
     return token == null
       ? []
       : [resourceUsageReferenceRow(
@@ -2802,7 +2820,7 @@ function expressionResourceReferenceRows(
   ) {
     return [];
   }
-  return resourceLocalTemplateExpressionParses(store, resource).flatMap((parse) => {
+  return resourceLocalEffectiveTemplateExpressionParses(store, resource).flatMap((parse) => {
     const expression = runtimeAcceptedBindingExpressionAstForParse(parse);
     const source = describeAddress(store, parse.sourceAddressHandle);
     const sourcePath = source?.path;
@@ -2813,12 +2831,20 @@ function expressionResourceReferenceRows(
       if (occurrence.resourceKind !== target.resourceKind) {
         return [];
       }
-      const visible = findVisibleTemplateResource(
-        resource.compilation.compilerWorld.resourceScope,
-        occurrence.resourceKind,
-        occurrence.expression.name.name,
-      );
-      if (visible == null || !visibleResourceMatchesTarget(store, visible, target)) {
+      const planEntries = isValueConverterOccurrence(occurrence)
+        ? resource.runtimeAnalysis.expressionResourcePlan.readValueConverterEntries(
+            parse.productHandle,
+            occurrence.expression,
+          )
+        : isBindingBehaviorOccurrence(occurrence)
+          ? resource.runtimeAnalysis.expressionResourcePlan.readBindingBehaviorEntries(
+              parse.productHandle,
+              occurrence.expression,
+            )
+          : [];
+      if (!planEntries.some((entry) =>
+        entry.resource != null && visibleResourceMatchesTarget(store, entry.resource, target)
+      )) {
         return [];
       }
       return [resourceUsageReferenceRow(
@@ -2845,16 +2871,47 @@ function bindingCommandResourceReferenceRows(
   if (target.resourceKind !== ResourceDefinitionKind.BindingCommand) {
     return [];
   }
+  const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
+  const exactCommandsBySyntax = new Map<ProductHandle, BindingCommandExecutable[]>();
+  for (const site of resourceLocalAuthoredTemplateValueSites(store, resource)) {
+    const syntaxProductHandle = site.syntax?.productHandle ?? null;
+    const commandProductHandle = site.bindingCommand?.productHandle ?? null;
+    if (syntaxProductHandle == null || commandProductHandle == null) {
+      continue;
+    }
+    const command = store.productDetails.read(
+      TemplateProductDetails.BindingCommandExecutable,
+      commandProductHandle,
+    );
+    if (command == null) {
+      continue;
+    }
+    const commands = exactCommandsBySyntax.get(syntaxProductHandle) ?? [];
+    if (!commands.some((candidate) => candidate.productHandle === command.productHandle)) {
+      commands.push(command);
+      exactCommandsBySyntax.set(syntaxProductHandle, commands);
+    }
+  }
   return resource.compilation.authoredAttributeSyntaxes.flatMap((syntax): readonly SemanticTemplateReferenceRow[] => {
-    if (syntax.command == null) {
+    if (
+      syntax.attribute.productHandle == null
+      || !compilerReachableAttributes.has(syntax.attribute.productHandle)
+      || syntax.command == null
+    ) {
       return [];
     }
-    const command = findVisibleTemplateResource(
-      resource.compilation.compilerWorld.resourceScope,
-      ResourceDefinitionKind.BindingCommand,
-      syntax.command.toLowerCase(),
-    );
-    if (command == null || !visibleResourceMatchesTarget(store, command, target)) {
+    const exactCommands = exactCommandsBySyntax.get(syntax.productHandle) ?? [];
+    const matches = exactCommands.length === 0
+      ? (() => {
+          const command = findVisibleTemplateResource(
+            resource.compilation.compilerWorld.resourceScope,
+            ResourceDefinitionKind.BindingCommand,
+            syntax.command.toLowerCase(),
+          );
+          return command != null && visibleResourceMatchesTarget(store, command, target);
+        })()
+      : exactCommands.some((command) => bindingCommandExecutableMatchesTarget(store, command, target));
+    if (!matches) {
       return [];
     }
     return [resourceUsageReferenceRow(
@@ -2869,6 +2926,31 @@ function bindingCommandResourceReferenceRows(
   });
 }
 
+function bindingCommandExecutableMatchesTarget(
+  store: KernelStore,
+  command: BindingCommandExecutable,
+  target: ResourceReferenceTarget,
+): boolean {
+  const definition = command.definitionProductHandle == null
+    ? null
+    : store.productDetails.read(ResourceProductDetails.Definition, command.definitionProductHandle);
+  const definitionSourceAddressHandle = definition == null
+    ? command.sourceAddressHandle
+    : 'nameSourceAddressHandle' in definition
+      ? definition.nameSourceAddressHandle
+        ?? definition.target.addressHandle
+        ?? definition.sourceAddressHandle
+      : definition.sourceAddressHandle;
+  return resourceIdentityMatchesTarget(
+    store,
+    ResourceDefinitionKind.BindingCommand,
+    [command.name, ...command.aliases],
+    command.definitionProductHandle,
+    definitionSourceAddressHandle,
+    target,
+  );
+}
+
 function attributePatternResourceReferenceRows(
   store: KernelStore,
   resource: TemplateResourceEmission,
@@ -2878,7 +2960,14 @@ function attributePatternResourceReferenceRows(
   if (target.resourceKind !== ResourceDefinitionKind.AttributePattern || target.definitionProductHandle == null) {
     return [];
   }
+  const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
   return resource.compilation.authoredAttributeSyntaxes.flatMap((syntax): readonly SemanticTemplateReferenceRow[] => {
+    if (
+      syntax.attribute.productHandle == null
+      || !compilerReachableAttributes.has(syntax.attribute.productHandle)
+    ) {
+      return [];
+    }
     const compiledPattern = syntax.compiledPatternProductHandle == null
       ? null
       : store.productDetails.read(
@@ -3114,6 +3203,7 @@ function sourceSlice(
 function authoredScopeReferenceRowsForTarget(
   store: KernelStore,
   resources: readonly TemplateResourceEmission[],
+  expressionWorld: AureliaAppWorldProjectEmission['templates']['expressionWorld'],
   selectedMemberName: string,
   targetSource: SemanticSourceReference,
   targetSources: readonly SemanticSourceReference[],
@@ -3122,7 +3212,7 @@ function authoredScopeReferenceRowsForTarget(
   handles: boolean,
 ): readonly SemanticTemplateReferenceRow[] {
   return uniqueSortedTemplateReferenceRows(resources.flatMap((resource) =>
-    resourceLocalTemplateExpressionParses(store, resource).flatMap((parse) => {
+    resourceLocalEffectiveTemplateExpressionParses(store, resource).flatMap((parse) => {
       if (!ExpressionParseResultInspector.hasCanonicalAst(parse.result)) {
         return [];
       }
@@ -3131,13 +3221,7 @@ function authoredScopeReferenceRowsForTarget(
       if (sourcePath == null) {
         return [];
       }
-      const scopes = bindingScopesForTemplateExpressionParse(resource, parse);
-      if (scopes.length === 0) {
-        return [];
-      }
-      const bindings = scopes.flatMap((scope) =>
-        runtimeExpressionBindingsForTemplateExpressionParseInScope(resource, parse, scope)
-      );
+      const bindings = runtimeExpressionBindingsForTemplateExpressionParse(resource, parse);
       const bindingKinds = new Set(bindings.map((binding) => binding.bindingKind));
       const bindingProductHandles = new Set(bindings.map((binding) => binding.productHandle));
       const bindingKind = bindingKinds.size === 1 ? [...bindingKinds][0]! : null;
@@ -3146,15 +3230,21 @@ function authoredScopeReferenceRowsForTarget(
         if (access.name.name !== selectedMemberName) {
           return [];
         }
-        const slots = scopes.map((scope) => scope.locate(access.name.name, access.ancestor).slot);
+        const selection = bindingSourceContextProjectionSelectionForTemplateExpressionParseAtOffset(
+          store,
+          resource,
+          expressionWorld,
+          parse,
+          access.name.span.start,
+        );
         if (
-          slots.some((slot) => slot == null)
-          || !slots.every((slot) => scopeSlotMatchesReferenceTarget(
+          selection?.kind !== RuntimeBindingSourceContextProjectionSelectionKind.Context
+          || !scopeSlotMatchesReferenceTarget(
             store,
-            slot!,
+            selection.projection.scope.locate(access.name.name, access.ancestor).slot,
             targetSources,
             targetIdentityHandle,
-          ))
+          )
         ) {
           return [];
         }
@@ -3187,10 +3277,13 @@ function authoredScopeReferenceRowsForTarget(
 
 function scopeSlotMatchesReferenceTarget(
   store: KernelStore,
-  slot: BindingContextSlot,
+  slot: BindingContextSlot | null,
   targetSources: readonly SemanticSourceReference[],
   targetIdentityHandle: IdentityHandle | null,
 ): boolean {
+  if (slot == null) {
+    return false;
+  }
   if (
     targetIdentityHandle != null
     && slot.targetIdentityHandle != null
@@ -3543,6 +3636,17 @@ function templateCompilationRows(
         + resource.compilation.bindingCommandLowering.multiBindingLowerings.length,
       instructions: resource.compilation.compiledTemplate.instructions.length,
       renderTargets: resource.compilation.compiledTemplate.renderTargets.length,
+      compiledTemplateState: resource.compilation.compiledTemplate.compiledTemplate.state,
+      compiledTemplateHasSlots: resource.compilation.compiledTemplate.compiledTemplate.hasSlots,
+      compiledTemplateNeedsCompile: resource.compilation.compiledTemplate.compiledTemplate.needsCompile,
+      contentProjectionSequences: resource.compilation.compiledTemplate.instructions.reduce(
+        (count, instruction) => count + (
+          instruction instanceof HydrateElementInstruction
+            ? instruction.projectionInstructionSequences.length
+            : 0
+        ),
+        0,
+      ),
       runtimeControllers: resource.runtimeAnalysis.readRuntimeControllers().length,
       runtimeChildContainers: resource.runtimeAnalysis.readRuntimeChildContainers().length,
       runtimeChildContextResolverSlots: resource.runtimeAnalysis.readRuntimeChildContextResolverSlots().length,

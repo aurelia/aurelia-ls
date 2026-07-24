@@ -33,9 +33,10 @@ import {
   commonTypeReference,
 } from '../type-system/expression-type-synthesis.js';
 import {
-  checkerCallableContextSignatures,
   checkerSignatureCandidateBasis,
   checkerSignatureParameterType,
+  checkerValueCallability,
+  CheckerValueCallabilityKind,
 } from '../type-system/checker-signature-parameters.js';
 import type { RuntimeBinding } from './runtime-binding.js';
 import {
@@ -105,6 +106,16 @@ export function activationModelHandoffForType(
       activate.handoffKind,
       model.sourceType,
       activate.openReason,
+    );
+  }
+  if (activate.kind === 'non-callable') {
+    return new CompositionActivationModelHandoff(
+      CompositionActivateMethodKind.NonCallable,
+      CompositionActivationModelHandoffKind.ActivateNonCallable,
+      null,
+      model.sourceType,
+      null,
+      null,
     );
   }
 
@@ -206,6 +217,9 @@ type ActivateMethodProjection =
     readonly openReason: string;
   }
   | {
+    readonly kind: 'non-callable';
+  }
+  | {
     readonly kind: 'present';
     readonly checker: ts.TypeChecker;
     readonly signatures: readonly ts.Signature[];
@@ -242,24 +256,29 @@ function activateMethodProjection(
   if (activateType == null) {
     return {
       kind: 'open',
-      handoffKind: CompositionActivationModelHandoffKind.ActivationParameterOpen,
+      handoffKind: CompositionActivationModelHandoffKind.Open,
       openReason: 'Resolved component activate member had no readable value type.',
     };
   }
 
-  const signatures = checkerCallableContextSignatures(targetCarrier.checker, activateType);
-  if (signatures.length === 0) {
+  const callability = checkerValueCallability(targetCarrier.checker, activateType);
+  if (callability.kind === CheckerValueCallabilityKind.NonCallable) {
+    return {
+      kind: 'non-callable',
+    };
+  }
+  if (callability.kind === CheckerValueCallabilityKind.Open) {
     return {
       kind: 'open',
-      handoffKind: CompositionActivationModelHandoffKind.ActivationParameterOpen,
-      openReason: 'Resolved component activate member was not callable.',
+      handoffKind: CompositionActivationModelHandoffKind.Open,
+      openReason: 'Resolved component activate member callability remained open.',
     };
   }
 
   return {
     kind: 'present',
     checker: targetCarrier.checker,
-    signatures,
+    signatures: callability.signatures,
     location,
   };
 }

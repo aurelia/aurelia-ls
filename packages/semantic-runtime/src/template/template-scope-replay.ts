@@ -3,9 +3,11 @@ import {
   BindingScopeCreatorKind,
   BindingScopeOwnerKind,
   bindingScopeCreatorKey,
+  type BindingContext,
   type BindingContextSlot,
   type BindingContextSlotMemberType,
   type BindingScopeCreator,
+  type OverrideContext,
 } from '../configuration/scope.js';
 import { isJavaScriptIdentifierName } from '../javascript/identifier.js';
 import { sameCheckerTypeReference } from '../type-system/type-shape.js';
@@ -81,6 +83,17 @@ export function templateScopeCreatesCurrentBindingContextAlias(scope: BindingSco
   return scope.ownerKind === BindingScopeOwnerKind.StateBinding;
 }
 
+/** Whether replaying a scope advances the runtime `$parent` chain, even when `$this` is reused. */
+export function templateScopeCreatesParentAlias(scope: BindingScope): boolean {
+  return scope.predecessor == null
+    && (
+      templateScopeCreatesCurrentBindingContextAlias(scope)
+      || scope.scopeCreators.some((creator) =>
+        creator.creatorKind === BindingScopeCreatorKind.ContentProjection
+      )
+    );
+}
+
 /** Generated object-literal expression that represents the repeated item binding context when locals are identifier-safe. */
 export function templateRepeatScopeCurrentAliasExpression(scope: BindingScope): string | null {
   const names = templateScopeBindingContextLocalNames(scope);
@@ -150,6 +163,27 @@ export function templateScopeCanEvaluateSourceScope(
 }
 
 /**
+ * Whether two independently materialized Scope chains expose the same expression-evaluation context.
+ *
+ * Runtime identity and provenance may differ, notably when duplicate AuSlot outlets instantiate the same projection.
+ * Context kinds, types, slots, parent hops, boundary behavior, and creator semantics must still agree.
+ */
+export function templateScopesHaveEquivalentEvaluationContext(
+  left: BindingScope,
+  right: BindingScope,
+): boolean {
+  if (left.productHandle === right.productHandle) {
+    return true;
+  }
+  const leftChain = templateScopeChain(left);
+  const rightChain = templateScopeChain(right);
+  return leftChain.length === rightChain.length
+    && leftChain.every((scope, index) =>
+      scopeEvaluationContextsMatch(scope, rightChain[index]!)
+    );
+}
+
+/**
  * Relationship needed when generated analyses must copy a source expression under an ambient scope.
  *
  * A non-empty tail means the source expression belongs to a deeper source scope that can be synthesized around the
@@ -179,11 +213,13 @@ export function templateScopeAliasSupport(scope: BindingScope): TemplateScopeAli
   let currentBindingContext = true;
   let parentBindingContextDepth = 0;
   for (const current of templateScopeReplayChain(scope)) {
-    if (!templateScopeCreatesCurrentBindingContextAlias(current)) {
+    if (!templateScopeCreatesParentAlias(current)) {
       continue;
     }
     parentBindingContextDepth = currentBindingContext ? parentBindingContextDepth + 1 : 0;
-    currentBindingContext = true;
+    if (templateScopeCreatesCurrentBindingContextAlias(current)) {
+      currentBindingContext = true;
+    }
   }
   return {
     currentBindingContext,
@@ -223,8 +259,96 @@ function bindingContextSlotsMatch(
     && left.targetIdentityHandle === right.targetIdentityHandle
     && left.targetTypeMemberHandle === right.targetTypeMemberHandle
     && left.sourceAddressHandle === right.sourceAddressHandle
+    && left.assignmentAccessKind === right.assignmentAccessKind
     && slotTypeReferencesMatch(left, right)
     && slotMemberTypesInclude(left.memberTypes, right.memberTypes);
+}
+
+function scopeEvaluationContextsMatch(
+  left: BindingScope,
+  right: BindingScope,
+): boolean {
+  return left.ownerKind === right.ownerKind
+    && left.isBoundary === right.isBoundary
+    && bindingContextsMatch(left.bindingContext, right.bindingContext)
+    && bindingContextsMatch(left.overrideContext, right.overrideContext)
+    && scopeCreatorSemanticsMatch(left.scopeCreators, right.scopeCreators);
+}
+
+function bindingContextsMatch(
+  left: BindingContext | OverrideContext,
+  right: BindingContext | OverrideContext,
+): boolean {
+  return left.contextKind === right.contextKind
+    && checkerTypeReferencesMatch(left.contextType, right.contextType)
+    && evaluationSlotsInclude(left.slots, right.slots)
+    && evaluationSlotsInclude(right.slots, left.slots);
+}
+
+function checkerTypeReferencesMatch(
+  left: BindingContext['contextType'] | OverrideContext['contextType'],
+  right: BindingContext['contextType'] | OverrideContext['contextType'],
+): boolean {
+  return left == null || right == null
+    ? left === right
+    : sameCheckerTypeReference(left, right);
+}
+
+function scopeCreatorSemanticsMatch(
+  left: readonly BindingScopeCreator[],
+  right: readonly BindingScopeCreator[],
+): boolean {
+  return left.length === right.length
+    && left.every((creator, index) =>
+      scopeCreatorSemanticKey(creator) === scopeCreatorSemanticKey(right[index]!)
+    );
+}
+
+function scopeCreatorSemanticKey(
+  creator: BindingScopeCreator,
+): string {
+  return [
+    creator.creatorKind,
+    creator.conditionPolarity ?? '',
+    creator.introducedSlotNames.join(','),
+    creator.assignedSlotNames.join(','),
+    creator.assignedContextKind ?? '',
+  ].join('|');
+}
+
+function evaluationSlotsInclude(
+  ambient: readonly BindingContextSlot[],
+  source: readonly BindingContextSlot[],
+): boolean {
+  return source.every((sourceSlot) =>
+    ambient.some((ambientSlot) => bindingContextSlotEvaluationMatches(ambientSlot, sourceSlot))
+  );
+}
+
+function bindingContextSlotEvaluationMatches(
+  left: BindingContextSlot,
+  right: BindingContextSlot,
+): boolean {
+  return left.name === right.name
+    && left.targetIdentityHandle === right.targetIdentityHandle
+    && left.targetTypeMemberHandle === right.targetTypeMemberHandle
+    && left.assignmentAccessKind === right.assignmentAccessKind
+    && checkerTypeReferencesMatch(left.targetType, right.targetType)
+    && left.staticValueEvaluation === right.staticValueEvaluation
+    && evaluationSlotMemberTypesInclude(left.memberTypes, right.memberTypes)
+    && evaluationSlotMemberTypesInclude(right.memberTypes, left.memberTypes);
+}
+
+function evaluationSlotMemberTypesInclude(
+  ambient: readonly BindingContextSlotMemberType[],
+  source: readonly BindingContextSlotMemberType[],
+): boolean {
+  return source.every((sourceMember) =>
+    ambient.some((ambientMember) =>
+      ambientMember.name === sourceMember.name
+      && sameCheckerTypeReference(ambientMember.targetType, sourceMember.targetType)
+    )
+  );
 }
 
 function slotTypeReferencesMatch(

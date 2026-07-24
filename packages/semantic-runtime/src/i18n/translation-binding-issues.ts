@@ -28,9 +28,6 @@ import {
   CheckerExpressionTypeEvaluationResultKind,
 } from '../type-system/expression-type-evaluation.js';
 import type {
-  CheckerExpressionTypeEvaluator,
-} from '../type-system/expression-type-evaluator.js';
-import type {
   CheckerExpressionTypeWorld,
 } from '../type-system/expression-type-world.js';
 import {
@@ -44,9 +41,6 @@ import {
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
 import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
-import type {
-  TemplateResourceScope,
-} from '../template/compiler-world.js';
 import {
   TemplateProductDetails,
 } from '../template/product-details.js';
@@ -92,7 +86,6 @@ export class I18nTranslationBindingIssueMaterializationRequest {
     readonly runtimeRendering: RuntimeRenderingEmission,
     readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
     readonly scopes: TemplateScopeConstructionEmission,
-    readonly resourceScope: TemplateResourceScope | null,
     readonly expressionWorld: CheckerExpressionTypeWorld,
   ) {}
 }
@@ -134,7 +127,7 @@ class I18nTranslationBindingIssueSourceSet {
 
 interface TranslationBindingIssueContext {
   readonly runtimeRendering: RuntimeRenderingEmission;
-  readonly evaluator: CheckerExpressionTypeEvaluator;
+  readonly expressionWorld: CheckerExpressionTypeWorld;
   readonly instructionScopes: RuntimeInstructionScopeLookup;
   readonly sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector;
 }
@@ -173,7 +166,7 @@ export class I18nTranslationBindingIssueMaterializer {
     );
     const context: TranslationBindingIssueContext = {
       runtimeRendering: input.runtimeRendering,
-      evaluator: input.expressionWorld.evaluator(input.resourceScope),
+      expressionWorld: input.expressionWorld,
       instructionScopes,
       sourceExpressionContexts: new RuntimeBindingSourceExpressionContextProjector(
         input.runtimeRendering,
@@ -292,7 +285,8 @@ export class I18nTranslationBindingIssueMaterializer {
     if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
       return false;
     }
-    const evaluation = context.evaluator.evaluate(
+    const renderContext = context.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
+    const evaluation = context.expressionWorld.evaluator(renderContext.resourceScope).evaluate(
       checkerContextForRuntimeBindingSourceExpressionProjection(projection, true),
     );
     return evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type

@@ -67,6 +67,7 @@ export function auLink(id: 'runtime-html:IComponentController'): ClassDecorator;
 export function auLink(id: 'runtime-html:IHydratableController'): ClassDecorator;
 export function auLink(id: 'runtime-html:ISyntheticView'): ClassDecorator;
 export function auLink(id: 'runtime-html:IViewFactory'): ClassDecorator;
+export function auLink(id: 'runtime-html:IAuSlotsInfo'): ClassDecorator;
 export function auLink(id: 'runtime-html:ICustomAttributeController'): ClassDecorator;
 export function auLink(id: 'runtime-html:IDryCustomElementController'): ClassDecorator;
 export function auLink(id: 'runtime-html:IContextualCustomElementController'): ClassDecorator;

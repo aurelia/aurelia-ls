@@ -28,7 +28,7 @@ import { describeAddress } from './source-reference.js';
 import type {
   SemanticRuntimeControllerHydrationHandoffKind,
   SemanticRuntimeControllerChildViewRenderingState,
-  SemanticRuntimeControllerLifecycleStepRow,
+  SemanticRuntimeControllerAssemblyStepRow,
   SemanticRuntimeControllerRow,
   SemanticRuntimeWatcherObservedDependencyRow,
   SemanticRuntimeWatcherRow,
@@ -214,11 +214,9 @@ function runtimeControllerRow(
   context: RuntimeControllerProjectionContext,
 ): SemanticRuntimeControllerRow {
   const state = runtimeControllerProjectionState(controller, context);
-  const controllerProduct = controller.toControllerProduct();
   return {
     renderingDefinitionName,
     controllerName: controller.name,
-    controllerPhase: controllerProduct.phase,
     creationKind: controller.creationKind,
     controllerReadiness: controller.readReadinessKind(),
     ...runtimeControllerDefinitionRowFields(state),
@@ -228,7 +226,7 @@ function runtimeControllerRow(
     childViewRenderingState: childViewRenderingState(controller, state.viewFactory, state.syntheticView),
     hydrationHandoffKind: state.handoffKind,
     compiledTemplateDefinitionName: state.compiledTemplateInfo?.definitionName ?? null,
-    ...runtimeControllerLifecycleRowFields(controller, context),
+    ...runtimeControllerAssemblyRowFields(controller, context),
     ...runtimeControllerRowHandles(controller, state, context),
   };
 }
@@ -375,12 +373,12 @@ function runtimeControllerTemplateControllerRowFields(
   };
 }
 
-function runtimeControllerLifecycleRowFields(
+function runtimeControllerAssemblyRowFields(
   controller: RuntimeControllerFrame,
   context: RuntimeControllerProjectionContext,
-): Pick<SemanticRuntimeControllerRow, 'lifecycleSteps' | 'source'> {
+): Pick<SemanticRuntimeControllerRow, 'assemblySteps' | 'source'> {
   return {
-    lifecycleSteps: controllerLifecycleStepRows(controller, context.store, context.handles),
+    assemblySteps: controllerAssemblyStepRows(controller, context.store, context.handles),
     source: describeAddress(context.store, controller.sourceAddressHandle),
   };
 }
@@ -499,6 +497,10 @@ function runtimeControllerRowHandles(
       definitionProductHandle: controller.definitionProductHandle,
       instructionProductHandle: controller.instructionProductHandle,
       instructionIdentityHandle: controller.instructionIdentityHandle,
+      constructionHydrationContextProductHandle:
+        controller.readConstructionHydrationContext()?.productHandle ?? null,
+      hydrationContextProductHandle: controller.readHydrationContext()?.productHandle ?? null,
+      auSlotsInfoProductHandle: controller.readAuSlotsInfo()?.productHandle ?? null,
       bindingScopeProductHandle: state.scope?.productHandle ?? null,
       compiledTemplateProductHandle: state.compiledTemplate?.productHandle ?? null,
       compiledTemplateClaimHandle: state.compiledTemplate?.claimHandle ?? null,
@@ -527,13 +529,13 @@ function runtimeControllerRowSortKey(row: SemanticRuntimeControllerRow): string 
   return `${row.renderingDefinitionName}:${row.parentControllerName ?? ''}:${row.controllerName ?? ''}:${row.creationKind}`;
 }
 
-function controllerLifecycleStepRows(
+function controllerAssemblyStepRows(
   controller: RuntimeControllerFrame,
   store: KernelStore,
   handles: boolean,
-): readonly SemanticRuntimeControllerLifecycleStepRow[] {
-  const steps = controller.readLifecycleSteps();
-  const rows: SemanticRuntimeControllerLifecycleStepRow[] = [];
+): readonly SemanticRuntimeControllerAssemblyStepRow[] {
+  const steps = controller.readAssemblySteps();
+  const rows: SemanticRuntimeControllerAssemblyStepRow[] = [];
   for (const step of steps) {
     const previous = rows[rows.length - 1] ?? null;
     if (previous != null && previous.stage === step.stage && previous.stepKind === step.stepKind) {

@@ -208,12 +208,12 @@ describe('DI provider model', () => {
     const fixture = await openProviderActivationFixture('resolver-family');
     const session = fixture.activation.createSession();
     const child = new ContainerChildMaterializer(fixture.runtime.workspace.store, fixture.runtime.workspace.store)
-      .materializeChild(new ContainerChildMaterializationRequest(
-        'di-provider-activation-test-child',
-        fixture.container,
-        null,
-        'activation-test-child',
-      ))
+      .materializeChild(new ContainerChildMaterializationRequest({
+        localKey: 'di-provider-activation-test-child',
+        parent: fixture.container,
+        sourceAddressHandle: null,
+        localName: 'activation-test-child',
+      }))
       .container;
 
     expect(activateNamedSite(fixture, session, 'optionalMissingRead', child).state)
@@ -919,6 +919,97 @@ describe('DI provider model', () => {
       return container?.readResolverSlots(slot.keyIdentityHandle).includes(slot) === true;
     })).toBe(true);
     expect(contextSlots.every((slot) => runtime.workspace.store.read(slot.productHandle) == null)).toBe(true);
+  });
+
+  test('preserves exact projection resource imports and hydration-context providers', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'content-projection-topology'),
+      storeKey: 'test:di-provider-model:content-projection-context',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const resource = app.emission.templates.resources.find((candidate) =>
+      candidate.compilation.definition.name === 'content-projection-topology-app'
+    );
+    const rendering = resource?.runtimeAnalysis.runtimeRendering;
+    const selected = rendering?.contentProjectionViews.find((view) =>
+      view.selectionKind === 'projected'
+        && view.slotName === 'heading'
+        && view.factoryContainer?.readResourceSlots().some((slot) =>
+          slot.resourceKey === 'au:resource:value-converter:projectionLabel'
+        )
+    );
+    const fallback = rendering?.contentProjectionViews.find((view) =>
+      view.selectionKind === 'fallback'
+        && view.factoryContainer?.readResourceSlots().some((slot) =>
+          slot.resourceKey === 'au:resource:value-converter:fallbackLabel'
+        )
+    );
+
+    expect(selected).toBeDefined();
+    expect(fallback).toBeDefined();
+    if (rendering == null || selected?.factoryContainer == null || fallback?.factoryContainer == null) {
+      throw new Error('Expected selected and fallback projection factory containers.');
+    }
+
+    expect(selected.factoryContainer.readResourceSlots().map((slot) => slot.resourceKey))
+      .toEqual([
+        'au:resource:value-converter:projectionLabel',
+        'au:resource:custom-element:scoped-compose-widget',
+        'au:resource:custom-element:opaque-content-shell',
+      ]);
+    expect(fallback.factoryContainer.readResourceSlots().map((slot) => slot.resourceKey))
+      .toEqual([
+        'au:resource:value-converter:fallbackLabel',
+        'au:resource:binding-behavior:fallbackAudit',
+        'au:resource:custom-element:scoped-compose-widget',
+      ]);
+    const selectedScopedElement = selected.factoryContainer.readResourceSlots().find((slot) =>
+      slot.resourceKey === 'au:resource:custom-element:scoped-compose-widget'
+    );
+    const fallbackScopedElement = fallback.factoryContainer.readResourceSlots().find((slot) =>
+      slot.resourceKey === 'au:resource:custom-element:scoped-compose-widget'
+    );
+    expect(selectedScopedElement?.resourceProductHandle)
+      .toBe(app.emission.resourceIndex.lookupByLocalName('DeclaringComposeWidget')?.productHandle);
+    expect(fallbackScopedElement?.resourceProductHandle)
+      .toBe(app.emission.resourceIndex.lookupByLocalName('ReceivingComposeWidget')?.productHandle);
+    expect(selectedScopedElement?.resourceProductHandle)
+      .not.toBe(fallbackScopedElement?.resourceProductHandle);
+
+    for (const slot of [
+      ...selected.factoryContainer.readResourceSlots(),
+      ...fallback.factoryContainer.readResourceSlots(),
+    ]) {
+      const subjectClaims = runtime.workspace.store.readClaimsForSubject(slot.productHandle)
+        .map((handle) => runtime.workspace.store.readClaim(handle));
+      const objectClaims = runtime.workspace.store.readClaimsForObject(slot.productHandle)
+        .map((handle) => runtime.workspace.store.readClaim(handle));
+      expect(subjectClaims.some((claim) =>
+        claim?.predicateKey === KernelVocabulary.Di.ResourceSlotImportedFrom.key
+      )).toBe(true);
+      expect(objectClaims.some((claim) =>
+        claim?.predicateKey === KernelVocabulary.Di.ProducesProduct.key
+      )).toBe(true);
+    }
+
+    const selectedContextProvider = rendering.childContextResolverSlots.find((slot) =>
+      slot.container.productHandle === selected.factoryContainer?.productHandle
+        && slot.resolver instanceof InstanceProvider
+        && slot.resolver.friendlyName === 'IHydrationContext'
+    );
+    expect(selectedContextProvider?.resolver).toBeInstanceOf(InstanceProvider);
+    expect((selectedContextProvider?.resolver as InstanceProvider).resolve().value?.productHandle)
+      .toBe(selected.factoryHydrationContext?.productHandle);
+    expect(selected.syntheticController?.readHydrationContext()?.productHandle)
+      .toBe(selected.factoryHydrationContext?.productHandle);
+
+    expect(rendering.childContextResolverSlots.some((slot) =>
+      slot.container.productHandle === fallback.factoryContainer?.productHandle
+        && slot.resolver instanceof InstanceProvider
+        && slot.resolver.friendlyName === 'IHydrationContext'
+    )).toBe(false);
+    expect(fallback.syntheticController?.readHydrationContext()?.productHandle)
+      .toBe(fallback.receivingController?.readHydrationContext()?.productHandle);
   });
 });
 

@@ -5,7 +5,7 @@ import type {
 } from '../expression/ast.js';
 import { ValueConverterExpression } from '../expression/ast.js';
 import { unwrapExpressionAstNodeParens } from '../expression/parse-result-inspection.js';
-import type { AddressHandle } from '../kernel/handles.js';
+import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import { auLink } from '../kernel/au-link.js';
 import type { KernelSourceFileReadView } from '../kernel/store.js';
 import {
@@ -15,7 +15,10 @@ import {
 import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
 import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
-import { RuntimeExpressionResourceBindReachability } from '../template/runtime-expression-resource.js';
+import {
+  RuntimeExpressionResourceBindReachability,
+  type RuntimeExpressionResourcePhaseReachability,
+} from '../template/runtime-expression-resource.js';
 
 export class RuntimeBindingExpressionScopeProjection {
   constructor(
@@ -29,6 +32,8 @@ export class RuntimeBindingExpressionScopeProjection {
 }
 
 export interface RuntimeBindingExpressionScopeProjectionRequest {
+  /** Exact rendered binding whose resource-plan application owns this lifecycle handoff. */
+  readonly bindingProductHandle: ProductHandle;
   readonly expression: ExpressionAstNode;
   readonly scope: BindingScope;
   readonly localKey: string;
@@ -66,6 +71,7 @@ export class RuntimeBindingExpressionScopeProjector {
       input.scope,
       input.localKey,
       input.sourceAddressHandle,
+      input.bindingProductHandle,
     );
   }
 
@@ -85,11 +91,19 @@ export class RuntimeBindingExpressionScopeProjector {
     );
   }
 
+  /** Whether the rendered binding completed `astBind(...)` and can enter source evaluation. */
+  sourceEvaluationReachability(
+    bindingProductHandle: ProductHandle,
+  ): RuntimeExpressionResourcePhaseReachability {
+    return this.expressionResourcePlan.readSourceEvaluationReachability(bindingProductHandle);
+  }
+
   private projectAstBindEffects(
     expression: ExpressionAstNode,
     scope: BindingScope | null,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
+    bindingProductHandle: ProductHandle,
   ): RuntimeBindingExpressionScopeProjection {
     const unwrapped = unwrapExpressionAstNodeParens(expression);
     if (unwrapped.$kind === 'ValueConverter') {
@@ -98,6 +112,7 @@ export class RuntimeBindingExpressionScopeProjector {
         scope,
         `${localKey}:value-converter:${unwrapped.name.name}`,
         sourceAddressHandle,
+        bindingProductHandle,
       );
       return new RuntimeBindingExpressionScopeProjection(
         new ValueConverterExpression(
@@ -114,15 +129,38 @@ export class RuntimeBindingExpressionScopeProjector {
       return new RuntimeBindingExpressionScopeProjection(unwrapped, scope, null);
     }
 
-    const planEntry = this.expressionResourcePlan.readBindingBehaviorEntry(unwrapped);
+    const planEntry = this.expressionResourcePlan.readBindingBehaviorEntry(
+      unwrapped,
+      bindingProductHandle,
+    );
     const reached = planEntry != null
       && planEntry.bindReachability === RuntimeExpressionResourceBindReachability.Reached
       && planEntry.issue == null;
+    if (planEntry == null && unwrapped.name.name === STATE_BINDING_BEHAVIOR_NAME) {
+      return new RuntimeBindingExpressionScopeProjection(
+        unwrapped.expression,
+        null,
+        'The state binding behavior did not retain an expression-resource plan entry for this rendered binding.',
+      );
+    }
+    if (
+      planEntry?.builtInResource?.name === BuiltInBindingBehaviorName.State
+      && !reached
+    ) {
+      return new RuntimeBindingExpressionScopeProjection(
+        unwrapped.expression,
+        null,
+        'The state binding behavior did not reach its source-scope handoff for this rendered binding.',
+      );
+    }
     const behaviorScope = reached && planEntry.builtInResource?.name === BuiltInBindingBehaviorName.State
       ? this.projectStateBindingBehaviorScope(unwrapped, scope, localKey, sourceAddressHandle)
       : new RuntimeBindingExpressionScopeProjection(unwrapped.expression, scope, null);
     const projectedConverter = reached
-      ? this.expressionResourcePlan.readProjectedConverterForBindingBehavior(unwrapped)
+      ? this.expressionResourcePlan.readProjectedConverterForBindingBehavior(
+          unwrapped,
+          bindingProductHandle,
+        )
       : null;
     if (projectedConverter != null) {
       const projectedInput = this.projectAstBindEffects(
@@ -130,6 +168,7 @@ export class RuntimeBindingExpressionScopeProjector {
         behaviorScope.scope,
         `${localKey}:behavior:${unwrapped.name.name}:value-converter-input`,
         sourceAddressHandle,
+        bindingProductHandle,
       );
       return new RuntimeBindingExpressionScopeProjection(
         new ValueConverterExpression(
@@ -147,6 +186,7 @@ export class RuntimeBindingExpressionScopeProjector {
       behaviorScope.scope,
       `${localKey}:behavior:${unwrapped.name.name}`,
       sourceAddressHandle,
+      bindingProductHandle,
     );
     return new RuntimeBindingExpressionScopeProjection(
       projectedInner.expression,

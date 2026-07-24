@@ -11,6 +11,7 @@ import type {
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
+import type { RegistrationValueReference } from '../registration/registration-reference.js';
 import {
   ContainerIdentity,
   ContainerIdentityKind,
@@ -41,6 +42,7 @@ import {
 } from './container-configuration.js';
 import {
   ContainerResolverSlot,
+  ContainerResourceSlot,
   ContainerSelfResolverSlot,
 } from './container-slot.js';
 import {
@@ -48,15 +50,35 @@ import {
 } from './resolver.js';
 import { DiKeyIdentityEmitter } from './di-key-identity-emitter.js';
 import { FrameworkIntrinsicDiKey } from './framework-intrinsic-di-key.js';
-import { DiContainerSelfResolverPublicationMaterializer } from './world-publication.js';
+import {
+  DiContainerSelfResolverPublicationMaterializer,
+  DiInstanceProviderPublicationMaterializer,
+  DiResourceSlotPublicationMaterializer,
+} from './world-publication.js';
+
+export interface ContainerContextResolverSlotInput {
+    /** Interface symbol name used as the DI key identity. */
+    readonly interfaceName: FrameworkIntrinsicDiKey;
+    /** Source address for the renderer/controller operation that installed the contextual provider. */
+    readonly sourceAddressHandle?: AddressHandle | null;
+    /** Exact prepared contextual value, when the semantic model owns one. */
+    readonly instance?: RegistrationValueReference | null;
+    /** Runtime product identity that owns the contextual provider. */
+    readonly ownerIdentityHandle?: IdentityHandle | null;
+}
 
 export class ContainerContextResolverSlotRequest {
-  constructor(
-    /** Interface symbol name used as the DI key identity. */
-    readonly interfaceName: FrameworkIntrinsicDiKey,
-    /** Source address for the renderer/controller operation that installed the contextual provider. */
-    readonly sourceAddressHandle: AddressHandle | null = null,
-  ) {}
+  readonly interfaceName: FrameworkIntrinsicDiKey;
+  readonly sourceAddressHandle: AddressHandle | null;
+  readonly instance: RegistrationValueReference | null;
+  readonly ownerIdentityHandle: IdentityHandle | null;
+
+  constructor(input: ContainerContextResolverSlotInput) {
+    this.interfaceName = input.interfaceName;
+    this.sourceAddressHandle = input.sourceAddressHandle ?? null;
+    this.instance = input.instance ?? null;
+    this.ownerIdentityHandle = input.ownerIdentityHandle ?? null;
+  }
 }
 
 export class ContainerRootMaterializationRequest {
@@ -136,28 +158,56 @@ export class ContainerRootMaterializer {
   }
 }
 
-export class ContainerChildMaterializationRequest {
-  constructor(
+export interface ContainerChildMaterializationInput {
     /** Store-local key for this child-container materialization. */
-    readonly localKey: string,
+    readonly localKey: string;
     /** Parent runtime container frame. */
-    readonly parent: Container,
+    readonly parent: Container;
     /** Source address for the renderer/controller operation that created the child. */
-    readonly sourceAddressHandle: AddressHandle | null,
+    readonly sourceAddressHandle: AddressHandle | null;
     /** Human-oriented trace name for this child container. */
-    readonly localName: string | null = null,
+    readonly localName?: string | null;
     /** Contextual providers installed by the runtime hydration helper. */
-    readonly contextResolvers: readonly ContainerContextResolverSlotRequest[] = [],
+    readonly contextResolvers?: readonly ContainerContextResolverSlotRequest[];
     /** Optional createChild configuration. Omit for runtime's default child-container path. */
-    readonly configuration: ContainerConfiguration | ContainerConfigurationRequest | null = null,
+    readonly configuration?: ContainerConfiguration | ContainerConfigurationRequest | null;
     /**
      * Record detail policy for framework contextual resolver slots.
      *
      * Some inquiry profiles need these slots modeled for DI lookup but do not need every renderer-created contextual
      * provider published as kernel products up front. Detailed topology lanes can still request full publication.
      */
-    readonly contextResolverRecordPolicy: ContainerContextResolverRecordPolicy = ContainerContextResolverRecordPolicy.PublishAll,
-  ) {}
+    readonly contextResolverRecordPolicy?: ContainerContextResolverRecordPolicy;
+    /**
+     * Explicit source for runtime `useResources(...)`.
+     *
+     * This is independent from configuration-driven parent-resource inheritance. Supplying both is invalid because
+     * the framework uses them as alternative child-container construction paths.
+     */
+    readonly resourceImportSource?: Container | null;
+}
+
+export class ContainerChildMaterializationRequest {
+  readonly localKey: string;
+  readonly parent: Container;
+  readonly sourceAddressHandle: AddressHandle | null;
+  readonly localName: string | null;
+  readonly contextResolvers: readonly ContainerContextResolverSlotRequest[];
+  readonly configuration: ContainerConfiguration | ContainerConfigurationRequest | null;
+  readonly contextResolverRecordPolicy: ContainerContextResolverRecordPolicy;
+  readonly resourceImportSource: Container | null;
+
+  constructor(input: ContainerChildMaterializationInput) {
+    this.localKey = input.localKey;
+    this.parent = input.parent;
+    this.sourceAddressHandle = input.sourceAddressHandle;
+    this.localName = input.localName ?? null;
+    this.contextResolvers = input.contextResolvers ?? [];
+    this.configuration = input.configuration ?? null;
+    this.contextResolverRecordPolicy = input.contextResolverRecordPolicy
+      ?? ContainerContextResolverRecordPolicy.PublishAll;
+    this.resourceImportSource = input.resourceImportSource ?? null;
+  }
 }
 
 export const enum ContainerContextResolverRecordPolicy {
@@ -168,14 +218,35 @@ export const enum ContainerContextResolverRecordPolicy {
 }
 
 export class ContainerChildMaterializationEmission {
+  private readonly mutableContextResolverSlots: ContainerResolverSlot[];
+
   constructor(
     /** Child runtime container frame. */
     readonly container: Container,
     /** Built-in IContainer self resolver row installed by container construction. */
     readonly selfResolverSlot: ContainerSelfResolverSlot,
     /** Runtime contextual resolver slots installed around controller hydration. */
-    readonly contextResolverSlots: readonly ContainerResolverSlot[],
+    contextResolverSlots: readonly ContainerResolverSlot[],
+    /** Child-owned resource rows copied by parent inheritance or an explicit runtime `useResources(...)` call. */
+    readonly resourceSlots: readonly ContainerResourceSlot[],
     /** Kernel records for the container product and child-owned DI slots. */
+    readonly records: readonly KernelStoreRecord[],
+  ) {
+    this.mutableContextResolverSlots = [...contextResolverSlots];
+  }
+
+  get contextResolverSlots(): readonly ContainerResolverSlot[] {
+    return [...this.mutableContextResolverSlots];
+  }
+
+  recordInstalledContextResolver(slot: ContainerResolverSlot): void {
+    this.mutableContextResolverSlots.push(slot);
+  }
+}
+
+export class ContainerContextResolverMaterializationEmission {
+  constructor(
+    readonly slot: ContainerResolverSlot,
     readonly records: readonly KernelStoreRecord[],
   ) {}
 }
@@ -184,6 +255,7 @@ export type ContainerChildMaterializationPhaseName =
   | 'source'
   | 'container'
   | 'self-resolver'
+  | 'resource-imports'
   | 'context-resolvers'
   | 'records';
 
@@ -236,6 +308,8 @@ const unmeasuredContainerChildMaterialization: ContainerChildMaterializationMeas
 export class ContainerChildMaterializer {
   private readonly keyIdentityEmitter: DiKeyIdentityEmitter;
   private readonly selfResolvers: DiContainerSelfResolverPublicationMaterializer;
+  private readonly instanceProviders: DiInstanceProviderPublicationMaterializer;
+  private readonly resourceSlots: DiResourceSlotPublicationMaterializer;
 
   constructor(
     /** Hot analysis store used for handle allocation and duplicate identity checks. */
@@ -245,6 +319,8 @@ export class ContainerChildMaterializer {
   ) {
     this.keyIdentityEmitter = new DiKeyIdentityEmitter(records);
     this.selfResolvers = new DiContainerSelfResolverPublicationMaterializer(store, this.keyIdentityEmitter);
+    this.instanceProviders = new DiInstanceProviderPublicationMaterializer(store);
+    this.resourceSlots = new DiResourceSlotPublicationMaterializer(store, this.keyIdentityEmitter);
   }
 
   materializeChild(
@@ -253,6 +329,26 @@ export class ContainerChildMaterializer {
   ): ContainerChildMaterializationEmission {
     const child = measure('container', () => this.create(input));
     return this.recordsFor(input, child, [], measure);
+  }
+
+  /** Install one later framework contextual provider into an already-created child container. */
+  installContextResolver(
+    child: ContainerChildMaterializationEmission,
+    localKey: string,
+    request: ContainerContextResolverSlotRequest,
+    provenanceHandle: ProvenanceHandle,
+    recordPolicy: ContainerContextResolverRecordPolicy = ContainerContextResolverRecordPolicy.PublishAll,
+  ): ContainerContextResolverMaterializationEmission {
+    const emission = this.recordsForContextResolverSlot(
+      child.container,
+      request,
+      `di-child-container:${localKey}:context`,
+      provenanceHandle,
+      recordPolicy === ContainerContextResolverRecordPolicy.PublishAll,
+    );
+    child.container.registerResolver(emission.slot);
+    child.recordInstalledContextResolver(emission.slot);
+    return new ContainerContextResolverMaterializationEmission(emission.slot, emission.records);
   }
 
   /** Create a child frame before its causal claims are published. */
@@ -278,6 +374,9 @@ export class ContainerChildMaterializer {
       this.selfResolvers.recordsForContainerSelfResolver(child)
     );
     child.registerSelfResolver(selfResolver.product);
+    const resourceImports = measure('resource-imports', () =>
+      this.recordsForImportedResourceSlots(child, input, source.provenanceHandle)
+    );
     const contextResolvers = measure('context-resolvers', () =>
       this.recordsForContextResolverSlots(child, input, local, source.provenanceHandle)
     );
@@ -287,6 +386,7 @@ export class ContainerChildMaterializer {
       ...source.records,
       ...this.recordsForChildContainer(input, local, source, child, claimHandles),
       ...selfResolver.records,
+      ...resourceImports.records,
       ...contextResolvers.records,
     ]);
 
@@ -294,8 +394,42 @@ export class ContainerChildMaterializer {
       child,
       selfResolver.product,
       contextResolvers.slots,
+      resourceImports.slots,
       records,
     );
+  }
+
+  private recordsForImportedResourceSlots(
+    child: Container,
+    input: ContainerChildMaterializationRequest,
+    provenanceHandle: ProvenanceHandle,
+  ): ContainerSlotEmissionSet<ContainerResourceSlot> {
+    const inheritsParentResources = child.readConfiguration().inheritParentResources;
+    if (inheritsParentResources && input.resourceImportSource != null) {
+      throw new Error(
+        `Child container '${child.productHandle}' cannot combine parent-resource inheritance with an explicit `
+        + 'useResources(...) source.',
+      );
+    }
+    const sourceContainer = inheritsParentResources
+      ? input.parent
+      : input.resourceImportSource;
+    if (sourceContainer == null) {
+      return new ContainerSlotEmissionSet([], []);
+    }
+
+    const records: KernelStoreRecord[] = [];
+    const slots = child.useResources(sourceContainer, (target, sourceSlot) => {
+      const publication = this.resourceSlots.recordsForImportedResourceSlot(
+        target,
+        sourceSlot,
+        input.sourceAddressHandle,
+        provenanceHandle,
+      );
+      records.push(...publication.records);
+      return publication.slot;
+    });
+    return new ContainerSlotEmissionSet(records, slots);
   }
 
   private createChildContainer(
@@ -386,6 +520,37 @@ export class ContainerChildMaterializer {
   ): ContainerSlotEmission<ContainerResolverSlot> {
     const records: KernelStoreRecord[] = [];
     const keyIdentityHandle = this.keyIdentityEmitter.interfaceKeyIdentityHandle(input.interfaceName);
+    if (input.instance != null) {
+      const ownerIdentityHandle = input.ownerIdentityHandle ?? input.instance.identityHandle;
+      if (ownerIdentityHandle == null) {
+        throw new Error(
+          `Contextual provider '${input.interfaceName}' needs an owning identity for its prepared instance.`,
+        );
+      }
+      if (publishRecords) {
+        this.keyIdentityEmitter.emitInterfaceKeyIdentity(
+          records,
+          keyIdentityHandle,
+          input.interfaceName,
+          null,
+          input.sourceAddressHandle,
+        );
+      }
+      const provider = this.instanceProviders.prepare(
+        local,
+        container,
+        ownerIdentityHandle,
+        keyIdentityHandle,
+        input.interfaceName,
+        input.instance,
+        null,
+        input.sourceAddressHandle,
+      );
+      if (publishRecords) {
+        records.push(...this.instanceProviders.recordsForContextual(provider, provenanceHandle));
+      }
+      return new ContainerSlotEmission(records, provider.resolverSlot);
+    }
     if (!publishRecords) {
       return new ContainerSlotEmission(
         records,

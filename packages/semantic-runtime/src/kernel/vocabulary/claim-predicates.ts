@@ -133,6 +133,17 @@ export const KernelClaimPredicates = {
         ),
       ),
     ),
+
+    /** A child-owned resource slot copied one exact source-container resource slot. */
+    ResourceSlotImportedFrom: defineClaimPredicate(
+      KernelVocabularyNamespace.Di,
+      'resource-slot-imported-from',
+      'A child-owned runtime resource slot was copied from one exact source-container resource slot.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Di.ResourceSlot),
+        productEndpoint(KernelProductKinds.Di.ResourceSlot),
+      ),
+    ),
   },
   Framework: {
 
@@ -307,6 +318,72 @@ export const KernelClaimPredicates = {
       ),
     ),
 
+    /** A modeled controller resolves one runtime IHydrationContext through its effective container. */
+    ControllerUsesHydrationContext: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-uses-hydration-context',
+      'A modeled controller resolves one runtime IHydrationContext through its effective container.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+        productEndpoint(KernelProductKinds.Configuration.HydrationContext),
+      ),
+    ),
+
+    /** A renderer-created view model was constructed while one inherited IHydrationContext was visible. */
+    ControllerConstructedWithHydrationContext: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-constructed-with-hydration-context',
+      'A renderer-created view model was constructed while one inherited runtime IHydrationContext was visible.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+        productEndpoint(KernelProductKinds.Configuration.HydrationContext),
+      ),
+    ),
+
+    /** A modeled controller receives one runtime IAuSlotsInfo value before view-model construction. */
+    ControllerUsesAuSlotsInfo: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-uses-au-slots-info',
+      'A modeled renderer-created controller receives one runtime IAuSlotsInfo value before view-model construction.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+        productEndpoint(KernelProductKinds.Configuration.AuSlotsInfo),
+      ),
+    ),
+
+    /** A runtime IHydrationContext names the custom-element controller whose view it hydrates. */
+    HydrationContextUsesController: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'hydration-context-uses-controller',
+      'A runtime IHydrationContext names the custom-element controller whose view it hydrates.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.HydrationContext),
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+      ),
+    ),
+
+    /** A runtime IHydrationContext retains the custom-element hydration instruction supplied to Controller.$el. */
+    HydrationContextUsesInstruction: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'hydration-context-uses-instruction',
+      'A runtime IHydrationContext retains the custom-element hydration instruction supplied to Controller.$el.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.HydrationContext),
+        productEndpoint(KernelProductKinds.Instruction.Instruction),
+      ),
+    ),
+
+    /** A runtime IHydrationContext retains the context inherited before Controller.$el installs its own value. */
+    HydrationContextHasParent: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'hydration-context-has-parent',
+      'A runtime IHydrationContext retains the context inherited before Controller.$el installs its own value.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.HydrationContext),
+        productEndpoint(KernelProductKinds.Configuration.HydrationContext),
+      ),
+    ),
+
     /** A modeled au-compose controller created or updated a CompositionController. */
     ControllerOwnsComposition: defineClaimPredicate(
       KernelVocabularyNamespace.Configuration,
@@ -425,6 +502,17 @@ export const KernelClaimPredicates = {
       claimSignature(
         productEndpoint(KernelProductKinds.Instruction.Instruction),
         productEndpoint(KernelProductKinds.Configuration.ViewFactory),
+      ),
+    ),
+
+    /** A hydrate-element instruction created a per-use runtime IAuSlotsInfo projection value. */
+    InstructionCreatesAuSlotsInfo: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'instruction-creates-au-slots-info',
+      'A hydrate-element instruction created a per-use runtime IAuSlotsInfo value from its projection map.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Instruction.Instruction),
+        productEndpoint(KernelProductKinds.Configuration.AuSlotsInfo),
       ),
     ),
 

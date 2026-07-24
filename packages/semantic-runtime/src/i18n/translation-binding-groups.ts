@@ -49,9 +49,9 @@ function i18nTranslationBindingTargetGroupKey(
   runtimeRendering: RuntimeRenderingEmission,
   binding: TranslationBinding,
 ): string {
-  const renderContext = runtimeRendering.readRenderContextForBinding(binding.productHandle);
+  const renderContext = runtimeRendering.requireRenderContextForBinding(binding.productHandle);
   return [
-    renderContext?.targetController.productHandle ?? 'no-target-controller',
+    renderContext.targetController.productHandle,
     binding.node.productHandle ?? 'no-node',
   ].join(':');
 }

@@ -59,7 +59,7 @@ import {
 import {
   bindingScopesForTemplateExpressionParse,
 } from '../out/template/template-expression-selection.js';
-import { resourceLocalTemplateExpressionParses } from '../out/template/runtime-resource-ownership.js';
+import { resourceLocalEffectiveTemplateExpressionParses } from '../out/template/template-expression-selection.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/typescript-project-diagnostics');
@@ -1737,7 +1737,7 @@ async function readGeneratedValueConverterEvaluatorProbe() {
   if (resource == null) {
     return { kind: 'missing-resource', display: null, openKind: null };
   }
-  const parse = resourceLocalTemplateExpressionParses(runtime.workspace.store, resource)
+  const parse = resourceLocalEffectiveTemplateExpressionParses(runtime.workspace.store, resource)
     .find((candidate) =>
       findValueConverterExpression(bindingExpressionAstForParse(candidate), 'dynamicContextualWord') != null
     ) ?? null;

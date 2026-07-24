@@ -46,6 +46,12 @@ import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import { camelCaseAttributeName } from './attribute-mapper.js';
+import {
+  AU_SLOT_PROCESS_CONTENT_TARGET_NAME,
+  AU_SLOT_RESOURCE_NAME,
+  AU_SLOT_TARGET_NAME,
+  AuSlotStaticAttributeName,
+} from './au-slot-source.js';
 import type {
   AttributeClassificationEmission,
 } from './attribute-classification-materializer.js';
@@ -56,6 +62,8 @@ import {
 } from './attribute-syntax.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import {
+  CompiledNativeSlotNameKind,
+  CompiledNativeSlotOutlet,
   CompiledTemplate,
   CompiledTemplateState,
   TemplateRenderTarget,
@@ -76,8 +84,10 @@ import {
 } from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
 import {
+  AuSlotProcessContentInstructionData,
   HydrateAttributeInstruction,
   HydrateElementInstruction,
+  HydrateElementProjectionContributor,
   HydrateElementProjectionInstructionSequence,
   HydrateLetElementInstruction,
   HydrateTemplateControllerInstruction,
@@ -251,6 +261,8 @@ class CompiledTemplateAssembly {
     readonly projectionSequenceDrafts: readonly ProjectionSequenceDraft[],
     readonly instructions: readonly TemplateInstruction[],
     readonly createdInstructions: readonly TemplateInstruction[],
+    readonly compilerReachableNodeProductHandles: readonly ProductHandle[],
+    readonly nativeSlotOutlets: readonly CompiledNativeSlotOutlet[],
     readonly records: readonly KernelStoreRecord[],
     readonly issues: readonly TemplateCompilerIssue[],
     readonly openSeams: readonly OpenSeam[],
@@ -295,6 +307,7 @@ class ElementProjectionChildGroup {
     readonly slotName: string,
     readonly extractedChildren: readonly HtmlNodeReferenceLike[],
     readonly sequenceChildren: readonly HtmlNodeReferenceLike[],
+    readonly contributors: readonly HydrateElementProjectionContributor[],
     readonly sourceAddressHandle: AddressHandle | null,
   ) {}
 }
@@ -332,6 +345,8 @@ class CompiledTemplateAssemblyState {
   readonly openSeams: OpenSeam[] = [];
   readonly instructions: TemplateInstruction[] = [];
   readonly createdInstructions: TemplateInstruction[] = [];
+  readonly compilerReachableNodeProductHandles: ProductHandle[] = [];
+  readonly nativeSlotOutlets: CompiledNativeSlotOutlet[] = [];
   readonly issues: TemplateCompilerIssue[] = [];
   readonly targetDrafts: TargetDraft[] = [];
   readonly surrogateInstructions: TemplateInstruction[] = [];
@@ -350,6 +365,7 @@ class CompiledTemplateAssemblyState {
 
   private instructionIndex = 0;
   private rowIndex = 0;
+  private readonly compilerReachableNodeProducts = new Set<ProductHandle>();
   private readonly issuePublisher: TemplateCompilerIssuePublisher;
 
   constructor(
@@ -427,6 +443,16 @@ class CompiledTemplateAssemblyState {
   readonly addExistingInstruction = (instruction: TemplateInstruction): TemplateInstruction => {
     this.instructions.push(instruction);
     return instruction;
+  };
+
+  readonly recordCompilerReachableNode = (
+    node: HtmlElement | HtmlText,
+  ): void => {
+    if (this.compilerReachableNodeProducts.has(node.productHandle)) {
+      return;
+    }
+    this.compilerReachableNodeProducts.add(node.productHandle);
+    this.compilerReachableNodeProductHandles.push(node.productHandle);
   };
 
   readonly emitRootRow = (
@@ -508,6 +534,8 @@ class CompiledTemplateAssemblyState {
       this.projectionSequenceDrafts,
       this.instructions,
       this.createdInstructions,
+      this.compilerReachableNodeProductHandles,
+      this.nativeSlotOutlets,
       this.records,
       this.issues,
       this.openSeams,
@@ -871,6 +899,7 @@ class CompiledTemplateInstructionTraversal {
       : null;
     const contentRoots = rootTemplate?.children ?? this.input.html.document.rootNodes;
     if (rootTemplate != null) {
+      this.assemblyState.recordCompilerReachableNode(rootTemplate);
       this.recordRootLocalTemplateIssue(rootTemplate);
     }
     this.recordLocalTemplateIssues(contentRoots);
@@ -896,6 +925,7 @@ class CompiledTemplateInstructionTraversal {
       ? null
       : this.indexes.nodesByProduct.get(nodeRef.productHandle) ?? null;
     if (node instanceof HtmlText) {
+      this.assemblyState.recordCompilerReachableNode(node);
       this.visitTextNode(node, emitRow);
       return;
     }
@@ -904,6 +934,7 @@ class CompiledTemplateInstructionTraversal {
       return;
     }
 
+    this.assemblyState.recordCompilerReachableNode(node);
     if (this.visitLetElement(node, emitRow)) {
       return;
     }
@@ -989,14 +1020,18 @@ class CompiledTemplateInstructionTraversal {
       : null;
     const elementInstructions: TemplateInstruction[] = [];
     let elementInstruction: HydrateElementInstruction | null = null;
-    this.recordSlotWithoutShadowDomIssue(node, lookupName);
     this.recordAuSlotProjectionIssue(node, lookupName, elementDefinition);
     const parts = this.collectElementInstructionParts(node, classifications, elementDefinition);
+    this.recordNativeSlotOutlet(node, lookupName, parts);
+    const processContentRemovedChildren = this.knownProcessContentRemovedChildHandles(node, elementDefinition);
     const projectionGroups = this.elementProjectionChildGroups(node, elementDefinition, parts);
     const extractedProjectionChildren = new Set(
-      projectionGroups.flatMap((group) =>
-        group.extractedChildren.map((child) => child.productHandle).filter((handle): handle is ProductHandle => handle != null)
-      ),
+      [
+        ...processContentRemovedChildren,
+        ...projectionGroups.flatMap((group) =>
+          group.extractedChildren.map((child) => child.productHandle).filter((handle): handle is ProductHandle => handle != null)
+        ),
+      ],
     );
 
     if (elementDefinition != null) {
@@ -1026,9 +1061,11 @@ class CompiledTemplateInstructionTraversal {
             return new HydrateElementProjectionInstructionSequence(
               projection.slotName,
               projection.productHandle,
+              group.contributors,
               projection.sourceAddressHandle,
             );
           }),
+          this.auSlotProcessContentData(node, elementDefinition),
           parts.bindableInstructions.map((instruction) => instruction.productHandle),
           parts.capturedSyntaxProductHandles,
           elementDefinition.containerless || hasHtmlAttribute(owner, TemplateSpecialAttributeName.Containerless),
@@ -1079,13 +1116,24 @@ class CompiledTemplateInstructionTraversal {
 
     emitRow(`element:${node.productHandle}`, node, directRow);
 
-    if (!shouldCompileChildren && !parts.hasProcessContentHook && this.hasUnprojectedChildren(node, extractedProjectionChildren)) {
-      this.assemblyState.addOpenSeam(
-        `containerless-children:${node.productHandle}`,
-        `Custom element '${elementDefinition?.name ?? node.tagName}' is containerless; child content/projection compilation is held open until projection ownership is modeled.`,
-        node.sourceAddressHandle,
-        KernelVocabulary.Compiler.OpenContentProjection.key,
-      );
+    if (
+      node.tagName.toLowerCase() === 'template'
+      && lookupName === 'template'
+      && elementDefinition == null
+      && parts.templateControllerInstructions.length === 0
+    ) {
+      return;
+    }
+
+    if (!shouldCompileChildren) {
+      if (!parts.hasProcessContentHook && this.hasUnprojectedChildren(node, extractedProjectionChildren)) {
+        this.assemblyState.addOpenSeam(
+          `containerless-children:${node.productHandle}`,
+          `Custom element '${elementDefinition?.name ?? node.tagName}' is containerless; child content/projection compilation is held open until projection ownership is modeled.`,
+          node.sourceAddressHandle,
+          KernelVocabulary.Compiler.OpenContentProjection.key,
+        );
+      }
       return;
     }
 
@@ -1109,11 +1157,15 @@ class CompiledTemplateInstructionTraversal {
     const groups = new Map<string, {
       extractedChildren: HtmlNodeReferenceLike[];
       sequenceChildren: HtmlNodeReferenceLike[];
+      contributors: HydrateElementProjectionContributor[];
       sourceAddressHandle: AddressHandle | null;
     }>();
     for (const childReference of node.children) {
       const child = this.nodeForReference(childReference);
       const auSlotAttribute = child instanceof HtmlElement ? this.attributeForElement(child, 'au-slot') : null;
+      if (auSlotAttribute != null && this.isRuntimeHtmlAuSlotDefinition(elementDefinition)) {
+        continue;
+      }
       const shouldExtract = auSlotAttribute != null || !isShadowDom;
       if (!shouldExtract) {
         continue;
@@ -1122,9 +1174,14 @@ class CompiledTemplateInstructionTraversal {
       const group = groups.get(slotName) ?? {
         extractedChildren: [],
         sequenceChildren: [],
+        contributors: [],
         sourceAddressHandle: child?.sourceAddressHandle ?? auSlotAttribute?.sourceAddressHandle ?? node.sourceAddressHandle,
       };
       group.extractedChildren.push(childReference);
+      group.contributors.push(new HydrateElementProjectionContributor(
+        childReference,
+        auSlotAttribute?.valueAddressHandle ?? null,
+      ));
       if (!(child instanceof HtmlText) || child.text.trim() !== '') {
         group.sequenceChildren.push(childReference);
       }
@@ -1134,6 +1191,7 @@ class CompiledTemplateInstructionTraversal {
       slotName,
       group.extractedChildren,
       group.sequenceChildren,
+      group.contributors,
       group.sourceAddressHandle,
     ));
   }
@@ -1150,10 +1208,57 @@ class CompiledTemplateInstructionTraversal {
       const instructions: TemplateInstruction[] = [];
       const emitRow = this.assemblyState.emitNestedRow(instructions);
       for (const child of group.sequenceChildren) {
-        this.visitNode(child, emitRow);
+        const childNode = this.nodeForReference(child);
+        if (childNode instanceof HtmlElement && this.isUnwrappedProjectionTemplate(childNode)) {
+          this.assemblyState.recordCompilerReachableNode(childNode);
+          for (const grandchild of childNode.children) {
+            this.visitNode(grandchild, emitRow);
+          }
+        } else {
+          this.visitNode(child, emitRow);
+        }
       }
       this.assemblyState.addProjectionSequenceDraft(instruction, projection, instructions);
     }
+  }
+
+  private auSlotProcessContentData(
+    node: HtmlElement,
+    elementDefinition: CustomElementDefinition,
+  ): AuSlotProcessContentInstructionData | null {
+    if (!this.isRuntimeHtmlAuSlotDefinition(elementDefinition)) {
+      return null;
+    }
+    const nameAttribute = this.attributeForElement(node, AuSlotStaticAttributeName.Name);
+    return new AuSlotProcessContentInstructionData(
+      nameAttribute?.rawValue ?? 'default',
+      nameAttribute?.valueAddressHandle ?? null,
+    );
+  }
+
+  private isUnwrappedProjectionTemplate(node: HtmlElement): boolean {
+    if (node.tagName.toLowerCase() !== 'template') {
+      return false;
+    }
+    const owner = this.indexes.ownersByElement.get(node.productHandle) ?? null;
+    return owner?.attributes.every((attribute) => attribute.rawName.toLowerCase() === 'au-slot') ?? true;
+  }
+
+  private knownProcessContentRemovedChildHandles(
+    node: HtmlElement,
+    elementDefinition: CustomElementDefinition | null,
+  ): readonly ProductHandle[] {
+    if (!this.isRuntimeHtmlAuSlotDefinition(elementDefinition)) {
+      return [];
+    }
+    return node.children.flatMap((childReference) => {
+      const child = this.nodeForReference(childReference);
+      return child instanceof HtmlElement
+        && this.attributeForElement(child, 'au-slot') != null
+        && child.productHandle != null
+        ? [child.productHandle]
+        : [];
+    });
   }
 
   private hasUnprojectedChildren(
@@ -1189,12 +1294,49 @@ class CompiledTemplateInstructionTraversal {
     return parts;
   }
 
-  private recordSlotWithoutShadowDomIssue(node: HtmlElement, lookupName: string): void {
+  private recordNativeSlotOutlet(
+    node: HtmlElement,
+    lookupName: string,
+    parts: ElementInstructionParts,
+  ): void {
     if (lookupName !== 'slot') {
       return;
     }
     const rootDefinition = this.rootCustomElementDefinition();
     if (rootDefinition?.shadowOptions != null) {
+      const nameAttribute = this.attributeForElement(node, 'name');
+      const owner = this.indexes.ownersByElement.get(node.productHandle) ?? null;
+      const nameSyntax = this.input.attributeSyntax.syntaxes.find((syntax) =>
+        syntax.target.toLowerCase() === 'name'
+        && owner?.attributes.some((attribute) => attribute.productHandle === syntax.attribute.productHandle)
+      ) ?? null;
+      const dynamicNameInstruction = [
+        ...parts.attributeInstructions,
+        ...parts.plainInstructions,
+        ...parts.bindableInstructions,
+      ].find((instruction): instruction is PropertyBindingInstruction | InterpolationInstruction =>
+        instruction instanceof PropertyBindingInstruction
+          ? instruction.targetProperty === 'name'
+          : instruction instanceof InterpolationInstruction && instruction.target === 'name'
+      ) ?? null;
+      const hasDynamicName = dynamicNameInstruction != null
+        || (nameSyntax != null && nameSyntax.rawName.toLowerCase() !== 'name');
+      const dynamicNameAttributeHandle = dynamicNameInstruction?.attribute?.productHandle ?? null;
+      const dynamicNameAttribute = dynamicNameAttributeHandle == null
+        ? null
+        : this.indexes.attributesByProduct.get(dynamicNameAttributeHandle) ?? null;
+      this.assemblyState.nativeSlotOutlets.push(new CompiledNativeSlotOutlet(
+        node.toReference(),
+        hasDynamicName
+          ? CompiledNativeSlotNameKind.Dynamic
+          : nameAttribute == null
+            ? CompiledNativeSlotNameKind.Default
+            : CompiledNativeSlotNameKind.Static,
+        hasDynamicName ? null : nameAttribute?.rawValue ?? '',
+        hasDynamicName
+          ? dynamicNameAttribute?.valueAddressHandle ?? dynamicNameInstruction?.sourceAddressHandle ?? nameSyntax?.sourceAddressHandle ?? null
+          : nameAttribute?.valueAddressHandle ?? null,
+      ));
       return;
     }
     this.assemblyState.addCompilerIssue(
@@ -1442,7 +1584,7 @@ class CompiledTemplateInstructionTraversal {
       bindableInstructions: [],
       capturedSyntaxProductHandles: [],
       hasProcessContentHook,
-      hasOpenProcessContentHook: hasProcessContentHook && !this.isKnownTransparentProcessContent(node, elementDefinition),
+      hasOpenProcessContentHook: hasProcessContentHook && !this.isKnownProcessContent(elementDefinition),
     };
   }
 
@@ -1599,38 +1741,18 @@ class CompiledTemplateInstructionTraversal {
     }
   }
 
-  private isKnownTransparentProcessContent(
-    node: HtmlElement,
+  private isKnownProcessContent(
     elementDefinition: CustomElementDefinition | null,
   ): boolean {
-    if (elementDefinition?.name !== 'au-slot') {
-      return false;
-    }
-    return !this.hasDescendantAttribute(node, 'au-slot');
+    return this.isRuntimeHtmlAuSlotDefinition(elementDefinition);
   }
 
-  private hasDescendantAttribute(node: HtmlElement, attributeName: string): boolean {
-    for (const childReference of node.children) {
-      const child = childReference.productHandle == null
-        ? null
-        : this.indexes.nodesByProduct.get(childReference.productHandle) ?? null;
-      if (!(child instanceof HtmlElement)) {
-        continue;
-      }
-      if (this.elementHasAttribute(child, attributeName) || this.hasDescendantAttribute(child, attributeName)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private elementHasAttribute(node: HtmlElement, attributeName: string): boolean {
-    return node.attributes.some((reference) => {
-      const attribute = reference.productHandle == null
-        ? null
-        : this.indexes.attributesByProduct.get(reference.productHandle) ?? null;
-      return attribute?.rawName === attributeName;
-    });
+  private isRuntimeHtmlAuSlotDefinition(
+    elementDefinition: CustomElementDefinition | null,
+  ): elementDefinition is CustomElementDefinition {
+    return elementDefinition?.name === AU_SLOT_RESOURCE_NAME
+      && elementDefinition.target.localName === AU_SLOT_TARGET_NAME
+      && elementDefinition.processContent?.localName === AU_SLOT_PROCESS_CONTENT_TARGET_NAME;
   }
 
   private letBindingInstructionsForElement(node: HtmlElement): readonly LetBindingInstruction[] {
@@ -1833,6 +1955,8 @@ export class CompiledTemplateMaterializer {
       input,
       handles,
       state,
+      assembly.compilerReachableNodeProductHandles,
+      assembly.nativeSlotOutlets,
       sequencePublications,
       source,
     );
@@ -1966,6 +2090,8 @@ export class CompiledTemplateMaterializer {
     input: CompiledTemplateMaterializationRequest,
     handles: CompiledTemplateHandles,
     state: CompiledTemplateState,
+    compilerReachableNodeProductHandles: readonly ProductHandle[],
+    nativeSlotOutlets: readonly CompiledNativeSlotOutlet[],
     sequences: CompiledTemplateSequencePublications,
     source: CompiledTemplateSourceSet,
   ): CompiledTemplate {
@@ -1974,6 +2100,9 @@ export class CompiledTemplateMaterializer {
       handles.identityHandle,
       input.html.document.productHandle,
       state,
+      compilerReachableNodeProductHandles,
+      nativeSlotOutlets,
+      state === CompiledTemplateState.Complete ? false : null,
       sequences.renderTargets,
       sequences.surrogateSequence,
       input.compilationUnit.sourceAddressHandle,

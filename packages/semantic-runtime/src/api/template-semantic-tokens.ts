@@ -42,7 +42,8 @@ import {
   capturedAttributeSyntaxForDynamicInstruction,
   resourceLocalBindingSourceOperations,
   resourceLocalDynamicTemplateInstructions,
-  resourceLocalTemplateExpressionParses,
+  resourceLocalAuthoredTemplateExpressionParses,
+  resourceLocalCompilerReachableHtmlAttributeProductHandles,
   resourceLocalTemplateInstructions,
 } from '../template/runtime-resource-ownership.js';
 import {
@@ -100,11 +101,12 @@ function templateResourceSemanticTokenRows(
     .filter((syntax) => syntax.attribute.productHandle != null)
     .map((syntax) => [syntax.attribute.productHandle as ProductHandle, syntax]));
   const syntaxByProduct = new Map(resource.compilation.authoredAttributeSyntaxes.map((syntax) => [syntax.productHandle, syntax]));
+  const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
 
   rows.push(...instructionSemanticTokenRows(store, resource, elementsByProduct, attributesByProduct, syntaxByAttributeProduct, handles));
   rows.push(...dynamicInstructionSyntaxSemanticTokenRows(store, resource, handles));
-  rows.push(...classificationSemanticTokenRows(store, resource, attributesByProduct, syntaxByProduct, handles));
-  rows.push(...multiBindingSegmentSemanticTokenRows(store, resource, syntaxByProduct, handles));
+  rows.push(...classificationSemanticTokenRows(store, resource, attributesByProduct, syntaxByProduct, compilerReachableAttributes, handles));
+  rows.push(...multiBindingSegmentSemanticTokenRows(store, resource, syntaxByProduct, compilerReachableAttributes, handles));
   rows.push(...expressionSemanticTokenRows(store, resource, handles));
   rows.push(...localTemplateDefinitionSemanticTokenRows(store, resource, handles));
 
@@ -155,9 +157,16 @@ function multiBindingSegmentSemanticTokenRows(
   store: KernelStore,
   resource: TemplateResourceEmission,
   syntaxByProduct: ReadonlyMap<ProductHandle, AttributeSyntax>,
+  compilerReachableAttributes: ReadonlySet<ProductHandle>,
   handles: boolean,
 ): readonly SemanticTemplateSemanticTokenRow[] {
   return resource.compilation.bindingCommandLowering.multiBindingSegments.flatMap((segment) => {
+    if (
+      segment.attribute.productHandle == null
+      || !compilerReachableAttributes.has(segment.attribute.productHandle)
+    ) {
+      return [];
+    }
     const syntax = syntaxByProduct.get(segment.syntaxProductHandle) ?? null;
     if (syntax == null) {
       return [];
@@ -380,12 +389,16 @@ function classificationSemanticTokenRows(
   resource: TemplateResourceEmission,
   attributesByProduct: ReadonlyMap<ProductHandle, HtmlAttribute>,
   syntaxByProduct: ReadonlyMap<ProductHandle, AttributeSyntax>,
+  compilerReachableAttributes: ReadonlySet<ProductHandle>,
   handles: boolean,
 ): readonly SemanticTemplateSemanticTokenRow[] {
   const rows: SemanticTemplateSemanticTokenRow[] = [];
   for (const classification of resource.compilation.attributeClassification.classifications) {
     const syntax = syntaxByProduct.get(classification.syntaxProductHandle) ?? null;
-    if (syntax == null) {
+    if (
+      syntax?.attribute.productHandle == null
+      || !compilerReachableAttributes.has(syntax.attribute.productHandle)
+    ) {
       continue;
     }
     const attribute = syntax.attribute.productHandle == null
@@ -431,7 +444,7 @@ function expressionSemanticTokenRows(
   handles: boolean,
 ): readonly SemanticTemplateSemanticTokenRow[] {
   const rows: SemanticTemplateSemanticTokenRow[] = [];
-  const parses = resourceLocalTemplateExpressionParses(store, resource);
+  const parses = resourceLocalAuthoredTemplateExpressionParses(store, resource);
   for (const parse of parses) {
     const parseSource = semanticExactSourceReference(describeAddress(store, parse.sourceAddressHandle));
     const root = expressionRoot(parse.result);

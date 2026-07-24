@@ -32,6 +32,7 @@ export const enum BindingScopeCreatorKind {
   TemplateControllerCondition = 'template-controller-condition',
   TemplateControllerBranch = 'template-controller-branch',
   TemplateControllerValueScope = 'template-controller-value-scope',
+  ContentProjection = 'content-projection',
 }
 
 export const enum BindingScopeConditionPolarity {
@@ -174,6 +175,48 @@ export type RuntimeBindingContextKind =
   | BindingContextKind.Synthetic
   | BindingContextKind.Object;
 
+export const enum BindingScopeBindingContextConstructionKind {
+  /** Materialize a new binding-context product for this scope state. */
+  Materialize = 'materialize',
+  /** Reuse an existing runtime binding-context object in a distinct Scope. */
+  Reuse = 'reuse',
+}
+
+/** Closed construction choice for the binding-context half of a runtime Scope. */
+export class BindingScopeBindingContextConstruction {
+  private constructor(
+    readonly constructionKind: BindingScopeBindingContextConstructionKind,
+    readonly contextKind: RuntimeBindingContextKind | null,
+    readonly contextType: CheckerTypeReference | null,
+    readonly slots: readonly BindingContextSlotDraft[],
+    readonly existingContext: BindingContext | null,
+  ) {}
+
+  static materialize(
+    contextKind: RuntimeBindingContextKind,
+    contextType: CheckerTypeReference | null = null,
+    slots: readonly BindingContextSlotDraft[] = [],
+  ): BindingScopeBindingContextConstruction {
+    return new BindingScopeBindingContextConstruction(
+      BindingScopeBindingContextConstructionKind.Materialize,
+      contextKind,
+      contextType,
+      slots,
+      null,
+    );
+  }
+
+  static reuse(context: BindingContext): BindingScopeBindingContextConstruction {
+    return new BindingScopeBindingContextConstruction(
+      BindingScopeBindingContextConstructionKind.Reuse,
+      null,
+      null,
+      [],
+      context,
+    );
+  }
+}
+
 /** Draft for one slot in a runtime BindingContext or IOverrideContext model. */
 export class BindingContextSlotDraft {
   constructor(
@@ -243,12 +286,8 @@ export class BindingScopeConstructionRequest {
     readonly ownerIdentityHandle: IdentityHandle | null,
     /** Parent Scope traversed by Aurelia `$parent` and ordinary fallback lookup. */
     readonly runtimeParent: BindingScope | null,
-    /** Binding-context lane for normal name lookup. */
-    readonly bindingContextKind: RuntimeBindingContextKind,
-    /** Static type of the binding context object itself, if known through the TypeChecker substrate. */
-    readonly bindingContextType: CheckerTypeReference | null = null,
-    /** Names visible through the binding context. */
-    readonly bindingContextSlots: readonly BindingContextSlotDraft[] = [],
+    /** Whether this Scope materializes or reuses its runtime binding-context object. */
+    readonly bindingContext: BindingScopeBindingContextConstruction,
     /** Static type of the override context object itself, if known through the TypeChecker substrate. */
     readonly overrideContextType: CheckerTypeReference | null = null,
     /** Names visible through the override context. */
@@ -431,6 +470,36 @@ export class BindingScope {
     }
   }
 
+  /** Runtime binding scope created for a custom-element controller and its view-model binding context. */
+  static forCustomElementController(input: {
+    readonly localKey: string;
+    readonly ownerProductHandle: ProductHandle | null;
+    readonly ownerIdentityHandle: IdentityHandle | null;
+    readonly parent: BindingScope | null;
+    readonly viewModelType: CheckerTypeReference | null;
+    readonly bindingContextSlots?: readonly BindingContextSlotDraft[];
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly scopeCreators?: readonly BindingScopeCreator[];
+  }): BindingScopeConstructionRequest {
+    return new BindingScopeConstructionRequest(
+      input.localKey,
+      BindingScopeOwnerKind.CustomElementController,
+      input.ownerProductHandle,
+      input.ownerIdentityHandle,
+      input.parent,
+      BindingScopeBindingContextConstruction.materialize(
+        BindingContextKind.ViewModel,
+        input.viewModelType,
+        input.bindingContextSlots ?? [],
+      ),
+      null,
+      [],
+      true,
+      input.sourceAddressHandle,
+      input.scopeCreators ?? [],
+    );
+  }
+
   /** Runtime `Scope.fromParent` shape for repeat-item contexts. */
   static fromRepeatedItem(input: {
     readonly localKey: string;
@@ -448,9 +517,11 @@ export class BindingScope {
       input.ownerProductHandle,
       input.ownerIdentityHandle,
       input.parent,
-      BindingContextKind.Object,
-      null,
-      input.localSlots,
+      BindingScopeBindingContextConstruction.materialize(
+        BindingContextKind.Object,
+        null,
+        input.localSlots,
+      ),
       null,
       input.overrideSlots,
       false,
@@ -475,11 +546,37 @@ export class BindingScope {
       input.ownerProductHandle,
       input.ownerIdentityHandle,
       input.parent,
-      BindingContextKind.Object,
-      input.contextType,
-      [],
+      BindingScopeBindingContextConstruction.materialize(
+        BindingContextKind.Object,
+        input.contextType,
+      ),
       null,
       [],
+      false,
+      input.sourceAddressHandle,
+      input.scopeCreators ?? [],
+    );
+  }
+
+  /** Runtime `Scope.fromParent(parent, parent.bindingContext)` shape used for projected content. */
+  static forContentProjection(input: {
+    readonly localKey: string;
+    readonly ownerProductHandle: ProductHandle | null;
+    readonly ownerIdentityHandle: IdentityHandle | null;
+    readonly declaringScope: BindingScope;
+    readonly overrideSlots: readonly BindingContextSlotDraft[];
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly scopeCreators?: readonly BindingScopeCreator[];
+  }): BindingScopeConstructionRequest {
+    return new BindingScopeConstructionRequest(
+      input.localKey,
+      BindingScopeOwnerKind.SyntheticView,
+      input.ownerProductHandle,
+      input.ownerIdentityHandle,
+      input.declaringScope,
+      BindingScopeBindingContextConstruction.reuse(input.declaringScope.bindingContext),
+      null,
+      input.overrideSlots,
       false,
       input.sourceAddressHandle,
       input.scopeCreators ?? [],
@@ -502,9 +599,10 @@ export class BindingScope {
       input.ownerProductHandle,
       input.ownerIdentityHandle,
       input.parent,
-      BindingContextKind.Object,
-      input.stateType,
-      [],
+      BindingScopeBindingContextConstruction.materialize(
+        BindingContextKind.Object,
+        input.stateType,
+      ),
       null,
       [],
       true,
@@ -532,11 +630,13 @@ export class BindingScope {
       input.ownerProductHandle,
       input.ownerIdentityHandle,
       input.runtimeParent === undefined ? input.base.runtimeParent : input.runtimeParent,
-      input.base.bindingContext.contextKind,
-      input.base.bindingContext.contextType,
-      mergeBindingContextSlotDrafts(
-        input.base.bindingContext.slots.map((slot) => BindingContextSlotDraft.fromSlot(slot)),
-        input.bindingContextSlots ?? [],
+      BindingScopeBindingContextConstruction.materialize(
+        input.base.bindingContext.contextKind,
+        input.base.bindingContext.contextType,
+        mergeBindingContextSlotDrafts(
+          input.base.bindingContext.slots.map((slot) => BindingContextSlotDraft.fromSlot(slot)),
+          input.bindingContextSlots ?? [],
+        ),
       ),
       input.base.overrideContext.contextType,
       mergeBindingContextSlotDrafts(
@@ -567,11 +667,13 @@ export class BindingScope {
       input.ownerProductHandle,
       input.ownerIdentityHandle,
       input.base.runtimeParent,
-      input.base.bindingContext.contextKind,
-      input.base.bindingContext.contextType,
-      mergeBindingContextSlotDrafts(
-        input.base.bindingContext.slots.map((slot) => BindingContextSlotDraft.fromSlot(slot)),
-        input.bindingContextSlots,
+      BindingScopeBindingContextConstruction.materialize(
+        input.base.bindingContext.contextKind,
+        input.base.bindingContext.contextType,
+        mergeBindingContextSlotDrafts(
+          input.base.bindingContext.slots.map((slot) => BindingContextSlotDraft.fromSlot(slot)),
+          input.bindingContextSlots,
+        ),
       ),
       input.base.overrideContext.contextType,
       mergeBindingContextSlotDrafts(

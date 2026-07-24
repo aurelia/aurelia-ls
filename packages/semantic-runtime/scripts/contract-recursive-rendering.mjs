@@ -75,7 +75,7 @@ const failures = [
     ? null
     : 'Expected recursive tree-node child controllers to close as recursive-boundary rows.',
   treeNodeBoundaryRows.some((row) =>
-    row.lifecycleSteps.some((step) => step.stepKind === 'recursive-hydration-boundary')
+    row.assemblySteps.some((step) => step.stepKind === 'recursive-hydration-boundary')
   )
     ? null
     : 'Expected recursive-boundary rows to carry a recursive-hydration-boundary lifecycle step.',
@@ -117,7 +117,7 @@ const summary = {
     controllerName: row.controllerName,
     parentControllerName: row.parentControllerName,
     childViewRenderingState: row.childViewRenderingState,
-    lifecycleStepKinds: row.lifecycleSteps.map((step) => step.stepKind),
+    assemblyStepKinds: row.assemblySteps.map((step) => step.stepKind),
     source: row.source?.label ?? null,
   })),
   syntheticAggregateRows: syntheticAggregateRows.map((row) => ({

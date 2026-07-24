@@ -15,6 +15,8 @@ import {
 export const AU_SLOT_RESOURCE_NAME = 'au-slot' as const;
 /** Framework target class name for runtime-html `AuSlot`. */
 export const AU_SLOT_TARGET_NAME = 'AuSlot' as const;
+/** Framework-owned hook target that distinguishes AuSlot from a custom element shadowing its public name. */
+export const AU_SLOT_PROCESS_CONTENT_TARGET_NAME = 'AuSlot.processContent' as const;
 
 /** Static attributes consumed by runtime-html `AuSlot.processContent`. */
 export enum AuSlotStaticAttributeName {
@@ -76,7 +78,7 @@ function auSlotElementAttributes(
 function optionalStaticNameAttribute(
   rawValue: string | null | undefined,
 ): AuthoredTemplateAttributeSource | null {
-  if (rawValue == null || rawValue.length === 0) {
+  if (rawValue == null) {
     return null;
   }
   return {

@@ -72,11 +72,14 @@ for (const row of closedComponentRows) {
   if (row.composedChildControllerCount !== 1 || row.composedChildContainerCount !== 1) {
     failures.push(`Expected non-component pressure not to suppress the closed custom-element child, observed controllers=${row.composedChildControllerCount}, containers=${row.composedChildContainerCount}.`);
   }
-  if (row.componentInputFulfillmentKind !== 'direct') {
-    failures.push(`Expected the closed component input to remain directly fulfilled, observed ${row.componentInputFulfillmentKind}.`);
+  if (
+    row.componentInputConsumptionKind !== 'await-thenable'
+    || row.componentInputValueStateKind !== 'closed'
+  ) {
+    failures.push(`Expected the closed component input to remain a closed value under AuCompose thenable-aware consumption, observed consumption=${row.componentInputConsumptionKind}, value=${row.componentInputValueStateKind}.`);
   }
-  if (row.templateInputFulfillmentKind !== 'open' || row.modelInputFulfillmentKind !== 'open') {
-    failures.push(`Expected open template/model inputs to stay explicitly open despite retained types or values, observed template=${row.templateInputFulfillmentKind}, model=${row.modelInputFulfillmentKind}.`);
+  if (row.templateInputValueStateKind !== 'open' || row.modelInputValueStateKind !== 'open') {
+    failures.push(`Expected open template/model inputs to stay explicitly open despite retained types or values, observed template=${row.templateInputValueStateKind}, model=${row.modelInputValueStateKind}.`);
   }
 }
 
@@ -89,8 +92,8 @@ for (const row of pressuredComponentRows) {
   if (row.componentResolutionKind !== 'static-value' || !row.resolvedComponentNames.includes('pressure-widget')) {
     failures.push(`Expected the pressured component to retain PressureWidget as a useful static candidate, observed kind=${row.componentResolutionKind}, candidates=${JSON.stringify(row.resolvedComponentNames)}.`);
   }
-  if (row.componentInputFulfillmentKind !== 'open') {
-    failures.push(`Expected the open-with-value component input to remain epistemically open, observed ${row.componentInputFulfillmentKind}.`);
+  if (row.componentInputValueStateKind !== 'open') {
+    failures.push(`Expected the open-with-value component input to remain epistemically open, observed ${row.componentInputValueStateKind}.`);
   }
   if (row.composedChildControllerCount !== 0 || row.composedChildContainerCount !== 0) {
     failures.push(`Expected component pressure to block concrete child materialization, observed controllers=${row.composedChildControllerCount}, containers=${row.composedChildContainerCount}.`);
@@ -167,9 +170,12 @@ const summary = {
   compositionRows: compositions.map((row) => ({
     source: sourceText(row.source),
     componentResolutionKind: row.componentResolutionKind,
-    componentInputFulfillmentKind: row.componentInputFulfillmentKind,
-    templateInputFulfillmentKind: row.templateInputFulfillmentKind,
-    modelInputFulfillmentKind: row.modelInputFulfillmentKind,
+    componentInputConsumptionKind: row.componentInputConsumptionKind,
+    componentInputValueStateKind: row.componentInputValueStateKind,
+    templateInputConsumptionKind: row.templateInputConsumptionKind,
+    templateInputValueStateKind: row.templateInputValueStateKind,
+    modelInputConsumptionKind: row.modelInputConsumptionKind,
+    modelInputValueStateKind: row.modelInputValueStateKind,
     resolvedComponentNames: row.resolvedComponentNames,
     componentCandidateCoverageKind: row.componentCandidateCoverageKind,
     composedChildControllerCount: row.composedChildControllerCount,

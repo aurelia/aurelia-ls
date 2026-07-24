@@ -1,6 +1,11 @@
 import ts from 'typescript';
 import { KernelStore } from '../out/kernel/store.js';
-import { BindingContextKind, BindingScopeConstructionRequest, BindingScopeOwnerKind } from '../out/configuration/scope.js';
+import {
+  BindingContextKind,
+  BindingScopeBindingContextConstruction,
+  BindingScopeConstructionRequest,
+  BindingScopeOwnerKind,
+} from '../out/configuration/scope.js';
 import { BindingScopeMaterializer } from '../out/configuration/scope-materializer.js';
 import { SourceSpan } from '../out/expression/source-span.js';
 import { PrimitiveLiteralExpression } from '../out/expression/ast.js';
@@ -46,9 +51,10 @@ const scope = new BindingScopeMaterializer(store, projector).construct(new Bindi
   null,
   null,
   null,
-  BindingContextKind.Synthetic,
-  rootReference,
-  [],
+  BindingScopeBindingContextConstruction.materialize(
+    BindingContextKind.Synthetic,
+    rootReference,
+  ),
   null,
   [],
   true,

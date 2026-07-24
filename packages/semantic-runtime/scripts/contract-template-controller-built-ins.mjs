@@ -96,6 +96,8 @@ const expressionTypes = overlayTypeSystem == null || overlayEmission?.overlaySou
       overlayEmission.expressionProbes,
     );
 const branchSlotDisplays = branchScopeSlotDisplays(resource);
+const promiseBranchLinks = (resource?.runtimeAnalysis.scopes.templateControllerLinks ?? [])
+  .filter((link) => ['pending', 'then', 'catch'].includes(link.sourceController.name));
 const virtualRepeatProbe = await readVirtualRepeatProbe();
 
 const failures = [];
@@ -169,6 +171,17 @@ assertExpressionType('repeatIndex.toFixed()', 'string');
 assertExpressionType('resolved.label', 'string');
 assertExpressionType('resolved.labelLength()', 'number');
 assertExpressionType('formatReason(reason)', 'string');
+assert(
+  new Set(promiseBranchLinks.map((link) => link.targetController.productHandle)).size === 4,
+  `Expected promise branches to retain four concrete promise applications, observed ${new Set(promiseBranchLinks.map((link) => link.targetController.productHandle)).size}.`,
+);
+assert(
+  promiseBranchLinks.every((link) =>
+    link.targetController.name === 'promise'
+    && link.sourceController.parent?.parent?.productHandle === link.targetController.productHandle
+  ),
+  'Expected every promise branch to link to its concrete enclosing promise controller application.',
+);
 assertExpressionType('listOnly(mode)', 'string');
 assertExpressionType('detailOnly(mode)', 'string');
 assertExpressionType('otherOnly(mode)', 'string');
@@ -232,6 +245,7 @@ const summary = {
     skips: overlayEmission?.skippedExpressions.length ?? 0,
     diagnostics: overlayDiagnostics.length,
   },
+  promiseBranchLinks: promiseBranchLinks.length,
   expressionTypes: Object.fromEntries(expressionTypes),
   virtualRepeat: {
     controllerCount: virtualRepeatProbe.controllerCount,

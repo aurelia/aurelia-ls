@@ -726,7 +726,13 @@ first computed watcher `ProxyObservable` lane for property and collection depend
 dependency products remain a substrate frontier for vanilla class domain modeling, especially when fixture recipes start
 relying more heavily on composed state classes instead of view-model forwarding.
 
-Binding data-flow publishes a binding-owned observed-dependency lane for connectable source evaluation. Ordinary
+Binding data-flow preserves two independent source-lifecycle axes. `sourceEvaluationKind` says whether the framework
+would perform a connectable read, a non-connectable read, or an assignment; `sourceEvaluationReachability` says whether
+the rendered binding's complete expression-resource `astBind(...)` chain reached that source operation. A blocked row
+retains prospective source/target types, assignment pressure, and the cause of the block for diagnostics, but it does
+not publish runtime observed dependencies. Binding-observed dependencies therefore remain evidence of a connectable
+read the modeled runtime can actually enter, not merely of syntax that would have been readable if bind had succeeded.
+Ordinary
 `AccessScope`, `AccessMember`, and `AccessKeyed` reads become `binding-observed-dependencies` rows. Collection method
 calls such as `map(...)` become collection-read rows only when TypeChecker receiver facts can still be a runtime array,
 mirroring the framework `isArray(instance)` branch while staying open/permissive for weakly typed receivers. The
@@ -752,7 +758,10 @@ evaluates them from `astBind(...)` with no active connectable; value-converter a
 `RuntimeBindingSourceExpressionContextProjector` is the binding-owned handoff from rendered binding products into
 expression consumers. It combines `RuntimeInstructionScopeLookup`, binding-behavior source-scope projection, and the
 rendering controller's `strict` flag before value channels, data-flow, source-value consumers, or router/composition
-materializers ask what a binding source means. This keeps select/checked/template-controller value-channel
+materializers ask what a binding source means. Its projection also retains the expression-resource plan's
+post-bind source-evaluation reachability. Type/checker consumers may inspect the authored expression and its projected
+scope even when that lifecycle axis is blocked; evaluator consumers must spend the reachability before executing the
+source. This keeps select/checked/template-controller value-channel
 source-shape reads aligned with data-flow source typing and writeability, and it also keeps static source-value reads
 from accidentally evaluating a binding against the raw instruction scope after `& state` has called
 `binding.useScope(...)`. Consumers should use this projector before constructing `CheckerExpressionTypeEvaluationContext`
@@ -771,7 +780,9 @@ handoff has already been proven. When a template/controller caller already owns 
 the helper owns the binding-present projection and the known-scope fallback so callers do not reassemble
 binding-behavior lifecycle, strict mode, resource scope, and source-value recursion state locally. Use
 `RuntimeBindingSourceValueEvaluationContext.knownScope(...)` directly only when a consumer is deliberately outside the
-runtime-binding projection lane, such as a router resource with no binding-owned source. Raw construction is
+runtime-binding projection lane and already owns a proven scope, resource scope, and container. Router resource
+bindings are not such an exception: they select the exact rendered binding for the concrete custom-attribute controller
+and enter through the ordinary source-expression projector. Raw construction is
 intentionally kept inside the context class so every source-value entry point names which lifecycle facts it owns. The
 context carries that lifecycle explicitly; do not use a missing binding-expression projector as a synonym for
 evaluate-only behavior, because nested bound-controller or composition reads may still need the projector while the
@@ -796,7 +807,9 @@ ancestry.
 Observed-dependency collection also enters through this projector. `projectSourceExpressions(...)` preserves the same
 binding-behavior lifecycle choice while splitting interpolation holes and evaluating trackable method calls in the
 projected source scope. This keeps binding-owned dependency rows aligned with data-flow and overlay rows for
-`& state`, i18n evaluate-only keys, recursive render-context scopes, and strict/non-strict nullish policy.
+`& state`, i18n evaluate-only keys, recursive render-context scopes, strict/non-strict nullish policy, and post-bind
+source-evaluation reachability. A blocked expression remains inspectable to overlays and diagnostics but contributes no
+connectable runtime dependency rows.
 Recursive rendering can expose one child binding through both its parent aggregate analysis and its own resource
 analysis. Project-wide observation producers therefore select `resourceLocalBindingObservedDependencies(...)` through
 the template runtime ownership boundary before publishing source-owned facts. Handle identity is compilation-context

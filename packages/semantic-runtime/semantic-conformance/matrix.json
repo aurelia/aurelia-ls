@@ -13436,7 +13436,7 @@
               "name": "nested transfer flow",
               "query": { "kind": "binding-data-flows", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "bindingKind": "property", "valueSiteKind": "captured-value", "sourceName": "capturedValue", "targetProperty": "value", "direction": "two-way" }, "source": { "marker": "<nested-capture-shell value.bind=\"capturedValue\"", "token": "value.bind=\"capturedValue\"" }, "count": 1 }
+                { "fields": { "bindingKind": "property", "valueSiteKind": "captured-value", "sourceName": "capturedValue", "targetProperty": "value", "direction": "two-way" }, "source": { "marker": "<nested-capture-shell value.bind=\"capturedValue | nestedIdentity\"", "token": "value.bind=\"capturedValue | nestedIdentity\"" }, "count": 1 }
               ]
             }
           ]

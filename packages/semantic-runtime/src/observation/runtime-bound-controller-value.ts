@@ -49,9 +49,9 @@ export interface RuntimeBoundControllerPropertyValue {
   /** Source-resource projector for binding-behavior scope changes such as `& state`. */
   readonly sourceBindingExpressionScopes: RuntimeBindingExpressionScopeProjector;
   /** Compiler resource scope visible to the parent binding source expression. */
-  readonly sourceResourceScope: TemplateResourceScope | null;
+  readonly sourceResourceScope: TemplateResourceScope;
   /** Compiler-world container visible to parent binding-source `resolve(...)` calls. */
-  readonly sourceDefaultContainer: Container | null;
+  readonly sourceDefaultContainer: Container;
   /** Rendering-controller strict mode that the parent binding uses for source evaluation. */
   readonly sourceStrictBinding: boolean | null;
   /** Binding-behavior lifecycle that already shaped the parent source scope handoff. */
@@ -74,10 +74,6 @@ export interface RuntimeBindingSourceValueRuntimeAnalysis {
 
 export interface RuntimeBindingSourceValueTemplateResource {
   readonly compilation: {
-    readonly compilerWorld: {
-      readonly container: Container;
-      readonly resourceScope: TemplateResourceScope | null;
-    };
     readonly definition: {
       readonly productHandle: ProductHandle | null;
       readonly target: {
@@ -283,8 +279,6 @@ export function runtimeBoundControllerValueTableForTemplateResources(
       boundControllerValuesForRuntimeAnalysis(
         kernel,
         resource.runtimeAnalysis,
-        resource.compilation.compilerWorld.resourceScope,
-        resource.compilation.compilerWorld.container,
       )
     ),
     resources.flatMap((resource) => controllerDefinitionsForRuntimeAnalysis(resource)),
@@ -296,13 +290,11 @@ export function extendRuntimeBoundControllerValueTable(
   base: RuntimeBoundControllerValueTable,
   rootDefinition: RuntimeControllerDefinitionReference,
   runtimeAnalysis: RuntimeBindingSourceValueRuntimeAnalysis,
-  resourceScope: TemplateResourceScope | null,
-  sourceDefaultContainer: Container | null,
 ): RuntimeBoundControllerValueTable {
   return new RuntimeBoundControllerValueTable(
     [
       ...base.values,
-      ...boundControllerValuesForRuntimeAnalysis(kernel, runtimeAnalysis, resourceScope, sourceDefaultContainer),
+      ...boundControllerValuesForRuntimeAnalysis(kernel, runtimeAnalysis),
     ],
     [
       ...base.readControllerDefinitions(),
@@ -315,8 +307,6 @@ export function extendRuntimeBoundControllerValueTable(
 function boundControllerValuesForRuntimeAnalysis(
   kernel: KernelSourceFileReadView,
   analysis: RuntimeBindingSourceValueRuntimeAnalysis,
-  resourceScope: TemplateResourceScope | null,
-  sourceDefaultContainer: Container | null,
 ): readonly RuntimeBoundControllerPropertyValue[] {
   const bindingsByProductHandle = new Map<ProductHandle, RuntimeBinding>(analysis.runtimeRendering.bindings
     .map((binding) => [binding.productHandle, binding]));
@@ -345,6 +335,7 @@ function boundControllerValuesForRuntimeAnalysis(
     if (binding == null || expressionProductHandle === undefined || !isRuntimeExpressionBinding(binding)) {
       continue;
     }
+    const renderContext = analysis.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
     const targetController = controllersByProductHandle.get(targetAccess.targetControllerProductHandle) ?? null;
     values.push({
       controllerProductHandle: targetAccess.targetControllerProductHandle,
@@ -360,9 +351,9 @@ function boundControllerValuesForRuntimeAnalysis(
         ?? readFieldProvenance(binding.fieldProvenance, 'source'),
       sourceScope: scopes.scopeForBinding(analysis.runtimeRendering, binding),
       sourceBindingExpressionScopes,
-      sourceResourceScope: resourceScope,
-      sourceDefaultContainer,
-      sourceStrictBinding: analysis.runtimeRendering.readRenderContextForBinding(binding.productHandle)?.renderingController.strict ?? null,
+      sourceResourceScope: renderContext.resourceScope,
+      sourceDefaultContainer: renderContext.requireActiveContainer(),
+      sourceStrictBinding: renderContext.renderingController.strict,
       sourceBindingBehavior: bindingBehaviorEvaluationForRuntimeBindingSource(binding),
     });
   }

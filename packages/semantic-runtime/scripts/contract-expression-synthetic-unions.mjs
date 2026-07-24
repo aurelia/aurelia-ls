@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import ts from 'typescript';
-import { BindingContextKind, BindingScopeConstructionRequest, BindingScopeOwnerKind } from '../out/configuration/scope.js';
+import {
+  BindingContextKind,
+  BindingScopeBindingContextConstruction,
+  BindingScopeConstructionRequest,
+  BindingScopeOwnerKind,
+} from '../out/configuration/scope.js';
 import { BindingScopeMaterializer } from '../out/configuration/scope-materializer.js';
 import { ExpressionParser } from '../out/expression/expression-parser.js';
 import { ExpressionParseResultKind } from '../out/expression/parse-result-algebra.js';
@@ -48,9 +53,10 @@ const scope = new BindingScopeMaterializer(store, projector).construct(new Bindi
   null,
   null,
   null,
-  BindingContextKind.Synthetic,
-  rootReference,
-  [],
+  BindingScopeBindingContextConstruction.materialize(
+    BindingContextKind.Synthetic,
+    rootReference,
+  ),
   null,
   [],
   true,

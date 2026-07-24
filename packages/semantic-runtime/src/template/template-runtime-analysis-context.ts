@@ -73,12 +73,28 @@ export class TemplateRuntimeAnalysisProjectContext {
         .find((sequence) => sequence.productHandle === productHandle) ?? null;
   }
 
+  readResourceForInstructionSequence(
+    /** Instruction-sequence product whose owning compiler world is required. */
+    productHandle: ProductHandle | null,
+  ): TemplateRuntimeAnalysisResource | null {
+    const resource = productHandle == null ? null : this.resourcesBySequence.get(productHandle) ?? null;
+    return resource == null ? null : this.requireResource(resource);
+  }
+
   readInstruction(productHandle: ProductHandle | null): TemplateInstruction | null {
     const resource = productHandle == null ? null : this.resourcesByInstruction.get(productHandle) ?? null;
     return resource == null
       ? null
       : this.requireResource(resource).compilation.compiledTemplate.instructions
         .find((instruction) => instruction.productHandle === productHandle) ?? null;
+  }
+
+  readResourceForInstruction(
+    /** Instruction product whose owning compiler world is required. */
+    productHandle: ProductHandle | null,
+  ): TemplateRuntimeAnalysisResource | null {
+    const resource = productHandle == null ? null : this.resourcesByInstruction.get(productHandle) ?? null;
+    return resource == null ? null : this.requireResource(resource);
   }
 
   private requireResource(resource: TemplateRuntimeAnalysisResource): TemplateRuntimeAnalysisResource {

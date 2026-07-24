@@ -71,6 +71,7 @@ import type {
   RuntimeExpressionResourcePlan,
   RuntimeValueConverterPlanEntry,
 } from './runtime-expression-resource-plan.js';
+import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import {
   RuntimeExpressionResourceBindReachability,
   RuntimeExpressionResourceLifecycleEffectKind,
@@ -83,7 +84,7 @@ import {
 export class RuntimeValueConverterMaterializationRequest {
   constructor(
     readonly localKey: string,
-    readonly container: Container,
+    readonly runtimeRendering: RuntimeRenderingEmission,
     readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
     readonly sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   ) {}
@@ -203,7 +204,9 @@ export class RuntimeValueConverterMaterializer {
       converter.name.span,
     );
     const phaseOrder = input.expressionResourcePlan.readValueConverterPhaseOrder(entry);
-    const lifecycle = this.lifecyclePublication(`${local}:lifecycle`, input, entry);
+    const renderContext = input.runtimeRendering.requireRenderContextForBinding(entry.binding.productHandle);
+    const container = renderContext.requireActiveContainer();
+    const lifecycle = this.lifecyclePublication(`${local}:lifecycle`, input, entry, container);
     const applications = valueConverterApplicationPhasesForBinding(entry.binding, input.expressionResourcePlan).map((phase) => {
       const phaseReachability = valueConverterPhaseReachability(input.expressionResourcePlan, entry, phase);
       return this.applicationProduct(
@@ -233,7 +236,7 @@ export class RuntimeValueConverterMaterializer {
           message: `Value converter '${converter.name.name}' was not resolved through the current compiler resource scope.`,
           frameworkErrorCode: RuntimeHtmlAstFrameworkErrorCode.AstConverterNotFound,
         }
-      : this.issueForValueConverter(input, entry);
+      : this.issueForValueConverter(entry, container);
     const issueProduct = issue == null || issueApplication == null
       ? null
       : this.issueProduct(
@@ -266,6 +269,7 @@ export class RuntimeValueConverterMaterializer {
     local: string,
     input: RuntimeValueConverterMaterializationRequest,
     entry: RuntimeValueConverterPlanEntry,
+    container: Container,
   ): RuntimeValueConverterLifecyclePublication {
     if (entry.builtInResource != null) {
       const signals = entry.builtInResource.signalNames.map((name) =>
@@ -305,7 +309,7 @@ export class RuntimeValueConverterMaterializer {
     const propertyRead = input.sourceValueEvaluator.readValueConverterInstanceProperty(
       definition,
       'signals',
-      input.container,
+      container,
     );
     const propertySource = this.sourceEvidenceForNode(
       `${local}:property`,
@@ -426,13 +430,13 @@ export class RuntimeValueConverterMaterializer {
   }
 
   private issueForValueConverter(
-    input: RuntimeValueConverterMaterializationRequest,
     entry: RuntimeValueConverterPlanEntry,
+    container: Container,
   ): RuntimeValueConverterIssueDraft | null {
     switch (entry.builtInResource?.name) {
       case BuiltInValueConverterName.Sanitize:
         return this.sanitize.toView({
-          hasCustomSanitizer: hasResolverForInterface(this.publication, input.container, 'ISanitizer'),
+          hasCustomSanitizer: hasResolverForInterface(this.publication, container, 'ISanitizer'),
         });
       default:
         return null;

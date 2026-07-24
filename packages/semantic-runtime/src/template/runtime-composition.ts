@@ -8,6 +8,7 @@ import type { ControllerReference } from '../configuration/controller.js';
 import type { RuntimeBindingReference } from './runtime-binding.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
+import type { EvaluationPromiseSettlementKind } from '../evaluation/values.js';
 
 export const enum CompositionComponentResolutionKind {
   /** `component` resolved from a statically evaluated constructable or resource name. */
@@ -18,6 +19,8 @@ export const enum CompositionComponentResolutionKind {
   ObjectViewModel = 'object-view-model',
   /** `template`-only composition; component activation does not participate. */
   TemplateOnly = 'template-only',
+  /** The thenable `component` input is known to reject before composition can select a component. */
+  Rejected = 'rejected',
   /** The composition input was present but could not be reduced to a modeled runtime branch. */
   Open = 'open',
 }
@@ -25,11 +28,11 @@ export const enum CompositionComponentResolutionKind {
 export const enum CompositionComponentCandidateCoverageKind {
   /** Component resolution did not use a TypeChecker candidate set. */
   NotApplicable = 'not-applicable',
-  /** Every finite TypeChecker constituent resolved to at least one custom-element definition. */
+  /** Every member of a finite exact named-class basis resolved to at least one custom-element definition. */
   Complete = 'complete',
-  /** Some finite TypeChecker constituents resolved, while at least one constituent did not. */
+  /** Useful resource identities were retained, but the candidate basis or its resource mapping was not exhaustive. */
   Partial = 'partial',
-  /** A finite TypeChecker candidate set or its resource identities could not be proven. */
+  /** No useful custom-element identity could be retained from the open TypeChecker shape. */
   Open = 'open',
 }
 
@@ -44,15 +47,33 @@ export const enum CompositionModelResolutionKind {
   Open = 'open',
 }
 
-export const enum CompositionInputFulfillmentKind {
+export const enum CompositionInputConsumptionKind {
   /** The input was not supplied. */
   Absent = 'absent',
-  /** The input was fulfilled from a direct static value or statically evaluated binding value. */
+  /** The framework consumes the input value directly without thenable assimilation. */
   Direct = 'direct',
-  /** The input was fulfilled by statically unwrapping a promise-valued binding. */
-  Promise = 'promise',
-  /** The input exists but could not be fulfilled statically. */
+  /** The framework accepts a direct value or awaits a thenable before consuming the input. */
+  AwaitThenable = 'await-thenable',
+}
+
+export const enum CompositionInputValueStateKind {
+  /** The input was not supplied. */
+  Absent = 'absent',
+  /** A direct input value is statically closed. */
+  Closed = 'closed',
+  /** A thenable input is known to fulfill with closed value evidence. */
+  Fulfilled = 'fulfilled',
+  /** A thenable input is known to reject. */
+  Rejected = 'rejected',
+  /** The input value, thenable settlement, or fulfillment evidence remains open. */
   Open = 'open',
+}
+
+export const enum CompositionRenderingContextKind {
+  /** Composition was materialized in the compiler resource that owns its authored instruction. */
+  DefinitionResource = 'definition-resource',
+  /** Composition was materialized while a parent resource recursively rendered the authored instruction. */
+  RecursiveResourceInstance = 'recursive-resource-instance',
 }
 
 export const enum CompositionActivateMethodKind {
@@ -60,6 +81,8 @@ export const enum CompositionActivateMethodKind {
   Present = 'present',
   /** Candidate view model does not expose `activate`; AuCompose simply skips the model handoff. */
   Absent = 'absent',
+  /** Candidate view model exposes `activate`, but its closed TypeScript contract is non-callable. */
+  NonCallable = 'non-callable',
   /** The target type was not precise enough to decide whether `activate` exists or is callable. */
   Open = 'open',
 }
@@ -67,6 +90,8 @@ export const enum CompositionActivateMethodKind {
 export const enum CompositionActivationModelHandoffKind {
   /** Candidate has no `activate`; framework runtime has no model lifecycle handoff to type-check. */
   ActivateAbsent = 'activate-absent',
+  /** Candidate has a closed non-callable `activate` contract; initial AuCompose composition would throw. */
+  ActivateNonCallable = 'activate-non-callable',
   /** Candidate has `activate()` with no first parameter. */
   ParameterlessActivate = 'parameterless-activate',
   /** Candidate has `activate(model)`, but the host did not supply a model binding. */
@@ -141,9 +166,28 @@ export class CompositionContext {
     readonly staticTemplate: string | null,
     readonly staticComponent: string | null,
     readonly staticModel: string | null,
-    readonly templateInputFulfillmentKind: CompositionInputFulfillmentKind | `${CompositionInputFulfillmentKind}`,
-    readonly componentInputFulfillmentKind: CompositionInputFulfillmentKind | `${CompositionInputFulfillmentKind}`,
-    readonly modelInputFulfillmentKind: CompositionInputFulfillmentKind | `${CompositionInputFulfillmentKind}`,
+    readonly templateInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`,
+    readonly templateInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`,
+    /** Evaluator Promise settlement for the framework-awaited template input, when it is known to be a Promise. */
+    readonly templateInputSettlementKind: EvaluationPromiseSettlementKind | `${EvaluationPromiseSettlementKind}` | null,
+    /** Type consumed after thenable assimilation, when the template binding has a checker-visible source type. */
+    readonly templateInputType: CheckerTypeReference | null,
+    /** Loaded template string when static evaluation proves the value consumed by AuCompose. */
+    readonly resolvedTemplate: string | null,
+    readonly componentInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`,
+    readonly componentInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`,
+    /** Evaluator Promise settlement for the framework-awaited component input, when it is known to be a Promise. */
+    readonly componentInputSettlementKind: EvaluationPromiseSettlementKind | `${EvaluationPromiseSettlementKind}` | null,
+    /** Type consumed after thenable assimilation, when the component binding has a checker-visible source type. */
+    readonly componentInputType: CheckerTypeReference | null,
+    readonly modelInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`,
+    readonly modelInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`,
+    readonly scopeBehaviorInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`,
+    readonly scopeBehaviorInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`,
+    readonly tagInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`,
+    readonly tagInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`,
+    readonly flushModeInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`,
+    readonly flushModeInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`,
     readonly templateBinding: RuntimeBindingReference | null,
     readonly componentBinding: RuntimeBindingReference | null,
     readonly modelBinding: RuntimeBindingReference | null,
@@ -184,6 +228,8 @@ export class CompositionController {
     readonly hostControllerProductHandle: ProductHandle,
     /** Parent rendering controller used for activation scope handoff. */
     readonly parentControllerProductHandle: ProductHandle | null,
+    /** Whether this row came from the instruction owner's own analysis or a recursive parent render. */
+    readonly renderingContextKind: CompositionRenderingContextKind | `${CompositionRenderingContextKind}`,
     readonly componentResolutionKind: CompositionComponentResolutionKind | `${CompositionComponentResolutionKind}`,
     /** Completeness of the TypeChecker candidate set when `componentResolutionKind` is `type-candidate`. */
     readonly componentCandidateCoverageKind: CompositionComponentCandidateCoverageKind | `${CompositionComponentCandidateCoverageKind}`,

@@ -1,4 +1,5 @@
 import { SemanticClaim, nullableClaim } from '../kernel/claim.js';
+import type { Container } from '../di/container.js';
 import type {
   ClaimHandle,
   IdentityHandle,
@@ -25,6 +26,7 @@ import {
 } from '../kernel/vocabulary.js';
 import type {
   TemplateRenderedInstruction,
+  TemplateResourceScope,
 } from './compiler-world.js';
 import {
   type RuntimeBindingScopeEffect,
@@ -51,6 +53,31 @@ export class RuntimeBindingRenderContext {
     readonly renderingController: RuntimeControllerFrame,
     /** Runtime target controller selected by renderer dispatch. */
     readonly targetController: RuntimeControllerFrame,
+    /**
+     * Controller whose hydration/source environment owns this binding.
+     *
+     * This differs from renderingController for nested captured-attribute transfer.
+     */
+    readonly sourceController: RuntimeControllerFrame,
+    /** Compiler resource scope that lowered the instruction creating this binding. */
+    readonly resourceScope: TemplateResourceScope,
+  ) {}
+
+  /** Exact runtime container visible to binding-source DI resolution. */
+  requireActiveContainer(): Container {
+    const container = this.sourceController.containerFrame;
+    if (container == null) {
+      throw new Error(`Runtime binding '${this.binding.productHandle}' has no active container frame.`);
+    }
+    return container;
+  }
+}
+
+/** Source controller and compiler scope retained for a runtime-created instruction. */
+export class RuntimeBindingInstructionEnvironment {
+  constructor(
+    readonly sourceController: RuntimeControllerFrame,
+    readonly resourceScope: TemplateResourceScope,
   ) {}
 }
 
@@ -101,6 +128,8 @@ export class RuntimeRenderedInstructionRecorder {
     bindings: RuntimeBinding[],
     openSeams: OpenSeam[],
     controllerBindingClaimHandles: ReadonlyMap<ProductHandle, readonly ClaimHandle[]>,
+    defaultResourceScope: TemplateResourceScope,
+    instructionEnvironments: ReadonlyMap<ProductHandle, RuntimeBindingInstructionEnvironment>,
   ): void {
     for (const rendered of renderedInstructions) {
       if (rendered.renderer.productHandle == null) {
@@ -118,8 +147,21 @@ export class RuntimeRenderedInstructionRecorder {
         this.recordTargetOperation(rendered.local, operation, rendered.renderer, source, records, claims, targetOperations, openSeams);
       }
 
+      const instructionEnvironment = instructionEnvironments.get(rendered.instruction.productHandle) ?? null;
       for (const binding of rendered.bindings) {
-        this.recordRuntimeBinding(rendered, binding, source, records, claims, scopeEffects, bindingRenderContexts, bindings, controllerBindingClaimHandles);
+        this.recordRuntimeBinding(
+          rendered,
+          binding,
+          source,
+          records,
+          claims,
+          scopeEffects,
+          bindingRenderContexts,
+          bindings,
+          controllerBindingClaimHandles,
+          instructionEnvironment?.sourceController ?? rendered.renderingController,
+          instructionEnvironment?.resourceScope ?? defaultResourceScope,
+        );
       }
     }
   }
@@ -134,6 +176,8 @@ export class RuntimeRenderedInstructionRecorder {
     bindingRenderContexts: RuntimeBindingRenderContext[],
     bindings: RuntimeBinding[],
     controllerBindingClaimHandles: ReadonlyMap<ProductHandle, readonly ClaimHandle[]>,
+    sourceController: RuntimeControllerFrame,
+    resourceScope: TemplateResourceScope,
   ): void {
     const bindingScopeEffects = rendered.scopeEffects.filter((effect) =>
       effect.binding.productHandle === binding.productHandle
@@ -168,6 +212,8 @@ export class RuntimeRenderedInstructionRecorder {
       binding,
       rendered.renderingController,
       rendered.targetController,
+      sourceController,
+      resourceScope,
     ));
     this.recordBinding(
       rendered.local,

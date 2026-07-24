@@ -194,6 +194,9 @@ import {
   readRuntimeCompositionRows,
 } from './composition-projections.js';
 import {
+  readTemplateContentProjectionRows,
+} from './content-projection-rows.js';
+import {
   appDiagnosticRows,
   appDiagnosticSummaryRows,
 } from './app-diagnostics.js';
@@ -353,6 +356,7 @@ import {
   type SemanticRuntimeAnswer,
   type SemanticRuntimeContinuationRow,
   type SemanticRuntimeCompositionResult,
+  type SemanticTemplateContentProjectionResult,
   type SemanticRuntimeControllerResult,
   type SemanticRuntimeWatcherObservedDependencyResult,
   type SemanticRuntimeWatcherResult,
@@ -2870,6 +2874,8 @@ export class SemanticApp {
         return answerCurrentQuery(() => this.runtimeWatcherObservedDependencies(query.page, query.detail));
       case SemanticAppQueryKind.RuntimeCompositions:
         return answerCurrentQuery(() => this.runtimeCompositions(query.page, query.detail));
+      case SemanticAppQueryKind.TemplateContentProjections:
+        return answerCurrentQuery(() => this.templateContentProjections(query.page, query.detail));
       default:
         return this.answerUnsupportedCatalogQuery(query, answerCurrentQuery);
     }
@@ -4186,6 +4192,32 @@ export class SemanticApp {
     return answer(
       outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} runtime composition row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  templateContentProjections(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticTemplateContentProjectionResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticTemplateContentProjectionResult>({
+      kind: SemanticAppQueryKind.TemplateContentProjections,
+      page,
+      detail,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const rows = readTemplateContentProjectionRows(
+      this.emission,
+      this.runtime.workspace.store,
+      includeHandles(detail),
+    );
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} template content-projection row(s).`,
       { rows: paged.rows },
       paged.page,
     );

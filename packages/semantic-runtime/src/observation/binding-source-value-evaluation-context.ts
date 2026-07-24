@@ -1,9 +1,10 @@
 import type { BindingScope } from '../configuration/scope.js';
 import type { Container } from '../di/container.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
-import type { AddressHandle } from '../kernel/handles.js';
+import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
+import { RuntimeExpressionResourcePhaseReachability } from '../template/runtime-expression-resource.js';
 import {
   CheckerExpressionTypeBindingBehaviorEvaluation,
 } from '../type-system/expression-type-context.js';
@@ -63,6 +64,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
       null,
       null,
       null,
+      null,
       CheckerExpressionTypeBindingBehaviorEvaluation.AstBindThenEvaluate,
       resourceScope,
       strictBinding,
@@ -73,7 +75,6 @@ export class RuntimeBindingSourceValueEvaluationContext {
   static fromRuntimeBindingSourceExpressionProjection(
     projection: RuntimeBindingSourceExpressionContextProjection,
     activeContainer?: Container | null,
-    resourceScope: TemplateResourceScope | null = null,
   ): RuntimeBindingSourceValueEvaluationContext {
     return new RuntimeBindingSourceValueEvaluationContext(
       projection.expression,
@@ -81,11 +82,13 @@ export class RuntimeBindingSourceValueEvaluationContext {
       activeContainer,
       undefined,
       projection.bindingExpressionScopes,
+      projection.bindingProductHandle,
       projection.localKey,
       projection.sourceAddressHandle,
       projection.bindingBehavior,
-      resourceScope,
+      projection.resourceScope,
       projection.strictBinding,
+      projection.sourceEvaluationReachability,
     );
   }
 
@@ -98,6 +101,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
     readonly activeContainer: Container | null | undefined = undefined,
     private readonly activeBoundControllerReads: Set<string> = new Set(),
     private readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjector | null = null,
+    private readonly bindingProductHandle: ProductHandle | null = null,
     private readonly localKey: string | null = null,
     private readonly sourceAddressHandle: AddressHandle | null = null,
     private readonly bindingBehavior: CheckerExpressionTypeBindingBehaviorEvaluation = CheckerExpressionTypeBindingBehaviorEvaluation.AstBindThenEvaluate,
@@ -105,6 +109,8 @@ export class RuntimeBindingSourceValueEvaluationContext {
     readonly resourceScope: TemplateResourceScope | null = null,
     /** Rendering-controller strict mode passed to Aurelia `astEvaluate` for this source-value request. */
     readonly strictBinding: boolean | null = null,
+    /** Whether the rendered binding completed `astBind(...)` far enough to enter source evaluation. */
+    readonly sourceEvaluationReachability: RuntimeExpressionResourcePhaseReachability = RuntimeExpressionResourcePhaseReachability.Reached,
   ) {}
 
   /** Returns a child request in the same source-value read chain. */
@@ -118,11 +124,13 @@ export class RuntimeBindingSourceValueEvaluationContext {
       this.activeContainer,
       this.activeBoundControllerReads,
       this.bindingExpressionScopes,
+      this.bindingProductHandle,
       this.localKey,
       this.sourceAddressHandle,
       this.bindingBehavior,
       this.resourceScope,
       this.strictBinding,
+      this.sourceEvaluationReachability,
     );
   }
 
@@ -134,11 +142,13 @@ export class RuntimeBindingSourceValueEvaluationContext {
       activeContainer,
       this.activeBoundControllerReads,
       this.bindingExpressionScopes,
+      this.bindingProductHandle,
       this.localKey,
       this.sourceAddressHandle,
       this.bindingBehavior,
       this.resourceScope,
       this.strictBinding,
+      this.sourceEvaluationReachability,
     );
   }
 
@@ -150,11 +160,13 @@ export class RuntimeBindingSourceValueEvaluationContext {
       this.activeContainer,
       this.activeBoundControllerReads,
       this.bindingExpressionScopes,
+      this.bindingProductHandle,
       this.localKey,
       this.sourceAddressHandle,
       this.bindingBehavior,
       resourceScope,
       this.strictBinding,
+      this.sourceEvaluationReachability,
     );
   }
 
@@ -205,11 +217,12 @@ export class RuntimeBindingSourceValueEvaluationContext {
     expression: ExpressionAstNode,
     sourceScope: BindingScope,
     bindingExpressionScopes: RuntimeBindingExpressionScopeProjector | null,
+    bindingProductHandle: ProductHandle,
     bindingBehavior: CheckerExpressionTypeBindingBehaviorEvaluation,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
     strictBinding: boolean | null = this.strictBinding,
-    resourceScope: TemplateResourceScope | null = this.resourceScope,
+    resourceScope: TemplateResourceScope,
     activeContainer: Container | null | undefined = this.activeContainer,
   ): RuntimeBindingSourceValueContextProjection {
     if (bindingBehavior === CheckerExpressionTypeBindingBehaviorEvaluation.AstEvaluateOnly) {
@@ -220,11 +233,13 @@ export class RuntimeBindingSourceValueEvaluationContext {
           activeContainer,
           this.activeBoundControllerReads,
           bindingExpressionScopes,
+          bindingProductHandle,
           localKey,
           sourceAddressHandle,
           bindingBehavior,
           resourceScope,
           strictBinding,
+          RuntimeExpressionResourcePhaseReachability.Reached,
         ),
         openReason: null,
       };
@@ -242,18 +257,22 @@ export class RuntimeBindingSourceValueEvaluationContext {
               activeContainer,
               this.activeBoundControllerReads,
               bindingExpressionScopes,
+              bindingProductHandle,
               localKey,
               sourceAddressHandle,
               bindingBehavior,
               resourceScope,
               strictBinding,
+              RuntimeExpressionResourcePhaseReachability.Reached,
             ),
             openReason: null,
           };
     }
     const projected = projectRuntimeSourceExpressionWithLifecycle({
+      bindingProductHandle,
       expression,
       sourceScope,
+      resourceScope,
       localKey,
       sourceAddressHandle,
       strictBinding,
@@ -274,11 +293,13 @@ export class RuntimeBindingSourceValueEvaluationContext {
         activeContainer,
         this.activeBoundControllerReads,
         bindingExpressionScopes,
+        bindingProductHandle,
         localKey,
         sourceAddressHandle,
         bindingBehavior,
-        resourceScope,
+        projected.resourceScope,
         strictBinding,
+        projected.sourceEvaluationReachability,
       ),
       openReason: null,
     };
@@ -298,9 +319,17 @@ export class RuntimeBindingSourceValueEvaluationContext {
     if (this.bindingExpressionScopes == null) {
       return null;
     }
+    if (this.bindingProductHandle == null) {
+      return null;
+    }
+    if (this.resourceScope == null) {
+      return null;
+    }
     const projected = projectRuntimeSourceExpressionWithLifecycle({
+      bindingProductHandle: this.bindingProductHandle,
       expression,
       sourceScope: scope,
+      resourceScope: this.resourceScope,
       localKey,
       strictBinding: this.strictBinding,
       bindingBehavior,
@@ -324,12 +353,10 @@ export class RuntimeBindingSourceValueEvaluationContext {
 export function sourceValueContextForRuntimeBindingSourceExpressionProjection(
   projection: RuntimeBindingSourceExpressionContextProjection,
   activeContainer?: Container | null,
-  resourceScope: TemplateResourceScope | null = null,
 ): RuntimeBindingSourceValueEvaluationContext {
   return RuntimeBindingSourceValueEvaluationContext.fromRuntimeBindingSourceExpressionProjection(
     projection,
     activeContainer,
-    resourceScope,
   );
 }
 
@@ -384,7 +411,6 @@ export function projectRuntimeBindingSourceValueContextInScope(
     context: sourceValueContextForRuntimeBindingSourceExpressionProjection(
       projection,
       input.activeContainer,
-      input.resourceScope ?? null,
     ),
     openReason: null,
   };

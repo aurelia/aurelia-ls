@@ -312,6 +312,28 @@ export class DiInstanceProviderPublicationMaterializer {
     provenanceHandle: ProvenanceHandle,
     producerClaimHandlesByProduct: ReadonlyMap<ProductHandle, ClaimHandle>,
   ): readonly KernelStoreRecord[] {
+    return this.recordsForPublication(
+      publication,
+      provenanceHandle,
+      [producerClaimHandleFor(publication.provider.productHandle, producerClaimHandlesByProduct)],
+      [producerClaimHandleFor(publication.resolverSlot.productHandle, producerClaimHandlesByProduct)],
+    );
+  }
+
+  /** Publish a framework-created contextual provider whose owning container operation is its complete producer. */
+  recordsForContextual(
+    publication: DiInstanceProviderPublication,
+    provenanceHandle: ProvenanceHandle,
+  ): readonly KernelStoreRecord[] {
+    return this.recordsForPublication(publication, provenanceHandle, [], []);
+  }
+
+  private recordsForPublication(
+    publication: DiInstanceProviderPublication,
+    provenanceHandle: ProvenanceHandle,
+    providerAdditionalClaimHandles: readonly ClaimHandle[],
+    resolverSlotAdditionalClaimHandles: readonly ClaimHandle[],
+  ): readonly KernelStoreRecord[] {
     const providerProducedClaimHandle = this.store.handles.claim(`${publication.local}:container-produces-provider`);
     const slotProducedClaimHandle = this.store.handles.claim(`${publication.local}:container-produces-resolver-slot`);
     return [
@@ -335,7 +357,7 @@ export class DiInstanceProviderPublicationMaterializer {
         materializationLocal: `${publication.local}:provider`,
         additionalClaimHandles: [
           providerProducedClaimHandle,
-          producerClaimHandleFor(publication.provider.productHandle, producerClaimHandlesByProduct),
+          ...providerAdditionalClaimHandles,
         ],
       }),
       new SemanticClaim(
@@ -358,7 +380,7 @@ export class DiInstanceProviderPublicationMaterializer {
         materializationLocal: `${publication.local}:resolver-slot`,
         additionalClaimHandles: [
           slotProducedClaimHandle,
-          producerClaimHandleFor(publication.resolverSlot.productHandle, producerClaimHandlesByProduct),
+          ...resolverSlotAdditionalClaimHandles,
         ],
       }),
     ];
@@ -785,11 +807,17 @@ class DiResourceSlotHandles {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly keyIdentityHandle: IdentityHandle,
-    readonly claimHandle: ClaimHandle,
+    readonly providesKeyClaimHandle: ClaimHandle,
+    readonly producedClaimHandle: ClaimHandle,
+    readonly importedFromClaimHandle: ClaimHandle | null,
   ) {}
 
   get claimHandles(): readonly ClaimHandle[] {
-    return [this.claimHandle];
+    return [
+      this.providesKeyClaimHandle,
+      this.producedClaimHandle,
+      ...(this.importedFromClaimHandle == null ? [] : [this.importedFromClaimHandle]),
+    ];
   }
 }
 
@@ -1188,6 +1216,46 @@ export class DiResourceSlotPublicationMaterializer {
     );
   }
 
+  /**
+   * Copy one already-published runtime resource row into a child container.
+   *
+   * Aurelia's `createChild({ inheritParentResources: true })` and `useResources(...)` reuse the same resource
+   * resolver under a new container-owned lookup row. The resource/key identities therefore stay stable while the
+   * slot product and its import provenance belong to the receiving container.
+   */
+  recordsForImportedResourceSlot(
+    container: Container,
+    sourceSlot: ContainerResourceSlot,
+    sourceAddressHandle: AddressHandle | null,
+    provenanceHandle: ProvenanceHandle,
+  ): {
+    readonly records: readonly KernelStoreRecord[];
+    readonly slot: ContainerResourceSlot;
+  } {
+    const handles = this.importedResourceSlotHandles(container, sourceSlot);
+    const slot = new ContainerResourceSlot(
+      handles.productHandle,
+      container.toReference(),
+      sourceSlot.resourceKey,
+      sourceSlot.keyIdentityHandle,
+      sourceSlot.resourceIdentityHandle,
+      sourceSlot.resourceProductHandle,
+      sourceSlot.resolverProductHandle,
+      sourceAddressHandle,
+      [],
+    );
+    return {
+      records: this.recordsForResourceSlotProduct(
+        container,
+        slot,
+        handles,
+        provenanceHandle,
+        sourceSlot,
+      ),
+      slot,
+    };
+  }
+
   private recordsForResourceSlot(
     container: Container,
     publication: DiResourceSlotPublication,
@@ -1319,6 +1387,24 @@ export class DiResourceSlotPublicationMaterializer {
         resourceKey,
       )),
       this.store.handles.claim(`${local}:provides-key`),
+      this.store.handles.claim(`${slotLocal}:container-produces-product`),
+      null,
+    );
+  }
+
+  private importedResourceSlotHandles(
+    container: Container,
+    sourceSlot: ContainerResourceSlot,
+  ): DiResourceSlotHandles {
+    const slotLocal = `di-resource-slot:${container.productHandle}:${sourceSlot.resourceKey}`;
+    return new DiResourceSlotHandles(
+      slotLocal,
+      this.store.handles.product(slotLocal),
+      this.store.handles.identity(slotLocal),
+      sourceSlot.keyIdentityHandle,
+      this.store.handles.claim(`${slotLocal}:provides-key`),
+      this.store.handles.claim(`${slotLocal}:container-produces-product`),
+      this.store.handles.claim(`${slotLocal}:imported-from:${sourceSlot.productHandle}`),
     );
   }
 
@@ -1353,10 +1439,11 @@ export class DiResourceSlotPublicationMaterializer {
     slot: ContainerResourceSlot,
     handles: DiResourceSlotHandles,
     provenanceHandle: ProvenanceHandle,
+    importedFrom: ContainerResourceSlot | null = null,
   ): readonly KernelStoreRecord[] {
     return [
       this.resourceSlotIdentity(container, slot, handles),
-      this.resourceSlotProvidesKeyClaim(slot, handles, provenanceHandle),
+      ...this.resourceSlotClaims(container, slot, handles, provenanceHandle, importedFrom),
       this.resourceSlotProduct(slot, handles, provenanceHandle),
       this.resourceSlotMaterialization(slot, handles),
     ];
@@ -1376,18 +1463,38 @@ export class DiResourceSlotPublicationMaterializer {
     );
   }
 
-  private resourceSlotProvidesKeyClaim(
+  private resourceSlotClaims(
+    container: Container,
     slot: ContainerResourceSlot,
     handles: DiResourceSlotHandles,
     provenanceHandle: ProvenanceHandle,
-  ): SemanticClaim {
-    return new SemanticClaim(
-      handles.claimHandle,
-      slot.productHandle,
-      KernelVocabulary.Di.ProvidesKey.key,
-      handles.keyIdentityHandle,
-      provenanceHandle,
-    );
+    importedFrom: ContainerResourceSlot | null,
+  ): readonly SemanticClaim[] {
+    return [
+      new SemanticClaim(
+        handles.providesKeyClaimHandle,
+        slot.productHandle,
+        KernelVocabulary.Di.ProvidesKey.key,
+        handles.keyIdentityHandle,
+        provenanceHandle,
+      ),
+      new SemanticClaim(
+        handles.producedClaimHandle,
+        container.productHandle,
+        KernelVocabulary.Di.ProducesProduct.key,
+        slot.productHandle,
+        provenanceHandle,
+      ),
+      ...(handles.importedFromClaimHandle == null || importedFrom == null
+        ? []
+        : [new SemanticClaim(
+            handles.importedFromClaimHandle,
+            slot.productHandle,
+            KernelVocabulary.Di.ResourceSlotImportedFrom.key,
+            importedFrom.productHandle,
+            provenanceHandle,
+          )]),
+    ];
   }
 
   private resourceSlotProduct(

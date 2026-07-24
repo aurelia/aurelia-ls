@@ -1104,10 +1104,12 @@ same lane: dynamic property bindings such as `component.bind`, `model.bind`, `co
 come from controller binding, while static `scope-behavior`, `tag`, and `flush-mode` come from literal
 `SetPropertyInstruction`s on the hydrate instruction. Component/template/model inputs also carry direct/promise/absent/open
 fulfillment fields so API callers can tell when a framework-supported promise-valued composition input was statically
-unwrapped. TypeChecker-backed component rows separately expose candidate coverage: `complete` means every finite union
-constituent resolved to a custom-element definition, `partial` retains useful candidates while keeping the composition
-open, and `open` means no exhaustive candidate set was provable. Candidate coverage does not claim the runtime-selected
-component value is known and never authorizes materializing one concrete child from a multi-candidate set. Plain object
+unwrapped. TypeChecker-backed component rows separately expose candidate coverage: `complete` means every member of a
+finite exact named-class basis resolved to a custom-element definition, `partial` retains useful candidates when that
+basis or its resource mapping is not exhaustive, and `open` means no useful resource identity survived. A broad
+construct signature can therefore contribute a candidate through its return type without claiming complete coverage.
+Candidate coverage does not claim the runtime-selected component value is known and never authorizes materializing one
+concrete child from a multi-candidate set. Plain object
 and non-resource constructable components report
 `componentResolutionKind=object-view-model`; they can still contribute activation handoff rows, but they do not claim
 compiled-template or candidate resource-analysis coverage because no custom-element definition exists.
@@ -1571,6 +1573,17 @@ Aggregate rows are intentionally cardinality-aware rather than instance-precise:
 `templateControllerLinkKind` and `linkedTemplateControllerName` when Aurelia's `link(...)` hook connects them to a
 controlling template controller, such as `else -> if` or `then/catch -> promise`.
 
+`RuntimeCompositions` exposes dynamic `AuCompose` input consumption and settlement independently from component
+candidate coverage and child materialization. Only component/template inputs are await-thenable; direct model/control
+inputs preserve Promise values rather than being silently unwrapped. Closed component values may materialize one
+composition-owned child controller/container, while complete TypeChecker candidate sets remain alternatives rather than
+inventing one selected runtime child.
+
+`TemplateContentProjections` exposes compiler provider sequences, runtime AuSlot selected/fallback/empty views, native
+Shadow DOM slot outlets, declaring/receiving controllers, hydration contexts, AuSlotsInfo, closure, and exact source
+loci. These rows project the shared runtime rendering and contextual-DI products; adapters must not reselect providers
+or reconstruct projection ownership from tag/source containment.
+
 `BindingTargetAccesses` exposes target-side accessor/observer lookup selected during `Controller.bind` for runtime
 property bindings and interpolations: accessor versus observer lookup, target kind, target property, selected built-in
 strategy, DOM events, target/property type displays, target type source, writability, observability, authority, source
@@ -1713,8 +1726,11 @@ property type, observer/direct-operation runtime value type, TypeChecker source-
 target-to-source flows, target mutation policy, TypeChecker assignability checks in the active directions, optional framework error code, source
 address, exact `expressionSource`, optional handles, and row-local runtime data-flow open pressure. Flow direction records
 value transport; `sourceEvaluationKind` separately records whether Aurelia evaluates with a connectable, without one,
-or treats the source as an assignment target. A suppressed target write does not erase source evaluation or the
-remaining target-to-source edge; these axes stay independent. This is the compact pressure signal for
+or treats the source as an assignment target. `sourceEvaluationReachability` independently records whether the rendered
+binding's complete expression-resource bind chain reached that source operation. Blocked rows retain prospective
+TypeChecker/assignment evidence and the lifecycle cause; they do not claim that the runtime performed the read. A
+suppressed target write does not erase source evaluation or the remaining target-to-source edge; these axes stay
+independent. This is the compact pressure signal for
 two-way form controls, setter-backed state, class/style presentation bindings, template-controller value bindings, and
 future validation/write diagnostics. Direct spread value bindings appear here as source-to-target flow from each spread
 object property into the corresponding target bindable, such as `featuredCardBindings.productId -> productId`.
@@ -1749,6 +1765,9 @@ data-flow edge, expression parse, and binding scope. Member reads also carry Typ
 source when the binding scope can close the owner expression. The `observedMemberSourceState` field distinguishes
 closed source routes from honest non-member carriers such as temporary collection call results, `$` runtime scope names,
 and genuinely open scope roots, so aggregate pressure does not treat every null declaration source as provenance loss.
+Rows are published only when `sourceEvaluationKind` is connectable-read and
+`sourceEvaluationReachability` is reached. A blocked binding remains visible in `BindingDataFlows` for diagnostics and
+explanation, while this query stays an honest runtime-effect projection.
 Use `BindingObservedDependencySummary` first when a client needs low-token observation evidence. It groups dependency
 kind, binding kind, source root, member source state, observed member kind, sampled source/member/method/key names, and
 definition counts, and it also publishes member-source-state rollups. Grouping by source root keeps direct `state`

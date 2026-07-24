@@ -10,6 +10,7 @@ import type { MaterializationOwnerHandle } from '../kernel/materialization.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { AppRootReference } from '../configuration/app-root.js';
 import type { ContainerReference } from '../di/container-reference.js';
+import type { RuntimeHydrationContext } from '../configuration/controller.js';
 import type { NodeObserverLocatorConfiguration } from '../observation/observer-locator.js';
 import type { ExpressionType } from '../expression/ast.js';
 import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
@@ -242,6 +243,8 @@ export interface TemplateRenderingRunRequest {
   readonly localKey: string;
   /** Compiled-template product whose rows are being spent by Rendering. */
   readonly compiledTemplate: CompiledTemplate;
+  /** Exact compiler resource scope that lowered the instruction stream being rendered. */
+  readonly resourceScope: TemplateResourceScope;
   /** Render targets paired with their instruction rows. */
   readonly targets: readonly TemplateRenderingTargetPlan[];
   /** All compiled instruction products, including nested hydrate props not directly present in target rows. */
@@ -332,6 +335,8 @@ export class TemplateRenderingRunResult {
 
   constructor(
     readonly rootController: RuntimeControllerFrame,
+    /** Exact compiler resource scope that owns every instruction dispatched by this run. */
+    readonly resourceScope: TemplateResourceScope,
     readonly renderedInstructions: readonly TemplateRenderedInstruction[],
     readonly openInstructions: readonly TemplateRenderingOpenInstruction[],
   ) {}
@@ -737,6 +742,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
     this.measure('render-dispatch:targets', () => this.renderTargetInstructions());
     return this.measure('render-dispatch:result', () => new TemplateRenderingRunResult(
       this.input.rootController,
+      this.input.resourceScope,
       this.renderedInstructions,
       this.openInstructions,
     ));
@@ -885,7 +891,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
     targetController: RuntimeControllerFrame,
     target = this.defaultTarget(),
     bindingOwner: RuntimeBinding | null = null,
-    hydrationContextController: RuntimeControllerFrame | null = targetController,
+    hydrationContext: RuntimeHydrationContext | null = targetController.readHydrationContext(),
     targetInstructions: readonly TemplateInstruction[] = [instruction],
   ): void {
     if (instruction instanceof SpreadElementPropBindingInstruction) {
@@ -908,7 +914,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
         targetController,
         target,
         bindingOwner,
-        hydrationContextController,
+        hydrationContext,
         targetInstructions,
       );
       return;
@@ -935,7 +941,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
         targetController,
         target,
         this,
-        hydrationContextController,
+        hydrationContext,
         targetInstructions,
       ))
     );

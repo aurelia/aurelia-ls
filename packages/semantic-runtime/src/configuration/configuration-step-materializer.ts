@@ -392,14 +392,13 @@ export class ConfigurationStepMaterializer {
       if (parent == null) {
         throw new Error('A closed authored child-container evaluation must be emitted after its parent container.');
       }
-      childContainerRequest = new ContainerChildMaterializationRequest(
-        `configuration-step:${local}`,
+      childContainerRequest = new ContainerChildMaterializationRequest({
+        localKey: `configuration-step:${local}`,
         parent,
-        source.addressHandle,
-        observation.receiverLocalName,
-        [],
-        containerConfiguration.configuration,
-      );
+        sourceAddressHandle: source.addressHandle,
+        localName: observation.receiverLocalName,
+        configuration: containerConfiguration.configuration,
+      });
       childParentContainer = parent;
       createdContainer = this.childContainers.create(childContainerRequest);
     }

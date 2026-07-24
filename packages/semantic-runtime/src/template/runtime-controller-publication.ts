@@ -125,6 +125,9 @@ export class RuntimeControllerPublicationMaterializer {
       ...nullableClaim(this.instructionCreatesControllerClaim(local, controller, source)),
       ...nullableClaim(this.controllerUsesCompiledTemplateClaim(local, controller, projectContext, source)),
       ...nullableClaim(this.controllerUsesInstructionSequenceClaim(local, controller, source)),
+      ...nullableClaim(this.controllerConstructedWithHydrationContextClaim(local, controller, source)),
+      ...nullableClaim(this.controllerUsesHydrationContextClaim(local, controller, source)),
+      ...nullableClaim(this.controllerUsesAuSlotsInfoClaim(local, controller, source)),
       ...(viewFactory == null ? [] : viewFactory.claims),
       ...nullableClaim(this.viewFactoryCreatesSyntheticViewClaim(local, controller, source)),
     ];
@@ -215,6 +218,57 @@ export class RuntimeControllerPublicationMaterializer {
         controller.productHandle,
         KernelVocabulary.Configuration.ControllerUsesInstructionSequence.key,
         instructionSequenceProductHandle,
+        source.provenanceHandle,
+      );
+  }
+
+  private controllerUsesHydrationContextClaim(
+    local: string,
+    controller: RuntimeControllerFrame,
+    source: RuntimeRenderingSourceSet,
+  ): SemanticClaim | null {
+    const context = controller.readHydrationContext();
+    return context == null
+      ? null
+      : new SemanticClaim(
+        this.store.handles.claim(`${local}:uses-hydration-context`),
+        controller.productHandle,
+        KernelVocabulary.Configuration.ControllerUsesHydrationContext.key,
+        context.productHandle,
+        source.provenanceHandle,
+      );
+  }
+
+  private controllerConstructedWithHydrationContextClaim(
+    local: string,
+    controller: RuntimeControllerFrame,
+    source: RuntimeRenderingSourceSet,
+  ): SemanticClaim | null {
+    const context = controller.readConstructionHydrationContext();
+    return context == null
+      ? null
+      : new SemanticClaim(
+        this.store.handles.claim(`${local}:constructed-with-hydration-context`),
+        controller.productHandle,
+        KernelVocabulary.Configuration.ControllerConstructedWithHydrationContext.key,
+        context.productHandle,
+        source.provenanceHandle,
+      );
+  }
+
+  private controllerUsesAuSlotsInfoClaim(
+    local: string,
+    controller: RuntimeControllerFrame,
+    source: RuntimeRenderingSourceSet,
+  ): SemanticClaim | null {
+    const slotsInfo = controller.readAuSlotsInfo();
+    return slotsInfo == null
+      ? null
+      : new SemanticClaim(
+        this.store.handles.claim(`${local}:uses-au-slots-info`),
+        controller.productHandle,
+        KernelVocabulary.Configuration.ControllerUsesAuSlotsInfo.key,
+        slotsInfo.productHandle,
         source.provenanceHandle,
       );
   }

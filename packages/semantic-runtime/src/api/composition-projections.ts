@@ -56,7 +56,6 @@ function runtimeCompositionRowsForResource(
   return resource.runtimeAnalysis.runtimeComposition.controllers.map((composition) =>
     runtimeCompositionRow(
       resource.compilation.definition.name,
-      resource.runtimeAnalysis.runtimeRendering.rootController.productHandle,
       composition,
       contextsByProduct.get(composition.context.productHandle) ?? null,
       controllersByProduct,
@@ -70,7 +69,6 @@ function runtimeCompositionRowsForResource(
 
 function runtimeCompositionRow(
   renderingDefinitionName: string,
-  rootControllerProductHandle: ProductHandle,
   composition: CompositionController,
   context: CompositionContext | null,
   controllersByProduct: ReadonlyMap<ProductHandle, RuntimeControllerFrame>,
@@ -114,9 +112,7 @@ function runtimeCompositionRow(
   });
   return {
     renderingDefinitionName,
-    renderingContextKind: composition.parentControllerProductHandle === rootControllerProductHandle
-      ? 'definition-resource'
-      : 'recursive-resource-instance',
+    renderingContextKind: composition.renderingContextKind,
     hostControllerName: hostController?.name ?? null,
     parentControllerName: parentController?.name ?? null,
     scopeBehavior: context?.scopeBehavior ?? null,
@@ -125,9 +121,23 @@ function runtimeCompositionRow(
     hasTemplateInput: context?.templateBinding != null || context?.staticTemplate != null,
     hasComponentInput: context?.componentBinding != null || context?.staticComponent != null,
     staticComponentName: context?.staticComponent ?? null,
-    templateInputFulfillmentKind: context?.templateInputFulfillmentKind ?? 'absent',
-    componentInputFulfillmentKind: context?.componentInputFulfillmentKind ?? 'absent',
-    modelInputFulfillmentKind: context?.modelInputFulfillmentKind ?? 'absent',
+    templateInputConsumptionKind: context?.templateInputConsumptionKind ?? 'absent',
+    templateInputValueStateKind: context?.templateInputValueStateKind ?? 'absent',
+    templateInputSettlementKind: context?.templateInputSettlementKind ?? null,
+    templateInputType: context?.templateInputType?.display ?? null,
+    resolvedTemplate: context?.resolvedTemplate ?? null,
+    componentInputConsumptionKind: context?.componentInputConsumptionKind ?? 'absent',
+    componentInputValueStateKind: context?.componentInputValueStateKind ?? 'absent',
+    componentInputSettlementKind: context?.componentInputSettlementKind ?? null,
+    componentInputType: context?.componentInputType?.display ?? null,
+    modelInputConsumptionKind: context?.modelInputConsumptionKind ?? 'absent',
+    modelInputValueStateKind: context?.modelInputValueStateKind ?? 'absent',
+    scopeBehaviorInputConsumptionKind: context?.scopeBehaviorInputConsumptionKind ?? 'absent',
+    scopeBehaviorInputValueStateKind: context?.scopeBehaviorInputValueStateKind ?? 'absent',
+    tagInputConsumptionKind: context?.tagInputConsumptionKind ?? 'absent',
+    tagInputValueStateKind: context?.tagInputValueStateKind ?? 'absent',
+    flushModeInputConsumptionKind: context?.flushModeInputConsumptionKind ?? 'absent',
+    flushModeInputValueStateKind: context?.flushModeInputValueStateKind ?? 'absent',
     hasTemplateBinding: context?.templateBinding != null,
     hasCompositionBinding: context?.compositionBinding != null,
     hasComposingBinding: context?.composingBinding != null,
@@ -188,7 +198,9 @@ function runtimeCompositionRow(
           parentControllerProductHandle: composition.parentControllerProductHandle,
           instructionProductHandle: context?.instructionProductHandle ?? null,
           templateBindingProductHandle: context?.templateBinding?.productHandle ?? null,
+          templateInputTypeProductHandle: context?.templateInputType?.productHandle ?? null,
           componentBindingProductHandle: context?.componentBinding?.productHandle ?? null,
+          componentInputTypeProductHandle: context?.componentInputType?.productHandle ?? null,
           modelBindingProductHandle: context?.modelBinding?.productHandle ?? null,
           scopeBehaviorBindingProductHandle: context?.scopeBehaviorBinding?.productHandle ?? null,
           tagBindingProductHandle: context?.tagBinding?.productHandle ?? null,

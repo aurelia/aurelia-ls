@@ -1,0 +1,9 @@
+<template>
+  <template>
+    <slot name="inert"></slot>
+  </template>
+
+  <template if.bind="showConditional">
+    <slot name="conditional"></slot>
+  </template>
+</template>

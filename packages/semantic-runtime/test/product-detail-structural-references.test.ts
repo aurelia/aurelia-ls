@@ -103,6 +103,7 @@ import {
 } from '../src/template/structural-references.js';
 import { RuntimeValueConverterApplicationReference } from '../src/template/runtime-value-converter.js';
 import { RuntimeWatcherKind, RuntimeWatcherReference } from '../src/template/runtime-watcher.js';
+import { RuntimeExpressionResourcePhaseReachability } from '../src/template/runtime-expression-resource.js';
 
 describe('product-detail structural references', () => {
   test('projects every compact runtime reference to its exact rich-detail occupancy', () => {
@@ -328,6 +329,7 @@ describe('product-detail structural references', () => {
       null,
       RuntimeBindingDataFlowDirection.SourceToTarget,
       RuntimeBindingSourceEvaluationKind.ConnectableRead,
+      RuntimeExpressionResourcePhaseReachability.Reached,
       RuntimeBindingValueChannelTargetMutationKind.WritesTarget,
       true,
       RuntimeBindingDataFlowSourceKind.Member,
@@ -578,7 +580,6 @@ describe('product-detail structural references', () => {
       ),
       null,
       null,
-      [],
     );
     expectExactProductDetailReferences(
       TemplateProductDetails.AttributeClassification.referencesFor(classification),

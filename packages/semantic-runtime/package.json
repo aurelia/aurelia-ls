@@ -58,6 +58,8 @@
     "contract:runtime-watcher-expression-source": "pnpm build && node scripts/contract-runtime-watcher-expression-source.mjs",
     "contract:runtime-effect-observation": "pnpm build && node scripts/contract-runtime-effect-observation.mjs",
     "contract:runtime-composition-bound-controller": "pnpm build && node scripts/contract-runtime-composition-bound-controller.mjs",
+    "contract:runtime-composition-controller-ownership": "pnpm build && node scripts/contract-runtime-composition-controller-ownership.mjs",
+    "contract:runtime-composition-input-semantics": "pnpm build && node scripts/contract-runtime-composition-input-semantics.mjs",
     "contract:runtime-composition-open-pressure": "pnpm build && node scripts/contract-runtime-composition-open-pressure.mjs",
     "contract:recursive-rendering": "pnpm build && node scripts/contract-recursive-rendering.mjs",
     "contract:select-checked-value-channels": "pnpm build && node scripts/contract-select-checked-value-channels.mjs",

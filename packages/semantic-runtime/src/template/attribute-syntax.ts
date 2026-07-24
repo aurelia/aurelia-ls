@@ -111,7 +111,6 @@ export type AttributeClassificationField =
   | 'resource'
   | 'bindingCommand'
   | 'bindable'
-  | 'instructions'
   | 'source';
 
 const AttributeSyntaxDetailKind = 'template.attribute-syntax';
@@ -771,8 +770,6 @@ export class AttributeClassification {
     readonly bindingCommand: BindingCommandExecutableReference | null,
     /** Bindable selected by classification, if any. */
     readonly bindable: TemplateBindableReference | null,
-    /** Instruction products produced downstream from this classification. */
-    readonly instructionProductHandles: readonly ProductHandle[],
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<AttributeClassificationField>[] = [],
     /** Exact unresolved lowering reason when classification could not close without guessing. */

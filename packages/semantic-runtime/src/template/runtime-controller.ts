@@ -1,8 +1,9 @@
 import {
+  type AuSlotsInfo,
   ControllerReference,
-  ControllerVmKind,
   CustomAttributeController,
-  HydratableController,
+  CustomElementController,
+  type RuntimeHydrationContext,
   SyntheticViewController,
   type ControllerProduct,
 } from '../configuration/controller.js';
@@ -43,7 +44,7 @@ export const enum RuntimeControllerCreationKind {
   SyntheticView = 'synthetic-view',
 }
 
-export const enum RuntimeControllerLifecycleStage {
+export const enum RuntimeControllerAssemblyStage {
   Creating = 'creating',
   Hydration = 'hydration',
   Rendering = 'rendering',
@@ -53,9 +54,10 @@ export const enum RuntimeControllerLifecycleStage {
   Bind = 'bind',
 }
 
-export const enum RuntimeControllerLifecycleStepKind {
+export const enum RuntimeControllerAssemblyStepKind {
   CreateController = 'create-controller',
   CreateChildContainer = 'create-child-container',
+  InstallHydrationContext = 'install-hydration-context',
   RegisterDependencies = 'register-dependencies',
   AddChild = 'add-child',
   AdmittedToParent = 'admitted-to-parent',
@@ -75,11 +77,11 @@ export const enum RuntimeControllerReadinessKind {
   Bound = 'bound',
 }
 
-export class RuntimeControllerLifecycleStep {
+export class RuntimeControllerAssemblyStep {
   constructor(
     readonly order: number,
-    readonly stage: RuntimeControllerLifecycleStage,
-    readonly stepKind: RuntimeControllerLifecycleStepKind,
+    readonly stage: RuntimeControllerAssemblyStage,
+    readonly stepKind: RuntimeControllerAssemblyStepKind,
     readonly relatedProductHandle: ProductHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly summary: string,
@@ -104,7 +106,6 @@ export interface RuntimeControllerBindHost {
   inputForBinding(
     controller: RuntimeControllerFrame,
     binding: RuntimeBinding,
-    index: number,
   ): RuntimeBindingBindContext | null;
 }
 
@@ -156,8 +157,11 @@ export class RuntimeControllerFrame {
   private readonly bindings: RuntimeBinding[] = [];
   private readonly watchers: RuntimeWatcher[] = [];
   private readonly children: RuntimeControllerFrame[] = [];
-  private readonly lifecycleSteps: RuntimeControllerLifecycleStep[] = [];
+  private readonly assemblySteps: RuntimeControllerAssemblyStep[] = [];
   private scope: BindingScopeReference | null = null;
+  private constructionHydrationContext: RuntimeHydrationContext | null = null;
+  private hydrationContext: RuntimeHydrationContext | null = null;
+  private auSlotsInfo: AuSlotsInfo | null = null;
 
   constructor(
     readonly creationKind: RuntimeControllerCreationKind,
@@ -179,9 +183,9 @@ export class RuntimeControllerFrame {
     readonly instructionSequenceProductHandle: ProductHandle | null = null,
     readonly syntheticOwnerInstructionProductHandle: ProductHandle | null = null,
   ) {
-    this.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Creating,
-      RuntimeControllerLifecycleStepKind.CreateController,
+    this.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Creating,
+      RuntimeControllerAssemblyStepKind.CreateController,
       productHandle,
       sourceAddressHandle,
       `Controller frame created for ${creationKind}.`,
@@ -190,9 +194,9 @@ export class RuntimeControllerFrame {
 
   addBinding(binding: RuntimeBinding): void {
     this.bindings.push(binding);
-    this.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.BindingAdmission,
-      RuntimeControllerLifecycleStepKind.AddBinding,
+    this.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.BindingAdmission,
+      RuntimeControllerAssemblyStepKind.AddBinding,
       binding.productHandle,
       binding.sourceAddressHandle,
       `Controller.addBinding admitted a ${binding.bindingKind} binding.`,
@@ -201,9 +205,9 @@ export class RuntimeControllerFrame {
 
   addWatcher(watcher: RuntimeWatcher): void {
     this.watchers.push(watcher);
-    this.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.BindingAdmission,
-      RuntimeControllerLifecycleStepKind.AddBinding,
+    this.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.BindingAdmission,
+      RuntimeControllerAssemblyStepKind.AddBinding,
       watcher.productHandle,
       watcher.sourceAddressHandle,
       `Controller.addBinding admitted a ${watcher.watcherKind} watcher.`,
@@ -212,16 +216,16 @@ export class RuntimeControllerFrame {
 
   addChild(child: RuntimeControllerFrame): void {
     this.children.push(child);
-    this.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.ChildAdmission,
-      RuntimeControllerLifecycleStepKind.AddChild,
+    this.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.ChildAdmission,
+      RuntimeControllerAssemblyStepKind.AddChild,
       child.productHandle,
       child.sourceAddressHandle,
       `Controller.addChild admitted ${child.creationKind}.`,
     );
-    child.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.ChildAdmission,
-      RuntimeControllerLifecycleStepKind.AdmittedToParent,
+    child.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.ChildAdmission,
+      RuntimeControllerAssemblyStepKind.AdmittedToParent,
       this.productHandle,
       child.sourceAddressHandle,
       `Controller was admitted to parent ${this.name ?? this.creationKind}.`,
@@ -230,8 +234,8 @@ export class RuntimeControllerFrame {
 
   bind(input: RuntimeControllerBindRequest): RuntimeControllerBindResult {
     const contributions: RuntimeControllerBindContribution[] = [];
-    const bindOne = (binding: RuntimeBinding, index: number): void => {
-      const bindInput = input.host.inputForBinding(this, binding, index);
+    const bindOne = (binding: RuntimeBinding): void => {
+      const bindInput = input.host.inputForBinding(this, binding);
       if (bindInput == null) {
         return;
       }
@@ -240,15 +244,13 @@ export class RuntimeControllerFrame {
         bindRuntimeBinding(binding, bindInput),
       ));
       if (binding instanceof SpreadBinding) {
-        binding.readInnerBindings().forEach((innerBinding, innerIndex) => {
-          bindOne(innerBinding, innerIndex);
-        });
+        binding.readInnerBindings().forEach(bindOne);
       }
     };
-    this.bindings.forEach((binding, index) => bindOne(binding, index));
-    this.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Bind,
-      RuntimeControllerLifecycleStepKind.Bind,
+    this.bindings.forEach(bindOne);
+    this.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Bind,
+      RuntimeControllerAssemblyStepKind.Bind,
       this.productHandle,
       this.sourceAddressHandle,
       `Controller.bind processed ${contributions.length} binding contribution(s).`,
@@ -258,24 +260,64 @@ export class RuntimeControllerFrame {
 
   attachScope(scope: BindingScopeReference): void {
     this.scope = scope;
-    this.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Scope,
-      RuntimeControllerLifecycleStepKind.AttachScope,
+    this.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Scope,
+      RuntimeControllerAssemblyStepKind.AttachScope,
       scope.productHandle,
       scope.sourceAddressHandle,
       'Controller received its runtime binding Scope.',
     );
   }
 
-  recordLifecycleStep(
-    stage: RuntimeControllerLifecycleStage,
-    stepKind: RuntimeControllerLifecycleStepKind,
+  attachHydrationContext(context: RuntimeHydrationContext): void {
+    if (this.hydrationContext != null && this.hydrationContext.productHandle !== context.productHandle) {
+      throw new Error(
+        `Controller '${this.productHandle}' cannot replace hydration context `
+        + `'${this.hydrationContext.productHandle}' with '${context.productHandle}'.`,
+      );
+    }
+    this.hydrationContext = context;
+    if (context.controller.productHandle === this.productHandle) {
+      this.recordAssemblyStep(
+        RuntimeControllerAssemblyStage.Hydration,
+        RuntimeControllerAssemblyStepKind.InstallHydrationContext,
+        context.productHandle,
+        context.sourceAddressHandle,
+        'Controller.$el installed the custom element\'s own IHydrationContext after view-model construction.',
+      );
+    }
+  }
+
+  attachConstructionHydrationContext(context: RuntimeHydrationContext): void {
+    if (this.constructionHydrationContext != null
+      && this.constructionHydrationContext.productHandle !== context.productHandle) {
+      throw new Error(
+        `Controller '${this.productHandle}' cannot replace construction hydration context `
+        + `'${this.constructionHydrationContext.productHandle}' with '${context.productHandle}'.`,
+      );
+    }
+    this.constructionHydrationContext = context;
+  }
+
+  attachAuSlotsInfo(slotsInfo: AuSlotsInfo): void {
+    if (this.auSlotsInfo != null && this.auSlotsInfo.productHandle !== slotsInfo.productHandle) {
+      throw new Error(
+        `Controller '${this.productHandle}' cannot replace AuSlotsInfo `
+        + `'${this.auSlotsInfo.productHandle}' with '${slotsInfo.productHandle}'.`,
+      );
+    }
+    this.auSlotsInfo = slotsInfo;
+  }
+
+  recordAssemblyStep(
+    stage: RuntimeControllerAssemblyStage,
+    stepKind: RuntimeControllerAssemblyStepKind,
     relatedProductHandle: ProductHandle | null,
     sourceAddressHandle: AddressHandle | null,
     summary: string,
   ): void {
-    this.lifecycleSteps.push(new RuntimeControllerLifecycleStep(
-      this.lifecycleSteps.length,
+    this.assemblySteps.push(new RuntimeControllerAssemblyStep(
+      this.assemblySteps.length,
       stage,
       stepKind,
       relatedProductHandle,
@@ -285,9 +327,9 @@ export class RuntimeControllerFrame {
   }
 
   recordRecursiveHydrationBoundary(summary: string): void {
-    this.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Rendering,
-      RuntimeControllerLifecycleStepKind.RecursiveHydrationBoundary,
+    this.recordAssemblyStep(
+      RuntimeControllerAssemblyStage.Rendering,
+      RuntimeControllerAssemblyStepKind.RecursiveHydrationBoundary,
       this.definitionProductHandle,
       this.sourceAddressHandle,
       summary,
@@ -320,24 +362,36 @@ export class RuntimeControllerFrame {
     return this.scope;
   }
 
-  readLifecycleSteps(): readonly RuntimeControllerLifecycleStep[] {
-    return [...this.lifecycleSteps];
+  readHydrationContext(): RuntimeHydrationContext | null {
+    return this.hydrationContext;
+  }
+
+  readConstructionHydrationContext(): RuntimeHydrationContext | null {
+    return this.constructionHydrationContext;
+  }
+
+  readAuSlotsInfo(): AuSlotsInfo | null {
+    return this.auSlotsInfo;
+  }
+
+  readAssemblySteps(): readonly RuntimeControllerAssemblyStep[] {
+    return [...this.assemblySteps];
   }
 
   hasRecursiveHydrationBoundary(): boolean {
-    return this.lifecycleSteps.some((step) =>
-      step.stepKind === RuntimeControllerLifecycleStepKind.RecursiveHydrationBoundary
+    return this.assemblySteps.some((step) =>
+      step.stepKind === RuntimeControllerAssemblyStepKind.RecursiveHydrationBoundary
     );
   }
 
   readReadinessKind(): RuntimeControllerReadinessKind {
-    if (this.lifecycleSteps.some((step) => step.stepKind === RuntimeControllerLifecycleStepKind.Bind)) {
+    if (this.assemblySteps.some((step) => step.stepKind === RuntimeControllerAssemblyStepKind.Bind)) {
       return RuntimeControllerReadinessKind.Bound;
     }
     if (this.scope != null) {
       return RuntimeControllerReadinessKind.ScopeReady;
     }
-    if (this.lifecycleSteps.some((step) => step.stepKind === RuntimeControllerLifecycleStepKind.RenderInstructions)
+    if (this.assemblySteps.some((step) => step.stepKind === RuntimeControllerAssemblyStepKind.RenderInstructions)
       || this.hasRecursiveHydrationBoundary()
       || this.bindings.length > 0
       || this.children.length > 0) {
@@ -366,7 +420,7 @@ export class RuntimeControllerFrame {
       return this.customAttributeControllerProduct(parent);
     }
 
-    return this.hydratableControllerProduct(parent);
+    return this.customElementControllerProduct(parent);
   }
 
   private parentReference(): ControllerReference | null {
@@ -408,14 +462,14 @@ export class RuntimeControllerFrame {
     );
   }
 
-  private hydratableControllerProduct(parent: ControllerReference | null): HydratableController {
-    return new HydratableController(
+  private customElementControllerProduct(parent: ControllerReference | null): CustomElementController {
+    return new CustomElementController(
       this.productHandle,
       this.identityHandle,
       this.name,
       this.container,
-      ControllerVmKind.CustomElement,
       this.definitionProductHandle,
+      this.viewModel,
       this.hostAddressHandle,
       this.scope,
       parent,

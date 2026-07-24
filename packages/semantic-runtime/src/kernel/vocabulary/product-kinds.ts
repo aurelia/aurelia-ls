@@ -231,12 +231,28 @@ export const KernelProductKinds = {
       'A framework-runtime issue discovered while constructing, hydrating, or activating a modeled controller.',
     ),
 
+    /** Product kind for runtime IHydrationContext values installed by custom-element controllers. */
+    HydrationContext: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'hydration-context',
+      KernelVocabularySlot.ProductKind,
+      'A modeled runtime IHydrationContext connecting one custom-element controller, its hydration instruction, and its parent context.',
+    ),
+
     /** Product kind for a runtime IViewFactory value that can create synthetic child views. */
     ViewFactory: defineVocabulary(
       KernelVocabularyNamespace.Configuration,
       'view-factory',
       KernelVocabularySlot.ProductKind,
       'A modeled runtime IViewFactory value that can create synthetic child views from a nested instruction sequence.',
+    ),
+
+    /** Product kind for runtime IAuSlotsInfo projected-name values installed during custom-element hydration. */
+    AuSlotsInfo: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'au-slots-info',
+      KernelVocabularySlot.ProductKind,
+      'A modeled runtime IAuSlotsInfo value retaining the unique provider-authored names available to a custom element.',
     ),
 
     /** Product kind for runtime Scope objects used by controller activation and binding lookup. */

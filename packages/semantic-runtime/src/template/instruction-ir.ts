@@ -107,6 +107,26 @@ export class TemplateInstructionSequence {
   ) {}
 }
 
+/** Known output of runtime-html `AuSlot.processContent` stored in the hydrate-element instruction data field. */
+export class AuSlotProcessContentInstructionData {
+  constructor(
+    /** Static outlet name selected by `AuSlot`; absence is lowered to the framework `default` name. */
+    readonly name: string,
+    /** Exact authored `name` value span, or null when the framework supplied `default`. */
+    readonly nameSourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** One authored child that contributed to a custom-element projection definition. */
+export class HydrateElementProjectionContributor {
+  constructor(
+    /** Authored direct child extracted into this projection definition. */
+    readonly node: HtmlNodeReference,
+    /** Exact `[au-slot]` value span, or null for inferred default projection membership. */
+    readonly slotNameSourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
 /** Lowered custom-element hydration instruction. */
 @auLink('template-compiler:HydrateElementInstruction')
 export class HydrateElementInstruction {
@@ -123,6 +143,8 @@ export class HydrateElementInstruction {
     readonly definitionProductHandle: ProductHandle | null,
     readonly childInstructionSequenceProductHandle: ProductHandle | null,
     readonly projectionInstructionSequences: readonly HydrateElementProjectionInstructionSequence[],
+    /** Known framework `processContent` data; null for ordinary or open custom-element hooks. */
+    readonly auSlotProcessContent: AuSlotProcessContentInstructionData | null,
     readonly bindableInstructionProductHandles: readonly ProductHandle[],
     readonly captureSyntaxProductHandles: readonly ProductHandle[],
     readonly containerless: boolean,
@@ -138,6 +160,8 @@ export class HydrateElementProjectionInstructionSequence {
     readonly slotName: string,
     /** Instruction sequence for the compiled projection template. */
     readonly instructionSequenceProductHandle: ProductHandle,
+    /** All authored direct children aggregated into this definition, in source order. */
+    readonly contributors: readonly HydrateElementProjectionContributor[],
     /** Source address for the projected child content that produced the sequence. */
     readonly sourceAddressHandle: AddressHandle | null,
   ) {}

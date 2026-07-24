@@ -970,7 +970,6 @@ function referencesForAttributeClassification(
     classification.resource == null ? [] : templateVisibleResourceReferences(classification.resource),
     bindingCommandExecutableReferenceReferences(classification.bindingCommand),
     templateBindableReferenceReferences(classification.bindable),
-    detailsReferences(TemplateDetailDescriptors.Instruction, classification.instructionProductHandles),
     kernelFieldProvenanceReferences(classification.fieldProvenance),
   );
 }
@@ -1087,6 +1086,13 @@ function referencesForCompiledTemplate(
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     detailReferences(TemplateDetailDescriptors.HtmlDocument, template.htmlDocumentProductHandle),
+    detailsReferences(TemplateDetailDescriptors.HtmlNode, template.compilerReachableNodeProductHandles),
+    ...template.nativeSlotOutlets.map((outlet) =>
+      mergeKernelDetailReferences(
+        htmlNodeReferenceReferences(outlet.node),
+        kernelRecordReferences(outlet.nameSourceAddressHandle),
+      )
+    ),
     ...template.targets.map((target) =>
       productIdentityAddressReferences(
         target.productHandle,
@@ -1164,6 +1170,12 @@ function referencesForTemplateInstruction(
             detailReferences(
               TemplateDetailDescriptors.InstructionSequence,
               projection.instructionSequenceProductHandle,
+            ),
+            ...projection.contributors.map((contributor) =>
+              mergeKernelDetailReferences(
+                htmlNodeReferenceReferences(contributor.node),
+                kernelRecordReferences(contributor.slotNameSourceAddressHandle),
+              )
             ),
             kernelRecordReferences(projection.sourceAddressHandle),
           )
@@ -1666,6 +1678,8 @@ function referencesForCompositionContext(
     runtimeBindingReferenceReferences(context.flushModeBinding),
     runtimeBindingReferenceReferences(context.composingBinding),
     runtimeBindingReferenceReferences(context.compositionBinding),
+    checkerTypeReferenceKernelReferences(context.templateInputType),
+    checkerTypeReferenceKernelReferences(context.componentInputType),
     expressionReferences(
       context.templateExpressionProductHandle,
       context.componentExpressionProductHandle,

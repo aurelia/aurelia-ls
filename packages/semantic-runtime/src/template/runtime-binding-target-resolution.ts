@@ -18,7 +18,7 @@ export function runtimeBindingTargetController(
   runtimeRendering: RuntimeRenderingEmission,
   binding: RuntimeBinding,
 ): RuntimeControllerFrame | null {
-  return targetControllerForContext(runtimeRendering.readRenderContextForBinding(binding.productHandle));
+  return targetControllerForContext(runtimeRendering.requireRenderContextForBinding(binding.productHandle));
 }
 
 /** Target object visible to behavior bind and ordinary target-access selection. */
@@ -64,9 +64,9 @@ export function runtimeBindingAccessTarget(
 }
 
 function targetControllerForContext(
-  context: RuntimeBindingRenderContext | null,
+  context: RuntimeBindingRenderContext,
 ): RuntimeControllerFrame | null {
-  return context == null || context.targetController.productHandle === context.renderingController.productHandle
+  return context.targetController.productHandle === context.renderingController.productHandle
     ? null
     : context.targetController;
 }

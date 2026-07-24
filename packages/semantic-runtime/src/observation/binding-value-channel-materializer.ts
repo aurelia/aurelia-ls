@@ -61,7 +61,6 @@ import { runtimeBindingPrimitiveValueFromExpressionValue } from './runtime-bindi
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
-import type { TemplateResourceScope } from '../template/compiler-world.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import type {
   TemplateScopeConstructionEmission,
@@ -95,8 +94,6 @@ export class RuntimeBindingValueChannelMaterializationRequest {
     readonly controllerBind: RuntimeControllerBindEmission,
     /** Runtime Scope applications visible to instruction-owned expressions. */
     readonly scopes: TemplateScopeConstructionEmission,
-    /** Compiler resource scope visible to expression semantics such as value converters. */
-    readonly resourceScope: TemplateResourceScope | null = null,
     /** Runtime-analysis expression world shared by scope, value-channel, and data-flow phases. */
     readonly expressionWorld: CheckerExpressionTypeWorld,
     /** Current TypeChecker epoch used by listener event maps and checker-backed value-channel refinements. */
@@ -185,7 +182,6 @@ export class RuntimeBindingValueChannelMaterializer {
     const source = this.recordsForSource(input.localKey);
     records.push(...source.records);
     const instructionScopes = instructionScopeLookup(input.scopes.instructionScopes);
-    const evaluator = input.expressionWorld.evaluator(input.resourceScope);
     const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
       this.store,
       input.expressionWorld,
@@ -202,6 +198,7 @@ export class RuntimeBindingValueChannelMaterializer {
     );
 
     input.runtimeBindings.bindings.forEach((binding, index) => {
+      const renderContext = input.runtimeBindings.requireRenderContextForBinding(binding.productHandle);
       for (const emission of this.recordsForBindingValueChannels(input, channelDrafts, source, {
         input: {
           runtimeBindings: input.runtimeBindings,
@@ -209,7 +206,7 @@ export class RuntimeBindingValueChannelMaterializer {
         },
         instructionScopes,
         sourceExpressionContexts,
-        evaluator,
+        evaluator: input.expressionWorld.evaluator(renderContext.resourceScope),
         typeSystem: input.typeSystem,
       }, binding, index)) {
         records.push(...emission.records);

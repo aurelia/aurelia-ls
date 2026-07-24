@@ -12,6 +12,7 @@ import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
 import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
+import type { RuntimeHydrationContext } from '../configuration/controller.js';
 import {
   TemplateRenderTarget,
   TemplateRenderTargetKind,
@@ -204,7 +205,7 @@ export interface RuntimeRendererSpreadCompileRequest {
   readonly binding: SpreadBinding;
   readonly target: TemplateRenderTarget;
   readonly targetController: RuntimeControllerFrame;
-  readonly hydrationContextController: RuntimeControllerFrame | null;
+  readonly hydrationContext: RuntimeHydrationContext | null;
 }
 
 export class RuntimeRendererSpreadCompileResult {
@@ -312,7 +313,7 @@ export interface RuntimeRenderingRun {
     targetController: RuntimeControllerFrame,
     target: TemplateRenderTarget,
     bindingOwner?: RuntimeBinding | null,
-    hydrationContextController?: RuntimeControllerFrame | null,
+    hydrationContext?: RuntimeHydrationContext | null,
     targetInstructions?: readonly TemplateInstruction[],
   ): void;
 }
@@ -327,7 +328,7 @@ export class RuntimeRendererInvocation {
     readonly targetController: RuntimeControllerFrame,
     readonly target: TemplateRenderTarget,
     readonly run: RuntimeRenderingRun,
-    readonly hydrationContextController: RuntimeControllerFrame | null = targetController,
+    readonly hydrationContext: RuntimeHydrationContext | null = targetController.readHydrationContext(),
     readonly targetInstructions: readonly TemplateInstruction[] = [],
   ) {}
 
@@ -367,7 +368,7 @@ export class RuntimeRendererInvocation {
       binding,
       target: this.target,
       targetController: this.targetController,
-      hydrationContextController: this.hydrationContextController,
+      hydrationContext: this.hydrationContext,
     });
   }
 
@@ -432,7 +433,7 @@ export class RuntimeRendererInvocation {
       targetController,
       this.target,
       null,
-      this.hydrationContextController,
+      this.hydrationContext,
       this.targetInstructions,
     );
   }
@@ -443,9 +444,9 @@ export class RuntimeRendererInvocation {
     bindingOwner: RuntimeBinding,
   ): void {
     instructions.forEach((instruction, index) => {
-      const contextController = instruction instanceof SpreadTransferedBindingInstruction
-        ? this.hydrationContextController?.parent ?? null
-        : this.hydrationContextController;
+      const hydrationContext = instruction instanceof SpreadTransferedBindingInstruction
+        ? this.hydrationContext?.parent ?? null
+        : this.hydrationContext;
       this.run.renderInstruction(
         `${this.local}:${localSuffix}:${index}`,
         instruction,
@@ -454,7 +455,7 @@ export class RuntimeRendererInvocation {
         this.targetController,
         this.target,
         bindingOwner,
-        contextController,
+        hydrationContext,
         instructions,
       );
     });
@@ -474,7 +475,7 @@ export class RuntimeRendererInvocation {
       this.targetController,
       this.target,
       this.run,
-      this.hydrationContextController,
+      this.hydrationContext,
       this.targetInstructions,
     );
   }

@@ -384,7 +384,11 @@ class TemplateRuntimeAnalysisFrame {
       controllerBind,
       scopes,
     );
-    const valueConverter = this.materializeValueConverterForDepth(expressionResourcePlan, sourceValueEvaluator);
+    const valueConverter = this.materializeValueConverterForDepth(
+      runtimeRendering,
+      expressionResourcePlan,
+      sourceValueEvaluator,
+    );
     const bindingValueChannel = this.materializeBindingValueChannelForDepth(
       runtimeRendering,
       expressionResourcePlan,
@@ -479,12 +483,13 @@ class TemplateRuntimeAnalysisFrame {
   }
 
   private materializeValueConverterForDepth(
+    runtimeRendering: RuntimeRenderingEmission,
     expressionResourcePlan: RuntimeExpressionResourcePlan,
     sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   ): RuntimeValueConverterEmission {
     return semanticAppAnalysisDepthSatisfies(this.analysisDepth, SemanticAppAnalysisDepth.BindingTargets)
       ? this.measure('value-converter', () =>
-        this.materializeValueConverter(expressionResourcePlan, sourceValueEvaluator)
+        this.materializeValueConverter(runtimeRendering, expressionResourcePlan, sourceValueEvaluator)
       )
       : skippedValueConverter(this.phases);
   }
@@ -554,7 +559,6 @@ class TemplateRuntimeAnalysisFrame {
   ): RuntimeExpressionResourcePlan {
     return this.services.expressionResourcePlan.plan(new RuntimeExpressionResourcePlanningRequest(
       runtimeRendering,
-      this.request.compilerWorld.resourceScope,
       this.request.compilerWorld.world.nodeObserverLocatorConfiguration,
       this.expressionWorld,
     ));
@@ -573,11 +577,9 @@ class TemplateRuntimeAnalysisFrame {
       projectContext: this.request.projectContext,
       evaluation: this.request.evaluation,
       typeSystem: this.request.typeSystem,
-      resourceScope: this.request.compilerWorld.resourceScope,
       expressionWorld: this.expressionWorld,
       boundControllerValues: this.boundControllerValues,
       sourceValueActivationView: this.sourceValueActivationView,
-      sourceValueDefaultContainer: this.request.compilerWorld.container,
       profiling: this.profilingSink(),
     } satisfies TemplateScopeConstructionRequest);
   }
@@ -613,7 +615,6 @@ class TemplateRuntimeAnalysisFrame {
       expressionResourcePlan,
       controllerBind,
       scopes,
-      this.request.compilerWorld.resourceScope,
       this.expressionWorld,
       this.request.typeSystem,
     ));
@@ -640,18 +641,18 @@ class TemplateRuntimeAnalysisFrame {
       runtimeRendering,
       expressionResourcePlan,
       scopes,
-      this.request.compilerWorld.resourceScope,
       this.expressionWorld,
     ));
   }
 
   private materializeValueConverter(
+    runtimeRendering: RuntimeRenderingEmission,
     expressionResourcePlan: RuntimeExpressionResourcePlan,
     sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   ): RuntimeValueConverterEmission {
     return this.services.valueConverter.materialize(new RuntimeValueConverterMaterializationRequest(
       this.request.localKey,
-      this.request.compilerWorld.container,
+      runtimeRendering,
       expressionResourcePlan,
       sourceValueEvaluator,
     ));
@@ -673,7 +674,6 @@ class TemplateRuntimeAnalysisFrame {
       controllerBind,
       bindingValueChannel,
       scopes,
-      this.request.compilerWorld.resourceScope,
       this.expressionWorld,
     ));
   }
@@ -697,7 +697,6 @@ class TemplateRuntimeAnalysisFrame {
       this.request.projectContext,
       this.request.resourceDefinitions,
       this.request.typeSystem,
-      this.request.compilerWorld.resourceScope,
       sourceValueEvaluator,
     ));
   }
@@ -726,8 +725,6 @@ class TemplateRuntimeAnalysisFrame {
         scopes,
         expressionWorld: this.expressionWorld,
       },
-      this.request.compilerWorld.resourceScope,
-      this.request.compilerWorld.container,
     );
     return RuntimeBindingSourceValueEvaluator.create(
       this.publication,

@@ -42,6 +42,47 @@ describe('runtime captured-attribute compilation', () => {
     expect(capturedSyntaxSpans.some((span) => firstCaptureStart <= span.start && span.end <= firstCaptureEnd)).toBe(true);
     expect(capturedSyntaxSpans.some((span) => secondCaptureStart <= span.start && span.end <= secondCaptureEnd)).toBe(false);
 
+    const controllers = [
+      resource.runtimeAnalysis.runtimeRendering.rootController,
+      ...resource.runtimeAnalysis.runtimeRendering.controllers,
+    ];
+    const nestedEnvironmentBindings = resource.runtimeAnalysis.runtimeRendering.dynamicInstructions.flatMap((instruction) => {
+      const context = resource.runtimeAnalysis.runtimeRendering.readDynamicInstructionContext(instruction.productHandle);
+      if (context == null) {
+        return [];
+      }
+      const sourceController = controllers.find((controller) =>
+        controller.productHandle === context.hydrationContext.controller.productHandle
+      ) ?? null;
+      const requestor = app.emission.templates.resources.find((candidate) =>
+        candidate.compilation.definition.productHandle === context.requestorDefinitionProductHandle
+      ) ?? null;
+      if (sourceController == null || requestor == null) {
+        return [];
+      }
+      return resource.runtimeAnalysis.runtimeRendering.bindings.flatMap((binding) => {
+        if (binding.instructionProductHandle !== instruction.productHandle) {
+          return [];
+        }
+        const renderContext = resource.runtimeAnalysis.runtimeRendering.requireRenderContextForBinding(
+          binding.productHandle,
+        );
+        return renderContext.renderingController.productHandle === sourceController.productHandle
+          ? []
+          : [{ renderContext, sourceController, requestor }];
+      });
+    });
+    expect(nestedEnvironmentBindings.length).toBeGreaterThan(0);
+    for (const { renderContext, sourceController, requestor } of nestedEnvironmentBindings) {
+      expect(renderContext.sourceController.productHandle).toBe(sourceController.productHandle);
+      expect(renderContext.resourceScope.productHandle).toBe(
+        requestor.compilation.compilerWorld.resourceScope.productHandle,
+      );
+      expect(renderContext.requireActiveContainer().identityHandle).toBe(
+        sourceController.containerFrame?.identityHandle,
+      );
+    }
+
     const diagnostics = await runtime.templateDiagnostics({
       sourceFile: { filePath: templateFile },
     });

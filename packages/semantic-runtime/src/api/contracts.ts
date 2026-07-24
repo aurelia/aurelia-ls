@@ -65,7 +65,6 @@ import type { CheckerExpressionTypeEvaluationCacheStats } from '../type-system/e
 import type { TypeSystemProjectAcquisitionKind } from '../type-system/project-computation.js';
 import type { TypeSystemTypeScriptVersionRelation } from '../type-system/typescript-environment.js';
 import type { ConfigurationOptionValueKind } from '../configuration/configuration-option.js';
-import type { ControllerPhase } from '../configuration/controller.js';
 import type {
   StateIssueKind,
   StateIssuePhase,
@@ -125,7 +124,10 @@ import type {
 import type {
   EvaluationModuleSourceHostProfile,
 } from '../evaluation/module-host.js';
-import type { EvaluationValueKind } from '../evaluation/values.js';
+import type {
+  EvaluationPromiseSettlementKind,
+  EvaluationValueKind,
+} from '../evaluation/values.js';
 import type {
   DiResolveActiveContainerExpectation,
   DiResolveEnclosingMemberKind,
@@ -241,9 +243,13 @@ import type { RuntimeControllerIssuePhase } from '../template/runtime-controller
 import type { RuntimeRendererIssuePhase } from '../template/runtime-renderer-issue.js';
 import type { TemplateCompilerIssuePhase } from '../template/compiler-issue.js';
 import type {
+  CompiledNativeSlotNameKind,
+  CompiledTemplateState,
+} from '../template/compiled-template.js';
+import type {
   RuntimeControllerCreationKind,
-  RuntimeControllerLifecycleStage,
-  RuntimeControllerLifecycleStepKind,
+  RuntimeControllerAssemblyStage,
+  RuntimeControllerAssemblyStepKind,
   RuntimeControllerReadinessKind,
 } from '../template/runtime-controller.js';
 import type {
@@ -255,9 +261,16 @@ import type {
   CompositionActivationModelHandoffKind,
   CompositionComponentCandidateCoverageKind,
   CompositionComponentResolutionKind,
-  CompositionInputFulfillmentKind,
+  CompositionInputConsumptionKind,
+  CompositionInputValueStateKind,
   CompositionModelResolutionKind,
+  CompositionRenderingContextKind,
 } from '../template/runtime-composition.js';
+import type {
+  RuntimeContentProjectionClosureKind,
+  RuntimeContentProjectionSelectionKind,
+} from '../template/runtime-content-projection.js';
+import type { AuSlotsInfoSourceKind } from '../configuration/controller.js';
 import type { RuntimeRendererKind } from '../template/runtime-renderer-reference.js';
 import type {
   TemplateExpressionParseState,
@@ -446,6 +459,7 @@ export const enum SemanticAppQueryKind {
   RuntimeWatchers = 'runtime-watchers',
   RuntimeWatcherObservedDependencies = 'runtime-watcher-observed-dependencies',
   RuntimeCompositions = 'runtime-compositions',
+  TemplateContentProjections = 'template-content-projections',
   BindingTargetAccesses = 'binding-target-accesses',
   TargetOperations = 'target-operations',
   BindingTargetOperations = 'binding-target-operations',
@@ -530,6 +544,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.RuntimeWatchers,
   SemanticAppQueryKind.RuntimeWatcherObservedDependencies,
   SemanticAppQueryKind.RuntimeCompositions,
+  SemanticAppQueryKind.TemplateContentProjections,
   SemanticAppQueryKind.BindingTargetAccesses,
   SemanticAppQueryKind.TargetOperations,
   SemanticAppQueryKind.BindingTargetOperations,
@@ -3504,6 +3519,10 @@ export interface SemanticTemplateCompilationRow {
   readonly bindingCommandLowerings: number;
   readonly instructions: number;
   readonly renderTargets: number;
+  readonly compiledTemplateState: CompiledTemplateState | `${CompiledTemplateState}`;
+  readonly compiledTemplateHasSlots: boolean;
+  readonly compiledTemplateNeedsCompile: false | null;
+  readonly contentProjectionSequences: number;
   readonly runtimeControllers: number;
   readonly runtimeChildContainers: number;
   readonly runtimeChildContextResolverSlots: number;
@@ -4122,11 +4141,11 @@ export type SemanticRuntimeTemplateControllerLinkKind =
   | 'promise-branch-to-promise'
   | 'switch-case-to-switch';
 
-export interface SemanticRuntimeControllerLifecycleStepRow {
+export interface SemanticRuntimeControllerAssemblyStepRow {
   readonly order: number;
   readonly count: number;
-  readonly stage: RuntimeControllerLifecycleStage | `${RuntimeControllerLifecycleStage}`;
-  readonly stepKind: RuntimeControllerLifecycleStepKind | `${RuntimeControllerLifecycleStepKind}`;
+  readonly stage: RuntimeControllerAssemblyStage | `${RuntimeControllerAssemblyStage}`;
+  readonly stepKind: RuntimeControllerAssemblyStepKind | `${RuntimeControllerAssemblyStepKind}`;
   readonly summary: string;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
@@ -4138,7 +4157,6 @@ export interface SemanticRuntimeControllerLifecycleStepRow {
 export interface SemanticRuntimeControllerRow {
   readonly renderingDefinitionName: string;
   readonly controllerName: string | null;
-  readonly controllerPhase: ControllerPhase | `${ControllerPhase}`;
   readonly creationKind: RuntimeControllerCreationKind | `${RuntimeControllerCreationKind}`;
   readonly controllerReadiness: RuntimeControllerReadinessKind | `${RuntimeControllerReadinessKind}`;
   readonly definitionKind: ResourceDefinitionKind | `${ResourceDefinitionKind}` | null;
@@ -4160,7 +4178,7 @@ export interface SemanticRuntimeControllerRow {
   readonly childViewRenderingState: SemanticRuntimeControllerChildViewRenderingState;
   readonly hydrationHandoffKind: SemanticRuntimeControllerHydrationHandoffKind;
   readonly compiledTemplateDefinitionName: string | null;
-  readonly lifecycleSteps: readonly SemanticRuntimeControllerLifecycleStepRow[];
+  readonly assemblySteps: readonly SemanticRuntimeControllerAssemblyStepRow[];
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly controllerProductHandle: ProductHandle;
@@ -4169,6 +4187,9 @@ export interface SemanticRuntimeControllerRow {
     readonly definitionProductHandle: ProductHandle | null;
     readonly instructionProductHandle: ProductHandle | null;
     readonly instructionIdentityHandle: IdentityHandle | null;
+    readonly constructionHydrationContextProductHandle: ProductHandle | null;
+    readonly hydrationContextProductHandle: ProductHandle | null;
+    readonly auSlotsInfoProductHandle: ProductHandle | null;
     readonly bindingScopeProductHandle: ProductHandle | null;
     readonly compiledTemplateProductHandle: ProductHandle | null;
     readonly compiledTemplateClaimHandle: ClaimHandle | null;
@@ -4269,14 +4290,31 @@ export interface SemanticRuntimeCompositionRow {
   readonly hasTemplateInput: boolean;
   readonly hasComponentInput: boolean;
   readonly staticComponentName: string | null;
-  readonly templateInputFulfillmentKind: CompositionInputFulfillmentKind | `${CompositionInputFulfillmentKind}`;
-  readonly componentInputFulfillmentKind: CompositionInputFulfillmentKind | `${CompositionInputFulfillmentKind}`;
-  readonly modelInputFulfillmentKind: CompositionInputFulfillmentKind | `${CompositionInputFulfillmentKind}`;
+  readonly templateInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`;
+  readonly templateInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`;
+  readonly templateInputSettlementKind: EvaluationPromiseSettlementKind | `${EvaluationPromiseSettlementKind}` | null;
+  /** Awaited TypeChecker type consumed by AuCompose for a bound template input. */
+  readonly templateInputType: string | null;
+  /** Loaded template string when static evaluation closes the framework-awaited input. */
+  readonly resolvedTemplate: string | null;
+  readonly componentInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`;
+  readonly componentInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`;
+  readonly componentInputSettlementKind: EvaluationPromiseSettlementKind | `${EvaluationPromiseSettlementKind}` | null;
+  /** Awaited TypeChecker type consumed by AuCompose for a bound component input. */
+  readonly componentInputType: string | null;
+  readonly modelInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`;
+  readonly modelInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`;
+  readonly scopeBehaviorInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`;
+  readonly scopeBehaviorInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`;
+  readonly tagInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`;
+  readonly tagInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`;
+  readonly flushModeInputConsumptionKind: CompositionInputConsumptionKind | `${CompositionInputConsumptionKind}`;
+  readonly flushModeInputValueStateKind: CompositionInputValueStateKind | `${CompositionInputValueStateKind}`;
   readonly hasTemplateBinding: boolean;
   readonly hasCompositionBinding: boolean;
   readonly hasComposingBinding: boolean;
   readonly componentResolutionKind: CompositionComponentResolutionKind | `${CompositionComponentResolutionKind}`;
-  /** Whether TypeChecker-derived component candidates cover every finite source-type constituent. */
+  /** Whether TypeChecker-derived component candidates exhaust a finite exact named-class basis. */
   readonly componentCandidateCoverageKind: CompositionComponentCandidateCoverageKind | `${CompositionComponentCandidateCoverageKind}`;
   readonly modelResolutionKind: CompositionModelResolutionKind | `${CompositionModelResolutionKind}`;
   readonly resolvedComponentCount: number;
@@ -4314,7 +4352,9 @@ export interface SemanticRuntimeCompositionRow {
     readonly parentControllerProductHandle: ProductHandle | null;
     readonly instructionProductHandle: ProductHandle | null;
     readonly templateBindingProductHandle: ProductHandle | null;
+    readonly templateInputTypeProductHandle: ProductHandle | null;
     readonly componentBindingProductHandle: ProductHandle | null;
+    readonly componentInputTypeProductHandle: ProductHandle | null;
     readonly modelBindingProductHandle: ProductHandle | null;
     readonly scopeBehaviorBindingProductHandle: ProductHandle | null;
     readonly tagBindingProductHandle: ProductHandle | null;
@@ -4326,8 +4366,7 @@ export interface SemanticRuntimeCompositionRow {
 }
 
 export type SemanticRuntimeCompositionRenderingContextKind =
-  | 'definition-resource'
-  | 'recursive-resource-instance';
+  CompositionRenderingContextKind | `${CompositionRenderingContextKind}`;
 
 export type SemanticRuntimeCompositionCandidateAnalysisState =
   | 'none'
@@ -4352,6 +4391,89 @@ export interface SemanticRuntimeCompositionActivationHandoffRow {
 
 export interface SemanticRuntimeCompositionResult {
   readonly rows: readonly SemanticRuntimeCompositionRow[];
+}
+
+export const enum SemanticTemplateContentProjectionSurfaceKind {
+  /** Compiler-owned provider sequence attached to a custom-element use. */
+  ProviderSequence = 'provider-sequence',
+  /** Runtime AuSlot selected, fallback, or empty view relation. */
+  AuSlotView = 'au-slot-view',
+  /** Compiler-reachable native Shadow DOM slot outlet. */
+  NativeSlotOutlet = 'native-slot-outlet',
+}
+
+export interface SemanticTemplateContentProjectionProviderRow {
+  readonly surfaceKind: SemanticTemplateContentProjectionSurfaceKind.ProviderSequence;
+  readonly renderingDefinitionName: string;
+  readonly receivingElementName: string;
+  readonly slotName: string;
+  readonly providerProjectedSlotNames: readonly string[];
+  readonly contributorCount: number;
+  readonly explicitContributorCount: number;
+  readonly instructionCount: number;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly providerInstructionProductHandle: ProductHandle;
+    readonly instructionSequenceProductHandle: ProductHandle;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateContentProjectionViewRow {
+  readonly surfaceKind: SemanticTemplateContentProjectionSurfaceKind.AuSlotView;
+  readonly renderingDefinitionName: string;
+  readonly slotName: string;
+  readonly selectionKind: RuntimeContentProjectionSelectionKind | `${RuntimeContentProjectionSelectionKind}`;
+  readonly closureKind: RuntimeContentProjectionClosureKind | `${RuntimeContentProjectionClosureKind}`;
+  /** Null only when the controller is not constructed through a renderer contextual-provider path. */
+  readonly auSlotsInfoSourceKind: AuSlotsInfoSourceKind | `${AuSlotsInfoSourceKind}` | null;
+  readonly providerProjectedSlotNames: readonly string[];
+  readonly declaringControllerName: string | null;
+  readonly receivingControllerName: string | null;
+  readonly outletControllerName: string | null;
+  readonly instructionCount: number;
+  readonly hasViewFactory: boolean;
+  readonly hasSyntheticController: boolean;
+  readonly factoryContainerDepth: number | null;
+  readonly factoryContainerResourceCount: number | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly outletInstructionProductHandle: ProductHandle;
+    readonly providerInstructionProductHandle: ProductHandle | null;
+    readonly instructionSequenceProductHandle: ProductHandle | null;
+    readonly declaringControllerProductHandle: ProductHandle | null;
+    readonly receivingControllerProductHandle: ProductHandle | null;
+    readonly outletControllerProductHandle: ProductHandle;
+    readonly viewFactoryProductHandle: ProductHandle | null;
+    readonly embeddedDefinitionProductHandle: ProductHandle | null;
+    readonly syntheticControllerProductHandle: ProductHandle | null;
+    readonly factoryContainerProductHandle: ProductHandle | null;
+    readonly factoryHydrationContextProductHandle: ProductHandle | null;
+    readonly slotsInfoProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateContentProjectionNativeOutletRow {
+  readonly surfaceKind: SemanticTemplateContentProjectionSurfaceKind.NativeSlotOutlet;
+  readonly renderingDefinitionName: string;
+  readonly nameKind: CompiledNativeSlotNameKind | `${CompiledNativeSlotNameKind}`;
+  readonly slotName: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly nodeProductHandle: ProductHandle | null;
+    readonly nameSourceAddressHandle: AddressHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export type SemanticTemplateContentProjectionRow =
+  | SemanticTemplateContentProjectionProviderRow
+  | SemanticTemplateContentProjectionViewRow
+  | SemanticTemplateContentProjectionNativeOutletRow;
+
+export interface SemanticTemplateContentProjectionResult {
+  readonly rows: readonly SemanticTemplateContentProjectionRow[];
 }
 
 export interface SemanticBindingTargetAccessRow {
@@ -4759,6 +4881,7 @@ export interface SemanticBindingDataFlowRow {
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
   readonly direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`;
   readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind | `${RuntimeBindingSourceEvaluationKind}`;
+  readonly sourceEvaluationReachability: RuntimeExpressionResourcePhaseReachability | `${RuntimeExpressionResourcePhaseReachability}`;
   readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind | `${RuntimeBindingValueChannelTargetMutationKind}`;
   readonly strictBinding: boolean | null;
   readonly expressionParseState: TemplateExpressionParseState | `${TemplateExpressionParseState}` | null;
@@ -4831,6 +4954,7 @@ export interface SemanticNullableBooleanCountRow {
 export interface SemanticBindingDataFlowSummaryRow {
   readonly direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`;
   readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind | `${RuntimeBindingSourceEvaluationKind}`;
+  readonly sourceEvaluationReachability: RuntimeExpressionResourcePhaseReachability | `${RuntimeExpressionResourcePhaseReachability}`;
   readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind | `${RuntimeBindingValueChannelTargetMutationKind}`;
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;

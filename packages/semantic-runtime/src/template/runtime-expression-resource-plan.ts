@@ -6,6 +6,7 @@ import type {
   IsAssign,
   ValueConverterExpression,
 } from '../expression/ast.js';
+import type { SourceSpan } from '../expression/source-span.js';
 import {
   bindingBehaviorProjectsThroughValueConverter,
   bindingBehaviorValueConverterProjection,
@@ -30,7 +31,6 @@ import {
   findVisibleTemplateResource,
   readBuiltInVisibleTemplateResource,
 } from './compiler-resource-lookup.js';
-import type { TemplateResourceScope } from './compiler-world.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
 import { TemplateBindingMode } from './instruction-ir.js';
 import {
@@ -168,22 +168,25 @@ class RuntimeValueConverterPhaseOrder {
 export class RuntimeExpressionResourcePlan {
   static readonly empty = new RuntimeExpressionResourcePlan([], new Map(), new Map());
 
-  private readonly effectiveModesByExpression = new Map<ProductHandle, TemplateBindingMode>();
+  private readonly effectiveModesByBinding = new Map<ProductHandle, TemplateBindingMode>();
   private readonly targetObserverOverridesByBinding = new Map<ProductHandle, RuntimeBindingTargetObserverOverride>();
   private readonly converterPhaseOrders = new Map<RuntimeValueConverterPlanEntry, RuntimeValueConverterPhaseOrder>();
   private readonly failedBindChains = new Set<string>();
+  private readonly sourceEvaluationReachabilityByBinding = new Map<ProductHandle, RuntimeExpressionResourcePhaseReachability>();
   private readonly behaviorEntriesByExpression = new Map<BindingBehaviorExpression, RuntimeBindingBehaviorPlanEntry[]>();
+  private readonly behaviorEntriesBySource = new Map<string, RuntimeBindingBehaviorPlanEntry[]>();
+  private readonly converterEntriesBySource = new Map<string, RuntimeValueConverterPlanEntry[]>();
   private readonly projectedConvertersByBehavior = new Map<BindingBehaviorExpression, RuntimeValueConverterPlanEntry[]>();
   readonly behaviorEntries: readonly RuntimeBindingBehaviorPlanEntry[];
   readonly converterEntries: readonly RuntimeValueConverterPlanEntry[];
 
   constructor(
     readonly entries: readonly RuntimeExpressionResourcePlanEntry[],
-    effectiveModesByExpression: ReadonlyMap<ProductHandle, TemplateBindingMode>,
+    effectiveModesByBinding: ReadonlyMap<ProductHandle, TemplateBindingMode>,
     targetObserverOverridesByBinding: ReadonlyMap<ProductHandle, RuntimeBindingTargetObserverOverride>,
   ) {
-    for (const [expressionProductHandle, mode] of effectiveModesByExpression) {
-      this.effectiveModesByExpression.set(expressionProductHandle, mode);
+    for (const [bindingProductHandle, mode] of effectiveModesByBinding) {
+      this.effectiveModesByBinding.set(bindingProductHandle, mode);
     }
     for (const [bindingProductHandle, override] of targetObserverOverridesByBinding) {
       this.targetObserverOverridesByBinding.set(bindingProductHandle, override);
@@ -192,8 +195,26 @@ export class RuntimeExpressionResourcePlan {
     this.converterEntries = entries.filter(isValueConverterPlanEntry);
     for (const entry of this.behaviorEntries) {
       appendPlanEntry(this.behaviorEntriesByExpression, entry.occurrence.expression, entry);
+      appendPlanEntry(
+        this.behaviorEntriesBySource,
+        expressionResourceSourceKey(
+          entry.expressionProductHandle,
+          entry.occurrence.expression.name.name,
+          entry.occurrence.expression.name.span,
+        ),
+        entry,
+      );
     }
     for (const entry of this.converterEntries) {
+      appendPlanEntry(
+        this.converterEntriesBySource,
+        expressionResourceSourceKey(
+          entry.expressionProductHandle,
+          entry.expression.name.name,
+          entry.expression.name.span,
+        ),
+        entry,
+      );
       if (entry.projectedByBehavior != null) {
         appendPlanEntry(this.projectedConvertersByBehavior, entry.projectedByBehavior, entry);
       }
@@ -202,12 +223,31 @@ export class RuntimeExpressionResourcePlan {
       if (entry.bindReachability !== RuntimeExpressionResourceBindReachability.Reached
         || (isBindingBehaviorPlanEntry(entry) && entry.issue != null)
         || (isValueConverterPlanEntry(entry) && entry.resource == null)) {
-        this.failedBindChains.add(expressionChainKey(entry.expressionProductHandle, chainIndexForPlanEntry(entry)));
+        this.failedBindChains.add(expressionChainKey(
+          entry.binding.productHandle,
+          entry.expressionProductHandle,
+          chainIndexForPlanEntry(entry),
+        ));
+      }
+    }
+    for (const entry of entries) {
+      const reachability = this.readPostBindPhaseReachability(entry);
+      const current = this.sourceEvaluationReachabilityByBinding.get(entry.binding.productHandle)
+        ?? RuntimeExpressionResourcePhaseReachability.Reached;
+      if (
+        current === RuntimeExpressionResourcePhaseReachability.Reached
+        || reachability === RuntimeExpressionResourcePhaseReachability.BlockedByBindFailure
+      ) {
+        this.sourceEvaluationReachabilityByBinding.set(entry.binding.productHandle, reachability);
       }
     }
     const convertersByChain = new Map<string, RuntimeValueConverterPlanEntry[]>();
     for (const entry of this.converterEntries) {
-      const key = expressionChainKey(entry.expressionProductHandle, entry.chainIndex);
+      const key = expressionChainKey(
+        entry.binding.productHandle,
+        entry.expressionProductHandle,
+        entry.chainIndex,
+      );
       if (entry.bindReachability !== RuntimeExpressionResourceBindReachability.Reached
         || entry.resource == null
         || this.failedBindChains.has(key)) {
@@ -227,23 +267,22 @@ export class RuntimeExpressionResourcePlan {
     }
   }
 
-  effectiveMode(
-    initialMode: TemplateBindingMode,
-    expressionProductHandle: ProductHandle | null,
-  ): TemplateBindingMode {
-    return expressionProductHandle == null
-      ? initialMode
-      : this.effectiveModesByExpression.get(expressionProductHandle) ?? initialMode;
-  }
-
   effectivePropertyBindingMode(binding: PropertyBinding): TemplateBindingMode {
-    return this.effectiveMode(binding.bindingMode, binding.expressionProductHandle);
+    return this.effectiveModesByBinding.get(binding.productHandle) ?? binding.bindingMode;
   }
 
   readTargetObserverOverride(
     bindingProductHandle: ProductHandle,
   ): RuntimeBindingTargetObserverOverride | null {
     return this.targetObserverOverridesByBinding.get(bindingProductHandle) ?? null;
+  }
+
+  /** Whether `astBind(...)` completed far enough for this rendered binding to enter source evaluation. */
+  readSourceEvaluationReachability(
+    bindingProductHandle: ProductHandle,
+  ): RuntimeExpressionResourcePhaseReachability {
+    return this.sourceEvaluationReachabilityByBinding.get(bindingProductHandle)
+      ?? RuntimeExpressionResourcePhaseReachability.Reached;
   }
 
   readValueConverterPhaseOrder(
@@ -259,32 +298,61 @@ export class RuntimeExpressionResourcePlan {
     if (entry.bindReachability !== RuntimeExpressionResourceBindReachability.Reached) {
       return RuntimeExpressionResourcePhaseReachability.BlockedByOuterFailure;
     }
-    return this.failedBindChains.has(expressionChainKey(entry.expressionProductHandle, chainIndexForPlanEntry(entry)))
+    return this.failedBindChains.has(expressionChainKey(
+      entry.binding.productHandle,
+      entry.expressionProductHandle,
+      chainIndexForPlanEntry(entry),
+    ))
       ? RuntimeExpressionResourcePhaseReachability.BlockedByBindFailure
       : RuntimeExpressionResourcePhaseReachability.Reached;
   }
 
-  /** Unique runtime application for one authored behavior AST, or null when reused applications disagree. */
+  /** Runtime application of one authored behavior AST for the specified rendered binding. */
   readBindingBehaviorEntry(
     expression: BindingBehaviorExpression,
+    bindingProductHandle: ProductHandle,
   ): RuntimeBindingBehaviorPlanEntry | null {
     const entries = this.behaviorEntriesByExpression.get(expression) ?? [];
-    return entries.length === 1 ? entries[0]! : null;
+    return entries.find((entry) => entry.binding.productHandle === bindingProductHandle) ?? null;
   }
 
-  /** Unique converter inserted by one reached binding behavior, if that behavior projected through a converter. */
+  /** Runtime applications of one behavior AST for one authored expression product. */
+  readBindingBehaviorEntries(
+    expressionProductHandle: ProductHandle,
+    expression: BindingBehaviorExpression,
+  ): readonly RuntimeBindingBehaviorPlanEntry[] {
+    return this.behaviorEntriesBySource.get(expressionResourceSourceKey(
+      expressionProductHandle,
+      expression.name.name,
+      expression.name.span,
+    )) ?? [];
+  }
+
+  /** Runtime applications of one converter AST for one authored expression product. */
+  readValueConverterEntries(
+    expressionProductHandle: ProductHandle,
+    expression: ValueConverterExpression,
+  ): readonly RuntimeValueConverterPlanEntry[] {
+    return this.converterEntriesBySource.get(expressionResourceSourceKey(
+      expressionProductHandle,
+      expression.name.name,
+      expression.name.span,
+    )) ?? [];
+  }
+
+  /** Converter inserted by one reached behavior application for the specified rendered binding. */
   readProjectedConverterForBindingBehavior(
     expression: BindingBehaviorExpression,
+    bindingProductHandle: ProductHandle,
   ): RuntimeValueConverterPlanEntry | null {
     const entries = this.projectedConvertersByBehavior.get(expression) ?? [];
-    return entries.length === 1 ? entries[0]! : null;
+    return entries.find((entry) => entry.binding.productHandle === bindingProductHandle) ?? null;
   }
 }
 
 export class RuntimeExpressionResourcePlanningRequest {
   constructor(
     readonly runtimeRendering: RuntimeRenderingEmission,
-    readonly resourceScope: TemplateResourceScope | null,
     readonly nodeObserverLocatorConfiguration: NodeObserverLocatorConfiguration | null,
     readonly expressionWorld: CheckerExpressionTypeWorld,
   ) {}
@@ -365,7 +433,7 @@ export class RuntimeExpressionResourcePlanner {
 
   plan(input: RuntimeExpressionResourcePlanningRequest): RuntimeExpressionResourcePlan {
     const entries: RuntimeExpressionResourcePlanEntry[] = [];
-    const effectiveModesByExpression = new Map<ProductHandle, TemplateBindingMode>();
+    const effectiveModesByBinding = new Map<ProductHandle, TemplateBindingMode>();
     const targetObserverOverridesByBinding = new Map<ProductHandle, RuntimeBindingTargetObserverOverride>();
     const bindEffects = new RuntimeBindingBehaviorBindEffectReader(input.expressionWorld.projector.publication);
     const observerLocator = new ObserverLocator(
@@ -375,6 +443,8 @@ export class RuntimeExpressionResourcePlanner {
     );
 
     for (const [bindingIndex, binding] of input.runtimeRendering.bindings.entries()) {
+      const renderContext = input.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
+      const resourceScope = renderContext.resourceScope;
       const targetController = runtimeBindingTargetController(input.runtimeRendering, binding);
       const target = runtimeBindingAccessTarget(input.expressionWorld.projector.publication, binding, targetController);
       const expressionProductHandles = expressionProductHandlesForRuntimeBinding(binding);
@@ -397,7 +467,7 @@ export class RuntimeExpressionResourcePlanner {
           const bindOrder = reached ? chainState.nextBindOrder++ : null;
           if (isBindingBehaviorOccurrence(occurrence)) {
             const resource = findVisibleTemplateResource(
-              input.resourceScope,
+              resourceScope,
               ResourceDefinitionKind.BindingBehavior,
               occurrence.expression.name.name,
             );
@@ -445,7 +515,7 @@ export class RuntimeExpressionResourcePlanner {
               && bindingBehaviorProjectsThroughValueConverter(occurrence.expression)) {
               const projected = bindingBehaviorValueConverterProjection(occurrence.expression);
               const projectedResource = findVisibleTemplateResource(
-                input.resourceScope,
+                resourceScope,
                 ResourceDefinitionKind.ValueConverter,
                 projected.name.name,
               );
@@ -480,7 +550,7 @@ export class RuntimeExpressionResourcePlanner {
             continue;
           }
           const resource = findVisibleTemplateResource(
-            input.resourceScope,
+            resourceScope,
             ResourceDefinitionKind.ValueConverter,
             occurrence.expression.name.name,
           );
@@ -512,8 +582,8 @@ export class RuntimeExpressionResourcePlanner {
         }
         const chainState = chainStates.get(0);
         if (binding instanceof PropertyBinding && chainState != null) {
-          effectiveModesByExpression.set(
-            expressionProductHandle,
+          effectiveModesByBinding.set(
+            binding.productHandle,
             chainState.bindState.readBindingMode() ?? binding.bindingMode,
           );
           const override = chainState.bindState.readTargetObserverOverride();
@@ -524,7 +594,7 @@ export class RuntimeExpressionResourcePlanner {
       }
     }
 
-    return new RuntimeExpressionResourcePlan(entries, effectiveModesByExpression, targetObserverOverridesByBinding);
+    return new RuntimeExpressionResourcePlan(entries, effectiveModesByBinding, targetObserverOverridesByBinding);
   }
 
   private issueForBindingBehavior(
@@ -704,14 +774,32 @@ function isValueConverterPlanEntry(
   return entry.resourceKind === ResourceDefinitionKind.ValueConverter;
 }
 
-function expressionChainKey(expressionProductHandle: ProductHandle, chainIndex: number): string {
-  return `${expressionProductHandle}:${chainIndex}`;
+function expressionChainKey(
+  bindingProductHandle: ProductHandle,
+  expressionProductHandle: ProductHandle,
+  chainIndex: number,
+): string {
+  return `${bindingProductHandle}:${expressionProductHandle}:${chainIndex}`;
 }
 
 function chainIndexForPlanEntry(entry: RuntimeExpressionResourcePlanEntry): number {
   return isBindingBehaviorPlanEntry(entry)
     ? entry.occurrence.chainIndex
     : entry.chainIndex;
+}
+
+function expressionResourceSourceKey(
+  expressionProductHandle: ProductHandle,
+  name: string,
+  nameSpan: SourceSpan,
+): string {
+  return [
+    expressionProductHandle,
+    name,
+    nameSpan.file?.path ?? '',
+    nameSpan.start,
+    nameSpan.end,
+  ].join('\0');
 }
 
 function appendPlanEntry<TKey, TValue>(

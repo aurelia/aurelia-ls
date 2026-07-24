@@ -1,0 +1,29 @@
+<template>
+  <header>
+    <au-slot name="heading" expose.bind="exposeHeading">
+      <span au-slot="removed-by-process-content">This direct child is removed by AuSlot.processContent.</span>
+      <h2>Fallback heading for ${receiverLabel | fallbackLabel}</h2>
+      <div class="captured-fallback-heading" ...$attrs></div>
+    </au-slot>
+    <au-slot name="heading" expose.bind="exposeHeading"></au-slot>
+    <au-slot name="ambiguous" expose.bind="exposeHeading"></au-slot>
+    <au-slot name="ambiguous" expose.bind="alternateHeading"></au-slot>
+  </header>
+
+  <main>
+    <au-slot>
+      <p>Fallback body for ${receiverLabel | fallbackLabel & fallbackAudit:receiverLabel}</p>
+      <au-compose component="scoped-compose-widget"></au-compose>
+    </au-slot>
+  </main>
+
+  <footer>
+    <div as-element="au-slot" name="actions">
+      <button type="button">Fallback action</button>
+    </div>
+  </footer>
+
+  <aside>
+    <au-slot name=""></au-slot>
+  </aside>
+</template>
