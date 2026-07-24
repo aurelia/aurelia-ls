@@ -2276,6 +2276,21 @@ export type SemanticAppDiagnosticKind =
   | RouteRecognizerIssueKind
   | `${RouteRecognizerIssueKind}`;
 
+/** Product-grounded relationship from one diagnostic fact to another. */
+export const enum SemanticDiagnosticRelationKind {
+  /** Both diagnostics describe the same modeled operation through different authorities. */
+  SameOperationEvidence = 'same-operation-evidence',
+  /** This diagnostic is an analysis consequence of the related diagnostic fact. */
+  DerivedConsequence = 'derived-consequence',
+}
+
+/** Exact semantic edge retained independently from any user-facing presentation policy. */
+export interface SemanticDiagnosticRelation {
+  readonly relationKind: SemanticDiagnosticRelationKind | `${SemanticDiagnosticRelationKind}`;
+  /** Identity of the diagnostic fact to which this row is related. */
+  readonly relatedDiagnosticIdentityHandle: IdentityHandle;
+}
+
 export interface SemanticDiagnosticRelatedInformation {
   readonly message: string;
   readonly source: SemanticSourceReference | null;
@@ -2301,6 +2316,12 @@ export interface SemanticAppDiagnosticRow {
   readonly missingInputs: readonly string[];
   readonly source: SemanticSourceReference | null;
   readonly subject: SemanticDiagnosticSubject | null;
+  /**
+   * Always-on answer-local semantic identity used by diagnostic relations, independent from optional detail handles.
+   * Null when the row is not backed by one uniquely identified semantic product; not durable across app generations.
+   */
+  readonly diagnosticIdentityHandle: IdentityHandle | null;
+  readonly diagnosticRelations?: readonly SemanticDiagnosticRelation[];
   readonly relatedInformation: readonly SemanticDiagnosticRelatedInformation[];
   readonly suggestion: SemanticTemplateCursorSuggestionRow | null;
   /** Boot-admitted source role when the diagnostic can be tied back to an authored project file. */
@@ -2329,6 +2350,7 @@ export type SemanticDiagnosticPresentationRelation =
   | 'same-subject'
   | 'semantic-explanation'
   | 'checker-evidence'
+  | 'derived-consequence'
   | 'runtime-consequence';
 
 export interface SemanticDiagnosticPresentationRow {
@@ -3780,6 +3802,8 @@ export interface SemanticTemplateDiagnosticRow extends SemanticTemplateCursorDia
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
   readonly valueSiteKind: TemplateValueSiteKind | `${TemplateValueSiteKind}` | null;
   readonly subject?: SemanticDiagnosticSubject | null;
+  readonly diagnosticIdentityHandle: IdentityHandle | null;
+  readonly diagnosticRelations?: readonly SemanticDiagnosticRelation[];
   readonly template: {
     readonly compilationLane: SemanticTemplateCompilationRow['compilationLane'] | null;
     readonly source: SemanticSourceReference | null;

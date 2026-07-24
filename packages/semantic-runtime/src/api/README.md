@@ -1025,6 +1025,13 @@ TypeScript row as contextual `checker-evidence`. This avoids duplicate editor di
 facts needed by MCP, AOT, explanation, or future policy consumers. TypeScript-native rows such as argument mismatch,
 arity mismatch, nullish access, and unknown-owner access remain primary. Template overlay rows share the same TypeScript
 diagnostic severity mapping as ordinary TypeScript diagnostic rows so unified diagnostic answers do not drift by lane.
+Raw diagnostic rows can also carry product-grounded `diagnosticRelations` independently from this presentation policy.
+Repeat source rejection spends the retained iterator effect, runtime binding, child-Scope creator, and introduced local
+slot to relate its later facts to the owning `AUR0777` row. Assignment strictness is parallel semantic evidence about
+that same runtime operation; checker and weak-owner diagnostics rooted in the rejected local are derived analysis
+consequences. The owning diagnostic identity and relation target remain present in compact rows so paging and LSP
+reassembly never fall back to source/code coincidence. Presentation may group those rows, but aggregation and paging
+must preserve every raw fact. Do not infer these edges from source proximity or message text.
 `AppOverview` uses `available-products` for its nested diagnostic summary so a compact first read does not publish
 query-time type products or full Program diagnostics. Explicit `AppDiagnostics`, `AppDiagnosticSummary`,
 `TypeScriptDiagnostics`, `TypeScriptDiagnosticSummary`, and `TemplateDiagnostics` calls still default to the repair

@@ -100,6 +100,7 @@ export function readFrameworkCapabilityDemandDiagnosticRows(
         missingInputs: diagnostic.missingInputs,
         source: diagnostic.source,
         subject: null,
+        diagnosticIdentityHandle: demand.identityHandle,
         relatedInformation: [],
         suggestion: diagnostic.suggestion,
         sourceRole: null,

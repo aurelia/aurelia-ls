@@ -403,7 +403,12 @@ classification, expression parsing, and instruction lowering converge on the sam
   binding-pattern projector can prove or warn that the item shape is not object-compatible, or that an array-rest
   destructuring source is not an actual Array. Repeat source compatibility publishes the same issue product shape for
   runtime-html `repeat_non_iterable` (`AUR0777`) when a repeat source is outside the framework's built-in
-  `RepeatableHandlerResolver` categories. Static repeated-view values use the shared representative-value substrate:
+  `RepeatableHandlerResolver` categories. The iterator effect is also the retained causal authority for later
+  diagnostics: its runtime binding identifies assignment evidence for the same operation, while
+  `BindingScope.scopeCreators` connects each introduced repeat-local slot back to the effect so checker and weak-owner
+  rows can be classified as derived analysis consequences. A later creator that introduces or assigns the same slot
+  stops that relation, preserving shadowing authority. Public diagnostic projection spends this graph directly; it
+  does not reconstruct ownership from coincident spans. Static repeated-view values use the shared representative-value substrate:
   exact per-instance views are not materialized, but common object fields and string-pattern prefixes can survive as a
   conservative child-scope value. If a consumer needs correlated alternatives across fields from the same repeated item,
   model that as a bounded value-flow frontier rather than teaching the consumer to special-case `repeat.for`.

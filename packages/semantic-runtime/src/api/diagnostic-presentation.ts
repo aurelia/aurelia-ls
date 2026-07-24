@@ -7,11 +7,17 @@ import type {
   SemanticDiagnosticPresentationRow,
   SemanticTemplateCursorDiagnosticSeverity,
 } from './contracts.js';
+import { SemanticDiagnosticRelationKind } from './contracts.js';
 
 interface PresentationInputRow {
   readonly index: number;
   readonly rowId: string;
   readonly row: SemanticAppDiagnosticRow;
+}
+
+interface RelatedPresentationInput {
+  readonly input: PresentationInputRow;
+  readonly relation: SemanticDiagnosticPresentationRelation;
 }
 
 type TemplateTypeRelationship = 'missing-member' | 'binding-assignment';
@@ -34,10 +40,41 @@ export function appDiagnosticPresentation(
   const groupedRows = subjectGroups(inputRows);
   const consumed = new Set<number>();
   const groups: SemanticDiagnosticPresentationGroup[] = [];
+  const relatedByPrimaryIndex = diagnosticRelationInputs(inputRows);
+
+  for (const primary of inputRows) {
+    const related = relatedByPrimaryIndex.get(primary.index) ?? [];
+    if (consumed.has(primary.index) || related.length === 0) {
+      continue;
+    }
+    const unconsumed = related.filter((candidate) => !consumed.has(candidate.input.index));
+    if (unconsumed.length === 0) {
+      continue;
+    }
+    let group = presentationGroup(
+      `relation:${primary.rowId}`,
+      primary.row.subject,
+      primary,
+      [],
+      null,
+    );
+    for (const candidate of unconsumed) {
+      group = appendPresentationRows(group, [candidate.input], candidate.relation);
+    }
+    groups.push(group);
+    consumed.add(primary.index);
+    for (const candidate of unconsumed) {
+      consumed.add(candidate.input.index);
+    }
+  }
 
   for (const primary of inputRows.filter((candidate) => isDuplicateRouterConfigurationDiagnostic(candidate.row))) {
+    if (consumed.has(primary.index)) {
+      continue;
+    }
     const related = inputRows.filter((candidate) =>
       candidate.index !== primary.index
+      && !consumed.has(candidate.index)
       && isRouterRegistrationResourceConsequence(candidate.row)
       && sameDiagnosticSource(primary.row, candidate.row)
     );
@@ -58,12 +95,15 @@ export function appDiagnosticPresentation(
   }
 
   for (const [groupKey, groupRows] of groupedRows) {
-    const unknownOwner = groupRows.find((candidate) => isTemplateUnknownOwnerOverlayDiagnostic(candidate.row)) ?? null;
+    const unknownOwner = groupRows.find((candidate) =>
+      !consumed.has(candidate.index) && isTemplateUnknownOwnerOverlayDiagnostic(candidate.row)
+    ) ?? null;
     if (unknownOwner == null) {
       continue;
     }
     const related = groupRows
       .filter((candidate) => candidate.index !== unknownOwner.index)
+      .filter((candidate) => !consumed.has(candidate.index))
       .filter((candidate) => isTemplateWeakNoMembersDiagnostic(candidate.row));
     if (related.length === 0) {
       continue;
@@ -178,6 +218,57 @@ export function appDiagnosticPresentation(
   };
 }
 
+function diagnosticRelationInputs(
+  rows: readonly PresentationInputRow[],
+): ReadonlyMap<number, readonly RelatedPresentationInput[]> {
+  const rowByIdentity = new Map<
+    NonNullable<SemanticAppDiagnosticRow['diagnosticIdentityHandle']>,
+    PresentationInputRow | null
+  >();
+  for (const row of rows) {
+    const identity = row.row.diagnosticIdentityHandle;
+    if (identity == null) {
+      continue;
+    }
+    rowByIdentity.set(identity, rowByIdentity.has(identity) ? null : row);
+  }
+
+  const relatedByPrimaryIndex = new Map<number, RelatedPresentationInput[]>();
+  for (const row of rows) {
+    const related = row.row.diagnosticRelations?.flatMap((relation) => {
+      const primary = rowByIdentity.get(relation.relatedDiagnosticIdentityHandle) ?? null;
+      const presentationRelation = semanticDiagnosticPresentationRelation(relation.relationKind);
+      return primary == null || primary.index === row.index || presentationRelation == null
+        ? []
+        : [{ primary, presentationRelation }];
+    }) ?? [];
+    if (related.length !== 1) {
+      continue;
+    }
+    const { primary, presentationRelation } = related[0]!;
+    let inputs = relatedByPrimaryIndex.get(primary.index);
+    if (inputs == null) {
+      inputs = [];
+      relatedByPrimaryIndex.set(primary.index, inputs);
+    }
+    inputs.push({ input: row, relation: presentationRelation });
+  }
+  return relatedByPrimaryIndex;
+}
+
+function semanticDiagnosticPresentationRelation(
+  relation: SemanticDiagnosticRelationKind | `${SemanticDiagnosticRelationKind}`,
+): SemanticDiagnosticPresentationRelation | null {
+  switch (relation) {
+    case SemanticDiagnosticRelationKind.SameOperationEvidence:
+      return 'semantic-explanation';
+    case SemanticDiagnosticRelationKind.DerivedConsequence:
+      return 'derived-consequence';
+    default:
+      return null;
+  }
+}
+
 function isDuplicateRouterConfigurationDiagnostic(
   row: SemanticAppDiagnosticRow,
 ): boolean {
@@ -201,10 +292,17 @@ function sameDiagnosticSource(
   left: SemanticAppDiagnosticRow,
   right: SemanticAppDiagnosticRow,
 ): boolean {
-  return left.source?.path != null
-    && left.source.path === right.source?.path
-    && left.source.start === right.source?.start
-    && left.source.end === right.source?.end;
+  return sameSourceReference(left.source, right.source);
+}
+
+function sameSourceReference(
+  left: SemanticAppDiagnosticRow['source'],
+  right: SemanticAppDiagnosticRow['source'],
+): boolean {
+  return left?.path != null
+    && left.path === right?.path
+    && left.start === right?.start
+    && left.end === right?.end;
 }
 
 function subjectGroups(

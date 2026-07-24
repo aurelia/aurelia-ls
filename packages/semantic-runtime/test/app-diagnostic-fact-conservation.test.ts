@@ -5,6 +5,7 @@ import {
   appDiagnosticPresentation,
   createSemanticRuntime,
   SemanticAppQueryKind,
+  SemanticDiagnosticRelationKind,
   SemanticRuntimeDetail,
   type SemanticAppDiagnosticRow,
 } from "../src/index.js";
@@ -42,6 +43,7 @@ function assignmentDiagnosticRow(
       subjectName: "fulfillmentMethod",
       source,
     },
+    diagnosticIdentityHandle: null,
     relatedInformation: [],
     suggestion: null,
     sourceRole: "template",
@@ -386,5 +388,114 @@ describe("app diagnostic fact conservation", () => {
         relation: "checker-evidence",
       }),
     ]);
+  });
+
+  test("preserves repeat source relations across runtime, data-flow, and checker diagnostics", async () => {
+    const sourceFile = "src/template-controller-edge-cases-app.html";
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(packageRoot, "fixtures/pressure/template-controller-built-ins"),
+      storeKey: "app-diagnostic-fact-conservation-repeat-relations",
+    });
+    const rows: SemanticAppDiagnosticRow[] = [];
+    let cursor: string | null | undefined;
+    do {
+      const answer = await runtime.answerAppQuery({
+        kind: SemanticAppQueryKind.AppDiagnostics,
+        sourceFile: { filePath: sourceFile },
+        analysisDepth: "binding-observation",
+        diagnosticProjection: "type-projection",
+        includeAuthoringTemplates: true,
+        page: { size: 2, cursor },
+      });
+      rows.push(...answer.value.rows);
+      cursor = answer.page?.nextCursor;
+    } while (cursor != null);
+    const presentation = appDiagnosticPresentation(rows, true);
+    const causes = rows.filter((row) =>
+      row.diagnosticKind === "runtime-binding-scope-framework-error"
+      && row.frameworkErrorCode === "AUR0777"
+    );
+
+    expect(causes).toHaveLength(2);
+    expect(presentation.rawRowCount).toBe(rows.length);
+    for (const cause of causes) {
+      expect(cause.diagnosticIdentityHandle).not.toBeNull();
+      expect(cause.handles).toBeUndefined();
+      const causeIndex = rows.indexOf(cause);
+      const group = presentation.groups.find((candidate) =>
+        candidate.primary.rowIndex === causeIndex
+      );
+      const related = group?.related.map((item) => ({
+        row: rows[item.rowIndex]!,
+        presentationRelation: item.relation,
+      })) ?? [];
+
+      expect(group?.rawRowCount).toBe(4);
+      expect(related).toHaveLength(3);
+      expect(related.map(({ row, presentationRelation }) => ({
+        diagnosticKind: row.diagnosticKind,
+        diagnosticRelation: row.diagnosticRelations?.[0]?.relationKind,
+        presentationRelation,
+      }))).toEqual(expect.arrayContaining([
+        {
+          diagnosticKind: "binding-target-assignment-strictness",
+          diagnosticRelation: SemanticDiagnosticRelationKind.SameOperationEvidence,
+          presentationRelation: "semantic-explanation",
+        },
+        {
+          diagnosticKind: "template-expression-typescript-diagnostic",
+          diagnosticRelation: SemanticDiagnosticRelationKind.DerivedConsequence,
+          presentationRelation: "derived-consequence",
+        },
+        {
+          diagnosticKind: "weak-expression-member-owner",
+          diagnosticRelation: SemanticDiagnosticRelationKind.DerivedConsequence,
+          presentationRelation: "derived-consequence",
+        },
+      ]));
+      for (const { row } of related) {
+        expect(row.diagnosticRelations?.[0]?.relatedDiagnosticIdentityHandle)
+          .toBe(cause.diagnosticIdentityHandle);
+      }
+    }
+  });
+
+  test("stops repeat diagnostic relations at a later slot assignment", async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(packageRoot, "fixtures/pressure/template-controller-built-ins"),
+      storeKey: "app-diagnostic-fact-conservation-repeat-shadow",
+    });
+    const answer = await runtime.answerAppQuery({
+      kind: SemanticAppQueryKind.AppDiagnostics,
+      sourceFile: { filePath: "src/repeat-diagnostic-shadow-app.html" },
+      analysisDepth: "binding-observation",
+      diagnosticProjection: "type-projection",
+      includeAuthoringTemplates: true,
+      page: { size: 100 },
+    });
+    const rows = answer.value.rows;
+    const cause = rows.find((row) =>
+      row.diagnosticKind === "runtime-binding-scope-framework-error"
+      && row.frameworkErrorCode === "AUR0777"
+    );
+
+    expect(cause?.diagnosticIdentityHandle).not.toBeNull();
+    expect(rows.filter((row) =>
+      row.diagnosticRelations?.some((relation) =>
+        relation.relatedDiagnosticIdentityHandle === cause?.diagnosticIdentityHandle
+      )
+    ).map((row) => row.diagnosticKind)).toEqual([
+      "binding-target-assignment-strictness",
+    ]);
+    expect(rows.filter((row) =>
+      (
+        row.diagnosticKind === "template-expression-typescript-diagnostic"
+        && row.missingInputs.includes("typescript:TS18046")
+      )
+      || (
+        row.diagnosticKind === "weak-expression-member-owner"
+        && row.missingInputs.includes("expression-member-owner-type:missing-slot-type")
+      )
+    )).toEqual([]);
   });
 });

@@ -28,7 +28,7 @@ import {
   sourceSpanContains,
   sourceSpanContainsOffset,
 } from '../kernel/address.js';
-import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import {
   AuthoredSourceTextCache,
   authoredSourcePositionForOffset,
@@ -110,6 +110,7 @@ import type {
   SemanticRuntimePageResult,
   SemanticRuntimeSourceFileInput,
   SemanticRuntimeSourceCursorInput,
+  SemanticDiagnosticRelation,
   SemanticDiagnosticSubject,
   SemanticTemplateCompilationRow,
   SemanticTemplateCursorBindableRow,
@@ -174,6 +175,10 @@ import {
   TemplateTypeSystemOverlayBuilder,
   type TemplateTypeSystemOverlayEmission,
 } from '../template/template-type-system-overlay.js';
+import {
+  TemplateDiagnosticRelations,
+  type TemplateDiagnosticRelationOrigin,
+} from './template-diagnostic-relations.js';
 
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
 
@@ -200,6 +205,11 @@ interface TemplateOverlayDiagnosticCache {
   readonly selectionsByOriginKey: ReadonlyMap<string, TemplateOverlayDiagnosticSelection>;
 }
 
+interface TemplateOverlayDiagnosticSubjectProjection {
+  readonly subject: SemanticDiagnosticSubject | null;
+  readonly memberAccess: ExpressionMemberAccessSpan | null;
+}
+
 interface TemplateCompletionReadResult {
   readonly outcome: SemanticRuntimeAnswerOutcome;
   readonly closure: SemanticRuntimeAnswerClosure;
@@ -224,6 +234,7 @@ interface TemplateDiagnosticsScanContext {
   readonly routeParameterEndpointPlans: ReadonlyMap<ProductHandle, RouteParameterEndpointPlan>;
   readonly i18nTranslationKeyProductHandles: readonly ProductHandle[];
   readonly sourceTextCache: AuthoredSourceTextCache;
+  readonly diagnosticRelationsByResource: WeakMap<TemplateResourceRuntimeAnalysisEmission, TemplateDiagnosticRelations>;
   readonly seenRows: Set<string>;
 }
 
@@ -237,13 +248,13 @@ interface TemplateDiagnosticOrigin {
 }
 
 type TemplateDiagnosticOriginFields = Pick<SemanticTemplateDiagnosticRow, 'phase'> & {
+  readonly diagnosticIdentityHandle: IdentityHandle | null;
   readonly handles?: NonNullable<SemanticTemplateDiagnosticRow['handles']>;
 };
 
 interface ExpressionMemberDiagnosticSite {
   readonly span: ExpressionMemberAccessSpan;
-  readonly semanticProductHandle: ProductHandle;
-  readonly sourceAddressHandle: AddressHandle | null;
+  readonly parse: TemplateExpressionParse;
 }
 
 interface ExpressionRootDiagnosticSite {
@@ -750,7 +761,7 @@ function templateOverlayTypeDiagnosticRows(
     if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
       return [];
     }
-    const row = templateOverlayDiagnosticRow(store, selection.selection, diagnostic, source, context.includeHandles);
+    const row = templateOverlayDiagnosticRow(store, selection.selection, diagnostic, source, context);
     const key = templateDiagnosticRowKey(row, source);
     if (context.seenRows.has(key)) {
       return [];
@@ -821,16 +832,18 @@ function templateDiagnosticOriginFields(
   includeHandles: boolean,
   origin: TemplateDiagnosticOrigin,
 ): TemplateDiagnosticOriginFields {
+  const semanticIdentityHandle = origin.semanticProductHandle == null
+    ? null
+    : store.readProduct(origin.semanticProductHandle)?.identityHandle ?? null;
   return {
     phase: origin.phase,
+    diagnosticIdentityHandle: semanticIdentityHandle,
     ...(includeHandles
       ? {
         handles: {
           sourceAddressHandle: origin.sourceAddressHandle,
           semanticProductHandle: origin.semanticProductHandle,
-          semanticIdentityHandle: origin.semanticProductHandle == null
-            ? null
-            : store.readProduct(origin.semanticProductHandle)?.identityHandle ?? null,
+          semanticIdentityHandle,
           overlayOriginKey: origin.overlayOriginKey ?? null,
           overlayFileName: origin.overlayFileName ?? null,
           overlaySegmentLabel: origin.overlaySegmentLabel ?? null,
@@ -845,10 +858,14 @@ function templateOverlayDiagnosticRow(
   selection: TemplateCompletionResourceSelection,
   diagnostic: TypeSystemOverlayDiagnostic,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
-  includeHandles: boolean,
+  context: TemplateDiagnosticsScanContext,
 ): SemanticTemplateDiagnosticRow {
   const missingInput = `typescript:TS${diagnostic.diagnostic.code}`;
   const suggestion = templateOverlayDiagnosticSuggestion(diagnostic, source);
+  const subject = templateOverlayDiagnosticSubject(store, selection.resource, diagnostic, source);
+  const parse = diagnostic.semanticProductHandle == null
+    ? null
+    : readTemplateExpressionParse(store, diagnostic.semanticProductHandle);
   return {
     diagnosticKind: 'template-expression-typescript-diagnostic',
     diagnosticAuthority: 'typescript',
@@ -858,7 +875,7 @@ function templateOverlayDiagnosticRow(
     missingInput,
     missingInputs: [missingInput],
     source,
-    subject: templateOverlayDiagnosticSubject(store, selection.resource, diagnostic, source),
+    subject: subject.subject,
     selectedMemberName: null,
     ownerTypeDisplay: null,
     ownerTypeShapeKind: null,
@@ -870,7 +887,7 @@ function templateOverlayDiagnosticRow(
       compilationLane: selection.lane,
       source: describeAddress(store, selection.sourceAddressHandle),
     },
-    ...templateDiagnosticOriginFields(store, includeHandles, {
+    ...templateDiagnosticOriginFields(store, context.includeHandles, {
       phase: diagnostic.diagnostic.phase,
       sourceAddressHandle: diagnostic.authoredSource?.sourceAddressHandle ?? null,
       semanticProductHandle: diagnostic.semanticProductHandle,
@@ -878,6 +895,12 @@ function templateOverlayDiagnosticRow(
       overlayFileName: diagnostic.overlayFileName,
       overlaySegmentLabel: diagnostic.segment?.label ?? null,
     }),
+    ...templateDiagnosticRelationFields(
+      diagnostic.diagnostic.code === 18046 && parse != null && subject.memberAccess != null
+        ? templateDiagnosticRelations(selection, context)
+          .forExpressionSubject(parse, subject.memberAccess.subjectSpan)
+        : null,
+    ),
   };
 }
 
@@ -886,8 +909,47 @@ function templateOverlayDiagnosticSubject(
   resource: TemplateResourceRuntimeAnalysisEmission,
   diagnostic: TypeSystemOverlayDiagnostic,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
-): SemanticDiagnosticSubject | null {
-  return templateExpressionDiagnosticSubject(store, resource, diagnostic.semanticProductHandle, source);
+): TemplateOverlayDiagnosticSubjectProjection {
+  return templateExpressionDiagnosticSubjectProjection(
+    store,
+    resource,
+    diagnostic.semanticProductHandle,
+    source,
+  );
+}
+
+function templateExpressionDiagnosticSubjectProjection(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  semanticProductHandle: ProductHandle | null,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+  subjectName: string | null = null,
+): TemplateOverlayDiagnosticSubjectProjection {
+  if (source.path == null || source.start == null || source.end == null) {
+    return { subject: null, memberAccess: null };
+  }
+  const memberAccess = memberAccessSpanForDiagnosticRange(
+    store,
+    resource,
+    semanticProductHandle,
+    source.start,
+    source.end,
+  );
+  return {
+    memberAccess,
+    subject: memberAccess == null
+      ? {
+        subjectKind: 'template-expression',
+        subjectName,
+        source,
+      }
+      : diagnosticSubjectForSpan(
+        source.path,
+        memberAccess.subjectKind,
+        memberAccess.subjectSpan,
+        subjectName,
+      ),
+  };
 }
 
 function templateExpressionDiagnosticSubject(
@@ -897,24 +959,13 @@ function templateExpressionDiagnosticSubject(
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
   subjectName: string | null = null,
 ): SemanticDiagnosticSubject | null {
-  if (source.path == null || source.start == null || source.end == null) {
-    return null;
-  }
-  const access = memberAccessSpanForDiagnosticRange(
+  return templateExpressionDiagnosticSubjectProjection(
     store,
     resource,
     semanticProductHandle,
-    source.start,
-    source.end,
-  );
-  if (access != null) {
-    return diagnosticSubjectForSpan(source.path, access.subjectKind, access.subjectSpan, subjectName);
-  }
-  return {
-    subjectKind: 'template-expression',
-    subjectName,
     source,
-  };
+    subjectName,
+  ).subject;
 }
 
 function memberAccessSpanForDiagnosticRange(
@@ -1049,7 +1100,34 @@ function templateDiagnosticsScanContext(
     routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
     sourceTextCache: new AuthoredSourceTextCache(workspaceRootDir, emission.project.inputGeneration.host),
+    diagnosticRelationsByResource: new WeakMap(),
     seenRows: new Set(),
+  };
+}
+
+function templateDiagnosticRelations(
+  selection: TemplateCompletionResourceSelection,
+  context: TemplateDiagnosticsScanContext,
+): TemplateDiagnosticRelations {
+  let relations = context.diagnosticRelationsByResource.get(selection.resource);
+  if (relations == null) {
+    relations = new TemplateDiagnosticRelations(selection.resource);
+    context.diagnosticRelationsByResource.set(selection.resource, relations);
+  }
+  return relations;
+}
+
+function templateDiagnosticRelationFields(
+  origin: TemplateDiagnosticRelationOrigin | null,
+): { readonly diagnosticRelations?: readonly SemanticDiagnosticRelation[] } {
+  if (origin == null) {
+    return {};
+  }
+  return {
+    diagnosticRelations: [{
+      relationKind: origin.relationKind,
+      relatedDiagnosticIdentityHandle: origin.issue.identityHandle,
+    }],
   };
 }
 
@@ -1105,12 +1183,13 @@ function templateDiagnosticRowsForMemberSite(
   });
   const cursorInfo = templateCursorInfoResult(store, selection, cursorContext, context.includeHandles, [...new Set(cursorContext.missingInputs)]);
   return cursorInfo.diagnostics.flatMap((diagnostic) =>
-    templateDiagnosticRowForDiagnostic(store, diagnostic, cursorInfo, source.sourcePath, site, context)
+    templateDiagnosticRowForDiagnostic(store, selection, diagnostic, cursorInfo, source.sourcePath, site, context)
   );
 }
 
 function templateDiagnosticRowForDiagnostic(
   store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
   diagnostic: SemanticTemplateCursorDiagnosticRow,
   cursorInfo: SemanticTemplateCursorInfoResult,
   filePath: string,
@@ -1128,9 +1207,15 @@ function templateDiagnosticRowForDiagnostic(
     ...diagnostic,
     ...templateDiagnosticOriginFields(store, context.includeHandles, {
       phase: null,
-      semanticProductHandle: site.semanticProductHandle,
-      sourceAddressHandle: site.sourceAddressHandle,
+      semanticProductHandle: site.parse.productHandle,
+      sourceAddressHandle: site.parse.sourceAddressHandle,
     }),
+    ...templateDiagnosticRelationFields(
+      diagnostic.diagnosticKind === 'weak-expression-member-owner'
+        && diagnostic.missingInputs.includes('expression-member-owner-type:missing-slot-type')
+        ? templateDiagnosticRelations(selection, context).forExpressionSubject(site.parse, span.subjectSpan)
+        : null,
+    ),
     source,
     subject: diagnosticSubjectForSpan(
       filePath,
@@ -1194,6 +1279,11 @@ function bindingDataFlowDiagnosticRowsForSelection(
           semanticProductHandle: dataFlow.productHandle,
           sourceAddressHandle: dataFlow.sourceAddressHandle,
         }),
+        ...templateDiagnosticRelationFields(
+          diagnostic.diagnosticKind === 'binding-target-assignment-strictness'
+            ? templateDiagnosticRelations(selection, context).forBindingDataFlow(dataFlow)
+            : null,
+        ),
         siteKind: TemplateCompletionSiteKind.Expression,
         valueSiteKind: valueSiteKindForDataFlow(store, dataFlow.expressionProductHandle),
         subject: templateExpressionDiagnosticSubject(
@@ -2011,8 +2101,7 @@ function expressionMemberDiagnosticSites(
       seen.add(key);
       sites.push({
         span,
-        semanticProductHandle: parse.productHandle,
-        sourceAddressHandle: parse.sourceAddressHandle,
+        parse,
       });
     }
   }

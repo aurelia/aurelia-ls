@@ -3,13 +3,6 @@
   "schemaVersion": "semantic-conformance-known-gaps.v1",
   "knownGaps": [
     {
-      "assertionId": "template-controller-built-ins/repeat-source-rejection-presentation-cascade-policy",
-      "status": "known-gap",
-      "failureBucket": "diagnostic-cascade-policy",
-      "firstObserved": "2026-07-09",
-      "rationale": "Raw AUR0777, assignment, checker, and weak-slot rows are all grounded evidence and must remain available. Presentation lacks an explicit causal edge from the rejected iterator projection to its derived repeat-local diagnostics, so the IDE still presents six consequences as independent problems instead of contextual evidence under the two root errors."
-    },
-    {
       "assertionId": "template-native-target-precedence/conditional-app-two-way-predicate",
       "status": "known-gap",
       "failureBucket": "attr-mapper-predicate-execution-open",
