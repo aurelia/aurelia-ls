@@ -26,6 +26,8 @@ export const enum FrameworkIntrinsicDiKey {
   IContextRouter = 'IContextRouter',
   /** Template compiler service installed by runtime-html's default component registrations. */
   ITemplateCompiler = 'ITemplateCompiler',
+  /** Runtime repeat-handler extension point consumed by RepeatableHandlerResolver. */
+  IRepeatableHandler = 'IRepeatableHandler',
 }
 
 export const frameworkIntrinsicDiKeys: readonly FrameworkIntrinsicDiKey[] = [
@@ -42,6 +44,7 @@ export const frameworkIntrinsicDiKeys: readonly FrameworkIntrinsicDiKey[] = [
   FrameworkIntrinsicDiKey.IRouteContext,
   FrameworkIntrinsicDiKey.IContextRouter,
   FrameworkIntrinsicDiKey.ITemplateCompiler,
+  FrameworkIntrinsicDiKey.IRepeatableHandler,
 ];
 
 export function frameworkIntrinsicDiKeyLocal(key: FrameworkIntrinsicDiKey): string {

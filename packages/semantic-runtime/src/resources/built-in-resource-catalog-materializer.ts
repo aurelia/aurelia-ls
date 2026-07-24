@@ -1104,6 +1104,8 @@ function resourceCatalogSummaryForFrameworkKind(frameworkKind: FrameworkRegistra
       return 'RuntimeHtml syntax-only registration group did not admit resource headers.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultRenderers:
       return 'RuntimeHtml DefaultRenderers admitted renderers but no resource headers.';
+    case FrameworkRegistrationKind.RuntimeHtmlArrayLikeHandler:
+      return 'RuntimeHtml ArrayLikeHandler admitted a DI repeat-handler effect but no resource headers.';
     case FrameworkRegistrationKind.AppTask:
       return 'AppTask registry does not admit resource catalogs.';
   }

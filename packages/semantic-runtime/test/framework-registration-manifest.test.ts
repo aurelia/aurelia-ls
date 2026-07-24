@@ -13,6 +13,7 @@ import {
   FrameworkDiEffectCoverageState,
   frameworkDiRegistrationEffectsForKind,
 } from '../src/di/framework-registration-effects.js';
+import { FrameworkIntrinsicDiKey } from '../src/di/framework-intrinsic-di-key.js';
 
 describe('framework registration manifest', () => {
   test('keeps DI effect coverage separate from closed catalog projections', () => {
@@ -25,6 +26,17 @@ describe('framework registration manifest', () => {
     expect(frameworkDiRegistrationEffectsForKind(
       FrameworkRegistrationKind.I18nConfiguration,
     ).coverageState).toBe(FrameworkDiEffectCoverageState.Closed);
+    const arrayLike = frameworkDiRegistrationEffectsForKind(
+      FrameworkRegistrationKind.RuntimeHtmlArrayLikeHandler,
+    );
+    expect(arrayLike.coverageState).toBe(FrameworkDiEffectCoverageState.Closed);
+    expect(arrayLike.resolvers).toEqual([
+      expect.objectContaining({
+        capability: FrameworkRegistrationCapability.RuntimeHtmlArrayLikeRepeatHandler,
+        keyName: FrameworkIntrinsicDiKey.IRepeatableHandler,
+        valueName: 'ArrayLikeHandler',
+      }),
+    ]);
   });
 
   test('selects a directly usable dialog configuration for generated registration source', () => {

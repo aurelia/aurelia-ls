@@ -41,12 +41,10 @@ import {
   sameCheckerTypeReference,
 } from './type-shape.js';
 import {
+  type CheckerRepeatableHandlerAdmission,
   CheckerTypeNullishPresence,
   checkerTypeShapeNullishPresence,
 } from './checker-related-types.js';
-import {
-  CheckerBindingPatternLocalProjection,
-} from './binding-pattern-locals.js';
 import {
   CheckerTypeShapeAccess,
   type CheckerTypeShapeMemberValueAccess,
@@ -316,25 +314,12 @@ export class CheckerExpressionTypeEvaluator {
       : this.typeAccess.memberValueAccess(ownerShape, memberName, `${localKey}:member:${localKeyPart(memberName)}`);
   }
 
-  evaluateIteratorElement(
-    context: CheckerExpressionTypeEvaluationContext,
-  ): CheckerExpressionTypeEvaluation {
-    this.requireCurrent();
-    return this.iterables.evaluateIteratorElement(context);
-  }
-
-  evaluateIteratorLocals(
-    context: CheckerExpressionTypeEvaluationContext,
-  ): CheckerExpressionTypeEvaluation | CheckerBindingPatternLocalProjection {
-    this.requireCurrent();
-    return this.iterables.evaluateIteratorLocals(context);
-  }
-
   evaluateIteratorProjection(
     context: CheckerExpressionTypeEvaluationContext,
+    handlerAdmission: CheckerRepeatableHandlerAdmission,
   ): CheckerExpressionIteratorProjection {
     this.requireCurrent();
-    return this.iterables.evaluateIteratorProjection(context);
+    return this.iterables.evaluateIteratorProjection(context, handlerAdmission);
   }
 
   private requireCurrent(): void {

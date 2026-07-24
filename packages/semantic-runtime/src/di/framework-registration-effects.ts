@@ -61,6 +61,13 @@ const frameworkResolverEffects: readonly FrameworkResolverEffect[] = [
     valueName: 'TemplateCompiler',
   },
   {
+    capability: FrameworkRegistrationCapability.RuntimeHtmlArrayLikeRepeatHandler,
+    keyName: FrameworkIntrinsicDiKey.IRepeatableHandler,
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'ArrayLikeHandler',
+  },
+  {
     capability: FrameworkRegistrationCapability.I18nServiceResolvers,
     keyName: 'I18nInitOptions',
     strategy: ResolverStrategy.callback,
@@ -317,6 +324,8 @@ function frameworkDiRegistrationOpenSummary(kind: FrameworkRegistrationKind): st
       return 'DefaultBindingLanguage catalog effects are modeled, but its DI registration body is not replayed yet.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
       return 'DefaultResources resource slots are modeled, but non-resource DI effects from the registration body remain open.';
+    case FrameworkRegistrationKind.RuntimeHtmlArrayLikeHandler:
+      return null;
     case FrameworkRegistrationKind.RuntimeHtmlDefaultComponents:
       return 'DefaultComponents compiler services are modeled, but remaining DI registrations are not replayed yet.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultRenderers:

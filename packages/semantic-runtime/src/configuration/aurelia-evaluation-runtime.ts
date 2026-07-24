@@ -1214,6 +1214,8 @@ export function aureliaFrameworkRegistrationValueForKind(
     case FrameworkRegistrationKind.RouterDefaultComponents:
     case FrameworkRegistrationKind.RouterDefaultResources:
       return frameworkRegistrationGroupValue(kind, node);
+    case FrameworkRegistrationKind.RuntimeHtmlArrayLikeHandler:
+      return frameworkRegistryValue(kind, node);
     case FrameworkRegistrationKind.StateDefaultConfiguration:
       return stateConfigurationFactoryNamespace(node);
     case FrameworkRegistrationKind.AppTask:

@@ -807,8 +807,10 @@ owned; renderer named-resource misses stay in `RuntimeControllerIssue`, and expr
 misses stay in the binding-utils/type-system lane.
 Runtime-html repeat diagnostics now split across the modeled framework owners. `RepeatableHandlerResolver` uses built-in
 handlers for arrays, sets, maps, numbers, and nullish; semantic-runtime maps unsupported checker-visible repeat sources
-to `repeat_non_iterable` (`AUR0777`) through scope issues and leaves `IRepeatableHandler` extension points as future
-DI/configuration pressure. The `Repeat` constructor option checks are controller-owned now:
+to `repeat_non_iterable` (`AUR0777`) through scope issues. Registered `IRepeatableHandler` extensions are read through
+the active render container's canonical interface key: framework `ArrayLikeHandler` spends its numeric-length contract,
+while app handlers reuse DI provider activation and their checker-visible `iterate` signatures to constrain source
+admission without inventing an item type. The `Repeat` constructor option checks are controller-owned now:
 `repeat_invalid_key_binding_command` (`AUR0775`), `repeat_extraneous_binding` (`AUR0776`), and
 `repeat_invalid_contextual_binding_command` (`AUR0821`) publish `RuntimeControllerIssue` products while renderer
 emulation creates the template-controller frame. The rest of the repeat frontier stays explicit:

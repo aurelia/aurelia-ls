@@ -17,7 +17,41 @@ export interface CheckerRepeatableElementTypeInfo {
   readonly unsupportedConstituents: number;
   readonly openConstituents: number;
   readonly nullishConstituents: number;
+  /** Constituents admitted only by an app-defined handler whose item projection remains unknown. */
+  readonly handlerOpenConstituents: number;
 }
+
+export const enum CheckerRepeatableHandlerCapability {
+  /** No app-registered repeat handler can widen the built-in source categories. */
+  None = 0,
+  /** Aurelia's ArrayLikeHandler admits object values with numeric length. */
+  ArrayLike = 1 << 0,
+  /** At least one app-defined handler participates in repeat-source admission. */
+  Custom = 1 << 1,
+}
+
+/** Checker-visible upper bound declared by one app-owned `IRepeatableHandler` implementation. */
+export class CheckerRepeatableHandlerContract {
+  constructor(
+    /** Value type accepted by the handler's `iterate` method, or null when the declaration stayed open. */
+    readonly sourceType: ts.Type | null,
+    /** Item type supplied to the handler's callback, or null when the declaration stayed open. */
+    readonly elementType: ts.Type | null,
+  ) {}
+}
+
+/** Handler set reached through the active render container's `all(IRepeatableHandler)` lookup. */
+export class CheckerRepeatableHandlerAdmission {
+  constructor(
+    readonly capabilities: CheckerRepeatableHandlerCapability,
+    readonly customContracts: readonly CheckerRepeatableHandlerContract[],
+  ) {}
+}
+
+export const NoCheckerRepeatableHandlerAdmission = new CheckerRepeatableHandlerAdmission(
+  CheckerRepeatableHandlerCapability.None,
+  [],
+);
 
 export const enum CheckerTypeNullishPresence {
   /** No visible checker constituent can produce `null`, `undefined`, or `void`. */
@@ -164,6 +198,74 @@ export function checkerRepeatableElementTypeInfo(
   return info;
 }
 
+/**
+ * Classify a repeat source after spending the handlers admitted by the active DI environment.
+ *
+ * The built-in relation remains independently cached because handler capabilities are request-context policy, not
+ * properties of a TypeChecker type. Custom handlers turn otherwise rejected constituents into honest open
+ * constituents; ArrayLikeHandler can retain the numeric index element type.
+ */
+export function checkerRepeatableElementTypeInfoForHandlerAdmission(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  admission: CheckerRepeatableHandlerAdmission,
+): CheckerRepeatableElementTypeInfo {
+  if (admission.capabilities === CheckerRepeatableHandlerCapability.None) {
+    return checkerRepeatableElementTypeInfo(checker, type);
+  }
+  if (type.isUnion()) {
+    return unionRepeatableElementTypeInfo(
+      checker,
+      type.types,
+      (constituent) => checkerRepeatableElementTypeInfoForHandlerAdmission(
+        checker,
+        constituent,
+        admission,
+      ),
+    );
+  }
+  if ((type.flags & ts.TypeFlags.TypeParameter) !== 0) {
+    const constraint = checker.getBaseConstraintOfType(type);
+    if (constraint != null && constraint !== type) {
+      return checkerRepeatableElementTypeInfoForHandlerAdmission(checker, constraint, admission);
+    }
+  }
+
+  const builtIn = checkerRepeatableElementTypeInfo(checker, type);
+  if (builtIn.unsupportedConstituents === 0) {
+    return builtIn;
+  }
+
+  if ((admission.capabilities & CheckerRepeatableHandlerCapability.ArrayLike) !== 0) {
+    const arrayLike = checkerArrayLikeAdmission(checker, type);
+    if (arrayLike.admitted) {
+      return repeatableElementInfo(
+        arrayLike.elementType ?? checker.getUnknownType(),
+        1,
+        0,
+        0,
+        0,
+        arrayLike.elementType == null ? 1 : 0,
+      );
+    }
+  }
+
+  const custom = checkerCustomRepeatableHandlerElementType(checker, type, admission.customContracts);
+  if (custom.matched) {
+    return repeatableElementInfo(
+      custom.elementType ?? checker.getUnknownType(),
+      0,
+      0,
+      1,
+      0,
+      1,
+    );
+  }
+  return custom.open
+    ? repeatableElementInfo(checker.getUnknownType(), 0, 1, 1, 0, 1)
+    : builtIn;
+}
+
 function computeCheckerRepeatableElementTypeInfo(
   checker: ts.TypeChecker,
   type: ts.Type,
@@ -173,15 +275,15 @@ function computeCheckerRepeatableElementTypeInfo(
   }
 
   if (checkerNullishType(checker, type)) {
-    return repeatableElementInfo(null, 0, 0, 0, 1);
+    return repeatableElementInfo(null, 0, 0, 0, 1, 0);
   }
 
   if ((type.flags & ts.TypeFlags.Any) !== 0) {
-    return repeatableElementInfo(checker.getAnyType(), 0, 0, 1, 0);
+    return repeatableElementInfo(checker.getAnyType(), 0, 0, 1, 0, 0);
   }
 
   if ((type.flags & ts.TypeFlags.Unknown) !== 0) {
-    return repeatableElementInfo(checker.getUnknownType(), 0, 0, 1, 0);
+    return repeatableElementInfo(checker.getUnknownType(), 0, 0, 1, 0, 0);
   }
 
   if ((type.flags & ts.TypeFlags.TypeParameter) !== 0) {
@@ -189,17 +291,17 @@ function computeCheckerRepeatableElementTypeInfo(
     if (constraint != null && constraint !== type) {
       return checkerRepeatableElementTypeInfo(checker, constraint);
     }
-    return repeatableElementInfo(checker.getUnknownType(), 0, 0, 1, 0);
+    return repeatableElementInfo(checker.getUnknownType(), 0, 0, 1, 0, 0);
   }
 
   if ((type.flags & ts.TypeFlags.Never) !== 0) {
-    return repeatableElementInfo(null, 0, 0, 1, 0);
+    return repeatableElementInfo(null, 0, 0, 1, 0, 0);
   }
 
   const elementType = checkerDefaultRepeatableElementType(checker, type);
   return elementType == null
-    ? repeatableElementInfo(null, 0, 1, 0, 0)
-    : repeatableElementInfo(elementType, 1, 0, 0, 0);
+    ? repeatableElementInfo(null, 0, 1, 0, 0, 0)
+    : repeatableElementInfo(elementType, 1, 0, 0, 0, 0);
 }
 
 function repeatableElementTypeInfoCache(
@@ -388,8 +490,10 @@ function checkerIndexInfoOfType(
 function unionRepeatableElementTypeInfo(
   checker: ts.TypeChecker,
   types: readonly ts.Type[],
+  read: (type: ts.Type) => CheckerRepeatableElementTypeInfo = (type) =>
+    checkerRepeatableElementTypeInfo(checker, type),
 ): CheckerRepeatableElementTypeInfo {
-  const infos = types.map((type) => checkerRepeatableElementTypeInfo(checker, type));
+  const infos = types.map(read);
   const elementTypes = infos
     .map((info) => info.elementType)
     .filter((type): type is ts.Type => type != null);
@@ -401,7 +505,55 @@ function unionRepeatableElementTypeInfo(
     sumRepeatableInfo(infos, 'unsupportedConstituents'),
     sumRepeatableInfo(infos, 'openConstituents'),
     sumRepeatableInfo(infos, 'nullishConstituents'),
+    sumRepeatableInfo(infos, 'handlerOpenConstituents'),
   );
+}
+
+function checkerArrayLikeAdmission(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): { readonly admitted: boolean; readonly elementType: ts.Type | null } {
+  if ((type.flags & ts.TypeFlags.Object) === 0) {
+    return { admitted: false, elementType: null };
+  }
+  const elementType = checkerNumberIndexValueType(checker, type);
+  const length = checker.getPropertyOfType(type, 'length')
+    ?? checker.getPropertyOfType(checker.getApparentType(type), 'length')
+    ?? null;
+  const lengthDeclaration = length?.valueDeclaration ?? length?.declarations?.[0] ?? null;
+  const lengthType = length == null || lengthDeclaration == null
+    ? null
+    : checker.getTypeOfSymbolAtLocation(length, lengthDeclaration);
+  return {
+    admitted: lengthType != null && checker.isTypeAssignableTo(lengthType, checker.getNumberType()),
+    elementType,
+  };
+}
+
+function checkerCustomRepeatableHandlerElementType(
+  checker: ts.TypeChecker,
+  sourceType: ts.Type,
+  contracts: readonly CheckerRepeatableHandlerContract[],
+): { readonly matched: boolean; readonly open: boolean; readonly elementType: ts.Type | null } {
+  const exactContracts = contracts.filter((contract) => contract.sourceType != null);
+  const matched = exactContracts.filter((contract) =>
+    checker.isTypeAssignableTo(sourceType, contract.sourceType!)
+  );
+  if (matched.length > 0) {
+    return {
+      matched: true,
+      open: false,
+      elementType: commonOrUnionRelatedType(
+        checker,
+        matched.map((contract) => contract.elementType ?? checker.getUnknownType()),
+      ),
+    };
+  }
+  return {
+    matched: false,
+    open: contracts.length > exactContracts.length,
+    elementType: null,
+  };
 }
 
 function checkerDefaultRepeatableElementType(
@@ -437,6 +589,7 @@ function repeatableElementInfo(
   unsupportedConstituents: number,
   openConstituents: number,
   nullishConstituents: number,
+  handlerOpenConstituents: number,
 ): CheckerRepeatableElementTypeInfo {
   return {
     elementType,
@@ -444,6 +597,7 @@ function repeatableElementInfo(
     unsupportedConstituents,
     openConstituents,
     nullishConstituents,
+    handlerOpenConstituents,
   };
 }
 

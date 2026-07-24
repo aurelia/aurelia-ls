@@ -15,12 +15,49 @@ import {
   frameworkIntrinsicDiKeyForName,
 } from './framework-intrinsic-di-key.js';
 
-const templateCompilerInterfaceSource = frameworkDeclarationSourceSpec(
-  new Set(['ITemplateCompiler']),
+const kernelIntrinsicDiKeySource = frameworkDeclarationSourceSpec(
+  new Set(['IContainer']),
+  ['@aurelia/kernel', 'aurelia'],
+  [
+    '/aurelia/packages/kernel/src/',
+    '/aurelia/packages/kernel/dist/types/',
+  ],
+);
+
+const runtimeHtmlIntrinsicDiKeySource = frameworkDeclarationSourceSpec(
+  new Set([
+    'IAurelia',
+    'IAppRoot',
+    'INode',
+    'IController',
+    'IRenderLocation',
+    'IViewFactory',
+    'IAuSlotsInfo',
+    'IHydrationContext',
+    'IRepeatableHandler',
+  ]),
+  ['@aurelia/runtime-html', 'aurelia'],
+  [
+    '/aurelia/packages/runtime-html/src/',
+    '/aurelia/packages/runtime-html/dist/types/',
+  ],
+);
+
+const templateCompilerIntrinsicDiKeySource = frameworkDeclarationSourceSpec(
+  new Set(['IInstruction', 'ITemplateCompiler']),
   ['@aurelia/template-compiler'],
   [
-    '/aurelia/packages/template-compiler/src/interfaces-template-compiler.ts',
-    '/aurelia/packages/template-compiler/dist/types/interfaces-template-compiler.d.ts',
+    '/aurelia/packages/template-compiler/src/',
+    '/aurelia/packages/template-compiler/dist/types/',
+  ],
+);
+
+const routerIntrinsicDiKeySource = frameworkDeclarationSourceSpec(
+  new Set(['IRouteContext', 'IContextRouter']),
+  ['@aurelia/router'],
+  [
+    '/aurelia/packages/router/src/',
+    '/aurelia/packages/router/dist/types/',
   ],
 );
 
@@ -103,10 +140,26 @@ export function isAureliaFrameworkIntrinsicDiKeyDeclaration(
   key: FrameworkIntrinsicDiKey,
   declaration: ts.Declaration,
 ): boolean {
-  if (key === FrameworkIntrinsicDiKey.ITemplateCompiler) {
-    return declarationMatchesFrameworkSource(declaration, new Map(), templateCompilerInterfaceSource);
+  switch (key) {
+    case FrameworkIntrinsicDiKey.IContainer:
+      return declarationMatchesFrameworkSource(declaration, new Map(), kernelIntrinsicDiKeySource);
+    case FrameworkIntrinsicDiKey.IAurelia:
+    case FrameworkIntrinsicDiKey.IAppRoot:
+    case FrameworkIntrinsicDiKey.INode:
+    case FrameworkIntrinsicDiKey.IController:
+    case FrameworkIntrinsicDiKey.IRenderLocation:
+    case FrameworkIntrinsicDiKey.IViewFactory:
+    case FrameworkIntrinsicDiKey.IAuSlotsInfo:
+    case FrameworkIntrinsicDiKey.IHydrationContext:
+    case FrameworkIntrinsicDiKey.IRepeatableHandler:
+      return declarationMatchesFrameworkSource(declaration, new Map(), runtimeHtmlIntrinsicDiKeySource);
+    case FrameworkIntrinsicDiKey.IInstruction:
+    case FrameworkIntrinsicDiKey.ITemplateCompiler:
+      return declarationMatchesFrameworkSource(declaration, new Map(), templateCompilerIntrinsicDiKeySource);
+    case FrameworkIntrinsicDiKey.IRouteContext:
+    case FrameworkIntrinsicDiKey.IContextRouter:
+      return declarationMatchesFrameworkSource(declaration, new Map(), routerIntrinsicDiKeySource);
   }
-  return isAureliaKernelDiDeclaration(declaration);
 }
 
 /** Recover a framework intrinsic key from its declaration even when published types omit the source initializer. */

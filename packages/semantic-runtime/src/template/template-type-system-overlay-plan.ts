@@ -43,11 +43,23 @@ export interface TemplateTypeSystemOverlayRepeatLayer {
   readonly kind: 'repeat';
   readonly declaration: TemplateTypeSystemOverlaySourceSlice;
   readonly iterable: readonly TemplateTypeSystemOverlayExpressionPart[];
+  readonly elementProjection: TemplateTypeSystemOverlayRepeatElementProjection | null;
   readonly previousKind: 'element-or-undefined' | 'undefined' | 'unknown';
   readonly previousAssignmentAccessKind: BindingContextSlotAssignmentAccessKind | null;
   readonly currentAliasExpression: string | null;
   readonly parentAlias: TemplateTypeSystemOverlayScopeAlias | null;
 }
+
+export type TemplateTypeSystemOverlayRepeatElementProjection =
+  | {
+      /** Scope construction retained an exact element type for this identifier declaration. */
+      readonly kind: 'exact';
+      readonly typeExpression: string;
+    }
+  | {
+      /** A runtime handler admits the source, but tooling cannot prove the handler's emitted item type. */
+      readonly kind: 'open';
+    };
 
 export interface TemplateTypeSystemOverlayScopeAlias {
   /** Bare `$parent` / `AccessThis` reads expose only the runtime binding context. */
@@ -227,7 +239,16 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
     const valuesLocal = `__au_repeat_values_${this.depth}`;
     this.builder.append(`${indent}const ${valuesLocal} = __au_repeat(`);
     appendTemplateTypeSystemOverlayExpressionParts(this.builder, layer.iterable, `repeat source for ${layer.declaration.text}`);
-    this.builder.append(');\n');
+    this.builder.append(')');
+    if (layer.elementProjection != null) {
+      const elementType = layer.elementProjection.kind === 'exact'
+        ? layer.elementProjection.typeExpression
+        : 'any';
+      // Scope construction owns repeat-handler admission. Replaying its answer avoids a second built-in-only
+      // inference island; `any` is diagnostic containment for an explicitly open app handler.
+      this.builder.append(` as unknown as Iterable<${elementType}>`);
+    }
+    this.builder.append(';\n');
     this.builder.append(`${indent}for (const ${layer.declaration.text} of ${valuesLocal}) {\n`);
     this.depth += 1;
     const nestedIndent = this.indent;

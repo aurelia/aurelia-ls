@@ -3,25 +3,11 @@
   "schemaVersion": "semantic-conformance-known-gaps.v1",
   "knownGaps": [
     {
-      "assertionId": "template-controller-scope-lab/registered-array-like-repeat-handler",
-      "status": "known-gap",
-      "failureBucket": "repeat-handler-admission-not-spent",
-      "firstObserved": "2026-07-09",
-      "rationale": "The app registers Aurelia's exported ArrayLikeHandler and the TypeChecker knows ArrayLike<ScopeTask>, but repeatability projection consults only the built-in resolver categories, emits a false AUR0777, and degrades the repeat local to unknown."
-    },
-    {
       "assertionId": "template-controller-scope-lab/app-owned-template-controller-scope-effect",
       "status": "known-gap",
       "failureBucket": "app-template-controller-scope-effect-not-modeled",
       "firstObserved": "2026-07-09",
       "rationale": "The project-local context-scope controller explicitly activates its view with Scope.fromParent(parent, value), but semantic-runtime treats app-owned template controllers as pass-through: the child value binding context is missing and the valid explicit parent lookup silently resolves no symbol, with no open-scope seam."
-    },
-    {
-      "assertionId": "template-controller-scope-lab/app-registered-repeat-handler-honesty",
-      "status": "known-gap",
-      "failureBucket": "repeat-handler-admission-not-spent",
-      "firstObserved": "2026-07-09",
-      "rationale": "The app registers an IRepeatableHandler for TaskWindow, but repeat projection ignores the open registration fact, emits a confident AUR0777 and downstream TS18046, and reports complete closure instead of preserving an admitted source with unknown element type."
     },
     {
       "assertionId": "template-controller-built-ins/unsupported-object-binding-pattern-is-diagnosed",

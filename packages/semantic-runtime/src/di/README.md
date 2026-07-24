@@ -44,6 +44,9 @@ The tooling model keeps those consequences distinct:
 - `Container` names the abstract container itself.
 - The runtime `IContainer` interface symbol is emitted as an interface DI key identity. `ContainerSelfResolverSlot` is
   the per-container row that makes that key resolve to the requestor.
+- Framework intrinsic interface identity is source-owned, not name-owned. Kernel, runtime-html, template-compiler, and
+  router keys are recognized against their actual declaration packages before collapsing to one canonical runtime key;
+  an app declaration that merely reuses names such as `IRepeatableHandler` or `IRouteContext` must remain distinct.
 - `ContainerConfiguration` names the runtime-shaped configuration policy.
 - `ContainerRegistrationOperation` names the act of spending an admission against a container.
 - `Resolver` names a runtime-shaped resolver value. Its `resolve(...)`, `register(...)`, and `getFactory(...)` methods

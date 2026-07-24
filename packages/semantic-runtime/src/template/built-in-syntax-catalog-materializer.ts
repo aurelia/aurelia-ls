@@ -1050,6 +1050,8 @@ function syntaxCatalogSummaryForFrameworkKind(frameworkKind: FrameworkRegistrati
       return 'RuntimeHtml DefaultResources spread admitted promise template-controller syntax; remaining resource effects stay outside this catalog.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultRenderers:
       return 'RuntimeHtml DefaultRenderers admitted renderers but no template syntax catalogs.';
+    case FrameworkRegistrationKind.RuntimeHtmlArrayLikeHandler:
+      return 'RuntimeHtml ArrayLikeHandler admitted a DI repeat-handler effect but no template syntax catalogs.';
     case FrameworkRegistrationKind.AppTask:
       return 'AppTask registry does not admit template syntax catalogs.';
   }

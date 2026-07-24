@@ -725,6 +725,8 @@ function runtimeRendererCatalogSummaryForFrameworkKind(frameworkKind: FrameworkR
       return 'RuntimeHtml DefaultBindingLanguage spread does not admit runtime renderers.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
       return 'RuntimeHtml DefaultResources spread does not admit runtime renderers.';
+    case FrameworkRegistrationKind.RuntimeHtmlArrayLikeHandler:
+      return 'RuntimeHtml ArrayLikeHandler admitted a DI repeat-handler effect but no runtime renderers.';
     case FrameworkRegistrationKind.AppTask:
       return 'AppTask registry does not admit runtime renderer catalogs.';
   }

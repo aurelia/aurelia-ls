@@ -15,6 +15,8 @@ export const enum FrameworkRegistrationCapability {
   RuntimeHtmlDefaultBindingLanguage = 'runtime-html.default-binding-language',
   /** RuntimeHtml default built-in resources such as `if`, `repeat`, `promise`, `focus`, and `show`. */
   RuntimeHtmlDefaultResources = 'runtime-html.default-resources',
+  /** RuntimeHtml ArrayLikeHandler admission for custom array-like repeat sources. */
+  RuntimeHtmlArrayLikeRepeatHandler = 'runtime-html.array-like-repeat-handler',
   /** RuntimeHtml default renderer registrations that hydrate compiler instructions into runtime products. */
   RuntimeHtmlDefaultRenderers = 'runtime-html.default-renderers',
   /** I18n plugin resource headers such as translation/date/number/relative-time converters and behaviors. */
@@ -136,6 +138,13 @@ const frameworkRegistrationDescriptors: readonly FrameworkRegistrationDescriptor
     moduleNames: ['@aurelia/runtime-html'],
     sourceRegistrationExportName: 'DefaultResources',
     capabilities: [FrameworkRegistrationCapability.RuntimeHtmlDefaultResources],
+  },
+  {
+    kind: FrameworkRegistrationKind.RuntimeHtmlArrayLikeHandler,
+    exportName: 'ArrayLikeHandler',
+    moduleNames: ['aurelia', '@aurelia/runtime-html'],
+    sourceRegistrationExportName: 'ArrayLikeHandler',
+    capabilities: [FrameworkRegistrationCapability.RuntimeHtmlArrayLikeRepeatHandler],
   },
   {
     kind: FrameworkRegistrationKind.RuntimeHtmlDefaultRenderers,

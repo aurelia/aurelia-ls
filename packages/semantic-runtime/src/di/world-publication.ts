@@ -60,6 +60,7 @@ import {
   ResourceIssuePublisher,
 } from '../resources/resource-issue-publication.js';
 import {
+  frameworkRegistrationKindForAdmission,
   ParameterizedRegistryAdmission,
   ResolverRegistrationAdmission,
   RegistryRegistrationAdmission,
@@ -1101,6 +1102,7 @@ export class DiResolverPublicationMaterializer {
           null,
           admission.sourceAddressHandle,
           effect.valueName,
+          frameworkRegistrationKindForAdmission(admission),
         ),
       sourceAddressHandle: admission.sourceAddressHandle,
     };

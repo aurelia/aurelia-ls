@@ -56,6 +56,8 @@ export interface CheckerExpressionTypeProjectionOptions {
    * memory/CPU trade-off for every consumer.
    */
   readonly memberProjection?: CheckerTypeMemberProjectionPolicy;
+  /** Semantic origin when framework projection, rather than the checker alone, determines certainty. */
+  readonly origin?: CheckerTypeProjectionOrigin;
 }
 
 /**
@@ -308,7 +310,7 @@ export class CheckerExpressionTypeSupport {
       localKey,
       checker,
       type,
-      origin: CheckerTypeProjectionOrigin.TypeChecker,
+      origin: options.origin ?? CheckerTypeProjectionOrigin.TypeChecker,
       sourceAddressHandle,
       display: checker.typeToString(type),
       memberProjection: options.memberProjection ?? CheckerTypeMemberProjectionPolicy.Eager,

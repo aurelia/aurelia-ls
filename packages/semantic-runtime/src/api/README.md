@@ -837,8 +837,12 @@ stay unclaimed until the matching expression, assignment, or scope-effect substr
 Repeat source compatibility is also scope-owned, but its authority comes from runtime-html `RepeatableHandlerResolver`
 rather than runtime AST: scope construction now maps sources outside the built-in repeat categories to
 `repeat_non_iterable` (`AUR0777`) through `RuntimeHtmlControllerFrameworkErrorCode`. The modeled default
-categories are arrays, sets, maps, numbers, and nullish. App-registered `IRepeatableHandler`s are future DI/configuration
-pressure, so do not broaden this with generic TypeScript iterable or array-like heuristics before that substrate exists.
+categories are arrays, sets, maps, numbers, and nullish. Scope construction also spends the exact
+`all(IRepeatableHandler)` lookup from the active render container. Framework `ArrayLikeHandler` admits object values
+with numeric length, while app-owned handlers reuse their DI resolver state, evaluated class declaration, and
+checker-visible `iterate(value, callback)` contract. A source outside a closed handler value domain remains rejected;
+an admitted custom source stays open when its item contract is unknown. Do not broaden this with generic TypeScript
+iterable heuristics or with registration-presence-only guesses.
 Repeat option diagnostics are controller-owned. Runtime rendering now publishes `RuntimeControllerIssue` products for
 the `Repeat` constructor failures that inspect iterator tail `MultiAttrInstruction`s: invalid `key` commands
 (`AUR0775`), extraneous option targets (`AUR0776`), and invalid `contextual` commands (`AUR0821`). Template diagnostics

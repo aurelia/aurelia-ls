@@ -75,6 +75,8 @@ export const enum FrameworkRegistrationKind {
   RuntimeHtmlDefaultBindingLanguage = 'runtime-html.default-binding-language',
   /** RuntimeHtml DefaultResources registration group. */
   RuntimeHtmlDefaultResources = 'runtime-html.default-resources',
+  /** RuntimeHtml ArrayLikeHandler registry for the IRepeatableHandler extension point. */
+  RuntimeHtmlArrayLikeHandler = 'runtime-html.array-like-handler',
   /** RuntimeHtml DefaultRenderers registration group. */
   RuntimeHtmlDefaultRenderers = 'runtime-html.default-renderers',
 }

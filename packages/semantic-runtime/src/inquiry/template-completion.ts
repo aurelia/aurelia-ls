@@ -62,6 +62,7 @@ import type {
   CheckerTypeReference,
 } from '../type-system/type-shape.js';
 import {
+  CheckerTypeProjectionOrigin,
   CheckerTypeShapeKind,
   type CheckerTypeMemberKind,
   type CheckerTypeMemberVisibilityKind,
@@ -629,6 +630,9 @@ class TemplateCompletionCursorContextBuilder {
       bindingScope,
       declarationSelection,
     );
+    if (selectedScopeSlot?.slot.targetType?.origin === CheckerTypeProjectionOrigin.Open) {
+      missingInputs.push('scope-slot:type-projection-open');
+    }
     const routeParameterEndpointProductHandles = this.routeParameterEndpointProductHandles(
       semanticMultiBindingSegment,
       siteKind,

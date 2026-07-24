@@ -23,7 +23,6 @@ import {
 import { CheckerAsyncTypeProjector } from '../type-system/checker-async-type-projector.js';
 import {
   CheckerExpressionTypeEvaluationResultKind,
-  type CheckerExpressionTypeEvaluation,
 } from '../type-system/expression-type-evaluation.js';
 import {
   CheckerExpressionTypeEvaluationContext,
@@ -41,15 +40,15 @@ import {
   projectRuntimeBindingSourceExpressionInScope,
 } from '../observation/runtime-binding-source-expression-context.js';
 import {
-  checkerRepeatableElementTypeInfo,
-} from '../type-system/checker-related-types.js';
-import {
   checkerArrayElementType,
 } from '../type-system/checker-collection-types.js';
 import {
   CheckerBindingPatternLocalProjection,
-  type CheckerBindingPatternLocalType,
 } from '../type-system/binding-pattern-locals.js';
+import {
+  NoCheckerRepeatableHandlerAdmission,
+  type CheckerRepeatableElementTypeInfo,
+} from '../type-system/checker-related-types.js';
 import {
   CheckerTypeProjectionOrigin,
   checkerTypeReferenceWithSource,
@@ -91,6 +90,7 @@ import {
 import { checkerPrimitiveLiteralType } from '../type-system/checker-primitive-types.js';
 import { CheckerExpressionTypeSynthesizer } from '../type-system/expression-type-synthesis.js';
 import { checkerBackedUnionTypeForReferences } from '../type-system/checker-type-union.js';
+import { runtimeRepeatableHandlerAdmission } from './repeatable-handler-admission.js';
 
 interface TemplateEventScopeInstruction {
   readonly node: HtmlNodeReference;
@@ -270,53 +270,6 @@ export class TemplateScopeTypeProjector {
         ).toReference();
   }
 
-  iteratorElementType(
-    input: TemplateScopeConstructionRequest,
-    parent: BindingScope,
-    effect: IteratorBindingScopeEffect,
-    localSuffix: string,
-  ): CheckerTypeReference | null {
-    const parse = this.readParse(effect.iterableExpressionProductHandle);
-    if (parse?.result.kind !== ExpressionParseResultKind.IteratorSuccess) {
-      return null;
-    }
-    const binding = this.runtimeExpressionBinding(input, effect.binding.productHandle);
-    const context = this.evaluationContextForRuntimeBinding(
-      parse.result.ast,
-      input,
-      parent,
-      `${input.localKey}:scope:${localSuffix}`,
-      effect.sourceAddressHandle,
-      binding,
-    );
-    if (context == null) {
-      return null;
-    }
-    const evaluation = this.typeEvaluator(input, binding).evaluateIteratorElement(context);
-    return evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
-      ? checkerTypeReferenceWithSource(evaluation.typeReference, evaluation.sourceAddressHandle)
-      : null;
-  }
-
-  iteratorLocalTypes(
-    input: TemplateScopeConstructionRequest,
-    parent: BindingScope,
-    effect: IteratorBindingScopeEffect,
-    localSuffix: string,
-  ): ReadonlyMap<string, CheckerBindingPatternLocalType> {
-    const projection = this.iteratorLocalProjection(input, parent, effect, localSuffix);
-    return new Map(projection.locals.map((local) => [local.name, local]));
-  }
-
-  iteratorLocalProjection(
-    input: TemplateScopeConstructionRequest,
-    parent: BindingScope,
-    effect: IteratorBindingScopeEffect,
-    localSuffix: string,
-  ): CheckerBindingPatternLocalProjection {
-    return this.iteratorProjection(input, parent, effect, localSuffix).localProjection;
-  }
-
   iteratorProjection(
     input: TemplateScopeConstructionRequest,
     parent: BindingScope,
@@ -339,7 +292,18 @@ export class TemplateScopeTypeProjector {
     if (context == null) {
       return new TemplateIteratorScopeProjection(parse, null, new CheckerBindingPatternLocalProjection([], []), null);
     }
-    const projection = this.typeEvaluator(input, binding).evaluateIteratorProjection(context);
+    const handlerAdmission = binding == null
+      ? NoCheckerRepeatableHandlerAdmission
+      : runtimeRepeatableHandlerAdmission(
+          this.store,
+          input.runtimeBindings.requireRenderContextForBinding(binding.productHandle).requireActiveContainer(),
+          input.typeSystem,
+          input.sourceValueActivationView ?? null,
+        );
+    const projection = this.typeEvaluator(input, binding).evaluateIteratorProjection(
+      context,
+      handlerAdmission,
+    );
     const elementType = projection.element.kind === CheckerExpressionTypeEvaluationResultKind.Type
       ? checkerTypeReferenceWithSource(projection.element.typeReference, projection.element.sourceAddressHandle)
       : null;
@@ -350,51 +314,22 @@ export class TemplateScopeTypeProjector {
       parse,
       elementType,
       localProjection,
-      this.iteratorRepeatableIssueFromEvaluation(projection.iterable, parse.result.ast.iterable.span),
+      this.iteratorRepeatableIssueFromProjection(
+        projection.repeatable,
+        projection.iterable.kind === CheckerExpressionTypeEvaluationResultKind.Type
+          ? projection.iterable.typeReference
+          : null,
+        parse.result.ast.iterable.span,
+      ),
     );
   }
 
-  iteratorRepeatableIssue(
-    input: TemplateScopeConstructionRequest,
-    parent: BindingScope,
-    effect: IteratorBindingScopeEffect,
-    localSuffix: string,
-  ): IteratorRepeatableRuntimeIssueProjection | null {
-    const parse = this.readParse(effect.iterableExpressionProductHandle);
-    if (parse?.result.kind !== ExpressionParseResultKind.IteratorSuccess) {
-      return null;
-    }
-    const binding = this.runtimeExpressionBinding(input, effect.binding.productHandle);
-    const context = this.evaluationContextForRuntimeBinding(
-      parse.result.ast.iterable,
-      input,
-      parent,
-      `${input.localKey}:scope:${localSuffix}:iterator-source-repeatable`,
-      effect.sourceAddressHandle,
-      binding,
-    );
-    if (context == null) {
-      return null;
-    }
-    const source = this.typeEvaluator(input, binding).evaluate(context);
-    return this.iteratorRepeatableIssueFromEvaluation(source, parse.result.ast.iterable.span);
-  }
-
-  private iteratorRepeatableIssueFromEvaluation(
-    source: CheckerExpressionTypeEvaluation,
+  private iteratorRepeatableIssueFromProjection(
+    repeatable: CheckerRepeatableElementTypeInfo | null,
+    sourceType: CheckerTypeReference | null,
     sourceSpan: SourceSpan,
   ): IteratorRepeatableRuntimeIssueProjection | null {
-    if (source.kind !== CheckerExpressionTypeEvaluationResultKind.Type) {
-      return null;
-    }
-    const checker = source.typeShape.carrier?.checker ?? null;
-    const type = source.typeShape.carrier?.type ?? null;
-    if (checker == null || type == null) {
-      return null;
-    }
-
-    const repeatable = checkerRepeatableElementTypeInfo(checker, type);
-    if (repeatable.unsupportedConstituents === 0) {
+    if (repeatable == null || sourceType == null || repeatable.unsupportedConstituents === 0) {
       return null;
     }
 
@@ -403,8 +338,8 @@ export class TemplateScopeTypeProjector {
       : 'possible';
     return new IteratorRepeatableRuntimeIssueProjection(
       certainty,
-      `Type '${source.typeShape.display}' does not match the built-in repeat source categories: array, set, map, number, or nullish.`,
-      source.typeReference,
+      `Type '${sourceType.display}' does not match the active repeat source categories: array, set, map, number, nullish, or a registered handler.`,
+      sourceType,
       sourceSpan,
     );
   }

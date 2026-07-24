@@ -86,7 +86,10 @@ source, value, expression, or template-local slot.
   future DOM-aware inquiries should reuse that substrate instead of growing parallel tag heuristics.
 - Keep repeatability aligned with Aurelia's default `RepeatableHandlerResolver`, not generic TypeScript iterability.
   Arrays, sets, maps, numbers, and nullish are built-in repeat sources; strings and arbitrary array-like objects are not
-  accepted here unless a future DI/configuration model proves that an app registered an `IRepeatableHandler`.
+  accepted by default. Request-context repeat projection may widen those categories only after the active render
+  container resolves a registered `IRepeatableHandler`: `ArrayLikeHandler` spends its numeric-length predicate, and
+  app handlers spend the checker-visible upper bound declared by `iterate(value, callback)`. Keep this policy outside
+  the cached checker/type relation because registration visibility belongs to the runtime request context.
 - Project repeat-local types through TypeChecker-visible nullable iterable unions and finite keyed access, such as
   `Item[] | null` and `Record<'primary' | 'secondary', Item[]>[lane]`, without moving that logic into template-specific
   heuristics.

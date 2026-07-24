@@ -27,6 +27,7 @@ import {
 import { bindingContextSlotTargetTypeSourceMember } from '../configuration/binding-scope-slot-projector.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
+  CheckerTypeProjectionOrigin,
   CheckerTypeMemberKind,
   sameCheckerTypeReference,
   type CheckerTypeMember,
@@ -1030,6 +1031,7 @@ export class TemplateTypeSystemOverlayBuilder {
           kind: 'repeat',
           declaration: repeat.declaration,
           iterable: repeat.iterable,
+          elementProjection: this.repeatElementProjection(current, repeat.declaration.text, overlayFileName),
           previousKind: repeatPreviousOverlayKind(current),
           previousAssignmentAccessKind: repeatPreviousAssignmentAccessKind(current),
           currentAliasExpression,
@@ -1157,6 +1159,22 @@ export class TemplateTypeSystemOverlayBuilder {
     return declaration == null
       ? null
       : { declaration, iterable: iterableParts };
+  }
+
+  private repeatElementProjection(
+    scope: BindingScope,
+    declaration: string,
+    overlayFileName: string,
+  ): TemplateTypeSystemOverlayRepeatLayer['elementProjection'] {
+    if (!isIdentifierName(declaration)) {
+      return null;
+    }
+    const slot = scope.bindingContext.slots.find((candidate) => candidate.name === declaration) ?? null;
+    if (slot?.targetType?.origin === CheckerTypeProjectionOrigin.Open) {
+      return { kind: 'open' };
+    }
+    const typeExpression = slot == null ? null : this.slotTypeExpression(slot, overlayFileName);
+    return typeExpression == null ? null : { kind: 'exact', typeExpression };
   }
 
   private letSources(
@@ -1570,6 +1588,7 @@ export class TemplateTypeSystemOverlayBuilder {
         kind: 'repeat',
         declaration: repeat.declaration,
         iterable: repeat.iterable,
+        elementProjection: this.repeatElementProjection(scope, repeat.declaration.text, overlayFileName),
         previousKind: repeatPreviousOverlayKind(scope),
         previousAssignmentAccessKind: repeatPreviousAssignmentAccessKind(scope),
         currentAliasExpression: templateRepeatScopeCurrentAliasExpression(scope),
