@@ -89,7 +89,9 @@
     <span class="custom-scope-parent">${$parent.hostTitle}</span>
   </section>
 
-  <section surface-gate.bind="isReady"></section>
+  <section surface-gate.bind="isReady">
+    <span class="surface-gate-title">${hostTitle}</span>
+  </section>
 
   <section class="invalid-scope-shapes">
     <span repeat.for="broken of notIterable">${broken}</span>

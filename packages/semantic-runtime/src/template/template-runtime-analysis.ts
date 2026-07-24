@@ -69,6 +69,7 @@ import {
 import type { KernelStore } from '../kernel/store.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
 import type { ProductHandle } from '../kernel/handles.js';
+import type { OpenSeam } from '../kernel/open-seam.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import type { CompiledTemplateEmission } from './compiled-template-materializer.js';
@@ -240,6 +241,18 @@ export class TemplateRuntimeAnalysisEmission {
       ...this.runtimeRendering.bindingIssues,
       ...this.controllerBind.bindingIssues,
       ...this.i18nTranslationBinding.issues,
+    ];
+  }
+
+  /** Open runtime-template boundaries retained by every analysis phase. */
+  readOpenSeams(): readonly OpenSeam[] {
+    return [
+      ...this.runtimeRendering.openSeams,
+      ...this.scopes.openSeams,
+      ...this.controllerBind.openSeams,
+      ...this.bindingValueChannel.openSeams,
+      ...this.bindingDataFlow.openSeams,
+      ...this.runtimeComposition.openSeams,
     ];
   }
 

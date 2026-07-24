@@ -131,7 +131,7 @@ import {
 } from '../template/html-ir.js';
 import {
   BuiltInTemplateControllerValueDomainKind,
-  frameworkTemplateControllerSemanticsForName,
+  frameworkTemplateControllerSemanticsForResource,
 } from '../template/template-controller-semantics.js';
 import { componentLifecycleHookName } from '../template/component-lifecycle-source.js';
 import {
@@ -1582,7 +1582,7 @@ function attributeValueCompletionMissingInput(
     case TemplateValueSiteKind.MultiBindingValue:
       return `attribute-value-domain:inline-multi-binding:${site.classification?.resource?.name ?? 'unknown'}`;
     case TemplateValueSiteKind.TemplateControllerValue:
-      if (templateControllerPrimaryValueHasOpenEndedDomain(site)) {
+      if (templateControllerPrimaryValueHasOpenEndedDomain(store, site)) {
         return null;
       }
       return `attribute-value-domain:template-controller:${site.classification?.resource?.name ?? 'unknown'}`;
@@ -1598,23 +1598,23 @@ function attributeValueCompletionMissingInput(
 }
 
 function templateControllerPrimaryValueHasOpenEndedDomain(
+  store: KernelStore,
   site: TemplateValueSite,
 ): boolean {
-  const semantics = templateControllerSemanticsForValueSite(site);
+  const semantics = templateControllerSemanticsForValueSite(store, site);
   return semantics?.valueDomainKind === BuiltInTemplateControllerValueDomainKind.OpenEnded
     && semantics.valueProperty != null
     && site.bindable?.reference.name === semantics.valueProperty;
 }
 
 function templateControllerSemanticsForValueSite(
+  store: KernelStore,
   site: TemplateValueSite,
 ) {
-  const resourceName = site.classification?.resource?.name
-    ?? site.syntax?.target
-    ?? null;
-  return resourceName == null
-    ? null
-    : frameworkTemplateControllerSemanticsForName(resourceName);
+  return frameworkTemplateControllerSemanticsForResource(
+    store,
+    site.classification?.resource ?? null,
+  );
 }
 
 function bindableValueHasOpenEndedScalarDomain(

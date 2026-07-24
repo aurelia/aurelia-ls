@@ -8525,7 +8525,11 @@
               "name": "project-local Scope.fromParent controller exposes its value binding context",
               "query": {
                 "kind": "template-cursor-info",
-                "cursor": { "marker": "<span class=\"custom-scope-name\">${name}</span>", "token": "name" }
+                "cursor": {
+                  "marker": "<span class=\"custom-scope-name\">${name}</span>",
+                  "token": "name",
+                  "occurrence": 2
+                }
               },
               "equals": {
                 "value.selectedMemberName": "name",
@@ -8543,6 +8547,28 @@
                 "value.selectedMemberName": "hostTitle",
                 "value.selectedMember.typeDisplay": "string"
               }
+            },
+            {
+              "name": "app-owned controller without a proven lifecycle Scope handoff remains explicitly open",
+              "query": {
+                "kind": "open-seams",
+                "sourceFile": false,
+                "options": { "detail": "full", "page": { "size": 200 } }
+              },
+              "rows": [
+                {
+                  "fields": {
+                    "seamKindKey": "template.open-template-controller-scope",
+                    "reasonKinds": ["template-controller-scope-open"]
+                  },
+                  "source": {
+                    "sourceFile": "src/scope-lab-app.ts",
+                    "marker": "name: 'surface-gate'",
+                    "token": "surface-gate"
+                  },
+                  "count": 1
+                }
+              ]
             }
           ]
         },

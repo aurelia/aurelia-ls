@@ -5,7 +5,14 @@ import { ResourceDefinitionHeaderEmission } from '../resources/resource-definiti
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { TemplateResourceScope } from './compiler-world.js';
-import type { TemplateVisibleResource } from './compiler-world-reference.js';
+import type {
+  TemplateVisibleResource,
+  TemplateVisibleResourceReference,
+} from './compiler-world-reference.js';
+
+type ReadableTemplateVisibleResource =
+  | TemplateVisibleResource
+  | TemplateVisibleResourceReference;
 
 export function findVisibleTemplateResource(
   resourceScope: TemplateResourceScope | null,
@@ -24,7 +31,7 @@ export function findVisibleTemplateResource(
 /** Read framework catalog identity from the selected visible header without reconstructing definition lineage. */
 export function readBuiltInVisibleTemplateResource(
   store: ProductDetailReadView,
-  resource: TemplateVisibleResource | null,
+  resource: ReadableTemplateVisibleResource | null,
 ): BuiltInResource | null {
   const productHandle = resource?.resourceProductHandle ?? null;
   if (productHandle == null) {
@@ -37,7 +44,7 @@ export function readBuiltInVisibleTemplateResource(
 /** Hydrate the current full definition behind a compiler-visible catalog entry. */
 export function readVisibleTemplateResourceDefinition(
   store: ProductDetailReadView,
-  resource: TemplateVisibleResource | null,
+  resource: ReadableTemplateVisibleResource | null,
 ): FullResourceDefinition | null {
   const productHandle = resource?.definitionProductHandle ?? null;
   return productHandle == null

@@ -244,6 +244,31 @@ const summary = {
     probes: overlayEmission?.expressionProbes.length ?? 0,
     skips: overlayEmission?.skippedExpressions.length ?? 0,
     diagnostics: overlayDiagnostics.length,
+    diagnosticRows: overlayDiagnostics.map((diagnostic) => ({
+      code: diagnostic.diagnostic.code,
+      message: diagnostic.diagnostic.message,
+      generatedSource: diagnostic.diagnostic.source == null
+        ? null
+        : {
+            start: diagnostic.diagnostic.source.start,
+            end: diagnostic.diagnostic.source.end,
+            text: overlayEmission.overlaySource.text.slice(
+              Math.max(0, (diagnostic.diagnostic.source.start ?? 0) - 80),
+              Math.min(
+                overlayEmission.overlaySource.text.length,
+                (diagnostic.diagnostic.source.end ?? diagnostic.diagnostic.source.start ?? 0) + 80,
+              ),
+            ),
+          },
+      segment: diagnostic.segment?.label ?? null,
+      authoredSource: diagnostic.authoredSource == null
+        ? null
+        : {
+            start: diagnostic.authoredSource.sourceStart,
+            end: diagnostic.authoredSource.sourceEnd,
+            label: diagnostic.authoredSource.label,
+          },
+    })),
   },
   promiseBranchLinks: promiseBranchLinks.length,
   expressionTypes: Object.fromEntries(expressionTypes),

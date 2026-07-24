@@ -1,4 +1,18 @@
 import { auLink } from '../kernel/au-link.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
+import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
+import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import type {
+  TemplateVisibleResource,
+  TemplateVisibleResourceReference,
+} from './compiler-world-reference.js';
+import {
+  readBuiltInVisibleTemplateResource,
+  readVisibleTemplateResourceDefinition,
+} from './compiler-resource-lookup.js';
+import { HydrateTemplateControllerInstruction } from './instruction-ir.js';
+import { TemplateProductDetails } from './product-details.js';
+import type { RuntimeControllerFrame } from './runtime-controller.js';
 
 /** Authored names of built-in template-controller resources modeled by semantic-runtime. */
 export enum BuiltInTemplateControllerName {
@@ -235,4 +249,47 @@ export function frameworkTemplateControllerSemanticsForName(
 ): BuiltInTemplateControllerSemantics | null {
   const key = controllerName.toLowerCase();
   return frameworkTemplateControllerSemantics.find((semantics) => semantics.controllerName === key) ?? null;
+}
+
+/**
+ * Resolve built-in flow semantics from the selected compiler-visible resource, not from authored spelling.
+ *
+ * An app-owned template controller may intentionally shadow a framework name. Only definitions emitted by the
+ * framework support catalog may spend the auLink-backed built-in flow model.
+ */
+export function frameworkTemplateControllerSemanticsForResource(
+  store: ProductDetailReadView,
+  resource: TemplateVisibleResource | TemplateVisibleResourceReference | null,
+): BuiltInTemplateControllerSemantics | null {
+  const definition = readVisibleTemplateResourceDefinition(store, resource);
+  if (!(definition instanceof CustomAttributeDefinition) || !definition.isTemplateController) {
+    return null;
+  }
+  const header = readBuiltInVisibleTemplateResource(store, resource);
+  return header != null
+    && header.resourceKind === ResourceDefinitionKind.TemplateController
+    && header.name === definition.name
+    ? frameworkTemplateControllerSemanticsForName(definition.name)
+    : null;
+}
+
+/** Resolve built-in flow semantics from one lowered controller instruction without discarding resource ownership. */
+export function frameworkTemplateControllerSemanticsForInstruction(
+  store: ProductDetailReadView,
+  instruction: HydrateTemplateControllerInstruction,
+): BuiltInTemplateControllerSemantics | null {
+  return frameworkTemplateControllerSemanticsForResource(store, instruction.resource);
+}
+
+/** Resolve built-in flow semantics from the exact instruction that created one runtime controller frame. */
+export function frameworkTemplateControllerSemanticsForController(
+  store: ProductDetailReadView,
+  controller: RuntimeControllerFrame | null,
+): BuiltInTemplateControllerSemantics | null {
+  const instruction = controller?.instructionProductHandle == null
+    ? null
+    : store.readProductDetail(TemplateProductDetails.Instruction, controller.instructionProductHandle);
+  return instruction instanceof HydrateTemplateControllerInstruction
+    ? frameworkTemplateControllerSemanticsForInstruction(store, instruction)
+    : null;
 }

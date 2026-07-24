@@ -1,5 +1,7 @@
 import type { ProductHandle } from '../kernel/handles.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
+import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
+import { ResourceProductDetails } from '../resources/product-details.js';
 import {
   HydrateTemplateControllerInstruction,
   InterpolationInstruction,
@@ -7,7 +9,6 @@ import {
   SetPropertyInstruction,
 } from './instruction-ir.js';
 import { TemplateProductDetails } from './product-details.js';
-import { frameworkTemplateControllerSemanticsForName } from './template-controller-semantics.js';
 
 export function templateControllerValueExpressionProductHandle(
   store: ProductDetailReadView,
@@ -17,7 +18,7 @@ export function templateControllerValueExpressionProductHandle(
   if (propertyBinding != null) {
     return propertyBinding.expressionProductHandle;
   }
-  const valueProperty = templateControllerValueProperty(instruction);
+  const valueProperty = templateControllerValueProperty(store, instruction);
   if (valueProperty == null) {
     return null;
   }
@@ -34,7 +35,7 @@ export function templateControllerValuePropertyBinding(
   store: ProductDetailReadView,
   instruction: HydrateTemplateControllerInstruction,
 ): PropertyBindingInstruction | null {
-  const valueProperty = templateControllerValueProperty(instruction);
+  const valueProperty = templateControllerValueProperty(store, instruction);
   if (valueProperty == null) {
     return null;
   }
@@ -51,7 +52,7 @@ export function templateControllerStaticValue(
   store: ProductDetailReadView,
   instruction: HydrateTemplateControllerInstruction,
 ): string | null {
-  const valueProperty = templateControllerValueProperty(instruction);
+  const valueProperty = templateControllerValueProperty(store, instruction);
   return valueProperty == null
     ? null
     : templateControllerStaticPropertyValue(store, instruction, valueProperty);
@@ -93,9 +94,15 @@ export function staticTemplateControllerBooleanProperty(
 }
 
 export function templateControllerValueProperty(
+  store: ProductDetailReadView,
   instruction: HydrateTemplateControllerInstruction,
 ): string | null {
-  return frameworkTemplateControllerSemanticsForName(instruction.controllerName)?.valueProperty ?? 'value';
+  const definition = instruction.definitionProductHandle == null
+    ? null
+    : store.readProductDetail(ResourceProductDetails.Definition, instruction.definitionProductHandle);
+  return definition instanceof CustomAttributeDefinition && definition.isTemplateController
+    ? definition.defaultProperty
+    : null;
 }
 
 function coerceTemplateControllerBoolean(value: string): boolean {

@@ -70,6 +70,8 @@ export const enum OpenSeamReasonKind {
   RuntimeCompositionInputOpen = 'runtime-composition-input-open',
   /** Runtime composition could not close custom-element candidate resolution or the composed-child handoff. */
   RuntimeCompositionComponentResolutionOpen = 'runtime-composition-component-resolution-open',
+  /** An app-owned template controller's lifecycle could not close the Scope supplied to its synthetic child view. */
+  TemplateControllerScopeOpen = 'template-controller-scope-open',
   /** Select value-channel analysis could not close the authored select target. */
   BindingValueChannelSelectTargetOpen = 'binding-value-channel-select-target-open',
   /** Select value-channel analysis could not close option value/model facts. */

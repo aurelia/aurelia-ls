@@ -207,7 +207,9 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
           targetNode.toReference(),
           syntax.attribute,
           target,
-          this.world.templateCompiler.resolveResources ? attributeDefinition.productHandle : null,
+          this.world.templateCompiler.resolveResources
+            ? attributeResource?.toReference() ?? null
+            : null,
           props.rootInstructions.map((prop) => prop.productHandle),
           syntax.sourceAddressHandle,
         ));

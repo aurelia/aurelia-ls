@@ -1163,7 +1163,7 @@ function referencesForTemplateInstruction(
     case TemplateInstructionKind.HydrateElement:
       return mergeKernelDetailReferences(
         common,
-        detailReferences(ResourceDetailDescriptors.Definition, instruction.definitionProductHandle),
+        templateVisibleResourceReferenceReferences(instruction.resource),
         detailReferences(
           TemplateDetailDescriptors.InstructionSequence,
           instruction.childInstructionSequenceProductHandle,
@@ -1196,7 +1196,7 @@ function referencesForTemplateInstruction(
       return mergeKernelDetailReferences(
         common,
         htmlAttributeReferenceReferences(instruction.attribute),
-        detailReferences(ResourceDetailDescriptors.Definition, instruction.definitionProductHandle),
+        templateVisibleResourceReferenceReferences(instruction.resource),
         detailsReferences(
           TemplateDetailDescriptors.Instruction,
           instruction.bindingInstructionProductHandles,
@@ -1206,7 +1206,7 @@ function referencesForTemplateInstruction(
       return mergeKernelDetailReferences(
         common,
         htmlAttributeReferenceReferences(instruction.attribute),
-        detailReferences(ResourceDetailDescriptors.Definition, instruction.definitionProductHandle),
+        templateVisibleResourceReferenceReferences(instruction.resource),
         detailReferences(
           TemplateDetailDescriptors.InstructionSequence,
           instruction.childInstructionSequenceProductHandle,

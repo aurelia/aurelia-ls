@@ -326,6 +326,14 @@ export const KernelOpenSeamKinds = {
     ),
   },
   Template: {
+    /** App-owned template-controller lifecycle code did not expose one provable synthetic-view Scope handoff. */
+    OpenTemplateControllerScope: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'open-template-controller-scope',
+      KernelVocabularySlot.OpenSeamKind,
+      'Template-controller lifecycle analysis retained child content while its synthetic-view Scope handoff remained open.',
+    ),
+
     /** Runtime AuCompose retained candidate inputs but could not close the complete composition operation. */
     OpenRuntimeComposition: defineVocabulary(
       KernelVocabularyNamespace.Template,

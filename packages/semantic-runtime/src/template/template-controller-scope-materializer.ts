@@ -78,6 +78,7 @@ import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import type { OpenSeam } from '../kernel/open-seam.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import {
   type BindableDefinition,
@@ -307,6 +308,8 @@ export class TemplateScopeConstructionEmission {
     readonly scopeIssues: readonly RuntimeBindingScopeIssue[],
     /** Kernel records that publish runtime binding scope issue products. */
     readonly scopeIssueRecords: readonly KernelStoreRecord[],
+    /** App-owned template-controller child Scope effects that remained open after source projection. */
+    readonly openSeams: readonly OpenSeam[],
     /** Scope materializer emissions, including root scope. */
     readonly scopeEmissions: readonly BindingScopeConstructionEmission[],
   ) {}
@@ -385,8 +388,11 @@ export class TemplateScopeConstructionFrame {
   readonly templateControllerLinks: TemplateControllerLinkApplication[] = [];
   readonly scopeIssues: RuntimeBindingScopeIssue[] = [];
   readonly scopeIssueRecords: KernelStoreRecord[] = [];
+  readonly openSeams: OpenSeam[] = [];
   readonly flowState = new TemplateControllerFlowState();
   currentScope: BindingScope;
+  private readonly scopeSupportRecords: KernelStoreRecord[] = [];
+  private readonly scopeSupportRecordHandles = new Set<string>();
 
   private constructor(
     readonly input: TemplateScopeConstructionRequest,
@@ -477,6 +483,28 @@ export class TemplateScopeConstructionFrame {
     this.scopeIssueRecords.push(...publication.records);
   }
 
+  addScopeSupportRecords(records: readonly KernelStoreRecord[]): void {
+    for (const record of records) {
+      if (this.scopeSupportRecordHandles.has(record.handle)) {
+        continue;
+      }
+      this.scopeSupportRecordHandles.add(record.handle);
+      this.scopeSupportRecords.push(record);
+    }
+  }
+
+  addOpenSeam(seam: OpenSeam): void {
+    if (this.openSeams.some((candidate) => candidate.handle === seam.handle)) {
+      return;
+    }
+    this.openSeams.push(seam);
+    this.addScopeSupportRecords([seam]);
+  }
+
+  readScopeSupportRecords(): readonly KernelStoreRecord[] {
+    return this.scopeSupportRecords;
+  }
+
   toEmission(
     instructionScopeRecords: readonly KernelStoreRecord[],
     templateControllerLinkRecords: readonly KernelStoreRecord[],
@@ -490,6 +518,7 @@ export class TemplateScopeConstructionFrame {
       templateControllerLinkRecords,
       this.scopeIssues,
       this.scopeIssueRecords,
+      this.openSeams,
       this.scopeEmissions,
     );
   }
@@ -661,6 +690,7 @@ export class TemplateControllerScopeMaterializer {
           ...instructionScopeRecords,
           ...templateControllerLinkRecords,
           ...frame.scopeIssueRecords,
+          ...frame.readScopeSupportRecords(),
         ],
         `template-scope:${frame.input.localKey}`,
       ),

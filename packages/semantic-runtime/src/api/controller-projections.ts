@@ -19,7 +19,7 @@ import { ResourceProductDetails } from '../resources/product-details.js';
 import {
   BuiltInTemplateControllerFlowKind,
   type BuiltInTemplateControllerSemantics,
-  frameworkTemplateControllerSemanticsForName,
+  frameworkTemplateControllerSemanticsForController,
 } from '../template/template-controller-semantics.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
@@ -391,7 +391,7 @@ function runtimeControllerProjectionState(
   const compiledTemplate = context.indexes.compiledTemplateByController.get(controller.productHandle) ?? null;
   const instructionSequence = context.indexes.instructionSequenceByController.get(controller.productHandle) ?? null;
   const viewFactory = viewFactoryForController(controller, context.indexes);
-  const templateControllerSemantics = semanticsForController(controller);
+  const templateControllerSemantics = semanticsForController(controller, context.store);
   const templateControllerLink = context.indexes.templateControllerLinkByController.get(controller.productHandle) ?? null;
   const viewFactoryDefinition = definitionLinkForViewFactory(viewFactory, context.indexes);
   return {
@@ -432,11 +432,15 @@ function viewFactoryForController(
 
 function semanticsForController(
   controller: RuntimeControllerFrame,
+  store: KernelStore,
 ): BuiltInTemplateControllerSemantics | null {
-  const templateControllerName = templateControllerNameForSemantics(controller);
-  return templateControllerName == null
-    ? null
-    : frameworkTemplateControllerSemanticsForName(templateControllerName);
+  const semanticOwner = controller.creationKind === RuntimeControllerCreationKind.SyntheticView
+    ? controller.parent
+    : controller;
+  return frameworkTemplateControllerSemanticsForController(
+    store,
+    semanticOwner,
+  );
 }
 
 function definitionLinkForViewFactory(
@@ -685,15 +689,6 @@ function definitionClassName(definition: FullResourceDefinition | null): string 
   return definition instanceof CustomElementDefinition || definition instanceof CustomAttributeDefinition
     ? definition.target.localName
     : null;
-}
-
-function templateControllerNameForSemantics(
-  controller: RuntimeControllerFrame,
-): string | null {
-  if (controller.creationKind === RuntimeControllerCreationKind.SyntheticView) {
-    return controller.parent?.name ?? null;
-  }
-  return controller.name;
 }
 
 function childViewRenderingState(

@@ -664,6 +664,15 @@ classification, expression parsing, and instruction lowering converge on the sam
   `$index` and `$length` as mutable data properties because `Repeat` updates them, while deriving several other
   contextuals through getters for hot-path efficiency; that descriptor choice is not template-author assignment
   authority and must not leak into source-write policy.
+  Built-in template-controller flow semantics are selected from the resolved framework-catalog definition, never from
+  the authored attribute name alone; an app-owned controller that shadows `with`, `repeat`, or another built-in name
+  keeps its own behavior. For app-owned template controllers, scope construction recognizes only checker- or
+  framework-import-grounded synthetic-view activation that passes the existing controller scope or calls
+  `Scope.fromParent(this.$controller.scope, this.<defaultProperty>)`. The exact activation-scope expression is retained
+  as provenance. Arbitrary lifecycle execution, conflicting activation shapes, and ungrounded view receivers publish a
+  `template-controller-scope-open` seam rather than borrowing built-in behavior. The resulting
+  `BindingScope.scopeCreators` entry is the durable handoff to overlays and inquiries; those consumers must not rescan
+  lifecycle source or reconstruct the scope cause from the template-controller spelling.
   Listener and state-dispatch event scopes keep `$event` as the DOM event type, then attach member-type refinements for
   `$event.currentTarget` and native form-control `$event.target` through the authored host element. This preserves normal
   event members while letting form payload expressions such as `$event.target.value` close through the same DOM
@@ -759,6 +768,8 @@ classification, expression parsing, and instruction lowering converge on the sam
   the selected catalog header while `definitionProductHandle` names the full definition. Consumers that need built-in
   identity must read the selected header directly; recovering origin from the definition by scanning convergence claims
   discards the visibility decision, misrepresents app shadowing, and creates an unrevisioned whole-kernel dependency.
+  Element, attribute, and template-controller hydration instructions all retain that selected visible-resource
+  reference; `definitionProductHandle` on those instructions is only a derived convenience for definition consumers.
 - Attribute patterns and binding commands are modeled as one configured syntax surface for compiler-world purposes.
   Runtime stores them differently for efficient attribute parsing and command lookup, but tooling should not let that
   implementation split make syntax visibility fundamentally container-specific unless a custom extension materializer

@@ -6,6 +6,7 @@ import type {
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { BindingCommandExecutableReference } from './binding-command-reference.js';
+import type { TemplateVisibleResourceReference } from './compiler-world-reference.js';
 import type { HtmlAttributeReference, HtmlNodeReference } from './html-ir.js';
 
 export const enum TemplateInstructionKind {
@@ -140,7 +141,8 @@ export class HydrateElementInstruction {
     readonly elementName: string,
     /** Effective compiler lookup name authored by the template, including aliases and `as-element`. */
     readonly resourceLookupName: string,
-    readonly definitionProductHandle: ProductHandle | null,
+    /** Compiler-visible resource selected for this instruction, including header and full-definition identity. */
+    readonly resource: TemplateVisibleResourceReference | null,
     readonly childInstructionSequenceProductHandle: ProductHandle | null,
     readonly projectionInstructionSequences: readonly HydrateElementProjectionInstructionSequence[],
     /** Known framework `processContent` data; null for ordinary or open custom-element hooks. */
@@ -151,6 +153,10 @@ export class HydrateElementInstruction {
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}
+
+  get definitionProductHandle(): ProductHandle | null {
+    return this.resource?.definitionProductHandle ?? null;
+  }
 }
 
 /** Projection definition compiled from child content of one custom-element usage. */
@@ -178,11 +184,16 @@ export class HydrateAttributeInstruction {
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
     readonly attributeName: string,
-    readonly definitionProductHandle: ProductHandle | null,
+    /** Compiler-visible resource selected for this instruction, including header and full-definition identity. */
+    readonly resource: TemplateVisibleResourceReference | null,
     readonly bindingInstructionProductHandles: readonly ProductHandle[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}
+
+  get definitionProductHandle(): ProductHandle | null {
+    return this.resource?.definitionProductHandle ?? null;
+  }
 }
 
 /** Lowered template-controller instruction that owns a nested template sequence. */
@@ -196,12 +207,17 @@ export class HydrateTemplateControllerInstruction {
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
     readonly controllerName: string,
-    readonly definitionProductHandle: ProductHandle | null,
+    /** Compiler-visible resource selected for this instruction, including header and full-definition identity. */
+    readonly resource: TemplateVisibleResourceReference | null,
     readonly childInstructionSequenceProductHandle: ProductHandle | null,
     readonly bindingInstructionProductHandles: readonly ProductHandle[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}
+
+  get definitionProductHandle(): ProductHandle | null {
+    return this.resource?.definitionProductHandle ?? null;
+  }
 }
 
 /** Lowered property binding instruction produced by bindable or command lowering. */

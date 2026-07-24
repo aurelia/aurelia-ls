@@ -3661,10 +3661,7 @@ function templateCompilationRows(
       runtimeBindingObservedDependencies: resourceLocalBindingObservedDependencies(store, resource).length,
       bindingScopes: resource.runtimeAnalysis.scopes.readScopes().length,
       openSeams: resource.compilation.compiledTemplate.openSeams.length
-        + resource.runtimeAnalysis.runtimeRendering.openSeams.length
-        + resource.runtimeAnalysis.controllerBind.openSeams.length
-        + resource.runtimeAnalysis.bindingValueChannel.openSeams.length
-        + resource.runtimeAnalysis.bindingDataFlow.openSeams.length,
+        + resource.runtimeAnalysis.readOpenSeams().length,
       source: describeAddress(
         store,
         resource.compilation.definition.template?.addressHandle ?? resource.compilation.definition.sourceAddressHandle,

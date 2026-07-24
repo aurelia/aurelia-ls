@@ -56,6 +56,12 @@ export function checkerTypeReferenceTypeExpression(
   const shape = reference.productHandle == null
     ? null
     : store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
+  const carrierTypeExpression = shape == null
+    ? null
+    : checkerCarrierTypeExpression(shape, context);
+  if (carrierTypeExpression != null) {
+    return carrierTypeExpression;
+  }
   const typeShapeExpression = shape == null
     ? null
     : checkerTypeShapeTypeExpression(shape, context);
@@ -73,12 +79,6 @@ export function checkerTypeReferenceTypeExpression(
     : checkerStructuralTypeExpression(shape, context);
   if (structuralTypeExpression != null) {
     return structuralTypeExpression;
-  }
-  const compoundTypeExpression = shape == null
-    ? null
-    : checkerCompoundCarrierTypeExpression(shape, context);
-  if (compoundTypeExpression != null) {
-    return compoundTypeExpression;
   }
   return primitiveCheckerTypeExpression(reference);
 }
@@ -151,16 +151,16 @@ function checkerStructuralTypeExpression(
   return null;
 }
 
-/** Emits checker-created unions/intersections whose constituents still have stable source-level spellings. */
-function checkerCompoundCarrierTypeExpression(
+/** Emits the instantiated checker carrier when every constituent has a stable source-level spelling. */
+function checkerCarrierTypeExpression(
   typeShape: CheckerTypeShape,
   context: GeneratedTypeScriptSourceContext,
 ): string | null {
   const carrier = typeShape.carrier;
-  if (carrier == null || !carrier.type.isUnionOrIntersection()) {
+  if (carrier == null) {
     return null;
   }
-  return checkerCompoundTypeExpression(
+  return checkerCarrierConstituentTypeExpression(
     carrier.checker,
     carrier.type,
     context,

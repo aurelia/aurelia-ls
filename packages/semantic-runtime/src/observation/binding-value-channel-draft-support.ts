@@ -25,9 +25,11 @@ import {
   type RuntimeBindingTargetOperation,
 } from '../template/runtime-binding.js';
 import {
-  frameworkTemplateControllerSemanticsForName,
+  BuiltInTemplateControllerFlowKind,
+  frameworkTemplateControllerSemanticsForController,
   type BuiltInTemplateControllerSemantics,
 } from '../template/template-controller-semantics.js';
+import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { RuntimeControllerFrame } from '../template/runtime-controller.js';
 import { CheckerAsyncTypeProjector } from '../type-system/checker-async-type-projector.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
@@ -783,9 +785,10 @@ export class RuntimeBindingValueChannelDraftSupport {
     context: BindingValueChannelDraftContext,
   ): BuiltInTemplateControllerSemantics | null {
     const controller = this.controllerForTargetAccess(targetAccess, context);
-    return controller?.name == null
-      ? null
-      : frameworkTemplateControllerSemanticsForName(controller.name);
+    return frameworkTemplateControllerSemanticsForController(
+      this.typeProjector.publication,
+      controller,
+    );
   }
 
   controllerForTargetAccess(
@@ -809,7 +812,11 @@ export class RuntimeBindingValueChannelDraftSupport {
     context: BindingValueChannelDraftContext,
   ): CheckerTypeReference | null {
     const branchController = this.controllerForTargetAccess(targetAccess, context);
-    const promiseController = nearestNamedControllerAncestor(branchController, 'promise');
+    const promiseController = nearestTemplateControllerAncestor(
+      this.typeProjector.publication,
+      branchController,
+      BuiltInTemplateControllerFlowKind.Promise,
+    );
     const promiseValueBinding = promiseController == null
       ? null
       : this.propertyBindingForControllerTarget(promiseController, context, ['value']);
@@ -944,13 +951,19 @@ export class RuntimeBindingValueChannelDraftSupport {
   }
 }
 
-function nearestNamedControllerAncestor(
+function nearestTemplateControllerAncestor(
+  store: ProductDetailReadView,
   controller: RuntimeControllerFrame | null,
-  name: string,
+  flowKind: BuiltInTemplateControllerFlowKind,
 ): RuntimeControllerFrame | null {
   let current = controller?.parent ?? null;
   while (current != null) {
-    if (current.name === name) {
+    if (
+      frameworkTemplateControllerSemanticsForController(
+        store,
+        current,
+      )?.flowKind === flowKind
+    ) {
       return current;
     }
     current = current.parent;

@@ -52,7 +52,7 @@ import {
 } from '../template/runtime-controller.js';
 import {
   BuiltInTemplateControllerChildViewCardinality,
-  frameworkTemplateControllerSemanticsForName,
+  frameworkTemplateControllerSemanticsForController,
 } from '../template/template-controller-semantics.js';
 import { RuntimeBindingSourceValueEvaluator } from '../observation/binding-source-value-evaluator.js';
 import { RuntimeBindingSourceValueEvaluationClosure } from '../configuration/binding-source-value-evaluation.js';
@@ -750,7 +750,7 @@ function viewportDraftsByOwnerContext(
           localKey: resource.compilation.localKey,
           controller,
           properties: viewportPropertiesFromController(publication, controller, sourceValueEvaluator),
-          presenceCardinality: viewportPresenceCardinality(controller),
+          presenceCardinality: viewportPresenceCardinality(publication, controller),
           index,
         };
         const drafts = draftsByOwner.get(owner.identityHandle);
@@ -1086,13 +1086,17 @@ function viewportBindableInstructionTarget(
 }
 
 function viewportPresenceCardinality(
+  publication: KernelPublicationContext,
   controller: RuntimeControllerFrame,
 ): BuiltInTemplateControllerChildViewCardinality {
   let cardinality = BuiltInTemplateControllerChildViewCardinality.Single;
   let current = controller.parent;
   while (current != null) {
     if (current.creationKind === RuntimeControllerCreationKind.TemplateController) {
-      const semantics = current.name == null ? null : frameworkTemplateControllerSemanticsForName(current.name);
+      const semantics = frameworkTemplateControllerSemanticsForController(
+        publication,
+        current,
+      );
       if (semantics == null) {
         return BuiltInTemplateControllerChildViewCardinality.Open;
       }

@@ -1171,11 +1171,7 @@ function applicationTemplateAsset(
   const compilationOpenSeams = compilation == null
     ? null
     : compilation.compilation.compiledTemplate.openSeams.length
-      + compilation.runtimeAnalysis.runtimeRendering.openSeams.length
-      + compilation.runtimeAnalysis.controllerBind.openSeams.length
-      + compilation.runtimeAnalysis.bindingValueChannel.openSeams.length
-      + compilation.runtimeAnalysis.bindingDataFlow.openSeams.length
-      + compilation.runtimeAnalysis.runtimeComposition.openSeams.length;
+      + compilation.runtimeAnalysis.readOpenSeams().length;
   const targetOperations = compilation == null
     ? []
     : resourceLocalBindingTargetOperations(store, compilation);

@@ -361,11 +361,7 @@ function recordOpenSeams(
 function templateResourceOpenSeams(resource: RuntimeTemplateResource): readonly OpenSeam[] {
   return [
     ...resource.compilation.compiledTemplate.openSeams,
-    ...resource.runtimeAnalysis.runtimeRendering.openSeams,
-    ...resource.runtimeAnalysis.controllerBind.openSeams,
-    ...resource.runtimeAnalysis.bindingValueChannel.openSeams,
-    ...resource.runtimeAnalysis.bindingDataFlow.openSeams,
-    ...resource.runtimeAnalysis.runtimeComposition.openSeams,
+    ...resource.runtimeAnalysis.readOpenSeams(),
   ];
 }
 

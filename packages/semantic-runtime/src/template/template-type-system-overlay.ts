@@ -116,7 +116,7 @@ import type { TemplateResourceRuntimeAnalysisEmission } from './template-compila
 import { completedTemplateExpressionAstForParse } from './expression-parse-projection.js';
 import {
   BuiltInTemplateControllerFlowKind,
-  frameworkTemplateControllerSemanticsForName,
+  frameworkTemplateControllerSemanticsForInstruction,
 } from './template-controller-semantics.js';
 import {
   staticTemplateControllerBooleanProperty,
@@ -1514,7 +1514,10 @@ export class TemplateTypeSystemOverlayBuilder {
       ));
       return null;
     }
-    const semantics = frameworkTemplateControllerSemanticsForName(instruction.controllerName);
+    const semantics = frameworkTemplateControllerSemanticsForInstruction(
+      this.store,
+      instruction,
+    );
     if (semantics?.flowKind === BuiltInTemplateControllerFlowKind.SwitchCase
       || semantics?.flowKind === BuiltInTemplateControllerFlowKind.SwitchDefault) {
       const layer = this.templateControllerSwitchCaseLayer(
@@ -1659,8 +1662,11 @@ export class TemplateTypeSystemOverlayBuilder {
       ));
       return null;
     }
-    const semantics = frameworkTemplateControllerSemanticsForName(instruction.controllerName);
-    if (semantics?.flowKind === BuiltInTemplateControllerFlowKind.ValueScope) {
+    const semantics = frameworkTemplateControllerSemanticsForInstruction(
+      this.store,
+      instruction,
+    );
+    if (semantics?.flowKind === BuiltInTemplateControllerFlowKind.ValueScope || semantics == null) {
       const source = ambientScope == null
         ? null
         : this.templateControllerValueSource(
@@ -1717,7 +1723,10 @@ export class TemplateTypeSystemOverlayBuilder {
     baseExpressionContext: TemplateTypeSystemOverlayExpressionProjectionContext,
     overlayFileName: string,
   ): TemplateTypeSystemOverlayConditionLayer | null {
-    const ownerSemantics = frameworkTemplateControllerSemanticsForName(owner.controllerName);
+    const ownerSemantics = frameworkTemplateControllerSemanticsForInstruction(
+      this.store,
+      owner,
+    );
     if (
       ownerSemantics?.flowKind !== BuiltInTemplateControllerFlowKind.Conditional
       && ownerSemantics?.flowKind !== BuiltInTemplateControllerFlowKind.ConditionalElse
@@ -1914,7 +1923,7 @@ export class TemplateTypeSystemOverlayBuilder {
     if (expressionSource != null) {
       return expressionSource;
     }
-    const valueProperty = templateControllerValueProperty(instruction);
+    const valueProperty = templateControllerValueProperty(this.store, instruction);
     if (valueProperty == null) {
       return null;
     }
@@ -1940,7 +1949,7 @@ export class TemplateTypeSystemOverlayBuilder {
       ? null
       : templateInstructionForProductHandle(resource, instructionProductHandle);
     const semantics = instruction instanceof HydrateTemplateControllerInstruction
-      ? frameworkTemplateControllerSemanticsForName(instruction.controllerName)
+      ? frameworkTemplateControllerSemanticsForInstruction(this.store, instruction)
       : null;
     return instruction instanceof HydrateTemplateControllerInstruction && semantics?.flowKind === targetFlowKind
       ? instruction
@@ -2039,7 +2048,10 @@ export class TemplateTypeSystemOverlayBuilder {
       .map((reference) => reference.productHandle == null ? null : templateInstructionForProductHandle(resource, reference.productHandle))
       .filter((instruction): instruction is HydrateTemplateControllerInstruction =>
         instruction instanceof HydrateTemplateControllerInstruction
-        && frameworkTemplateControllerSemanticsForName(instruction.controllerName)?.flowKind === BuiltInTemplateControllerFlowKind.SwitchCase
+        && frameworkTemplateControllerSemanticsForInstruction(
+          this.store,
+          instruction,
+        )?.flowKind === BuiltInTemplateControllerFlowKind.SwitchCase
       );
     return instructions ?? [];
   }

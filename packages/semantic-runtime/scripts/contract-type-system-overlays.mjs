@@ -746,6 +746,12 @@ if (
 ) {
   failures.push(`Expected bound, literal, and interpolation-backed <let> slots to preserve string, \"literal\", and string types, observed ${letSourceFormOverlay.selectedLabelType ?? 'missing'}, ${letSourceFormOverlay.literalLabelType ?? 'missing'}, ${letSourceFormOverlay.interpolatedLabelType ?? 'missing'}.`);
 }
+if (
+  letSourceFormOverlay.appTemplateControllerNameSkipped
+  || letSourceFormOverlay.appTemplateControllerNameType !== 'string'
+) {
+  failures.push(`Expected app-owned Scope.fromParent template-controller scope to replay through the shared value-scope overlay layer as name:string, observed skipped=${letSourceFormOverlay.appTemplateControllerNameSkipped}, type=${letSourceFormOverlay.appTemplateControllerNameType ?? 'missing'}.`);
+}
 if (publicTemplateOverlayDiagnostics.overlayRows !== 6) {
   failures.push(`Expected public template diagnostics to retain all six admitted TypeScript overlay facts, observed ${publicTemplateOverlayDiagnostics.overlayRows}.`);
 }
@@ -2206,6 +2212,16 @@ async function readLetSourceFormOverlayProbe() {
   const variableTypes = readOverlayVariableTypesByName(typeSystem, emission.overlaySource.fileName);
   const htmlText = fs.readFileSync(path.join(letSourceFormFixtureRoot, 'src/scope-lab-app.html'), 'utf8');
   const interpolationStart = htmlText.indexOf('${task.name}');
+  const appTemplateControllerStart = htmlText.indexOf('${name}', htmlText.indexOf('custom-scope-name'));
+  const appTemplateControllerNameStart = appTemplateControllerStart + 2;
+  const appTemplateControllerNameEnd = appTemplateControllerNameStart + 'name'.length;
+  const appTemplateControllerProbe = emission.expressionProbes.find((probe) =>
+    probe.authoredExpressionText === 'name'
+    && probe.sourceStart != null
+    && probe.sourceEnd != null
+    && probe.sourceStart <= appTemplateControllerNameStart
+    && probe.sourceEnd >= appTemplateControllerNameEnd
+  ) ?? null;
   return {
     resourceFound: resource != null,
     interpolationSkipped: emission.skippedExpressions.some((skip) =>
@@ -2216,6 +2232,15 @@ async function readLetSourceFormOverlayProbe() {
     selectedLabelType: variableTypes.get('selectedLabel') ?? null,
     literalLabelType: variableTypes.get('literalLabel') ?? null,
     interpolatedLabelType: variableTypes.get('interpolatedLabel') ?? null,
+    appTemplateControllerNameSkipped: emission.skippedExpressions.some((skip) =>
+      skip.sourceStart != null
+      && skip.sourceEnd != null
+      && skip.sourceStart <= appTemplateControllerNameStart
+      && skip.sourceEnd >= appTemplateControllerNameEnd
+    ),
+    appTemplateControllerNameType: appTemplateControllerProbe == null
+      ? null
+      : variableTypes.get(appTemplateControllerProbe.localName) ?? null,
   };
 }
 

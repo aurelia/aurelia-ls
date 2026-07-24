@@ -837,7 +837,9 @@ class CompiledTemplateInstructionFactory {
         node.toReference(),
         attribute?.toReference() ?? syntax?.attribute ?? { productHandle: null, addressHandle: classification.sourceAddressHandle, rawName: null },
         syntax?.target ?? classification.resource?.name ?? '(unknown)',
-        resolvedInstructionResourceProductHandle(this.input, classification),
+        this.input.compilerReads.resolveResources()
+          ? classification.resource?.toReference() ?? null
+          : null,
         props.map((instruction) => instruction.productHandle),
         classification.sourceAddressHandle,
         [],
@@ -869,7 +871,9 @@ class CompiledTemplateInstructionFactory {
           node.toReference(),
           attribute?.toReference() ?? syntax?.attribute ?? { productHandle: null, addressHandle: classification.sourceAddressHandle, rawName: null },
           syntax?.target ?? classification.resource?.name ?? '(unknown)',
-          resolvedInstructionResourceProductHandle(this.input, classification),
+          this.input.compilerReads.resolveResources()
+            ? classification.resource?.toReference() ?? null
+            : null,
           childSequenceProductHandle,
           props.map((instruction) => instruction.productHandle),
           classification.sourceAddressHandle,
@@ -1046,7 +1050,9 @@ class CompiledTemplateInstructionTraversal {
           node.toReference(),
           elementDefinition.name,
           lookupName,
-          this.input.compilerReads.resolveResources() ? elementDefinition.productHandle : null,
+          this.input.compilerReads.resolveResources()
+            ? elementResolution?.resource?.toReference() ?? null
+            : null,
           null,
           projectionGroups.map((group, index) => {
             const local = `${instructionLocal}:projection:${index}`;
@@ -2779,15 +2785,6 @@ function nullableInstruction(
   instruction: TemplateInstruction | null,
 ): readonly TemplateInstruction[] {
   return instruction == null ? [] : [instruction];
-}
-
-function resolvedInstructionResourceProductHandle(
-  input: CompiledTemplateMaterializationRequest,
-  classification: AttributeClassification,
-): ProductHandle | null {
-  return input.compilerReads.resolveResources()
-    ? classification.resource?.definitionProductHandle ?? classification.resource?.resourceProductHandle ?? null
-    : null;
 }
 
 function compiledTemplateStateFor(

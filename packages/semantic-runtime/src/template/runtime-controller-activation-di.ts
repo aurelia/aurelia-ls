@@ -1,4 +1,9 @@
 import ts from 'typescript';
+import {
+  readImportedExportName,
+  readSourceImportBindings,
+  type SourceImportBindings,
+} from '../evaluation/import-bindings.js';
 import { isNestedExecutionBoundary } from '../evaluation/ts-syntax.js';
 import {
   SourceSpanAddress,
@@ -28,23 +33,17 @@ const VIEW_FACTORY_MODULES = new Set([
   '@aurelia/runtime-html',
 ]);
 
+const RESOLVE_EXPORTS = new Set(['resolve']);
+const VIEW_FACTORY_EXPORTS = new Set(['IViewFactory']);
+
 export interface RuntimeControllerActivationDiSite {
   readonly sourceAddressHandle: AddressHandle;
   readonly records: readonly KernelStoreRecord[];
 }
 
-interface ImportBindings {
-  readonly resolveIdentifiers: ReadonlySet<string>;
-  readonly resolveNamespaces: ReadonlySet<string>;
-  readonly viewFactoryIdentifiers: ReadonlySet<string>;
-  readonly viewFactoryNamespaces: ReadonlySet<string>;
-}
-
-class MutableImportBindings implements ImportBindings {
-  readonly resolveIdentifiers = new Set<string>();
-  readonly resolveNamespaces = new Set<string>();
-  readonly viewFactoryIdentifiers = new Set<string>();
-  readonly viewFactoryNamespaces = new Set<string>();
+export interface ControllerActivationImportBindings {
+  readonly resolve: SourceImportBindings;
+  readonly viewFactory: SourceImportBindings;
 }
 
 /**
@@ -92,7 +91,7 @@ function readClassActivationViewFactoryResolveSites(
   declaration: ts.ClassDeclaration,
 ): readonly RuntimeControllerActivationDiSite[] {
   const sourceFile = declaration.getSourceFile();
-  const bindings = readImportBindings(sourceFile);
+  const bindings = readControllerActivationImportBindings(sourceFile);
   const sites: RuntimeControllerActivationDiSite[] = [];
   for (const member of declaration.members) {
     if (isStaticClassElement(member)) {
@@ -113,7 +112,7 @@ function visitActivationNode(
   publication: KernelPublicationContext,
   sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
-  bindings: ImportBindings,
+  bindings: ControllerActivationImportBindings,
   definitionName: string,
   node: ts.Node,
   sites: RuntimeControllerActivationDiSite[],
@@ -129,73 +128,23 @@ function visitActivationNode(
   );
 }
 
-function readImportBindings(sourceFile: ts.SourceFile): ImportBindings {
-  const bindings = new MutableImportBindings();
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) {
-      continue;
-    }
-    const moduleSpecifier = statement.moduleSpecifier.text;
-    const namedBindings = statement.importClause?.namedBindings ?? null;
-    if (namedBindings == null) {
-      continue;
-    }
-    if (ts.isNamespaceImport(namedBindings)) {
-      if (RESOLVE_MODULES.has(moduleSpecifier)) {
-        bindings.resolveNamespaces.add(namedBindings.name.text);
-      }
-      if (VIEW_FACTORY_MODULES.has(moduleSpecifier)) {
-        bindings.viewFactoryNamespaces.add(namedBindings.name.text);
-      }
-      continue;
-    }
-    for (const element of namedBindings.elements) {
-      const importedName = element.propertyName?.text ?? element.name.text;
-      if (importedName === 'resolve' && RESOLVE_MODULES.has(moduleSpecifier)) {
-        bindings.resolveIdentifiers.add(element.name.text);
-      }
-      if (importedName === 'IViewFactory' && VIEW_FACTORY_MODULES.has(moduleSpecifier)) {
-        bindings.viewFactoryIdentifiers.add(element.name.text);
-      }
-    }
-  }
-  return bindings;
+export function readControllerActivationImportBindings(
+  sourceFile: ts.SourceFile,
+): ControllerActivationImportBindings {
+  return {
+    resolve: readSourceImportBindings(sourceFile, RESOLVE_MODULES, RESOLVE_EXPORTS),
+    viewFactory: readSourceImportBindings(sourceFile, VIEW_FACTORY_MODULES, VIEW_FACTORY_EXPORTS),
+  };
 }
 
-function isResolveIViewFactoryCall(
+export function isResolveIViewFactoryCall(
   node: ts.CallExpression,
-  bindings: ImportBindings,
+  bindings: ControllerActivationImportBindings,
 ): boolean {
   const key = node.arguments[0] ?? null;
-  return isResolveExpression(node.expression, bindings)
+  return readImportedExportName(node.expression, bindings.resolve, RESOLVE_EXPORTS) === 'resolve'
     && key != null
-    && isIViewFactoryExpression(key, bindings);
-}
-
-function isResolveExpression(
-  expression: ts.Expression,
-  bindings: ImportBindings,
-): boolean {
-  if (ts.isIdentifier(expression)) {
-    return bindings.resolveIdentifiers.has(expression.text);
-  }
-  return ts.isPropertyAccessExpression(expression)
-    && expression.name.text === 'resolve'
-    && ts.isIdentifier(expression.expression)
-    && bindings.resolveNamespaces.has(expression.expression.text);
-}
-
-function isIViewFactoryExpression(
-  expression: ts.Expression,
-  bindings: ImportBindings,
-): boolean {
-  if (ts.isIdentifier(expression)) {
-    return bindings.viewFactoryIdentifiers.has(expression.text);
-  }
-  return ts.isPropertyAccessExpression(expression)
-    && expression.name.text === 'IViewFactory'
-    && ts.isIdentifier(expression.expression)
-    && bindings.viewFactoryNamespaces.has(expression.expression.text);
+    && readImportedExportName(key, bindings.viewFactory, VIEW_FACTORY_EXPORTS) === 'IViewFactory';
 }
 
 function sourceSiteForNode(
