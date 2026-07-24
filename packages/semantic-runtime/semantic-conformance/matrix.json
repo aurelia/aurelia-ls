@@ -10443,10 +10443,12 @@
               "closure": "complete",
               "equals": {
                 "value.selectedMemberName": "load",
-                "value.rows.length": 13
+                "value.rows.length": 15
               },
               "rows": [
-                { "fields": { "referenceKind": "resource-usage", "name": "load" }, "source": { "marker": "load=\"route: product-detail; params.bind: { productId: 'espresso' }\"", "token": "load" }, "count": 1 }
+                { "fields": { "referenceKind": "resource-usage", "name": "load" }, "source": { "marker": "load=\"route: product-detail; params.bind: { productId: 'espresso' }\"", "token": "load" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "name": "load" }, "source": { "sourceFile": "src/route-link.html", "marker": "load.bind=\"productId | routeInstruction\"", "token": "load" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "name": "load" }, "source": { "sourceFile": "src/route-link.html", "marker": "load.bind=\"blockedProductId | routeInstruction & missingBehavior\"", "token": "load" }, "count": 1 }
               ]
             }
           ]
@@ -12022,20 +12024,23 @@
             {
               "name": "runtime compositions",
               "query": { "kind": "runtime-compositions", "options": { "page": { "size": 100 } } },
-              "equals": { "value.rows.length": 10 },
+              "equals": { "value.rows.length": 17 },
               "rows": [
-                { "fields": { "renderingDefinitionName": "compose-dashboard-app", "renderingContextKind": "recursive-resource-instance", "componentResolutionKind": "type-candidate", "componentCandidateCoverageKind": "complete", "modelResolutionKind": "static-value", "modelAssignableToActivationParameterCount": 2 }, "source": { "marker": "<au-compose component.bind=\"widget.component\" model.bind=\"widget\"></au-compose>", "token": "<au-compose component.bind=\"widget.component\" model.bind=\"widget\"></au-compose>" } },
+                { "fields": { "renderingDefinitionName": "compose-dashboard-app", "renderingContextKind": "definition-resource", "componentResolutionKind": "type-candidate", "componentCandidateCoverageKind": "complete", "modelResolutionKind": "static-value", "modelAssignableToActivationParameterCount": 2 }, "source": { "marker": "<au-compose component.bind=\"widget.component\" model.bind=\"widget\"></au-compose>", "token": "<au-compose component.bind=\"widget.component\" model.bind=\"widget\"></au-compose>" } },
                 { "fields": { "renderingDefinitionName": "compose-dashboard-app", "renderingContextKind": "definition-resource", "componentResolutionKind": "static-value", "modelResolutionKind": "static-value", "modelAssignableToActivationParameterCount": 1 }, "source": { "marker": "<au-compose component=\"chart-widget\" model.bind=\"selectedWidget\"></au-compose>", "token": "<au-compose component=\"chart-widget\" model.bind=\"selectedWidget\"></au-compose>" } },
                 { "fields": { "renderingDefinitionName": "compose-dashboard-app", "renderingContextKind": "definition-resource", "componentResolutionKind": "template-only", "modelResolutionKind": "absent", "modelAssignableToActivationParameterCount": 0 }, "source": { "marker": "<au-compose template.bind=\"getAsyncTemplate()\" scope-behavior=\"scoped\" composition.bind=\"composition\"></au-compose>", "token": "<au-compose template.bind=\"getAsyncTemplate()\" scope-behavior=\"scoped\" composition.bind=\"composition\"></au-compose>" } },
-                { "fields": { "renderingDefinitionName": "widget-host", "renderingContextKind": "definition-resource", "componentResolutionKind": "static-value", "modelResolutionKind": "static-value", "modelAssignableToActivationParameterCount": 0 }, "source": { "sourceFile": "src/widget-host.html", "marker": "<au-compose component.bind=\"component\" model.bind=\"model\"></au-compose>", "token": "<au-compose component.bind=\"component\" model.bind=\"model\"></au-compose>" } },
-                { "fields": { "openReason": null }, "count": 10 }
+                { "fields": { "renderingDefinitionName": "widget-host", "renderingContextKind": "definition-resource", "componentResolutionKind": "static-value", "modelResolutionKind": "static-value", "modelAssignableToActivationParameterCount": 0 }, "source": { "sourceFile": "src/widget-host.html", "marker": "<au-compose if.bind=\"component\" component.bind=\"component\" model.bind=\"model\"></au-compose>", "token": "<au-compose if.bind=\"component\" component.bind=\"component\" model.bind=\"model\"></au-compose>" } },
+                { "fields": { "openReason": null }, "count": 16 }
               ]
             },
             {
               "name": "open seams",
-              "query": { "kind": "open-seams", "options": { "page": { "size": 100 } } },
+              "query": { "kind": "open-seams", "options": { "detail": "full", "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 1 },
               "rows": [
-                { "count": 0 }
+                { "fields": { "seamKindKey": "template.open-runtime-composition" }, "source": { "marker": "template.bind=\"getOpenTemplate()\"", "token": "template.bind=\"getOpenTemplate()\"" }, "count": 1 },
+                { "rowPath": "value.rows[].reasonSources", "fields": { "reasonKind": "runtime-composition-input-open" }, "count": 1 },
+                { "rowPath": "value.rows[].reasonSources", "fields": { "reasonKind": "async-execution-value" }, "count": 1 }
               ]
             }
           ]

@@ -125,8 +125,8 @@ import {
   resourceLocalAuthoredTemplateValueSites,
 } from '../template/runtime-resource-ownership.js';
 import {
-  bindingSourceContextProjectionSelectionForTemplateExpressionParseAtOffset,
-  RuntimeBindingSourceContextProjectionSelectionKind,
+  bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset,
+  RuntimeBindingSourceEnvironmentSelectionKind,
   resourceLocalEffectiveTemplateExpressionParses,
   runtimeExpressionBindingsForTemplateExpressionParse,
 } from '../template/template-expression-selection.js';
@@ -3230,7 +3230,7 @@ function authoredScopeReferenceRowsForTarget(
         if (access.name.name !== selectedMemberName) {
           return [];
         }
-        const selection = bindingSourceContextProjectionSelectionForTemplateExpressionParseAtOffset(
+        const selection = bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset(
           store,
           resource,
           expressionWorld,
@@ -3238,10 +3238,10 @@ function authoredScopeReferenceRowsForTarget(
           access.name.span.start,
         );
         if (
-          selection?.kind !== RuntimeBindingSourceContextProjectionSelectionKind.Context
+          selection.kind !== RuntimeBindingSourceEnvironmentSelectionKind.Context
           || !scopeSlotMatchesReferenceTarget(
             store,
-            selection.projection.scope.locate(access.name.name, access.ancestor).slot,
+            selection.scope.locate(access.name.name, access.ancestor).slot,
             targetSources,
             targetIdentityHandle,
           )

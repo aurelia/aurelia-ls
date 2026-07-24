@@ -93,6 +93,8 @@ import {
   HydrateElementInstruction,
   type HydrateElementProjectionInstructionSequence,
   HydrateTemplateControllerInstruction,
+  IteratorBindingInstruction,
+  MultiAttrInstruction,
   type TemplateInstruction,
   type TemplateInstructionSequence,
 } from './instruction-ir.js';
@@ -194,6 +196,7 @@ export interface RuntimeRenderingMaterializationRequest {
 export class RuntimeRenderingEmission {
   private readonly bindingsByInstruction = new Map<ProductHandle, RuntimeBinding[]>();
   private readonly bindingsByExpressionProduct = new Map<ProductHandle, RuntimeBinding[]>();
+  private readonly expressionProductsByBinding = new Map<ProductHandle, readonly ProductHandle[]>();
   private readonly bindingsByProduct = new Map<ProductHandle, RuntimeBinding>();
   private readonly effectsByOwner = new Map<ProductHandle, RuntimeBindingScopeEffect[]>();
   private readonly renderContextsByBinding = new Map<ProductHandle, RuntimeBindingRenderContext>();
@@ -226,6 +229,8 @@ export class RuntimeRenderingEmission {
     readonly embeddedDefinitions: readonly CustomElementDefinition[],
     /** Binding render contexts needed by later binding.bind materialization. */
     readonly bindingRenderContexts: readonly RuntimeBindingRenderContext[],
+    /** Expression products evaluated in each exact rendered binding environment. */
+    bindingExpressionProductHandles: ReadonlyMap<ProductHandle, readonly ProductHandle[]>,
     /** Runtime child containers materialized while renderers created child controllers. */
     readonly childContainers: readonly Container[],
     /** Framework-runtime issues discovered while constructing or hydrating controllers. */
@@ -259,7 +264,12 @@ export class RuntimeRenderingEmission {
       const instructionBindings = this.bindingsByInstruction.get(binding.instructionProductHandle) ?? [];
       instructionBindings.push(binding);
       this.bindingsByInstruction.set(binding.instructionProductHandle, instructionBindings);
-      for (const expressionProductHandle of expressionProductHandlesForRuntimeBinding(binding)) {
+      const expressionProductHandles = bindingExpressionProductHandles.get(binding.productHandle);
+      if (expressionProductHandles == null) {
+        throw new Error(`Runtime binding '${binding.productHandle}' has no expression-environment relation.`);
+      }
+      this.expressionProductsByBinding.set(binding.productHandle, expressionProductHandles);
+      for (const expressionProductHandle of expressionProductHandles) {
         const expressionBindings = this.bindingsByExpressionProduct.get(expressionProductHandle) ?? [];
         expressionBindings.push(binding);
         this.bindingsByExpressionProduct.set(expressionProductHandle, expressionBindings);
@@ -308,9 +318,14 @@ export class RuntimeRenderingEmission {
     return this.bindingsByInstruction.get(productHandle) ?? [];
   }
 
-  /** Returns runtime bindings that consume one exact expression product across recursive render contexts. */
+  /** Returns runtime bindings whose exact render environment evaluates one expression product. */
   readBindingsForExpressionProduct(productHandle: ProductHandle): readonly RuntimeBinding[] {
     return this.bindingsByExpressionProduct.get(productHandle) ?? [];
+  }
+
+  /** Returns expression products evaluated in one exact rendered binding environment. */
+  readExpressionProductsForBinding(productHandle: ProductHandle): readonly ProductHandle[] {
+    return this.expressionProductsByBinding.get(productHandle) ?? [];
   }
 
   /** Returns the materialized runtime binding for a binding product handle. */
@@ -767,6 +782,7 @@ export class RuntimeRenderingMaterializer {
       })),
       state.embeddedDefinitions,
       state.bindingRenderContexts,
+      this.bindingExpressionProductHandles(state),
       state.childContainers(),
       state.controllerIssues,
       state.rendererIssues,
@@ -782,6 +798,30 @@ export class RuntimeRenderingMaterializer {
       state.contentProjectionViews,
       state.records,
     );
+  }
+
+  private bindingExpressionProductHandles(
+    state: RuntimeRenderingMaterializationState,
+  ): ReadonlyMap<ProductHandle, readonly ProductHandle[]> {
+    const dynamicInstructions = new Map(
+      state.dynamicInstructions.map((instruction) => [instruction.productHandle, instruction]),
+    );
+    const readInstruction = (productHandle: ProductHandle): TemplateInstruction | null =>
+      dynamicInstructions.get(productHandle)
+        ?? state.input.projectContext.readInstruction(productHandle);
+    return new Map(state.bindings.map((binding) => {
+      const handles = new Set(expressionProductHandlesForRuntimeBinding(binding));
+      const instruction = readInstruction(binding.instructionProductHandle);
+      if (instruction instanceof IteratorBindingInstruction) {
+        for (const tailHandle of instruction.tailInstructionProductHandles) {
+          const tail = readInstruction(tailHandle);
+          if (tail instanceof MultiAttrInstruction && tail.expressionProductHandle != null) {
+            handles.add(tail.expressionProductHandle);
+          }
+        }
+      }
+      return [binding.productHandle, [...handles]] as const;
+    }));
   }
 
   private renderTargetInputs(

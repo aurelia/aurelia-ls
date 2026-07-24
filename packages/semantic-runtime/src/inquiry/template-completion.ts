@@ -134,8 +134,8 @@ import {
 } from '../template/template-controller-semantics.js';
 import { componentLifecycleHookName } from '../template/component-lifecycle-source.js';
 import {
-  bindingSourceContextProjectionSelectionForTemplateExpressionParseAtOffset,
-  RuntimeBindingSourceContextProjectionSelectionKind,
+  bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset,
+  RuntimeBindingSourceEnvironmentSelectionKind,
   templateInstructionForExpressionParse,
   templateScopeRangeAddressHandle,
 } from '../template/template-expression-selection.js';
@@ -3059,18 +3059,18 @@ function bindingEnvironmentForCursor(
       null,
     );
   }
-  const selection = bindingSourceContextProjectionSelectionForTemplateExpressionParseAtOffset(
+  const selection = bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset(
     store,
     resource,
     expressionWorld,
     expressionParse,
     offset,
   );
-  if (selection?.kind === RuntimeBindingSourceContextProjectionSelectionKind.Context) {
+  if (selection.kind === RuntimeBindingSourceEnvironmentSelectionKind.Context) {
     return new TemplateCursorBindingEnvironment(
-      selection.projection.scope,
-      selection.projection.resourceScope,
-      selection.projection,
+      selection.scope,
+      selection.resourceScope,
+      selection.sourceProjection,
       null,
     );
   }
@@ -3078,8 +3078,7 @@ function bindingEnvironmentForCursor(
     null,
     null,
     null,
-    selection?.openReason
-      ?? 'Runtime binding source expression did not retain a cursor-addressable source context.',
+    selection.openReason,
   );
 }
 

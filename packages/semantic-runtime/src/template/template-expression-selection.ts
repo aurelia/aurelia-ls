@@ -21,8 +21,8 @@ import {
 } from '../observation/runtime-binding-source-expression-context.js';
 import { CheckerExpressionTypeBindingBehaviorEvaluation } from '../type-system/expression-type-context.js';
 import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
+import type { TemplateResourceScope } from './compiler-world.js';
 import { bindingExpressionAstForProductAtOffset } from './expression-parse-product.js';
-import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-expression-products.js';
 import {
   expressionProductHandlesForInstruction,
   MultiAttrInstruction,
@@ -60,6 +60,30 @@ export interface RuntimeBindingSourceContextProjectionOpenSelection {
 export type RuntimeBindingSourceContextProjectionSelectionResult =
   | RuntimeBindingSourceContextProjectionSelection
   | RuntimeBindingSourceContextProjectionOpenSelection;
+
+export const enum RuntimeBindingSourceEnvironmentSelectionKind {
+  /** Runtime binding candidates converged to one source Scope and compiler resource scope. */
+  Context = 'context',
+  /** Runtime binding candidates did not provide one deterministic source environment. */
+  Open = 'open',
+}
+
+export interface RuntimeBindingSourceEnvironmentSelection {
+  readonly kind: RuntimeBindingSourceEnvironmentSelectionKind.Context;
+  readonly scope: BindingScope;
+  readonly resourceScope: TemplateResourceScope;
+  /** Lifecycle projection when the cursor has a complete expression AST. */
+  readonly sourceProjection: RuntimeBindingSourceExpressionContextProjection | null;
+}
+
+export interface RuntimeBindingSourceEnvironmentOpenSelection {
+  readonly kind: RuntimeBindingSourceEnvironmentSelectionKind.Open;
+  readonly openReason: string;
+}
+
+export type RuntimeBindingSourceEnvironmentSelectionResult =
+  | RuntimeBindingSourceEnvironmentSelection
+  | RuntimeBindingSourceEnvironmentOpenSelection;
 
 /**
  * Shared selection helpers for consumers that need to move from compiler-owned template products to runtime scope
@@ -113,8 +137,7 @@ export function runtimeExpressionBindingsForTemplateExpressionProductHandle(
 ): readonly RuntimeExpressionBinding[] {
   return resource.runtimeAnalysis.runtimeRendering
     .readBindingsForExpressionProduct(expressionProductHandle)
-    .filter(isRuntimeExpressionBinding)
-    .filter((binding) => expressionProductHandlesForRuntimeBinding(binding).includes(expressionProductHandle));
+    .filter(isRuntimeExpressionBinding);
 }
 
 /** Runtime bindings for one expression product that can be evaluated from the ambient materialized scope. */
@@ -149,29 +172,34 @@ export function runtimeExpressionBindingsForTemplateExpressionParse(
   return runtimeExpressionBindingsForTemplateExpressionProductHandle(resource, expressionParse.productHandle);
 }
 
-/** Selects the runtime binding source context for a cursor expression, preserving an open result when reuse diverges. */
-export function bindingSourceContextProjectionSelectionForTemplateExpressionParseAtOffset(
+/** Selects the exact runtime source environment even while an in-progress expression has no AST yet. */
+export function bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset(
   store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
   expressionWorld: CheckerExpressionTypeWorld,
   expressionParse: TemplateExpressionParse,
   offset: number,
   ambientScope: BindingScope | null = null,
-): RuntimeBindingSourceContextProjectionSelectionResult | null {
+): RuntimeBindingSourceEnvironmentSelectionResult {
   const expression = bindingExpressionAstForProductAtOffset(store, expressionParse.productHandle, offset)
     ?? ExpressionParseResultInspector.memberOwnerAtOffset(expressionParse.result, offset);
-  if (expression == null) {
-    return null;
-  }
   const bindings = ambientScope == null
     ? runtimeExpressionBindingsForTemplateExpressionParse(resource, expressionParse)
     : runtimeExpressionBindingsForTemplateExpressionParseInScope(resource, expressionParse, ambientScope);
+  if (expression == null) {
+    return selectRuntimeBindingSourceEnvironment(
+      resource,
+      expressionParse,
+      bindings,
+      ambientScope,
+    );
+  }
   const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
     store,
     expressionWorld,
     resource.runtimeAnalysis.expressionResourcePlan,
   );
-  return selectRuntimeBindingSourceContextProjection({
+  const selection = selectRuntimeBindingSourceContextProjection({
     bindings,
     expression,
     localKey: `template-expression-selection:${expressionParse.productHandle}:source-scope`,
@@ -187,6 +215,72 @@ export function bindingSourceContextProjectionSelectionForTemplateExpressionPars
       binding,
     ),
   });
+  return selection.kind === RuntimeBindingSourceContextProjectionSelectionKind.Open
+    ? {
+        kind: RuntimeBindingSourceEnvironmentSelectionKind.Open,
+        openReason: selection.openReason,
+      }
+    : {
+        kind: RuntimeBindingSourceEnvironmentSelectionKind.Context,
+        scope: selection.projection.scope,
+        resourceScope: selection.projection.resourceScope,
+        sourceProjection: selection.projection,
+      };
+}
+
+function selectRuntimeBindingSourceEnvironment(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  expressionParse: TemplateExpressionParse,
+  bindings: readonly RuntimeExpressionBinding[],
+  ambientScope: BindingScope | null,
+): RuntimeBindingSourceEnvironmentSelectionResult {
+  const instruction = templateInstructionForExpressionParse(resource, expressionParse);
+  if (instruction == null) {
+    return {
+      kind: RuntimeBindingSourceEnvironmentSelectionKind.Open,
+      openReason: 'Template expression did not retain an effective runtime instruction.',
+    };
+  }
+  const instructionScopes = instructionScopeLookup(resource.runtimeAnalysis.scopes.instructionScopes);
+  const candidates = bindings.flatMap((binding) => {
+    const renderContext = resource.runtimeAnalysis.runtimeRendering.requireRenderContextForBinding(
+      binding.productHandle,
+    );
+    const scope = ambientScope ?? instructionScopes.scopeForInstruction(
+      instruction.productHandle,
+      renderContext.sourceController.productHandle,
+    );
+    return scope == null
+      ? []
+      : [{
+          scope,
+          resourceScope: renderContext.resourceScope,
+          strictBinding: renderContext.renderingController.strict,
+        }];
+  });
+  if (candidates.length !== bindings.length || candidates.length === 0) {
+    return {
+      kind: RuntimeBindingSourceEnvironmentSelectionKind.Open,
+      openReason: 'Runtime binding candidates did not retain a complete source environment.',
+    };
+  }
+  const first = candidates[0]!;
+  const divergent = candidates.find((candidate) =>
+    !templateScopesHaveEquivalentEvaluationContext(first.scope, candidate.scope)
+    || first.resourceScope.identityHandle !== candidate.resourceScope.identityHandle
+    || first.strictBinding !== candidate.strictBinding
+  );
+  return divergent == null
+    ? {
+        kind: RuntimeBindingSourceEnvironmentSelectionKind.Context,
+        scope: first.scope,
+        resourceScope: first.resourceScope,
+        sourceProjection: null,
+      }
+    : {
+        kind: RuntimeBindingSourceEnvironmentSelectionKind.Open,
+        openReason: 'Runtime binding candidates have multiple distinct source environments for this expression site.',
+      };
 }
 
 export function selectRuntimeBindingSourceContextProjection(
