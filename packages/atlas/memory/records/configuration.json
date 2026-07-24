@@ -411,18 +411,20 @@
         "observation",
         "auLink"
       ],
-      "summary": "AppTask-time mutations of framework services must materialize as compiler-world and observer-locator service state.",
-      "rationale": "Framework corpus form pressure exposed AppTask callbacks that call IAttrMapper.useTwoWay(...) and NodeObserverLocator.useConfig(...). These are not fixture quirks: Aurelia applications can customize framework services during configuration, so semantic-runtime needs a durable recognition and threading layer rather than built-in-only AttrMapper/ObserverLocator instances.",
+      "summary": "AppTask-time mutations of framework services must materialize as container-scoped compiler-world, observer-locator, and listener-authoring state.",
+      "rationale": "Framework corpus pressure exposed AppTask callbacks that call IAttrMapper.useTwoWay(...), NodeObserverLocator.useConfig(...), and mutate IKeyMapping. These are not fixture quirks: Aurelia applications can customize framework services during configuration, so semantic-runtime needs a durable recognition and threading layer rather than built-in-only service instances.",
       "guidance": [
-        "Start here when AppTask callbacks mutate IAttrMapper, NodeObserverLocator, or adjacent framework services.",
+        "Start here when AppTask callbacks mutate IAttrMapper, NodeObserverLocator, IKeyMapping, or adjacent framework services.",
         "Evaluator-created AppTask registry values must retain occurrence-local slot, key, callback, and captured-environment evidence through value forks; do not reconstruct the callback from source or final module state.",
         "AppTask factory calls are registry value creation, not standalone app configuration effects. Framework-service customization may consume only RegisteredAppTask rows actually spent by DI, in registration order; an unregistered declaration has no app-world effect.",
+        "Select framework-service AppTasks per app-root container using the nearest IAppTask registration cohort; independent roots must not consume one project-global customization snapshot.",
         "Keep service customizations framework-shaped and auLink-grounded; do not push one-off rules into compiler or binding materializers.",
         "Only treat an AppTask callback parameter as a container when the AppTask key is IContainer. Direct service keys such as NodeObserverLocator and IAttrMapper bind the parameter to that service, while no-key tasks and arbitrary DI keys must not become container locals just because their callback body calls .get(...).",
         "The framework-service execution host identifies only calls reached by evaluator control flow. Configuration and observation decoders consume immutable invocation evidence; they must not replay callback source or rebuild alias maps.",
         "Duplicate NodeObserverLocator config/global config mappings are configuration-owned diagnostics: publish ConfigurationIssue products with exact runtime-html AUR0653 authority and keep the rest of the valid service state available to compiler-world observer lookup.",
         "Configuration customization owns duplicate NodeObserverLocator mappings (AUR0653) and the allowDirtyCheck service-state handoff. The sibling node_observer_strategy_not_found code (AUR0652) is spent by observation target-access diagnostics only when observer lookup models the exact dirty-check-disabled framework path; host-node controller codes remain outside this frontier.",
         "NodeObserverLocator.useConfig(...) service state is spent only when template/runtime binding semantics ask for an observer. Plain to-view .bind host-node access may still close through getAccessor/ElementPropertyAccessor unless an accessor override exists; two-way/from-view paths reach the configured observer.",
+        "IKeyMapping mutations execute through the same evaluator-owned AppTask callback path. Preserve exact known meta/key membership and authored key sources, but keep dynamic computed membership open and never claim arbitrary IModifiedEventHandlerCreator modifier vocabularies are enumerable.",
         "AttrMapper useMapping/useGlobalMapping/useTwoWay keys are exact app-authored runtime keys. Project the template node and attribute through runtime-dom-name before lookup; never case-fold the app configuration into aliases that the framework would not spend.",
         "Static AttrMapper useTwoWay recognition may spend only fully understood predicates. Reject unsupported conjunction terms rather than widening a conditional predicate; arbitrary predicate execution remains an explicit open capability.",
         "Attach ConfigurationIssue product details only after the issue kernel records are committed; sidecar details without materialized products are invalid.",
@@ -472,6 +474,12 @@
           "linkId": "runtime-html:NodeObserverLocator",
           "symbolName": "NodeObserverLocator",
           "summary": "Observer service that consumes recognized node observer customization state."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-event-modifier.ts",
+          "symbolName": "RuntimeKeyMappingConfiguration",
+          "summary": "App-effective key-mapping vocabulary and exact app-authored source witnesses carried by compiler worlds."
         },
         {
           "kind": "source",

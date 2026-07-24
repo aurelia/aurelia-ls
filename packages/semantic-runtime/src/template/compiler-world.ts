@@ -82,6 +82,7 @@ import {
   TemplateCompilerServiceReference,
   type TemplateVisibleResource,
 } from './compiler-world-reference.js';
+import type { RuntimeKeyMappingConfiguration } from './runtime-event-modifier.js';
 
 export const enum TemplateCompilerWorldKind {
   /** Compiler world for an app root or app-level container. */
@@ -1074,6 +1075,8 @@ export class TemplateCompilerWorld {
     readonly resourceScopeProductHandle: ProductHandle | null,
     /** App-authored NodeObserverLocator service state visible to runtime binding analysis. */
     readonly nodeObserverLocatorConfiguration: NodeObserverLocatorConfiguration | null,
+    /** App-effective IKeyMapping state visible to listener runtime analysis and authoring. */
+    readonly runtimeKeyMappingConfiguration: RuntimeKeyMappingConfiguration,
     /** Compiler services visible to this compiler world. */
     readonly services: readonly TemplateCompilerServiceReference[],
     /** Source address for the world owner. */

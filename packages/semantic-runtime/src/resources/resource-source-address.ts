@@ -18,7 +18,10 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
-import { unwrapExpression } from '../evaluation/ts-syntax.js';
+import {
+  authoredPropertyNameSpan,
+  unwrapExpression,
+} from '../evaluation/ts-syntax.js';
 import {
   TemplateSourceOffsetMap,
 } from './custom-element-definition.js';
@@ -193,20 +196,7 @@ export function sourceSpanRangeForNode(
   sourceFile: ts.SourceFile,
   node: ts.Node | null,
 ): SourceSpanRange | null {
-  if (node == null) {
-    return null;
-  }
-  const sourceNode = sourceAddressNode(node);
-  let start = sourceNode.getStart(sourceFile);
-  let end = sourceNode.end;
-  if (ts.isStringLiteralLike(sourceNode) || ts.isNoSubstitutionTemplateLiteral(sourceNode)) {
-    start += 1;
-    end -= 1;
-  }
-  if (end < start) {
-    return null;
-  }
-  return { start, end };
+  return node == null ? null : authoredPropertyNameSpan(sourceFile, node);
 }
 
 function inlineTemplateStringExpression(
@@ -384,28 +374,4 @@ function readUnicodeEscape(
   return /^[0-9a-fA-F]{4}$/.test(text)
     ? { decoded: String.fromCharCode(parseInt(text, 16)), rawLength: 6 }
     : null;
-}
-
-function sourceAddressNode(node: ts.Node): ts.Node {
-  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-    const target = node.left;
-    if (ts.isPropertyAccessExpression(target)) {
-      return target.name;
-    }
-    if (ts.isElementAccessExpression(target) && target.argumentExpression != null) {
-      return target.argumentExpression;
-    }
-  }
-  if (
-    (ts.isPropertyAssignment(node)
-      || ts.isShorthandPropertyAssignment(node)
-      || ts.isMethodDeclaration(node)
-      || ts.isPropertyDeclaration(node)
-      || ts.isGetAccessorDeclaration(node)
-      || ts.isSetAccessorDeclaration(node))
-    && node.name != null
-  ) {
-    return node.name;
-  }
-  return node;
 }

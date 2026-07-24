@@ -25,13 +25,18 @@ import {
 import { delegateStaticEvaluationRuntimeHost } from '../evaluation/runtime-host.js';
 import { StaticEvaluationSessionFork } from '../evaluation/evaluation-session.js';
 import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own-properties.js';
+import type { EvaluatedProjectSource } from '../evaluation/project-evaluation.js';
 import {
+  EvaluationArrayElement,
+  EvaluationArrayShape,
+  EvaluationArrayValue,
   EvaluationBooleanValue,
   EvaluationBoundaryKind,
   EvaluationBoundaryObjectValue,
   EvaluationObjectProperty,
   EvaluationObjectPropertyState,
   EvaluationObjectValue,
+  EvaluationStringValue,
   EvaluationUndefined,
   EvaluationValueKind,
   type EvaluationFunctionValue,
@@ -43,6 +48,7 @@ import {
 } from '../evaluation/seams.js';
 import { evaluationValuesShareLineage } from '../evaluation/value-relation.js';
 import {
+  localKeyPart,
   projectModuleSourceNodeOrdinalLocalKey,
 } from '../kernel/local-key.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
@@ -57,11 +63,18 @@ import {
   publishProductDetails,
   type KernelPublicationContext,
 } from '../kernel/publication.js';
+import { sourceSpanEvidenceForSite } from '../kernel/source-address.js';
+import { SourceSpanRole } from '../kernel/address.js';
+import { EvidenceRole } from '../kernel/evidence.js';
 import {
   AttributeMapperConfiguration,
   AttributeMapperMapping,
   AttributeMapperTwoWayRule,
 } from '../template/attribute-mapper.js';
+import {
+  RuntimeKeyMappingConfiguration,
+  RuntimeKeyMappingEntry,
+} from '../template/runtime-event-modifier.js';
 import {
   NodeObserverLocatorConfiguration,
   type NodeObserverLocatorAccessorOverride,
@@ -75,6 +88,8 @@ import {
   nodeObserverNodeConfigsFromUseConfigCall,
 } from '../observation/node-observer-config-reader.js';
 import {
+  authoredPropertyNameSpan,
+  authoredPropertyNameNode,
   readReferenceName,
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
@@ -106,11 +121,20 @@ import {
 } from './framework-error-code.js';
 import { ConfigurationProductDetails } from './product-details.js';
 import { normalizeConfigurationSourceFileName } from './source-file-names.js';
-import type { DiWorldConstructionEmission } from '../di/world-construction.js';
+import type {
+  DiWorldConstructionEmission,
+  RegisteredAppTask,
+} from '../di/world-construction.js';
+import type { Container } from '../di/container.js';
+import type {
+  AddressHandle,
+  IdentityHandle,
+} from '../kernel/handles.js';
 
 const enum FrameworkServiceKind {
   AttrMapper = 'attr-mapper',
   NodeObserverLocator = 'node-observer-locator',
+  KeyMapping = 'key-mapping',
 }
 
 const enum AppTaskCallbackTargetKind {
@@ -172,19 +196,48 @@ const builtInGlobalAttributeMappingKeys = [
   'readonly',
 ] as const;
 
-export class FrameworkServiceCustomizationProjectResult {
+/** Framework-service state visible to one app-root compiler world after its reached AppTasks execute. */
+export class FrameworkServiceCustomization {
+  static readonly empty = new FrameworkServiceCustomization(
+    AttributeMapperConfiguration.empty,
+    NodeObserverLocatorConfiguration.empty,
+    RuntimeKeyMappingConfiguration.frameworkDefault,
+  );
+
   constructor(
     readonly attributeMapper: AttributeMapperConfiguration,
     readonly nodeObserverLocator: NodeObserverLocatorConfiguration,
+    readonly runtimeKeyMapping: RuntimeKeyMappingConfiguration,
+  ) {}
+}
+
+/** One app-root container and the nearest runtime AppTask cohort whose service state it observes. */
+export class FrameworkServiceCustomizationScope {
+  constructor(
+    readonly targetContainerIdentityHandle: IdentityHandle,
+    readonly taskContainerIdentityHandle: IdentityHandle | null,
+    readonly customization: FrameworkServiceCustomization,
+  ) {}
+}
+
+/** Project recognition result with app-root/container-scoped service state and project-wide pressure. */
+export class FrameworkServiceCustomizationProjectResult {
+  private readonly scopesByTargetContainer: ReadonlyMap<IdentityHandle, FrameworkServiceCustomizationScope>;
+
+  constructor(
+    readonly scopes: readonly FrameworkServiceCustomizationScope[],
     readonly issues: readonly ConfigurationIssue[] = [],
     readonly records: readonly KernelStoreRecord[] = [],
-  ) {}
+  ) {
+    this.scopesByTargetContainer = new Map(scopes.map((scope) => [
+      scope.targetContainerIdentityHandle,
+      scope,
+    ]));
+  }
 
-  get isEmpty(): boolean {
-    return this.attributeMapper.isEmpty
-      && this.nodeObserverLocator.isEmpty
-      && this.issues.length === 0
-      && this.records.length === 0;
+  forContainer(container: Container): FrameworkServiceCustomization {
+    return this.scopesByTargetContainer.get(container.identityHandle)?.customization
+      ?? FrameworkServiceCustomization.empty;
   }
 }
 
@@ -198,6 +251,7 @@ class FrameworkServiceCustomizationDraft {
   readonly issues: ConfigurationIssue[] = [];
   readonly records: KernelStoreRecord[] = [];
   nodeObserverLocatorAllowDirtyCheck: boolean | null = null;
+  runtimeKeyMapping = RuntimeKeyMappingConfiguration.frameworkDefault;
 
   private readonly nodeConfigKeys = new Set<string>(builtInNodeObserverConfigKeys);
   private readonly globalNodeConfigKeys = new Set<string>(builtInGlobalNodeObserverConfigKeys);
@@ -205,10 +259,12 @@ class FrameworkServiceCustomizationDraft {
   private readonly globalAttributeMappingKeys = new Set<string>(builtInGlobalAttributeMappingKeys);
   private issueOrdinal = 0;
   private openOrdinal = 0;
+  private runtimeKeyMappingSourceOrdinal = 0;
 
   constructor(
     private readonly issuePublisher: ConfigurationIssuePublisher,
     private readonly configurationPublication: ConfigurationKernelPublication,
+    private readonly scopeLocalKey: string,
   ) {}
 
   addEvaluationPressure(
@@ -284,8 +340,8 @@ class FrameworkServiceCustomizationDraft {
     }
   }
 
-  toResult(): FrameworkServiceCustomizationProjectResult {
-    return new FrameworkServiceCustomizationProjectResult(
+  toCustomization(): FrameworkServiceCustomization {
+    return new FrameworkServiceCustomization(
       new AttributeMapperConfiguration(this.attributeMappings, this.attributeTwoWayRules),
       new NodeObserverLocatorConfiguration(
         this.nodeConfigs,
@@ -294,9 +350,54 @@ class FrameworkServiceCustomizationDraft {
         this.globalAccessorOverrides,
         this.nodeObserverLocatorAllowDirtyCheck,
       ),
-      this.issues,
-      this.records,
+      this.runtimeKeyMapping,
     );
+  }
+
+  sourceForRuntimeKeyMappingEntry(
+    context: ConfigurationRecognitionContext,
+    node: ts.Node,
+    modifier: string,
+  ): Pick<RuntimeKeyMappingEntry, 'sourceAddressHandle' | 'provenanceHandle'> {
+    const sourceNode = authoredPropertyNameNode(node);
+    const sourceFileAddressHandle = context.sourceFileAddressHandleForNode(sourceNode);
+    if (sourceFileAddressHandle == null) {
+      return {
+        sourceAddressHandle: null,
+        provenanceHandle: null,
+      };
+    }
+    const span = authoredPropertyNameSpan(sourceNode.getSourceFile(), sourceNode);
+    if (span == null) {
+      return {
+        sourceAddressHandle: null,
+        provenanceHandle: null,
+      };
+    }
+    const local = `runtime-key-mapping:${this.scopeLocalKey}:${projectModuleSourceNodeOrdinalLocalKey({
+      projectKey: context.projectKey,
+      moduleKey: context.moduleKey,
+      sourceFile: sourceNode.getSourceFile(),
+      node: sourceNode,
+      index: this.runtimeKeyMappingSourceOrdinal++,
+    })}:${modifier}`;
+    const source = sourceSpanEvidenceForSite(
+      this.configurationPublication.store,
+      local,
+      {
+        sourceFileAddressHandle,
+        start: span.start,
+        end: span.end,
+      },
+      SourceSpanRole.Name,
+      [EvidenceRole.Configuration],
+      `AppTask configured IKeyMapping modifier '${modifier}'.`,
+    );
+    this.records.push(...source.records);
+    return {
+      sourceAddressHandle: source.addressHandle,
+      provenanceHandle: source.provenanceHandle,
+    };
   }
 
   private addOpenSeams(
@@ -307,7 +408,7 @@ class FrameworkServiceCustomizationDraft {
     if (seams.length === 0) {
       return;
     }
-    const local = `framework-service-customization:${projectModuleSourceNodeOrdinalLocalKey({
+    const local = `framework-service-customization:${this.scopeLocalKey}:${projectModuleSourceNodeOrdinalLocalKey({
       projectKey: context.projectKey,
       moduleKey: context.moduleKey,
       sourceFile: context.sourceFile,
@@ -323,7 +424,7 @@ class FrameworkServiceCustomizationDraft {
     tagName: string,
     propertyName: string,
   ): void {
-    const local = `configuration-issue:${projectModuleSourceNodeOrdinalLocalKey({
+    const local = `configuration-issue:${this.scopeLocalKey}:${projectModuleSourceNodeOrdinalLocalKey({
       projectKey: context.projectKey,
       moduleKey: context.moduleKey,
       sourceFile: context.sourceFile,
@@ -376,7 +477,7 @@ class FrameworkServiceCustomizationDraft {
     attributeName: string,
     tagName: string,
   ): void {
-    const local = `configuration-issue:${projectModuleSourceNodeOrdinalLocalKey({
+    const local = `configuration-issue:${this.scopeLocalKey}:${projectModuleSourceNodeOrdinalLocalKey({
       projectKey: context.projectKey,
       moduleKey: context.moduleKey,
       sourceFile: context.sourceFile,
@@ -412,46 +513,59 @@ export class FrameworkServiceCustomizationRecognitionPass {
   recognize(
     configuration: ConfigurationRecognitionProjectResult,
     diWorld: DiWorldConstructionEmission,
+    targetContainers: readonly Container[],
   ): FrameworkServiceCustomizationProjectResult {
-    const draft = new FrameworkServiceCustomizationDraft(
-      new ConfigurationIssuePublisher(this.store),
-      new ConfigurationKernelPublication(this.store),
-    );
     const sourceFileAddressHandlesByFileName = readSourceFileAddressHandlesByFileName(configuration.evaluation);
     const evaluatedSourcesByFileName = new Map(configuration.evaluation.readEvaluatedSources().map((source) => [
       normalizeConfigurationSourceFileName(source.sourceFile.fileName),
       source,
     ]));
-    for (const registration of diWorld.registeredAppTasks) {
-      const evaluation = registration.evaluation;
-      const callback = evaluation?.callback?.value;
-      if (evaluation == null || callback?.kind !== EvaluationValueKind.Function) {
+    const customizationsByTaskContainer = new Map<IdentityHandle, FrameworkServiceCustomization>();
+    const scopes: FrameworkServiceCustomizationScope[] = [];
+    const issues: ConfigurationIssue[] = [];
+    const records: KernelStoreRecord[] = [];
+    const seenTargets = new Set<IdentityHandle>();
+    for (const targetContainer of targetContainers) {
+      if (seenTargets.has(targetContainer.identityHandle)) {
         continue;
       }
-      const evaluationSource = evaluatedSourcesByFileName.get(
-        normalizeConfigurationSourceFileName(callback.declaration.getSourceFile().fileName),
-      ) ?? null;
-      if (evaluationSource == null) {
+      seenTargets.add(targetContainer.identityHandle);
+      const cohort = registeredAppTaskCohortForContainer(diWorld.registeredAppTasks, targetContainer);
+      if (cohort == null) {
+        scopes.push(new FrameworkServiceCustomizationScope(
+          targetContainer.identityHandle,
+          null,
+          FrameworkServiceCustomization.empty,
+        ));
         continue;
       }
-      const context = new ConfigurationRecognitionContext(
-        evaluationSource.sourceFile,
-        evaluationSource.moduleKey,
-        evaluationSource.admission.projectKey,
-        evaluationSource.admission.addressHandle,
-        evaluationSource.evaluation,
-        new StaticSourceLiteralExpressionReader(),
-        null,
-        sourceFileAddressHandlesByFileName,
-      );
-      executeAppTaskServiceCustomizations(
-        context,
-        evaluation,
-        callback,
-        draft,
-      );
+      let customization = customizationsByTaskContainer.get(cohort.container.identityHandle) ?? null;
+      if (customization == null) {
+        const draft = new FrameworkServiceCustomizationDraft(
+          new ConfigurationIssuePublisher(this.store),
+          new ConfigurationKernelPublication(this.store),
+          localKeyPart(cohort.container.identityHandle),
+        );
+        for (const registration of cohort.registrations) {
+          executeRegisteredAppTaskServiceCustomizations(
+            registration,
+            evaluatedSourcesByFileName,
+            sourceFileAddressHandlesByFileName,
+            draft,
+          );
+        }
+        customization = draft.toCustomization();
+        customizationsByTaskContainer.set(cohort.container.identityHandle, customization);
+        issues.push(...draft.issues);
+        records.push(...draft.records);
+      }
+      scopes.push(new FrameworkServiceCustomizationScope(
+        targetContainer.identityHandle,
+        cohort.container.identityHandle,
+        customization,
+      ));
     }
-    const result = draft.toResult();
+    const result = new FrameworkServiceCustomizationProjectResult(scopes, issues, records);
     this.publication.publish(new KernelPublicationPlan(
       new KernelStoreBatch(
         result.records,
@@ -461,6 +575,65 @@ export class FrameworkServiceCustomizationRecognitionPass {
     ));
     return result;
   }
+}
+
+class RegisteredAppTaskCohort {
+  constructor(
+    readonly container: Container,
+    readonly registrations: readonly RegisteredAppTask[],
+  ) {}
+}
+
+function registeredAppTaskCohortForContainer(
+  registrations: readonly RegisteredAppTask[],
+  targetContainer: Container,
+): RegisteredAppTaskCohort | null {
+  let container: Container | null = targetContainer;
+  while (container != null) {
+    const selected = registrations.filter((registration) =>
+      registration.container.identityHandle === container?.identityHandle
+    );
+    if (selected.length > 0) {
+      return new RegisteredAppTaskCohort(container, selected);
+    }
+    container = container.parent;
+  }
+  return null;
+}
+
+function executeRegisteredAppTaskServiceCustomizations(
+  registration: RegisteredAppTask,
+  evaluatedSourcesByFileName: ReadonlyMap<string, EvaluatedProjectSource>,
+  sourceFileAddressHandlesByFileName: ReadonlyMap<string, AddressHandle>,
+  draft: FrameworkServiceCustomizationDraft,
+): void {
+  const evaluation = registration.evaluation;
+  const callback = evaluation?.callback?.value;
+  if (evaluation == null || callback?.kind !== EvaluationValueKind.Function) {
+    return;
+  }
+  const evaluationSource = evaluatedSourcesByFileName.get(
+    normalizeConfigurationSourceFileName(callback.declaration.getSourceFile().fileName),
+  ) ?? null;
+  if (evaluationSource == null) {
+    return;
+  }
+  const context = new ConfigurationRecognitionContext(
+    evaluationSource.sourceFile,
+    evaluationSource.moduleKey,
+    evaluationSource.admission.projectKey,
+    evaluationSource.admission.addressHandle,
+    evaluationSource.evaluation,
+    new StaticSourceLiteralExpressionReader(),
+    null,
+    sourceFileAddressHandlesByFileName,
+  );
+  executeAppTaskServiceCustomizations(
+    context,
+    evaluation,
+    callback,
+    draft,
+  );
 }
 
 function executeAppTaskServiceCustomizations(
@@ -480,6 +653,7 @@ function executeAppTaskServiceCustomizations(
     executableCallback.declaration,
     evaluation.runtimeHost,
     draft.nodeObserverLocatorAllowDirtyCheck ?? true,
+    draft.runtimeKeyMapping,
   );
   const callbackArgument = services.callbackArgument(callbackTarget);
   const handledServices = new Map<StaticInvocationFrame['identity'], FrameworkServiceKind>();
@@ -501,10 +675,15 @@ function executeAppTaskServiceCustomizations(
       continue;
     }
     const reader = new StaticInvocationEvidenceExpressionReader(invocation.moduleKey, [invocation]);
-    if (service === FrameworkServiceKind.AttrMapper) {
-      recognizeAttrMapperCall(context, invocation.propertyKey, invocation.node, reader, draft);
-    } else {
-      recognizeNodeObserverLocatorCall(context, invocation.propertyKey, invocation.node, reader, draft);
+    switch (service) {
+      case FrameworkServiceKind.AttrMapper:
+        recognizeAttrMapperCall(context, invocation.propertyKey, invocation.node, reader, draft);
+        break;
+      case FrameworkServiceKind.NodeObserverLocator:
+        recognizeNodeObserverLocatorCall(context, invocation.propertyKey, invocation.node, reader, draft);
+        break;
+      case FrameworkServiceKind.KeyMapping:
+        break;
     }
   }
 
@@ -706,15 +885,19 @@ const nodeObserverLocatorMethodNames = new Set([
   'overrideAccessorGlobal',
 ]);
 
+const noFrameworkServiceMethodNames = new Set<string>();
+
 class FrameworkServiceExecutionValues {
   readonly attrMapper: EvaluationObjectValue;
   readonly nodeObserverLocator: EvaluationObjectValue;
+  readonly keyMapping: EvaluationObjectValue;
   readonly container: EvaluationObjectValue;
 
   constructor(
     node: ts.Node,
     runtimeHost: StaticEvaluationRuntimeHost,
     allowDirtyCheck: boolean,
+    runtimeKeyMapping: RuntimeKeyMappingConfiguration,
   ) {
     const graph = runtimeHost.evaluationValueGraph;
     const attrMapper = frameworkServiceValue(
@@ -727,9 +910,11 @@ class FrameworkServiceExecutionValues {
       node,
       allowDirtyCheck,
     );
+    const keyMapping = frameworkKeyMappingValue(node, runtimeKeyMapping);
     const container = frameworkServiceContainerValue(node);
     this.attrMapper = graph?.retainProduced(attrMapper) ?? attrMapper;
     this.nodeObserverLocator = graph?.retainProduced(nodeObserverLocator) ?? nodeObserverLocator;
+    this.keyMapping = graph?.retainProduced(keyMapping) ?? keyMapping;
     this.container = graph?.retainProduced(container) ?? container;
   }
 
@@ -740,17 +925,25 @@ class FrameworkServiceExecutionValues {
   }
 
   serviceValue(kind: FrameworkServiceKind): EvaluationObjectValue {
-    return kind === FrameworkServiceKind.AttrMapper
-      ? this.attrMapper
-      : this.nodeObserverLocator;
+    switch (kind) {
+      case FrameworkServiceKind.AttrMapper:
+        return this.attrMapper;
+      case FrameworkServiceKind.NodeObserverLocator:
+        return this.nodeObserverLocator;
+      case FrameworkServiceKind.KeyMapping:
+        return this.keyMapping;
+    }
   }
 
   serviceKindForReceiver(receiver: EvaluationValue): FrameworkServiceKind | null {
     if (evaluationValuesShareLineage(receiver, this.attrMapper)) {
       return FrameworkServiceKind.AttrMapper;
     }
-    return evaluationValuesShareLineage(receiver, this.nodeObserverLocator)
-      ? FrameworkServiceKind.NodeObserverLocator
+    if (evaluationValuesShareLineage(receiver, this.nodeObserverLocator)) {
+      return FrameworkServiceKind.NodeObserverLocator;
+    }
+    return evaluationValuesShareLineage(receiver, this.keyMapping)
+      ? FrameworkServiceKind.KeyMapping
       : null;
   }
 
@@ -789,6 +982,59 @@ function frameworkServiceValue(
     ));
   }
   return new EvaluationObjectValue(properties, false, node);
+}
+
+function frameworkKeyMappingValue(
+  node: ts.Node,
+  configuration: RuntimeKeyMappingConfiguration,
+): EvaluationObjectValue {
+  const meta = new EvaluationArrayValue(
+    configuration.meta.map((entry, index) => new EvaluationArrayElement(
+      new EvaluationStringValue(entry.runtimeName, null),
+      null,
+      [],
+      index,
+    )),
+    node,
+    configuration.metaDomainClosed
+      ? EvaluationArrayShape.exact(configuration.meta.length)
+      : EvaluationArrayShape.from({
+          exactLength: null,
+          hasExactElements: false,
+          hasExactOrder: false,
+          uncertainties: [],
+          extentOpenSeams: [],
+          elementOpenSeams: [],
+          orderOpenSeams: [],
+        }),
+  );
+  const keys = new EvaluationObjectValue(
+    new Map(configuration.keys.map((entry) => [
+      entry.modifier,
+      new EvaluationObjectProperty(
+        entry.modifier,
+        new EvaluationStringValue(entry.runtimeName, null),
+        null,
+        EvaluationObjectPropertyState.Closed,
+      ),
+    ])),
+    !configuration.keyDomainClosed,
+    node,
+  );
+  return new EvaluationObjectValue(new Map([
+    ['meta', new EvaluationObjectProperty(
+      'meta',
+      meta,
+      null,
+      EvaluationObjectPropertyState.Closed,
+    )],
+    ['keys', new EvaluationObjectProperty(
+      'keys',
+      keys,
+      null,
+      EvaluationObjectPropertyState.Closed,
+    )],
+  ]), false, node);
 }
 
 function frameworkServiceContainerValue(node: ts.Node): EvaluationObjectValue {
@@ -889,6 +1135,12 @@ function publishFrameworkServiceMutations(
     executionClosed,
     draft,
   );
+  draft.runtimeKeyMapping = readRuntimeKeyMappingConfiguration(
+    context,
+    services.keyMapping,
+    draft.runtimeKeyMapping,
+    draft,
+  );
   for (const property of services.container.properties.values()) {
     if (property.node != null) {
       draft.addDomainPressure(
@@ -899,6 +1151,152 @@ function publishFrameworkServiceMutations(
       );
     }
   }
+}
+
+function readRuntimeKeyMappingConfiguration(
+  context: ConfigurationRecognitionContext,
+  service: EvaluationObjectValue,
+  previous: RuntimeKeyMappingConfiguration,
+  draft: FrameworkServiceCustomizationDraft,
+): RuntimeKeyMappingConfiguration {
+  const meta = readRuntimeMetaMappingEntries(
+    context,
+    service.properties.get('meta')?.value ?? null,
+    previous.meta,
+    draft,
+  );
+  const keys = readRuntimeKeyMappingEntries(
+    context,
+    service.properties.get('keys')?.value ?? null,
+    previous.keys,
+    draft,
+  );
+  return new RuntimeKeyMappingConfiguration(
+    meta.entries,
+    keys.entries,
+    meta.domainClosed,
+    keys.domainClosed,
+  );
+}
+
+class RuntimeKeyMappingEntryRead {
+  constructor(
+    readonly entries: readonly RuntimeKeyMappingEntry[],
+    readonly domainClosed: boolean,
+  ) {}
+}
+
+function readRuntimeMetaMappingEntries(
+  context: ConfigurationRecognitionContext,
+  value: EvaluationValue | null,
+  previous: readonly RuntimeKeyMappingEntry[],
+  draft: FrameworkServiceCustomizationDraft,
+): RuntimeKeyMappingEntryRead {
+  if (value?.kind !== EvaluationValueKind.Array) {
+    if (value != null) {
+      draft.addDomainPressure(
+        context,
+        value.node ?? context.sourceFile,
+        'IKeyMapping.meta did not reduce to an array of modifier names.',
+        frameworkServiceReasonKindsForValue(value, []),
+      );
+    }
+    return new RuntimeKeyMappingEntryRead([], false);
+  }
+  const enumerable = readEvaluationEnumerableOwnEntries(value);
+  if (enumerable == null) {
+    return new RuntimeKeyMappingEntryRead([], false);
+  }
+  const entries: RuntimeKeyMappingEntry[] = [];
+  let domainClosed = !enumerable.mayHaveUnknownEntries && !enumerable.mayHaveUnknownOrder;
+  for (const entry of enumerable.entries) {
+    const runtimeName = readStaticStringValue(entry.value);
+    if (runtimeName == null) {
+      domainClosed = false;
+      draft.addDomainPressure(
+        context,
+        entry.sourceNode ?? value.node ?? context.sourceFile,
+        'IKeyMapping.meta entry did not reduce to a string.',
+        frameworkServiceReasonKindsForValue(entry.value, entry.openSeams),
+      );
+      continue;
+    }
+    entries.push(runtimeKeyMappingEntry(
+      context,
+      runtimeName,
+      runtimeName,
+      entry.sourceNode,
+      previous,
+      draft,
+    ));
+  }
+  return new RuntimeKeyMappingEntryRead(entries, domainClosed);
+}
+
+function readRuntimeKeyMappingEntries(
+  context: ConfigurationRecognitionContext,
+  value: EvaluationValue | null,
+  previous: readonly RuntimeKeyMappingEntry[],
+  draft: FrameworkServiceCustomizationDraft,
+): RuntimeKeyMappingEntryRead {
+  const enumerable = readEvaluationEnumerableOwnEntries(value);
+  if (enumerable == null) {
+    if (value != null) {
+      draft.addDomainPressure(
+        context,
+        value.node ?? context.sourceFile,
+        'IKeyMapping.keys did not expose enumerable own entries.',
+        frameworkServiceReasonKindsForValue(value, []),
+      );
+    }
+    return new RuntimeKeyMappingEntryRead([], false);
+  }
+  const entries: RuntimeKeyMappingEntry[] = [];
+  let domainClosed = !enumerable.mayHaveUnknownEntries && !enumerable.mayHaveUnknownOrder;
+  for (const entry of enumerable.entries) {
+    const runtimeName = readStaticStringValue(entry.value);
+    if (runtimeName == null) {
+      domainClosed = false;
+      draft.addDomainPressure(
+        context,
+        entry.sourceNode ?? value?.node ?? context.sourceFile,
+        `IKeyMapping.keys['${entry.name}'] did not reduce to a string.`,
+        frameworkServiceReasonKindsForValue(entry.value, entry.openSeams),
+      );
+      continue;
+    }
+    entries.push(runtimeKeyMappingEntry(
+      context,
+      entry.name,
+      runtimeName,
+      entry.sourceNode,
+      previous,
+      draft,
+    ));
+  }
+  return new RuntimeKeyMappingEntryRead(entries, domainClosed);
+}
+
+function runtimeKeyMappingEntry(
+  context: ConfigurationRecognitionContext,
+  modifier: string,
+  runtimeName: string,
+  sourceNode: ts.Node | null,
+  previous: readonly RuntimeKeyMappingEntry[],
+  draft: FrameworkServiceCustomizationDraft,
+): RuntimeKeyMappingEntry {
+  if (sourceNode == null) {
+    return previous.find((entry) =>
+      entry.modifier === modifier && entry.runtimeName === runtimeName
+    ) ?? new RuntimeKeyMappingEntry(modifier, runtimeName);
+  }
+  const source = draft.sourceForRuntimeKeyMappingEntry(context, sourceNode, modifier);
+  return new RuntimeKeyMappingEntry(
+    modifier,
+    runtimeName,
+    source.sourceAddressHandle,
+    source.provenanceHandle,
+  );
 }
 
 function publishFrameworkServiceObjectMutations(
@@ -938,13 +1336,25 @@ function publishFrameworkServiceObjectMutations(
 }
 
 function frameworkServiceMethodNames(kind: FrameworkServiceKind): ReadonlySet<string> {
-  return kind === FrameworkServiceKind.AttrMapper
-    ? attrMapperMethodNames
-    : nodeObserverLocatorMethodNames;
+  switch (kind) {
+    case FrameworkServiceKind.AttrMapper:
+      return attrMapperMethodNames;
+    case FrameworkServiceKind.NodeObserverLocator:
+      return nodeObserverLocatorMethodNames;
+    case FrameworkServiceKind.KeyMapping:
+      return noFrameworkServiceMethodNames;
+  }
 }
 
 function frameworkServiceLabel(kind: FrameworkServiceKind): string {
-  return kind === FrameworkServiceKind.AttrMapper ? 'IAttrMapper' : 'NodeObserverLocator';
+  switch (kind) {
+    case FrameworkServiceKind.AttrMapper:
+      return 'IAttrMapper';
+    case FrameworkServiceKind.NodeObserverLocator:
+      return 'NodeObserverLocator';
+    case FrameworkServiceKind.KeyMapping:
+      return 'IKeyMapping';
+  }
 }
 
 function appTaskCallbackTarget(appTask: AureliaAppTaskEvaluation): AppTaskCallbackTarget | null {
@@ -976,6 +1386,8 @@ function serviceKindForKeyValue(
     case 'INodeObserverLocator':
     case 'NodeObserverLocator':
       return FrameworkServiceKind.NodeObserverLocator;
+    case 'IKeyMapping':
+      return FrameworkServiceKind.KeyMapping;
     default:
       return null;
   }

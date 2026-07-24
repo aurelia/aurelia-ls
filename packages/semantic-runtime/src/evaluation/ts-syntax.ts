@@ -72,6 +72,48 @@ export function readPropertyName(
     : null;
 }
 
+/** Recover the authored property-name token that one retained property write/declaration represents. */
+export function authoredPropertyNameNode(node: ts.Node): ts.Node {
+  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+    const target = unwrapExpression(node.left);
+    if (ts.isPropertyAccessExpression(target)) {
+      return target.name;
+    }
+    if (ts.isElementAccessExpression(target) && target.argumentExpression != null) {
+      return target.argumentExpression;
+    }
+  }
+  if (
+    (
+      ts.isPropertyAssignment(node)
+      || ts.isShorthandPropertyAssignment(node)
+      || ts.isMethodDeclaration(node)
+      || ts.isPropertyDeclaration(node)
+      || ts.isGetAccessorDeclaration(node)
+      || ts.isSetAccessorDeclaration(node)
+    )
+    && node.name != null
+  ) {
+    return node.name;
+  }
+  return node;
+}
+
+/** Recover the authored content span for a retained property write/declaration. */
+export function authoredPropertyNameSpan(
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+): Pick<SourceSpanSite, 'start' | 'end'> | null {
+  const sourceNode = authoredPropertyNameNode(node);
+  let start = sourceNode.getStart(sourceFile);
+  let end = sourceNode.end;
+  if (ts.isStringLiteralLike(sourceNode) || ts.isNoSubstitutionTemplateLiteral(sourceNode)) {
+    start += 1;
+    end -= 1;
+  }
+  return end < start ? null : { start, end };
+}
+
 export function readObjectPropertyExpression(
   object: ts.ObjectLiteralExpression,
   propertyName: string,

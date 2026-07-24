@@ -20,6 +20,7 @@ import {
 } from './compiler-issue-publication.js';
 import type { NodeObserverLocatorConfiguration } from '../observation/observer-locator.js';
 import { AttributeMapperConfiguration } from './attribute-mapper.js';
+import { RuntimeKeyMappingConfiguration } from './runtime-event-modifier.js';
 import {
   TemplateCompilerService,
   TemplateCompilerWorld,
@@ -114,6 +115,9 @@ export class TemplateCompilerWorldConstructionRequest {
     readonly attributeMapperConfiguration: AttributeMapperConfiguration = AttributeMapperConfiguration.empty,
     /** App-authored NodeObserverLocator service state visible to runtime binding analysis for this world. */
     readonly nodeObserverLocatorConfiguration: NodeObserverLocatorConfiguration | null = null,
+    /** App-effective IKeyMapping state visible to listener runtime analysis and authoring. */
+    readonly runtimeKeyMappingConfiguration: RuntimeKeyMappingConfiguration =
+      RuntimeKeyMappingConfiguration.frameworkDefault,
   ) {}
 }
 
@@ -393,6 +397,7 @@ export class TemplateCompilerWorldMaterializer {
       input.sourceAddressHandle,
       parent.attributeMapper.configuration,
       parent.world.nodeObserverLocatorConfiguration,
+      parent.world.runtimeKeyMappingConfiguration,
     );
   }
 
@@ -778,6 +783,7 @@ export class TemplateCompilerWorldMaterializer {
       input.container.toReference(),
       resourceScope.productHandle,
       input.nodeObserverLocatorConfiguration,
+      input.runtimeKeyMappingConfiguration,
       services,
       source.addressHandle,
       [],

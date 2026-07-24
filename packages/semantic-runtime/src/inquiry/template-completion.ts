@@ -97,6 +97,7 @@ import {
 import { I18nProductDetails } from '../i18n/product-details.js';
 import type { I18nTranslationKey } from '../i18n/model.js';
 import {
+  TemplateCompilerWorld,
   TemplateResourceScope,
   templateBindableReferences,
 } from '../template/compiler-world.js';
@@ -139,7 +140,7 @@ import {
   runtimeRefTargetNames,
   sameHtmlNodeReference,
 } from '../template/runtime-ref-target.js';
-import { builtInRuntimeEventModifierNames } from '../template/runtime-event-modifier.js';
+import { runtimeEventModifierCatalog } from '../template/runtime-event-modifier.js';
 import {
   HtmlAttribute,
   HtmlElement,
@@ -243,6 +244,7 @@ export const enum TemplateCompletionCandidateSourceKind {
   TypeSystem = 'type-system',
   Router = 'router',
   I18n = 'i18n',
+  Configuration = 'configuration',
   Framework = 'framework',
 }
 
@@ -790,6 +792,7 @@ class TemplateCompletionCursorContextBuilder {
           TemplateCompletionDomainKind.ListenerModifier,
           instruction.productHandle,
           instruction.eventModifierSourceAddressHandle,
+          [this.input.resource.compilation.compilerWorld.world.productHandle],
         );
       }
       if (
@@ -1419,17 +1422,37 @@ function collectListenerModifierCandidates(
     frame.missingInputs.push('completion-domain:listener-instruction');
     return;
   }
-  // The default catalog is useful positive evidence, but app DI can replace handlers or mutate IKeyMapping.
+  const worldProductHandle = domain.basisProductHandles[0] ?? null;
+  const world = worldProductHandle == null
+    ? null
+    : frame.store.productDetails.read(TemplateProductDetails.World, worldProductHandle);
+  if (!(world instanceof TemplateCompilerWorld)) {
+    frame.missingInputs.push('completion-domain:compiler-world');
+    return;
+  }
+  // Custom IModifiedEventHandlerCreator implementations expose event applicability but not an enumerable modifier API.
   frame.missingInputs.push('app-effective-event-modifier-registrations');
-  for (const name of builtInRuntimeEventModifierNames(instruction.eventName)) {
+  const catalog = runtimeEventModifierCatalog(
+    instruction.eventName,
+    world.runtimeKeyMappingConfiguration,
+  );
+  if (!catalog.keyMappingDomainClosed) {
+    frame.missingInputs.push('app-effective-key-mapping-membership');
+  }
+  for (const candidate of catalog.candidates) {
+    const appConfigured = candidate.sourceAddressHandle != null;
     frame.candidates.push(new TemplateCompletionCandidate(
       TemplateCompletionCandidateKind.EventModifier,
-      name,
-      TemplateCompletionCandidateSourceKind.Framework,
-      instruction.productHandle,
-      instruction.identityHandle,
-      null,
-      `Built-in Aurelia modifier for '${instruction.eventName}' listeners.`,
+      candidate.name,
+      appConfigured
+        ? TemplateCompletionCandidateSourceKind.Configuration
+        : TemplateCompletionCandidateSourceKind.Framework,
+      appConfigured ? world.productHandle : instruction.productHandle,
+      appConfigured ? world.identityHandle : instruction.identityHandle,
+      candidate.sourceAddressHandle,
+      appConfigured
+        ? `App-configured Aurelia modifier for '${instruction.eventName}' listeners.`
+        : `Built-in Aurelia modifier for '${instruction.eventName}' listeners.`,
     ));
   }
 }

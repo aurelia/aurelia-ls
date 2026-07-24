@@ -148,10 +148,18 @@ export class AureliaAppWorldComposer {
       configuration.evaluation,
     );
     const containerChainFacts = readDiContainerChainFacts(this.publication, diWorld);
+    const containersByProduct = new Map(kernelConfiguration.containers.map((container) => [
+      container.productHandle,
+      container,
+    ]));
+    const appRootContainers = kernelConfiguration.appRoots.flatMap((appRoot) => {
+      const container = containerForAppRoot(appRoot, containersByProduct);
+      return container == null ? [] : [container];
+    });
     const frameworkServiceCustomizations = new FrameworkServiceCustomizationRecognitionPass(
       this.store,
       this.publication,
-    ).recognize(configuration, diWorld);
+    ).recognize(configuration, diWorld, appRootContainers);
     const compilerWorlds = this.constructCompilerWorlds(
       kernelConfiguration,
       diWorld,
@@ -336,6 +344,7 @@ class AppRootCompilerWorldFrame {
       visibleResources: resources,
       resourceDefinitions: this.resourceDefinitions,
     });
+    const frameworkServiceCustomization = this.frameworkServiceCustomizations.forContainer(container);
     const request = new TemplateCompilerWorldConstructionRequest(
       `app-root:${appRoot.productHandle}`,
       TemplateCompilerWorldKind.AppRoot,
@@ -347,8 +356,9 @@ class AppRootCompilerWorldFrame {
       runtimeRenderers,
       TemplateResourceVisibilityKind.Configured,
       appRoot.sourceAddressHandle,
-      this.frameworkServiceCustomizations.attributeMapper,
-      this.frameworkServiceCustomizations.nodeObserverLocator,
+      frameworkServiceCustomization.attributeMapper,
+      frameworkServiceCustomization.nodeObserverLocator,
+      frameworkServiceCustomization.runtimeKeyMapping,
     );
     return this.compilerWorldMaterializer.construct(request);
   }

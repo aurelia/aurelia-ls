@@ -11,6 +11,7 @@ new Aurelia()
     StandardConfiguration,
     AppTask.creating(IKeyMapping, (mapping) => {
       mapping.keys['upper_k'] = 'K';
+      mapping.keys[document.documentElement.dataset.runtimeModifier!] = 'runtime';
     }),
   )
   .app({

@@ -15,8 +15,8 @@ classification, expression parsing, and instruction lowering converge on the sam
   services. It is the handoff from DI world construction into template compilation. The service set mirrors the
   runtime root compilation context: template compiler, resource resolver, attribute parser, binding-command resolver,
   expression parser, and attribute mapper. The world detail also owns the app-visible `NodeObserverLocator`
-  configuration consumed by runtime binding analysis; do not carry that state beside the world in a second emission
-  field.
+  configuration consumed by runtime binding analysis and the app-effective `IKeyMapping` state consumed by listener
+  authoring; do not carry that state beside the world in a second emission field.
 - `compiler-world-materializer.ts` materializes a compiler world after earlier passes have selected the visible container,
   resource headers, and syntax executables. It constructs the scope and compiler service products, but it does not
   rediscover source configuration. Published compiler worlds are immutable semantic inputs; lookup memoization and
@@ -848,9 +848,11 @@ Runtime `DefaultBindingSyntax` also registers `EventModifierRegistration`. That 
 pattern or binding command, so it is intentionally separate from the built-in syntax catalog. The finite framework
 defaults live in `runtime-event-modifier.ts`: universal `prevent`/`stop`, mouse button/meta modifiers for the event
 family registered by `ModifiedMouseEventHandler`, and key/meta/character/code modifiers from the default `IKeyMapping`
-for the keyboard family. This vocabulary is not globally closed because applications can register
-`IModifiedEventHandlerCreator` implementations and mutate or replace `IKeyMapping`; completion exposes the default
-catalog as partial until those app-effective DI effects have a semantic product.
+for the keyboard family. App-root compiler worlds replace that default with known `IKeyMapping` state produced by the
+nearest DI-spent AppTask cohort, including exact authored sources and open membership after dynamic writes. This
+vocabulary is still not globally closed because arbitrary `IModifiedEventHandlerCreator.getHandler(...)`
+implementations expose event applicability without an enumerable modifier API; listener-modifier completion therefore
+returns known framework and app candidates as an explicitly partial answer.
 
 Renderer-created child controllers now materialize runtime child containers instead of carrying open container
 references. This covers the common element/attribute hydration path: a child container product, the built-in

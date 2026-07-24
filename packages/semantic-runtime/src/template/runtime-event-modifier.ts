@@ -1,8 +1,13 @@
+import type {
+  AddressHandle,
+  ProvenanceHandle,
+} from '../kernel/handles.js';
+
 /**
  * Built-in modifier tokens registered by runtime-html's EventModifierRegistration.
  *
- * This is the framework-default vocabulary. Custom IModifiedEventHandlerCreator and IKeyMapping registrations
- * can replace or extend the effective app domain, so consumers must retain that registration boundary as open.
+ * Custom IModifiedEventHandlerCreator registrations can replace the effective handler for an event type, so consumers
+ * must retain that registration boundary as open even when the default handler's vocabulary is known.
  */
 export const enum RuntimeEventModifierName {
   /** Prevent the browser's default action after the listener accepts the event. */
@@ -33,6 +38,58 @@ export const enum RuntimeEventModifierName {
   Tab = 'tab',
 }
 
+/** One effective IKeyMapping entry, including app-authored source when a task replaced or introduced it. */
+export class RuntimeKeyMappingEntry {
+  constructor(
+    /** Modifier spelling consumed by a modified event handler. */
+    readonly modifier: string,
+    /** Runtime key or meta-property spelling selected by IKeyMapping. */
+    readonly runtimeName: string,
+    /** Exact app-authored key/value mutation, absent for framework defaults. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Source witness for the app-authored mutation, absent for framework defaults. */
+    readonly provenanceHandle: ProvenanceHandle | null = null,
+  ) {}
+}
+
+/** App-effective IKeyMapping state after statically reached lifecycle-task mutations. */
+export class RuntimeKeyMappingConfiguration {
+  static readonly frameworkDefault = new RuntimeKeyMappingConfiguration(
+    defaultRuntimeMetaMappings(),
+    defaultRuntimeKeyMappings(),
+    true,
+    true,
+  );
+
+  constructor(
+    /** Effective modifier names mapped to KeyboardEvent/MouseEvent meta-property prefixes. */
+    readonly meta: readonly RuntimeKeyMappingEntry[],
+    /** Effective modifier names mapped to KeyboardEvent.key values. */
+    readonly keys: readonly RuntimeKeyMappingEntry[],
+    /** Whether every runtime meta entry is known. */
+    readonly metaDomainClosed: boolean,
+    /** Whether every runtime key entry is known. */
+    readonly keyDomainClosed: boolean,
+  ) {}
+}
+
+/** One completion-ready modifier name after framework defaults and app-effective key mapping have converged. */
+export class RuntimeEventModifierCandidate {
+  constructor(
+    readonly name: string,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly provenanceHandle: ProvenanceHandle | null,
+  ) {}
+}
+
+/** Known modifier candidates and closure for the key-mapping fields consulted by one runtime handler family. */
+export class RuntimeEventModifierCatalog {
+  constructor(
+    readonly candidates: readonly RuntimeEventModifierCandidate[],
+    readonly keyMappingDomainClosed: boolean,
+  ) {}
+}
+
 const universalEventModifiers = [
   RuntimeEventModifierName.Prevent,
   RuntimeEventModifierName.Stop,
@@ -43,59 +100,103 @@ const mouseEventModifiers = [
   RuntimeEventModifierName.Left,
   RuntimeEventModifierName.Middle,
   RuntimeEventModifierName.Right,
-  RuntimeEventModifierName.Control,
-  RuntimeEventModifierName.Alt,
-  RuntimeEventModifierName.Shift,
-  RuntimeEventModifierName.Meta,
 ] as const;
 
-const keyboardEventModifiers = [
-  ...universalEventModifiers,
-  RuntimeEventModifierName.Control,
-  RuntimeEventModifierName.Alt,
-  RuntimeEventModifierName.Shift,
-  RuntimeEventModifierName.Meta,
-  RuntimeEventModifierName.Escape,
-  RuntimeEventModifierName.Enter,
-  RuntimeEventModifierName.Space,
-  RuntimeEventModifierName.Tab,
-  ...defaultKeyboardCharacterModifiers(),
-] as const;
-
-function defaultKeyboardCharacterModifiers(): readonly string[] {
-  const lowerCaseLetters = Array.from(
-    { length: 26 },
-    (_, index) => String.fromCharCode(97 + index),
-  );
-  const upperCaseCodes = Array.from(
-    { length: 26 },
-    (_, index) => String(65 + index),
-  );
-  const lowerCaseCodes = Array.from(
-    { length: 26 },
-    (_, index) => String(97 + index),
-  );
-  // Framework docs and source comments promise A-Z/a-z. The vendored runtime's length 25 is an off-by-one bug;
-  // tooling models the intended range so `z`, `90`, and `122` remain authorable after the runtime correction.
-  return [...lowerCaseLetters, ...upperCaseCodes, ...lowerCaseCodes];
-}
-
-/** Read the built-in modifier vocabulary selected by runtime-html for an event name. */
-export function builtInRuntimeEventModifierNames(
+/** Read known modifier candidates selected by the handler family and app-effective IKeyMapping. */
+export function runtimeEventModifierCatalog(
   eventName: string,
-): readonly string[] {
+  keyMapping: RuntimeKeyMappingConfiguration = RuntimeKeyMappingConfiguration.frameworkDefault,
+): RuntimeEventModifierCatalog {
+  const candidates: RuntimeEventModifierCandidate[] = [];
   switch (eventName) {
     case 'click':
     case 'mousedown':
     case 'mousemove':
     case 'mouseup':
     case 'dblclick':
-    case 'contextmenu':
-      return mouseEventModifiers;
+    case 'contextmenu': {
+      appendFrameworkModifiers(candidates, mouseEventModifiers);
+      appendKeyMappingEntries(candidates, keyMapping.meta);
+      return new RuntimeEventModifierCatalog(candidates, keyMapping.metaDomainClosed);
+    }
     case 'keydown':
-    case 'keyup':
-      return keyboardEventModifiers;
+    case 'keyup': {
+      appendFrameworkModifiers(candidates, universalEventModifiers);
+      appendKeyMappingEntries(candidates, keyMapping.meta);
+      appendKeyMappingEntries(candidates, keyMapping.keys);
+      return new RuntimeEventModifierCatalog(
+        candidates,
+        keyMapping.metaDomainClosed && keyMapping.keyDomainClosed,
+      );
+    }
     default:
-      return universalEventModifiers;
+      appendFrameworkModifiers(candidates, universalEventModifiers);
+      return new RuntimeEventModifierCatalog(candidates, true);
   }
+}
+
+function appendFrameworkModifiers(
+  candidates: RuntimeEventModifierCandidate[],
+  names: readonly RuntimeEventModifierName[],
+): void {
+  for (const name of names) {
+    appendRuntimeEventModifierCandidate(candidates, new RuntimeEventModifierCandidate(name, null, null));
+  }
+}
+
+function appendKeyMappingEntries(
+  candidates: RuntimeEventModifierCandidate[],
+  entries: readonly RuntimeKeyMappingEntry[],
+): void {
+  for (const entry of entries) {
+    appendRuntimeEventModifierCandidate(candidates, new RuntimeEventModifierCandidate(
+      entry.modifier,
+      entry.sourceAddressHandle,
+      entry.provenanceHandle,
+    ));
+  }
+}
+
+function appendRuntimeEventModifierCandidate(
+  candidates: RuntimeEventModifierCandidate[],
+  candidate: RuntimeEventModifierCandidate,
+): void {
+  const index = candidates.findIndex((current) => current.name === candidate.name);
+  if (index < 0) {
+    candidates.push(candidate);
+    return;
+  }
+  if (candidate.sourceAddressHandle != null) {
+    candidates[index] = candidate;
+  }
+}
+
+function defaultRuntimeMetaMappings(): readonly RuntimeKeyMappingEntry[] {
+  return [
+    new RuntimeKeyMappingEntry(RuntimeEventModifierName.Control, RuntimeEventModifierName.Control),
+    new RuntimeKeyMappingEntry(RuntimeEventModifierName.Alt, RuntimeEventModifierName.Alt),
+    new RuntimeKeyMappingEntry(RuntimeEventModifierName.Shift, RuntimeEventModifierName.Shift),
+    new RuntimeKeyMappingEntry(RuntimeEventModifierName.Meta, RuntimeEventModifierName.Meta),
+  ];
+}
+
+function defaultRuntimeKeyMappings(): readonly RuntimeKeyMappingEntry[] {
+  const entries = [
+    new RuntimeKeyMappingEntry(RuntimeEventModifierName.Escape, 'Escape'),
+    new RuntimeKeyMappingEntry(RuntimeEventModifierName.Enter, 'Enter'),
+    new RuntimeKeyMappingEntry(RuntimeEventModifierName.Space, 'Space'),
+    new RuntimeKeyMappingEntry(RuntimeEventModifierName.Tab, 'tab'),
+  ];
+  // Framework docs and source comments promise A-Z/a-z. The vendored runtime's length 25 is an off-by-one bug;
+  // tooling models the intended range so `z`, `90`, and `122` remain authorable after the runtime correction.
+  for (let index = 0; index < 26; index += 1) {
+    const upper = String.fromCharCode(65 + index);
+    const lower = String.fromCharCode(97 + index);
+    entries.push(
+      new RuntimeKeyMappingEntry(String(65 + index), upper),
+      new RuntimeKeyMappingEntry(String(97 + index), lower),
+      new RuntimeKeyMappingEntry(lower, lower),
+    );
+  }
+  return entries;
 }

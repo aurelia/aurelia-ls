@@ -44,6 +44,12 @@ const neverRegistered = {
 })
 class AppTaskExecutionOrderApp {}
 
+@customElement({
+  name: 'isolated-app-task-execution-app',
+  template: '<template>Isolated AppTask execution</template>',
+})
+class IsolatedAppTaskExecutionApp {}
+
 new Aurelia()
   .register(
     StandardConfiguration,
@@ -53,6 +59,17 @@ new Aurelia()
   .app({
     host: document.body,
     component: AppTaskExecutionOrderApp,
+  })
+  .start();
+
+new Aurelia()
+  .register(
+    StandardConfiguration,
+    mapperTask({ 'isolated-execution': 'isolatedExecution' }),
+  )
+  .app({
+    host: document.body,
+    component: IsolatedAppTaskExecutionApp,
   })
   .start();
 

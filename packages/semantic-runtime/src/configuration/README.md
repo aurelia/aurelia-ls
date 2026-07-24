@@ -218,18 +218,22 @@ Some AppTask callbacks do intentionally mutate framework service state before co
 generic lifecycle execution: `framework-service-customization.ts` executes the exact DI-spent callback in an isolated
 evaluator fork under the path-proven effect policy. Framework-service aliases, local helper calls, and
 `IContainer.get(...)` retain evaluator identity, while only reached `IAttrMapper`/`AttrMapper` and
-`NodeObserverLocator`/`INodeObserverLocator` invocation snapshots become explicit service configuration for app-root
-compiler worlds and bind-time observer lookup. Unregistered task definitions and dead callback branches do not
-participate; runtime-dependent branches publish evaluator pressure instead of guessed mutations.
+`NodeObserverLocator`/`INodeObserverLocator` invocation snapshots plus `IKeyMapping` object mutations become explicit
+service configuration for app-root compiler worlds, bind-time observer lookup, and listener authoring. Each app-root
+container selects the same nearest `IAppTask` registration cohort as `AppRoot`; independent roots do not share a
+project-global service snapshot. Unregistered task definitions and dead callback branches do not participate;
+runtime-dependent branches publish evaluator pressure instead of guessed mutations.
 `AttrMapper.useTwoWay(...)` therefore affects compiler-world binding mode decisions,
 and `NodeObserverLocator.useConfig(...)`, accessor overrides, and closed `allowDirtyCheck` assignments affect the per-world observer locator used by
-`Controller.bind` analysis. The callback argument is treated as a framework service only when the `AppTask` key is that
-service, and as a container only when the key is `IContainer`; no-key tasks and arbitrary DI keys must not masquerade as
-containers merely because their parameter is later used with `.get(...)`. The execution host models only those two
-framework services and container lookup for them; unsupported calls, mutations, async continuations, and arbitrary
-lifecycle effects stay open. Invocation arguments are decoded through `StaticInvocationEvidenceExpressionReader`, so a
-new callback shape must improve the ECMAScript evaluator or the shared expression reader rather than add one-off source
-parsing inside compiler-world, renderer, or observation materializers.
+`Controller.bind` analysis. Known `IKeyMapping.meta` and `.keys` membership is re-enumerated after each reached callback,
+preserving exact authored key sources while dynamic computed writes keep membership open. The callback argument is
+treated as a framework service only when the `AppTask` key is that service, and as a container only when the key is
+`IContainer`; no-key tasks and arbitrary DI keys must not masquerade as containers merely because their parameter is
+later used with `.get(...)`. The execution host models only those three framework services and container lookup for
+them; unsupported calls, mutations, async continuations, and arbitrary lifecycle effects stay open. Invocation
+arguments are decoded through `StaticInvocationEvidenceExpressionReader`, so a new callback shape must improve the
+ECMAScript evaluator or the shared expression reader rather than add one-off source parsing inside compiler-world,
+renderer, or observation materializers.
 `AttrMapper` configuration keys remain exact, as they do in the framework service. Template compilation projects
 authored HTML/SVG/MathML names into the browser's runtime `nodeName` and attribute spelling before lookup; it does not
 case-fold the app's `useMapping(...)`, `useGlobalMapping(...)`, or `useTwoWay(...)` constants into aliases that would be

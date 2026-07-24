@@ -13369,13 +13369,20 @@
               "name": "keyboard modifier completions",
               "query": { "kind": "template-completions", "cursor": { "marker": "keydown.trigger:ctrl+enter", "token": "ctrl" }, "options": { "page": { "size": 100 } } },
               "outcomes": ["partial"],
-              "equals": { "value.domainKind": "listener-modifier", "value.missingInputs.length": 1 },
+              "equals": {
+                "value.domainKind": "listener-modifier",
+                "value.missingInputs": [
+                  "app-effective-event-modifier-registrations",
+                  "app-effective-key-mapping-membership"
+                ]
+              },
               "rows": [
-                { "rowPath": "value.candidates", "count": 88 },
+                { "rowPath": "value.candidates", "count": 89 },
                 { "rowPath": "value.candidates", "fields": { "name": "prevent", "candidateKind": "event-modifier" }, "count": 1 },
                 { "rowPath": "value.candidates", "fields": { "name": "ctrl", "candidateKind": "event-modifier" }, "count": 1 },
                 { "rowPath": "value.candidates", "fields": { "name": "enter", "candidateKind": "event-modifier" }, "count": 1 },
                 { "rowPath": "value.candidates", "fields": { "name": "escape", "candidateKind": "event-modifier" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "upper_k", "candidateKind": "event-modifier", "sourceKind": "configuration" }, "count": 1 },
                 { "rowPath": "value.candidates", "fields": { "name": "z", "candidateKind": "event-modifier" }, "count": 1 },
                 { "rowPath": "value.candidates", "fields": { "name": "90", "candidateKind": "event-modifier" }, "count": 1 },
                 { "rowPath": "value.candidates", "fields": { "name": "122", "candidateKind": "event-modifier" }, "count": 1 },
@@ -13404,9 +13411,23 @@
               "name": "app key mapping completion",
               "query": { "kind": "template-completions", "cursor": { "marker": "keydown.trigger:upper_k", "token": "upper_k" }, "options": { "page": { "size": 100 } } },
               "outcomes": ["partial"],
-              "equals": { "value.domainKind": "listener-modifier" },
+              "equals": {
+                "value.domainKind": "listener-modifier",
+                "value.missingInputs": [
+                  "app-effective-event-modifier-registrations",
+                  "app-effective-key-mapping-membership"
+                ]
+              },
               "rows": [
-                { "rowPath": "value.candidates", "fields": { "name": "upper_k", "candidateKind": "event-modifier" }, "count": 1 }
+                {
+                  "rowPath": "value.candidates",
+                  "fields": {
+                    "name": "upper_k",
+                    "candidateKind": "event-modifier",
+                    "sourceKind": "configuration"
+                  },
+                  "count": 1
+                }
               ]
             }
           ]

@@ -39,6 +39,7 @@ import type {
   TemplateVisibleResource,
 } from './compiler-world-reference.js';
 import type { RuntimeRenderer } from './runtime-renderer.js';
+import type { RuntimeKeyMappingConfiguration } from './runtime-event-modifier.js';
 
 /** Slot-owned comparison for a compiler world and the semantic service references it exposes. */
 export function compareTemplateCompilerWorldDetails(
@@ -63,6 +64,10 @@ export function compareTemplateCompilerWorldDetails(
       previous.nodeObserverLocatorConfiguration,
       next.nodeObserverLocatorConfiguration,
     )
+    || !sameRuntimeKeyMappingConfiguration(
+      previous.runtimeKeyMappingConfiguration,
+      next.runtimeKeyMappingConfiguration,
+    )
     || !sameArrays(previous.services, next.services, sameCompilerServiceReferenceSemantics)
   ) {
     return KernelPublicationDecisionKind.Replace;
@@ -73,6 +78,11 @@ export function compareTemplateCompilerWorldDetails(
       && sameContainerWitness(previous.container, next.container, context)
       && sameArrays(previous.services, next.services, (left, right) =>
         sameKernelRecordWitness(left.addressHandle, right.addressHandle, context))
+      && sameRuntimeKeyMappingWitness(
+        previous.runtimeKeyMappingConfiguration,
+        next.runtimeKeyMappingConfiguration,
+        context,
+      )
       && sameKernelRecordWitness(previous.sourceAddressHandle, next.sourceAddressHandle, context)
       && sameKernelFieldProvenance(previous.fieldProvenance, next.fieldProvenance, context),
   );
@@ -590,6 +600,31 @@ function sameNodeObserverLocatorConfiguration(
     && sameArrays(previous.accessorOverrides, next.accessorOverrides, (left, right) =>
       left.tagName === right.tagName && left.propertyName === right.propertyName)
     && sameArrays(previous.globalAccessorOverrides, next.globalAccessorOverrides, (left, right) => left === right);
+}
+
+function sameRuntimeKeyMappingConfiguration(
+  previous: RuntimeKeyMappingConfiguration,
+  next: RuntimeKeyMappingConfiguration,
+): boolean {
+  return previous.metaDomainClosed === next.metaDomainClosed
+    && previous.keyDomainClosed === next.keyDomainClosed
+    && sameArrays(previous.meta, next.meta, (left, right) =>
+      left.modifier === right.modifier && left.runtimeName === right.runtimeName)
+    && sameArrays(previous.keys, next.keys, (left, right) =>
+      left.modifier === right.modifier && left.runtimeName === right.runtimeName);
+}
+
+function sameRuntimeKeyMappingWitness(
+  previous: RuntimeKeyMappingConfiguration,
+  next: RuntimeKeyMappingConfiguration,
+  context: KernelPublicationComparisonContext,
+): boolean {
+  return sameArrays(previous.meta, next.meta, (left, right) =>
+    sameKernelRecordWitness(left.sourceAddressHandle, right.sourceAddressHandle, context)
+      && sameKernelRecordWitness(left.provenanceHandle, right.provenanceHandle, context))
+    && sameArrays(previous.keys, next.keys, (left, right) =>
+      sameKernelRecordWitness(left.sourceAddressHandle, right.sourceAddressHandle, context)
+        && sameKernelRecordWitness(left.provenanceHandle, right.provenanceHandle, context));
 }
 
 function sameRuntimeNodeObserverConfig(

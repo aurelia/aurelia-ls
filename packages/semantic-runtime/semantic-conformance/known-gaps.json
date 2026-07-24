@@ -10,13 +10,6 @@
       "rationale": "Aurelia executes arbitrary IAttrMapper.useTwoWay predicates against the live element. Semantic-runtime now rejects partially understood predicate conjunctions instead of widening them, but does not yet preserve an executable or open predicate product, so the valid live-attribute branch remains conservatively to-view."
     },
     {
-      "assertionId": "template-ref-listener-semantics/listener-custom-key-mapping-completion-context",
-      "status": "known-gap",
-      "failureBucket": "listener-app-effective-modifier-catalog",
-      "firstObserved": "2026-07-24",
-      "rationale": "Framework-default event modifiers are available as an explicitly partial completion domain, but semantic-runtime does not yet project app-effective IKeyMapping mutations or IModifiedEventHandlerCreator replacement order from DI/AppTask execution. The registered upper_k mapping must join the completion domain without treating arbitrary custom handler implementations as a closed enumerable vocabulary."
-    },
-    {
       "assertionId": "template-spread-capture-semantics/spread-key-realization-is-conditional",
       "status": "known-gap",
       "failureBucket": "spread-value-conditional-realization-vocabulary",
