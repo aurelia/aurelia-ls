@@ -136,11 +136,6 @@ const expectedPreludeHelpers = [
     emittedNames: ['__au_binding_behavior_argument'],
   },
   {
-    key: 'event',
-    owner: 'listener-binding',
-    emittedNames: ['__au_event'],
-  },
-  {
     key: 'switch-case',
     owner: 'switch-template-controller',
     emittedNames: ['__au_switch_case'],
@@ -398,6 +393,12 @@ if (generatedEventOverlay.expressionTypes.get('state.submitWithEvent($event)') !
 }
 if (generatedEventOverlay.expressionTypes.get('state.submitWithButton($event.currentTarget)') !== 'boolean') {
   failures.push(`Expected generated listener-event overlay to type a currentTarget-refined listener call as boolean, observed ${generatedEventOverlay.expressionTypes.get('state.submitWithButton($event.currentTarget)') ?? 'missing'}.`);
+}
+if (generatedEventOverlay.expressionTypes.get('state.inspectCustomEvent($event)') !== 'boolean') {
+  failures.push(`Expected generated listener-event overlay to type an unknown-name event call as boolean, observed ${generatedEventOverlay.expressionTypes.get('state.inspectCustomEvent($event)') ?? 'missing'}.`);
+}
+if (generatedEventOverlay.generatedCustomEventUnknownTypeExpression !== true) {
+  failures.push('Expected generated listener-event overlay to consume the materialized CustomEvent<unknown> scope type.');
 }
 if (generatedEventOverlay.generatedGlobalEventMemberTypeExpression !== true) {
   failures.push('Expected generated listener-event overlay to spell DOM event member refinements through a stable global type expression.');
@@ -910,9 +911,11 @@ if (failures.length > 0) {
         expressionProbeCount: generatedEventOverlay.expressionProbeCount,
         skippedExpressionCount: generatedEventOverlay.skippedExpressionCount,
         generatedGlobalEventMemberTypeExpression: generatedEventOverlay.generatedGlobalEventMemberTypeExpression,
+        generatedCustomEventUnknownTypeExpression: generatedEventOverlay.generatedCustomEventUnknownTypeExpression,
         selectedExpressionTypes: {
           explicitEventCall: generatedEventOverlay.expressionTypes.get('state.submitWithEvent($event)'),
           refinedCurrentTargetCall: generatedEventOverlay.expressionTypes.get('state.submitWithButton($event.currentTarget)'),
+          customEventCall: generatedEventOverlay.expressionTypes.get('state.inspectCustomEvent($event)'),
         },
       },
       generatedRuntimeAssignmentOverlay: {
@@ -1390,6 +1393,7 @@ async function readGeneratedEventScopeOverlayProbe() {
     overlayDiagnosticCount: diagnostics.length,
     generatedAnyHole: overlayTextHasGeneratedAnyHole(emission.overlaySource),
     generatedGlobalEventMemberTypeExpression: emission.overlaySource.text.includes('currentTarget: HTMLButtonElement'),
+    generatedCustomEventUnknownTypeExpression: emission.overlaySource.text.includes('CustomEvent<unknown>'),
   };
 }
 

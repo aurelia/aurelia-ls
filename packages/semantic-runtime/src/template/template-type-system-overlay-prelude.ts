@@ -1,8 +1,4 @@
 import { TypeSystemOverlaySourceBuilder } from '../type-system/overlay.js';
-import {
-  CHECKER_DOM_EVENT_FALLBACK_TYPE_NAMES,
-  CHECKER_DOM_EVENT_MAP_TYPE_NAMES,
-} from '../type-system/dom-node-type.js';
 
 export interface TemplateTypeSystemOverlayPreludeViewModel {
   readonly typeName: string;
@@ -16,8 +12,6 @@ export const enum TemplateTypeSystemOverlayPreludeHelperKey {
   ValueConverter = 'value-converter',
   /** Bind-time argument helper used by binding-behavior overlay projection. */
   BindingBehavior = 'binding-behavior',
-  /** Listener event-map helper used by $event overlay scopes. */
-  Event = 'event',
   /** Type-predicate helper used by switch/case overlay guards. */
   SwitchCase = 'switch-case',
 }
@@ -29,8 +23,6 @@ export const enum TemplateTypeSystemOverlayPreludeHelperOwner {
   RuntimeValueConverter = 'runtime-value-converter',
   /** Runtime binding-behavior materialization and value-transparent bind calls. */
   RuntimeBindingBehavior = 'runtime-binding-behavior',
-  /** Runtime listener binding invocation and DOM event-map lookup. */
-  ListenerBinding = 'listener-binding',
   /** Runtime-html Switch/Case matching and TypeChecker equality narrowing. */
   SwitchTemplateController = 'switch-template-controller',
 }
@@ -82,13 +74,6 @@ export const templateTypeSystemOverlayPreludeHelpers: readonly TemplateTypeSyste
     ],
   },
   {
-    key: TemplateTypeSystemOverlayPreludeHelperKey.Event,
-    owner: TemplateTypeSystemOverlayPreludeHelperOwner.ListenerBinding,
-    summary: 'Aurelia listener $event event-map lookup for generated listener scope layers.',
-    emittedNames: ['__au_event'],
-    lines: [templateTypeSystemOverlayDomEventHelperLine()],
-  },
-  {
     key: TemplateTypeSystemOverlayPreludeHelperKey.SwitchCase,
     owner: TemplateTypeSystemOverlayPreludeHelperOwner.SwitchTemplateController,
     summary: 'Aurelia switch/case branch predicates: scalar cases compare by strict equality and array cases use includes.',
@@ -126,12 +111,4 @@ function appendPreludeHelper(
   for (const line of helper.lines) {
     builder.appendLine(line);
   }
-}
-
-function templateTypeSystemOverlayDomEventHelperLine(): string {
-  const [fallback] = CHECKER_DOM_EVENT_FALLBACK_TYPE_NAMES;
-  const clauses = CHECKER_DOM_EVENT_MAP_TYPE_NAMES
-    .map((mapName) => `K extends keyof ${mapName} ? ${mapName}[K]`)
-    .join(' : ');
-  return `type __au_event<K extends string> = ${clauses} : ${fallback};`;
 }

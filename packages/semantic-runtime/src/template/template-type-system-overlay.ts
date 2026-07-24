@@ -1445,7 +1445,7 @@ export class TemplateTypeSystemOverlayBuilder {
     if (instruction instanceof ListenerBindingInstruction || instruction instanceof DispatchBindingInstruction) {
       return [{
         kind: 'event',
-        eventName: instruction.eventName,
+        typeExpression: overlayEventTypeExpression(scope, this.store, overlayFileName),
         memberTypes: overlayEventMemberTypes(scope, this.store, overlayFileName),
       }];
     }
@@ -2327,7 +2327,7 @@ function overlayEventMemberTypes(
   store: KernelStore,
   overlayFileName: string,
 ): readonly TemplateTypeSystemOverlayEventMemberType[] {
-  const slot = scope.overrideContext.lookup('$event') ?? scope.bindingContext.lookup('$event');
+  const slot = overlayEventSlot(scope);
   return slot?.memberTypes.flatMap((memberType) => {
     if (!isIdentifierName(memberType.name)) {
       return [];
@@ -2337,6 +2337,21 @@ function overlayEventMemberTypes(
       ? []
       : [{ name: memberType.name, typeText }];
   }) ?? [];
+}
+
+function overlayEventTypeExpression(
+  scope: BindingScope,
+  store: KernelStore,
+  overlayFileName: string,
+): string | null {
+  const targetType = overlayEventSlot(scope)?.targetType ?? null;
+  return targetType == null
+    ? null
+    : checkerTypeReferenceTypeExpression(store, targetType, { generatedFileName: overlayFileName });
+}
+
+function overlayEventSlot(scope: BindingScope): BindingContextSlot | null {
+  return scope.overrideContext.lookup('$event') ?? scope.bindingContext.lookup('$event');
 }
 
 function repeatOverrideSlotValueKind(

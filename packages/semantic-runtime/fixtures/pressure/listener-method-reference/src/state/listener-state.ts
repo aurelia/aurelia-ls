@@ -28,4 +28,10 @@ export class ListenerState {
     this.lastEventType = button.type;
     return true;
   }
+
+  inspectCustomEvent(event: CustomEvent<unknown>): boolean {
+    this.submittedCount += 1;
+    this.lastEventType = event.type;
+    return true;
+  }
 }

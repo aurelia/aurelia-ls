@@ -146,7 +146,7 @@ export interface TemplateTypeSystemOverlaySwitchCaseLayer {
 
 export interface TemplateTypeSystemOverlayEventLayer {
   readonly kind: 'event';
-  readonly eventName: string;
+  readonly typeExpression: string | null;
   readonly memberTypes: readonly TemplateTypeSystemOverlayEventMemberType[];
 }
 
@@ -472,7 +472,7 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
   }
 
   private appendEventLayer(layer: TemplateTypeSystemOverlayEventLayer): void {
-    this.builder.append(`${this.indent}const $event = undefined as unknown as __au_event<${templateTypeSystemOverlayQuotedStringLiteral(layer.eventName)}>`);
+    this.builder.append(`${this.indent}const $event = undefined as unknown as ${layer.typeExpression ?? 'unknown'}`);
     if (layer.memberTypes.length > 0) {
       this.builder.append(' & { ');
       layer.memberTypes.forEach((member, index) => {
