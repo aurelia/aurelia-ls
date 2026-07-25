@@ -625,7 +625,7 @@ class AureliaAppWorldProjectConstructionFrame {
       routeRecognizer,
     );
     const i18n = this.materializeI18nTranslationCatalog(configuration);
-    const stateBase = this.materializeStateBase(configuration, typeSystem);
+    const stateBase = this.materializeStateBase(configuration, appWorld, typeSystem);
     const recognizedSourceApiRoots = this.recognizeSourceApiRoots(typeSystem, configuration);
     const serviceRoots = this.materializeFrameworkServiceRoots(typeSystem, recognizedSourceApiRoots);
     const sourceApiRoots = serviceRoots.sourceApiRoots;
@@ -894,7 +894,7 @@ class AureliaAppWorldProjectConstructionFrame {
     return {
       projectKey: this.project.projectKey,
       evaluation,
-      stateStores: state.readStores(),
+      stateStoreVisibility: state.readStoreVisibility(),
       runtimeAnalysisDepth: this.analysisDepth,
       includeAuthoringTemplates: this.includeAuthoringTemplates,
       authoringTemplateSourceFiles: this.authoringTemplateSourceFiles,
@@ -1171,9 +1171,10 @@ class AureliaAppWorldProjectConstructionFrame {
 
   private materializeStateBase(
     configuration: ConfigurationRecognitionProjectResult,
+    appWorld: AureliaAppWorldEmission,
     typeSystem: TypeSystemProject,
   ): StateProjectResult {
-    const stores = this.materializeStateStoreConfigurations(configuration, typeSystem);
+    const stores = this.materializeStateStoreConfigurations(configuration, appWorld, typeSystem);
     const sourceIssues = this.materializeStateSourceIssues(typeSystem);
     const getterBindings = this.materializeStateGetterBindings(stores, typeSystem);
     return new StateProjectResult(
@@ -1183,6 +1184,7 @@ class AureliaAppWorldProjectConstructionFrame {
         ...stores.issues,
         ...sourceIssues.issues,
       ],
+      stores.storeVisibility,
     );
   }
 
@@ -1195,7 +1197,7 @@ class AureliaAppWorldProjectConstructionFrame {
       new StateStoreLookupIssueMaterializer(this.store, this.publication).materializeAndEmit(
         this.project,
         typeSystem,
-        state.readStores(),
+        state.readStoreVisibility(),
         templates,
       )
     );
@@ -1206,17 +1208,20 @@ class AureliaAppWorldProjectConstructionFrame {
         ...state.issues,
         ...lookupIssues.issues,
       ],
+      state.storeVisibility,
     );
   }
 
   private materializeStateStoreConfigurations(
     configuration: ConfigurationRecognitionProjectResult,
+    appWorld: AureliaAppWorldEmission,
     typeSystem: TypeSystemProject,
   ): StateProjectResult {
     return this.measure('state-store-materialization', () =>
       new StateStoreConfigurationMaterializationProjectPass().materializeAndEmit(
         this.store,
         configuration,
+        appWorld.diWorld,
         typeSystem,
         this.publication,
       )
@@ -1245,7 +1250,7 @@ class AureliaAppWorldProjectConstructionFrame {
         this.store,
         this.project,
         typeSystem,
-        state.readStores(),
+        state.readStoreVisibility().defaultSelection(),
         this.publication,
       )
     );

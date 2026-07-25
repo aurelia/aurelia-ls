@@ -53,7 +53,7 @@ import {
   runtimeBoundControllerValueTableForTemplateResources,
   type RuntimeBoundControllerValueTable,
 } from '../observation/runtime-bound-controller-value.js';
-import type { StateStoreConfiguration } from '../state/model.js';
+import { StateStoreVisibility } from '../state/state-store-visibility.js';
 import {
   AttributeClassificationMaterializer,
   type AttributeClassificationEmission,
@@ -311,7 +311,8 @@ export interface TemplateCompilationProjectProfile {
 export interface TemplateCompilationProjectOptions {
   readonly runtimeAnalysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
   readonly evaluation?: StaticProjectEvaluationResult | null;
-  readonly stateStores?: readonly StateStoreConfiguration[];
+  /** Pre-template state visibility authority; omitted only when the standalone compiler has no state project. */
+  readonly stateStoreVisibility?: StateStoreVisibility;
   readonly includeAuthoringTemplates?: boolean;
   readonly authoringTemplateSourceFiles?: readonly string[];
   readonly authoringTemplateLimit?: number | null;
@@ -324,6 +325,8 @@ export class TemplateCompilationProjectPlan {
   constructor(
     readonly appWorld: AureliaAppWorldEmission,
     readonly cohortPlan: TemplateCompilationCohortProjectPlan,
+    /** State registry definitions and DI ownership fixed for this planned compiler generation. */
+    readonly stateStoreVisibility: StateStoreVisibility,
     readonly authoringTemplateSourceFiles: readonly string[],
     readonly authoringTemplateLimit: number | null,
     readonly telemetry: NormalizedSemanticRuntimeTelemetryOptions,
@@ -680,6 +683,7 @@ export class TemplateCompilationProjectPass {
     return new TemplateCompilationProjectPlan(
       appWorld,
       cohortPlan,
+      options.stateStoreVisibility ?? StateStoreVisibility.empty(),
       authoringTemplateSourceFiles,
       authoringTemplateLimit,
       telemetry,
@@ -728,11 +732,13 @@ export class TemplateCompilationProjectPass {
         );
     const phaseRecorder = new TemplateCompilationPhaseRecorder(this.publication, frontDoor.plan.telemetry);
     const runtimeAnalysisDepth = options.runtimeAnalysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH;
+    const stateStoreVisibility = frontDoor.plan.stateStoreVisibility
+      .withContainers(templateCompilerWorldContainers(frontDoor));
     const expressionWorld = new CheckerExpressionTypeWorld(
       this.store,
       new CheckerTypeProjector(this.store, this.publication),
       undefined,
-      options.stateStores ?? [],
+      stateStoreVisibility,
     );
     const resources = this.analyzeCompiledResources(
       frontDoor.appCompilations,
@@ -784,11 +790,13 @@ export class TemplateCompilationProjectPass {
     ) {
       return null;
     }
+    const stateStoreVisibility = frontDoor.plan.stateStoreVisibility
+      .withContainers(templateCompilerWorldContainers(frontDoor));
     const expressionWorld = new CheckerExpressionTypeWorld(
       this.store,
       new CheckerTypeProjector(this.store, this.publication),
       undefined,
-      options.stateStores ?? [],
+      stateStoreVisibility,
     );
     const resources = rebaseRuntimeAnalysisResources(
       frontDoor.appCompilations,
@@ -1498,6 +1506,21 @@ export class TemplateCompilationProjectPass {
       boundControllerValues,
     ));
   }
+}
+
+function templateCompilerWorldContainers(
+  frontDoor: TemplateCompilationFrontDoorEmission,
+): readonly TemplateCompilerWorldEmission['container'][] {
+  return [...new Map([
+    ...frontDoor.plan.appWorld.diWorld.containers,
+    ...[
+      ...frontDoor.appCompilations,
+      ...frontDoor.authoringCompilations,
+    ].flatMap((compilation) => [
+      compilation.parentCompilerWorld.container,
+      compilation.compilerWorld.container,
+    ]),
+  ].map((container) => [container.identityHandle, container])).values()];
 }
 
 class TemplateCompilerWorldSelection {

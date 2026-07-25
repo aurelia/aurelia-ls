@@ -139,7 +139,7 @@ function stateGetterBindingEvidence(
     handles.evidenceHandle,
     EvidenceKind.SemanticObservation,
     [EvidenceRole.Configuration, EvidenceRole.TransformOutput],
-    'StateGetterBinding admitted from @fromState(...) decorator lifecycle hook registration.',
+    '@fromState(...) source definition admitted for later controller-local StateGetterBinding application.',
     seed.sourceAddressHandle,
   );
 }

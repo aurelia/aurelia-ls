@@ -37,6 +37,9 @@ import {
   configuredStateStoreForName,
   stateStoreDisplayName,
 } from './state-store-identity.js';
+import type {
+  StateStoreVisibilitySelection,
+} from './state-store-visibility.js';
 import {
   stateGetterBindingProductEmission,
   type StateGetterBindingProductSeed,
@@ -59,11 +62,11 @@ export class StateGetterBindingMaterializationProjectPass {
     store: KernelStore,
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
-    stateStores: readonly StateStoreConfiguration[],
+    storeVisibility: StateStoreVisibilitySelection,
     publication: KernelPublicationContext,
   ): StateGetterBindingProjectResult {
     const seeds = readFromStateDecoratorBindingSites(project, typeSystem).map((site, index) =>
-      stateGetterBindingProductSeed(store, publication, project, typeSystem, stateStores, site, index)
+      stateGetterBindingProductSeed(store, publication, project, typeSystem, storeVisibility, site, index)
     );
     const emissions = seeds.map((seed, index) =>
       stateGetterBindingProductEmission(store, seed, index)
@@ -88,7 +91,7 @@ function stateGetterBindingProductSeed(
   publication: KernelPublicationContext,
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
-  stateStores: readonly StateStoreConfiguration[],
+  storeVisibility: StateStoreVisibilitySelection,
   site: FromStateDecoratorBindingSite,
   index: number,
 ): StateGetterBindingProductSeed {
@@ -136,7 +139,7 @@ function stateGetterBindingProductSeed(
       targetSource.handle,
       `${local}:target-member-type`,
     );
-  const resolved = stateGetterBindingStoreResolution(site, stateStores);
+  const resolved = stateGetterBindingStoreResolution(site, storeVisibility);
   return {
     projectKey: project.projectKey,
     sourceAddressHandle: source.handle,
@@ -162,22 +165,32 @@ function stateGetterBindingProductSeed(
 
 function stateGetterBindingStoreResolution(
   site: FromStateDecoratorBindingSite,
-  stateStores: readonly StateStoreConfiguration[],
+  storeVisibility: StateStoreVisibilitySelection,
 ): {
   readonly kind: StateGetterBindingStoreResolutionKind;
   readonly store: StateStoreConfiguration | null;
+  readonly openReason: string | null;
 } {
   if (site.storeName === undefined) {
     return {
       kind: StateGetterBindingStoreResolutionKind.DynamicStoreName,
       store: null,
+      openReason: null,
     };
   }
-  const store = configuredStateStoreForName(stateStores, site.storeName);
+  const store = configuredStateStoreForName(storeVisibility.stores, site.storeName);
   if (store == null) {
+    if (storeVisibility.openReason != null) {
+      return {
+        kind: StateGetterBindingStoreResolutionKind.OpenStoreVisibility,
+        store: null,
+        openReason: storeVisibility.openReason,
+      };
+    }
     return {
       kind: StateGetterBindingStoreResolutionKind.MissingStore,
       store: null,
+      openReason: null,
     };
   }
   return {
@@ -185,6 +198,7 @@ function stateGetterBindingStoreResolution(
       ? StateGetterBindingStoreResolutionKind.DefaultStore
       : StateGetterBindingStoreResolutionKind.NamedStore,
     store,
+    openReason: null,
   };
 }
 
@@ -198,6 +212,9 @@ function stateGetterBindingOpenReason(
   switch (resolution.kind) {
     case StateGetterBindingStoreResolutionKind.DynamicStoreName:
       reasons.push('@fromState uses a runtime-dependent store name expression; semantic-runtime cannot choose the Store instance yet.');
+      break;
+    case StateGetterBindingStoreResolutionKind.OpenStoreVisibility:
+      reasons.push(resolution.openReason ?? 'The effective IStoreRegistry is open, so semantic-runtime cannot choose the Store instance yet.');
       break;
     case StateGetterBindingStoreResolutionKind.MissingStore:
       reasons.push(`@fromState references store "${stateStoreDisplayName(site.storeName)}", but no configured @aurelia/state store with that name is visible.`);

@@ -3839,7 +3839,7 @@ export class SemanticApp {
     const paged = pageRows(rows, page);
     return answer(
       outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} @fromState StateGetterBinding row(s).`,
+      `Returned ${paged.rows.length} of ${rows.length} source-level @fromState binding definition row(s).`,
       { rows: paged.rows },
       paged.page,
     );

@@ -1,4 +1,5 @@
 import {
+  kernelFieldProvenanceReferences,
   kernelProductDetailReference,
   kernelRecordReferences,
   mergeKernelDetailReferences,
@@ -34,11 +35,21 @@ export const StateProductDetails = {
     StateDetailDescriptors.StoreConfiguration,
     (configuration) => mergeKernelDetailReferences(
       kernelRecordReferences(
+        configuration.container.productHandle,
+        configuration.container.identityHandle,
+        configuration.container.addressHandle,
+        configuration.registrationProductHandle,
+        configuration.registrationAdmissionProductHandle,
+        configuration.registrationSourceAddressHandle,
+        configuration.configurationStepProductHandle,
+        configuration.configurationStepIdentityHandle,
+        configuration.configurationValueSourceAddressHandle,
         configuration.nameSourceAddressHandle,
         configuration.initialStateSourceAddressHandle,
         configuration.optionsOrHandlerSourceAddressHandle,
         ...configuration.actionHandlerSourceAddressHandles,
       ),
+      kernelFieldProvenanceReferences(configuration.fieldProvenance),
       checkerTypeReferenceKernelReferences(configuration.initialStateType),
     ),
   ),

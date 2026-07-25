@@ -1545,6 +1545,7 @@ export class TemplateControllerScopeMaterializer {
       expression,
       sourceScope: value.sourceScope,
       resourceScope: value.sourceResourceScope,
+      activeContainer: value.sourceDefaultContainer,
       localKey: `${input.localKey}:bound-controller:${value.propertyName}:source-scope`,
       sourceAddressHandle,
       strictBinding: value.sourceStrictBinding,
@@ -1598,11 +1599,23 @@ export class TemplateControllerScopeMaterializer {
     runtimeAssignmentOwner: TemplateInstruction = instruction,
   ): BindingScope {
     if (instruction instanceof StateBindingInstruction) {
-      return this.constructStateBindingCommandScope(frame, base, instruction, localSuffix);
+      return this.constructStateBindingCommandScope(
+        frame,
+        base,
+        instruction,
+        localSuffix,
+        controllerContext,
+      );
     }
 
     if (instruction instanceof DispatchBindingInstruction) {
-      const stateScope = this.constructStateBindingCommandScope(frame, base, instruction, localSuffix);
+      const stateScope = this.constructStateBindingCommandScope(
+        frame,
+        base,
+        instruction,
+        localSuffix,
+        controllerContext,
+      );
       const emission = this.measure(frame.input, 'state-dispatch-event-scope', () =>
         this.constructListenerEventScope(frame, stateScope, instruction, localSuffix)
       );
@@ -1667,11 +1680,14 @@ export class TemplateControllerScopeMaterializer {
     base: BindingScope,
     instruction: StateBindingInstruction | DispatchBindingInstruction,
     localSuffix: string,
+    controllerContext: RuntimeControllerFrame | null,
   ): BindingScope {
     const projection = this.measure(frame.input, 'state-binding-command-scope', () =>
       new StateBindingScopeProjector(
         this.store,
-        frame.input.expressionWorld.stateStores,
+        frame.input.expressionWorld.stateStoreSelectionForContainer(
+          controllerContext?.containerFrame ?? null,
+        ),
         frame.input.expressionWorld.projector,
       ).scopeForStoreName(
         instruction.storeName,

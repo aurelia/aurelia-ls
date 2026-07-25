@@ -500,12 +500,12 @@ export const KernelProductKinds = {
       KernelVocabularySlot.ProductKind,
       'One @aurelia/state store configuration admitted from StateDefaultConfiguration builder calls before AppTask execution.',
     ),
-    /** Product kind for one StateGetterBinding created by @fromState(...) lifecycle hooks. */
+    /** Product kind for one @fromState(...) source definition that lifecycle hooks apply per controller. */
     GetterBinding: defineVocabulary(
       KernelVocabularyNamespace.State,
       'getter-binding',
       KernelVocabularySlot.ProductKind,
-      'One @aurelia/state StateGetterBinding created by @fromState(...) for a field or setter target.',
+      'One @fromState(...) source definition for controller-local @aurelia/state StateGetterBinding application.',
     ),
     /** Product kind for a source-backed @aurelia/state configuration or store-registry issue. */
     Issue: defineVocabulary(

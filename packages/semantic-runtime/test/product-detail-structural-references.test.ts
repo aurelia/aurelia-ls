@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
 import { ConfigurationProductDetails } from '../src/configuration/product-details.js';
+import { ContainerReference } from '../src/di/container-reference.js';
 import {
   BindingContext,
   BindingContextKind,
@@ -18,13 +19,18 @@ import {
   FrameworkCapabilityDemandSiteKind,
 } from '../src/framework/capability-demand.js';
 import { FrameworkProductDetails } from '../src/framework/product-details.js';
-import { KernelHandleFactory, type ProductHandle } from '../src/kernel/handles.js';
+import {
+  KernelHandleFactory,
+  type KernelRecordHandle,
+  type ProductHandle,
+} from '../src/kernel/handles.js';
 import { KernelPublicationSurface } from '../src/kernel/publication-surface.js';
 import type { ProductDetailDescriptor } from '../src/kernel/detail-descriptors.js';
 import {
   KernelProductDetailReference,
   type KernelDetailReference,
 } from '../src/kernel/detail-references.js';
+import { FieldProvenance } from '../src/kernel/provenance.js';
 import {
   ComputedObservationDependencyMode,
 } from '../src/observation/computed-observation.js';
@@ -66,6 +72,7 @@ import {
 import {
   StateGetterBinding,
   StateGetterBindingStoreResolutionKind,
+  StateStoreConfiguration,
 } from '../src/state/model.js';
 import { StateProductDetails } from '../src/state/product-details.js';
 import { FrameworkRegistrationCapability } from '../src/registration/framework-registration-manifest.js';
@@ -488,6 +495,54 @@ describe('product-detail structural references', () => {
       StateProductDetails.StoreConfiguration.descriptor,
       storeProduct,
     );
+
+    const containerProduct = handles.product('state-store-container');
+    const containerIdentity = handles.identity('state-store-container');
+    const registrationProduct = handles.product('state-store-registration');
+    const registrationAdmissionProduct = handles.product('state-store-registration-admission');
+    const registrationSource = handles.address('state-store-registration');
+    const configurationStepProduct = handles.product('state-store-configuration-step');
+    const configurationStepIdentity = handles.identity('state-store-configuration-step');
+    const configurationValueSource = handles.address('state-store-configuration-value');
+    const fieldProvenance = handles.provenance('state-store-container-field');
+    const storeConfiguration = new StateStoreConfiguration(
+      storeProduct,
+      handles.identity('state-store'),
+      new ContainerReference(containerIdentity, containerProduct, sourceAddress, 'root'),
+      registrationProduct,
+      registrationAdmissionProduct,
+      registrationSource,
+      configurationStepProduct,
+      configurationStepIdentity,
+      configurationValueSource,
+      null,
+      true,
+      null,
+      'absent',
+      0,
+      sourceAddress,
+      null,
+      null,
+      null,
+      null,
+      [],
+      [new FieldProvenance('container', fieldProvenance)],
+    );
+    const storeReferences = StateProductDetails.StoreConfiguration.referencesFor(storeConfiguration);
+    for (const handle of [
+      containerProduct,
+      containerIdentity,
+      sourceAddress,
+      registrationProduct,
+      registrationAdmissionProduct,
+      registrationSource,
+      configurationStepProduct,
+      configurationStepIdentity,
+      configurationValueSource,
+      fieldProvenance,
+    ]) {
+      expectRecordReference(storeReferences, handle);
+    }
   });
 
   test('preserves exact producer occupancies across scope, framework, and resource carriers', () => {
@@ -620,5 +675,16 @@ function expectProductDetailReference(
     surface: KernelPublicationSurface.ProductDetail,
     handle,
     detailKind: descriptor.detailKind,
+  }));
+}
+
+function expectRecordReference(
+  references: readonly KernelDetailReference[],
+  handle: KernelRecordHandle,
+): void {
+  expect(references).toContainEqual(expect.objectContaining({
+    surface: KernelPublicationSurface.Record,
+    handle,
+    detailKind: null,
   }));
 }

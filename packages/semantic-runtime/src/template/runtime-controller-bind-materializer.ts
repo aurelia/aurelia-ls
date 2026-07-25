@@ -27,7 +27,6 @@ import { CustomElementDefinition } from '../resources/custom-element-definition.
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
-import type { StateStoreConfiguration } from '../state/model.js';
 import {
   configuredStateStoreForName,
 } from '../state/state-store-identity.js';
@@ -103,8 +102,6 @@ export interface RuntimeControllerBindMaterializationRequest {
   readonly expressionWorld: CheckerExpressionTypeWorld;
   /** App-authored NodeObserverLocator service state visible to this runtime binding analysis. */
   readonly nodeObserverLocatorConfiguration?: NodeObserverLocatorConfiguration | null;
-  /** App-authored @aurelia/state store configurations visible to binding-source operation analysis. */
-  readonly stateStores?: readonly StateStoreConfiguration[] | null;
   /** Whether this standalone analysis root is proven to be the app root in its compiler world. */
   readonly isAppRootDefinition: boolean;
 }
@@ -641,7 +638,13 @@ export class RuntimeControllerBindMaterializer {
     targetController: RuntimeControllerFrame | null,
   ): RuntimeBindingSourceOperationTarget {
     if (binding instanceof StateDispatchBinding) {
-      const configuredStore = configuredStateStoreForName(input.stateStores ?? [], binding.storeName);
+      const renderContext = input.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
+      const configuredStore = configuredStateStoreForName(
+        input.expressionWorld.stateStoreSelectionForContainer(
+          renderContext.requireActiveContainer(),
+        ).stores,
+        binding.storeName,
+      );
       return new RuntimeBindingSourceOperationTarget(
         RuntimeBindingTargetKind.StateStore,
         null,

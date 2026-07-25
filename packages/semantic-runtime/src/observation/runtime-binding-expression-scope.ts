@@ -1,4 +1,5 @@
 import type { BindingScope } from '../configuration/scope.js';
+import type { Container } from '../di/container.js';
 import type {
   ExpressionAstNode,
   IsValueConverter,
@@ -15,6 +16,7 @@ import {
 import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
 import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
+import type { TemplateResourceScope } from '../template/compiler-world.js';
 import {
   RuntimeExpressionResourceBindReachability,
   type RuntimeExpressionResourcePhaseReachability,
@@ -38,6 +40,9 @@ export interface RuntimeBindingExpressionScopeProjectionRequest {
   readonly scope: BindingScope;
   readonly localKey: string;
   readonly sourceAddressHandle: AddressHandle | null;
+  readonly resourceScope: TemplateResourceScope;
+  /** Active runtime container visible to binding-behavior DI resolution. */
+  readonly activeContainer: Container | null;
 }
 
 /**
@@ -49,19 +54,11 @@ export interface RuntimeBindingExpressionScopeProjectionRequest {
  */
 @auLink('runtime:astBind')
 export class RuntimeBindingExpressionScopeProjector {
-  private readonly stateScopes: StateBindingScopeProjector;
-
   constructor(
     readonly kernel: KernelSourceFileReadView,
     readonly expressionWorld: CheckerExpressionTypeWorld,
     readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
-  ) {
-    this.stateScopes = new StateBindingScopeProjector(
-      kernel,
-      expressionWorld.stateStores,
-      expressionWorld.projector,
-    );
-  }
+  ) {}
 
   project(
     input: RuntimeBindingExpressionScopeProjectionRequest,
@@ -72,6 +69,8 @@ export class RuntimeBindingExpressionScopeProjector {
       input.localKey,
       input.sourceAddressHandle,
       input.bindingProductHandle,
+      input.resourceScope,
+      input.activeContainer,
     );
   }
 
@@ -104,6 +103,8 @@ export class RuntimeBindingExpressionScopeProjector {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
     bindingProductHandle: ProductHandle,
+    resourceScope: TemplateResourceScope,
+    activeContainer: Container | null,
   ): RuntimeBindingExpressionScopeProjection {
     const unwrapped = unwrapExpressionAstNodeParens(expression);
     if (unwrapped.$kind === 'ValueConverter') {
@@ -113,6 +114,8 @@ export class RuntimeBindingExpressionScopeProjector {
         `${localKey}:value-converter:${unwrapped.name.name}`,
         sourceAddressHandle,
         bindingProductHandle,
+        resourceScope,
+        activeContainer,
       );
       return new RuntimeBindingExpressionScopeProjection(
         new ValueConverterExpression(
@@ -154,7 +157,13 @@ export class RuntimeBindingExpressionScopeProjector {
       );
     }
     const behaviorScope = reached && planEntry.builtInResource?.name === BuiltInBindingBehaviorName.State
-      ? this.projectStateBindingBehaviorScope(unwrapped, scope, localKey, sourceAddressHandle)
+      ? this.projectStateBindingBehaviorScope(
+          unwrapped,
+          scope,
+          localKey,
+          sourceAddressHandle,
+          activeContainer,
+        )
       : new RuntimeBindingExpressionScopeProjection(unwrapped.expression, scope, null);
     const projectedConverter = reached
       ? this.expressionResourcePlan.readProjectedConverterForBindingBehavior(
@@ -169,6 +178,8 @@ export class RuntimeBindingExpressionScopeProjector {
         `${localKey}:behavior:${unwrapped.name.name}:value-converter-input`,
         sourceAddressHandle,
         bindingProductHandle,
+        resourceScope,
+        activeContainer,
       );
       return new RuntimeBindingExpressionScopeProjection(
         new ValueConverterExpression(
@@ -187,6 +198,8 @@ export class RuntimeBindingExpressionScopeProjector {
       `${localKey}:behavior:${unwrapped.name.name}`,
       sourceAddressHandle,
       bindingProductHandle,
+      resourceScope,
+      activeContainer,
     );
     return new RuntimeBindingExpressionScopeProjection(
       projectedInner.expression,
@@ -200,6 +213,7 @@ export class RuntimeBindingExpressionScopeProjector {
     scope: BindingScope | null,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
+    activeContainer: Container | null,
   ): RuntimeBindingExpressionScopeProjection {
     if (scope == null) {
       return new RuntimeBindingExpressionScopeProjection(
@@ -208,7 +222,19 @@ export class RuntimeBindingExpressionScopeProjector {
         'A previous state binding behavior did not produce a store-backed binding scope.',
       );
     }
-    const stateScope = this.stateScopes.scopeForBindingBehavior(
+    if (activeContainer == null) {
+      return new RuntimeBindingExpressionScopeProjection(
+        expression.expression,
+        null,
+        'The state binding behavior did not retain the active runtime container needed to resolve IStoreRegistry.',
+      );
+    }
+    const storeSelection = this.expressionWorld.stateStoreSelectionForContainer(activeContainer);
+    const stateScope = new StateBindingScopeProjector(
+      this.kernel,
+      storeSelection,
+      this.expressionWorld.projector,
+    ).scopeForBindingBehavior(
       expression,
       scope,
       `${localKey}:state-binding-behavior:${expression.span.start}:${expression.span.end}`,

@@ -23,8 +23,8 @@ import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { KernelStore } from '../kernel/store.js';
-import type { StateStoreConfiguration } from '../state/model.js';
 import { StateBindingScopeProjector } from '../state/state-binding-scope.js';
+import type { StateStoreVisibilitySelection } from '../state/state-store-visibility.js';
 import {
   BindingScope,
 } from '../configuration/scope.js';
@@ -130,9 +130,9 @@ export class CheckerExpressionTypeEvaluator {
     private readonly store: KernelStore,
     readonly projector: CheckerTypeProjector,
     /** Compiler resource scope visible at this expression site, when template compilation supplied one. */
-    readonly resourceScope: TemplateResourceScope | null = null,
-    readonly cache: CheckerExpressionTypeEvaluationCache = new CheckerExpressionTypeEvaluationCache(),
-    readonly stateStores: readonly StateStoreConfiguration[] = [],
+    readonly resourceScope: TemplateResourceScope | null,
+    readonly cache: CheckerExpressionTypeEvaluationCache,
+    readonly stateStoreSelection: StateStoreVisibilitySelection,
   ) {
     this.typeAccess = new CheckerTypeShapeAccess(store, projector);
     this.synthesis = new CheckerExpressionTypeSynthesizer(projector);
@@ -156,7 +156,7 @@ export class CheckerExpressionTypeEvaluator {
       this.access,
       this.calls,
       resourceScope,
-      new StateBindingScopeProjector(store, stateStores, projector),
+      new StateBindingScopeProjector(store, stateStoreSelection, projector),
       {
         evaluateNode: (context) => this.evaluateNode(context),
       },

@@ -2473,10 +2473,21 @@ export interface SemanticStateStoreRow {
   readonly initialStateKind: ConfigurationOptionValueKind | `${ConfigurationOptionValueKind}` | null;
   readonly optionsOrHandlerKind: SemanticStateStoreOptionsOrHandlerKind;
   readonly actionHandlerCount: number;
+  readonly containerSource: SemanticSourceReference | null;
+  readonly registrationSource: SemanticSourceReference | null;
+  readonly configurationValueSource: SemanticSourceReference | null;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly productHandle: ProductHandle;
     readonly identityHandle: IdentityHandle;
+    readonly containerProductHandle: ProductHandle | null;
+    readonly containerIdentityHandle: IdentityHandle | null;
+    readonly registrationProductHandle: ProductHandle;
+    readonly registrationAdmissionProductHandle: ProductHandle;
+    readonly registrationSourceAddressHandle: AddressHandle | null;
+    readonly configurationStepProductHandle: ProductHandle;
+    readonly configurationStepIdentityHandle: IdentityHandle;
+    readonly configurationValueSourceAddressHandle: AddressHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
     readonly nameSourceAddressHandle: AddressHandle | null;
     readonly initialStateSourceAddressHandle: AddressHandle | null;
@@ -2490,6 +2501,7 @@ export interface SemanticStateStoresResult {
 }
 
 export interface SemanticStateGetterBindingRow {
+  /** Source-level decorator projection; applied controller ownership is not represented by this row yet. */
   readonly projectKey: string;
   readonly targetKind: string;
   readonly targetName: string | null;

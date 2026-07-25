@@ -2183,13 +2183,9 @@ function routerSourceExpressionEvaluationFrame(
       ),
     };
   }
-  const renderContext = site.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
   return {
     state: 'context',
-    context: sourceValueContextForRuntimeBindingSourceExpressionProjection(
-      projection,
-      renderContext.requireActiveContainer(),
-    ),
+    context: sourceValueContextForRuntimeBindingSourceExpressionProjection(projection),
   };
 }
 

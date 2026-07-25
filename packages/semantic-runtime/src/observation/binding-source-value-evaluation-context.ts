@@ -74,12 +74,11 @@ export class RuntimeBindingSourceValueEvaluationContext {
   /** Creates a source-value request from the binding-owned source-expression lifecycle projection. */
   static fromRuntimeBindingSourceExpressionProjection(
     projection: RuntimeBindingSourceExpressionContextProjection,
-    activeContainer?: Container | null,
   ): RuntimeBindingSourceValueEvaluationContext {
     return new RuntimeBindingSourceValueEvaluationContext(
       projection.expression,
       projection.scope,
-      activeContainer,
+      projection.activeContainer,
       undefined,
       projection.bindingExpressionScopes,
       projection.bindingProductHandle,
@@ -278,6 +277,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
       strictBinding,
       bindingBehavior,
       bindingExpressionScopes,
+      activeContainer: activeContainer ?? null,
     });
     if (projected.kind !== RuntimeBindingSourceExpressionProjectionKind.Context) {
       return {
@@ -290,7 +290,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
       context: new RuntimeBindingSourceValueEvaluationContext(
         projected.expression,
         projected.scope,
-        activeContainer,
+        projected.activeContainer,
         this.activeBoundControllerReads,
         bindingExpressionScopes,
         bindingProductHandle,
@@ -335,6 +335,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
       bindingBehavior,
       sourceAddressHandle,
       bindingExpressionScopes: this.bindingExpressionScopes,
+      activeContainer: this.activeContainer ?? null,
     });
     return projected.kind === RuntimeBindingSourceExpressionProjectionKind.Open
       ? {
@@ -352,11 +353,9 @@ export class RuntimeBindingSourceValueEvaluationContext {
 
 export function sourceValueContextForRuntimeBindingSourceExpressionProjection(
   projection: RuntimeBindingSourceExpressionContextProjection,
-  activeContainer?: Container | null,
 ): RuntimeBindingSourceValueEvaluationContext {
   return RuntimeBindingSourceValueEvaluationContext.fromRuntimeBindingSourceExpressionProjection(
     projection,
-    activeContainer,
   );
 }
 
@@ -410,7 +409,6 @@ export function projectRuntimeBindingSourceValueContextInScope(
   return {
     context: sourceValueContextForRuntimeBindingSourceExpressionProjection(
       projection,
-      input.activeContainer,
     ),
     openReason: null,
   };

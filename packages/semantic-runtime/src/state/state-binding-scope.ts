@@ -14,6 +14,7 @@ import { localKeyPart } from '../kernel/local-key.js';
 import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
 import { staticStringLiteralExpression } from '../template/expression-resource-occurrence.js';
 import type { StateStoreConfiguration } from './model.js';
+import type { StateStoreVisibilitySelection } from './state-store-visibility.js';
 import {
   configuredStateStoreForName,
   stateStoreDisplayName,
@@ -46,7 +47,7 @@ export class StateBindingScopeProjector {
 
   constructor(
     readonly kernel: KernelSourceFileReadView,
-    readonly stateStores: readonly StateStoreConfiguration[],
+    readonly storeSelection: StateStoreVisibilitySelection,
     readonly projector: CheckerTypeProjector,
   ) {
     this.scopeMaterializer = new BindingScopeMaterializer(kernel, projector);
@@ -87,12 +88,13 @@ export class StateBindingScopeProjector {
         'The state binding behavior uses a dynamic store argument; semantic-runtime cannot choose a store state type yet.',
       );
     }
-    const configuredStore = configuredStateStoreForName(this.stateStores, storeName);
+    const configuredStore = configuredStateStoreForName(this.storeSelection.stores, storeName);
     if (configuredStore == null) {
       return new StateBindingScopeProjection(
         null,
         null,
-        `The state binding behavior references store "${stateStoreDisplayName(storeName)}", but no configured store is visible to expression evaluation.`,
+        this.storeSelection.openReason
+          ?? `The state binding behavior references store "${stateStoreDisplayName(storeName)}", but no configured store is visible to expression evaluation.`,
       );
     }
     if (configuredStore.initialStateType == null) {

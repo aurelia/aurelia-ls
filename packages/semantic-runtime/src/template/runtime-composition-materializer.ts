@@ -812,12 +812,8 @@ export class RuntimeCompositionMaterializer {
         flow?.sourceType ?? null,
       );
     }
-    const renderContext = input.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
     const evaluated = input.sourceValueEvaluator.evaluate(
-      sourceValueContextForRuntimeBindingSourceExpressionProjection(
-        projection,
-        renderContext.requireActiveContainer(),
-      ),
+      sourceValueContextForRuntimeBindingSourceExpressionProjection(projection),
     );
     return new EvaluatedBinding(
       binding,

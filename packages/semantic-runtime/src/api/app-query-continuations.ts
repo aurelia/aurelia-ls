@@ -1067,7 +1067,7 @@ function addStateAndI18nContinuations(
     case SemanticAppQueryKind.StateStores:
       seeds.push(
         inspect(
-          'Inspect @fromState StateGetterBinding rows that consume configured stores.',
+          'Inspect source-level @fromState definitions that reference configured stores.',
           rowQuery(SemanticAppQueryKind.StateGetterBindings, query, page),
           InquiryEvidenceState.TypeProjected,
         ),
@@ -1085,7 +1085,7 @@ function addStateAndI18nContinuations(
     case SemanticAppQueryKind.StateGetterBindings:
       seeds.push(
         inspect(
-          'Inspect configured stores referenced by @fromState bindings.',
+          'Inspect configured stores referenced by source-level @fromState definitions.',
           rowQuery(SemanticAppQueryKind.StateStores, query, page),
         ),
         diagnose(

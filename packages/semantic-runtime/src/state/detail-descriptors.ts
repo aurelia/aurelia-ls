@@ -13,7 +13,7 @@ export const StateDetailDescriptors = {
   GetterBinding: defineProductDetailDescriptor<StateGetterBinding>(
     KernelVocabulary.State.GetterBinding.key,
     'state.getter-binding',
-    '@aurelia/state StateGetterBinding created by @fromState(...) for field/setter targets.',
+    '@fromState(...) source definition that will create controller-local @aurelia/state StateGetterBinding instances.',
   ),
   Issue: defineProductDetailDescriptor<StateIssue>(
     KernelVocabulary.State.Issue.key,

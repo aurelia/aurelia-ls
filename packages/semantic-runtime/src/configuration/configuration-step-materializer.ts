@@ -452,14 +452,36 @@ export class ConfigurationStepMaterializer {
 
     const appTasks = this.recordsForStepAppTasks(context, observation, local, stepClaims.producerClaimHandlesByProduct);
     records.push(...appTasks.records);
-    const options = this.recordsForStepOptions(
+    const configurationValue = observation.optionContributions.length > 0
+      && ts.isCallExpression(observation.sourceNode)
+      ? context.expressionReader.evaluateExpression(observation.sourceNode).value
+      : null;
+    const configurationValueSource = this.recordsForConfigurationValueSource(
       context,
       observation,
       local,
       source,
+      configurationValue,
+    );
+    if (configurationValueSource !== source) {
+      records.push(...configurationValueSource.records);
+    }
+    const options = this.recordsForStepOptions(
+      context,
+      observation,
+      local,
+      configurationValueSource,
       stepClaims.producerClaimHandlesByProduct,
     );
     records.push(...options.records);
+    if (configurationValue != null) {
+      for (const emission of options.emissions) {
+        this.evaluationBindings.bindOptionContributionConfigurationValue(
+          emission.contribution.productHandle,
+          configurationValue,
+        );
+      }
+    }
 
     const registrationEmission = this.emitStepRegistrations(
       context,
@@ -661,6 +683,28 @@ export class ConfigurationStepMaterializer {
     return new OptionContributionEmissionSet(
       emissions.flatMap((emission) => emission.records),
       emissions,
+    );
+  }
+
+  private recordsForConfigurationValueSource(
+    context: ConfigurationRecognitionContext,
+    observation: ConfigurationStepObservation,
+    local: string,
+    stepSource: ConfigurationSourceRecordSet,
+    configurationValue: EvaluationValue | null,
+  ): ConfigurationSourceRecordSet {
+    const valueSourceNode = configurationValue?.node ?? null;
+    if (valueSourceNode == null || valueSourceNode === observation.sourceNode) {
+      return stepSource;
+    }
+    return this.publication.recordsForSource(
+      context,
+      valueSourceNode,
+      `configuration-value:${local}`,
+      EvidenceKind.ConfigurationFlow,
+      [EvidenceRole.Configuration],
+      'Runtime configuration value that receives this step option contribution.',
+      SourceSpanRole.Value,
     );
   }
 

@@ -610,7 +610,6 @@ class TemplateRuntimeAnalysisFrame {
       typeSystem: this.request.typeSystem,
       expressionWorld: this.expressionWorld,
       nodeObserverLocatorConfiguration: this.request.compilerWorld.world.nodeObserverLocatorConfiguration,
-      stateStores: this.expressionWorld.stateStores,
       isAppRootDefinition: this.request.definition.productHandle != null
         && this.request.definition.productHandle === this.request.appRootDefinitionProductHandle,
     } satisfies RuntimeControllerBindMaterializationRequest);

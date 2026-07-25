@@ -92,7 +92,7 @@ describe('template compilation project pass', () => {
       {
         projectKey: `${app.project.projectKey}:staged-generation`,
         evaluation: app.emission.evaluation,
-        stateStores: app.emission.state.readStores(),
+        stateStoreVisibility: app.emission.state.readStoreVisibility(),
         runtimeAnalysisDepth: app.emission.analysisDepth,
       },
     );
@@ -246,7 +246,7 @@ describe('template compilation project pass', () => {
         {
           projectKey: `${app.project.projectKey}:no-op-policy`,
           evaluation: app.emission.evaluation,
-          stateStores: app.emission.state.readStores(),
+          stateStoreVisibility: app.emission.state.readStoreVisibility(),
           runtimeAnalysisDepth: app.emission.analysisDepth,
         },
       );

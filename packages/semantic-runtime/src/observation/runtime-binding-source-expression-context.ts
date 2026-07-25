@@ -1,4 +1,5 @@
 import type { BindingScope } from '../configuration/scope.js';
+import type { Container } from '../di/container.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import { unwrapExpressionAstNodeParens } from '../expression/parse-result-inspection.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
@@ -43,6 +44,8 @@ export interface RuntimeBindingSourceExpressionContextProjection {
   readonly bindingProductHandle: ProductHandle;
   /** Compiler resource scope that lowered the runtime binding owning this source expression. */
   readonly resourceScope: TemplateResourceScope;
+  /** Active runtime container visible to source-expression DI and binding-behavior handoff. */
+  readonly activeContainer: Container | null;
   /** Source-scope projector that owns later nested binding-behavior handoffs for this expression read. */
   readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjector;
   /** Rendering-controller strict mode passed into Aurelia `astEvaluate` / `astAssign`. */
@@ -96,6 +99,8 @@ export interface RuntimeSourceExpressionLifecycleProjectionRequest {
   readonly sourceScope: BindingScope;
   /** Compiler resource scope visible to resource-backed expression semantics. */
   readonly resourceScope: TemplateResourceScope;
+  /** Active runtime container visible to source-expression DI and binding-behavior handoff. */
+  readonly activeContainer: Container | null;
   /** Semantic local key for projected TypeChecker/source-value products. */
   readonly localKey: string;
   /** Authored source address for the owning runtime expression. */
@@ -145,6 +150,7 @@ export class RuntimeBindingSourceExpressionContextProjector {
       expression: input.expression,
       sourceScope: instructionScope,
       resourceScope: renderContext.resourceScope,
+      activeContainer: renderContext.requireActiveContainer(),
       localKey: input.localKey,
       sourceAddressHandle: input.binding.sourceAddressHandle,
       strictBinding,
@@ -182,6 +188,7 @@ export class RuntimeBindingSourceExpressionContextProjector {
       expression: input.expression,
       sourceScope: instructionScope,
       resourceScope: renderContext.resourceScope,
+      activeContainer: renderContext.requireActiveContainer(),
       localKey: input.localKey,
       sourceAddressHandle: input.binding.sourceAddressHandle,
       strictBinding,
@@ -204,6 +211,7 @@ export function projectRuntimeBindingSourceExpressionInScope(
     expression: input.expression,
     sourceScope: input.sourceScope,
     resourceScope: renderContext.resourceScope,
+    activeContainer: renderContext.requireActiveContainer(),
     localKey: input.localKey,
     sourceAddressHandle: input.binding.sourceAddressHandle,
     strictBinding: renderContext.renderingController.strict,
@@ -224,6 +232,7 @@ export function projectRuntimeBindingSourceExpressionsInScope(
     expression: input.expression,
     sourceScope: input.sourceScope,
     resourceScope: renderContext.resourceScope,
+    activeContainer: renderContext.requireActiveContainer(),
     localKey: input.localKey,
     sourceAddressHandle: input.binding.sourceAddressHandle,
     strictBinding: renderContext.renderingController.strict,
@@ -295,6 +304,8 @@ export function projectRuntimeSourceExpressionWithLifecycle(
       scope: input.sourceScope,
       localKey: `${input.localKey}:runtime-expression-scope`,
       sourceAddressHandle: input.sourceAddressHandle,
+      resourceScope: input.resourceScope,
+      activeContainer: input.activeContainer,
     })
     : {
       expression: input.expression,
@@ -317,6 +328,7 @@ export function projectRuntimeSourceExpressionWithLifecycle(
     scope: projected.scope,
     bindingProductHandle: input.bindingProductHandle,
     resourceScope: input.resourceScope,
+    activeContainer: input.activeContainer,
     strictBinding: input.strictBinding,
     sourceAddressHandle: input.sourceAddressHandle,
     localKey: input.localKey,
@@ -340,6 +352,7 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
       scope: input.sourceScope,
       bindingProductHandle: input.bindingProductHandle,
       resourceScope: input.resourceScope,
+      activeContainer: input.activeContainer,
       strictBinding: input.strictBinding,
       sourceAddressHandle: input.sourceAddressHandle,
       localKey: index === 0 ? input.localKey : `${input.localKey}:expression:${index}`,
@@ -354,6 +367,8 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
     scope: input.sourceScope,
     localKey: `${input.localKey}:runtime-expression-scope`,
     sourceAddressHandle: input.sourceAddressHandle,
+    resourceScope: input.resourceScope,
+    activeContainer: input.activeContainer,
   }).map((projected, index) => projected.scope == null
     ? {
         kind: RuntimeBindingSourceExpressionProjectionKind.Open,
@@ -369,6 +384,7 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
         scope: projected.scope,
         bindingProductHandle: input.bindingProductHandle,
         resourceScope: input.resourceScope,
+        activeContainer: input.activeContainer,
         strictBinding: input.strictBinding,
         sourceAddressHandle: input.sourceAddressHandle,
         localKey: index === 0 ? input.localKey : `${input.localKey}:expression:${index}`,

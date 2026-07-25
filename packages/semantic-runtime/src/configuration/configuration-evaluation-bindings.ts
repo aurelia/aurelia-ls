@@ -13,10 +13,17 @@ export class ConfigurationEvaluationBindings {
     readonly containersByEvaluation: ReadonlyMap<AureliaContainerEvaluation, Container>,
     readonly aureliasByEvaluation: ReadonlyMap<AureliaFacadeEvaluation, Aurelia>,
     readonly registrationValuesByAdmissionProduct: ReadonlyMap<ProductHandle, EvaluationValue>,
+    readonly configurationValuesByOptionContributionProduct: ReadonlyMap<ProductHandle, EvaluationValue>,
   ) {}
 
   registrationValueForAdmission(admissionProductHandle: ProductHandle): EvaluationValue | null {
     return this.registrationValuesByAdmissionProduct.get(admissionProductHandle) ?? null;
+  }
+
+  configurationValueForOptionContribution(
+    contributionProductHandle: ProductHandle,
+  ): EvaluationValue | null {
+    return this.configurationValuesByOptionContributionProduct.get(contributionProductHandle) ?? null;
   }
 }
 
@@ -26,6 +33,7 @@ export class ConfigurationEvaluationBindingMark {
     readonly containerCount: number,
     readonly aureliaCount: number,
     readonly registrationValueCount: number,
+    readonly configurationValueCount: number,
   ) {}
 }
 
@@ -34,15 +42,18 @@ export class ConfigurationEvaluationBindingFrame {
   private readonly containersByEvaluation = new Map<AureliaContainerEvaluation, Container>();
   private readonly aureliasByEvaluation = new Map<AureliaFacadeEvaluation, Aurelia>();
   private readonly registrationValuesByAdmissionProduct = new Map<ProductHandle, EvaluationValue>();
+  private readonly configurationValuesByOptionContributionProduct = new Map<ProductHandle, EvaluationValue>();
   private readonly containerEntries: [AureliaContainerEvaluation, Container][] = [];
   private readonly aureliaEntries: [AureliaFacadeEvaluation, Aurelia][] = [];
   private readonly registrationValueEntries: [ProductHandle, EvaluationValue][] = [];
+  private readonly configurationValueEntries: [ProductHandle, EvaluationValue][] = [];
 
   mark(): ConfigurationEvaluationBindingMark {
     return new ConfigurationEvaluationBindingMark(
       this.containerEntries.length,
       this.aureliaEntries.length,
       this.registrationValueEntries.length,
+      this.configurationValueEntries.length,
     );
   }
 
@@ -86,11 +97,23 @@ export class ConfigurationEvaluationBindingFrame {
     this.registrationValueEntries.push([admissionProductHandle, value]);
   }
 
+  bindOptionContributionConfigurationValue(
+    contributionProductHandle: ProductHandle,
+    value: EvaluationValue,
+  ): void {
+    if (this.configurationValuesByOptionContributionProduct.has(contributionProductHandle)) {
+      return;
+    }
+    this.configurationValuesByOptionContributionProduct.set(contributionProductHandle, value);
+    this.configurationValueEntries.push([contributionProductHandle, value]);
+  }
+
   readSince(mark: ConfigurationEvaluationBindingMark): ConfigurationEvaluationBindings {
     return new ConfigurationEvaluationBindings(
       new Map(this.containerEntries.slice(mark.containerCount)),
       new Map(this.aureliaEntries.slice(mark.aureliaCount)),
       new Map(this.registrationValueEntries.slice(mark.registrationValueCount)),
+      new Map(this.configurationValueEntries.slice(mark.configurationValueCount)),
     );
   }
 
@@ -99,6 +122,7 @@ export class ConfigurationEvaluationBindingFrame {
       new Map(this.containersByEvaluation),
       new Map(this.aureliasByEvaluation),
       new Map(this.registrationValuesByAdmissionProduct),
+      new Map(this.configurationValuesByOptionContributionProduct),
     );
   }
 }
@@ -110,5 +134,6 @@ export function mergeConfigurationEvaluationBindings(
     new Map(bindings.flatMap((binding) => [...binding.containersByEvaluation])),
     new Map(bindings.flatMap((binding) => [...binding.aureliasByEvaluation])),
     new Map(bindings.flatMap((binding) => [...binding.registrationValuesByAdmissionProduct])),
+    new Map(bindings.flatMap((binding) => [...binding.configurationValuesByOptionContributionProduct])),
   );
 }

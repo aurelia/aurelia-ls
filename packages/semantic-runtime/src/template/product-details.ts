@@ -1300,11 +1300,17 @@ function referencesForTemplateInstruction(
       return mergeKernelDetailReferences(common, htmlAttributeReferenceReferences(instruction.attribute));
     case TemplateInstructionKind.TranslationBindBinding:
     case TemplateInstructionKind.TranslationParametersBinding:
+      return mergeKernelDetailReferences(
+        common,
+        htmlAttributeReferenceReferences(instruction.attribute),
+        expressionReferences(instruction.expressionProductHandle),
+      );
     case TemplateInstructionKind.StateBinding:
     case TemplateInstructionKind.DispatchBinding:
       return mergeKernelDetailReferences(
         common,
         htmlAttributeReferenceReferences(instruction.attribute),
+        kernelRecordReferences(instruction.storeNameSourceAddressHandle),
         expressionReferences(instruction.expressionProductHandle),
       );
   }
@@ -1421,6 +1427,7 @@ function referencesForRuntimeBinding(
       return mergeKernelDetailReferences(
         common,
         htmlAttributeReferenceReferences(binding.attribute),
+        kernelRecordReferences(binding.storeNameSourceAddressHandle),
         expressionReferences(binding.expressionProductHandle),
       );
   }

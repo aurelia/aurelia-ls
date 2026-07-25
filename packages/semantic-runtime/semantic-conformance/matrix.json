@@ -16003,6 +16003,257 @@
       ]
     },
     {
+      "id": "state-store-container-ownership",
+      "fixture": "fixtures/pressure/state-store-container-ownership",
+      "aureliaDomain": "plugin-capability-admission",
+      "capability": "state-store-container-ownership",
+      "domainAxis": "type-system",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/main.ts",
+      "requirement": "State store definitions retain their admitted registration container, while compiler and controller consumers select the nearest effective IStoreRegistry without leaking sibling or shadowed store shapes.",
+      "cases": [
+        {
+          "id": "sibling-containers-own-independent-same-named-stores",
+          "expectations": [
+            {
+              "name": "state stores",
+              "query": { "kind": "state-stores", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "name": "default",
+                    "isDefault": true
+                  },
+                  "count": 6
+                },
+                {
+                  "fields": {
+                    "name": "session",
+                    "isDefault": false
+                  },
+                  "count": 3
+                }
+              ]
+            },
+            {
+              "name": "state issues",
+              "query": { "kind": "state-issues", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "issueKind": "duplicate-store-name"
+                  },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "sibling-a-template-spends-only-sibling-a-store-shapes",
+          "sourceFile": "src/sibling-a-app.html",
+          "expectations": [
+            {
+              "name": "default state cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "siblingAOnly & state", "token": "siblingAOnly" } },
+              "equals": {
+                "value.selectedMemberName": "siblingAOnly",
+                "value.selectedMember.typeDisplay": "number",
+                "value.selectedMember.isReadonly": false
+              }
+            },
+            {
+              "name": "named state cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "sessionLabel & state:'session'", "token": "sessionLabel" } },
+              "equals": {
+                "value.selectedMemberName": "sessionLabel",
+                "value.selectedMember.typeDisplay": "string",
+                "value.selectedMember.isReadonly": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "sibling-b-template-spends-only-sibling-b-store-shapes",
+          "sourceFile": "src/sibling-b-app.html",
+          "expectations": [
+            {
+              "name": "default state cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "siblingBOnly & state", "token": "siblingBOnly" } },
+              "equals": {
+                "value.selectedMemberName": "siblingBOnly",
+                "value.selectedMember.typeDisplay": "boolean",
+                "value.selectedMember.isReadonly": false
+              }
+            },
+            {
+              "name": "named state cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "sessionCode & state:'session'", "token": "sessionCode" } },
+              "equals": {
+                "value.selectedMemberName": "sessionCode",
+                "value.selectedMember.typeDisplay": "number",
+                "value.selectedMember.isReadonly": false
+              }
+            }
+          ]
+        },
+        {
+          "id": "shared-component-retains-both-root-local-state-types",
+          "sourceFile": "src/shared-state-view.html",
+          "expectations": [
+            {
+              "name": "binding observed dependencies",
+              "query": { "kind": "binding-observed-dependencies", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "sourceName": "sharedValue",
+                    "observedMemberSourceState": "source"
+                  },
+                  "source": { "sourceFile": "src/states.ts", "marker": "sharedValue: 'alpha'", "token": "sharedValue" },
+                  "sourceField": "observedMemberSource",
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "sourceName": "sharedValue",
+                    "observedMemberSourceState": "source"
+                  },
+                  "source": { "sourceFile": "src/states.ts", "marker": "sharedValue: 42", "token": "sharedValue" },
+                  "sourceField": "observedMemberSource",
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "shared-from-state-definition-does-not-pick-an-arbitrary-root-store",
+          "sourceFile": "src/shared-state-view.ts",
+          "expectations": [
+            {
+              "name": "state getter bindings",
+              "query": { "kind": "state-getter-bindings", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "targetName": "sharedFromStore",
+                    "storeName": null,
+                    "storeResolutionKind": "open-store-visibility"
+                  },
+                  "source": {
+                    "marker": "@fromState<{ sharedValue: unknown }, unknown>((state) => state.sharedValue)",
+                    "token": "@fromState<{ sharedValue: unknown }, unknown>((state) => state.sharedValue)"
+                  },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "child-container-inherits-parent-store-registry",
+          "sourceFile": "src/inherited-state-app.html",
+          "expectations": [
+            {
+              "name": "default state cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "inheritedOnly & state", "token": "inheritedOnly" } },
+              "equals": {
+                "value.selectedMemberName": "inheritedOnly",
+                "value.selectedMember.typeDisplay": "string"
+              }
+            },
+            {
+              "name": "named state cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "inheritedSessionOnly & state:'session'", "token": "inheritedSessionOnly" } },
+              "equals": {
+                "value.selectedMemberName": "inheritedSessionOnly",
+                "value.selectedMember.typeDisplay": "boolean"
+              }
+            }
+          ]
+        },
+        {
+          "id": "child-store-registry-shadows-parent-stores",
+          "sourceFile": "src/shadowed-state-app.html",
+          "expectations": [
+            {
+              "name": "default state cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "shadowChildOnly & state", "token": "shadowChildOnly" } },
+              "equals": {
+                "value.selectedMemberName": "shadowChildOnly",
+                "value.selectedMember.typeDisplay": "number"
+              }
+            },
+            {
+              "name": "named state cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "shadowChildSessionOnly & state:'child-session'", "token": "shadowChildSessionOnly" } },
+              "equals": {
+                "value.selectedMemberName": "shadowChildSessionOnly",
+                "value.selectedMember.typeDisplay": "string"
+              }
+            },
+            {
+              "name": "state issues",
+              "query": { "kind": "state-issues", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "issueKind": "store-not-found",
+                    "storeName": "parent-session"
+                  },
+                  "source": { "marker": "'parent-session'", "token": "'parent-session'" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "issueKind": "store-not-found",
+                    "storeName": "parent-session"
+                  },
+                  "source": { "marker": "textcontent.state:parent-session", "token": "parent-session" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "custom-registry-keeps-runtime-only-store-membership-open",
+          "sourceFile": "src/custom-registry-app.html",
+          "expectations": [
+            {
+              "name": "state issues",
+              "query": { "kind": "state-issues", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "issueKind": "store-not-found",
+                    "storeName": "runtime-store"
+                  },
+                  "absent": true
+                }
+              ]
+            },
+            {
+              "name": "binding observed dependencies",
+              "query": { "kind": "binding-observed-dependencies", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "sourceName": "runtimeOnly",
+                    "observedMemberSourceState": "open"
+                  },
+                  "source": { "marker": "runtimeOnly & state:'runtime-store'", "token": "runtimeOnly" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "validation-html-open-resource-configuration",
       "fixture": "fixtures/pressure/plugin-capability-open-configuration",
       "aureliaDomain": "plugin-capability-admission",

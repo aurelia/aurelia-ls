@@ -16,6 +16,7 @@ import { localKeyPart } from '../kernel/local-key.js';
 import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
 import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import { expressionProductHandlesForRuntimeBinding } from '../template/runtime-binding-expression-products.js';
+import { sourceAddressForRuntimeExpressionSpan } from '../template/runtime-expression-source-address.js';
 import {
   StateBinding,
   StateDispatchBinding,
@@ -34,8 +35,12 @@ import {
   FromStateStoreReferenceSite,
   readFromStateStoreReferenceSites,
 } from './from-state-decorator-recognition.js';
-import type { StateStoreConfiguration } from './model.js';
 import { StateProductDetails } from './product-details.js';
+import { configuredStateStoreForName } from './state-store-identity.js';
+import {
+  type StateStoreVisibility,
+  type StateStoreVisibilitySelection,
+} from './state-store-visibility.js';
 import {
   StateIssueKind,
   StateIssuePhase,
@@ -67,6 +72,7 @@ class StateStoreLookupSite {
     readonly sourcePath: string | null,
     readonly start: number | null,
     readonly end: number | null,
+    readonly storeVisibility: StateStoreVisibilitySelection,
   ) {}
 }
 
@@ -95,20 +101,22 @@ export class StateStoreLookupIssueMaterializer {
   materializeAndEmit(
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
-    stores: readonly StateStoreConfiguration[],
+    storeVisibility: StateStoreVisibility,
     templates: TemplateCompilationProjectEmission,
   ): StateStoreLookupIssueProjectResult {
-    const configuredStoreNames = new Set(
-      stores
-        .filter((store) => !store.isDefault)
-        .map((store) => store.name)
-        .filter((name): name is string => name != null),
-    );
     const publications = [
-      ...fromStateStoreLookupSites(this.publication, project, typeSystem),
-      ...templateStoreLookupSites(this.publication, templates),
+      ...fromStateStoreLookupSites(
+        this.publication,
+        project,
+        typeSystem,
+        storeVisibility.defaultSelection(),
+      ),
+      ...templateStoreLookupSites(this.publication, templates, storeVisibility),
     ]
-      .filter((site) => !configuredStoreNames.has(site.storeName))
+      .filter((site) =>
+        configuredStateStoreForName(site.storeVisibility.stores, site.storeName) == null
+        && site.storeVisibility.openReason == null
+      )
       .map((site, index) => this.publicationForSite(project, site, index));
     const records = publications.flatMap((publication) => publication.records);
     this.publication.publish(new KernelPublicationPlan(
@@ -148,6 +156,7 @@ function fromStateStoreLookupSites(
   publication: KernelPublicationContext,
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
+  storeVisibility: StateStoreVisibilitySelection,
 ): readonly StateStoreLookupSite[] {
   return readFromStateStoreReferenceSites(project, typeSystem).map((site, index) => {
     const local = [
@@ -167,6 +176,7 @@ function fromStateStoreLookupSites(
       site.sourcePath,
       site.start,
       site.end,
+      storeVisibility,
     );
   });
 }
@@ -174,40 +184,50 @@ function fromStateStoreLookupSites(
 function templateStoreLookupSites(
   publication: KernelPublicationContext,
   templates: TemplateCompilationProjectEmission,
+  storeVisibility: StateStoreVisibility,
 ): readonly StateStoreLookupSite[] {
   return [
     ...templates.resources,
     ...templates.authoringResources,
   ].flatMap((resource) =>
-    resourceLocalRuntimeBindings(publication, resource).flatMap((binding) =>
-      bindingStateStoreLookupSites(publication, binding)
-    )
+    resourceLocalRuntimeBindings(publication, resource).flatMap((binding) => {
+      const renderContext = resource.runtimeAnalysis.runtimeRendering
+        .requireRenderContextForBinding(binding.productHandle);
+      return bindingStateStoreLookupSites(
+        publication,
+        binding,
+        storeVisibility.selectionForContainer(renderContext.sourceController.containerFrame),
+      );
+    })
   );
 }
 
 function bindingStateStoreLookupSites(
   publication: KernelPublicationContext,
   binding: RuntimeBinding,
+  storeVisibility: StateStoreVisibilitySelection,
 ): readonly StateStoreLookupSite[] {
   return [
-    ...stateCommandStoreLookupSites(binding),
-    ...stateBindingBehaviorStoreLookupSites(publication, binding),
+    ...stateCommandStoreLookupSites(binding, storeVisibility),
+    ...stateBindingBehaviorStoreLookupSites(publication, binding, storeVisibility),
   ];
 }
 
 function stateCommandStoreLookupSites(
   binding: RuntimeBinding,
+  storeVisibility: StateStoreVisibilitySelection,
 ): readonly StateStoreLookupSite[] {
   if (binding instanceof StateBinding && binding.storeName != null && binding.sourceAddressHandle != null) {
     return [
       new StateStoreLookupSite(
         StateStoreLookupSiteKind.StateBindingCommand,
         binding.storeName,
-        binding.sourceAddressHandle,
+        binding.storeNameSourceAddressHandle ?? binding.sourceAddressHandle,
         [],
         null,
         null,
         null,
+        storeVisibility,
       ),
     ];
   }
@@ -216,11 +236,12 @@ function stateCommandStoreLookupSites(
       new StateStoreLookupSite(
         StateStoreLookupSiteKind.DispatchBindingCommand,
         binding.storeName,
-        binding.sourceAddressHandle,
+        binding.storeNameSourceAddressHandle ?? binding.sourceAddressHandle,
         [],
         null,
         null,
         null,
+        storeVisibility,
       ),
     ];
   }
@@ -230,6 +251,7 @@ function stateCommandStoreLookupSites(
 function stateBindingBehaviorStoreLookupSites(
   publication: KernelPublicationContext,
   binding: RuntimeBinding,
+  storeVisibility: StateStoreVisibilitySelection,
 ): readonly StateStoreLookupSite[] {
   return expressionProductHandlesForRuntimeBinding(binding).flatMap((productHandle) => {
     const parse = readTemplateExpressionParse(publication, productHandle);
@@ -242,20 +264,34 @@ function stateBindingBehaviorStoreLookupSites(
       if (behavior.name.name !== BuiltInBindingBehaviorName.State) {
         return [];
       }
-      const storeName = staticStringLiteralExpression(behavior.args[0] ?? null);
-      return storeName == null
-        ? []
-        : [
-          new StateStoreLookupSite(
-            StateStoreLookupSiteKind.StateBindingBehavior,
-            storeName,
-            sourceAddressHandle,
-            [],
-            null,
-            null,
-            null,
-          ),
-        ];
+      const storeExpression = behavior.args[0] ?? null;
+      const storeName = staticStringLiteralExpression(storeExpression);
+      if (storeName == null || storeExpression == null) {
+        return [];
+      }
+      const source = sourceAddressForRuntimeExpressionSpan(
+        publication,
+        [
+          'state-store-lookup',
+          localKeyPart(productHandle),
+          storeExpression.span.start,
+          storeExpression.span.end,
+        ].join(':'),
+        sourceAddressHandle,
+        storeExpression.span,
+      );
+      return [
+        new StateStoreLookupSite(
+          StateStoreLookupSiteKind.StateBindingBehavior,
+          storeName,
+          source.handle ?? sourceAddressHandle,
+          source.records,
+          null,
+          null,
+          null,
+          storeVisibility,
+        ),
+      ];
     });
   });
 }
