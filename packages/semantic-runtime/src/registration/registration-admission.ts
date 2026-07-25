@@ -9,6 +9,7 @@ import type {
   RegistrationKeyReference,
   RegistrationValueReference,
 } from './registration-reference.js';
+import type { RegistrationCarrierKind } from './registration-observation.js';
 
 export const enum RegistrationAdmissionKind {
   /** Admission produced by a `Registration.*` factory call. */
@@ -29,6 +30,8 @@ export const enum RegistrationAdmissionKind {
   PlainClassFallback = 'plain-class-fallback',
   /** Admission produced by one value inside an array, object, or module-map registration carrier. */
   RecursiveCarrierEntry = 'recursive-carrier-entry',
+  /** Admission produced when a ParameterizedRegistry fallback passes an object parameter to Container.register. */
+  ParameterizedRegistryParameter = 'parameterized-registry-parameter',
 }
 
 export const enum RegistrationStrategy {
@@ -76,6 +79,7 @@ export const enum RegistrationKeyRole {
 }
 
 export type RegistrationAdmissionField =
+  | 'carrierKind'
   | 'admissionKind'
   | 'strategy'
   | 'keyRole'
@@ -115,6 +119,8 @@ export class OpenRegistrationAdmission {
     readonly productHandle: ProductHandle,
     /** Registration identity for this admission event. */
     readonly identityHandle: IdentityHandle,
+    /** Source carrier lane that produced this admission. */
+    readonly carrierKind: RegistrationCarrierKind,
     /** Source lane that admitted this registration. */
     readonly admissionKind: RegistrationAdmissionKind,
     /** Best-known strategy, including `unknown` when recognition could not classify it. */
@@ -141,6 +147,8 @@ export class ResolverRegistrationAdmission {
     readonly productHandle: ProductHandle,
     /** Registration identity for this admission event. */
     readonly identityHandle: IdentityHandle,
+    /** Source carrier lane that produced this admission. */
+    readonly carrierKind: RegistrationCarrierKind,
     /** Source lane that admitted this registration. */
     readonly admissionKind: RegistrationAdmissionKind,
     /** Runtime registration strategy represented by this admission. */
@@ -190,6 +198,8 @@ export class ParameterizedRegistryAdmission {
     readonly productHandle: ProductHandle,
     /** Registration identity for this registry-producing admission event. */
     readonly identityHandle: IdentityHandle,
+    /** Source carrier lane that produced this admission. */
+    readonly carrierKind: RegistrationCarrierKind,
     /** Source lane that admitted this registry. */
     readonly admissionKind: RegistrationAdmissionKind,
     /** Key used to look up an existing registry before falling back to parameter registration. */
@@ -212,6 +222,8 @@ export class RegistryRegistrationAdmission {
     readonly productHandle: ProductHandle,
     /** Registration identity for this registry admission event. */
     readonly identityHandle: IdentityHandle,
+    /** Source carrier lane that produced this admission. */
+    readonly carrierKind: RegistrationCarrierKind,
     /** Source lane that admitted this registry. */
     readonly admissionKind: RegistrationAdmissionKind,
     /** Registry value that will later be analyzed or invoked abstractly by DI world construction. */
@@ -232,6 +244,8 @@ export class ResourceRegistrationAdmission {
     readonly productHandle: ProductHandle,
     /** Registration identity for this resource admission event. */
     readonly identityHandle: IdentityHandle,
+    /** Source carrier lane that produced this admission. */
+    readonly carrierKind: RegistrationCarrierKind,
     /** Source lane that admitted this resource. */
     readonly admissionKind: RegistrationAdmissionKind,
     /** Source-level value that carried the resource class or definition. */
@@ -254,6 +268,8 @@ export class FrameworkRegistrationAdmission {
     readonly productHandle: ProductHandle,
     /** Registration identity for this framework admission event. */
     readonly identityHandle: IdentityHandle,
+    /** Source carrier lane that produced this admission. */
+    readonly carrierKind: RegistrationCarrierKind,
     /** Source lane that admitted this framework registration group. */
     readonly admissionKind: RegistrationAdmissionKind,
     /** Known framework registration group or effect package recognized from source. */

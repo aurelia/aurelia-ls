@@ -1,5 +1,4 @@
 import type ts from 'typescript';
-import type { EvaluatedDiKeyDeclarationSource } from '../di/di-key-identity-emitter.js';
 import type { EvaluationValue } from '../evaluation/values.js';
 import type {
   AddressHandle,
@@ -17,6 +16,15 @@ import type {
   RegistryBodyReference,
   RegistrationValueKind,
 } from './registration-reference.js';
+
+/** Evaluator-owned constructable declaration source used when no TypeChecker epoch is available. */
+export class EvaluatedRegistrationKeyDeclarationSource {
+  constructor(
+    readonly declaration: ts.ClassLikeDeclaration | ts.FunctionLikeDeclaration,
+    readonly moduleKey: string,
+    readonly sourceFileAddressHandle: AddressHandle | null,
+  ) {}
+}
 
 export const enum RegistrationCarrierKind {
   /** Call to `Registration.instance`, `singleton`, `transient`, `callback`, `cachedCallback`, `aliasTo`, or `defer`. */
@@ -37,6 +45,8 @@ export const enum RegistrationCarrierKind {
   PlainClassAdmission = 'plain-class-admission',
   /** One member admitted from an array, object, or module-map registration carrier. */
   RecursiveCarrierEntry = 'recursive-carrier-entry',
+  /** Object parameter admitted by the fallback branch of a ParameterizedRegistry application. */
+  ParameterizedRegistryParameter = 'parameterized-registry-parameter',
 }
 
 export const enum RegistrationKeyObservationKind {
@@ -56,7 +66,7 @@ export class RegistrationKeyObservation {
     /** Runtime key-shape evidence available before kernel identity materialization. */
     readonly observationKind: RegistrationKeyObservationKind = RegistrationKeyObservationKind.Expression,
     /** Declaration source for evaluator-proven constructable keys. */
-    readonly constructableSource: EvaluatedDiKeyDeclarationSource | null = null,
+    readonly constructableSource: EvaluatedRegistrationKeyDeclarationSource | null = null,
     /** Evaluator value used to recover primitive-value and object identity across import aliases. */
     readonly evaluatedValue: EvaluationValue | null = null,
     /** Source-file address when the key expression belongs to another admitted module. */
@@ -90,6 +100,28 @@ export class RegistrationValueObservation {
     /** Candidate-local evaluator value retained for later execution without entering kernel records. */
     readonly evaluatedValue: EvaluationValue | null = null,
   ) {}
+
+  /** Preserve the source/evaluator witness while another layer attaches a materialized product projection. */
+  withProductProjection(
+    valueKind: RegistrationValueKind,
+    localName: string | null,
+    productHandle: ProductHandle | null,
+    frameworkKind: FrameworkRegistrationKind | null,
+  ): RegistrationValueObservation {
+    return new RegistrationValueObservation(
+      valueKind,
+      localName,
+      this.node,
+      this.isDeclaration,
+      productHandle,
+      frameworkKind,
+      this.sourceFileAddressHandle,
+      this.moduleKey,
+      this.registryBody,
+      this.keyObservation,
+      this.evaluatedValue,
+    );
+  }
 }
 
 /** Explicit unresolved pressure from registration recognition. */
@@ -103,6 +135,14 @@ export class RegistrationRecognitionOpen {
     readonly node: ts.Node,
     /** Lower-level producer reasons that caused this registration seam, when available. */
     readonly reasonKinds: readonly OpenSeamReasonKind[] = [],
+  ) {}
+}
+
+/** Exact evaluator value together with the authored carrier occurrence that offered it to registration flow. */
+export class EvaluatedRegistrationCarrier {
+  constructor(
+    readonly sourceNode: ts.Node,
+    readonly value: EvaluationValue,
   ) {}
 }
 
@@ -129,5 +169,59 @@ export class RegistrationAdmissionObservation {
     readonly openSeams: readonly RegistrationRecognitionOpen[] = [],
     /** Resource lookup name override passed to `ResourceDefinition.register(container, alias)`. */
     readonly resourceLookupNameOverride: string | null = null,
+    /** Exact evaluator carrier offered to registration flow, retained outside durable kernel records. */
+    readonly evaluatedCarrierValue: EvaluationValue | null = null,
   ) {}
+
+  withEvaluatedCarrierValue(value: EvaluationValue): RegistrationAdmissionObservation {
+    if (this.evaluatedCarrierValue === value) {
+      return this;
+    }
+    return this.withRegisteredValueAndShape(
+      this.strategy,
+      this.keyRole,
+      this.targetKey,
+      this.registeredValue,
+      this.openSeams,
+      value,
+    );
+  }
+
+  /** Preserve admission-local carrier evidence while enriching the registered value. */
+  withRegisteredValue(
+    registeredValue: RegistrationValueObservation | null,
+  ): RegistrationAdmissionObservation {
+    return this.withRegisteredValueAndShape(
+      this.strategy,
+      this.keyRole,
+      this.targetKey,
+      registeredValue,
+      this.openSeams,
+      this.evaluatedCarrierValue,
+    );
+  }
+
+  /** Preserve carrier evidence while convergence refines the normalized registration lane. */
+  withRegisteredValueAndShape(
+    strategy: RegistrationStrategy,
+    keyRole: RegistrationKeyRole,
+    targetKey: RegistrationKeyObservation | null,
+    registeredValue: RegistrationValueObservation | null,
+    openSeams: readonly RegistrationRecognitionOpen[],
+    evaluatedCarrierValue: EvaluationValue | null = this.evaluatedCarrierValue,
+  ): RegistrationAdmissionObservation {
+    return new RegistrationAdmissionObservation(
+      this.carrierKind,
+      this.admissionKind,
+      strategy,
+      keyRole,
+      this.sourceNode,
+      targetKey,
+      registeredValue,
+      this.registryParameters,
+      openSeams,
+      this.resourceLookupNameOverride,
+      evaluatedCarrierValue,
+    );
+  }
 }

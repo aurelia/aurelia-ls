@@ -102,13 +102,16 @@ The tooling model should keep that split:
   shared `IAppRoot` providers. Every `.app(...)` step publishes a distinct app-root config and `AppRoot`, then prepares
   that shared root provider with the newly constructed root. Active-root/start/stop lifecycle remains outside this
   boundary. Keep these operation-owned products separate from sequence orchestration and generic DI spending.
-- `configuration-evaluation-bindings.ts` is the project-run identity bridge from evaluator-owned facade/container values
-  to emitted `Aurelia` and `Container` products. Recognition groups steps by those identities; receiver spelling remains
-  a trace label only. `ConfigurationStep.target*` identifies the exact existing or newly-created runtime value acted on,
-  while `producedProductHandles` contains only products created by that operation. The project pass recognizes all
-  modules first, then emits container parents, container registrations, exact facade creations, and later facade uses in
-  dependency order while retaining evaluator module order within each phase. DI consumes the exact target product and
-  must not reconstruct it from evaluator receiver maps. This is a materialization prerequisite, not full lifecycle replay.
+- `configuration-evaluation-bindings.ts` is the project-run identity bridge from evaluator-owned values and authored
+  syntax nodes to emitted configuration products. It retains exact facade/container values, registration carriers,
+  option values, product source nodes, and reusable runtime-value source nodes. Recognition groups steps by those
+  identities; receiver spelling remains a trace label only. `ConfigurationStep.target*` identifies the exact existing
+  or newly-created runtime value acted on, while `producedProductHandles` contains only products created by that
+  operation. The project pass recognizes all modules first, then emits container parents, container registrations,
+  exact facade creations, and later facade uses in dependency order while retaining evaluator module order within each
+  phase. Registry execution and option ownership consume these generation-local relations directly; they must not map
+  compressed source addresses back to AST nodes or infer ownership from span containment. This is a materialization
+  prerequisite, not full lifecycle replay.
 - Configuration source publication anchors a node against its own admitted source file, including evaluator values
   returned across module boundaries. Never attach a foreign declaration or constructor node to the importing module's
   source-file address merely because that module owns the current recognition context.
@@ -306,8 +309,8 @@ configuration. Unknown membership produces no missing-registration or configured
 Configuration-option ownership uses the exact registered-value/configuration-value source relation shared with router
 options and compiler catalogs. Do not reintroduce source containment, call-step scanning, or plugin-local name matching
 to recover that relation. App-root/compiler-world registration visibility uses
-`registrationAdmissionsVisibleToContainer(...)`, which walks only the consulting container chain and retains exact
-admission operations; sibling app roots with the same imports do not share plugin capabilities.
+`registrationOperationsVisibleToContainer(...)`, which walks only the consulting container chain and retains exact
+application operations; sibling app roots with the same imports do not share plugin capabilities.
 
 Evaluated object values that expose a `register` method are classified as IRegistry-shaped admissions. Imported or
 declaration-only values can also be admitted through the TypeChecker when their static type exposes a callable

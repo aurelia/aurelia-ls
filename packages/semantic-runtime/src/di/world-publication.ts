@@ -24,7 +24,10 @@ import {
   MaterializationRecord,
   MaterializedProduct,
 } from '../kernel/materialization.js';
+import { recordsForSourceOpenSeam } from '../kernel/source-open-seam.js';
 import {
+  compactFieldProvenance,
+  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import type {
@@ -37,6 +40,11 @@ import {
   type OpenSeamKindKey,
   type ProductKindKey,
 } from '../kernel/vocabulary.js';
+import type { StaticProjectEvaluationSourceIndex } from '../evaluation/project-source-index.js';
+import {
+  evaluationOpenSeamDefaultReasonKinds,
+  type EvaluationOpenSeam,
+} from '../evaluation/seams.js';
 import {
   AppTaskCallbackKind,
   AppTaskDefinition,
@@ -59,14 +67,12 @@ import {
   ResourceIssuePublication,
   ResourceIssuePublisher,
 } from '../resources/resource-issue-publication.js';
-import {
-  frameworkRegistrationKindForAdmission,
-  ParameterizedRegistryAdmission,
-  ResolverRegistrationAdmission,
-  RegistryRegistrationAdmission,
-  type RegistrationAdmissionProduct,
+import type {
+  RegistrationAdmissionField,
+  RegistrationAdmissionProduct,
 } from '../registration/registration-admission.js';
 import {
+  type FrameworkRegistrationKind,
   RegistryBodyKind,
   RegistrationKeyReference,
   RegistrationValueReference,
@@ -84,6 +90,7 @@ import type { ContainerLookupKey } from './container-key.js';
 import { ContainerRegistrationOperation } from './container-registration.js';
 import {
   ParameterizedRegistry,
+  type RegistryField,
   RegistryRegistrationState,
   RegistryValue,
 } from './registry.js';
@@ -108,8 +115,8 @@ import { DiIssuePublisher } from './di-issue-publication.js';
 import { InstanceProvider } from './instance-provider.js';
 import {
   Resolver,
+  type ResolverField,
   ResolverStrategy,
-  resolverStrategyForRegistrationStrategy,
 } from './resolver.js';
 
 export class DiSourceSet {
@@ -180,9 +187,9 @@ export class DiRegistrationOperationEmission {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly product: ContainerRegistrationOperation,
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
-    readonly acceptRegistrationClaimHandle: ClaimHandle,
+    readonly containerProducesOperationClaimHandle: ClaimHandle,
+    readonly operationAppliesAdmissionClaimHandle: ClaimHandle,
+    readonly operationUsesRegistrationValueClaimHandle: ClaimHandle | null,
   ) {}
 }
 
@@ -190,7 +197,9 @@ export class DiRegistrationOperationHandles {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
-    readonly acceptRegistrationClaimHandle: ClaimHandle,
+    readonly containerProducesOperationClaimHandle: ClaimHandle,
+    readonly operationAppliesAdmissionClaimHandle: ClaimHandle,
+    readonly operationUsesRegistrationValueClaimHandle: ClaimHandle,
   ) {}
 }
 
@@ -198,22 +207,6 @@ export class DiClaimEmission {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly handles: readonly ClaimHandle[],
-  ) {}
-}
-
-export class DiParameterizedRegistryPublicationEmission {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly registry: ParameterizedRegistry | null,
-    readonly openSeams: readonly OpenSeam[],
-  ) {}
-}
-
-export class DiRegistryPublicationEmission {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly registry: RegistryValue,
-    readonly openSeams: readonly OpenSeam[],
   ) {}
 }
 
@@ -457,97 +450,137 @@ export function recordsForDiOpenSeam(
   };
 }
 
+/** Retain candidate-local evaluator pressure at its exact source locus inside one DI application. */
+export function recordsForDiEvaluationOpenSeams(
+  store: KernelStore,
+  sourceIndex: StaticProjectEvaluationSourceIndex,
+  local: string,
+  evaluationOpenSeams: readonly EvaluationOpenSeam[],
+  fallbackAddressHandle: AddressHandle | null,
+): {
+  readonly records: readonly KernelStoreRecord[];
+  readonly seams: readonly OpenSeam[];
+} {
+  const records: KernelStoreRecord[] = [];
+  const seams: OpenSeam[] = [];
+  evaluationOpenSeams.forEach((evaluationSeam, index) => {
+    const sourceFile = evaluationSeam.node.getSourceFile();
+    const sourceFileAddressHandle = sourceIndex.addressHandleForNode(evaluationSeam.node);
+    const reasonKinds = evaluationSeam.reasonKinds.length === 0
+      ? evaluationOpenSeamDefaultReasonKinds(evaluationSeam.seamKind)
+      : evaluationSeam.reasonKinds;
+    const seamLocal = `${local}:${index}`;
+    const emission = sourceFileAddressHandle == null
+      ? recordsForDiOpenSeam(
+          store,
+          seamLocal,
+          evaluationSeam.seamKind,
+          evaluationSeam.summary,
+          fallbackAddressHandle,
+          reasonKinds,
+        )
+      : (() => {
+          const sourceEmission = recordsForSourceOpenSeam(store, {
+            localKey: seamLocal,
+            openKind: evaluationSeam.seamKind,
+            summary: evaluationSeam.summary,
+            sourceFileAddressHandle,
+            start: evaluationSeam.node.getStart(sourceFile),
+            end: evaluationSeam.node.end,
+            evidenceRoles: [EvidenceRole.Diagnostic, EvidenceRole.Registration],
+            reasonKinds,
+            includeProvenanceRecord: true,
+          });
+          const seam = sourceEmission.records.find((record): record is OpenSeam =>
+            record instanceof OpenSeam && record.handle === sourceEmission.handle
+          );
+          if (seam == null) {
+            throw new Error('DI evaluator-pressure publication did not emit its promised open seam.');
+          }
+          return { records: sourceEmission.records, seam };
+        })();
+    records.push(...emission.records);
+    seams.push(emission.seam);
+  });
+  return { records, seams };
+}
+
 export class DiRegistryPublicationMaterializer {
   constructor(private readonly store: KernelStore) {}
 
-  recordsForParameterizedRegistry(
-    container: Container,
-    admission: ParameterizedRegistryAdmission,
+  /** Publish one reusable ParameterizedRegistry independently from any container application. */
+  recordsForCanonicalParameterizedRegistry(
+    key: RegistrationKeyReference,
+    params: readonly RegistrationValueReference[],
+    sourceAddressHandle: AddressHandle | null,
+    fieldProvenance: readonly FieldProvenance<RegistryField>[],
+    ownerIdentityHandle: IdentityHandle | null,
     local: string,
     provenanceHandle: ProvenanceHandle,
-  ): DiParameterizedRegistryPublicationEmission {
-    const records: KernelStoreRecord[] = [];
-    const openSeams: OpenSeam[] = [];
-    if (admission.registryLookupKey == null) {
-      const seam = recordsForDiOpenSeam(this.store,
-        `${local}:parameterized-registry-open-key`,
-        KernelVocabulary.Di.OpenRegistrationSpending.key,
-        'ParameterizedRegistry admission did not expose a closed registry lookup key.',
-        admission.sourceAddressHandle,
-        [OpenSeamReasonKind.DiRegistrationKeyOpen],
-      );
-      records.push(...seam.records);
-      openSeams.push(seam.seam);
-      return new DiParameterizedRegistryPublicationEmission(records, null, openSeams);
-    }
-
-    const registry = this.parameterizedRegistryForAdmission(local, admission);
-    const registryResult = registry.register(container);
-    const seam = recordsForDiOpenSeam(this.store,
-      `${local}:parameterized-registry-open`,
-      KernelVocabulary.Di.OpenRegistryBody.key,
-      summaryForParameterizedRegistryResult(registryResult?.state ?? RegistryRegistrationState.Open),
-      admission.sourceAddressHandle,
-      [OpenSeamReasonKind.DiRegistryBodyOpen],
-    );
-    records.push(
-      ...this.recordsForParameterizedRegistryProduct(local, container, admission, registry, provenanceHandle, [seam.seam.handle]),
-      ...seam.records,
-    );
-    openSeams.push(seam.seam);
-    return new DiParameterizedRegistryPublicationEmission(records, registry, openSeams);
-  }
-
-  recordsForRegistry(
-    container: Container,
-    admission: RegistryRegistrationAdmission,
-    local: string,
-    provenanceHandle: ProvenanceHandle,
-    registryBodyInterpreted: boolean,
-  ): DiRegistryPublicationEmission {
-    const registry = this.registryForAdmission(local, admission);
-    const openSummary = registryBodyInterpreted ? null : summaryForRegistryAdmissionOpen(admission);
-    const seam = openSummary == null
-      ? null
-      : recordsForDiOpenSeam(this.store,
-        `${local}:registry-open`,
-        KernelVocabulary.Di.OpenRegistryBody.key,
-        openSummary,
-        admission.sourceAddressHandle,
-        [OpenSeamReasonKind.DiRegistryBodyOpen],
-      );
-    const records: KernelStoreRecord[] = [
-      ...this.recordsForRegistryProduct(
-        local,
-        container,
-        admission,
-        registry,
-        provenanceHandle,
-        seam == null ? [] : [seam.seam.handle],
-      ),
-      ...(seam?.records ?? []),
-    ];
-    return new DiRegistryPublicationEmission(records, registry, seam == null ? [] : [seam.seam]);
-  }
-
-  private parameterizedRegistryForAdmission(
-    local: string,
-    admission: ParameterizedRegistryAdmission,
-  ): ParameterizedRegistry {
-    return new ParameterizedRegistry(
+  ): {
+    readonly records: readonly KernelStoreRecord[];
+    readonly registry: ParameterizedRegistry;
+  } {
+    const registry = new ParameterizedRegistry(
       this.store.handles.product(`${local}:parameterized-registry`),
       this.store.handles.identity(`${local}:parameterized-registry`),
-      admission.registryLookupKey!,
-      admission.registryParameters,
-      admission.sourceAddressHandle,
-      [],
+      key,
+      params,
+      sourceAddressHandle,
+      fieldProvenance,
     );
+    return {
+      records: this.recordsForParameterizedRegistryProduct(
+        local,
+        null,
+        ownerIdentityHandle,
+        sourceAddressHandle,
+        registry,
+        provenanceHandle,
+        [],
+      ),
+      registry,
+    };
+  }
+
+  /** Publish one reusable IRegistry-shaped runtime value independently from any container application. */
+  recordsForCanonicalRegistry(
+    registryValue: RegistrationValueReference | null,
+    sourceAddressHandle: AddressHandle | null,
+    fieldProvenance: readonly FieldProvenance<RegistryField>[],
+    ownerIdentityHandle: IdentityHandle | null,
+    local: string,
+    provenanceHandle: ProvenanceHandle,
+  ): {
+    readonly records: readonly KernelStoreRecord[];
+    readonly registry: RegistryValue;
+  } {
+    const registry = new RegistryValue(
+      this.store.handles.product(`${local}:registry`),
+      this.store.handles.identity(`${local}:registry`),
+      registryValue,
+      sourceAddressHandle,
+      fieldProvenance,
+    );
+    return {
+      records: this.recordsForRegistryProduct(
+        local,
+        null,
+        ownerIdentityHandle,
+        sourceAddressHandle,
+        registry,
+        provenanceHandle,
+        [],
+      ),
+      registry,
+    };
   }
 
   private recordsForParameterizedRegistryProduct(
     local: string,
-    container: Container,
-    admission: ParameterizedRegistryAdmission,
+    containerIdentityHandle: IdentityHandle | null,
+    ownerIdentityHandle: IdentityHandle | null,
+    sourceAddressHandle: AddressHandle | null,
     registry: ParameterizedRegistry,
     provenanceHandle: ProvenanceHandle,
     openSeamHandles: readonly OpenSeamHandle[],
@@ -556,15 +589,15 @@ export class DiRegistryPublicationMaterializer {
       new DiProductIdentity(
         registry.identityHandle,
         KernelVocabulary.Di.ParameterizedRegistry.key,
-        container.identityHandle,
-        admission.identityHandle,
-        admission.sourceAddressHandle,
+        containerIdentityHandle,
+        ownerIdentityHandle,
+        sourceAddressHandle,
       ),
       new MaterializedProduct(
         registry.productHandle,
         KernelVocabulary.Di.ParameterizedRegistry.key,
         registry.identityHandle,
-        admission.sourceAddressHandle,
+        sourceAddressHandle,
         provenanceHandle,
       ),
       new MaterializationRecord(
@@ -577,23 +610,11 @@ export class DiRegistryPublicationMaterializer {
     ];
   }
 
-  private registryForAdmission(
-    local: string,
-    admission: RegistryRegistrationAdmission,
-  ): RegistryValue {
-    return new RegistryValue(
-      this.store.handles.product(`${local}:registry`),
-      this.store.handles.identity(`${local}:registry`),
-      admission.registryValue,
-      admission.sourceAddressHandle,
-      [],
-    );
-  }
-
   private recordsForRegistryProduct(
     local: string,
-    container: Container,
-    admission: RegistryRegistrationAdmission,
+    containerIdentityHandle: IdentityHandle | null,
+    ownerIdentityHandle: IdentityHandle | null,
+    sourceAddressHandle: AddressHandle | null,
     registry: RegistryValue,
     provenanceHandle: ProvenanceHandle,
     openSeamHandles: readonly OpenSeamHandle[],
@@ -602,15 +623,15 @@ export class DiRegistryPublicationMaterializer {
       new DiProductIdentity(
         registry.identityHandle,
         KernelVocabulary.Di.Registry.key,
-        container.identityHandle,
-        admission.identityHandle,
-        admission.sourceAddressHandle,
+        containerIdentityHandle,
+        ownerIdentityHandle,
+        sourceAddressHandle,
       ),
       new MaterializedProduct(
         registry.productHandle,
         KernelVocabulary.Di.Registry.key,
         registry.identityHandle,
-        admission.sourceAddressHandle,
+        sourceAddressHandle,
         provenanceHandle,
       ),
       new MaterializationRecord(
@@ -715,7 +736,7 @@ export class DiFrameworkAppTaskPublicationMaterializer {
   }
 }
 
-function summaryForParameterizedRegistryResult(state: RegistryRegistrationState): string {
+export function summaryForParameterizedRegistryResult(state: RegistryRegistrationState): string {
   switch (state) {
     case RegistryRegistrationState.Delegated:
       return 'ParameterizedRegistry found a registry key, but delegated registry body interpretation is still open.';
@@ -726,33 +747,59 @@ function summaryForParameterizedRegistryResult(state: RegistryRegistrationState)
   }
 }
 
-function summaryForRegistryAdmissionOpen(admission: RegistryRegistrationAdmission): string | null {
-  switch (admission.registryValue?.registryBody?.bodyKind) {
+export function summaryForRegistryValueOpen(
+  registryValue: RegistrationValueReference | null,
+): string | null {
+  switch (registryValue?.registryBody?.bodyKind) {
     case RegistryBodyKind.AliasedResourcesRegistry:
       return 'aliasedResourcesRegistry(...) module input or alias arguments are not statically closed enough for registry body interpretation.';
     case undefined:
       break;
   }
-  const frameworkKind = admission.registryValue?.frameworkKind;
+  const frameworkKind = registryValue?.frameworkKind;
   if (frameworkKind != null) {
     return frameworkDiRegistrationEffectsForKind(frameworkKind).openSummary;
   }
   return 'IRegistry registration body has not been interpreted by DI world construction yet.';
 }
 
-interface DiResolverPublication {
+export interface DiResolverPublication {
   readonly ownerIdentityHandle: IdentityHandle;
   readonly key: RegistrationKeyReference;
   readonly keyIdentityHandle: IdentityHandle;
   readonly strategy: ResolverStrategy;
   readonly state: RegistrationValueReference | null;
   readonly sourceAddressHandle: AddressHandle | null;
+  readonly fieldProvenance: readonly FieldProvenance<ResolverField>[];
 }
 
-interface DiResolverPublicationEmission {
+export interface DiResolverPublicationEmission {
   readonly records: readonly KernelStoreRecord[];
   readonly resolver: Resolver;
   readonly resolverSlot: ContainerResolverSlot;
+}
+
+/** Preserve key/state witness precision while projecting registration facts into a runtime Resolver. */
+export function resolverFieldProvenanceForRegistration(
+  provenance: readonly FieldProvenance<RegistrationAdmissionField>[],
+): readonly FieldProvenance<ResolverField>[] {
+  return compactFieldProvenance<ResolverField>(provenance.map((entry) => {
+    switch (entry.field) {
+      case 'targetKey':
+        return new FieldProvenance('_key', entry.provenanceHandle);
+      case 'registeredValue':
+        return new FieldProvenance('_state', entry.provenanceHandle);
+      case 'strategy':
+        return new FieldProvenance('_strategy', entry.provenanceHandle);
+      case 'source':
+        return new FieldProvenance('source', entry.provenanceHandle);
+      case 'admissionKind':
+      case 'keyRole':
+      case 'registryParameters':
+      case 'resourceLookupNameOverride':
+        return null;
+    }
+  }));
 }
 
 interface DiFactoryPublicationEmission {
@@ -846,26 +893,6 @@ export class DiResolverPublicationMaterializer {
     private readonly keyIdentityEmitter: DiKeyIdentityEmitter,
   ) {}
 
-  resolverPublicationForAdmission(
-    admission: ResolverRegistrationAdmission,
-  ): DiResolverPublication | null {
-    if (admission.targetKey?.identityHandle == null) {
-      return null;
-    }
-    const strategy = resolverStrategyForRegistrationStrategy(admission.strategy);
-    if (strategy == null) {
-      return null;
-    }
-    return {
-      ownerIdentityHandle: admission.identityHandle,
-      key: admission.targetKey,
-      keyIdentityHandle: admission.targetKey.identityHandle,
-      strategy,
-      state: admission.registeredValue,
-      sourceAddressHandle: admission.sourceAddressHandle,
-    };
-  }
-
   recordsForResolverPublication(
     container: Container,
     publication: DiResolverPublication,
@@ -890,9 +917,60 @@ export class DiResolverPublicationMaterializer {
     };
   }
 
+  /** Publish one reusable runtime Resolver independently from any container application. */
+  recordsForCanonicalResolver(
+    publication: DiResolverPublication,
+    local: string,
+    provenanceHandle: ProvenanceHandle,
+  ): {
+    readonly records: readonly KernelStoreRecord[];
+    readonly resolver: Resolver;
+  } {
+    const handles = this.resolverPublicationHandles(local);
+    const resolver = this.resolverForPublication(publication, handles);
+    return {
+      records: this.recordsForPublishedResolver(
+        null,
+        publication,
+        resolver,
+        handles,
+        local,
+        provenanceHandle,
+      ),
+      resolver,
+    };
+  }
+
+  /** Publish the container-owned slot created when an existing Resolver is registered. */
+  recordsForCanonicalResolverSlot(
+    container: Container,
+    publication: DiResolverPublication,
+    resolver: Resolver,
+    local: string,
+    provenanceHandle: ProvenanceHandle,
+  ): {
+    readonly records: readonly KernelStoreRecord[];
+    readonly resolverSlot: ContainerResolverSlot;
+  } {
+    const handles = this.resolverPublicationHandles(local);
+    const resolverSlot = this.resolverSlotForPublication(container, publication, resolver, handles);
+    return {
+      records: this.recordsForPublishedResolverSlot(
+        container,
+        publication,
+        resolverSlot,
+        handles,
+        local,
+        provenanceHandle,
+      ),
+      resolverSlot,
+    };
+  }
+
   recordsForFrameworkResolverEffect(
     container: Container,
     admission: RegistrationAdmissionProduct,
+    frameworkKind: FrameworkRegistrationKind,
     effect: FrameworkResolverEffect,
     typeSystem: TypeSystemProject,
     local: string,
@@ -916,6 +994,7 @@ export class DiResolverPublicationMaterializer {
 
     const publication = this.frameworkResolverPublication(
       admission,
+      frameworkKind,
       effect,
       keyIdentity,
     );
@@ -995,7 +1074,7 @@ export class DiResolverPublicationMaterializer {
       publication.strategy,
       publication.state,
       publication.sourceAddressHandle,
-      [],
+      publication.fieldProvenance,
     );
   }
 
@@ -1034,7 +1113,7 @@ export class DiResolverPublicationMaterializer {
   }
 
   private recordsForPublishedResolver(
-    container: Container,
+    container: Container | null,
     publication: DiResolverPublication,
     resolver: Resolver,
     handles: DiResolverPublicationHandles,
@@ -1045,7 +1124,7 @@ export class DiResolverPublicationMaterializer {
       productKindKey: KernelVocabulary.Di.Resolver.key,
       productHandle: resolver.productHandle,
       identityHandle: resolver.identityHandle,
-      parentIdentityHandle: container.identityHandle,
+      parentIdentityHandle: container?.identityHandle ?? null,
       ownerIdentityHandle: publication.ownerIdentityHandle,
       sourceAddressHandle: publication.sourceAddressHandle,
       providesKeyClaimHandle: handles.resolverProvidesKeyClaimHandle,
@@ -1081,6 +1160,7 @@ export class DiResolverPublicationMaterializer {
 
   private frameworkResolverPublication(
     admission: RegistrationAdmissionProduct,
+    frameworkKind: FrameworkRegistrationKind,
     effect: FrameworkResolverEffect,
     keyIdentity: DiKeyIdentityEmission,
   ): DiResolverPublication {
@@ -1102,9 +1182,10 @@ export class DiResolverPublicationMaterializer {
           null,
           admission.sourceAddressHandle,
           effect.valueName,
-          frameworkRegistrationKindForAdmission(admission),
+          frameworkKind,
         ),
       sourceAddressHandle: admission.sourceAddressHandle,
+      fieldProvenance: [],
     };
   }
 }

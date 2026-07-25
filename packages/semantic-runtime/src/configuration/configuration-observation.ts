@@ -215,7 +215,26 @@ export class ConfigurationStepObservation {
     readonly containerEvaluation: AureliaContainerEvaluation | null = null,
     /** Project-evaluation identity for the Aurelia facade receiver. */
     readonly aureliaEvaluation: AureliaFacadeEvaluation | null = null,
+    /** Project-wide modeled execution order; null for source inventories that have not run. */
+    readonly executionOrdinal: number | null = null,
   ) {}
+
+  withExecutionOrdinal(executionOrdinal: number): ConfigurationStepObservation {
+    return new ConfigurationStepObservation(
+      this.carrierKind,
+      this.stepKind,
+      this.sourceNode,
+      this.receiverLocalName,
+      this.appRootConfig,
+      this.appTasks,
+      this.optionContributions,
+      this.registrationAdmissions,
+      this.openSeams,
+      this.containerEvaluation,
+      this.aureliaEvaluation,
+      executionOrdinal,
+    );
+  }
 }
 
 /** Ordered configuration flow observed in one evaluated source module. */

@@ -27,7 +27,10 @@ import {
   MaterializationRecord,
   MaterializedProduct,
 } from '../kernel/materialization.js';
-import { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import {
+  OpenSeam,
+  OpenSeamReasonKind,
+} from '../kernel/open-seam.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
@@ -61,7 +64,9 @@ import {
   ResolverRegistrationAdmission,
 } from './registration-admission.js';
 import {
+  EvaluatedRegistrationCarrier,
   RegistrationAdmissionObservation,
+  RegistrationCarrierKind,
   RegistrationKeyObservation,
   RegistrationKeyObservationKind,
   RegistrationRecognitionOpen,
@@ -90,6 +95,8 @@ export const enum RegistrationEmissionScope {
   SourceModule = 'source-module',
   /** Registration admission owned by a configuration step in an app-world sequence. */
   ConfigurationStep = 'configuration-step',
+  /** Conditional registration admission owned by a reached DI registration operation. */
+  DiRegistrationOperation = 'di-registration-operation',
 }
 
 /** Inputs shared by registration emission for one evaluated source module. */
@@ -101,6 +108,8 @@ export class RegistrationEmissionContext {
     readonly moduleKey: string,
     /** Source-file address admitted by boot or host setup. */
     readonly sourceFileAddressHandle: AddressHandle,
+    /** Exact source-file address for every admitted node used by this emission. */
+    private readonly sourceFileAddressHandleForNode_: (node: ts.Node) => AddressHandle | null,
     /** Project identity used to scope primitive DI keys in a shared kernel store. */
     readonly projectKey: string | null,
     /** Shared TypeChecker epoch used to canonicalize imported and reexported key declarations. */
@@ -120,6 +129,17 @@ export class RegistrationEmissionContext {
   get batchLabel(): string {
     return `registration-admission:${this.recordKeyPrefix}`;
   }
+
+  sourceFileAddressHandleForNode(node: ts.Node): AddressHandle {
+    const handle = this.sourceFileAddressHandleForNode_(node);
+    if (handle != null) {
+      return handle;
+    }
+    if (node.getSourceFile() === this.sourceFile) {
+      return this.sourceFileAddressHandle;
+    }
+    throw new Error('Registration emission cannot attach a foreign node to the caller source-file address.');
+  }
 }
 
 /** Result of emitting registration observations into the kernel. */
@@ -129,8 +149,31 @@ export class RegistrationKernelEmission {
     readonly admissions: readonly RegistrationAdmissionProduct[],
     /** Kernel records committed for these admissions. */
     readonly records: readonly KernelStoreRecord[],
-    /** Candidate-local evaluator values indexed by their emitted admission products. */
-    readonly evaluatedValuesByAdmissionProduct: ReadonlyMap<ProductHandle, EvaluationValue>,
+    /** Candidate-local evaluator values and their exact source occurrences, indexed by emitted admission product. */
+    readonly evaluatedCarriersByAdmissionProduct: ReadonlyMap<ProductHandle, EvaluatedRegistrationCarrier>,
+    /** Exact source carrier nodes retained for candidate-local occurrence joins. */
+    readonly sourceNodesByAdmissionProduct: ReadonlyMap<ProductHandle, ts.Node>,
+    /** Exact source nodes for the runtime values offered by each admission. */
+    readonly runtimeValueSourceNodesByAdmissionProduct: ReadonlyMap<ProductHandle, ts.Node>,
+    /** Admission-local recognition pressure retained without reconstructing materialization envelopes. */
+    readonly openSeamsByAdmissionProduct: ReadonlyMap<ProductHandle, readonly OpenSeam[]>,
+  ) {}
+}
+
+/**
+ * Kernel support for one reached runtime registration value without publishing another source-admission product.
+ * DI uses this when candidate-local evaluator evidence closes a generic source admission.
+ */
+export class RegistrationValueSupportEmission {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly sourceAddressHandle: AddressHandle,
+    readonly sourceProvenanceHandle: ProvenanceHandle,
+    readonly key: RegistrationKeyReference,
+    readonly value: RegistrationValueReference | null,
+    readonly registryParameters: readonly RegistrationValueReference[],
+    readonly fieldProvenance: readonly FieldProvenance<RegistrationAdmissionField>[],
+    readonly openSeams: readonly OpenSeam[],
   ) {}
 }
 
@@ -316,7 +359,7 @@ class RegistrationAdmissionSupportMaterializer {
       [
         new SourceSpanAddress(
           addressHandle,
-          observation.sourceFileAddressHandle ?? context.sourceFileAddressHandle,
+          observation.sourceFileAddressHandle ?? context.sourceFileAddressHandleForNode(observation.node),
           observation.node.getStart(sourceFile),
           observation.node.end,
           SourceSpanRole.Value,
@@ -411,7 +454,7 @@ class RegistrationAdmissionSupportMaterializer {
     const records: KernelStoreRecord[] = [
       new SourceSpanAddress(
         handles.addressHandle,
-        observation.sourceFileAddressHandle ?? context.sourceFileAddressHandle,
+        observation.sourceFileAddressHandle ?? context.sourceFileAddressHandleForNode(observation.node),
         observation.node.getStart(sourceFile),
         observation.node.end,
         observation.isDeclaration ? SourceSpanRole.Name : SourceSpanRole.Value,
@@ -522,8 +565,8 @@ class RegistrationAdmissionSupportMaterializer {
         localKey: `registration-open:${local}:${seam.openKind}:${index}`,
         openKind: seam.openKind,
         summary: seam.summary,
-        sourceFileAddressHandle: context.sourceFileAddressHandle,
-        start: seam.node.getStart(context.sourceFile),
+        sourceFileAddressHandle: context.sourceFileAddressHandleForNode(seam.node),
+        start: seam.node.getStart(seam.node.getSourceFile()),
         end: seam.node.end,
         evidenceRoles: [EvidenceRole.Diagnostic, EvidenceRole.Registration],
         reasonKinds: seam.reasonKinds.length === 0
@@ -580,17 +623,63 @@ export class RegistrationKernelEmitter {
   ): RegistrationKernelEmission {
     const records: KernelStoreRecord[] = [];
     const admissions: RegistrationAdmissionProduct[] = [];
-    const evaluatedValuesByAdmissionProduct = new Map<ProductHandle, EvaluationValue>();
+    const evaluatedCarriersByAdmissionProduct = new Map<ProductHandle, EvaluatedRegistrationCarrier>();
+    const sourceNodesByAdmissionProduct = new Map<ProductHandle, ts.Node>();
+    const runtimeValueSourceNodesByAdmissionProduct = new Map<ProductHandle, ts.Node>();
+    const openSeamsByAdmissionProduct = new Map<ProductHandle, readonly OpenSeam[]>();
     observations.forEach((observation, index) => {
       const emission = this.recordsForObservation(context, observation, index);
       records.push(...emission.records);
       admissions.push(emission.admission);
-      const evaluatedValue = observation.registeredValue?.evaluatedValue ?? null;
+      sourceNodesByAdmissionProduct.set(emission.admission.productHandle, observation.sourceNode);
+      if (observation.registeredValue != null) {
+        runtimeValueSourceNodesByAdmissionProduct.set(
+          emission.admission.productHandle,
+          observation.registeredValue.node,
+        );
+      }
+      const evaluatedValue = observation.evaluatedCarrierValue;
       if (evaluatedValue != null) {
-        evaluatedValuesByAdmissionProduct.set(emission.admission.productHandle, evaluatedValue);
+        evaluatedCarriersByAdmissionProduct.set(
+          emission.admission.productHandle,
+          new EvaluatedRegistrationCarrier(observation.sourceNode, evaluatedValue),
+        );
+      }
+      if (emission.openSeams.length > 0) {
+        openSeamsByAdmissionProduct.set(emission.admission.productHandle, emission.openSeams);
       }
     });
-    return new RegistrationKernelEmission(admissions, records, evaluatedValuesByAdmissionProduct);
+    return new RegistrationKernelEmission(
+      admissions,
+      records,
+      evaluatedCarriersByAdmissionProduct,
+      sourceNodesByAdmissionProduct,
+      runtimeValueSourceNodesByAdmissionProduct,
+      openSeamsByAdmissionProduct,
+    );
+  }
+
+  /** Materialize source/key/value support for a reached runtime registration value without inventing an admission. */
+  materializeValueSupport(
+    context: RegistrationEmissionContext,
+    observation: RegistrationAdmissionObservation,
+    local: string,
+  ): RegistrationValueSupportEmission {
+    const source = this.recordsForObservationSource(context, observation, local);
+    const support = this.supportMaterializer.materialize(context, observation, local, source);
+    return new RegistrationValueSupportEmission(
+      [
+        ...source.records,
+        ...support.records,
+      ],
+      source.addressHandle,
+      source.provenanceHandle,
+      support.key.reference,
+      support.value.reference,
+      support.registryParameters.references,
+      registrationAdmissionFieldProvenance(support.key, support.value, support.registryParameters),
+      support.seams.records.filter((record): record is OpenSeam => record instanceof OpenSeam),
+    );
   }
 
   private recordsForObservation(
@@ -600,11 +689,12 @@ export class RegistrationKernelEmitter {
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly admission: RegistrationAdmissionProduct;
+    readonly openSeams: readonly OpenSeam[];
   } {
     const records: KernelStoreRecord[] = [];
     const local = sourceNodeOrdinalLocalKey({
       prefix: context.recordKeyPrefix,
-      sourceFile: context.sourceFile,
+      sourceFile: observation.sourceNode.getSourceFile(),
       node: observation.sourceNode,
       index,
     });
@@ -616,7 +706,11 @@ export class RegistrationKernelEmitter {
 
     const admission = this.recordsForObservationProduct(observation, local, source, support);
     records.push(...admission.records);
-    return { records, admission: admission.admission };
+    return {
+      records,
+      admission: admission.admission,
+      openSeams: support.seams.records.filter((record): record is OpenSeam => record instanceof OpenSeam),
+    };
   }
 
   private recordsForObservationProduct(
@@ -743,8 +837,8 @@ export class RegistrationKernelEmitter {
       [
         new SourceSpanAddress(
           sourceAddressHandle,
-          context.sourceFileAddressHandle,
-          observation.sourceNode.getStart(context.sourceFile),
+          context.sourceFileAddressHandleForNode(observation.sourceNode),
+          observation.sourceNode.getStart(observation.sourceNode.getSourceFile()),
           observation.sourceNode.end,
           SourceSpanRole.Range,
         ),
@@ -752,7 +846,9 @@ export class RegistrationKernelEmitter {
           sourceEvidenceHandle,
           EvidenceKind.ConfigurationFlow,
           [EvidenceRole.Registration],
-          `${observation.carrierKind} admitted a ${observation.strategy} registration.`,
+          observation.carrierKind === RegistrationCarrierKind.RegistrationFactoryCall
+            ? `Registration factory produced a ${observation.strategy} runtime registration value.`
+            : `${observation.carrierKind} admitted a ${observation.strategy} registration.`,
           sourceAddressHandle,
         ),
         new ProvenanceRecord(
@@ -781,6 +877,7 @@ export class RegistrationKernelEmitter {
         new FrameworkRegistrationAdmission(
           productHandle,
           identityHandle,
+          observation.carrierKind,
           observation.admissionKind,
           frameworkKind,
           value,
@@ -795,6 +892,7 @@ export class RegistrationKernelEmitter {
         new ParameterizedRegistryAdmission(
           productHandle,
           identityHandle,
+          observation.carrierKind,
           observation.admissionKind,
           key,
           registryParameters,
@@ -809,6 +907,7 @@ export class RegistrationKernelEmitter {
         new RegistryRegistrationAdmission(
           productHandle,
           identityHandle,
+          observation.carrierKind,
           observation.admissionKind,
           value,
           sourceAddressHandle,
@@ -822,6 +921,7 @@ export class RegistrationKernelEmitter {
         new ResourceRegistrationAdmission(
           productHandle,
           identityHandle,
+          observation.carrierKind,
           observation.admissionKind,
           value,
           sourceAddressHandle,
@@ -836,6 +936,7 @@ export class RegistrationKernelEmitter {
         new ResolverRegistrationAdmission(
           productHandle,
           identityHandle,
+          observation.carrierKind,
           observation.admissionKind,
           observation.strategy,
           observation.keyRole,
@@ -851,6 +952,7 @@ export class RegistrationKernelEmitter {
       new OpenRegistrationAdmission(
         productHandle,
         identityHandle,
+        observation.carrierKind,
         observation.admissionKind,
         observation.strategy,
         observation.keyRole,

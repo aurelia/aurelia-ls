@@ -368,6 +368,7 @@ export class StaticEvaluationSessionFork implements StaticEvaluationForkLineage 
       source.mayHaveUnknownProperties,
       source.shapeOpenSeams,
       source.propertyOrderOpenSeams,
+      source.baseClass == null ? null : this.classShell(source.baseClass),
     );
     this.bindValue(source, target);
     return target;

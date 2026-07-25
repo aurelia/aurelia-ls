@@ -321,10 +321,17 @@
         {
           "kind": "source-file-exists",
           "filePath": "packages/semantic-runtime/fixtures/pressure/contextual-call-argument-completion/src/contextual-call-argument-completion-app.html"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CheckerExpressionTypeWorld",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-type-world.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-20"
+      "updatedAt": "2026-07-26"
     },
     {
       "id": "frontier:completed-input-companion-builder",

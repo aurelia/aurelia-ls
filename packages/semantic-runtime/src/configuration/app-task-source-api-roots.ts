@@ -42,8 +42,11 @@ function appTaskCallbackRoot(
     return [];
   }
   const callback = appTask.callback.node;
-  const programCallback = typeSystem.readProgramNode(callback) ?? callback;
-  if (!ts.isArrowFunction(programCallback) && !ts.isFunctionExpression(programCallback)) {
+  const programCallback = typeSystem.readProgramNode(callback);
+  if (
+    programCallback == null
+    || (!ts.isArrowFunction(programCallback) && !ts.isFunctionExpression(programCallback))
+  ) {
     return [];
   }
   const firstParameter = programCallback.parameters[0] ?? null;

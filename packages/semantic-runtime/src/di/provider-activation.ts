@@ -3,6 +3,7 @@ import ts from 'typescript';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
 import {
   AureliaInterfaceDefaultRegistrationState,
+  aureliaClassInjectionEvaluationForValue,
   aureliaContainerEvaluationForValue,
   aureliaInterfaceEvaluationForValue,
   aureliaResolverEvaluationForValue,
@@ -35,10 +36,11 @@ import {
   type EvaluatedProjectSource,
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
+import { StaticProjectEvaluationSourceIndex } from '../evaluation/project-source-index.js';
 import {
   compactEvaluationOpenSeams,
+  EvaluationOpenSeam,
   EvaluationOpenSeamKind,
-  type EvaluationOpenSeam,
 } from '../evaluation/seams.js';
 import { DefaultStaticEvaluationPolicy } from '../evaluation/policy.js';
 import { readStaticOwnProperty } from '../evaluation/property-access.js';
@@ -47,6 +49,9 @@ import {
   EvaluationArrayElement,
   EvaluationArrayShape,
   EvaluationArrayValue,
+  EvaluationBoundaryKind,
+  EvaluationBoundaryObjectValue,
+  EvaluationObjectValue,
   type EvaluationFunctionValue,
   EvaluationObjectPropertyState,
   type EvaluationClassValue,
@@ -55,6 +60,7 @@ import {
   type EvaluationValue,
 } from '../evaluation/values.js';
 import type { AddressHandle, IdentityHandle } from '../kernel/handles.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
   SourceFileAddress,
   SourceSpanAddress,
@@ -92,6 +98,7 @@ import {
 import {
   ContainerLookupKey,
   ContainerLookupKeyKind,
+  containerLookupKeyForRegistrationKey,
   containerLookupKeyForRegistrationValue,
 } from './container-key.js';
 import {
@@ -103,8 +110,11 @@ import {
 import {
   DiKeyExpressionIdentityRequest,
   DiKeyIdentityEmitter,
-  EvaluatedDiKeyDeclarationSource,
 } from './di-key-identity-emitter.js';
+import { EvaluatedRegistrationKeyDeclarationSource } from '../registration/registration-observation.js';
+import {
+  evaluatedRegistryRegisterFunction,
+} from '../registration/evaluated-registration-value.js';
 import type { DiDependencyCycleStep } from './di-issue.js';
 import { InstanceProvider, InstanceProviderResolutionKind } from './instance-provider.js';
 import {
@@ -113,10 +123,25 @@ import {
   ResolverStrategy,
 } from './resolver.js';
 import { DiContainerKeyExpressionIdentityKind } from './source-key-expression.js';
-import type { DiWorldConstructionEmission } from './world-construction.js';
-import { executeDiRegistryFunction } from './registry-execution.js';
+import {
+  executeDiRegistryFunction,
+  type DiRegistryExecutionResult,
+} from './registry-execution.js';
+import type { ParameterizedRegistry } from './registry.js';
 import { delegateStaticEvaluationRuntimeHost } from '../evaluation/runtime-host.js';
 import { EvaluationValueEvidence } from '../evaluation/value-pressure.js';
+import {
+  designParamTypesMetadataState,
+  diClassDecoratorModeForTypeSystem,
+  readClassInjectionMetadata,
+  type DiClassInjectionEvaluation,
+  type DiClassInjectionMetadata,
+} from './injection-metadata.js';
+import {
+  DiClassDependencyPlanner,
+  DiClassDependencyPositionState,
+  DiClassDependencySlotState,
+} from './class-dependency-plan.js';
 
 export const enum DiProviderActivationState {
   /** A source-visible value was produced. */
@@ -250,6 +275,29 @@ const enum DiRegistryResolverReturnState {
   Open,
 }
 
+/** Container products required by provider activation, independently of a completed world emission. */
+export interface DiProviderActivationTopology {
+  readonly containers: readonly Container[];
+  readonly resolverSlots: readonly ContainerResolverSlot[];
+  readonly selfResolverSlots: readonly ContainerSelfResolverSlot[];
+  readonly factorySlots: readonly ContainerFactorySlot[];
+}
+
+/** Exact evaluator values retained outside durable resolver records for candidate-local activation. */
+export interface DiProviderActivationValueSource {
+  evaluatedResolverState(resolver: Resolver): EvaluationValue | null;
+  parameterizedRegistrySource(registry: ParameterizedRegistry): ts.Node | null;
+}
+
+export const noDiProviderActivationValues: DiProviderActivationValueSource = {
+  evaluatedResolverState(): EvaluationValue | null {
+    return null;
+  },
+  parameterizedRegistrySource(): ts.Node | null {
+    return null;
+  },
+};
+
 /**
  * DI-owned bridge between authored key expressions, runtime-shaped container state, and evaluator class activation.
  *
@@ -257,14 +305,9 @@ const enum DiRegistryResolverReturnState {
  * resolvers, canonical key identities, and evaluator class values remain the authorities.
  */
 export class DiProviderActivationView {
-  private readonly sourcesByModuleKey = new Map<string, EvaluatedProjectSource>();
-  private readonly sourcesByFileName = new Map<string, EvaluatedProjectSource>();
-  private readonly sourcesByAuthoredPath = new Map<string, EvaluatedProjectSource>();
-  private readonly sourcePathsByFileName = new Map<string, string>();
-  private readonly sourceAddressHandlesByFileName = new Map<string, AddressHandle>();
+  private readonly sourceIndex: StaticProjectEvaluationSourceIndex;
   private readonly containersByProductHandle = new Map<string, Container>();
   private readonly invocationsByExpression = new Map<ts.CallExpression, StaticInvocationOccurrence<ts.CallExpression>[]>();
-  private readonly executionOrdinalsByInvocation = new Map<StaticInvocationOccurrence<ts.CallExpression>, number>();
   private readonly executionEventsBySourceKey = new Map<string, DiProviderActivationExecutionEvent[]>();
   private readonly resolverSlotExecutionOrdinals = new WeakMap<ContainerResolverLikeSlot, number | null>();
   private readonly factorySlotExecutionOrdinals = new WeakMap<ContainerFactorySlot, number | null>();
@@ -276,24 +319,18 @@ export class DiProviderActivationView {
     private readonly evaluation: StaticProjectEvaluationResult,
     private readonly typeSystem: TypeSystemProject,
     private readonly configuration: ConfigurationKernelEmission,
-    world: DiWorldConstructionEmission,
+    topology: DiProviderActivationTopology,
+    private readonly exactValues: DiProviderActivationValueSource,
   ) {
+    this.sourceIndex = new StaticProjectEvaluationSourceIndex(evaluation);
     this.keyIdentities = new DiKeyIdentityEmitter(publication);
-    for (const container of world.containers) {
+    for (const container of topology.containers) {
       this.containersByProductHandle.set(container.productHandle, container);
     }
     for (const source of evaluation.sources) {
       if (!isEvaluatedProjectSource(source)) {
         continue;
       }
-      this.sourcesByModuleKey.set(normalizeModuleKey(source.moduleKey), source);
-      this.sourcesByFileName.set(normalizeModuleKey(source.sourceFile.fileName), source);
-      this.sourcesByAuthoredPath.set(normalizeModuleKey(source.admission.path), source);
-      this.sourcePathsByFileName.set(normalizeModuleKey(source.sourceFile.fileName), source.admission.path);
-      this.sourceAddressHandlesByFileName.set(
-        normalizeModuleKey(source.sourceFile.fileName),
-        source.admission.addressHandle,
-      );
       for (const invocation of source.evaluation.invocations) {
         if (!isStaticCallInvocationOccurrence(invocation)) {
           continue;
@@ -307,13 +344,13 @@ export class DiProviderActivationView {
       }
     }
     this.indexExecutionOrder();
-    for (const slot of [...world.resolverSlots, ...world.selfResolverSlots]) {
+    for (const slot of [...topology.resolverSlots, ...topology.selfResolverSlots]) {
       this.resolverSlotExecutionOrdinals.set(
         slot,
         this.executionOrdinalForSourceAddress(slot.sourceAddressHandle),
       );
     }
-    for (const slot of world.factorySlots) {
+    for (const slot of topology.factorySlots) {
       this.factorySlotExecutionOrdinals.set(
         slot,
         this.executionOrdinalForSourceAddress(slot.sourceAddressHandle),
@@ -326,7 +363,7 @@ export class DiProviderActivationView {
   }
 
   executionOrdinalForInvocation(invocation: StaticInvocationOccurrence<ts.CallExpression>): number | null {
-    return this.executionOrdinalsByInvocation.get(invocation) ?? null;
+    return this.sourceIndex.executionOrdinalForInvocation(invocation);
   }
 
   executionOrdinalForResolverSlot(slot: ContainerResolverLikeSlot): number | null | undefined {
@@ -445,9 +482,7 @@ export class DiProviderActivationView {
     evaluatedValue: EvaluationValue | null,
   ): DiProviderActivationKey {
     const source = this.sourceForNode(expression);
-    const sourceAddressHandle = this.sourceAddressHandlesByFileName.get(
-      normalizeModuleKey(expression.getSourceFile().fileName),
-    ) ?? null;
+    const sourceAddressHandle = this.sourceIndex.addressHandleForNode(expression);
     const local = [
       'di-provider-activation-key',
       sourceAddressHandle ?? normalizeModuleKey(expression.getSourceFile().fileName),
@@ -459,12 +494,10 @@ export class DiProviderActivationView {
       : this.publication.handles.address(`${local}:occurrence`);
     const evaluatedDeclaration = evaluatedValue?.kind === EvaluationValueKind.Class
       || evaluatedValue?.kind === EvaluationValueKind.Function
-      ? new EvaluatedDiKeyDeclarationSource(
+      ? new EvaluatedRegistrationKeyDeclarationSource(
           evaluatedValue.declaration,
           evaluatedValue.environment.moduleKey,
-          this.sourceAddressHandlesByFileName.get(
-            normalizeModuleKey(evaluatedValue.declaration.getSourceFile().fileName),
-          ) ?? null,
+          this.sourceIndex.addressHandleForNode(evaluatedValue.declaration),
         )
       : null;
     const records: KernelStoreRecord[] = occurrenceAddressHandle == null
@@ -516,9 +549,7 @@ export class DiProviderActivationView {
     if (!(identity instanceof TypeScriptDeclarationIdentity) || identity.moduleKey == null || identity.localName == null) {
       return null;
     }
-    const source = this.sourcesByModuleKey.get(normalizeModuleKey(identity.moduleKey))
-      ?? this.sourcesByFileName.get(normalizeModuleKey(identity.moduleKey))
-      ?? null;
+    const source = this.sourceIndex.readEvaluated(identity.moduleKey);
     const value = source?.evaluation.environment.readValue(identity.localName) ?? null;
     return value?.kind === EvaluationValueKind.Class ? value : null;
   }
@@ -532,31 +563,44 @@ export class DiProviderActivationView {
     if (!(declaration instanceof TypeScriptDeclarationIdentity) || declaration.moduleKey == null || declaration.localName == null) {
       return null;
     }
-    const source = this.sourcesByModuleKey.get(normalizeModuleKey(declaration.moduleKey))
-      ?? this.sourcesByFileName.get(normalizeModuleKey(declaration.moduleKey))
-      ?? null;
+    const source = this.sourceIndex.readEvaluated(declaration.moduleKey);
     const value = source?.evaluation.environment.readValue(declaration.localName) ?? null;
     return value?.kind === EvaluationValueKind.Class ? value : null;
   }
 
   sourceForClass(value: EvaluationClassValue): EvaluatedProjectSource | null {
-    return this.sourcesByModuleKey.get(normalizeModuleKey(value.environment.moduleKey))
-      ?? this.sourcesByFileName.get(normalizeModuleKey(value.declaration.getSourceFile().fileName))
-      ?? null;
+    return this.sourceIndex.readEvaluated(value.environment.moduleKey)
+      ?? this.sourceIndex.readEvaluatedForNode(value.declaration);
+  }
+
+  classInjectionMetadata(value: EvaluationClassValue): DiClassInjectionMetadata {
+    return readClassInjectionMetadata(value.declaration, this.typeSystem);
+  }
+
+  classInjectionEvaluation(value: EvaluationClassValue): DiClassInjectionEvaluation | null {
+    return aureliaClassInjectionEvaluationForValue(value);
+  }
+
+  classDecoratorMode(): import('./injection-metadata.js').DiClassDecoratorMode {
+    return diClassDecoratorModeForTypeSystem(this.typeSystem);
+  }
+
+  classDesignParamTypesMetadataState(
+    value: EvaluationClassValue,
+  ): import('./injection-metadata.js').DiDesignParamTypesMetadataState {
+    return designParamTypesMetadataState(value.declaration, this.typeSystem);
   }
 
   sourceForClassEnvironment(moduleKey: string): EvaluatedProjectSource | null {
-    return this.sourcesByModuleKey.get(normalizeModuleKey(moduleKey))
-      ?? this.sourcesByFileName.get(normalizeModuleKey(moduleKey))
-      ?? null;
+    return this.sourceIndex.readEvaluated(moduleKey);
   }
 
   sourcePathForNode(node: ts.Node): string | null {
-    return this.sourcePathsByFileName.get(normalizeModuleKey(node.getSourceFile().fileName)) ?? null;
+    return this.sourceIndex.readForNode(node)?.admission.path ?? null;
   }
 
   sourceForNode(node: ts.Node): EvaluatedProjectSource | null {
-    return this.sourcesByFileName.get(normalizeModuleKey(node.getSourceFile().fileName)) ?? null;
+    return this.sourceIndex.readEvaluatedForNode(node);
   }
 
   containerForProductHandle(productHandle: string | null): Container | null {
@@ -567,17 +611,23 @@ export class DiProviderActivationView {
     return this.evaluationValuesByContainer.get(container) ?? null;
   }
 
+  evaluatedResolverState(resolver: Resolver): EvaluationValue | null {
+    return this.exactValues.evaluatedResolverState(resolver);
+  }
+
+  parameterizedRegistrySource(registry: ParameterizedRegistry): ts.Node | null {
+    return this.exactValues.parameterizedRegistrySource(registry);
+  }
+
   valueExpressionForReference(reference: RegistrationValueReference | null): ts.Expression | null {
-    if (reference?.addressHandle == null) {
-      return null;
-    }
+    return reference?.addressHandle == null ? null : this.sourceExpressionForAddress(reference.addressHandle);
+  }
+
+  sourceExpressionForAddress(addressHandle: AddressHandle): ts.Expression | null {
     return sourceExpressionForSourceAddress(
       this.publication,
-      reference.addressHandle,
-      (path) => this.sourcesByAuthoredPath.get(normalizeModuleKey(path))?.sourceFile
-        ?? this.sourcesByModuleKey.get(normalizeModuleKey(path))?.sourceFile
-        ?? this.sourcesByFileName.get(normalizeModuleKey(path))?.sourceFile
-        ?? null,
+      addressHandle,
+      (path) => this.sourceIndex.readEvaluated(path)?.sourceFile ?? null,
     );
   }
 
@@ -597,9 +647,8 @@ export class DiProviderActivationView {
 
   private indexExecutionOrder(): void {
     const indexedSources = new Set<EvaluatedProjectSource>();
-    let ordinal = 0;
     for (const moduleKey of this.evaluation.evaluationOrderModuleKeys) {
-      const source = this.sourcesByModuleKey.get(normalizeModuleKey(moduleKey)) ?? null;
+      const source = this.sourceIndex.readEvaluated(moduleKey);
       if (source == null || indexedSources.has(source)) {
         continue;
       }
@@ -608,14 +657,17 @@ export class DiProviderActivationView {
         if (!isStaticCallInvocationOccurrence(invocation)) {
           continue;
         }
+        const ordinal = this.sourceIndex.executionOrdinalForInvocation(invocation);
+        if (ordinal == null) {
+          continue;
+        }
         const event: DiProviderActivationExecutionEvent = {
           invocation,
           sourceFile: source.sourceFile,
           start: invocation.node.getStart(source.sourceFile),
           end: invocation.node.end,
-          ordinal: ordinal++,
+          ordinal,
         };
-        this.executionOrdinalsByInvocation.set(invocation, event.ordinal);
         this.appendExecutionEvent(source.admission.path, event);
         this.appendExecutionEvent(source.moduleKey, event);
         this.appendExecutionEvent(source.sourceFile.fileName, event);
@@ -667,6 +719,7 @@ export class DiProviderActivationSession {
   private readonly singletonValues = new Map<object, DiProviderActivationResult>();
   private readonly activeSingletons = new Set<object>();
   private readonly activeAliases = new Set<Resolver>();
+  private readonly classDependencies: DiClassDependencyPlanner<Container>;
   private activeRequestor: Container | null = null;
   private activeExecutionOrdinal: number | null = null;
   private activationDepth = 0;
@@ -674,7 +727,25 @@ export class DiProviderActivationSession {
 
   constructor(
     private readonly view: DiProviderActivationView,
-  ) {}
+  ) {
+    this.classDependencies = new DiClassDependencyPlanner({
+      sourceForClass: (value) => this.view.sourceForClass(value),
+      readInjectionMetadata: (value) => this.view.classInjectionMetadata(value),
+      readInjectionEvaluation: (value) => this.view.classInjectionEvaluation(value),
+      readDecoratorMode: () => this.view.classDecoratorMode(),
+      readDesignParamTypesMetadataState: (value) =>
+        this.view.classDesignParamTypesMetadataState(value),
+      evaluateStaticInject: (receiver, source, node, requestor) =>
+        this.withActiveRequestor(requestor, () =>
+          this.evaluatorForSource(source).evaluatePropertyValue(
+            receiver,
+            'inject',
+            source.moduleKey,
+            node,
+          )
+        ),
+    });
+  }
 
   runtimeHostFor(
     baseHost: StaticEvaluationRuntimeHost,
@@ -715,6 +786,68 @@ export class DiProviderActivationSession {
       : this.withExecutionOrdinal(ordinal, () => this.withActivation(() =>
           this.activatePreparedExpression(requestor, expression, evidence, entryNode, null, 0)
         ));
+  }
+
+  /** Resolve one exact parameterized registry's delegated handler against the current live container topology. */
+  activateParameterizedRegistryHandler(
+    requestor: Container,
+    registry: ParameterizedRegistry,
+  ): DiProviderActivationResult {
+    const lookupKey = containerLookupKeyForRegistrationKey(registry.key);
+    if (lookupKey == null) {
+      return activationOpen('Parameterized registry lookup key did not retain a closed runtime key shape.');
+    }
+    const entryNode = this.view.parameterizedRegistrySource(registry);
+    if (entryNode == null) {
+      return activationOpen('Parameterized registry did not retain its exact evaluator source.');
+    }
+    return this.withActivation(() => {
+      const answer = this.lookup(requestor, lookupKey);
+      return answer.closure === DiProviderActivationLookupClosure.Open
+        ? activationLookupOrderOpen()
+        : answer.lookup == null
+          ? activationOpen('Parameterized registry selected delegated registration, but the live container lookup had no matching handler.')
+          : this.activateLookup(
+              requestor,
+              answer.lookup,
+              { key: lookupKey, classValue: null, sourceValue: null },
+              entryNode,
+              null,
+              0,
+            );
+    });
+  }
+
+  /** Execute one exact registry against the same mutable evaluator graph used for provider activation. */
+  executeRegistrationRegistry(
+    requestor: Container,
+    registryValue: EvaluationValue,
+    parameterValues: readonly EvaluationValue[],
+  ): DiRegistryExecutionResult | null {
+    const registerFunction = evaluatedRegistryRegisterFunction(registryValue);
+    const source = registerFunction == null ? null : this.view.sourceForNode(registerFunction.declaration);
+    if (registerFunction == null || source == null) {
+      return null;
+    }
+    const invocationNode = registerFunction.declaration;
+    const containerValue = new EvaluationObjectValue(new Map(), false, invocationNode);
+    return this.withActiveRequestor(requestor, () => executeDiRegistryFunction(
+      registerFunction,
+      registryValue,
+      containerValue,
+      parameterValues,
+      invocationNode,
+      source.evaluation.policy,
+      this.internalRuntimeHost(source.evaluation.runtimeHost),
+      (frame, host) => frame.propertyKey === 'register'
+        ? containerValue
+        : host.unknown(
+            `Registry execution reached unsupported container.${frame.propertyKey ?? '<computed>'}(...).`,
+            frame.node,
+            frame.moduleKey,
+            EvaluationOpenSeamKind.DynamicCall,
+          ),
+    ));
   }
 
   resolutionFailureForContainerApiInvocation(
@@ -1120,11 +1253,16 @@ export class DiProviderActivationSession {
     const resolution = resolver.resolve(handler, requestor);
     switch (resolution.resolutionKind) {
       case ResolverResolutionKind.Instance:
-        return this.directValueForReference(requestor, resolution.value, dependencyNode, host, depth);
+        {
+          const exactState = this.view.evaluatedResolverState(resolver);
+          return exactState == null
+            ? this.directValueForReference(requestor, resolution.value, dependencyNode, host, depth)
+            : activationValue(exactState);
+        }
       case ResolverResolutionKind.SingletonFactory:
         return this.activateSingletonReference(requestor, resolver, resolution.value, key.key, dependencyNode);
       case ResolverResolutionKind.TransientFactory:
-        return this.activateConstructableReference(requestor, resolution.value, key.key, dependencyNode, null);
+        return this.activateConstructableReference(requestor, resolver, resolution.value, key.key, dependencyNode, null);
       case ResolverResolutionKind.Alias: {
         const aliasKey = containerLookupKeyForRegistrationValue(resolution.value);
         if (aliasKey == null) {
@@ -1319,6 +1457,7 @@ export class DiProviderActivationSession {
       registerFunction,
       key.sourceValue,
       containerValue,
+      [],
       dependencyNode,
       source?.evaluation.policy ?? DefaultStaticEvaluationPolicy,
       this.internalRuntimeHost(source?.evaluation.runtimeHost ?? {}),
@@ -1419,7 +1558,10 @@ export class DiProviderActivationSession {
     key: ContainerLookupKey,
     dependencyNode: ts.Node,
   ): DiProviderActivationResult {
-    const value = this.view.classValueForReference(reference);
+    const exact = this.view.evaluatedResolverState(resolver);
+    const value = exact?.kind === EvaluationValueKind.Class
+      ? exact
+      : this.view.classValueForReference(reference);
     return value == null
       ? activationOpen('Aurelia singleton resolver value did not map to an evaluator class declaration.')
       : this.activateSingleton(requestor, resolver, value, key, dependencyNode);
@@ -1427,6 +1569,7 @@ export class DiProviderActivationSession {
 
   private activateConstructableReference(
     requestor: Container,
+    resolver: Resolver,
     reference: RegistrationValueReference | null,
     key: ContainerLookupKey,
     dependencyNode: ts.Node,
@@ -1435,7 +1578,10 @@ export class DiProviderActivationSession {
     if (reference == null || !registrationValueKindCanConstruct(reference.valueKind)) {
       return activationOpen('Aurelia factory resolver did not retain a constructable source value.');
     }
-    const value = this.view.classValueForReference(reference);
+    const exact = this.view.evaluatedResolverState(resolver);
+    const value = exact?.kind === EvaluationValueKind.Class
+      ? exact
+      : this.view.classValueForReference(reference);
     return value == null
       ? activationOpen('Aurelia factory resolver value did not map to an evaluator class declaration.')
       : this.activateClass(requestor, value, key, dependencyNode, cycleIdentity);
@@ -1500,11 +1646,108 @@ export class DiProviderActivationSession {
       if (source == null) {
         return activationOpen('Aurelia provider class is outside the admitted static-evaluation graph.');
       }
+      const dependencyPlan = this.classDependencies.planFor(value, requestor);
+      if (dependencyPlan.abruptCompletion != null) {
+        return activationOpenWithPressure(
+          dependencyPlan.positionalReason
+            ?? evaluationAbruptCompletionSummary(dependencyPlan.abruptCompletion),
+          dependencyPlan.positionalOpenSeams,
+          dependencyPlan.abruptCompletion,
+        );
+      }
+      if (dependencyPlan.positionState === DiClassDependencyPositionState.Failed) {
+        return activationFailedWithoutFrameworkCode(
+          dependencyPlan.positionalReason
+            ?? 'Aurelia provider class dependency metadata is not a runtime array.',
+        );
+      }
+      if (dependencyPlan.positionState === DiClassDependencyPositionState.Open) {
+        return activationOpenWithPressure(
+          dependencyPlan.positionalReason
+            ?? 'Aurelia provider class dependency metadata did not close.',
+          dependencyPlan.positionalOpenSeams,
+          null,
+        );
+      }
+
+      const dependencyValues: EvaluationValue[] = [];
+      const dependencyOpenSeams: EvaluationOpenSeam[] = [...dependencyPlan.positionalOpenSeams];
+      for (const dependency of dependencyPlan.slots) {
+        if (dependency.state === DiClassDependencySlotState.Hole) {
+          dependencyValues.push(EvaluationUndefined);
+          continue;
+        }
+        const evidence = dependency.evidence;
+        if (evidence == null) {
+          return activationOpenWithPressure(
+            'Aurelia dependency planning retained a present position without runtime key evidence.',
+            dependencyOpenSeams,
+            null,
+          );
+        }
+        if (
+          evidence.openSeams.length > 0
+          || evidence.value.kind === EvaluationValueKind.Unknown
+        ) {
+          return activationOpenWithPressure(
+            evidence.value.kind === EvaluationValueKind.Unknown
+              ? evidence.value.reason
+              : 'Aurelia dependency key remained qualified by open evaluation pressure.',
+            [...dependencyOpenSeams, ...evidence.openSeams],
+            null,
+          );
+        }
+        const expression = dependency.sourceExpression ?? dependency.carrierExpression;
+        const activation = this.activatePreparedExpression(
+          requestor,
+          expression,
+          evidence,
+          expression,
+          null,
+          0,
+        );
+        dependencyOpenSeams.push(...activation.openSeams);
+        if (
+          activation.state === DiProviderActivationState.Cycle
+          || activation.state === DiProviderActivationState.Failed
+          || activation.abruptCompletion != null
+        ) {
+          return activationWithAdditionalPressure(activation, dependencyOpenSeams);
+        }
+        if (activation.state === DiProviderActivationState.Undefined) {
+          dependencyValues.push(EvaluationUndefined);
+          continue;
+        }
+        if (activation.state === DiProviderActivationState.Deferred) {
+          dependencyValues.push(new EvaluationBoundaryObjectValue(
+            EvaluationBoundaryKind.HostEnvironment,
+            activation.reason ?? 'Aurelia deferred DI resolver result',
+            new Map(),
+            expression,
+            true,
+          ));
+          continue;
+        }
+        if (activation.value != null) {
+          dependencyValues.push(activation.value);
+          continue;
+        }
+        return activationWithAdditionalPressure(
+          activation.state === DiProviderActivationState.Open
+            ? activation
+            : activationOpen(
+                activation.reason
+                  ?? 'Aurelia dependency activation did not close to one runtime value.',
+              ),
+          dependencyOpenSeams,
+        );
+      }
       const read = this.withActiveRequestor(requestor, (): EvaluationRead<EvaluationValue> => {
         const result = this.evaluatorForSource(source).evaluateClassValueInstantiation(
           value,
           source.moduleKey,
           dependencyNode,
+          dependencyValues,
         );
         return new EvaluationRead(
           result.value,
@@ -1517,11 +1760,21 @@ export class DiProviderActivationSession {
         return this.detectedCycle;
       }
       if (read.value == null) {
-        return activationOpenForExpressionRead(read);
+        return activationWithAdditionalPressure(
+          activationOpenForExpressionRead(read),
+          dependencyOpenSeams,
+        );
       }
       return read.value.kind === EvaluationValueKind.Unknown
-        ? activationOpenWithPressure(read.value.reason, read.openSeams, null)
-        : activationValueWithPressure(read.value, read.openSeams);
+        ? activationOpenWithPressure(
+            read.value.reason,
+            [...dependencyOpenSeams, ...read.openSeams],
+            null,
+          )
+        : activationValueWithPressure(
+            read.value,
+            [...dependencyOpenSeams, ...read.openSeams],
+          );
     } finally {
       this.frames.pop();
     }
@@ -1673,7 +1926,7 @@ export class DiProviderActivationSession {
     switch (resolution.resolutionKind) {
       case ResolverResolutionKind.SingletonFactory:
       case ResolverResolutionKind.TransientFactory:
-        return this.activateConstructableReference(requestor, resolution.value, key.key, dependencyNode, null);
+        return this.activateConstructableReference(requestor, resolver, resolution.value, key.key, dependencyNode, null);
       case ResolverResolutionKind.Alias: {
         const aliasKey = containerLookupKeyForRegistrationValue(resolution.value);
         if (aliasKey == null || this.activeAliases.has(resolver)) {
@@ -2009,7 +2262,7 @@ export class DiProviderActivationSession {
     }
   }
 
-  private withActiveRequestor<TValue>(requestor: Container, read: () => TValue): TValue {
+  private withActiveRequestor<TValue>(requestor: Container | null, read: () => TValue): TValue {
     const previous = this.activeRequestor;
     this.activeRequestor = requestor;
     try {
@@ -2084,7 +2337,6 @@ function registryResolverReturnState(
       return DiRegistryResolverReturnState.Invalid;
   }
 }
-
 
 function containerApiMethodValidatesKey(
   methodKind: DiContainerApiMethodKind,
@@ -2193,6 +2445,20 @@ function activationFailed(
     null,
     reason,
     failureKind,
+    null,
+    [],
+    null,
+  );
+}
+
+function activationFailedWithoutFrameworkCode(
+  reason: string,
+): DiProviderActivationResult {
+  return new DiProviderActivationResult(
+    DiProviderActivationState.Failed,
+    null,
+    reason,
+    null,
     null,
     [],
     null,

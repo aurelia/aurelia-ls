@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { ModuleEnvironmentRecord } from './environment.js';
 import {
   compactEvaluationOpenSeams,
@@ -55,6 +56,7 @@ export interface StaticLiteralEvaluationHost {
     summary: string,
     node: ts.Node,
     moduleKey: string,
+    reasonKinds?: readonly OpenSeamReasonKind[],
   ): void;
 
   unknown(
@@ -106,13 +108,15 @@ export function evaluateStaticArrayLiteral(
         const spreadOpenSeams = compactEvaluationOpenSeams([
           ...host.openSeamsSince(checkpoint),
           new EvaluationOpenSeam(
-            EvaluationOpenSeamKind.DynamicMutation,
+            EvaluationOpenSeamKind.DynamicLoop,
             `Array membership depends on boundary spread '${spread.path}'.`,
             element,
             moduleKey,
             [openSeamReasonKindForEvaluationBoundary(spread.boundaryKind)],
           ),
         ]);
+        // Audit the reached runtime iteration; value-pressure keeps it on the shape rather than the binding edge.
+        host.replayOpenSeams(spreadOpenSeams);
         extentOpenSeams.push(...spreadOpenSeams);
         elementOpenSeams.push(...spreadOpenSeams);
         continue;
@@ -126,7 +130,7 @@ export function evaluateStaticArrayLiteral(
           kind: EvaluationArrayUncertaintyKind.NonArraySpread,
           node: element,
         });
-        host.open(EvaluationOpenSeamKind.DynamicMutation, 'Array spread did not reduce to a modeled iterable.', element, moduleKey);
+        host.open(EvaluationOpenSeamKind.DynamicLoop, 'Array spread did not reduce to a modeled iterable.', element, moduleKey);
         const spreadOpenSeams = compactEvaluationOpenSeams([
           ...directPressure,
           ...host.openSeamsSince(checkpoint),
@@ -167,10 +171,11 @@ export function evaluateStaticArrayLiteral(
       ) {
         const guardrailCheckpoint = host.openSeamCheckpoint();
         host.open(
-          EvaluationOpenSeamKind.DynamicMutation,
+          EvaluationOpenSeamKind.DynamicLoop,
           'Array literal spread exceeds the static iteration guardrail.',
           element,
           moduleKey,
+          [OpenSeamReasonKind.StaticEvaluationGuardrailLimit],
         );
         guardrailOpenSeams = host.openSeamsSince(guardrailCheckpoint);
       }
@@ -299,6 +304,8 @@ export function evaluateStaticObjectLiteral(
             [openSeamReasonKindForEvaluationBoundary(spread.boundaryKind)],
           ),
         ]);
+        // Audit the reached runtime property copy; value-pressure keeps it on the shape rather than the binding edge.
+        host.replayOpenSeams(pressure);
         openEvaluationObjectProperties(properties, pressure);
         shapeOpenSeams.push(...pressure);
         continue;

@@ -1,7 +1,3 @@
-import {
-  frameworkRegistrationKindForAdmission,
-  type RegistrationAdmissionProduct,
-} from './registration-admission.js';
 import { FrameworkRegistrationKind } from './registration-reference.js';
 
 export const enum FrameworkRegistrationCapability {
@@ -362,14 +358,6 @@ export function frameworkRegistrationKindCarriesCapability(
   capability: FrameworkRegistrationCapability,
 ): boolean {
   return frameworkRegistrationCapabilitiesForKind(kind).includes(capability);
-}
-
-export function frameworkRegistrationAdmissionCarriesCapability(
-  admission: RegistrationAdmissionProduct,
-  capability: FrameworkRegistrationCapability,
-): boolean {
-  const kind = frameworkRegistrationKindForAdmission(admission);
-  return kind == null ? false : frameworkRegistrationKindCarriesCapability(kind, capability);
 }
 
 function buildKindsByModule(

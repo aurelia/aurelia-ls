@@ -53,15 +53,7 @@ import {
   isAureliaIgnoreResolverExpression,
   readAureliaResolverWrapperCall,
 } from './resolver-wrapper-recognition.js';
-
-/** Evaluator-owned declaration source used when no TypeChecker epoch is available. */
-export class EvaluatedDiKeyDeclarationSource {
-  constructor(
-    readonly declaration: ts.ClassLikeDeclaration | ts.FunctionLikeDeclaration,
-    readonly moduleKey: string,
-    readonly sourceFileAddressHandle: AddressHandle | null,
-  ) {}
-}
+import type { EvaluatedRegistrationKeyDeclarationSource } from '../registration/registration-observation.js';
 
 /** All available evidence for normalizing one authored DI key occurrence. */
 export class DiKeyExpressionIdentityRequest {
@@ -70,7 +62,7 @@ export class DiKeyExpressionIdentityRequest {
     readonly expression: ts.Expression,
     readonly localName: string | null,
     readonly evaluatedValue: EvaluationValue | null,
-    readonly evaluatedDeclaration: EvaluatedDiKeyDeclarationSource | null,
+    readonly evaluatedDeclaration: EvaluatedRegistrationKeyDeclarationSource | null,
     readonly typeSystem: TypeSystemProject | null,
     readonly fallbackIdentityHandle: IdentityHandle,
     readonly occurrenceAddressHandle: AddressHandle | null,
@@ -179,14 +171,9 @@ export class DiKeyIdentityEmitter {
       }
     }
 
-    const object = this.emitObjectKeyIdentity(records, publication, request);
-    if (object != null) {
-      return object;
-    }
-
-    const evaluatedDeclaration = declaration == null
-      ? this.evaluatedDeclarationForExpression(records, request)
-      : null;
+    // Runtime value identity outranks the carrier expression's declared type. A mutable or
+    // broadly-typed binding can still hold one exact class/function key at the reached occurrence.
+    const evaluatedDeclaration = this.evaluatedDeclarationForExpression(records, request);
     if (evaluatedDeclaration != null) {
       const handle = this.records.handles.identity(`di-key:constructable:${localKeyPart(evaluatedDeclaration.identityHandle)}`);
       this.emitRecord(records, new ConstructableDiKeyIdentity(
@@ -196,6 +183,11 @@ export class DiKeyIdentityEmitter {
         evaluatedDeclaration.addressHandle,
       ));
       return new DiKeyIdentityEmission(handle, DiKeyIdentityKind.Constructable, ContainerLookupKeyKind.Constructable);
+    }
+
+    const object = this.emitObjectKeyIdentity(records, publication, request);
+    if (object != null) {
+      return object;
     }
 
     this.emitRecord(records, new UnknownDiKeyIdentity(
@@ -270,9 +262,7 @@ export class DiKeyIdentityEmitter {
     request: DiKeyExpressionIdentityRequest,
   ): DiKeyIdentityEmission | null {
     const typeSystem = request.typeSystem;
-    const expression = typeSystem?.readProgramExpression(request.expression) ?? null;
-    if (typeSystem == null || expression == null
-      || !isAureliaIgnoreResolverExpression(typeSystem.checker, expression)) {
+    if (typeSystem == null || !isAureliaIgnoreResolverExpression(typeSystem, request.expression)) {
       return null;
     }
     const handle = this.records.handles.identity('di-key:resolver:ignore');
@@ -291,11 +281,10 @@ export class DiKeyIdentityEmitter {
     request: DiKeyExpressionIdentityRequest,
   ): DiKeyIdentityEmission | null {
     const typeSystem = request.typeSystem;
-    const expression = typeSystem?.readProgramExpression(request.expression) ?? null;
-    if (typeSystem == null || expression == null) {
+    if (typeSystem == null) {
       return null;
     }
-    const wrapper = readAureliaResolverWrapperCall(typeSystem.checker, expression);
+    const wrapper = readAureliaResolverWrapperCall(typeSystem, request.expression);
     if (wrapper == null) {
       return null;
     }
@@ -409,13 +398,16 @@ export class DiKeyIdentityEmitter {
     }
     const typeSystem = request.typeSystem;
     const creationNode = value.node;
-    const source = typeSystem == null || creationNode == null
+    const programCreationNode = typeSystem == null || creationNode == null
+      ? null
+      : typeSystem.readProgramNode(creationNode);
+    const source = typeSystem == null || programCreationNode == null
       ? null
       : sourceSpanForCheckerNode(
         publication,
         typeSystem.checker,
         'di-key-object-creation',
-        typeSystem.readProgramNode(creationNode) ?? creationNode,
+        programCreationNode,
         SourceSpanRole.Value,
       );
     if (source != null) {

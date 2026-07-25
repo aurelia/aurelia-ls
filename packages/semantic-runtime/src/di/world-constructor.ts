@@ -32,7 +32,26 @@ import {
 } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
-import type { EvaluationValue } from '../evaluation/values.js';
+import type {
+  EvaluationArrayElement,
+  EvaluationFunctionValue,
+  EvaluationValue,
+} from '../evaluation/values.js';
+import { EvaluationValueKind } from '../evaluation/values.js';
+import {
+  type EvaluationOpenSeam,
+} from '../evaluation/seams.js';
+import {
+  evaluationAbruptCompletionSummary,
+} from '../evaluation/completion.js';
+import {
+  openSeamReasonKindsForEvaluationPressure,
+} from '../evaluation/boundary-open-reason.js';
+import {
+  foldStaticValueMemberRead,
+  readStaticValueProperty,
+} from '../evaluation/property-access.js';
+import { StaticProjectEvaluationSourceIndex } from '../evaluation/project-source-index.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   AppTaskDefinition,
@@ -46,6 +65,7 @@ import {
 } from '../configuration/configuration-sequence.js';
 import {
   buildRegistryBodyStepIndex,
+  RegistryAdmissionBodyExecution,
   type RegistryBodyStepIndex,
 } from '../configuration/registry-body-index.js';
 import type {
@@ -60,45 +80,68 @@ import type { ResourceDefinitionIndex } from '../resources/resource-definition-i
 import type { ResourceIssue } from '../resources/resource-issue.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import {
-  frameworkRegistrationKindForAdmission,
-  isResolverRegistrationStrategy,
   OpenRegistrationAdmission,
   ParameterizedRegistryAdmission,
   FrameworkRegistrationAdmission,
   ResourceRegistrationAdmission,
   RegistryRegistrationAdmission,
-  RegistrationKeyRole,
   RegistrationStrategy,
   ResolverRegistrationAdmission,
   type RegistrationAdmissionProduct,
 } from '../registration/registration-admission.js';
+import type { EvaluatedRegistrationCarrier } from '../registration/registration-observation.js';
 import {
   FrameworkRegistrationKind,
   RegistryBodyInterpretationState,
 } from '../registration/registration-reference.js';
+import type { RegistrationKernelEmission } from '../registration/registration-kernel-emitter.js';
+import { hasEvaluationRegisterFunction } from '../registration/evaluated-registration-value.js';
 import {
   FrameworkDiEffectCoverageState,
   frameworkDiRegistrationEffectsForKind,
 } from './framework-registration-effects.js';
 import type { Container } from './container.js';
-import { ContainerRegistrationOperation } from './container-registration.js';
+import {
+  ContainerRegistrationOperation,
+  frameworkRegistrationKindForOperation,
+} from './container-registration.js';
 import {
   ContainerFactorySlot,
   ContainerResourceSlot,
   ContainerResolverSlot,
   ContainerSelfResolverSlot,
 } from './container-slot.js';
-import type { DiIssue } from './di-issue.js';
+import type { ContainerResolutionFailureKind } from './container-lookup.js';
 import {
+  type DiIssue,
+  DiRegistryApplicationFailureKind,
+} from './di-issue.js';
+import {
+  type DiIssuePublication,
   DiIssuePublisher,
 } from './di-issue-publication.js';
 import { DiKeyIdentityEmitter } from './di-key-identity-emitter.js';
 import { DiProductDetails } from './product-details.js';
 import { Resolver } from './resolver.js';
+import { isConcreteResolverStrategy } from './resolver.js';
 import {
   ParameterizedRegistry,
+  RegistryRegistrationState,
   RegistryValue,
 } from './registry.js';
+import {
+  DiRegistrationValueMaterializer,
+  DiRegistrationValueMaterialization,
+} from './registration-value-materializer.js';
+import type {
+  DiRegistrationEvidenceAuthority,
+  DiRegistrationValueProduct,
+} from './registration-value.js';
+import {
+  DiProviderActivationView,
+  DiProviderActivationState,
+  type DiProviderActivationSession,
+} from './provider-activation.js';
 import {
   DiRegistrationOpenSeamScope,
   DiWorldConstructionEmission,
@@ -117,7 +160,10 @@ import {
   DiResolverPublicationMaterializer,
   DiSourceSet,
   recordsForDiOpenSeam,
+  recordsForDiEvaluationOpenSeams,
   recordsForDiSource,
+  summaryForParameterizedRegistryResult,
+  summaryForRegistryValueOpen,
 } from './world-publication.js';
 
 interface DiRegistrationSpendingEmission {
@@ -153,6 +199,38 @@ interface DiRegistrationSpendingCascadeEmission {
   readonly completion: DiRegistrationCascadeCompletion;
 }
 
+interface DiRegistrationApplication {
+  readonly body: RegistryAdmissionBodyExecution;
+  readonly conditionalAdmissions: RegistrationKernelEmission | null;
+  readonly records: readonly KernelStoreRecord[];
+  readonly openSeams: readonly OpenSeam[];
+  readonly issues: readonly DiIssuePublication[];
+  readonly fatal: boolean;
+}
+
+const enum DiRegistryHandlerReadState {
+  Callable,
+  Open,
+  NotCallable,
+}
+
+type DiRegistryHandlerRead =
+  | {
+    readonly state: DiRegistryHandlerReadState.Callable;
+    readonly value: EvaluationFunctionValue;
+    readonly openSeams: readonly EvaluationOpenSeam[];
+  }
+  | {
+    readonly state: DiRegistryHandlerReadState.Open;
+    readonly reason: string;
+    readonly openSeams: readonly EvaluationOpenSeam[];
+    readonly reasonKinds: readonly OpenSeamReasonKind[];
+  }
+  | {
+    readonly state: DiRegistryHandlerReadState.NotCallable;
+    readonly reason: string;
+  };
+
 const enum DiRegistrationCascadeCompletion {
   /** Registration effects completed without a framework-fatal recursive registry branch. */
   Completed = 'completed',
@@ -166,7 +244,8 @@ type DiRegistrationDirectSpender = (
   admission: RegistrationAdmissionProduct,
   ordinal: number,
   runtimeValue: EvaluationValue | null,
-  registryBodyInterpreted: boolean,
+  registrationValue: DiRegistrationValueMaterialization,
+  application: DiRegistrationApplication,
   inheritedOpenSeams: readonly OpenSeam[],
 ) => DiRegistrationSpendingEmission;
 
@@ -174,7 +253,36 @@ interface DiRegistrationSpendingCascadeServices {
   readonly admissionsByProduct: ReadonlyMap<ProductHandle, RegistrationAdmissionProduct>;
   readonly openSeamsByAdmissionProduct: ReadonlyMap<ProductHandle, readonly OpenSeam[]>;
   readonly registryBodyIndex: RegistryBodyStepIndex;
+  readonly activation: DiProviderActivationSession;
   readonly issuePublisher: DiIssuePublisher;
+  readonly materializeValue: (
+    admission: RegistrationAdmissionProduct,
+    carrier: EvaluatedRegistrationCarrier | null,
+  ) => DiRegistrationValueMaterialization;
+  readonly parameterElementsFor: (
+    registry: ParameterizedRegistry,
+  ) => readonly EvaluationArrayElement[];
+  readonly materializeParameterizedRegistryParameters: (
+    registry: ParameterizedRegistry,
+    ownerKey: string,
+  ) => RegistrationKernelEmission;
+  readonly openParameterizedRegistry: (
+    local: string,
+    registry: ParameterizedRegistry,
+    summary: string,
+    reasonKinds: readonly OpenSeamReasonKind[],
+  ) => {
+    readonly records: readonly KernelStoreRecord[];
+    readonly seam: OpenSeam;
+  };
+  readonly retainEvaluationPressure: (
+    local: string,
+    openSeams: readonly EvaluationOpenSeam[],
+    fallbackAddressHandle: import('../kernel/handles.js').AddressHandle | null,
+  ) => {
+    readonly records: readonly KernelStoreRecord[];
+    readonly seams: readonly OpenSeam[];
+  };
   readonly spendDirect: DiRegistrationDirectSpender;
 }
 
@@ -195,12 +303,27 @@ class DiRegistrationSpendingFrame {
   constructor(
     source: DiSourceSet,
     readonly operation: DiRegistrationOperationEmission,
+    registrationValue: DiRegistrationValueMaterialization,
   ) {
     this.records = [
       ...source.records,
+      ...registrationValue.records,
       ...operation.records,
     ];
-    this.operationMaterializationClaimHandles = [operation.acceptRegistrationClaimHandle];
+    this.operationMaterializationClaimHandles = [
+      operation.containerProducesOperationClaimHandle,
+      operation.operationAppliesAdmissionClaimHandle,
+      ...(operation.operationUsesRegistrationValueClaimHandle == null
+        ? []
+        : [operation.operationUsesRegistrationValueClaimHandle]),
+    ];
+    if (registrationValue.product instanceof Resolver) {
+      this.resolvers.push(registrationValue.product);
+    } else if (registrationValue.product instanceof RegistryValue) {
+      this.registries.push(registrationValue.product);
+    } else if (registrationValue.product instanceof ParameterizedRegistry) {
+      this.parameterizedRegistries.push(registrationValue.product);
+    }
   }
 
   recordOpenSeam(
@@ -248,28 +371,6 @@ class DiRegistrationSpendingFrame {
     }
   }
 
-  recordParameterizedRegistry(emission: {
-    readonly records: readonly KernelStoreRecord[];
-    readonly registry: ParameterizedRegistry | null;
-    readonly openSeams: readonly OpenSeam[];
-  }): void {
-    this.records.push(...emission.records);
-    if (emission.registry != null) {
-      this.parameterizedRegistries.push(emission.registry);
-    }
-    this.openSeams.push(...emission.openSeams);
-  }
-
-  recordRegistry(emission: {
-    readonly records: readonly KernelStoreRecord[];
-    readonly registry: RegistryValue;
-    readonly openSeams: readonly OpenSeam[];
-  }): void {
-    this.records.push(...emission.records);
-    this.registries.push(emission.registry);
-    this.openSeams.push(...emission.openSeams);
-  }
-
   recordResourceSlots(container: Container, emission: DiResourceSlotEmission): void {
     this.records.push(...emission.records);
     this.resourceSlots.push(...emission.slots);
@@ -288,7 +389,7 @@ class DiRegistrationSpendingFrame {
     this.factorySlots.push(...effects.factorySlots);
     this.resourceSlots.push(...effects.resourceSlots);
     this.registeredAppTasks.push(...effects.appTasks.map((task) =>
-      new RegisteredAppTask(task, container.toReference(), null)
+      new RegisteredAppTask(task, null, this.operation.product)
     ));
     this.openSeams.push(...effects.openSeams);
     this.issues.push(...effects.issues);
@@ -305,15 +406,14 @@ class DiRegistrationSpendingFrame {
   }
 
   recordAppTask(
-    container: Container,
     task: AppTaskDefinition | null,
     runtimeValue: EvaluationValue | null,
   ): void {
     if (task != null) {
       this.registeredAppTasks.push(new RegisteredAppTask(
         task,
-        container.toReference(),
         aureliaAppTaskEvaluationForValue(runtimeValue),
+        this.operation.product,
       ));
     }
   }
@@ -332,8 +432,7 @@ class DiRegistrationSpendingFrame {
       openSeams: this.openSeams,
       registrationOpenSeamScopes: this.openSeams.map((seam) => new DiRegistrationOpenSeamScope(
         seam,
-        this.operation.product.admissionProductHandle,
-        this.operation.product.container.identityHandle,
+        this.operation.product,
       )),
       issues: this.issues,
       resourceIssues: this.resourceIssues,
@@ -396,6 +495,14 @@ class DiRegistrationSpendingCascadeFrame {
     }
   }
 
+  markFatal(): void {
+    this.completion = DiRegistrationCascadeCompletion.Fatal;
+  }
+
+  get fatal(): boolean {
+    return this.completion === DiRegistrationCascadeCompletion.Fatal;
+  }
+
   toEmission(): DiRegistrationSpendingCascadeEmission {
     return {
       records: this.records,
@@ -430,36 +537,433 @@ class DiRegistrationSpendingCascade {
     container: Container,
     step: ConfigurationStep,
     admission: RegistrationAdmissionProduct,
-    runtimeValue: EvaluationValue | null,
+    carrier: EvaluatedRegistrationCarrier | null,
+    admissionOpenSeams: readonly OpenSeam[] | null = null,
   ): DiRegistrationSpendingCascadeEmission {
     const spentKey = `${container.productHandle}:${step.productHandle}:${admission.productHandle}`;
     if (this.activeAdmissionKeys.has(spentKey)) {
       return this.unableAutoRegisterCascade(spentKey, step, admission);
     }
+    const ordinal = this.nextOperationOrdinal++;
     this.activeAdmissionKeys.add(spentKey);
     try {
-      const body = this.services.registryBodyIndex.executeAdmission(admission, runtimeValue);
-      const inheritedOpenSeams = this.services.openSeamsByAdmissionProduct.get(admission.productHandle) ?? [];
+      const runtimeValue = carrier?.value ?? null;
+      const registrationValue = this.services.materializeValue(admission, carrier);
+      let application = emptyDiRegistrationApplication();
+      if (
+        registrationValue.product instanceof RegistryValue
+        && hasEvaluationRegisterFunction(runtimeValue)
+      ) {
+        const body = this.services.registryBodyIndex.matchAdmission(
+          admission,
+          runtimeValue,
+          this.services.activation.executeRegistrationRegistry(container, runtimeValue, []),
+        );
+        application = this.applicationForRegistryBody(
+          container,
+          step,
+          admission,
+          ordinal,
+          body,
+        );
+      }
+      if (registrationValue.product instanceof ParameterizedRegistry) {
+        application = this.prepareParameterizedRegistry(
+          container,
+          step,
+          admission,
+          ordinal,
+          registrationValue.product,
+        );
+      }
+      const inheritedOpenSeams = registrationValue.closesAdmissionRecognition
+        ? registrationValue.openSeams
+        : [
+            ...(admissionOpenSeams
+              ?? this.services.openSeamsByAdmissionProduct.get(admission.productHandle)
+              ?? []),
+            ...registrationValue.openSeams,
+          ];
       const frame = new DiRegistrationSpendingCascadeFrame(
         this.services.spendDirect(
           container,
           step,
           admission,
-          this.nextOperationOrdinal++,
+          ordinal,
           runtimeValue,
-          body.interpreted,
+          registrationValue,
+          application,
           inheritedOpenSeams,
         ),
       );
-      for (const bodyStep of body.steps) {
-        if (!this.recordBodyStep(frame, container, bodyStep)) {
-          break;
+      if (application.conditionalAdmissions != null) {
+        for (const conditionalAdmission of application.conditionalAdmissions.admissions) {
+          const spent = this.spend(
+            container,
+            step,
+            conditionalAdmission,
+            application.conditionalAdmissions.evaluatedCarriersByAdmissionProduct.get(conditionalAdmission.productHandle) ?? null,
+            application.conditionalAdmissions.openSeamsByAdmissionProduct.get(conditionalAdmission.productHandle) ?? [],
+          );
+          frame.recordCascade(spent);
+          if (spent.completion === DiRegistrationCascadeCompletion.Fatal) {
+            break;
+          }
         }
+      }
+      if (!frame.fatal) {
+        for (const bodyStep of application.body.steps) {
+          if (!this.recordBodyStep(frame, container, bodyStep)) {
+            break;
+          }
+        }
+      }
+      if (application.fatal) {
+        frame.markFatal();
       }
       return frame.toEmission();
     } finally {
       this.activeAdmissionKeys.delete(spentKey);
     }
+  }
+
+  private prepareParameterizedRegistry(
+    container: Container,
+    step: ConfigurationStep,
+    admission: RegistrationAdmissionProduct,
+    ordinal: number,
+    registry: ParameterizedRegistry,
+  ): DiRegistrationApplication {
+    const result = registry.register(container);
+    if (result.state === RegistryRegistrationState.Open) {
+      return this.openParameterizedRegistryApplication(
+        container,
+        step,
+        admission,
+        ordinal,
+        registry,
+        summaryForParameterizedRegistryResult(result.state),
+        [OpenSeamReasonKind.DiRegistryBodyOpen],
+      );
+    }
+
+    const parameterElements = this.services.parameterElementsFor(registry);
+    const parameterOpenSeams = parameterElements.flatMap((element) => element.openSeams);
+    if (parameterElements.length !== registry.params.length || parameterOpenSeams.length > 0) {
+      const pressure = this.services.retainEvaluationPressure(
+        this.parameterizedRegistryLocal(container, step, admission, ordinal, 'parameter-pressure'),
+        parameterOpenSeams,
+        registry.sourceAddressHandle,
+      );
+      return pressure.seams.length > 0
+        ? {
+            ...emptyDiRegistrationApplication(),
+            records: pressure.records,
+            openSeams: pressure.seams,
+          }
+        : this.openParameterizedRegistryApplication(
+          container,
+          step,
+          admission,
+          ordinal,
+          registry,
+          'Parameterized registry arguments did not retain one exact evaluator value per runtime parameter.',
+          [OpenSeamReasonKind.DiRegistryBodyOpen],
+        );
+    }
+
+    if (result.state === RegistryRegistrationState.ParameterAdmission) {
+      return {
+        ...emptyDiRegistrationApplication(),
+        conditionalAdmissions: this.services.materializeParameterizedRegistryParameters(
+          registry,
+          `di-registration:${ordinal}:${container.productHandle}:${step.productHandle}:${admission.productHandle}`,
+        ),
+      };
+    }
+
+    const activation = this.services.activation.activateParameterizedRegistryHandler(
+      container,
+      registry,
+    );
+    if (activation.abruptCompletion != null) {
+      return this.failedRegistryApplication(
+        container,
+        step,
+        admission,
+        ordinal,
+        DiRegistryApplicationFailureKind.AbruptCompletion,
+        `Parameterized registry handler activation failed: ${evaluationAbruptCompletionSummary(activation.abruptCompletion)}`,
+      );
+    }
+    if (activation.state === DiProviderActivationState.Failed) {
+      return this.failedRegistryApplication(
+        container,
+        step,
+        admission,
+        ordinal,
+        DiRegistryApplicationFailureKind.HandlerResolution,
+        activation.reason ?? 'Parameterized registry handler resolution entered a proven container failure.',
+        activation.failureKind,
+      );
+    }
+    if (activation.state === DiProviderActivationState.Cycle && activation.cycle != null) {
+      const issue = this.services.issuePublisher.publishCyclicDependency(
+        this.parameterizedRegistryLocal(container, step, admission, ordinal, 'handler-cycle'),
+        registry.key.localName,
+        registry.key.localName ?? `${registry.key.identityHandle}`,
+        activation.cycle,
+        registry.sourceAddressHandle,
+      );
+      return {
+        ...emptyDiRegistrationApplication(),
+        records: issue.records,
+        issues: [issue],
+        fatal: true,
+      };
+    }
+    if (activation.state !== DiProviderActivationState.Value || activation.value == null) {
+      if (activation.state === DiProviderActivationState.Undefined) {
+        return this.failedRegistryApplication(
+          container,
+          step,
+          admission,
+          ordinal,
+          DiRegistryApplicationFailureKind.HandlerRegisterNotCallable,
+          'Parameterized registry handler resolution produced undefined, so runtime register(container, ...params) dispatch would throw.',
+        );
+      }
+      const pressure = this.services.retainEvaluationPressure(
+        this.parameterizedRegistryLocal(container, step, admission, ordinal, 'handler-pressure'),
+        activation.openSeams,
+        registry.sourceAddressHandle,
+      );
+      return pressure.seams.length > 0
+        ? {
+            ...emptyDiRegistrationApplication(),
+            records: pressure.records,
+            openSeams: pressure.seams,
+          }
+        : this.openParameterizedRegistryApplication(
+            container,
+            step,
+            admission,
+            ordinal,
+            registry,
+            activation.reason
+              ?? 'Parameterized registry handler resolution did not produce one exact registry value.',
+            [OpenSeamReasonKind.DiRegistryBodyOpen],
+          );
+    }
+
+    const activationPressure = this.services.retainEvaluationPressure(
+      this.parameterizedRegistryLocal(container, step, admission, ordinal, 'handler-value-pressure'),
+      activation.openSeams,
+      registry.sourceAddressHandle,
+    );
+    const handler = readParameterizedRegistryHandler(activation.value);
+    if (handler.state === DiRegistryHandlerReadState.NotCallable) {
+      return mergeDiRegistrationApplications(
+        {
+          ...emptyDiRegistrationApplication(),
+          records: activationPressure.records,
+          openSeams: activationPressure.seams,
+        },
+        this.failedRegistryApplication(
+          container,
+          step,
+          admission,
+          ordinal,
+          DiRegistryApplicationFailureKind.HandlerRegisterNotCallable,
+          handler.reason,
+        ),
+      );
+    }
+    if (handler.state === DiRegistryHandlerReadState.Open) {
+      const memberPressure = this.services.retainEvaluationPressure(
+        this.parameterizedRegistryLocal(container, step, admission, ordinal, 'handler-member-pressure'),
+        handler.openSeams,
+        registry.sourceAddressHandle,
+      );
+      const pressure = mergeDiRegistrationApplications(
+        {
+          ...emptyDiRegistrationApplication(),
+          records: activationPressure.records,
+          openSeams: activationPressure.seams,
+        },
+        {
+          ...emptyDiRegistrationApplication(),
+          records: memberPressure.records,
+          openSeams: memberPressure.seams,
+        },
+      );
+      return pressure.openSeams.length > 0
+        ? pressure
+        : mergeDiRegistrationApplications(
+            pressure,
+            this.openParameterizedRegistryApplication(
+              container,
+              step,
+              admission,
+              ordinal,
+              registry,
+              handler.reason,
+              handler.reasonKinds.length === 0
+                ? [OpenSeamReasonKind.DiRegistryBodyOpen]
+                : handler.reasonKinds,
+            ),
+          );
+    }
+
+    const parameterValues = parameterElements.map((element) => element.value);
+    const body = this.services.registryBodyIndex.matchRuntimeValue(
+      activation.value,
+      this.services.activation.executeRegistrationRegistry(
+        container,
+        activation.value,
+        parameterValues,
+      ),
+    );
+    let application = mergeDiRegistrationApplications(
+      {
+        ...emptyDiRegistrationApplication(),
+        records: activationPressure.records,
+        openSeams: activationPressure.seams,
+      },
+      this.applicationForRegistryBody(container, step, admission, ordinal, body),
+    );
+    if (!body.closed && !application.fatal && application.openSeams.length === 0) {
+      application = mergeDiRegistrationApplications(
+        application,
+        this.openParameterizedRegistryApplication(
+            container,
+            step,
+            admission,
+            ordinal,
+            registry,
+            'Parameterized registry resolved an exact handler, but its register(container, ...params) body did not close to the source-owned registration sequence.',
+            [OpenSeamReasonKind.DiRegistryBodyOpen],
+        ),
+      );
+    }
+    return application;
+  }
+
+  private applicationForRegistryBody(
+    container: Container,
+    step: ConfigurationStep,
+    admission: RegistrationAdmissionProduct,
+    ordinal: number,
+    body: RegistryAdmissionBodyExecution,
+  ): DiRegistrationApplication {
+    const execution = body.execution;
+    const pressure = this.services.retainEvaluationPressure(
+      this.parameterizedRegistryLocal(container, step, admission, ordinal, 'registry-body-pressure'),
+      execution?.auditOpenSeams ?? [],
+      admission.sourceAddressHandle,
+    );
+    const application: DiRegistrationApplication = {
+      ...emptyDiRegistrationApplication(),
+      body,
+      records: pressure.records,
+      openSeams: pressure.seams,
+    };
+    return execution?.abruptCompletion == null
+      ? application
+      : mergeDiRegistrationApplications(
+          application,
+          this.failedRegistryApplication(
+            container,
+            step,
+            admission,
+            ordinal,
+            DiRegistryApplicationFailureKind.AbruptCompletion,
+            `Registry application failed after its reached effects: ${evaluationAbruptCompletionSummary(execution.abruptCompletion)}`,
+          ),
+        );
+  }
+
+  private failedRegistryApplication(
+    container: Container,
+    step: ConfigurationStep,
+    admission: RegistrationAdmissionProduct,
+    ordinal: number,
+    failureKind: DiRegistryApplicationFailureKind,
+    message: string,
+    resolutionFailureKind: ContainerResolutionFailureKind | null = null,
+  ): DiRegistrationApplication {
+    const issue = this.services.issuePublisher.publishRegistryApplicationFailed(
+      this.parameterizedRegistryLocal(container, step, admission, ordinal, `failure:${failureKind}`),
+      container,
+      step.stepKind,
+      admission.admissionKind,
+      registrationAdmissionStrategyLabel(admission),
+      failureKind,
+      message,
+      admission.sourceAddressHandle,
+      resolutionFailureKind,
+    );
+    return {
+      ...emptyDiRegistrationApplication(),
+      records: issue.records,
+      issues: [issue],
+      fatal: true,
+    };
+  }
+
+  private openParameterizedRegistryApplication(
+    container: Container,
+    step: ConfigurationStep,
+    admission: RegistrationAdmissionProduct,
+    ordinal: number,
+    registry: ParameterizedRegistry,
+    summary: string,
+    reasonKinds: readonly OpenSeamReasonKind[],
+  ): DiRegistrationApplication {
+    const open = this.parameterizedRegistryOpen(
+      container,
+      step,
+      admission,
+      ordinal,
+      registry,
+      summary,
+      reasonKinds,
+    );
+    return {
+      ...emptyDiRegistrationApplication(),
+      records: open.records,
+      openSeams: [open.seam],
+    };
+  }
+
+  private parameterizedRegistryLocal(
+    container: Container,
+    step: ConfigurationStep,
+    admission: RegistrationAdmissionProduct,
+    ordinal: number,
+    suffix: string,
+  ): string {
+    return `di-registration:${ordinal}:${container.productHandle}:${step.productHandle}:${admission.productHandle}:${suffix}`;
+  }
+
+  private parameterizedRegistryOpen(
+    container: Container,
+    step: ConfigurationStep,
+    admission: RegistrationAdmissionProduct,
+    ordinal: number,
+    registry: ParameterizedRegistry,
+    summary: string,
+    reasonKinds: readonly OpenSeamReasonKind[],
+  ): {
+    readonly records: readonly KernelStoreRecord[];
+    readonly seam: OpenSeam;
+  } {
+    return this.services.openParameterizedRegistry(
+      this.parameterizedRegistryLocal(container, step, admission, ordinal, 'parameterized-registry-open'),
+      registry,
+      summary,
+      reasonKinds,
+    );
   }
 
   private recordBodyStep(
@@ -471,7 +975,8 @@ class DiRegistrationSpendingCascade {
     for (const admissionHandle of bodyStep.registrationAdmissionProductHandles) {
       const admission = this.admissionForProduct(admissionHandle);
       if (admission != null) {
-        const spent = this.spend(container, bodyStep, admission, execution.runtimeValueForAdmission(admission));
+        const carrier = execution.runtimeCarrierForAdmission(admission);
+        const spent = this.spend(container, bodyStep, admission, carrier);
         frame.recordCascade(spent);
         if (spent.completion === DiRegistrationCascadeCompletion.Fatal) {
           return false;
@@ -532,6 +1037,68 @@ function registrationAdmissionStrategyLabel(admission: RegistrationAdmissionProd
   return admission.strategy;
 }
 
+function emptyDiRegistrationApplication(): DiRegistrationApplication {
+  return {
+    body: new RegistryAdmissionBodyExecution([], false),
+    conditionalAdmissions: null,
+    records: [],
+    openSeams: [],
+    issues: [],
+    fatal: false,
+  };
+}
+
+function mergeDiRegistrationApplications(
+  left: DiRegistrationApplication,
+  right: DiRegistrationApplication,
+): DiRegistrationApplication {
+  return {
+    body: registryBodyHasEvidence(right.body) ? right.body : left.body,
+    conditionalAdmissions: right.conditionalAdmissions ?? left.conditionalAdmissions,
+    records: [...left.records, ...right.records],
+    openSeams: [...left.openSeams, ...right.openSeams],
+    issues: [...left.issues, ...right.issues],
+    fatal: left.fatal || right.fatal,
+  };
+}
+
+function registryBodyHasEvidence(body: RegistryAdmissionBodyExecution): boolean {
+  return body.execution != null || body.steps.length > 0 || body.matched;
+}
+
+function readParameterizedRegistryHandler(value: EvaluationValue): DiRegistryHandlerRead {
+  return foldStaticValueMemberRead<DiRegistryHandlerRead>(readStaticValueProperty(value, 'register', value.node), {
+    value: (member) => member.kind === EvaluationValueKind.Function
+      ? {
+          state: DiRegistryHandlerReadState.Callable,
+          value: member,
+          openSeams: [] as readonly EvaluationOpenSeam[],
+        }
+      : {
+          state: DiRegistryHandlerReadState.NotCallable,
+          reason: 'Parameterized registry handler activation produced an exact value whose register member is not callable.',
+        },
+    candidate: (_member, openSeams) => ({
+      state: DiRegistryHandlerReadState.Open,
+      reason: 'Parameterized registry handler has a candidate register member qualified by unresolved property pressure.',
+      openSeams,
+      reasonKinds: openSeamReasonKindsForEvaluationPressure(openSeams, null),
+    }),
+    getter: (_getter, _thisValue, openSeams) => ({
+      state: DiRegistryHandlerReadState.Open,
+      reason: 'Parameterized registry handler exposes register through a getter whose result has not been executed by DI world construction.',
+      openSeams,
+      reasonKinds: openSeamReasonKindsForEvaluationPressure(openSeams, null),
+    }),
+    open: (reason, _seamKind, reasonKinds, openSeams) => ({
+      state: DiRegistryHandlerReadState.Open,
+      reason,
+      openSeams,
+      reasonKinds,
+    }),
+  });
+}
+
 class DiWorldConstructionFrame {
   readonly records: KernelStoreRecord[] = [];
   readonly registrationOperations: ContainerRegistrationOperation[] = [];
@@ -548,6 +1115,8 @@ class DiWorldConstructionFrame {
   readonly issues: DiIssue[] = [];
   readonly resourceIssues: ResourceIssue[] = [];
   private readonly resolverProductHandles = new Set<ProductHandle>();
+  private readonly registryProductHandles = new Set<ProductHandle>();
+  private readonly parameterizedRegistryProductHandles = new Set<ProductHandle>();
 
   recordSelfResolver(selfResolver: ContainerSelfResolverSlot): void {
     this.selfResolverSlots.push(selfResolver);
@@ -571,7 +1140,7 @@ class DiWorldConstructionFrame {
   ): void {
     this.records.push(...seam.records);
     this.openSeams.push(seam.seam);
-    this.registrationOpenSeamScopes.push(new DiRegistrationOpenSeamScope(seam.seam, null, null));
+    this.registrationOpenSeamScopes.push(new DiRegistrationOpenSeamScope(seam.seam, null));
   }
 
   recordSpending(spent: {
@@ -591,9 +1160,24 @@ class DiWorldConstructionFrame {
   }): void {
     this.records.push(...spent.records);
     this.registrationOperations.push(...spent.operations);
-    this.resolvers.push(...spent.resolvers);
-    this.registries.push(...spent.registries);
-    this.parameterizedRegistries.push(...spent.parameterizedRegistries);
+    for (const resolver of spent.resolvers) {
+      if (!this.resolverProductHandles.has(resolver.productHandle)) {
+        this.resolverProductHandles.add(resolver.productHandle);
+        this.resolvers.push(resolver);
+      }
+    }
+    for (const registry of spent.registries) {
+      if (!this.registryProductHandles.has(registry.productHandle)) {
+        this.registryProductHandles.add(registry.productHandle);
+        this.registries.push(registry);
+      }
+    }
+    for (const registry of spent.parameterizedRegistries) {
+      if (!this.parameterizedRegistryProductHandles.has(registry.productHandle)) {
+        this.parameterizedRegistryProductHandles.add(registry.productHandle);
+        this.parameterizedRegistries.push(registry);
+      }
+    }
     this.resolverSlots.push(...spent.resolverSlots);
     this.factorySlots.push(...spent.factorySlots);
     this.resourceSlots.push(...spent.resourceSlots);
@@ -661,6 +1245,29 @@ export class DiWorldConstructor {
     const aureliaContainerByProduct = this.aureliaContainerIndex(configuration, containersByProduct);
     const admissionsByProduct = registrationAdmissionIndex(configuration);
     const appTasksByProduct = appTaskIndex(configuration);
+    const registrationValues = new DiRegistrationValueMaterializer(
+      this.store,
+      this.publication,
+      configuration,
+      evaluation,
+      typeSystem,
+      projectKey,
+      this.resolverPublication,
+      this.registryPublication,
+    );
+    const activation = new DiProviderActivationView(
+      this.publication,
+      evaluation.forkSession(),
+      typeSystem,
+      configuration,
+      {
+        containers: [...containersByProduct.values()],
+        resolverSlots: frame.resolverSlots,
+        selfResolverSlots: frame.selfResolverSlots,
+        factorySlots: frame.factorySlots,
+      },
+      registrationValues,
+    ).createSession();
     const registrationCascade = this.registrationSpendingCascade(
       configuration,
       evaluation,
@@ -670,6 +1277,8 @@ export class DiWorldConstructor {
       projectKey,
       admissionsByProduct,
       appTasksByProduct,
+      registrationValues,
+      activation,
     );
 
     this.spendConfigurationSteps(
@@ -700,25 +1309,59 @@ export class DiWorldConstructor {
     projectKey: string | null,
     admissionsByProduct: ReadonlyMap<ProductHandle, RegistrationAdmissionProduct>,
     appTasksByProduct: ReadonlyMap<ProductHandle, AppTaskDefinition>,
+    registrationValues: DiRegistrationValueMaterializer,
+    activation: DiProviderActivationSession,
   ): DiRegistrationSpendingCascade {
+    const sourceIndex = new StaticProjectEvaluationSourceIndex(evaluation);
     return new DiRegistrationSpendingCascade({
       admissionsByProduct,
       openSeamsByAdmissionProduct: registrationAdmissionOpenSeamIndex(configuration),
-      registryBodyIndex: buildRegistryBodyStepIndex(this.publication, configuration, evaluation),
+      registryBodyIndex: buildRegistryBodyStepIndex(configuration),
+      activation,
       issuePublisher: new DiIssuePublisher(this.store),
-      spendDirect: (container, step, admission, ordinal, runtimeValue, registryBodyInterpreted, inheritedOpenSeams) =>
+      materializeValue: (admission, carrier) => registrationValues.materialize(admission, carrier),
+      parameterElementsFor: (registry) => registrationValues.evaluatedRegistryParameterElements(registry),
+      materializeParameterizedRegistryParameters: (registry, ownerKey) =>
+        registrationValues.materializeParameterizedRegistryParameterAdmissions(registry, ownerKey),
+      openParameterizedRegistry: (local, registry, summary, reasonKinds) => recordsForDiOpenSeam(
+        this.store,
+        local,
+        KernelVocabulary.Di.OpenRegistryBody.key,
+        summary,
+        registry.sourceAddressHandle,
+        reasonKinds,
+      ),
+      retainEvaluationPressure: (local, openSeams, fallbackAddressHandle) =>
+        recordsForDiEvaluationOpenSeams(
+          this.store,
+          sourceIndex,
+          local,
+          openSeams,
+          fallbackAddressHandle,
+        ),
+      spendDirect: (
+        container,
+        step,
+        admission,
+        ordinal,
+        runtimeValue,
+        registrationValue,
+        application,
+        inheritedOpenSeams,
+      ) =>
         this.recordsForRegistrationSpending(
           container,
           step,
           admission,
           ordinal,
           runtimeValue,
+          registrationValue,
+          application,
           typeSystem,
           configuredResources,
           resourceDefinitions,
           projectKey,
           appTasksByProduct,
-          registryBodyInterpreted,
           inheritedOpenSeams,
         ),
     });
@@ -818,7 +1461,7 @@ export class DiWorldConstructor {
           container,
           step,
           admission,
-          configuration.evaluationBindings.registrationValueForAdmission(admission.productHandle),
+          configuration.evaluationBindings.registrationCarrierForAdmission(admission.productHandle),
         );
         frame.recordSpending(spent);
         if (spent.completion === DiRegistrationCascadeCompletion.Fatal) {
@@ -878,12 +1521,13 @@ export class DiWorldConstructor {
     admission: RegistrationAdmissionProduct,
     ordinal: number,
     runtimeValue: EvaluationValue | null,
+    registrationValue: DiRegistrationValueMaterialization,
+    application: DiRegistrationApplication,
     typeSystem: TypeSystemProject,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     resourceDefinitions: ResourceDefinitionIndex | null,
     projectKey: string | null,
     appTasksByProduct: ReadonlyMap<ProductHandle, AppTaskDefinition>,
-    registryBodyInterpreted: boolean,
     inheritedOpenSeams: readonly OpenSeam[],
   ): DiRegistrationSpendingEmission {
     const local = `di-registration:${ordinal}:${container.productHandle}:${step.productHandle}:${admission.productHandle}`;
@@ -892,16 +1536,44 @@ export class DiWorldConstructor {
       'Configuration-owned registration admission spent into DI world construction.',
       step.sourceAddressHandle ?? admission.sourceAddressHandle,
     );
-    const operation = this.operationForAdmission(container, admission, ordinal, local, source.provenanceHandle);
-    container.register(operation.product);
-    const frame = new DiRegistrationSpendingFrame(source, operation);
-    frame.retainOpenSeams(inheritedOpenSeams);
+    const operation = this.operationForAdmission(
+      container,
+      admission,
+      registrationValue.product,
+      registrationValue.authority,
+      registrationValue.frameworkRegistrationKind,
+      ordinal,
+      local,
+      source.provenanceHandle,
+    );
+    const frame = new DiRegistrationSpendingFrame(source, operation, registrationValue);
+    frame.records.push(...application.records);
+    frame.retainOpenSeams([...inheritedOpenSeams, ...application.openSeams]);
+    frame.issues.push(...application.issues.map((publication) => publication.issue));
+    if (application.issues.length > 0) {
+      frame.recordProductClaims(this.recordsForOperationProductClaims(
+        `${local}:application-issues`,
+        operation.product.productHandle,
+        application.issues.map((publication) => publication.issue.productHandle),
+        source.provenanceHandle,
+      ));
+    }
+    if (application.conditionalAdmissions != null) {
+      frame.records.push(...application.conditionalAdmissions.records);
+      frame.recordProductClaims(this.recordsForOperationAdmissionClaims(
+        `${local}:conditional-admission`,
+        operation.product.productHandle,
+        application.conditionalAdmissions.admissions,
+        source.provenanceHandle,
+      ));
+    }
 
     this.spendRegistrationAdmission(
       frame,
       container,
       admission,
       runtimeValue,
+      registrationValue.product,
       typeSystem,
       configuredResources,
       resourceDefinitions,
@@ -909,7 +1581,7 @@ export class DiWorldConstructor {
       appTasksByProduct,
       local,
       source.provenanceHandle,
-      registryBodyInterpreted,
+      application,
     );
     frame.records.push(...this.recordsForOperationEnvelope(
       local,
@@ -927,6 +1599,7 @@ export class DiWorldConstructor {
     container: Container,
     admission: RegistrationAdmissionProduct,
     runtimeValue: EvaluationValue | null,
+    registrationValue: DiRegistrationValueProduct | null,
     typeSystem: TypeSystemProject,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     resourceDefinitions: ResourceDefinitionIndex | null,
@@ -934,25 +1607,29 @@ export class DiWorldConstructor {
     appTasksByProduct: ReadonlyMap<ProductHandle, AppTaskDefinition>,
     local: string,
     provenanceHandle: ProvenanceHandle,
-    registryBodyInterpreted: boolean,
+    application: DiRegistrationApplication,
   ): void {
-    if (admission instanceof OpenRegistrationAdmission) {
-      this.spendOpenRegistrationAdmission(frame, admission, local);
-      return;
-    }
-    if (admission instanceof ResolverRegistrationAdmission) {
-      this.spendResolverRegistrationAdmission(frame, container, admission, local, provenanceHandle);
-      return;
-    }
-    if (admission instanceof ParameterizedRegistryAdmission) {
-      this.spendParameterizedRegistryAdmission(frame, container, admission, local, provenanceHandle);
-      return;
-    }
-    if (admission instanceof RegistryRegistrationAdmission) {
-      this.spendRegistryRegistrationAdmission(
+    if (registrationValue instanceof Resolver) {
+      this.spendCanonicalResolverValue(
         frame,
         container,
         admission,
+        registrationValue,
+        local,
+        provenanceHandle,
+      );
+      return;
+    }
+    if (registrationValue instanceof ParameterizedRegistry) {
+      // Parameterized registries can recursively spend source-owned admissions, so the cascade owns their branch.
+      return;
+    }
+    if (registrationValue instanceof RegistryValue) {
+      this.spendCanonicalRegistryValue(
+        frame,
+        container,
+        admission,
+        registrationValue,
         runtimeValue,
         typeSystem,
         configuredResources,
@@ -960,8 +1637,35 @@ export class DiWorldConstructor {
         appTasksByProduct,
         local,
         provenanceHandle,
-        registryBodyInterpreted,
+        application,
       );
+      return;
+    }
+    const frameworkKind = frameworkRegistrationKindForOperation(frame.operation.product);
+    if (frameworkKind != null) {
+      this.spendFrameworkRegistrationOperation(
+        frame,
+        container,
+        admission,
+        frameworkKind,
+        typeSystem,
+        configuredResources,
+        projectKey,
+        local,
+        provenanceHandle,
+      );
+      return;
+    }
+    if (admission instanceof OpenRegistrationAdmission) {
+      this.spendUnmaterializedRegistrationAdmission(frame, admission, local);
+      return;
+    }
+    if (
+      admission instanceof ResolverRegistrationAdmission
+      || admission instanceof ParameterizedRegistryAdmission
+      || admission instanceof RegistryRegistrationAdmission
+    ) {
+      this.spendUnmaterializedRegistrationAdmission(frame, admission, local);
       return;
     }
     if (admission instanceof ResourceRegistrationAdmission) {
@@ -976,23 +1680,15 @@ export class DiWorldConstructor {
       );
       return;
     }
-    if (admission instanceof FrameworkRegistrationAdmission) {
-      this.spendFrameworkRegistrationAdmission(
-        frame,
-        container,
-        admission,
-        typeSystem,
-        configuredResources,
-        projectKey,
-        local,
-        provenanceHandle,
-      );
-    }
   }
 
-  private spendOpenRegistrationAdmission(
+  private spendUnmaterializedRegistrationAdmission(
     frame: DiRegistrationSpendingFrame,
-    admission: OpenRegistrationAdmission,
+    admission:
+      | OpenRegistrationAdmission
+      | ResolverRegistrationAdmission
+      | ParameterizedRegistryAdmission
+      | RegistryRegistrationAdmission,
     local: string,
   ): void {
     if (frame.openSeams.length > 0) {
@@ -1001,55 +1697,57 @@ export class DiWorldConstructor {
     frame.recordOpenSeam(recordsForDiOpenSeam(this.store,
       `${local}:open-admission`,
       KernelVocabulary.Di.OpenRegistrationSpending.key,
-      summaryForOpenRegistrationAdmission(admission),
+      summaryForUnmaterializedRegistrationAdmission(admission),
       admission.sourceAddressHandle,
-      [OpenSeamReasonKind.DiRegistrationAdmissionOpen],
+      reasonKindsForUnmaterializedRegistrationAdmission(admission),
     ));
   }
 
-  private spendResolverRegistrationAdmission(
+  private spendCanonicalResolverValue(
     frame: DiRegistrationSpendingFrame,
     container: Container,
-    admission: ResolverRegistrationAdmission,
+    admission: RegistrationAdmissionProduct,
+    resolver: Resolver,
     local: string,
     provenanceHandle: ProvenanceHandle,
   ): void {
-    const emission = this.recordsForResolverAdmission(container, admission, local, provenanceHandle);
-    frame.recordResolverEmission(container, emission);
+    if (resolver._key.identityHandle == null || !isConcreteResolverStrategy(resolver._strategy)) {
+      throw new Error('A canonical runtime Resolver must retain one closed key and concrete framework strategy.');
+    }
+    const emission = this.resolverPublication.recordsForCanonicalResolverSlot(
+      container,
+      {
+        ownerIdentityHandle: admission.identityHandle,
+        key: resolver._key,
+        keyIdentityHandle: resolver._key.identityHandle,
+        strategy: resolver._strategy,
+        state: resolver._state,
+        sourceAddressHandle: resolver.sourceAddressHandle,
+        fieldProvenance: resolver.fieldProvenance,
+      },
+      resolver,
+      local,
+      provenanceHandle,
+    );
+    frame.recordResolverEmission(container, {
+      records: emission.records,
+      resolvers: [],
+      resolverSlots: [emission.resolverSlot],
+      openSeams: [],
+    });
     frame.recordProductClaims(this.recordsForOperationProductClaims(
-      `${local}:resolver-products`,
-      frame.operation.productHandle,
-      [
-        ...emission.resolvers.map((resolver) => resolver.productHandle),
-        ...emission.resolverSlots.map((slot) => slot.productHandle),
-      ],
+      `${local}:resolver-slot-products`,
+      frame.operation.product.productHandle,
+      [emission.resolverSlot.productHandle],
       provenanceHandle,
     ));
   }
 
-  private spendParameterizedRegistryAdmission(
+  private spendCanonicalRegistryValue(
     frame: DiRegistrationSpendingFrame,
     container: Container,
-    admission: ParameterizedRegistryAdmission,
-    local: string,
-    provenanceHandle: ProvenanceHandle,
-  ): void {
-    const emission = this.recordsForParameterizedRegistry(container, admission, local, provenanceHandle);
-    frame.recordParameterizedRegistry(emission);
-    if (emission.registry != null) {
-      frame.recordProductClaims(this.recordsForOperationProductClaims(
-        `${local}:parameterized-registry-products`,
-        frame.operation.productHandle,
-        [emission.registry.productHandle],
-        provenanceHandle,
-      ));
-    }
-  }
-
-  private spendRegistryRegistrationAdmission(
-    frame: DiRegistrationSpendingFrame,
-    container: Container,
-    admission: RegistryRegistrationAdmission,
+    admission: RegistrationAdmissionProduct,
+    registryValue: RegistryValue,
     runtimeValue: EvaluationValue | null,
     typeSystem: TypeSystemProject,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
@@ -1057,22 +1755,32 @@ export class DiWorldConstructor {
     appTasksByProduct: ReadonlyMap<ProductHandle, AppTaskDefinition>,
     local: string,
     provenanceHandle: ProvenanceHandle,
-    registryBodyInterpreted: boolean,
+    application: DiRegistrationApplication,
   ): void {
-    const emission = this.recordsForRegistry(
-      container,
-      admission,
-      local,
-      provenanceHandle,
-      registryBodyInterpreted || frameworkDiEffectsCloseRegistryBody(admission),
-    );
-    frame.recordRegistry(emission);
-    const registeredAppTask = appTaskForRegistryAdmission(admission, appTasksByProduct);
-    frame.recordAppTask(container, registeredAppTask, runtimeValue);
+    const bodyClosed = application.body.closed
+      || frameworkDiEffectsCloseRegistryBody(frame.operation.product);
+    const openSummary = application.fatal || bodyClosed || application.openSeams.length > 0
+      ? null
+      : summaryForRegistryValueOpen(registryValue.registryValue);
+    if (openSummary != null) {
+      frame.recordOpenSeam(recordsForDiOpenSeam(
+        this.store,
+        `${local}:registry-open`,
+        KernelVocabulary.Di.OpenRegistryBody.key,
+        openSummary,
+        admission.sourceAddressHandle,
+        [OpenSeamReasonKind.DiRegistryBodyOpen],
+      ));
+    }
+    if (application.fatal) {
+      return;
+    }
 
+    const registeredAppTask = appTaskForRegistrationOperation(frame.operation.product, appTasksByProduct);
+    frame.recordAppTask(registeredAppTask, runtimeValue);
     const frameworkEffects = this.recordsForFrameworkRegistrationEffects(
       container,
-      admission,
+      frame.operation.product,
       typeSystem,
       configuredResources,
       projectKey,
@@ -1081,10 +1789,9 @@ export class DiWorldConstructor {
     );
     frame.recordFrameworkEffects(container, frameworkEffects);
     frame.recordProductClaims(this.recordsForOperationProductClaims(
-      `${local}:registry-products`,
-      frame.operation.productHandle,
+      `${local}:registry-effect-products`,
+      frame.operation.product.productHandle,
       [
-        emission.registry.productHandle,
         ...(registeredAppTask == null ? [] : [registeredAppTask.productHandle]),
         ...frameworkEffects.resolvers.map((resolver) => resolver.productHandle),
         ...frameworkEffects.resolverSlots.map((slot) => slot.productHandle),
@@ -1116,7 +1823,7 @@ export class DiWorldConstructor {
     frame.recordResourceSlots(container, emission);
     frame.recordProductClaims(this.recordsForOperationProductClaims(
       `${local}:resource-products`,
-      frame.operation.productHandle,
+      frame.operation.product.productHandle,
       [
         ...emission.slots.map((slot) => slot.productHandle),
         ...emission.issues.map((issue) => issue.productHandle),
@@ -1125,10 +1832,11 @@ export class DiWorldConstructor {
     ));
   }
 
-  private spendFrameworkRegistrationAdmission(
+  private spendFrameworkRegistrationOperation(
     frame: DiRegistrationSpendingFrame,
     container: Container,
-    admission: FrameworkRegistrationAdmission,
+    admission: RegistrationAdmissionProduct,
+    frameworkKind: FrameworkRegistrationKind,
     typeSystem: TypeSystemProject,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     projectKey: string | null,
@@ -1137,7 +1845,7 @@ export class DiWorldConstructor {
   ): void {
     const frameworkEffects = this.recordsForFrameworkRegistrationEffects(
       container,
-      admission,
+      frame.operation.product,
       typeSystem,
       configuredResources,
       projectKey,
@@ -1147,7 +1855,7 @@ export class DiWorldConstructor {
     frame.recordFrameworkEffects(container, frameworkEffects);
     frame.recordProductClaims(this.recordsForOperationProductClaims(
       `${local}:framework-effect-products`,
-      frame.operation.productHandle,
+      frame.operation.product.productHandle,
       [
         ...frameworkEffects.resolvers.map((resolver) => resolver.productHandle),
         ...frameworkEffects.resolverSlots.map((slot) => slot.productHandle),
@@ -1158,7 +1866,7 @@ export class DiWorldConstructor {
       provenanceHandle,
     ));
 
-    const openSummary = frameworkDiRegistrationEffectsForKind(admission.frameworkKind).openSummary;
+    const openSummary = frameworkDiRegistrationEffectsForKind(frameworkKind).openSummary;
     if (openSummary != null) {
       frame.recordOpenSeam(recordsForDiOpenSeam(this.store,
         `${local}:framework-registration-open`,
@@ -1173,19 +1881,37 @@ export class DiWorldConstructor {
   private operationForAdmission(
     container: Container,
     admission: RegistrationAdmissionProduct,
+    registrationValue: DiRegistrationValueProduct | null,
+    evidenceAuthority: DiRegistrationEvidenceAuthority,
+    frameworkRegistrationKind: FrameworkRegistrationKind | null,
     ordinal: number,
     local: string,
     provenanceHandle: ProvenanceHandle,
   ): DiRegistrationOperationEmission {
     const handles = this.registrationOperationHandles(local);
-    const operation = this.registrationOperationForAdmission(container, admission, ordinal, handles);
-    const records = this.recordsForRegistrationOperation(container, admission, operation, handles, provenanceHandle);
+    const operation = this.registrationOperationForAdmission(
+      container,
+      admission,
+      registrationValue,
+      evidenceAuthority,
+      frameworkRegistrationKind,
+      ordinal,
+      handles,
+    );
+    const records = this.recordsForRegistrationOperation(
+      container,
+      admission,
+      registrationValue,
+      operation,
+      handles,
+      provenanceHandle,
+    );
     return new DiRegistrationOperationEmission(
       records,
       operation,
-      handles.productHandle,
-      handles.identityHandle,
-      handles.acceptRegistrationClaimHandle,
+      handles.containerProducesOperationClaimHandle,
+      handles.operationAppliesAdmissionClaimHandle,
+      registrationValue == null ? null : handles.operationUsesRegistrationValueClaimHandle,
     );
   }
 
@@ -1193,13 +1919,18 @@ export class DiWorldConstructor {
     return new DiRegistrationOperationHandles(
       this.store.handles.product(`${local}:operation`),
       this.store.handles.identity(`${local}:operation`),
-      this.store.handles.claim(`${local}:container-accepts-registration`),
+      this.store.handles.claim(`${local}:container-produces-operation`),
+      this.store.handles.claim(`${local}:operation-applies-admission`),
+      this.store.handles.claim(`${local}:operation-uses-registration-value`),
     );
   }
 
   private registrationOperationForAdmission(
     container: Container,
     admission: RegistrationAdmissionProduct,
+    registrationValue: DiRegistrationValueProduct | null,
+    evidenceAuthority: DiRegistrationEvidenceAuthority,
+    frameworkRegistrationKind: FrameworkRegistrationKind | null,
     ordinal: number,
     handles: DiRegistrationOperationHandles,
   ): ContainerRegistrationOperation {
@@ -1208,8 +1939,10 @@ export class DiWorldConstructor {
       handles.identityHandle,
       ordinal,
       container.toReference(),
-      admission.productHandle,
-      admission.sourceAddressHandle,
+      admission,
+      registrationValue,
+      evidenceAuthority,
+      frameworkRegistrationKind,
       admission.sourceAddressHandle ?? container.sourceAddressHandle,
       [],
     );
@@ -1219,6 +1952,7 @@ export class DiWorldConstructor {
   private recordsForRegistrationOperation(
     container: Container,
     admission: RegistrationAdmissionProduct,
+    registrationValue: DiRegistrationValueProduct | null,
     operation: ContainerRegistrationOperation,
     handles: DiRegistrationOperationHandles,
     provenanceHandle: ProvenanceHandle,
@@ -1232,12 +1966,28 @@ export class DiWorldConstructor {
         operation.sourceAddressHandle,
       ),
       new SemanticClaim(
-        handles.acceptRegistrationClaimHandle,
+        handles.containerProducesOperationClaimHandle,
         container.productHandle,
-        KernelVocabulary.Di.AcceptsRegistration.key,
+        KernelVocabulary.Di.ProducesProduct.key,
+        operation.productHandle,
+        provenanceHandle,
+      ),
+      new SemanticClaim(
+        handles.operationAppliesAdmissionClaimHandle,
+        operation.productHandle,
+        KernelVocabulary.Di.AppliesRegistration.key,
         admission.productHandle,
         provenanceHandle,
       ),
+      ...(registrationValue == null
+        ? []
+        : [new SemanticClaim(
+            handles.operationUsesRegistrationValueClaimHandle,
+            operation.productHandle,
+            KernelVocabulary.Di.UsesRegistrationValue.key,
+            registrationValue.productHandle,
+            provenanceHandle,
+          )]),
     ];
   }
 
@@ -1250,16 +2000,16 @@ export class DiWorldConstructor {
   ): readonly KernelStoreRecord[] {
     return [
       new MaterializedProduct(
-        operation.productHandle,
+        operation.product.productHandle,
         KernelVocabulary.Di.ContainerRegistration.key,
-        operation.identityHandle,
+        operation.product.identityHandle,
         operation.product.sourceAddressHandle,
         provenanceHandle,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`${local}:operation`),
-        operation.identityHandle,
-        [operation.productHandle],
+        operation.product.identityHandle,
+        [operation.product.productHandle],
         materializationClaimHandles,
         openSeamHandles,
       ),
@@ -1287,94 +2037,25 @@ export class DiWorldConstructor {
     return new DiClaimEmission(records, handles);
   }
 
-  private recordsForResolverAdmission(
-    container: Container,
-    admission: ResolverRegistrationAdmission,
+  private recordsForOperationAdmissionClaims(
     local: string,
+    operationProductHandle: ProductHandle,
+    admissions: readonly RegistrationAdmissionProduct[],
     provenanceHandle: ProvenanceHandle,
-  ): {
-    readonly records: readonly KernelStoreRecord[];
-    readonly resolvers: readonly Resolver[];
-    readonly resolverSlots: readonly ContainerResolverSlot[];
-    readonly openSeams: readonly OpenSeam[];
-  } {
-    const records: KernelStoreRecord[] = [];
-    const openSeams: OpenSeam[] = [];
-    if (admission.keyRole !== RegistrationKeyRole.AdmittedKey || admission.targetKey?.identityHandle == null) {
-      const seam = recordsForDiOpenSeam(this.store,
-        `${local}:open-key`,
-        KernelVocabulary.Di.OpenRegistrationSpending.key,
-        'Resolver admission could not produce a container slot because the admitted DI key stayed open.',
-        admission.sourceAddressHandle,
-        [OpenSeamReasonKind.DiRegistrationKeyOpen],
+  ): DiClaimEmission {
+    const handles: ClaimHandle[] = [];
+    const records = admissions.map((admission, index) => {
+      const handle = this.store.handles.claim(`${local}:${index}`);
+      handles.push(handle);
+      return new SemanticClaim(
+        handle,
+        operationProductHandle,
+        KernelVocabulary.Di.AdmitsRegistration.key,
+        admission.productHandle,
+        provenanceHandle,
       );
-      records.push(...seam.records);
-      openSeams.push(seam.seam);
-      return { records, resolvers: [], resolverSlots: [], openSeams };
-    }
-
-    if (!isResolverRegistrationStrategy(admission.strategy)) {
-      const seam = recordsForDiOpenSeam(this.store,
-        `${local}:open-strategy`,
-        KernelVocabulary.Di.OpenRegistrationSpending.key,
-        `DI world construction does not yet spend ${admission.strategy} admissions into concrete container effects.`,
-        admission.sourceAddressHandle,
-        [OpenSeamReasonKind.DiRegistrationStrategyOpen],
-      );
-      records.push(...seam.records);
-      openSeams.push(seam.seam);
-      return { records, resolvers: [], resolverSlots: [], openSeams };
-    }
-
-    const publication = this.resolverPublication.resolverPublicationForAdmission(admission);
-    if (publication == null) {
-      const seam = recordsForDiOpenSeam(this.store,
-        `${local}:open-publication`,
-        KernelVocabulary.Di.OpenRegistrationSpending.key,
-        'Resolver admission had a closed strategy but did not expose a closed DI key publication.',
-        admission.sourceAddressHandle,
-        [OpenSeamReasonKind.DiRegistrationPublicationOpen],
-      );
-      records.push(...seam.records);
-      openSeams.push(seam.seam);
-      return { records, resolvers: [], resolverSlots: [], openSeams };
-    }
-
-    const emission = this.resolverPublication.recordsForResolverPublication(container, publication, local, provenanceHandle);
-    records.push(...emission.records);
-    return {
-      records,
-      resolvers: [emission.resolver],
-      resolverSlots: [emission.resolverSlot],
-      openSeams,
-    };
-  }
-
-  private recordsForParameterizedRegistry(
-    container: Container,
-    admission: ParameterizedRegistryAdmission,
-    local: string,
-    provenanceHandle: ProvenanceHandle,
-  ): {
-    readonly records: readonly KernelStoreRecord[];
-    readonly registry: ParameterizedRegistry | null;
-    readonly openSeams: readonly OpenSeam[];
-  } {
-    return this.registryPublication.recordsForParameterizedRegistry(container, admission, local, provenanceHandle);
-  }
-
-  private recordsForRegistry(
-    container: Container,
-    admission: RegistryRegistrationAdmission,
-    local: string,
-    provenanceHandle: ProvenanceHandle,
-    registryBodyInterpreted: boolean,
-  ): {
-    readonly records: readonly KernelStoreRecord[];
-    readonly registry: RegistryValue;
-    readonly openSeams: readonly OpenSeam[];
-  } {
-    return this.registryPublication.recordsForRegistry(container, admission, local, provenanceHandle, registryBodyInterpreted);
+    });
+    return new DiClaimEmission(records, handles);
   }
 
   private recordsForResourceAdmission(
@@ -1449,14 +2130,17 @@ export class DiWorldConstructor {
 
   private recordsForConfiguredResourceSlots(
     container: Container,
-    admission: RegistrationAdmissionProduct,
+    operation: ContainerRegistrationOperation,
+    frameworkKind: FrameworkRegistrationKind,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     projectKey: string | null,
     local: string,
     provenanceHandle: ProvenanceHandle,
   ): DiResourceSlotEmission {
+    const admission = operation.admission;
     const selection = configuredResources.selections.find((candidate) =>
       candidate.registrationAdmissionProductHandle === admission.productHandle
+      && candidate.frameworkKind === frameworkKind
     );
     if (selection == null) {
       return new DiResourceSlotEmission([], [], []);
@@ -1505,14 +2189,15 @@ export class DiWorldConstructor {
 
   private recordsForFrameworkRegistrationEffects(
     container: Container,
-    admission: RegistrationAdmissionProduct,
+    operation: ContainerRegistrationOperation,
     typeSystem: TypeSystemProject,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     projectKey: string | null,
     local: string,
     provenanceHandle: ProvenanceHandle,
   ): DiFrameworkRegistrationEffectEmission {
-    const frameworkKind = frameworkRegistrationKindForAdmission(admission);
+    const admission = operation.admission;
+    const frameworkKind = frameworkRegistrationKindForOperation(operation);
     if (frameworkKind == null) {
       return new DiFrameworkRegistrationEffectEmission([], [], [], [], [], []);
     }
@@ -1520,7 +2205,8 @@ export class DiWorldConstructor {
     const frameworkEffects = frameworkDiRegistrationEffectsForKind(frameworkKind);
     const resourceEmission = this.recordsForConfiguredResourceSlots(
       container,
-      admission,
+      operation,
+      frameworkKind,
       configuredResources,
       projectKey,
       `${local}:resources`,
@@ -1531,6 +2217,7 @@ export class DiWorldConstructor {
         this.resolverPublication.recordsForFrameworkResolverEffect(
           container,
           admission,
+          frameworkKind,
           effect,
           typeSystem,
           `${local}:resolver:${index}`,
@@ -1589,7 +2276,22 @@ function resourceLookupNames(
   return [lookupNameOverride ?? definition.name, ...definition.aliases.map((alias) => alias.name)];
 }
 
-function summaryForOpenRegistrationAdmission(admission: OpenRegistrationAdmission): string {
+function summaryForUnmaterializedRegistrationAdmission(
+  admission:
+    | OpenRegistrationAdmission
+    | ResolverRegistrationAdmission
+    | ParameterizedRegistryAdmission
+    | RegistryRegistrationAdmission,
+): string {
+  if (admission instanceof ResolverRegistrationAdmission) {
+    return 'Resolver registration reached DI spending without one closed key and concrete runtime strategy.';
+  }
+  if (admission instanceof ParameterizedRegistryAdmission) {
+    return 'Parameterized registry reached DI spending without one closed registry lookup key.';
+  }
+  if (admission instanceof RegistryRegistrationAdmission) {
+    return 'Registry registration reached DI spending without a materialized IRegistry-shaped runtime value.';
+  }
   switch (admission.strategy) {
     case RegistrationStrategy.Unknown:
       return 'Registration admission was preserved, but recognition could not classify its runtime strategy yet.';
@@ -1618,14 +2320,34 @@ function summaryForOpenRegistrationAdmission(admission: OpenRegistrationAdmissio
   }
 }
 
-function frameworkDiEffectsCloseRegistryBody(admission: RegistrationAdmissionProduct): boolean {
+function reasonKindsForUnmaterializedRegistrationAdmission(
+  admission:
+    | OpenRegistrationAdmission
+    | ResolverRegistrationAdmission
+    | ParameterizedRegistryAdmission
+    | RegistryRegistrationAdmission,
+): readonly OpenSeamReasonKind[] {
   if (
-    admission instanceof RegistryRegistrationAdmission
-    && admission.registryValue?.registryBody?.state === RegistryBodyInterpretationState.Interpreted
+    admission instanceof ResolverRegistrationAdmission
+    || admission instanceof ParameterizedRegistryAdmission
+  ) {
+    return [OpenSeamReasonKind.DiRegistrationKeyOpen];
+  }
+  if (admission instanceof RegistryRegistrationAdmission) {
+    return [OpenSeamReasonKind.DiRegistrationPublicationOpen];
+  }
+  return [OpenSeamReasonKind.DiRegistrationAdmissionOpen];
+}
+
+function frameworkDiEffectsCloseRegistryBody(operation: ContainerRegistrationOperation): boolean {
+  const registrationValue = operation.registrationValue;
+  if (
+    registrationValue instanceof RegistryValue
+    && registrationValue.registryValue?.registryBody?.state === RegistryBodyInterpretationState.Interpreted
   ) {
     return true;
   }
-  const frameworkKind = frameworkRegistrationKindForAdmission(admission);
+  const frameworkKind = frameworkRegistrationKindForOperation(operation);
   return frameworkKind != null
     && frameworkDiRegistrationEffectsForKind(frameworkKind).coverageState === FrameworkDiEffectCoverageState.Closed;
 }
@@ -1689,13 +2411,15 @@ function emptyRegistrationSpendingCascade(): DiRegistrationSpendingCascadeEmissi
   };
 }
 
-function appTaskForRegistryAdmission(
-  admission: RegistryRegistrationAdmission,
+function appTaskForRegistrationOperation(
+  operation: ContainerRegistrationOperation,
   appTasksByProduct: ReadonlyMap<ProductHandle, AppTaskDefinition>,
 ): AppTaskDefinition | null {
-  if (frameworkRegistrationKindForAdmission(admission) !== FrameworkRegistrationKind.AppTask) {
+  if (frameworkRegistrationKindForOperation(operation) !== FrameworkRegistrationKind.AppTask) {
     return null;
   }
-  const productHandle = admission.registryValue?.productHandle ?? null;
+  const productHandle = operation.registrationValue instanceof RegistryValue
+    ? operation.registrationValue.registryValue?.productHandle ?? null
+    : null;
   return productHandle == null ? null : appTasksByProduct.get(productHandle) ?? null;
 }

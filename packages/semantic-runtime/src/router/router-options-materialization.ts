@@ -33,10 +33,7 @@ import type {
   KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
-import {
-  frameworkRegistrationKindForAdmission,
-  type RegistrationAdmissionProduct,
-} from '../registration/registration-admission.js';
+import { frameworkRegistrationKindForOperation } from '../di/container-registration.js';
 import {
   FrameworkRegistrationKind,
 } from '../registration/registration-reference.js';
@@ -61,7 +58,6 @@ interface RouterOptionsEmission {
 interface RouterOptionsSeed {
   readonly appRoot: AppRoot;
   readonly operation: ContainerRegistrationOperation;
-  readonly admission: RegistrationAdmissionProduct;
   readonly contributions: readonly ConfigurationOptionContribution[];
   readonly configurationValueSourceAddressHandle: AddressHandle | null;
 }
@@ -69,7 +65,6 @@ interface RouterOptionsSeed {
 interface RouterRegistrationUse {
   readonly appRoot: AppRoot;
   readonly operation: ContainerRegistrationOperation;
-  readonly admission: RegistrationAdmissionProduct;
 }
 
 interface RouterOptionsSeedSet {
@@ -177,7 +172,7 @@ export class RouterOptionsMaterializationProjectPass {
     const draft = foldRouterOptions(seed.contributions);
     const local = `router-options:${project.projectKey}:${seed.appRoot.identityHandle}:${seed.operation.identityHandle}:${index}`;
     const sourceAddressHandle = seed.contributions.at(-1)?.sourceAddressHandle
-      ?? seed.admission.sourceAddressHandle;
+      ?? seed.operation.admission.sourceAddressHandle;
     const options = routerOptionsModel(
       store,
       local,
@@ -214,7 +209,7 @@ export class RouterOptionsMaterializationProjectPass {
         duplicate.operation.identityHandle,
         index,
       ].join(':');
-      const sourceAddressHandle = duplicate.operation.admissionAddressHandle
+      const sourceAddressHandle = duplicate.operation.admission.sourceAddressHandle
         ?? duplicate.operation.sourceAddressHandle;
       const message = 'RouterConfiguration is registered more than once in the same application container tree; the root RouteContext cannot be installed unambiguously.';
       const issue = new RouterIssueModel(
@@ -237,7 +232,7 @@ export class RouterOptionsMaterializationProjectPass {
         sourceAddressHandle,
         [new RouterIssueRelatedInformation(
           'The first RouterConfiguration registration in this application container tree is here.',
-          first.operation.admissionAddressHandle ?? first.operation.sourceAddressHandle,
+          first.operation.admission.sourceAddressHandle ?? first.operation.sourceAddressHandle,
         )],
       );
       return {
@@ -269,7 +264,7 @@ function routerOptionsModel(
     seed.appRoot.toReference(),
     seed.operation.container,
     seed.operation.productHandle,
-    seed.operation.admissionAddressHandle ?? seed.operation.sourceAddressHandle,
+    seed.operation.admission.sourceAddressHandle ?? seed.operation.sourceAddressHandle,
     seed.configurationValueSourceAddressHandle,
     draft.basePath,
     draft.useUrlFragmentHash,
@@ -313,9 +308,6 @@ function routerOptionsSeeds(
   configuration: ConfigurationKernelEmission,
   diWorld: DiWorldConstructionEmission,
 ): RouterOptionsSeedSet {
-  const admissionsByProduct = new Map(
-    configuration.registrationAdmissions.map((admission) => [admission.productHandle, admission] as const),
-  );
   const appRootsByContainer = new Map(
     configuration.appRoots.flatMap((appRoot) =>
       appRoot.container.productHandle == null
@@ -325,12 +317,8 @@ function routerOptionsSeeds(
   );
   const usesByAppRoot = new Map<ProductHandle, RouterRegistrationUse[]>();
   for (const operation of diWorld.registrationOperations) {
-    const admission = operation.admissionProductHandle == null
-      ? null
-      : admissionsByProduct.get(operation.admissionProductHandle) ?? null;
     if (
-      admission == null
-      || frameworkRegistrationKindForAdmission(admission) !== FrameworkRegistrationKind.RouterConfiguration
+      frameworkRegistrationKindForOperation(operation) !== FrameworkRegistrationKind.RouterConfiguration
       || operation.container.productHandle == null
     ) {
       continue;
@@ -340,7 +328,7 @@ function routerOptionsSeeds(
       continue;
     }
     const uses = usesByAppRoot.get(appRoot.productHandle);
-    const use = { appRoot, operation, admission };
+    const use = { appRoot, operation };
     if (uses == null) {
       usesByAppRoot.set(appRoot.productHandle, [use]);
     } else {
@@ -356,10 +344,12 @@ function routerOptionsSeeds(
       continue;
     }
     const use = uses[0]!;
-    const configurationValueSourceAddressHandle = configurationValueSourceAddressHandleForAdmission(use.admission);
+    const configurationValueSourceAddressHandle = configurationValueSourceAddressHandleForAdmission(
+      use.operation.admission,
+    );
     seeds.push({
       ...use,
-      contributions: configurationOptionContributionsForAdmission(store, configuration, use.admission)
+      contributions: configurationOptionContributionsForAdmission(configuration, use.operation.admission)
         .filter((contribution) =>
           contribution.configurationKind === FrameworkRegistrationKind.RouterConfiguration
         ),

@@ -51,7 +51,9 @@ the exact `DI.createContainer()` product through service-root enrichment and the
 `framework.container-root-denotes-container` claim; ambiguous source spans prove nothing. Provider visibility comes from
 the exact `Container` frames and resolver/resource slots in the current DI/runtime world, never from world-global
 presence. Registration-hiding seams retain their admission/container loci; unknown loci remain conservatively
-unconstrained.
+unconstrained. A `DiRegistrationOpenSeamScope` is already typed application evidence and remains registration-hiding
+regardless of whether the retained seam kind is owned by DI, registration, or evaluation. Only raw configuration seams
+need kind-based filtering before they can block a capability demand.
 
 Keep recognizers pure where possible, but do not let shared positive facts stay as projection-local state. If a fact is
 consumed by more than one domain, or justifies a framework-coded positive diagnostic, promote it into a kernel product,

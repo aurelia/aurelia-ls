@@ -18,6 +18,7 @@ import {
   ContainerChildMaterializationRequest,
   ContainerChildMaterializer,
 } from '../src/di/container-materializer.js';
+import { frameworkRegistrationKindForOperation } from '../src/di/container-registration.js';
 import type { Container } from '../src/di/container.js';
 import type { ContainerResolverSlot } from '../src/di/container-slot.js';
 import {
@@ -31,6 +32,7 @@ import { ContainerDefaultResolverPolicy } from '../src/di/container-configuratio
 import {
   DiProviderActivationState,
   DiProviderActivationView,
+  noDiProviderActivationValues,
   type DiProviderActivationResult,
   type DiProviderActivationSession,
 } from '../src/di/provider-activation.js';
@@ -39,16 +41,23 @@ import {
   ResolverResolutionKind,
 } from '../src/di/resolver.js';
 import { InstanceProvider } from '../src/di/instance-provider.js';
+import { ParameterizedRegistry } from '../src/di/registry.js';
 import type { DiWorldConstructionEmission } from '../src/di/world-construction.js';
-import { DiIssueKind, DiIssueSubjectKind } from '../src/di/di-issue.js';
+import {
+  DiIssueKind,
+  DiIssueSubjectKind,
+  DiRegistryApplicationFailureKind,
+} from '../src/di/di-issue.js';
 import {
   isEvaluatedProjectSource,
   type StaticProjectEvaluationResult,
 } from '../src/evaluation/project-evaluation.js';
 import {
+  EvaluationObjectValue,
   EvaluationValueKind,
   type EvaluationValue,
 } from '../src/evaluation/values.js';
+import type { IdentityHandle, ProductHandle } from '../src/kernel/handles.js';
 import { evaluationValueOwnOpenSeams } from '../src/evaluation/value-pressure.js';
 import {
   SourceFileAddress,
@@ -62,17 +71,52 @@ import {
 import { OpenSeamReasonKind } from '../src/kernel/open-seam.js';
 import { KernelVocabulary } from '../src/kernel/vocabulary.js';
 import {
-  frameworkRegistrationKindForAdmission,
+  FrameworkRegistrationAdmission,
   OpenRegistrationAdmission,
+  RegistrationAdmissionKind,
   RegistryRegistrationAdmission,
   ResolverRegistrationAdmission,
   RegistrationStrategy,
 } from '../src/registration/registration-admission.js';
+import { frameworkRegistrationKindForRegistrationEvidence } from '../src/registration/evaluated-registration-classifier.js';
+import {
+  EvaluatedRegistrationCarrier,
+  RegistrationCarrierKind,
+} from '../src/registration/registration-observation.js';
 import { FrameworkRegistrationKind } from '../src/registration/registration-reference.js';
 
 const pressureFixtures = fileURLToPath(new URL('../fixtures/pressure', import.meta.url));
 
 describe('DI provider model', () => {
+  test('lets exact evaluator evidence reject stale framework source classification', () => {
+    const sourceFile = ts.createSourceFile(
+      'framework-registration-authority.ts',
+      '({ register() {} })',
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const expression = (sourceFile.statements[0] as ts.ExpressionStatement).expression;
+    const admission = new FrameworkRegistrationAdmission(
+      'framework-registration-admission' as ProductHandle,
+      'framework-registration-identity' as IdentityHandle,
+      RegistrationCarrierKind.AureliaRegisterCall,
+      RegistrationAdmissionKind.AureliaRegisterArgument,
+      FrameworkRegistrationKind.StandardConfiguration,
+      null,
+      null,
+    );
+    const exactNonFrameworkValue = new EvaluatedRegistrationCarrier(
+      expression,
+      new EvaluationObjectValue(new Map(), false, expression),
+    );
+
+    expect(frameworkRegistrationKindForRegistrationEvidence(admission, null))
+      .toBe(FrameworkRegistrationKind.StandardConfiguration);
+    expect(frameworkRegistrationKindForRegistrationEvidence(admission, exactNonFrameworkValue))
+      .toBeNull();
+  });
+
   test('carries a createInterface default registration into the registration corridor', async () => {
     const runtime = await createSemanticRuntime({
       workspaceRoot: path.join(pressureFixtures, 'di-cyclic-dependency'),
@@ -123,6 +167,7 @@ describe('DI provider model', () => {
       storeKey: 'test:di-provider-model:callback-lifetime',
     });
     const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const configuration = app.emission.configuration.readConfiguration();
     const world = app.emission.appWorld.diWorld;
     const callbackSlot = world.resolverSlots.find((slot) => resolverKeyName(slot) === 'callback-service');
     const cachedCallbackSlot = world.resolverSlots.find((slot) => resolverKeyName(slot) === 'cached-callback-service');
@@ -174,6 +219,69 @@ describe('DI provider model', () => {
     expect(transientOne.state).toBe(DiProviderActivationState.Value);
     expect(transientTwo.state).toBe(DiProviderActivationState.Value);
     expect(transientTwo.value).not.toBe(transientOne.value);
+  });
+
+  test('matches Aurelia class dependency timing, precedence, sparse slots, and metadata inheritance', async () => {
+    const fixture = await openProviderActivationFixture(
+      'class-dependency-topology',
+      'di-class-dependency-topology',
+    );
+    const session = fixture.activation.createSession();
+    const activate = (name: string): DiProviderActivationResult =>
+      activateNamedSite(fixture, session, name);
+    const dependencyMarker = (name: string): string | null =>
+      marker(instanceProperty(activate(name).value, 'dependency'));
+
+    expect(dependencyMarker('definitionTimeRead')).toBe('first-dependency');
+
+    const sparseStatic = activate('sparseStaticRead');
+    expect(sparseStatic.state).toBe(DiProviderActivationState.Value);
+    expect(instanceProperty(sparseStatic.value, 'first')?.kind).toBe(EvaluationValueKind.Undefined);
+    expect(marker(instanceProperty(sparseStatic.value, 'second'))).toBe('second-dependency');
+    expect(activate('explicitUndefinedStaticRead').state).toBe(DiProviderActivationState.Failed);
+    expect(activate('invalidStaticRead').state).toBe(DiProviderActivationState.Failed);
+
+    expect(activate('inheritedGetterRead').state).toBe(DiProviderActivationState.Value);
+    expect(dependencyMarker('cachedGetterReadOne')).toBe('first-dependency');
+    expect(dependencyMarker('cachedGetterReadTwo')).toBe('first-dependency');
+    expect(dependencyMarker('staticPrecedenceRead')).toBe('first-dependency');
+    expect(dependencyMarker('undefinedStaticRead')).toBe('first-dependency');
+    expect(dependencyMarker('stackedDecoratorRead')).toBe('first-dependency');
+
+    const sparseDecorator = activate('sparseDecoratorRead');
+    expect(sparseDecorator.state).toBe(DiProviderActivationState.Value);
+    expect(instanceProperty(sparseDecorator.value, 'first')?.kind).toBe(EvaluationValueKind.Undefined);
+    expect(marker(instanceProperty(sparseDecorator.value, 'second'))).toBe('second-dependency');
+
+    expect(activate('fieldMetadataRead').state).toBe(DiProviderActivationState.Value);
+    expect(dependencyMarker('reexportedAliasRead')).toBe('first-dependency');
+    expect(dependencyMarker('namespaceAliasRead')).toBe('second-dependency');
+    expect(instanceProperty(activate('reexportedResolverRead').value, 'dependency')?.kind)
+      .toBe(EvaluationValueKind.Undefined);
+    expect(instanceProperty(activate('bareResolverRead').value, 'dependency')?.kind)
+      .toBe(EvaluationValueKind.Undefined);
+    expect(dependencyMarker('nestedResolverRead')).toBe('first-dependency');
+
+    const leftToRightFailure = activate('leftToRightFailureRead');
+    expect(leftToRightFailure.state).toBe(DiProviderActivationState.Failed);
+    expect(leftToRightFailure.failureKind).toBe(ContainerResolutionFailureKind.UnableJitNonConstructor);
+    expect(leftToRightFailure.reason).toContain("key kind 'string'");
+    expect(leftToRightFailure.cycle).toBeNull();
+  });
+
+  test('keeps legacy design:paramtypes honest without losing own empty metadata', async () => {
+    const fixture = await openProviderActivationFixture(
+      'design-paramtypes-boundary',
+      'di-design-paramtypes-boundary',
+    );
+    const session = fixture.activation.createSession();
+    const metadata = activateNamedSite(fixture, session, 'metadataRead');
+    const emptyMetadata = activateNamedSite(fixture, session, 'emptyMetadataRead');
+
+    expect(metadata.state).toBe(DiProviderActivationState.Open);
+    expect(metadata.reason).toContain('design:paramtypes');
+    expect(emptyMetadata.state).toBe(DiProviderActivationState.Value);
+    expect(emptyMetadata.reason).toBeNull();
   });
 
   test('spends interface defaults during JIT and fresh activation without declaration-name joins', async () => {
@@ -409,16 +517,12 @@ describe('DI provider model', () => {
     const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
     const world = app.emission.appWorld;
     const appContainer = world.configuration.aurelias[0]?.container.productHandle ?? null;
-    const spentAdmissions = new Map(world.configuration.registrationAdmissions.map((admission) => [
-      admission.productHandle,
-      admission,
-    ]));
     const appOperations = world.diWorld.registrationOperations.filter((operation) =>
       operation.container.productHandle === appContainer
     );
 
     expect(appOperations.map((operation) =>
-      spentAdmissions.get(operation.admissionProductHandle ?? '')
+      operation.admission
     ).map((admission) =>
       admission instanceof RegistryRegistrationAdmission ? admission.registryValue?.localName ?? null : null
     )).toEqual(['OuterRegistry', 'CompilerRegistry', 'StandardConfiguration']);
@@ -445,8 +549,8 @@ describe('DI provider model', () => {
     const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
     const world = app.emission.appWorld;
     const resolverNames = world.diWorld.resolverSlots.map(resolverKeyName);
-    const frameworkKinds = world.configuration.registrationAdmissions.flatMap((admission) => {
-      const frameworkKind = frameworkRegistrationKindForAdmission(admission);
+    const frameworkKinds = world.diWorld.registrationOperations.flatMap((operation) => {
+      const frameworkKind = frameworkRegistrationKindForOperation(operation);
       return frameworkKind == null ? [] : [frameworkKind];
     });
 
@@ -647,14 +751,8 @@ describe('DI provider model', () => {
     expect(resolverOwners.get('implicit-app')).toBe(implicitAurelia?.container.productHandle);
     expect(resolverOwners.get('static-chain')).not.toBe(resolverOwners.get('static-registration-only'));
 
-    const admissionsByProduct = new Map(configuration.registrationAdmissions.map((admission) => [
-      admission.productHandle,
-      admission,
-    ]));
     expect(app.emission.appWorld.diWorld.registrationOperations.flatMap((operation) => {
-      const admission = operation.admissionProductHandle == null
-        ? null
-        : admissionsByProduct.get(operation.admissionProductHandle) ?? null;
+      const admission = operation.admission;
       const localName = admission instanceof ResolverRegistrationAdmission
         ? admission.registeredValue?.localName ?? null
         : null;
@@ -671,12 +769,8 @@ describe('DI provider model', () => {
     });
     const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
     const world = app.emission.appWorld;
-    const admissions = new Map(world.configuration.registrationAdmissions.map((admission) => [
-      admission.productHandle,
-      admission,
-    ]));
     const operationNames = world.diWorld.registrationOperations.map((operation) => {
-      const admission = admissions.get(operation.admissionProductHandle ?? '') ?? null;
+      const admission = operation.admission;
       return admission instanceof RegistryRegistrationAdmission
         ? admission.registryValue?.localName ?? null
         : null;
@@ -726,6 +820,201 @@ describe('DI provider model', () => {
     expect(world.compilerWorlds).toHaveLength(1);
   });
 
+  test('reifies repeated registration applications without collapsing admission or container identity', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'di-registration-application-topology'),
+      storeKey: 'test:di-provider-model:registration-application-topology',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const world = app.emission.appWorld.diWorld;
+    const resolver = world.resolvers.find((candidate) =>
+      candidate instanceof Resolver
+      && candidate._key.localName === 'shared-registration-application'
+    ) ?? null;
+    const operations = world.registrationOperations.filter((operation) =>
+      operation.registrationValue === resolver
+    );
+    const admission = operations[0]?.admission ?? null;
+    const resolverSlots = world.resolverSlots.filter((slot) => slot.resolver === resolver);
+
+    expect(admission).toBeInstanceOf(RegistryRegistrationAdmission);
+    expect(resolver).toBeInstanceOf(Resolver);
+    expect(world.resolvers.filter((candidate) => candidate === resolver)).toHaveLength(1);
+    expect(operations).toHaveLength(3);
+    expect(operations.every((operation) => operation.admission === admission)).toBe(true);
+    expect(operations.every((operation) => operation.registrationValue === resolver)).toBe(true);
+    expect(new Set(operations.map((operation) => operation.productHandle)).size).toBe(3);
+    expect(new Set(operations.map((operation) => operation.identityHandle)).size).toBe(3);
+    expect(new Set(operations.map((operation) => operation.container.productHandle)).size).toBe(2);
+    expect(resolverSlots).toHaveLength(3);
+    expect(new Set(resolverSlots.map((slot) => slot.container.productHandle)).size).toBe(2);
+    expect(operations.map((operation) => operation.ordinal)).toEqual(
+      [...operations].sort((left, right) => left.ordinal - right.ordinal).map((operation) => operation.ordinal),
+    );
+    const sharedTaskRegistrations = world.registeredAppTasks.filter((registration) => {
+      const taskAdmission = registration.operation.admission;
+      return taskAdmission instanceof RegistryRegistrationAdmission
+        && taskAdmission.registryValue?.localName === 'sharedTask';
+    });
+    expect(sharedTaskRegistrations).toHaveLength(2);
+    expect(new Set(sharedTaskRegistrations.map((registration) => registration.task.productHandle)).size).toBe(1);
+    expect(new Set(sharedTaskRegistrations.map((registration) => registration.operation.productHandle)).size).toBe(2);
+    expect(new Set(sharedTaskRegistrations.map((registration) => registration.operation.identityHandle)).size).toBe(2);
+    expect(new Set(sharedTaskRegistrations.map((registration) => registration.operation.ordinal)).size).toBe(2);
+    expect(new Set(sharedTaskRegistrations.map((registration) =>
+      registration.operation.registrationValue?.productHandle
+    )).size).toBe(1);
+
+    for (const operation of operations) {
+      const containerProducesOperation = runtime.workspace.store
+        .readClaimsForSubject(operation.container.productHandle!)
+        .map((handle) => runtime.workspace.store.readClaim(handle))
+        .find((claim) =>
+          claim?.predicateKey === KernelVocabulary.Di.ProducesProduct.key
+          && claim.objectHandle === operation.productHandle
+        ) ?? null;
+      const operationAppliesAdmission = runtime.workspace.store
+        .readClaimsForSubject(operation.productHandle)
+        .map((handle) => runtime.workspace.store.readClaim(handle))
+        .find((claim) =>
+          claim?.predicateKey === KernelVocabulary.Di.AppliesRegistration.key
+          && claim.objectHandle === admission?.productHandle
+        ) ?? null;
+      const operationUsesRegistrationValue = runtime.workspace.store
+        .readClaimsForSubject(operation.productHandle)
+        .map((handle) => runtime.workspace.store.readClaim(handle))
+        .find((claim) =>
+          claim?.predicateKey === KernelVocabulary.Di.UsesRegistrationValue.key
+          && claim.objectHandle === resolver?.productHandle
+        ) ?? null;
+      const materialization = runtime.workspace.store.readMaterializations().find((candidate) =>
+        candidate.productHandles.includes(operation.productHandle)
+      ) ?? null;
+
+      expect(containerProducesOperation).not.toBeNull();
+      expect(operationAppliesAdmission).not.toBeNull();
+      expect(operationUsesRegistrationValue).not.toBeNull();
+      expect(materialization?.claimHandles).toEqual(expect.arrayContaining([
+        containerProducesOperation!.handle,
+        operationAppliesAdmission!.handle,
+        operationUsesRegistrationValue!.handle,
+      ]));
+      expect(runtime.workspace.store.readClaimsForSubject(operation.productHandle)
+        .map((handle) => runtime.workspace.store.readClaim(handle))
+        .filter((claim) =>
+          claim?.predicateKey === KernelVocabulary.Di.ProducesProduct.key
+        )
+        .every((claim) =>
+          claim?.objectHandle !== resolver?.productHandle
+          && !operations.some((candidate) => candidate.productHandle === claim?.objectHandle)
+        ))
+        .toBe(true);
+    }
+  });
+
+  test('spends parameterized registries through live handler and fallback branches', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'di-parameterized-registry-topology'),
+      storeKey: 'test:di-provider-model:parameterized-registry-topology',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const world = app.emission.appWorld.diWorld;
+    const resolverNames = world.resolverSlots
+      .flatMap((slot) => {
+        const identity = runtime.workspace.store.read(slot.keyIdentityHandle);
+        return identity instanceof StringDiKeyIdentity ? [identity.value] : [];
+      });
+    const parameterizedOperations = world.registrationOperations.filter((operation) =>
+      operation.registrationValue instanceof ParameterizedRegistry
+    );
+    const operationOpenSeams = runtime.workspace.store.readMaterializations()
+      .filter((materialization) => parameterizedOperations.some((operation) =>
+        materialization.productHandles.includes(operation.productHandle)
+      ))
+      .flatMap((materialization) => materialization.openSeamHandles)
+      .map((handle) => runtime.workspace.store.readOpenSeam(handle))
+      .filter((seam) => seam != null);
+
+    expect(resolverNames).toEqual(expect.arrayContaining([
+      'deferred-shared-1',
+      'deferred-shared-2',
+      'deferred-alias-3',
+      'deferred-transient-1-1',
+      'deferred-transient-2-1',
+      'fallback-registry-value',
+      'fallback-carrier-value',
+      'late-fallback-value',
+    ]));
+    expect(resolverNames).not.toContain('deferred-callback-1');
+    expect(world.parameterizedRegistries).toHaveLength(7);
+    expect(parameterizedOperations).toHaveLength(8);
+    expect(operationOpenSeams.filter((seam) =>
+      seam.reasonKinds.includes(OpenSeamReasonKind.DiRegistryBodyOpen)
+    )).toHaveLength(1);
+  });
+
+  test('preserves registry effects, pressure, and fatal completion without taking invalid fallback paths', async () => {
+    const runtime = await createSemanticRuntime({
+      workspaceRoot: path.join(pressureFixtures, 'di-registry-completion-topology'),
+      storeKey: 'test:di-provider-model:registry-completion-topology',
+    });
+    const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
+    const world = app.emission.appWorld.diWorld;
+    const resolverNames = world.resolverSlots.flatMap((slot) => {
+      const identity = runtime.workspace.store.read(slot.keyIdentityHandle);
+      return identity instanceof StringDiKeyIdentity ? [identity.value] : [];
+    });
+    const failureIssues = world.issues.filter((issue) =>
+      issue.issueKind === DiIssueKind.RegistryApplicationFailed
+    );
+    const cycleIssues = world.issues.filter((issue) =>
+      issue.issueKind === DiIssueKind.CyclicDependency
+    );
+
+    expect(resolverNames).toEqual(expect.arrayContaining([
+      'partial-before-throw',
+      'caught-inside-catch',
+      'caught-after-catch',
+      'audit-pressure-effect',
+    ]));
+    expect(resolverNames).not.toEqual(expect.arrayContaining([
+      'partial-after-throw',
+      'partial-after-registry',
+      'non-callable-fallback',
+      'non-callable-after-defer',
+      'failed-handler-fallback',
+      'failed-handler-after-defer',
+      'cyclic-handler-effect',
+      'cyclic-handler-fallback',
+      'cyclic-handler-after-defer',
+    ]));
+    expect(failureIssues.map((issue) =>
+      issue.subject.kind === DiIssueSubjectKind.RegistrationCascade
+        ? issue.subject.failureKind
+        : null
+    )).toEqual(expect.arrayContaining([
+      DiRegistryApplicationFailureKind.AbruptCompletion,
+      DiRegistryApplicationFailureKind.HandlerRegisterNotCallable,
+      DiRegistryApplicationFailureKind.HandlerResolution,
+    ]));
+    expect(cycleIssues).toHaveLength(1);
+
+    const auditOperation = world.registrationOperations.find((operation) =>
+      operation.admission instanceof RegistryRegistrationAdmission
+      && operation.admission.registryValue?.localName === 'AuditPressureRegistry'
+    );
+    const auditMaterialization = runtime.workspace.store.readMaterializations().find((materialization) =>
+      auditOperation != null && materialization.productHandles.includes(auditOperation.productHandle)
+    );
+    const auditSeams = auditMaterialization?.openSeamHandles.flatMap((handle) => {
+      const seam = runtime.workspace.store.readOpenSeam(handle);
+      return seam == null ? [] : [seam];
+    }) ?? [];
+    expect(auditSeams.some((seam) =>
+      seam.reasonKinds.includes(OpenSeamReasonKind.HostEnvironmentValue)
+    )).toBe(true);
+  });
+
   test('spends repeated global configuration calls from definite occurrence evidence', async () => {
     const runtime = await createSemanticRuntime({
       workspaceRoot: path.join(pressureFixtures, 'configuration-execution-order'),
@@ -760,7 +1049,7 @@ describe('DI provider model', () => {
       candidate instanceof OpenRegistrationAdmission
     );
     const operation = world.diWorld.registrationOperations.find((candidate) =>
-      candidate.admissionProductHandle === admission?.productHandle
+      candidate.admission === admission
     );
     const admissionMaterialization = runtime.workspace.store.readMaterializations().find((materialization) =>
       admission != null && materialization.productHandles.includes(admission.productHandle)
@@ -784,12 +1073,8 @@ describe('DI provider model', () => {
     });
     const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
     const world = app.emission.appWorld;
-    const admissions = new Map(world.configuration.registrationAdmissions.map((admission) => [
-      admission.productHandle,
-      admission,
-    ]));
     const operationNames = world.diWorld.registrationOperations.map((operation) => {
-      const admission = admissions.get(operation.admissionProductHandle ?? '') ?? null;
+      const admission = operation.admission;
       return admission instanceof RegistryRegistrationAdmission
         ? admission.registryValue?.localName ?? null
         : null;
@@ -1024,9 +1309,10 @@ interface ProviderActivationFixture {
 
 async function openProviderActivationFixture(
   testKey: string,
+  fixtureName: string = 'di-provider-activation',
 ): Promise<ProviderActivationFixture> {
   const runtime = await createSemanticRuntime({
-    workspaceRoot: path.join(pressureFixtures, 'di-provider-activation'),
+    workspaceRoot: path.join(pressureFixtures, fixtureName),
     storeKey: `test:di-provider-model:${testKey}`,
   });
   const app = await runtime.openApp({ analysisDepth: 'binding-observation' });
@@ -1050,6 +1336,7 @@ async function openProviderActivationFixture(
       app.emission.typeSystem,
       configuration,
       app.emission.appWorld.diWorld,
+      noDiProviderActivationValues,
     ),
     container,
     sites,

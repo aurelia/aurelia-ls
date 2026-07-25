@@ -1,4 +1,4 @@
-import { IContainer, resolve } from '@aurelia/kernel';
+import { IContainer, optional, resolve } from '@aurelia/kernel';
 import { IObservation, observable } from '@aurelia/runtime';
 import { customElement } from '@aurelia/runtime-html';
 import template from './source-observation-effects-app.html';
@@ -16,6 +16,18 @@ class ProfileState {
     },
   };
   readonly tracker = new MouseTracker();
+}
+
+class StaticInjectedObservationEffects {
+  static inject = [optional(IObservation)];
+
+  readonly status = {
+    label: 'ready',
+  };
+
+  constructor(observation: unknown) {
+    (observation as IObservation).watch(this.status, (status) => status.label, () => {});
+  }
 }
 
 @customElement({

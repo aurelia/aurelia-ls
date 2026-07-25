@@ -31,7 +31,7 @@ import {
 import { delegateStaticEvaluationRuntimeHost } from '../evaluation/runtime-host.js';
 import { StaticEvaluationSessionFork } from '../evaluation/evaluation-session.js';
 import { readEvaluationEnumerableOwnEntries } from '../evaluation/enumerable-own-properties.js';
-import type { EvaluatedProjectSource } from '../evaluation/project-evaluation.js';
+import { StaticProjectEvaluationSourceIndex } from '../evaluation/project-source-index.js';
 import {
   EvaluationArrayElement,
   EvaluationArrayShape,
@@ -98,10 +98,7 @@ import {
   authoredPropertyNameNode,
   readReferenceName,
 } from '../evaluation/ts-syntax.js';
-import {
-  readSourceFileAddressHandlesByFileName,
-  type ConfigurationRecognitionProjectResult,
-} from './configuration-recognition-project-pass.js';
+import type { ConfigurationRecognitionProjectResult } from './configuration-recognition-project-pass.js';
 import {
   configurationRecognitionOpensForEvaluationRead,
   ConfigurationRecognitionOpen,
@@ -125,14 +122,12 @@ import {
   ConfigurationFrameworkErrorCode,
 } from './framework-error-code.js';
 import { ConfigurationProductDetails } from './product-details.js';
-import { normalizeConfigurationSourceFileName } from './source-file-names.js';
 import type {
   DiWorldConstructionEmission,
   RegisteredAppTask,
 } from '../di/world-construction.js';
 import type { Container } from '../di/container.js';
 import type {
-  AddressHandle,
   IdentityHandle,
 } from '../kernel/handles.js';
 
@@ -543,11 +538,7 @@ export class FrameworkServiceCustomizationRecognitionPass {
     diWorld: DiWorldConstructionEmission,
     targetContainers: readonly Container[],
   ): FrameworkServiceCustomizationProjectResult {
-    const sourceFileAddressHandlesByFileName = readSourceFileAddressHandlesByFileName(configuration.evaluation);
-    const evaluatedSourcesByFileName = new Map(configuration.evaluation.readEvaluatedSources().map((source) => [
-      normalizeConfigurationSourceFileName(source.sourceFile.fileName),
-      source,
-    ]));
+    const sourceIndex = new StaticProjectEvaluationSourceIndex(configuration.evaluation);
     const customizationsByTaskContainer = new Map<IdentityHandle, FrameworkServiceCustomization>();
     const scopes: FrameworkServiceCustomizationScope[] = [];
     const issues: ConfigurationIssue[] = [];
@@ -577,8 +568,7 @@ export class FrameworkServiceCustomizationRecognitionPass {
         for (const registration of cohort.registrations) {
           executeRegisteredAppTaskServiceCustomizations(
             registration,
-            evaluatedSourcesByFileName,
-            sourceFileAddressHandlesByFileName,
+            sourceIndex,
             draft,
           );
         }
@@ -631,8 +621,7 @@ function registeredAppTaskCohortForContainer(
 
 function executeRegisteredAppTaskServiceCustomizations(
   registration: RegisteredAppTask,
-  evaluatedSourcesByFileName: ReadonlyMap<string, EvaluatedProjectSource>,
-  sourceFileAddressHandlesByFileName: ReadonlyMap<string, AddressHandle>,
+  sourceIndex: StaticProjectEvaluationSourceIndex,
   draft: FrameworkServiceCustomizationDraft,
 ): void {
   const evaluation = registration.evaluation;
@@ -640,9 +629,7 @@ function executeRegisteredAppTaskServiceCustomizations(
   if (evaluation == null || callback?.kind !== EvaluationValueKind.Function) {
     return;
   }
-  const evaluationSource = evaluatedSourcesByFileName.get(
-    normalizeConfigurationSourceFileName(callback.declaration.getSourceFile().fileName),
-  ) ?? null;
+  const evaluationSource = sourceIndex.readEvaluatedForNode(callback.declaration);
   if (evaluationSource == null) {
     return;
   }
@@ -654,7 +641,7 @@ function executeRegisteredAppTaskServiceCustomizations(
     evaluationSource.evaluation,
     new StaticSourceLiteralExpressionReader(),
     null,
-    sourceFileAddressHandlesByFileName,
+    sourceIndex,
   );
   executeAppTaskServiceCustomizations(
     context,

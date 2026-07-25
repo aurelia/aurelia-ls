@@ -1,19 +1,12 @@
 import ts from 'typescript';
-import { EvaluatedDiKeyDeclarationSource } from '../di/di-key-identity-emitter.js';
 import type { StaticExpressionEvaluationReader } from '../evaluation/expression-reader.js';
-import { readReferenceName } from '../evaluation/ts-syntax.js';
-import {
-  EvaluationValueKind,
-  type EvaluationValue,
-} from '../evaluation/values.js';
+import type { EvaluationValue } from '../evaluation/values.js';
 import type { StaticModuleEvaluationResult } from '../evaluation/module-evaluation-result.js';
+import type { StaticProjectEvaluationSourceIndex } from '../evaluation/project-source-index.js';
 import type { AddressHandle } from '../kernel/handles.js';
-import {
-  RegistrationKeyObservation,
-  RegistrationKeyObservationKind,
-} from '../registration/registration-observation.js';
+import type { RegistrationKeyObservation } from '../registration/registration-observation.js';
+import { registrationKeyObservationForEvaluatedValue } from '../registration/evaluated-registration-factory.js';
 import type { TypeSystemProject } from '../type-system/project.js';
-import { normalizeConfigurationSourceFileName } from './source-file-names.js';
 
 /** Inputs shared by configuration recognizers for one evaluated source module. */
 export class ConfigurationRecognitionContext {
@@ -32,10 +25,8 @@ export class ConfigurationRecognitionContext {
     readonly expressionReader: StaticExpressionEvaluationReader,
     /** Shared TypeChecker epoch for source-level shape checks that evaluation cannot close. */
     readonly typeSystem: TypeSystemProject | null = null,
-    /** Source-file addresses for other project modules reachable through the evaluator. */
-    private readonly sourceFileAddressHandlesByFileName: ReadonlyMap<string, AddressHandle> = new Map([
-      [normalizeConfigurationSourceFileName(sourceFile.fileName), sourceFileAddressHandle],
-    ]),
+    /** Shared index of project-evaluation sources reachable by evaluator values and declarations. */
+    readonly sourceIndex: StaticProjectEvaluationSourceIndex,
   ) {}
 
   withExpressionReader(expressionReader: StaticExpressionEvaluationReader): ConfigurationRecognitionContext {
@@ -47,14 +38,12 @@ export class ConfigurationRecognitionContext {
       this.evaluation,
       expressionReader,
       this.typeSystem,
-      this.sourceFileAddressHandlesByFileName,
+      this.sourceIndex,
     );
   }
 
   sourceFileAddressHandleForNode(node: ts.Node): AddressHandle | null {
-    return this.sourceFileAddressHandlesByFileName.get(
-      normalizeConfigurationSourceFileName(node.getSourceFile().fileName),
-    ) ?? null;
+    return this.sourceIndex.addressHandleForNode(node);
   }
 
   /** Observe a DI key once through the evaluator so every configuration carrier spends the same value evidence. */
@@ -68,23 +57,10 @@ export class ConfigurationRecognitionContext {
     expression: ts.Expression,
     value: EvaluationValue | null,
   ): RegistrationKeyObservation {
-    const constructable = value?.kind === EvaluationValueKind.Class || value?.kind === EvaluationValueKind.Function
-      ? new EvaluatedDiKeyDeclarationSource(
-          value.declaration,
-          value.environment.moduleKey,
-          this.sourceFileAddressHandleForNode(value.declaration),
-        )
-      : null;
-    const declarationName = constructable == null
-      ? null
-      : ts.getNameOfDeclaration(constructable.declaration)?.getText(constructable.declaration.getSourceFile()) ?? null;
-    return new RegistrationKeyObservation(
-      declarationName ?? readReferenceName(expression),
+    return registrationKeyObservationForEvaluatedValue(
       expression,
-      constructable == null ? RegistrationKeyObservationKind.Expression : RegistrationKeyObservationKind.Constructable,
-      constructable,
       value,
-      this.sourceFileAddressHandleForNode(expression),
+      (node) => this.sourceFileAddressHandleForNode(node),
     );
   }
 }

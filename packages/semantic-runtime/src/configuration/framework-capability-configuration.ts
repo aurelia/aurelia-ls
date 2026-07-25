@@ -147,7 +147,7 @@ export function i18nTranslationSyntaxConfigurationForAdmission(
     ['t'],
     null,
   );
-  for (const contribution of configurationOptionContributionsForAdmission(store, configuration, admission)) {
+  for (const contribution of configurationOptionContributionsForAdmission(configuration, admission)) {
     if (!isSingleOption(contribution, FrameworkRegistrationKind.I18nConfiguration, 'translationAttributeAliases')) {
       continue;
     }
@@ -182,7 +182,7 @@ export function validationHtmlResourceConfigurationForAdmission(
     true,
     null,
   );
-  for (const contribution of configurationOptionContributionsForAdmission(store, configuration, admission)) {
+  for (const contribution of configurationOptionContributionsForAdmission(configuration, admission)) {
     if (isSingleOption(
       contribution,
       FrameworkRegistrationKind.ValidationHtmlConfiguration,

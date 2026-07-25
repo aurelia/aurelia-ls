@@ -102,11 +102,12 @@ no package/local-name exception is needed.
 Runtime-shaped `Resolver`, `IRegistry`, and `ParameterizedRegistry` values live in `../di/`. Registration admissions
 may point at those products, but they are not themselves the runtime values.
 
-`IRegistry` bodies are connected later through `../configuration/registry-body-index.ts`. The index uses source-span
-containment between the registry value and the recognized `register(container)` body; it intentionally does not use
-local names as identity. Imported registry values work when the evaluator can point the value at an admitted source-file
-address in the owning module. Unadmitted or unresolved registry bodies remain open instead of borrowing spans from the
-importing file.
+`IRegistry` bodies are connected later through `../configuration/registry-body-index.ts`.
+`ConfigurationEvaluationBindings` retains the exact source node that owns each registry value, registry sequence,
+configuration step, and nested admission. The index joins declaration inventory and reached evaluator invocations by
+that node identity; it does not reverse-map compressed source spans or use local names as identity. Imported registry
+values work when the evaluator retains their owning source node in the admitted project graph. Unadmitted or unresolved
+registry bodies remain open instead of borrowing source from the importing file.
 Registry body interpretation and registry body effects are distinct. The index records that a body was recognized for
 an admission even if it emitted zero registration steps, and registration observation handles include project identity
 so the same linked source can be analyzed under several project frames without duplicate kernel records.

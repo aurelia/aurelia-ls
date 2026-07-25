@@ -234,10 +234,17 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/template/runtime-controller.ts",
           "symbolName": "RuntimeControllerFrame"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "StateStoreVisibility",
+          "filePath": "packages/semantic-runtime/src/state/state-store-visibility.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
         }
       ],
       "createdAt": "2026-07-25",
-      "updatedAt": "2026-07-25"
+      "updatedAt": "2026-07-26"
     }
   ]
 }

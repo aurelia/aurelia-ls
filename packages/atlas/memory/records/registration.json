@@ -106,14 +106,15 @@
         "di"
       ],
       "summary": "Framework capability identity, runtime registration shape, and residual effect closure are separate facts.",
-      "rationale": "A known framework export can be a direct registry, recursive registration group, non-registrable factory namespace, persistent builder result, or AppTask factory. The former manifest role/chain-method table synthesized register shape from capability identity and caused bare State/AppTask factory namespaces and registration arrays to masquerade as registries. Static evaluation now preserves exact value stages, generic registration follows ECMAScript enumerable carrier semantics, and framework effect packages own their modeled effects plus honest residual openness.",
+      "rationale": "A known framework export can be a direct registry, recursive registration group, non-registrable factory namespace, persistent builder result, or AppTask factory. The former manifest role/chain-method table synthesized register shape from capability identity and caused bare State/AppTask factory namespaces and registration arrays to masquerade as registries. Static evaluation now preserves exact value stages, generic registration follows ECMAScript enumerable carrier semantics, canonical DI registration values retain exact runtime shape, and framework effect packages own their modeled effects plus honest residual openness.",
       "guidance": [
         "Keep framework-registration-manifest.ts about export identity, source-generation availability, and semantic capabilities; do not restore role, chain-method, or synthetic register-shape policy there.",
         "Treat callable register as direct IRegistry shape and arrays, objects, and module namespaces as recursive enumerable carriers. Use readEvaluationEnumerableOwnEntries rather than adding another consumer-local walker.",
         "StateDefaultConfiguration, AppTask, LoggerConfiguration, and StyleConfiguration exports are factory namespaces. Only their evaluated method results carry FrameworkRegistrationKind registration identity.",
         "Preserve known entries and residual membership/order openness together. A partial evaluator value must not become either false closure or an all-or-nothing loss of known registrations.",
         "Let frameworkDiRegistrationEffectsForKind own only modeled DI provider/task effects and residual DI coverage. Resource, syntax, renderer, compiler-world, and app-task materializers own closure for their own answer families; do not infer global closure from another family.",
-        "Derive capability blockers through seam materialization ownership and the exact accepted admission. A known framework residual blocks only capabilities carried by that admission; an unclassified registration remains conservatively unconstrained."
+        "At an admission boundary, exact evaluator carrier classification outranks source recognition even when it proves that no framework package applies. After spending, frameworkRegistrationKindForOperation(...) is the sole effective-package authority.",
+        "Derive capability blockers through seam materialization ownership and exact registration operations. A known framework residual blocks only capabilities carried by that operation; an unclassified registration remains conservatively unconstrained."
       ],
       "anchors": [
         {
@@ -136,9 +137,9 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/configuration/configuration-recognizer.ts",
-          "symbolName": "recognizeEvaluatedRegistrationValue",
-          "summary": "Structural recursive-carrier and exact framework-value registration recognition."
+          "filePath": "packages/semantic-runtime/src/di/container-registration.ts",
+          "symbolName": "frameworkRegistrationKindForOperation",
+          "summary": "Effective framework package selected for one concrete registration application."
         },
         {
           "kind": "source",
@@ -149,8 +150,8 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/framework/capability-demand-materializer.ts",
-          "symbolName": "constrainedRegistrationHidingOpenSeamAdmissions",
-          "summary": "Capability-specific blocker projection from materialization-owned seams to accepted registration admissions."
+          "symbolName": "registrationHidingOpenSeamFacts",
+          "summary": "Capability-specific blocker projection from materialization-owned seams to exact registration operations."
         },
         {
           "kind": "fixture",
@@ -177,11 +178,16 @@
         {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/di/framework-registration-effects.ts",
-          "symbolName": "frameworkRegistrationEffectsForKind"
+          "symbolName": "frameworkDiRegistrationEffectsForKind"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/container-registration.ts",
+          "symbolName": "frameworkRegistrationKindForOperation"
         }
       ],
       "createdAt": "2026-07-19",
-      "updatedAt": "2026-07-19"
+      "updatedAt": "2026-07-25"
     }
   ]
 }

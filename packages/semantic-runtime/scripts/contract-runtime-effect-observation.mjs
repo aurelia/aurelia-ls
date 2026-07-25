@@ -23,7 +23,7 @@ const observedDependencies = app.ask({
 }).value.rows;
 
 const failures = [
-  effectCountExpectation(effects, 5),
+  effectCountExpectation(effects, 6),
   effectExpectation(
     'Run effect should use the RunEffect connectable branch and execute immediately.',
     effects,
@@ -66,6 +66,13 @@ const failures = [
     'ast-evaluate',
     'template-expression-read',
     'address.city',
+  ),
+  dependencyExpectation(
+    'Resolver-wrapped static inject should expose IObservation through the canonical class dependency plan.',
+    observedDependencies,
+    'observer-locator-function-key',
+    'proxy-property-read',
+    'status.label',
   ),
   dependencyExpectation(
     'Run effect should publish synchronous @observable getter reads from the active connectable window.',

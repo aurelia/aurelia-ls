@@ -11,7 +11,7 @@ import { ExpressionParser } from '../out/expression/expression-parser.js';
 import { ExpressionParseResultKind } from '../out/expression/parse-result-algebra.js';
 import { KernelStore } from '../out/kernel/store.js';
 import { CheckerTypeProjector, CheckerTypeMemberProjectionPolicy } from '../out/type-system/checker-projector.js';
-import { CheckerExpressionTypeEvaluator } from '../out/type-system/expression-type-evaluator.js';
+import { CheckerExpressionTypeWorld } from '../out/type-system/expression-type-world.js';
 import { CheckerExpressionTypeEvaluationContext } from '../out/type-system/expression-type-context.js';
 import { CheckerExpressionTypeEvaluationResultKind } from '../out/type-system/expression-type-evaluation.js';
 import { CheckerTypeProjectionOrigin } from '../out/type-system/type-shape.js';
@@ -92,7 +92,7 @@ const scope = new BindingScopeMaterializer(store, projector).construct(new Bindi
   null,
 )).scope;
 
-const evaluator = new CheckerExpressionTypeEvaluator(store, projector);
+const evaluator = new CheckerExpressionTypeWorld(store, projector).evaluator();
 const parser = new ExpressionParser();
 
 assertExpressionType(

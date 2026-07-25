@@ -5,6 +5,7 @@ import {
 } from '../evaluation/ts-syntax.js';
 import { DiResolverKeyKind } from '../kernel/identity.js';
 import { symbolForExpression } from '../type-system/checker-node-helpers.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 
 export const AURELIA_RESOLVER_KEY_KIND_BY_EXPORT = {
   lazy: DiResolverKeyKind.Lazy,
@@ -56,14 +57,21 @@ export interface DiAureliaResolverWrapperCall {
 }
 
 export function readAureliaResolverWrapperCall(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   expression: ts.Expression,
 ): DiAureliaResolverWrapperCall | null {
-  const current = unwrapExpression(expression);
+  const programExpression = typeSystem.readProgramExpression(expression);
+  const current = programExpression == null ? null : unwrapExpression(programExpression);
+  if (current == null) {
+    return null;
+  }
   if (!ts.isCallExpression(current)) {
     return null;
   }
-  const wrapperKind = aureliaResolverWrapperKindForCallee(checker, unwrapExpression(current.expression));
+  const wrapperKind = aureliaResolverWrapperKindForCallee(
+    typeSystem.checker,
+    unwrapExpression(current.expression),
+  );
   if (wrapperKind == null) {
     return null;
   }
@@ -102,11 +110,15 @@ function aureliaResolverWrapperKindForCallee(
 
 /** Whether an expression is Aurelia's built-in resolver that intentionally injects `undefined`. */
 export function isAureliaIgnoreResolverExpression(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   expression: ts.Expression,
 ): boolean {
-  const current = unwrapExpression(expression);
-  const symbol = symbolForExpression(checker, current);
+  const programExpression = typeSystem.readProgramExpression(expression);
+  const current = programExpression == null ? null : unwrapExpression(programExpression);
+  if (current == null) {
+    return false;
+  }
+  const symbol = symbolForExpression(typeSystem.checker, current);
   return symbol?.getName() === 'ignore'
     && (symbol.declarations ?? []).some(isAureliaResolverWrapperDeclaration);
 }

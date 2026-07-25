@@ -68,18 +68,19 @@ import type { AppTaskDefinition } from '../configuration/app-task.js';
 import {
   type DiContainerChainFacts,
 } from '../di/container-chain.js';
+import {
+  frameworkRegistrationKindForOperation,
+  type ContainerRegistrationOperation,
+} from '../di/container-registration.js';
 import type { DiWorldConstructionEmission } from '../di/world-construction.js';
-import { registrationAdmissionsVisibleToContainer } from '../di/world-construction.js';
+import { registrationOperationsVisibleToContainer } from '../di/world-construction.js';
 import {
   FrameworkRegistrationCapability,
-  frameworkRegistrationAdmissionCarriesCapability,
+  frameworkRegistrationCapabilitiesForKind,
   frameworkRegistrationKindsForCapability,
   frameworkRegistrationModuleNamesForCapability,
 } from '../registration/framework-registration-manifest.js';
-import {
-  frameworkRegistrationKindForAdmission,
-  type RegistrationAdmissionProduct,
-} from '../registration/registration-admission.js';
+import type { RegistrationAdmissionProduct } from '../registration/registration-admission.js';
 import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
@@ -420,9 +421,9 @@ class SourceServiceApiAdmission {
 class SourceServiceApiAdmissionContext {
   private readonly chainFacts: DiContainerChainFacts;
   private readonly registrationHidingOpenSeams: readonly OpenSeam[];
-  private readonly constrainedRegistrationHidingOpenSeamAdmissions: ReadonlyMap<
+  private readonly constrainedRegistrationHidingOpenSeamOperations: ReadonlyMap<
     OpenSeamHandle,
-    readonly RegistrationAdmissionProduct[]
+    readonly ContainerRegistrationOperation[]
   >;
   private readonly registrationHidingOpenSeamContainerScopes: ReadonlyMap<OpenSeamHandle, readonly IdentityHandle[]>;
   private readonly serviceRootsByProduct: ReadonlyMap<ProductHandle, FrameworkServiceRoot>;
@@ -446,7 +447,7 @@ class SourceServiceApiAdmissionContext {
       configuration,
     );
     this.registrationHidingOpenSeams = openSeamFacts.seams;
-    this.constrainedRegistrationHidingOpenSeamAdmissions = openSeamFacts.constrainedAdmissions;
+    this.constrainedRegistrationHidingOpenSeamOperations = openSeamFacts.constrainedOperations;
     this.registrationHidingOpenSeamContainerScopes = openSeamFacts.containerScopes;
     this.serviceRootsByProduct = new Map(serviceRoots.map((root) => [root.productHandle, root]));
     this.appTaskContainerIdentitiesByTask = appTaskContainerIdentitiesByTask(diWorld);
@@ -506,11 +507,11 @@ class SourceServiceApiAdmissionContext {
     requiredCapability: FrameworkRegistrationCapability,
     consultingChain: ReadonlySet<IdentityHandle> | null,
   ): boolean {
-    const constrainedAdmissions = this.constrainedRegistrationHidingOpenSeamAdmissions.get(seam.handle);
+    const constrainedOperations = this.constrainedRegistrationHidingOpenSeamOperations.get(seam.handle);
     if (
-      constrainedAdmissions != null
-      && !constrainedAdmissions.some((admission) =>
-        frameworkRegistrationAdmissionCarriesCapability(admission, requiredCapability)
+      constrainedOperations != null
+      && !constrainedOperations.some((operation) =>
+        frameworkRegistrationOperationCarriesCapability(operation, requiredCapability)
       )
     ) {
       return false;
@@ -726,7 +727,7 @@ class TemplateCapabilityAdmission {
 }
 
 class TemplateCapabilityAdmissionContext {
-  private readonly admissionsByContainer = new Map<ProductHandle, readonly RegistrationAdmissionProduct[]>();
+  private readonly operationsByContainer = new Map<ProductHandle, readonly ContainerRegistrationOperation[]>();
 
   constructor(
     private readonly store: KernelMaterializationReadView,
@@ -816,8 +817,11 @@ class TemplateCapabilityAdmissionContext {
     admitted: boolean,
     configurationForAdmission: (admission: RegistrationAdmissionProduct) => ConfiguredSurfaceMembership,
   ): TemplateCapabilityAdmission {
-    const admissions = this.admissionsForResource(resource)
-      .filter((admission) => frameworkRegistrationAdmissionCarriesCapability(admission, capability));
+    const admissions = uniqueRegistrationAdmissions(
+      this.operationsForResource(resource)
+        .filter((operation) => frameworkRegistrationOperationCarriesCapability(operation, capability))
+        .map((operation) => operation.admission),
+    );
     const admissionSources = [...new Set(admissions.flatMap((admission) =>
       admission.sourceAddressHandle == null ? [] : [admission.sourceAddressHandle]
     ))];
@@ -862,30 +866,33 @@ class TemplateCapabilityAdmissionContext {
     resource: TemplateResourceRuntimeAnalysisEmission,
     capability: FrameworkRegistrationCapability,
   ): readonly AddressHandle[] {
-    return [...new Set(this.admissionsForResource(resource)
-      .filter((admission) => frameworkRegistrationAdmissionCarriesCapability(admission, capability))
-      .flatMap((admission) => admission.sourceAddressHandle == null ? [] : [admission.sourceAddressHandle]))];
+    return [...new Set(this.operationsForResource(resource)
+      .filter((operation) => frameworkRegistrationOperationCarriesCapability(operation, capability))
+      .flatMap((operation) =>
+        operation.admission.sourceAddressHandle == null
+          ? []
+          : [operation.admission.sourceAddressHandle]
+      ))];
   }
 
-  private admissionsForResource(
+  private operationsForResource(
     resource: TemplateResourceRuntimeAnalysisEmission,
-  ): readonly RegistrationAdmissionProduct[] {
+  ): readonly ContainerRegistrationOperation[] {
     const container = resource.compilation.compilerWorld.container;
     const containerProductHandle = container.productHandle;
     if (containerProductHandle == null) {
       return [];
     }
-    let admissions = this.admissionsByContainer.get(containerProductHandle);
-    if (admissions == null) {
-      admissions = registrationAdmissionsVisibleToContainer(
+    let operations = this.operationsByContainer.get(containerProductHandle);
+    if (operations == null) {
+      operations = registrationOperationsVisibleToContainer(
         container,
-        this.configuration.registrationAdmissions,
         this.world,
         this.containerChainFacts,
       );
-      this.admissionsByContainer.set(containerProductHandle, admissions);
+      this.operationsByContainer.set(containerProductHandle, operations);
     }
-    return admissions;
+    return operations;
   }
 }
 
@@ -1555,7 +1562,7 @@ function frameworkCapabilityDemandLocalKey(
 
 interface RegistrationHidingOpenSeamFacts {
   readonly seams: readonly OpenSeam[];
-  readonly constrainedAdmissions: ReadonlyMap<OpenSeamHandle, readonly RegistrationAdmissionProduct[]>;
+  readonly constrainedOperations: ReadonlyMap<OpenSeamHandle, readonly ContainerRegistrationOperation[]>;
   readonly containerScopes: ReadonlyMap<OpenSeamHandle, readonly IdentityHandle[]>;
 }
 
@@ -1570,40 +1577,34 @@ function registrationHidingOpenSeamFacts(
 ): RegistrationHidingOpenSeamFacts {
   const seamsByHandle = new Map(
     [
-      ...world.openSeams,
-      ...configuration.openSeamScopes.map((scope) => scope.seam),
-    ]
-      .filter(isRegistrationHidingOpenSeam)
-      .map((seam) => [seam.handle, seam] as const),
+      ...world.registrationOpenSeamScopes.map((scope) => scope.seam),
+      ...configuration.openSeamScopes
+        .map((scope) => scope.seam)
+        .filter(isConfigurationRegistrationHidingOpenSeam),
+    ].map((seam) => [seam.handle, seam] as const),
   );
-  const admissionsByProduct = new Map<ProductHandle, RegistrationAdmissionProduct>(
-    configuration.registrationAdmissions.map((admission) => [admission.productHandle, admission]),
-  );
-  const admissionsBySeam = new Map<OpenSeamHandle, Map<ProductHandle, RegistrationAdmissionProduct>>();
+  const operationsBySeam = new Map<OpenSeamHandle, Map<ProductHandle, ContainerRegistrationOperation>>();
   const admissionUnconstrainedSeams = new Set<OpenSeamHandle>();
   const containersBySeam = new Map<OpenSeamHandle, Set<IdentityHandle>>();
   const containerUnconstrainedSeams = new Set<OpenSeamHandle>();
 
   const recordScope = (
     seam: OpenSeam,
-    admissionProductHandle: ProductHandle | null,
+    operation: ContainerRegistrationOperation | null,
     containerIdentityHandle: IdentityHandle | null,
   ): void => {
     if (!seamsByHandle.has(seam.handle)) {
       return;
     }
-    const admission = admissionProductHandle == null
-      ? null
-      : admissionsByProduct.get(admissionProductHandle) ?? null;
-    if (admission == null || frameworkRegistrationKindForAdmission(admission) == null) {
+    if (operation == null || frameworkRegistrationKindForOperation(operation) == null) {
       admissionUnconstrainedSeams.add(seam.handle);
     } else {
-      let admissions = admissionsBySeam.get(seam.handle);
-      if (admissions == null) {
-        admissions = new Map();
-        admissionsBySeam.set(seam.handle, admissions);
+      let operations = operationsBySeam.get(seam.handle);
+      if (operations == null) {
+        operations = new Map();
+        operationsBySeam.set(seam.handle, operations);
       }
-      admissions.set(admission.productHandle, admission);
+      operations.set(operation.productHandle, operation);
     }
 
     if (containerIdentityHandle == null) {
@@ -1622,15 +1623,19 @@ function registrationHidingOpenSeamFacts(
     recordScope(scope.seam, null, scope.containerIdentityHandle);
   }
   for (const scope of world.registrationOpenSeamScopes) {
-    recordScope(scope.seam, scope.admissionProductHandle, scope.containerIdentityHandle);
+    recordScope(
+      scope.seam,
+      scope.operation,
+      scope.operation?.container.identityHandle ?? null,
+    );
   }
 
   return {
     seams: [...seamsByHandle.values()],
-    constrainedAdmissions: new Map(
-      [...admissionsBySeam]
+    constrainedOperations: new Map(
+      [...operationsBySeam]
         .filter(([handle]) => !admissionUnconstrainedSeams.has(handle))
-        .map(([handle, admissions]) => [handle, [...admissions.values()]] as const),
+        .map(([handle, operations]) => [handle, [...operations.values()]] as const),
     ),
     containerScopes: new Map(
       [...containersBySeam]
@@ -1640,7 +1645,30 @@ function registrationHidingOpenSeamFacts(
   };
 }
 
-function isRegistrationHidingOpenSeam(
+function frameworkRegistrationOperationCarriesCapability(
+  operation: ContainerRegistrationOperation,
+  capability: FrameworkRegistrationCapability,
+): boolean {
+  const frameworkKind = frameworkRegistrationKindForOperation(operation);
+  return frameworkKind != null
+    && frameworkRegistrationCapabilitiesForKind(frameworkKind).includes(capability);
+}
+
+function uniqueRegistrationAdmissions(
+  admissions: readonly RegistrationAdmissionProduct[],
+): readonly RegistrationAdmissionProduct[] {
+  const byProduct = new Map<ProductHandle, RegistrationAdmissionProduct>();
+  for (const admission of admissions) {
+    byProduct.set(admission.productHandle, admission);
+  }
+  return [...byProduct.values()];
+}
+
+/**
+ * Configuration scopes predate DI application, so only registration-preparation pressure can hide a provider.
+ * DI-owned scopes are already explicitly typed as registration hiding and must not be filtered again by seam kind.
+ */
+function isConfigurationRegistrationHidingOpenSeam(
   seam: OpenSeam,
 ): boolean {
   switch (seam.seamKindKey) {

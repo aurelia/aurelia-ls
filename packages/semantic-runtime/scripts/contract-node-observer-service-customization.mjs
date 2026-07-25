@@ -55,6 +55,10 @@ const pressureTargetAccessRows = pressureApp.ask({
   kind: SemanticAppQueryKind.BindingTargetAccesses,
   page: { size: 1000 },
 }).value.rows;
+const pressureDataFlowRows = pressureApp.ask({
+  kind: SemanticAppQueryKind.BindingDataFlows,
+  page: { size: 1000 },
+}).value.rows;
 const pressureSites = pressureApp.ask({
   kind: SemanticAppQueryKind.OpenSeamSites,
   openSeamKindKey: 'configuration.open-configuration-option',
@@ -72,8 +76,14 @@ const runtimeFieldPressure = pressureSites.find((row) =>
   row.reasonKinds.includes('host-environment-value')
   && row.sampleSummary.includes('Node observer type may be replaced')
 );
-const unsupportedTwoWayPressure = pressureSites.find((row) =>
+const obsoleteTwoWayPressure = pressureSites.find((row) =>
   row.sampleSummary.includes('useTwoWay predicate could not be reduced')
+);
+const guardedLiveDataFlow = pressureDataFlowRows.find((row) =>
+  row.sourceName === 'guardedLivePosition'
+);
+const guardedColdDataFlow = pressureDataFlowRows.find((row) =>
+  row.sourceName === 'guardedColdPosition'
 );
 const closedAfterSpreadPressure = pressureSites.find((row) =>
   row.source?.path?.endsWith('src/main.ts') === true
@@ -117,8 +127,14 @@ if (
 if (runtimeFieldPressure == null) {
   failures.push(`Expected open node-observer fields to retain their host-environment evaluator cause, got ${JSON.stringify(pressureSites)}.`);
 }
-if (unsupportedTwoWayPressure == null) {
-  failures.push('Expected a predicate with an unmodeled element-state guard to remain an explicit configuration seam.');
+if (guardedLiveDataFlow?.direction !== 'two-way') {
+  failures.push(`Expected the authored live attribute to satisfy the app two-way predicate, got ${JSON.stringify(guardedLiveDataFlow)}.`);
+}
+if (guardedColdDataFlow?.direction !== 'source-to-target') {
+  failures.push(`Expected the cold element to fail the app two-way predicate, got ${JSON.stringify(guardedColdDataFlow)}.`);
+}
+if (obsoleteTwoWayPressure != null) {
+  failures.push(`Expected the modeled tag/property/hasAttribute predicate to close without its legacy open seam, got ${JSON.stringify(obsoleteTwoWayPressure)}.`);
 }
 if (closedAfterSpreadPressure != null) {
   failures.push(`Expected irrelevant unknown fields before explicit observer fields to be discharged by projection, got ${JSON.stringify(closedAfterSpreadPressure)}.`);
@@ -134,7 +150,9 @@ const summary = {
   openDirectionObserver,
   closedSpellcheckObserver,
   runtimeFieldPressure,
-  unsupportedTwoWayPressure,
+  guardedLiveDataFlow,
+  guardedColdDataFlow,
+  obsoleteTwoWayPressure,
 };
 
 if (failures.length > 0) {

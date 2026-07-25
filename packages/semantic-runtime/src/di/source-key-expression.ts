@@ -19,7 +19,6 @@ import {
 } from './resolver-wrapper-recognition.js';
 import {
   firstSymbolDeclaration,
-  symbolForExpression,
 } from '../type-system/checker-node-helpers.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 
@@ -69,7 +68,6 @@ export function containerLookupKeyKindForExpression(
   typeSystem: TypeSystemProject,
   expression: ts.Expression | null,
 ): ContainerLookupKeyKind {
-  const checker = typeSystem.checker;
   if (expression == null) {
     return ContainerLookupKeyKind.Unknown;
   }
@@ -94,14 +92,15 @@ export function containerLookupKeyKindForExpression(
   if (ts.isClassExpression(current)) {
     return ContainerLookupKeyKind.Constructable;
   }
-  if (readAureliaResolverWrapperCall(checker, current) != null) {
+  if (readAureliaResolverWrapperCall(typeSystem, current) != null) {
     return ContainerLookupKeyKind.Resolver;
   }
   if (ts.isIdentifier(current) && intrinsicTypeNames.has(current.text)) {
     return ContainerLookupKeyKind.IntrinsicConstructable;
   }
 
-  const declaration = declarationForExpression(checker, current);
+  const symbol = typeSystem.readProgramAliasedSymbolAtLocation(current);
+  const declaration = symbol == null ? null : firstSymbolDeclaration(symbol);
   if (declaration == null) {
     return ContainerLookupKeyKind.Unknown;
   }
@@ -185,14 +184,6 @@ export function containerKeyExpressionIdentityKind(
     }
   }
   return DiContainerKeyExpressionIdentityKind.Stable;
-}
-
-function declarationForExpression(
-  checker: ts.TypeChecker,
-  expression: ts.Expression,
-): ts.Declaration | null {
-  const symbol = symbolForExpression(checker, expression);
-  return symbol == null ? null : firstSymbolDeclaration(symbol);
 }
 
 const intrinsicTypeNames = new Set<string>([

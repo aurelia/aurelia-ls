@@ -46,6 +46,11 @@ const dynamicMutationSites = app.ask({
   openSeamKindKey: 'evaluation.dynamic-mutation',
   page: { size: 20 },
 }).value;
+const dynamicLoopSites = app.ask({
+  kind: SemanticAppQueryKind.OpenSeamSites,
+  openSeamKindKey: 'evaluation.dynamic-loop',
+  page: { size: 20 },
+}).value;
 
 const failures = [];
 const unresolvedText = JSON.stringify(allUnresolved);
@@ -81,6 +86,13 @@ if (
 }
 if (dynamicMutationSites.totalOpenSeamSites !== 0 || dynamicMutationSites.totalOpenSeamRows !== 0) {
   failures.push(`Expected host/browser boundary writes to stay boundary values, observed ${dynamicMutationSites.totalOpenSeamSites} dynamic-mutation sites covering ${dynamicMutationSites.totalOpenSeamRows} raw rows.`);
+}
+if (
+  dynamicLoopSites.totalOpenSeamSites !== 1
+  || dynamicLoopSites.totalOpenSeamRows !== 1
+  || dynamicLoopSites.rows[0]?.reasonKinds.includes('host-environment-value') !== true
+) {
+  failures.push(`Expected the host-backed adoptedStyleSheets spread to remain one host-environment dynamic-loop site, observed ${dynamicLoopSites.totalOpenSeamSites} sites covering ${dynamicLoopSites.totalOpenSeamRows} raw rows.`);
 }
 if (appSourceUnresolved.rows.length !== 1 || appSourceUnresolved.rows[0]?.source?.path.endsWith('src/app.ts') !== true) {
   failures.push('Expected sourceFile-filtered unresolved-identifier seams to point at src/app.ts.');
@@ -118,6 +130,7 @@ if (failures.length > 0) {
     appSourceUnresolved,
     dynamicCallSites,
     dynamicMutationSites,
+    dynamicLoopSites,
     summary,
     overviewDisplayText: overview.displayText,
   }, null, 2));
@@ -128,6 +141,7 @@ if (failures.length > 0) {
     unresolvedIdentifierRows: allUnresolved.rows.length,
     deferredPromiseReactionSites: deferredPromiseReactionSites.length,
     dynamicMutationSites: dynamicMutationSites.totalOpenSeamSites,
+    dynamicLoopSites: dynamicLoopSites.totalOpenSeamSites,
     summaryDisplayText: summary.displayText,
     overviewDisplayText: overview.displayText,
   }, null, 2));

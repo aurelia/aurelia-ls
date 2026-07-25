@@ -6,7 +6,6 @@ import type {
 } from '../kernel/handles.js';
 import { ContainerIdentityKind } from '../kernel/identity.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
-import { ContainerRegistrationOperation } from './container-registration.js';
 import {
   ContainerConfiguration,
   ContainerDefaultResolverPolicy,
@@ -42,13 +41,6 @@ export type ContainerField =
   | 'root'
   | 'source';
 
-export type ContainerRegisterEntry =
-  | ContainerRegistrationOperation
-  | ContainerResolverSlot
-  | ContainerSelfResolverSlot
-  | ContainerResourceSlot
-  | ContainerFactorySlot;
-
 export type ContainerChildFactory = (
   parent: Container,
   configuration: ContainerConfiguration,
@@ -62,7 +54,6 @@ export type ContainerResourceSlotFactory = (
 /** Abstract Aurelia container before or during DI world construction. */
 @auLink('kernel:Container')
 export class Container {
-  private _registerDepth = 0;
   private readonly _resolvers = new Map<IdentityHandle, ContainerResolverLikeSlot[]>();
   private readonly _factories: Map<IdentityHandle, ContainerFactorySlot>;
   private readonly res = new Map<string, ContainerResourceSlot>();
@@ -71,7 +62,6 @@ export class Container {
   private readonly _parentReference: ContainerReference | null;
   private readonly _rootReference: ContainerReference;
   private readonly config: ContainerConfiguration;
-  private readonly registrationOperations: ContainerRegistrationOperation[] = [];
   private disposed = false;
   readonly id: IdentityHandle;
   readonly root: Container;
@@ -143,29 +133,6 @@ export class Container {
   /** Durable root reference for kernel facts and answer envelopes. */
   readRootReference(): ContainerReference {
     return this._rootReference;
-  }
-
-  /** Register already-materialized DI effects against this container. */
-  register(...entries: ContainerRegisterEntry[]): this {
-    ++this._registerDepth;
-    try {
-      for (const entry of entries) {
-        if (entry instanceof ContainerRegistrationOperation) {
-          this.registrationOperations.push(entry);
-        } else if (entry instanceof ContainerResolverSlot) {
-          this.registerResolver(entry);
-        } else if (entry instanceof ContainerSelfResolverSlot) {
-          this.registerSelfResolver(entry);
-        } else if (entry instanceof ContainerResourceSlot) {
-          this.registerResource(entry);
-        } else if (entry instanceof ContainerFactorySlot) {
-          this.registerFactory(entry);
-        }
-      }
-    } finally {
-      --this._registerDepth;
-    }
-    return this;
   }
 
   /** Apply a resolver row to the container's resolver map. */
@@ -488,10 +455,6 @@ export class Container {
       this._factories.clear();
     }
     this.disposed = true;
-  }
-
-  readRegistrationOperations(): readonly ContainerRegistrationOperation[] {
-    return [...this.registrationOperations];
   }
 
   readResolverSlots(keyIdentityHandle?: IdentityHandle): readonly ContainerResolverLikeSlot[] {

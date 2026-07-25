@@ -31,6 +31,12 @@ describe('AppTask registration execution', () => {
 
     expect(registrations).toHaveLength(3);
     expect(factorySites.size).toBe(1);
+    expect(new Set(registrations.map((registration) => registration.operation.productHandle)).size).toBe(3);
+    expect(new Set(registrations.map((registration) => registration.operation.identityHandle)).size).toBe(3);
+    expect(new Set(registrations.map((registration) => registration.operation.ordinal)).size).toBe(3);
+    expect(registrations.every((registration) =>
+      registration.container.productHandle === registration.operation.container.productHandle
+    )).toBe(true);
     expect(registrations[0]?.evaluation?.callback?.value)
       .not.toBe(registrations[1]?.evaluation?.callback?.value);
     expect(mappingsByWorld.map((mappings) =>

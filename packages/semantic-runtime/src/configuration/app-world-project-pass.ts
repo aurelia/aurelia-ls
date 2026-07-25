@@ -47,6 +47,7 @@ import type { TypeSystemProject } from '../type-system/project.js';
 import type { DiContainerChainFacts } from '../di/container-chain.js';
 import type { Container } from '../di/container.js';
 import type { DiWorldConstructionEmission } from '../di/world-construction.js';
+import { DiClassDependencyProjectView } from '../di/class-dependency-plan.js';
 import type { ConfigurationKernelEmission } from './configuration-kernel-emitter.js';
 import type {
   TypeSystemProjectAcquisitionProfile,
@@ -84,7 +85,10 @@ import {
   type TemplateCompilationProjectOptions,
 } from '../template/template-compilation-project-pass.js';
 import { RuntimeBindingSourceValueEvaluator } from '../observation/binding-source-value-evaluator.js';
-import { DiProviderActivationView } from '../di/provider-activation.js';
+import {
+  DiProviderActivationView,
+  noDiProviderActivationValues,
+} from '../di/provider-activation.js';
 import { runtimeBoundControllerValueTableForTemplateResources } from '../observation/runtime-bound-controller-value.js';
 import {
   ConfigurationRecognitionProjectPass,
@@ -604,7 +608,8 @@ class AureliaAppWorldProjectConstructionFrame {
     const sourceObservation = this.materializeObservationSourceIssues(typeSystem);
     const computedObservation = this.materializeComputedObservationDefinitions(typeSystem);
     const computedObserverSources = this.materializeComputedObserverSources(typeSystem);
-    const runtimeEffects = this.materializeRuntimeEffects(typeSystem);
+    const classDependencies = new DiClassDependencyProjectView(evaluation, typeSystem);
+    const runtimeEffects = this.materializeRuntimeEffects(typeSystem, classDependencies);
     const proxyObservableEscapes = this.materializeProxyObservableEscapes(typeSystem);
     const resources = this.recognizeResources(evaluation, typeSystem);
     const resourceIndex = this.indexResources(resources);
@@ -627,7 +632,11 @@ class AureliaAppWorldProjectConstructionFrame {
     const i18n = this.materializeI18nTranslationCatalog(configuration);
     const stateBase = this.materializeStateBase(configuration, appWorld, typeSystem);
     const recognizedSourceApiRoots = this.recognizeSourceApiRoots(typeSystem, configuration);
-    const serviceRoots = this.materializeFrameworkServiceRoots(typeSystem, recognizedSourceApiRoots);
+    const serviceRoots = this.materializeFrameworkServiceRoots(
+      typeSystem,
+      recognizedSourceApiRoots,
+      classDependencies,
+    );
     const sourceApiRoots = serviceRoots.sourceApiRoots;
     const validation = this.materializeValidationSourceIssues(typeSystem, configuration, sourceApiRoots);
     const fetchClient = this.materializeFetchClientSourceIssues(typeSystem, sourceApiRoots);
@@ -832,6 +841,7 @@ class AureliaAppWorldProjectConstructionFrame {
         typeSystem,
         appWorld.configuration,
         appWorld.diWorld,
+        noDiProviderActivationValues,
       ),
     );
     const routeRuntimeTopology = this.materializeRouteRuntimeTopology(routeContexts, templates, bindingSourceValues);
@@ -979,9 +989,14 @@ class AureliaAppWorldProjectConstructionFrame {
 
   private materializeRuntimeEffects(
     typeSystem: TypeSystemProject,
+    classDependencies: DiClassDependencyProjectView,
   ): RuntimeEffectProjectResult {
     return this.measure('runtime-effects', () =>
-      new RuntimeEffectMaterializer(this.store, this.publication).materialize(this.project, typeSystem)
+      new RuntimeEffectMaterializer(this.store, this.publication).materialize(
+        this.project,
+        typeSystem,
+        classDependencies,
+      )
     );
   }
 
@@ -1270,12 +1285,14 @@ class AureliaAppWorldProjectConstructionFrame {
   private materializeFrameworkServiceRoots(
     typeSystem: TypeSystemProject,
     sourceApiRoots: AureliaSourceApiRootFacts,
+    classDependencies: DiClassDependencyProjectView,
   ): FrameworkServiceRootMaterializationResult {
     return this.measure('framework-service-roots', () =>
       new FrameworkServiceRootMaterializer(this.store, this.publication).materializeAndEmit(
         this.project,
         typeSystem,
         sourceApiRoots,
+        classDependencies,
       )
     );
   }

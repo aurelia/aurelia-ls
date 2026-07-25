@@ -18,6 +18,11 @@ import {
   DiKeyIdentityEmitter,
 } from '../di/di-key-identity-emitter.js';
 import {
+  DiClassDependencyPositionState,
+  DiClassDependencyProjectView,
+  DiClassDependencySlotState,
+} from '../di/class-dependency-plan.js';
+import {
   readAureliaResolverWrapperCall,
 } from '../di/resolver-wrapper-recognition.js';
 import {
@@ -144,6 +149,7 @@ export class FrameworkServiceRootMaterializer {
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
     sourceApiRoots: AureliaSourceApiRootFacts,
+    classDependencies: DiClassDependencyProjectView,
   ): FrameworkServiceRootMaterializationResult {
     const containerPublications = uniqueRootSites(readFrameworkContainerRootSites(project, typeSystem, sourceApiRoots))
       .map((site) => this.publishRoot(project, typeSystem, site));
@@ -153,7 +159,12 @@ export class FrameworkServiceRootMaterializer {
       .map((site) => this.publishRoot(project, typeSystem, site));
     const candidateSeams = recordsForSourceOpenMaterializations(
       this.store,
-      cappedCandidateSeamsBySource(readFrameworkServiceRootCandidateSeams(project, typeSystem, rootsWithContainers)),
+      cappedCandidateSeamsBySource(readFrameworkServiceRootCandidateSeams(
+        project,
+        typeSystem,
+        rootsWithContainers,
+        classDependencies,
+      )),
     );
     const allPublications = [...containerPublications, ...servicePublications];
     const records = [
@@ -193,13 +204,16 @@ export class FrameworkServiceRootMaterializer {
     const provenanceHandle = this.store.handles.provenance(local);
     const productHandle = this.store.handles.product(local);
     const identityHandle = this.store.handles.identity(local);
-    const keySource = site.serviceKeyExpression == null
+    const programServiceKeyExpression = site.serviceKeyExpression == null
+      ? null
+      : typeSystem.readProgramExpression(site.serviceKeyExpression);
+    const keySource = programServiceKeyExpression == null
       ? null
       : sourceSpanForCheckerNode(
           this.publication,
           typeSystem.checker,
           `${local}:service-key`,
-          typeSystem.readProgramExpression(site.serviceKeyExpression) ?? site.serviceKeyExpression,
+          programServiceKeyExpression,
           SourceSpanRole.Value,
         );
     const records: KernelStoreRecord[] = [
@@ -296,8 +310,6 @@ const FRAMEWORK_SERVICE_DESCRIPTORS: readonly FrameworkServiceDescriptor[] = [
   },
 ];
 
-const AURELIA_INJECT_MODULES = new Set(['aurelia', '@aurelia/kernel']);
-const AURELIA_INJECT_EXPORTS = new Set(['inject']);
 const MAX_SERVICE_ROOT_CANDIDATE_SEAMS_PER_FILE = 8;
 
 function readFrameworkContainerRootSites(
@@ -357,6 +369,7 @@ function readFrameworkServiceRootCandidateSeams(
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
   sourceApiRoots: AureliaSourceApiRootFacts,
+  classDependencies: DiClassDependencyProjectView,
 ): readonly SourceOpenSeamInput[] {
   return project.sourceFiles.flatMap((source) => {
     const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
@@ -367,7 +380,6 @@ function readFrameworkServiceRootCandidateSeams(
       descriptor.serviceFamily,
       readSourceImportBindings(sourceFile, descriptor.moduleSpecifiers, descriptor.exports),
     ]));
-    const injectBindings = readSourceImportBindings(sourceFile, AURELIA_INJECT_MODULES, AURELIA_INJECT_EXPORTS);
     const seams: SourceOpenSeamInput[] = [];
     const visit = (node: ts.Node): void => {
       if (ts.isCallExpression(node)) {
@@ -375,7 +387,13 @@ function readFrameworkServiceRootCandidateSeams(
         pushNullable(seams, containerApiCandidateSeam(source, sourceFile, typeSystem, sourceApiRoots, serviceBindings, node));
       }
       if (ts.isClassDeclaration(node)) {
-        seams.push(...classicInjectionCandidateSeams(source, sourceFile, serviceBindings, injectBindings, node));
+        seams.push(...classDependencyCandidateSeams(
+          source,
+          sourceFile,
+          serviceBindings,
+          node,
+          classDependencies,
+        ));
       }
       ts.forEachChild(node, visit);
     };
@@ -460,7 +478,7 @@ function containerApiCandidateSeam(
     if (bindings == null) {
       continue;
     }
-    const serviceKeyName = readResolverWrappedServiceKeyName(typeSystem.checker, first, bindings, descriptor.exports);
+    const serviceKeyName = readResolverWrappedServiceKeyName(typeSystem, first, bindings, descriptor.exports);
     if (serviceKeyName == null) {
       continue;
     }
@@ -475,88 +493,66 @@ function containerApiCandidateSeam(
 }
 
 function readResolverWrappedServiceKeyName(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   expression: ts.Expression,
   bindings: SourceImportBindings,
   allowedExports: ReadonlySet<string>,
 ): string | null {
-  const wrapper = readAureliaResolverWrapperCall(checker, expression);
+  const wrapper = readAureliaResolverWrapperCall(typeSystem, expression);
   if (wrapper?.innerExpression == null) {
     return null;
   }
   return readServiceKeyNameFromExpression(wrapper.innerExpression, bindings, allowedExports);
 }
 
-function classicInjectionCandidateSeams(
+function classDependencyCandidateSeams(
   source: ProjectBootFrame['sourceFiles'][number],
   sourceFile: ts.SourceFile,
   bindingsByFamily: ReadonlyMap<string, SourceImportBindings>,
-  injectBindings: SourceImportBindings,
   node: ts.ClassDeclaration,
+  classDependencies: DiClassDependencyProjectView,
 ): readonly SourceOpenSeamInput[] {
-  const seams: SourceOpenSeamInput[] = [];
-  for (const member of node.members) {
-    if (!memberIsStaticInjectMetadata(member)) {
-      continue;
-    }
-    for (const array of staticInjectArrayExpressions(member)) {
-      for (const element of array.elements) {
-        if (!ts.isSpreadElement(element) && expressionReferencesAnyFrameworkService(element, bindingsByFamily)) {
-          seams.push(candidateSeamForNode(
-            source,
-            sourceFile,
-            element,
-            'Classic static inject metadata names a framework service key; constructor parameter ownership is not modeled as a positive source service root yet.',
-          ));
-        }
-      }
-    }
+  const plan = classDependencies.readForDeclaration(node);
+  if (plan == null) {
+    return [];
   }
-  for (const decorator of ts.canHaveDecorators(node) ? ts.getDecorators(node) ?? [] : []) {
-    const expression = unwrapExpression(decorator.expression);
-    if (!ts.isCallExpression(expression) || readImportedExportName(expression.expression, injectBindings, AURELIA_INJECT_EXPORTS) == null) {
-      continue;
-    }
-    for (const argument of expression.arguments) {
-      if (!ts.isSpreadElement(argument) && expressionReferencesAnyFrameworkService(argument, bindingsByFamily)) {
-        seams.push(candidateSeamForNode(
+  const seams: SourceOpenSeamInput[] = [];
+  if (plan.positionState === DiClassDependencyPositionState.Open) {
+    return sourceImportsAnyFrameworkService(bindingsByFamily)
+      ? [candidateSeamForNode(
           source,
           sourceFile,
-          argument,
-          'Classic @inject(...) metadata names a framework service key; constructor parameter ownership is not modeled as a positive source service root yet.',
-        ));
-      }
+          node.name ?? node,
+          'Aurelia class dependency metadata stayed open while this source imports a modeled framework service; constructor parameter ownership cannot be classified as a positive service root.',
+        )]
+      : [];
+  }
+  if (plan.positionState !== DiClassDependencyPositionState.Exact) {
+    return [];
+  }
+  for (const dependency of plan.slots) {
+    if (
+      dependency.state === DiClassDependencySlotState.Present
+      && dependency.lookupKeyExpression != null
+      && expressionReferencesAnyFrameworkService(dependency.lookupKeyExpression, bindingsByFamily)
+    ) {
+      seams.push(candidateSeamForNode(
+        source,
+        sourceFile,
+        dependency.lookupKeyExpression,
+        'Aurelia class dependency metadata names a framework service key; constructor parameter ownership is not modeled as a positive source service root yet.',
+      ));
     }
   }
   return seams;
 }
 
-function memberIsStaticInjectMetadata(
-  member: ts.ClassElement,
-): member is ts.PropertyDeclaration | ts.GetAccessorDeclaration {
-  return (
-    ts.isPropertyDeclaration(member)
-    || ts.isGetAccessorDeclaration(member)
-  ) && propertyNameIs(member.name, 'inject') && isStaticMember(member);
-}
-
-function staticInjectArrayExpressions(
-  member: ts.PropertyDeclaration | ts.GetAccessorDeclaration,
-): readonly ts.ArrayLiteralExpression[] {
-  if (ts.isPropertyDeclaration(member)) {
-    const initializer = member.initializer == null ? null : unwrapExpression(member.initializer);
-    return initializer != null && ts.isArrayLiteralExpression(initializer) ? [initializer] : [];
-  }
-  const body = member.body;
-  if (body == null) {
-    return [];
-  }
-  const returns = body.statements.filter(ts.isReturnStatement);
-  if (returns.length !== 1 || returns[0]?.expression == null) {
-    return [];
-  }
-  const expression = unwrapExpression(returns[0].expression);
-  return ts.isArrayLiteralExpression(expression) ? [expression] : [];
+function sourceImportsAnyFrameworkService(
+  bindingsByFamily: ReadonlyMap<string, SourceImportBindings>,
+): boolean {
+  return [...bindingsByFamily.values()].some((bindings) =>
+    bindings.locals.size > 0 || bindings.namespaces.size > 0
+  );
 }
 
 function expressionReferencesResolveNamedSymbol(
@@ -1161,23 +1157,6 @@ function isSourceRootPropertyName(
   name: ts.Identifier | ts.PropertyName,
 ): name is ts.Identifier | ts.StringLiteralLike | ts.NumericLiteral {
   return ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name);
-}
-
-function propertyNameIs(
-  name: ts.PropertyName,
-  expected: string,
-): boolean {
-  return (
-    ts.isIdentifier(name)
-    || ts.isStringLiteralLike(name)
-    || ts.isNumericLiteral(name)
-  ) && name.text === expected;
-}
-
-function isStaticMember(
-  node: ts.ClassElement,
-): boolean {
-  return (ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Static) !== 0;
 }
 
 function expressionIsDirectDeclarationInitializer(

@@ -4,7 +4,10 @@ import { DialogConfiguration, IDialogService } from '@aurelia/dialog';
 
 class HiddenDialogRegistry implements IRegistry {
   register(container: IContainer): void {
-    for (const entry of [DialogConfiguration]) {
+    const entries = location.hash === '#dialog'
+      ? [DialogConfiguration]
+      : [];
+    for (const entry of entries) {
       container.register(entry);
     }
   }

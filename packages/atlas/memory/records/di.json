@@ -129,18 +129,21 @@
         "evaluation"
       ],
       "summary": "DiWorldConstructor coordinates path-proven registration spending into exact container-owned DI products.",
-      "rationale": "The constructor remains a broad coordination point, but evaluator execution, key identity, provider activation, and publication now have separate owners. Future cleanup should preserve that boundary: this class orders app/container spending and aggregates emissions; it must not become another source parser, evaluator, key authority, or world-global provider index.",
+      "rationale": "The constructor remains a broad coordination point, but evaluator execution, registration-value materialization, key identity, provider activation, source-node ownership, and publication now have separate owners. Future cleanup should preserve that boundary: this class orders app/container spending and aggregates emissions; it must not become another source parser, evaluator, runtime-shape classifier, key authority, or world-global provider index.",
       "guidance": [
         "Check framework.di and framework.admission before extending this constructor from app pressure alone.",
-        "Spend evaluator-known registry functions only through DiRegistrationSpendingCascade when an executed configuration path supplies the exact occurrence-local registry value. RegistryBodyStepIndex is a declaration-inventory join: candidate-local execution must reach and match each register call before DI spends its historical argument values; unresolved or unmatched bodies remain open.",
+        "Materialize reusable resolver/registry values through DiRegistrationValueMaterializer before creating the application operation. Exact evaluator evidence is authoritative, including an exact null framework classification.",
+        "Spend evaluator-known registry functions only through DiRegistrationSpendingCascade when an executed configuration path supplies the exact occurrence-local registry value. RegistryBodyStepIndex joins retained AST-node identity to candidate-local execution; do not restore source-span containment or address-to-AST recovery.",
         "Registry bodies and bounded AppTask callbacks share evaluation-owned executeStaticFunctionEffects for PathProvenEffects semantics. DI owns exact registry/container receiver dispatch and ordered registration spending, not a private branch interpreter.",
         "Use an active recursion stack for unable_auto_register authority; completed repeated registry calls are distinct ordered effects, not a global visited-set duplicate.",
-        "ContainerRegistrationOperation.ordinal records DI traversal order independently of materialization order. AppTask effects join to that traversal as RegisteredAppTask evidence only when their admission is spent; do not infer registration from a source definition or factory site.",
+        "ContainerRegistrationOperation is the application occurrence authority. It retains the exact admission, reusable value, receiving container, evidence authority, effective framework kind, identity, and ordinal; downstream consumers must not rebuild these relations from product handles.",
+        "Every DiRegistrationOpenSeamScope is authoritative application/container uncertainty even when its exact seam kind is evaluation-owned. Consumers must not re-filter those scopes through a DI-only seam-kind list.",
         "Derive compiler-world visibility from canonical ITemplateCompiler provider identity on the app container's consulting chain, not from manifest capability presence.",
         "Framework registration effects can emit resolver slots, resource slots, app tasks, and root-shared factory slots; keep registerFactory effects as ContainerFactorySlot products instead of resolver shortcuts.",
         "Use DiKeyIdentityEmitter for all key publication and DiProviderActivationView for provider/default/activation reads rather than adding constructor-local identity or source graphs.",
         "Treat splits as framework-interface boundaries, not generic small-class cleanup."
       ],
+      "nextActionPolicy": "proactive",
       "anchors": [
         {
           "kind": "source",
@@ -156,9 +159,15 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-registration.ts",
+          "symbolName": "ContainerRegistrationOperation",
+          "summary": "Exact ordered registration application occurrence."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/registry-body-index.ts",
           "symbolName": "RegistryBodyStepIndex",
-          "summary": "Registry declaration inventory joined to exact candidate-local execution and occurrence values."
+          "summary": "Registry declaration inventory joined by retained node identity to exact candidate-local execution and occurrence values."
         },
         {
           "kind": "source",
@@ -208,7 +217,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-07-20"
+      "updatedAt": "2026-07-25"
     },
     {
       "id": "frontier:resolver",
@@ -729,6 +738,82 @@
       ],
       "createdAt": "2026-07-19",
       "updatedAt": "2026-07-19"
+    },
+    {
+      "id": "decision:di-registration-admission-value-application",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "di",
+        "registration",
+        "configuration",
+        "evaluation",
+        "kernel-publication",
+        "provenance"
+      ],
+      "summary": "DI keeps registration admission, reusable runtime registration value, and concrete application occurrence as three distinct identities.",
+      "rationale": "One normalized admission may be applied repeatedly or to several containers, while one evaluated registry or resolver value may be reused by those applications. Compressing these identities into an admission handle caused consumers to rebuild application topology, source recognition to override exact evaluator evidence, and registry/configuration ownership to be reconstructed from source spans. ContainerRegistrationOperation now retains the exact admission and canonical runtime value for one ordered container application, with durable edges for both relations.",
+      "guidance": [
+        "Treat RegistrationAdmissionProduct as the normalized value offered to registration, DiRegistrationValueProduct as a reusable runtime resolver or registry object, and ContainerRegistrationOperation as one ordered application to one concrete container.",
+        "Use Di.AppliesRegistration for operation-to-admission topology and Di.UsesRegistrationValue for operation-to-reusable-value topology. Container and produced-effect ownership use Di.ProducesProduct.",
+        "Exact evaluator evidence is authoritative even when it proves that no framework package applies. Post-spending consumers must use frameworkRegistrationKindForOperation(...) and must not reclassify operation.admission.",
+        "Use registrationOperationsVisibleToContainer(...) for consulting-chain visibility. Do not restore container-to-admission helper joins or sibling/world-global admission scans.",
+        "ConfigurationEvaluationBindings owns generation-local evaluator and AST-node relations. Registry-body execution and option ownership must use those relations directly instead of reverse-mapping source addresses or comparing spans.",
+        "Treat every DiRegistrationOpenSeamScope as authoritative application/container uncertainty regardless of the retained seam's domain kind. Evaluator-owned branch or call pressure can hide nested registry effects; only raw pre-application configuration seams need kind filtering.",
+        "Configured catalog construction is pre-spending evidence. It may classify an admission from its retained evaluator carrier, but app-world selection must join the catalog to an exact operation by both admission identity and effective framework kind.",
+        "Keep provider activation downstream of spent slots and canonical registration values. Do not create a second registration-application graph inside DiProviderActivationView."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-registration.ts",
+          "symbolName": "ContainerRegistrationOperation",
+          "summary": "Exact application occurrence with admission, reusable value, evidence authority, effective framework kind, container, and ordinal."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-evaluation-bindings.ts",
+          "symbolName": "ConfigurationEvaluationBindings",
+          "summary": "Generation-local exact evaluator and AST-node relations retained outside durable kernel records."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/world-construction.ts",
+          "symbolName": "registrationOperationsVisibleToContainer",
+          "summary": "Shared consulting-container-chain operation projection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/vocabulary/claim-predicates.ts",
+          "symbolName": "KernelClaimPredicates",
+          "summary": "Durable AppliesRegistration, UsesRegistrationValue, and ProducesProduct topology."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/di/README.md",
+          "summary": "Durable DI application identity and ownership doctrine."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/container-registration.ts",
+          "symbolName": "ContainerRegistrationOperation"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-evaluation-bindings.ts",
+          "symbolName": "ConfigurationEvaluationBindings"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/world-construction.ts",
+          "symbolName": "registrationOperationsVisibleToContainer"
+        }
+      ],
+      "createdAt": "2026-07-25",
+      "updatedAt": "2026-07-25"
     }
   ]
 }

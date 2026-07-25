@@ -3,7 +3,6 @@ import ts from 'typescript';
 import {
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
-import { symbolForExpression } from '../type-system/checker-node-helpers.js';
 import {
   declarationMatchesFrameworkSource,
   frameworkDeclarationSourceSpec,
@@ -71,18 +70,20 @@ const interfaceSymbolSource = frameworkDeclarationSourceSpec(
 );
 
 export function isAureliaCreateInterfaceCallee(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   expression: ts.Expression,
 ): boolean {
-  const name = ts.isPropertyAccessExpression(expression)
-    ? expression.name
-    : ts.isIdentifier(expression)
-      ? expression
+  const programExpression = typeSystem.readProgramExpression(expression);
+  const name = programExpression != null && ts.isPropertyAccessExpression(programExpression)
+    ? programExpression.name
+    : programExpression != null && ts.isIdentifier(programExpression)
+      ? programExpression
       : null;
   if (name == null || name.text !== 'createInterface') {
     return false;
   }
-  return (symbolForExpression(checker, name)?.declarations ?? []).some(isAureliaCreateInterfaceDeclaration);
+  return (typeSystem.readProgramAliasedSymbolAtLocation(name)?.declarations ?? [])
+    .some(isAureliaCreateInterfaceDeclaration);
 }
 
 /** Whether a runtime value declaration denotes an Aurelia InterfaceSymbol DI key. */
@@ -94,22 +95,23 @@ export function isAureliaInterfaceKeyDeclaration(
   if (aureliaFrameworkIntrinsicDiKeyForDeclaration(declaration) != null) {
     return true;
   }
-  if (!ts.isVariableDeclaration(declaration)) {
+  const programDeclaration = typeSystem.readProgramDeclaration(declaration);
+  if (programDeclaration == null || !ts.isVariableDeclaration(programDeclaration)) {
     return false;
   }
-  const initializer = declaration.initializer == null
+  const initializer = programDeclaration.initializer == null
     ? null
-    : unwrapExpression(declaration.initializer);
+    : unwrapExpression(programDeclaration.initializer);
   if (
     initializer != null
     && ts.isCallExpression(initializer)
-    && isAureliaCreateInterfaceCallee(checker, unwrapExpression(initializer.expression))
+    && isAureliaCreateInterfaceCallee(typeSystem, unwrapExpression(initializer.expression))
   ) {
     return true;
   }
 
   // Published declarations erase createInterface initializers but retain the nominal kernel InterfaceSymbol type.
-  const declaredType = typeSystem.readProgramTypeAtLocation(declaration.name);
+  const declaredType = typeSystem.readProgramTypeAtLocation(programDeclaration.name);
   return declaredType != null && typeMatchesFrameworkDeclarationSource(
     declaredType,
     checker,

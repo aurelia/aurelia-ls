@@ -3,40 +3,14 @@ import ts from 'typescript';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
   hasAccessorModifier,
-  unwrapExpression,
 } from '../evaluation/ts-syntax.js';
 import type { AddressHandle } from '../kernel/handles.js';
-import {
-  readImportedExportName,
-  readSourceImportBindings,
-  type SourceImportBindings,
-} from '../evaluation/import-bindings.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { decoratedTargetName } from '../type-system/decorator-target.js';
-
-const AURELIA_INJECTION_DECORATOR_MODULES = new Set([
-  'aurelia',
-  '@aurelia/kernel',
-]);
-
-const AURELIA_INJECTION_DECORATOR_EXPORTS = new Set([
-  'inject',
-  'all',
-  'lazy',
-  'optional',
-  'ignore',
-  'factory',
-  'own',
-  'resource',
-  'optionalResource',
-  'allResources',
-  'newInstanceForScope',
-  'newInstanceOf',
-]);
-
-const BARE_INJECTION_DECORATOR_EXPORTS = new Set([
-  'ignore',
-]);
+import {
+  readAureliaInjectionBindings,
+  readAureliaInjectionDecorator,
+} from './injection-metadata.js';
 
 export type DiInjectDecoratorTargetKind =
   | 'method'
@@ -69,7 +43,12 @@ export function readInvalidDiInjectDecoratorSites(
     const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     return sourceFile == null
       ? []
-      : readSourceFileInvalidDiInjectDecoratorSites(source.path, source.addressHandle, sourceFile);
+      : readSourceFileInvalidDiInjectDecoratorSites(
+          source.path,
+          source.addressHandle,
+          sourceFile,
+          typeSystem,
+        );
   });
 }
 
@@ -77,8 +56,9 @@ function readSourceFileInvalidDiInjectDecoratorSites(
   sourcePath: string,
   sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
+  typeSystem: TypeSystemProject,
 ): readonly DiInjectDecoratorSite[] {
-  const bindings = readInjectionDecoratorBindings(sourceFile);
+  const bindings = readAureliaInjectionBindings(sourceFile);
   const sites: DiInjectDecoratorSite[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isParameter(node)) {
@@ -88,8 +68,8 @@ function readSourceFileInvalidDiInjectDecoratorSites(
     const targetKind = invalidInjectDecoratorTargetKind(node);
     if (targetKind != null && ts.canHaveDecorators(node)) {
       for (const decorator of ts.getDecorators(node) ?? []) {
-        const decoratorName = readInjectionDecoratorName(decorator, bindings);
-        if (decoratorName == null) {
+        const metadata = readAureliaInjectionDecorator(decorator, bindings, typeSystem);
+        if (metadata == null) {
           continue;
         }
         sites.push(new DiInjectDecoratorSite(
@@ -97,7 +77,7 @@ function readSourceFileInvalidDiInjectDecoratorSites(
           sourceFileAddressHandle,
           decorator.getStart(sourceFile),
           decorator.end,
-          decoratorName,
+          metadata.exportName,
           targetKind,
           decoratedTargetName(node),
         ));
@@ -108,25 +88,6 @@ function readSourceFileInvalidDiInjectDecoratorSites(
   };
   visit(sourceFile);
   return sites;
-}
-
-function readInjectionDecoratorBindings(sourceFile: ts.SourceFile): SourceImportBindings {
-  return readSourceImportBindings(
-    sourceFile,
-    AURELIA_INJECTION_DECORATOR_MODULES,
-    AURELIA_INJECTION_DECORATOR_EXPORTS,
-  );
-}
-
-function readInjectionDecoratorName(
-  decorator: ts.Decorator,
-  bindings: SourceImportBindings,
-): string | null {
-  const expression = unwrapExpression(decorator.expression);
-  if (ts.isCallExpression(expression)) {
-    return readImportedExportName(expression.expression, bindings, true);
-  }
-  return readImportedExportName(expression, bindings, BARE_INJECTION_DECORATOR_EXPORTS);
 }
 
 function invalidInjectDecoratorTargetKind(

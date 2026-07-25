@@ -8,7 +8,10 @@ import {
   FrameworkIntrinsicDiKey,
   frameworkIntrinsicDiKeyLocal,
 } from '../src/di/framework-intrinsic-di-key.js';
-import { DiProviderActivationView } from '../src/di/provider-activation.js';
+import {
+  DiProviderActivationView,
+  noDiProviderActivationValues,
+} from '../src/di/provider-activation.js';
 import { runtimeRepeatableHandlerAdmission } from '../src/template/repeatable-handler-admission.js';
 import { CheckerRepeatableHandlerCapability } from '../src/type-system/checker-related-types.js';
 
@@ -46,6 +49,7 @@ describe('repeat-handler admission', () => {
         app.emission.typeSystem,
         app.emission.appWorld.configuration,
         app.emission.appWorld.diWorld,
+        noDiProviderActivationValues,
       ),
     );
     capabilities = admission.capabilities;

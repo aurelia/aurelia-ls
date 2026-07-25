@@ -28,6 +28,8 @@ export const enum DiIssuePhase {
   ContainerApiRecognition = 'container-api-recognition',
   /** Source-visible singleton activation graph is being checked for resolver re-entry. */
   DependencyCycleAnalysis = 'dependency-cycle-analysis',
+  /** A reusable registry value is being applied to one concrete DI container. */
+  RegistryApplication = 'registry-application',
 }
 
 export const enum DiIssueKind {
@@ -53,6 +55,8 @@ export const enum DiIssueKind {
   CyclicDependency = 'cyclic-dependency',
   /** Container.register recursion reached Aurelia's auto-registration depth guard. */
   UnableAutoRegister = 'unable-auto-register',
+  /** A registry application is proven to throw before its owning registration sequence can continue. */
+  RegistryApplicationFailed = 'registry-application-failed',
   /** A registry key's static register method returned no resolver during JIT registration. */
   NullResolverFromRegister = 'null-resolver-from-register',
   /** A newInstance resolver targets an Aurelia interface key with no registration/default implementation. */
@@ -77,6 +81,17 @@ export const enum DiIssueSubjectKind {
   DependencyCycle = 'dependency-cycle',
   /** Issue is about recursive registry/register spending. */
   RegistrationCascade = 'registration-cascade',
+}
+
+export const enum DiRegistryApplicationFailureKind {
+  /** Resolving the ParameterizedRegistry handler entered a proven container-resolution failure. */
+  HandlerResolution = 'handler-resolution',
+  /** Resolving the ParameterizedRegistry handler re-entered an active singleton. */
+  HandlerDependencyCycle = 'handler-dependency-cycle',
+  /** The resolved handler has an exact non-callable register member. */
+  HandlerRegisterNotCallable = 'handler-register-not-callable',
+  /** Handler activation or registry-body execution completed with a thrown value. */
+  AbruptCompletion = 'abrupt-completion',
 }
 
 export interface DiResourceSlotIssueSubject {
@@ -140,6 +155,7 @@ export interface DiRegistrationCascadeIssueSubject {
   readonly stepKind: string;
   readonly admissionKind: string;
   readonly strategy: string;
+  readonly failureKind: DiRegistryApplicationFailureKind | null;
 }
 
 export type DiIssueSubject =

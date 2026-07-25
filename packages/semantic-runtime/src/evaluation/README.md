@@ -283,9 +283,10 @@ must not rebuild a syntax-only object-map walker beside it.
 `literals.ts` owns array and object literal construction through a small host delegation boundary, similar to
 `intrinsics.ts`. Keep literal element/property traversal there, but keep recursion, property-name reading, seam policy,
 and unknown/boundary construction on `StaticEvaluator` so the extracted code does not become a second evaluator. Object
-spread accepts both boundary objects and boundary values as unresolved spread carriers; array spread only treats boundary
-values as unresolved iterable carriers and should keep boundary objects on the dynamic-mutation seam path unless a real
-ECMAScript-modeling reason changes that policy.
+spread accepts both boundary objects and boundary values as unresolved spread carriers. Array spread classifies an
+unknown iterator source, including boundary values and non-modeled boundary objects, as `dynamic-loop`, never as a
+mutation. Literal construction audits that reached runtime work while retaining the same pressure on the resulting
+shape; `evaluationValueEvidence(...)` prevents carrier-owned pressure from also qualifying the lexical binding edge.
 Known object properties retain per-property final-write state. A later unknown computed key, unresolved spread, or
 unsupported member opens every property written before it because the runtime write may replace any key; a later exact
 property write closes that property again. Object spread and `Object.assign(...)` preserve the same source order instead

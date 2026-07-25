@@ -488,6 +488,11 @@ class StaticEvaluationBranchJoiner {
           left.declaration,
           environment,
           sameReference(left.node, right.node),
+          new Map(),
+          false,
+          [],
+          [],
+          sameReference(left.baseClass, right.baseClass),
         ));
     this.writeValuePair(left, right, target);
     return target;

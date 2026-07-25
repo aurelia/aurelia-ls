@@ -37,8 +37,9 @@ if (unknownBlockingSeams.length === 0) {
 if (!unknownSeamRows.some((seam) =>
   seam.seamKindKey === KernelVocabulary.Di.OpenRegistryBody.key
   || seam.reasonKinds?.includes('di-registry-body-open')
+  || seam.seamKindKey === KernelVocabulary.Evaluation.DynamicBranch.key
 )) {
-  failures.push('Admission-unknown demand should link a DI registry-body/open-spending seam.');
+  failures.push('Admission-unknown demand should link the exact registry-body or evaluator pressure retained by DI spending.');
 }
 if (unknownDiagnostics.some((row) => row.missingInput === 'dialog.service-resolvers')) {
   failures.push('Admission-unknown dialog demand must not emit framework-capability-not-registered.');

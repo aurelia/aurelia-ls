@@ -326,6 +326,7 @@ export function readStaticValueProperty(
   receiver: EvaluationValue,
   propertyName: string,
   node: ts.Node | null,
+  getterReceiver: EvaluationValue = receiver,
 ): StaticValueMemberRead {
   const ownProperty = readStaticOwnProperty(receiver, propertyName);
   if (ownProperty != null) {
@@ -349,7 +350,7 @@ export function readStaticValueProperty(
       return openSeams.length === 0
         && ownProperty.state === EvaluationObjectPropertyState.Closed
         && ownProperty.presence === EvaluationObjectPropertyPresence.Present
-        ? staticValueMemberGetter(ownProperty.value, receiver)
+        ? staticValueMemberGetter(ownProperty.value, getterReceiver)
         : staticValueMemberOpen(
             `Getter '${propertyName}' is qualified by open property pressure and cannot be invoked speculatively.`,
             EvaluationOpenSeamKind.DynamicCall,
@@ -371,6 +372,9 @@ export function readStaticValueProperty(
   }
   if (receiver.kind === EvaluationValueKind.Function && propertyName === 'call') {
     return staticValueMemberValue(new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, 'Function.prototype.call', node));
+  }
+  if (receiver.kind === EvaluationValueKind.Class && receiver.baseClass != null) {
+    return readStaticValueProperty(receiver.baseClass, propertyName, node, getterReceiver);
   }
   if ((receiver.kind === EvaluationValueKind.Object || receiver.kind === EvaluationValueKind.Instance)
     && !receiver.mayHaveUnknownProperties) {

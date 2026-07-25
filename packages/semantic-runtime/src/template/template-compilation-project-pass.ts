@@ -48,7 +48,10 @@ import type { TypeSystemProject } from '../type-system/project.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { CheckerTypeProjector } from '../type-system/checker-projector.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
-import { DiProviderActivationView } from '../di/provider-activation.js';
+import {
+  DiProviderActivationView,
+  noDiProviderActivationValues,
+} from '../di/provider-activation.js';
 import {
   runtimeBoundControllerValueTableForTemplateResources,
   type RuntimeBoundControllerValueTable,
@@ -729,6 +732,7 @@ export class TemplateCompilationProjectPass {
           typeSystem,
           frontDoor.plan.appWorld.configuration,
           frontDoor.plan.appWorld.diWorld,
+          noDiProviderActivationValues,
         );
     const phaseRecorder = new TemplateCompilationPhaseRecorder(this.publication, frontDoor.plan.telemetry);
     const runtimeAnalysisDepth = options.runtimeAnalysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH;

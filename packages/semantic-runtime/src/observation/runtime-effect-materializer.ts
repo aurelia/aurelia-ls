@@ -6,6 +6,11 @@ import {
   isAureliaContainerReceiver,
 } from '../di/container-api-recognition.js';
 import {
+  DiClassDependencyPositionState,
+  DiClassDependencyProjectView,
+  DiClassDependencySlotState,
+} from '../di/class-dependency-plan.js';
+import {
   readImportedExportName,
   readSourceImportBindings,
   typeNodeReferencesImportedExport,
@@ -90,10 +95,6 @@ const OBSERVATION_SERVICE_EXPORTS = new Set([
   'IObservation',
 ]);
 
-const OBSERVATION_INJECT_EXPORTS = new Set([
-  'inject',
-]);
-
 const OBSERVATION_RESOLVE_EXPORTS = new Set([
   'resolve',
 ]);
@@ -147,8 +148,9 @@ export class RuntimeEffectMaterializer {
   materialize(
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
+    classDependencies: DiClassDependencyProjectView,
   ): RuntimeEffectProjectResult {
-    const publications = readRuntimeEffectSourceSites(project, typeSystem)
+    const publications = readRuntimeEffectSourceSites(project, typeSystem, classDependencies)
       .map((site, index) => this.publicationForSite(project, typeSystem, site, index));
     const records = publications.flatMap((publication) => publication.records);
     this.publication.publish(new KernelPublicationPlan(
@@ -224,6 +226,7 @@ export class RuntimeEffectMaterializer {
 function readRuntimeEffectSourceSites(
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
+  classDependencies: DiClassDependencyProjectView,
 ): readonly RuntimeEffectSourceSite[] {
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
@@ -240,7 +243,13 @@ function readRuntimeEffectSourceSites(
       sourceFile,
       bindings,
       sourcePathByFileName,
-      roots: readObservationRoots(sourceFile, bindings, typeSystem, sourcePathByFileName),
+      roots: readObservationRoots(
+        sourceFile,
+        bindings,
+        typeSystem,
+        sourcePathByFileName,
+        classDependencies,
+      ),
       sites: [],
     };
     visitRuntimeEffectSourceNode(context, sourceFile);
@@ -264,6 +273,7 @@ function readObservationRoots(
   bindings: SourceImportBindings,
   typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
+  classDependencies: DiClassDependencyProjectView,
 ): ObservationRootSet {
   const locals = new Set<string>();
   const instanceMembers = new Set<string>();
@@ -284,7 +294,10 @@ function readObservationRoots(
         instanceMembers.add(name);
       }
     } else if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
-      if (nodeIsObservationTyped(node, bindings) || parameterIsInjectedObservation(node, bindings)) {
+      if (
+        nodeIsObservationTyped(node, bindings)
+        || parameterIsInjectedObservation(node, bindings, classDependencies)
+      ) {
         locals.add(node.name.text);
         if (parameterIsParameterProperty(node)) {
           instanceMembers.add(node.name.text);
@@ -447,6 +460,7 @@ function expressionReferencesObservationKey(
 function parameterIsInjectedObservation(
   parameter: ts.ParameterDeclaration,
   bindings: SourceImportBindings,
+  classDependencies: DiClassDependencyProjectView,
 ): boolean {
   if (!ts.isConstructorDeclaration(parameter.parent)) {
     return false;
@@ -457,25 +471,16 @@ function parameterIsInjectedObservation(
   if (parameterIndex < 0 || !ts.isClassLike(classNode)) {
     return false;
   }
-  const injectArguments = classInjectArguments(classNode, bindings);
-  return injectArguments[parameterIndex] != null
-    && expressionReferencesObservationKey(injectArguments[parameterIndex], bindings);
-}
-
-function classInjectArguments(
-  classNode: ts.ClassLikeDeclaration,
-  bindings: SourceImportBindings,
-): readonly ts.Expression[] {
-  const injectDecorator = (ts.getDecorators(classNode) ?? []).find((decorator) => {
-    const expression = unwrapExpression(decorator.expression);
-    return ts.isCallExpression(expression)
-      && readImportedExportName(expression.expression, bindings, OBSERVATION_INJECT_EXPORTS) === 'inject';
-  });
-  if (injectDecorator == null) {
-    return [];
+  const plan = classDependencies.readForDeclaration(classNode);
+  const dependency = plan?.positionState === DiClassDependencyPositionState.Exact
+    ? plan.slots[parameterIndex] ?? null
+    : null;
+  if (dependency?.state !== DiClassDependencySlotState.Present) {
+    return false;
   }
-  const expression = unwrapExpression(injectDecorator.expression);
-  return ts.isCallExpression(expression) ? [...expression.arguments] : [];
+  return dependency.lookupKeyExpression == null
+    ? false
+    : expressionReferencesObservationKey(dependency.lookupKeyExpression, bindings);
 }
 
 function propertyNameForInstanceMember(

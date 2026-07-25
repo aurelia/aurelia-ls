@@ -1,7 +1,4 @@
 import type {
-  AddressHandle,
-} from '../kernel/handles.js';
-import type {
   ProjectBootFrame,
   SourceFileAdmission,
 } from '../boot/frames.js';
@@ -11,6 +8,7 @@ import {
 } from '../evaluation/project-evaluation.js';
 import { StaticModuleEvaluationExpressionReader } from '../evaluation/expression-reader.js';
 import type { EvaluationModuleResolutionOpen } from '../evaluation/module-host.js';
+import { StaticProjectEvaluationSourceIndex } from '../evaluation/project-source-index.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
@@ -26,7 +24,6 @@ import {
   ConfigurationRecognitionPass,
 } from './configuration-recognition-pass.js';
 import type { ConfigurationSequenceObservation } from './configuration-observation.js';
-import { normalizeConfigurationSourceFileName } from './source-file-names.js';
 import {
   ConfigurationEvaluationBindingFrame,
   mergeConfigurationEvaluationBindings,
@@ -111,12 +108,12 @@ export class ConfigurationRecognitionProjectPass {
     publication: KernelPublicationContext,
   ): ConfigurationRecognitionProjectResult {
     const recognition = new ConfigurationRecognitionPass();
-    const sourceFileAddressHandlesByFileName = readSourceFileAddressHandlesByFileName(evaluation);
+    const sourceIndex = new StaticProjectEvaluationSourceIndex(evaluation);
     const drafts = evaluation.sources.map((source) => this.recognizeSource(
       recognition,
       source,
       typeSystem,
-      sourceFileAddressHandlesByFileName,
+      sourceIndex,
     ));
     const evaluationBindings = new ConfigurationEvaluationBindingFrame();
     const emitter = new ConfigurationKernelEmitter(store, publication, evaluationBindings);
@@ -168,7 +165,7 @@ export class ConfigurationRecognitionProjectPass {
     recognition: ConfigurationRecognitionPass,
     source: StaticProjectEvaluationResult['sources'][number],
     typeSystem: TypeSystemProject | null,
-    sourceFileAddressHandlesByFileName: ReadonlyMap<string, AddressHandle>,
+    sourceIndex: StaticProjectEvaluationSourceIndex,
   ): ConfigurationRecognitionSourceDraft {
     if (!isEvaluatedProjectSource(source)) {
       return new ConfigurationRecognitionSourceDraft(
@@ -186,7 +183,7 @@ export class ConfigurationRecognitionProjectPass {
       source.evaluation,
       new StaticModuleEvaluationExpressionReader(source.evaluation),
       typeSystem,
-      sourceFileAddressHandlesByFileName,
+      sourceIndex,
     );
     return new ConfigurationRecognitionSourceDraft(
       source.admission,
@@ -298,25 +295,14 @@ function containerEvaluationDepth(
   return depth;
 }
 
-export function readSourceFileAddressHandlesByFileName(
-  evaluation: StaticProjectEvaluationResult,
-): ReadonlyMap<string, AddressHandle> {
-  const result = new Map<string, AddressHandle>();
-  for (const source of evaluation.sources) {
-    if (source.sourceFile == null) {
-      continue;
-    }
-    result.set(normalizeConfigurationSourceFileName(source.sourceFile.fileName), source.admission.addressHandle);
-  }
-  return result;
-}
-
 function aggregateConfigurationEmission(
   emissions: readonly ConfigurationKernelEmission[],
 ): ConfigurationKernelEmission {
+  const steps = emissions.flatMap((emission) => emission.steps);
+  steps.sort(compareConfigurationStepExecution);
   return new ConfigurationKernelEmission(
     emissions.flatMap((emission) => emission.sequences),
-    emissions.flatMap((emission) => emission.steps),
+    steps,
     emissions.flatMap((emission) => emission.aurelias),
     emissions.flatMap((emission) => emission.appRoots),
     emissions.flatMap((emission) => emission.containers),
@@ -327,4 +313,16 @@ function aggregateConfigurationEmission(
     mergeConfigurationEvaluationBindings(emissions.map((emission) => emission.evaluationBindings)),
     emissions.flatMap((emission) => emission.records),
   );
+}
+
+function compareConfigurationStepExecution(
+  left: ConfigurationKernelEmission['steps'][number],
+  right: ConfigurationKernelEmission['steps'][number],
+): number {
+  if (left.executionOrdinal == null) {
+    return right.executionOrdinal == null ? 0 : 1;
+  }
+  return right.executionOrdinal == null
+    ? -1
+    : left.executionOrdinal - right.executionOrdinal;
 }

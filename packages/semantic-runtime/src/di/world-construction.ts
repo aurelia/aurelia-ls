@@ -2,7 +2,6 @@ import type {
   KernelStoreRecord,
 } from '../kernel/store.js';
 import type { OpenSeam } from '../kernel/open-seam.js';
-import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import type { Container } from './container.js';
 import type { ContainerReference } from './container-reference.js';
 import type { ContainerRegistrationOperation } from './container-registration.js';
@@ -22,7 +21,6 @@ import type { AppTaskDefinition } from '../configuration/app-task.js';
 import type { AureliaAppTaskEvaluation } from '../configuration/aurelia-evaluation-runtime.js';
 import type { DiIssue } from './di-issue.js';
 import type { ResourceIssue } from '../resources/resource-issue.js';
-import type { RegistrationAdmissionProduct } from '../registration/registration-admission.js';
 import type { DiContainerChainFacts } from './container-chain.js';
 
 /** Runtime resolver objects that can occupy a container resolver slot. */
@@ -32,8 +30,8 @@ export type DiResolverProduct = Resolver | InstanceProvider;
 export class DiRegistrationOpenSeamScope {
   constructor(
     readonly seam: OpenSeam,
-    readonly admissionProductHandle: ProductHandle | null,
-    readonly containerIdentityHandle: IdentityHandle | null,
+    /** Exact registration operation whose spending retained or produced this seam. */
+    readonly operation: ContainerRegistrationOperation | null,
   ) {}
 }
 
@@ -41,11 +39,15 @@ export class DiRegistrationOpenSeamScope {
 export class RegisteredAppTask {
   constructor(
     readonly task: AppTaskDefinition,
-    /** Container into which this task registration was spent. */
-    readonly container: ContainerReference,
     /** Exact call-time evaluator evidence, absent for framework-minted tasks. */
     readonly evaluation: AureliaAppTaskEvaluation | null,
+    /** Exact registration occurrence that spent this task into a container. */
+    readonly operation: ContainerRegistrationOperation,
   ) {}
+
+  get container(): ContainerReference {
+    return this.operation.container;
+  }
 }
 
 /** Result of spending configuration-owned registrations into abstract DI container state. */
@@ -89,38 +91,18 @@ export class DiWorldConstructionEmission {
   }
 }
 
-/** Read each configuration admission spent into a container consulted by this container. */
-export function registrationAdmissionsVisibleToContainer(
+/** Read every concrete registration occurrence spent into a container consulted by this container. */
+export function registrationOperationsVisibleToContainer(
   container: Container,
-  admissions: readonly RegistrationAdmissionProduct[],
   world: DiWorldConstructionEmission,
   containerChainFacts: DiContainerChainFacts,
-): readonly RegistrationAdmissionProduct[] {
-  const admissionByProduct = new Map(admissions.map((admission) => [
-    admission.productHandle,
-    admission,
-  ]));
+): readonly ContainerRegistrationOperation[] {
   const consultingChain = new Set(
     containerChainFacts.containerChainIdentityHandles(container.identityHandle),
   );
-  const seen = new Set<ProductHandle>();
-  const result: RegistrationAdmissionProduct[] = [];
-  for (const operation of world.registrationOperations) {
-    const admissionProductHandle = operation.admissionProductHandle;
+  return world.registrationOperations.filter((operation) => {
     const operationContainerIdentityHandle = operation.container.identityHandle;
-    if (
-      admissionProductHandle == null
-      || operationContainerIdentityHandle == null
-      || !consultingChain.has(operationContainerIdentityHandle)
-      || seen.has(admissionProductHandle)
-    ) {
-      continue;
-    }
-    const admission = admissionByProduct.get(admissionProductHandle) ?? null;
-    if (admission != null) {
-      seen.add(admissionProductHandle);
-      result.push(admission);
-    }
-  }
-  return result;
+    return operationContainerIdentityHandle != null
+      && consultingChain.has(operationContainerIdentityHandle);
+  });
 }

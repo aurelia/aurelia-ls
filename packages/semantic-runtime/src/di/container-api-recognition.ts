@@ -124,7 +124,7 @@ function recordContainerApiCallSite(
   const keyExpression = node.arguments[0] ?? null;
   const keyWrapper = keyExpression == null
     ? null
-    : readAureliaResolverWrapperCall(checker, keyExpression);
+    : readAureliaResolverWrapperCall(typeSystem, keyExpression);
   sites.push(new DiContainerApiCallSite(
     sourcePath,
     sourceFileAddressHandle,

@@ -266,6 +266,10 @@ export class ConfigurationKernelEmitter {
       openSeams.handles,
     );
     records.push(...sequenceEmission.records);
+    this.evaluationBindings.bindProductSource(
+      sequenceEmission.sequence.productHandle,
+      observation.sourceNode,
+    );
     const openSeamContainerIdentityHandle = stepSet.sequenceAppRoot?.container.identityHandle
       ?? stepSet.sequenceAurelia?.container.identityHandle
       ?? uniqueContainerIdentityHandle(stepSet.containers);

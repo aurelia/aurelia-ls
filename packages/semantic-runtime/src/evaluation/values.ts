@@ -1386,6 +1386,8 @@ export class EvaluationClassValue {
     shapeOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
     /** Exact pressure that prevents known enumerable static properties from having one proven runtime order. */
     propertyOrderOpenSeams: readonly EvaluationOpenSeam[] = noEvaluationOpenSeams,
+    /** Exact evaluator-local superclass whose static and prototype-visible properties precede this class. */
+    readonly baseClass: EvaluationClassValue | null = null,
   ) {
     this.properties = new Map(properties);
     this._shapeOpenSeams = compactEvaluationOpenSeams(shapeOpenSeams);

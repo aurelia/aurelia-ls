@@ -239,6 +239,11 @@ export interface StaticEvaluationValueMetadataTransfer {
   forkValue<TValue extends EvaluationValue>(value: TValue): TValue;
 }
 
+/** Evaluator operations exposed while a runtime host records class-definition-time metadata. */
+export interface StaticClassValueObservationHost {
+  evaluateExpression(expression: ts.Expression): EvaluationValueEvidence;
+}
+
 /** Completion-aware value returned by a runtime-host operation that executes synchronously in expression flow. */
 export class StaticEvaluationRuntimeValueResult {
   readonly openSeams: readonly EvaluationOpenSeam[];
@@ -258,6 +263,17 @@ export interface StaticEvaluationRuntimeHostOperations {
     source: EvaluationValue,
     target: EvaluationValue,
     transfer: StaticEvaluationValueMetadataTransfer,
+  ): void;
+
+  /**
+   * Observe host-owned class metadata at JavaScript class-definition time, before static fields run.
+   *
+   * The generic evaluator owns timing and expression evaluation; domain hosts own the meaning of
+   * framework-specific decorator values retained through this callback.
+   */
+  observeClassValue?(
+    value: EvaluationClassValue,
+    host: StaticClassValueObservationHost,
   ): void;
 
   resolveIdentifier?(
@@ -338,6 +354,35 @@ export class StaticExpressionEvaluationResult {
   }
 }
 
+/** Result of evaluating one authored argument list without invoking a callee. */
+export class StaticArgumentListEvaluationResult {
+  readonly openSeams: readonly EvaluationOpenSeam[];
+  readonly auditOpenSeams: readonly EvaluationOpenSeam[];
+  readonly invocationEvaluations: readonly StaticInvocationEvaluation[];
+  readonly invocations: readonly StaticInvocationOccurrence[];
+
+  constructor(
+    /** Positional argument evidence, or null when argument evaluation completed abruptly. */
+    readonly argumentList: EvaluationArgumentList | null,
+    readonly abruptCompletion: EvaluationExpressionAbruptCompletion | null,
+    openSeams: readonly EvaluationOpenSeam[],
+    readonly executionTopology: StaticEvaluationExecutionTopology,
+    auditOpenSeams: readonly EvaluationOpenSeam[] = openSeams,
+    readonly mutationCount: number = 0,
+  ) {
+    this.openSeams = compactEvaluationOpenSeams([
+      ...openSeams,
+      ...argumentList?.aggregateOpenSeams ?? [],
+    ]);
+    this.auditOpenSeams = compactEvaluationOpenSeams([
+      ...auditOpenSeams,
+      ...argumentList?.aggregateOpenSeams ?? [],
+    ]);
+    this.invocationEvaluations = executionTopology.invocationEvaluations;
+    this.invocations = this.invocationEvaluations.filter(isStaticInvocationOccurrence);
+  }
+}
+
 /** ECMAScript-shaped evaluator for module-level analysis. */
 export class StaticEvaluator {
   /** Every seam encountered on the modeled execution path, irrespective of later value projection. */
@@ -351,8 +396,8 @@ export class StaticEvaluator {
       this.evaluateExpression(expression, environment, moduleKey, depth),
     readPropertyName: (name, environment, moduleKey, depth) =>
       this.readPropertyName(name, environment, moduleKey, depth),
-    open: (seamKind, summary, node, moduleKey) =>
-      this.open(seamKind, summary, node, moduleKey),
+    open: (seamKind, summary, node, moduleKey, reasonKinds) =>
+      this.open(seamKind, summary, node, moduleKey, reasonKinds),
     unknown: (reason, node, moduleKey, seamKind) =>
       this.unknown(reason, node, moduleKey, seamKind),
     openSeamCheckpoint: () => this.causalOpenSeams.length,
@@ -519,6 +564,20 @@ export class StaticEvaluator {
     );
   }
 
+  /** Evaluate an authored argument list with ECMAScript spread and left-to-right completion semantics. */
+  evaluateArgumentListInEnvironment(
+    expressions: readonly ts.Expression[],
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+  ): StaticArgumentListEvaluationResult {
+    this.runtimeHost.evaluationValueGraph?.retainEnvironment(environment);
+    const checkpoint = this.pressureCheckpoint();
+    return this.argumentListResult(
+      () => this.evaluateArgumentList(expressions, environment, moduleKey, 0),
+      checkpoint,
+    );
+  }
+
   /** Instantiate an evaluator-known class value without requiring a synthetic `new` expression. */
   evaluateClassValueInstantiation(
     callee: EvaluationClassValue,
@@ -631,6 +690,38 @@ export class StaticEvaluator {
           throw error;
         }
         return new StaticExpressionEvaluationResult(
+          error.completion,
+          this.causalOpenSeams.slice(checkpoint.openSeamCount),
+          this.orderedExecutionTopologySince(checkpoint.executionEventCount),
+          this.auditOpenSeams.slice(checkpoint.auditOpenSeamCount),
+          this.mutationCount - checkpoint.mutationCount,
+        );
+      } finally {
+        this.restoreEvaluationCheckpoint(checkpoint);
+      }
+    });
+  }
+
+  private argumentListResult(
+    evaluate: () => EvaluationArgumentList,
+    checkpoint: StaticIntrinsicEvaluationCheckpoint,
+  ): StaticArgumentListEvaluationResult {
+    return this.executionBudget.run(() => {
+      try {
+        return new StaticArgumentListEvaluationResult(
+          evaluate(),
+          null,
+          this.causalOpenSeams.slice(checkpoint.openSeamCount),
+          this.orderedExecutionTopologySince(checkpoint.executionEventCount),
+          this.auditOpenSeams.slice(checkpoint.auditOpenSeamCount),
+          this.mutationCount - checkpoint.mutationCount,
+        );
+      } catch (error) {
+        if (!(error instanceof EvaluationAbruptCompletionSignal)) {
+          throw error;
+        }
+        return new StaticArgumentListEvaluationResult(
+          null,
           error.completion,
           this.causalOpenSeams.slice(checkpoint.openSeamCount),
           this.orderedExecutionTopologySince(checkpoint.executionEventCount),
@@ -1068,6 +1159,36 @@ export class StaticEvaluator {
     moduleKey: string,
     depth: number,
   ): EvaluationClassValue {
+    const extendsType = declaration.heritageClauses
+      ?.find((clause) => clause.token === ts.SyntaxKind.ExtendsKeyword)
+      ?.types[0] ?? null;
+    const heritageCheckpoint = this.causalOpenSeams.length;
+    const evaluatedBase = extendsType == null
+      ? null
+      : this.evaluateExpression(extendsType.expression, environment, moduleKey, depth + 1);
+    if (extendsType != null && evaluatedBase?.kind !== EvaluationValueKind.Class) {
+      this.open(
+        EvaluationOpenSeamKind.UnsupportedExpression,
+        'Class heritage did not reduce to one evaluator-local base class.',
+        extendsType.expression,
+        moduleKey,
+      );
+    }
+    const heritageOpenSeams = this.consumeOpenSeamsSince(heritageCheckpoint);
+    const classValue = new EvaluationClassValue(
+      declaration,
+      environment,
+      declaration,
+      new Map(),
+      extendsType != null && evaluatedBase?.kind !== EvaluationValueKind.Class,
+      heritageOpenSeams,
+      [],
+      evaluatedBase?.kind === EvaluationValueKind.Class ? evaluatedBase : null,
+    );
+    this.runtimeHost.observeClassValue?.(classValue, {
+      evaluateExpression: (expression) =>
+        this.evaluateExpressionEvidence(expression, environment, moduleKey, depth + 1),
+    });
     const propertyEvaluation = readStaticClassProperties(
       declaration,
       environment,
@@ -1075,14 +1196,12 @@ export class StaticEvaluator {
       depth,
       this.classHost,
     );
-    return new EvaluationClassValue(
-      declaration,
-      environment,
-      declaration,
-      propertyEvaluation.properties,
-      propertyEvaluation.mayHaveUnknownProperties,
-      propertyEvaluation.shapeOpenSeams,
-    );
+    for (const [name, property] of propertyEvaluation.properties) {
+      classValue.properties.set(name, property);
+    }
+    classValue.mayHaveUnknownProperties ||= propertyEvaluation.mayHaveUnknownProperties;
+    classValue.retainShapeOpenSeams(propertyEvaluation.shapeOpenSeams);
+    return classValue;
   }
 
   private evaluateEnumDeclaration(

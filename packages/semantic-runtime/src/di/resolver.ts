@@ -50,6 +50,24 @@ export const enum ResolverStrategy {
   alias = 5,
 }
 
+/** Narrow a runtime strategy carrier to Aurelia's closed ResolverStrategy vocabulary. */
+export function isConcreteResolverStrategy(
+  strategy: ResolverStrategy | number | null,
+): strategy is ResolverStrategy {
+  switch (strategy) {
+    case ResolverStrategy.instance:
+    case ResolverStrategy.singleton:
+    case ResolverStrategy.transient:
+    case ResolverStrategy.callback:
+    case ResolverStrategy.array:
+    case ResolverStrategy.alias:
+      return true;
+    case null:
+    default:
+      return false;
+  }
+}
+
 export const enum ResolverResolutionKind {
   /** Resolver returns a modeled value directly. */
   Instance = 'instance',

@@ -1,8 +1,5 @@
-import { sourceSpansEqual } from '../kernel/address.js';
 import { evaluationValuesShareLineage } from '../evaluation/value-relation.js';
 import type { AddressHandle } from '../kernel/handles.js';
-import { sourceSpanAddressForAddress } from '../kernel/source-address.js';
-import type { KernelStoreReadView } from '../kernel/store.js';
 import {
   FrameworkRegistrationAdmission,
   RegistryRegistrationAdmission,
@@ -31,31 +28,26 @@ export function configurationValueSourceAddressHandleForAdmission(
 
 /** Join option contributions to the exact configuration value admitted through this registration. */
 export function configurationOptionContributionsForAdmission(
-  store: KernelStoreReadView,
   configuration: ConfigurationKernelEmission,
   admission: RegistrationAdmissionProduct,
 ): readonly ConfigurationOptionContribution[] {
-  const admittedValue = configuration.evaluationBindings.registrationValueForAdmission(
+  const admittedCarrier = configuration.evaluationBindings.registrationCarrierForAdmission(
     admission.productHandle,
   );
-  const configurationValueSource = sourceSpanAddressForAddress(
-    store,
-    configurationValueSourceAddressHandleForAdmission(admission),
+  const configurationValueSource = configuration.evaluationBindings.runtimeValueSourceNodeForProduct(
+    admission.productHandle,
   );
   return configuration.optionContributions.filter((contribution) => {
     const contributionValue = configuration.evaluationBindings
       .configurationValueForOptionContribution(contribution.productHandle);
-    if (admittedValue != null && contributionValue != null) {
-      return evaluationValuesShareLineage(admittedValue, contributionValue);
+    if (admittedCarrier != null && contributionValue != null) {
+      return evaluationValuesShareLineage(admittedCarrier.value, contributionValue);
     }
-    const contributionSource = sourceSpanAddressForAddress(
-      store,
-      contribution.configurationValueSourceAddressHandle,
+    // Registry-method inventories intentionally have no project-execution value until DI invokes the registry.
+    // Source-node identity retains that declaration ownership without reconstructing it from compressed spans.
+    const contributionSource = configuration.evaluationBindings.runtimeValueSourceNodeForProduct(
+      contribution.productHandle,
     );
-    return (
-      configurationValueSource != null
-      && contributionSource != null
-      && sourceSpansEqual(configurationValueSource, contributionSource)
-    );
+    return configurationValueSource != null && contributionSource === configurationValueSource;
   });
 }

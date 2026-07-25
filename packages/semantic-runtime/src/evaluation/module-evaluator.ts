@@ -18,8 +18,8 @@ import {
 } from './policy.js';
 import {
   EvaluationExportKind,
+  EvaluationImportEntry,
   EvaluationImportKind,
-  type EvaluationImportEntry,
   type EvaluationModuleGraph,
   type EvaluationModuleRecord,
 } from './module-graph.js';
@@ -439,7 +439,18 @@ export class StaticModuleGraphEvaluator {
       ? isRelativeModuleSpecifier(moduleSpecifier)
         ? this.openEvidence(`Re-export '${moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`, node)
         : new EvaluationValueEvidence(
-            new EvaluationBoundaryValue(
+            this.externalValueResolver?.resolveImportValue(
+              fromModuleKey,
+              new EvaluationImportEntry(
+                exportName === 'default'
+                  ? EvaluationImportKind.Default
+                  : EvaluationImportKind.Named,
+                moduleSpecifier,
+                exportName,
+                exportName,
+                node,
+              ),
+            ) ?? new EvaluationBoundaryValue(
               EvaluationBoundaryKind.ExternalModule,
               `re-export '${exportName}' from '${moduleSpecifier}'`,
               node,
@@ -458,12 +469,21 @@ export class StaticModuleGraphEvaluator {
     return targetModuleKey == null
       ? isRelativeModuleSpecifier(moduleSpecifier)
         ? this.openValue(`Namespace re-export '${moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`, node)
-        : new EvaluationBoundaryObjectValue(
-          EvaluationBoundaryKind.ExternalModule,
-          `namespace re-export '${moduleSpecifier}'`,
-          new Map(),
-          node,
-        )
+        : this.externalValueResolver?.resolveImportValue(
+          fromModuleKey,
+          new EvaluationImportEntry(
+            EvaluationImportKind.Namespace,
+            moduleSpecifier,
+            null,
+            null,
+            node,
+          ),
+        ) ?? new EvaluationBoundaryObjectValue(
+            EvaluationBoundaryKind.ExternalModule,
+            `namespace re-export '${moduleSpecifier}'`,
+            new Map(),
+            node,
+          )
       : this.readModuleNamespaceValue(targetModuleKey, node);
   }
 

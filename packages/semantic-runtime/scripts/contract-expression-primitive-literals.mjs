@@ -10,7 +10,7 @@ import { BindingScopeMaterializer } from '../out/configuration/scope-materialize
 import { SourceSpan } from '../out/expression/source-span.js';
 import { PrimitiveLiteralExpression } from '../out/expression/ast.js';
 import { CheckerTypeProjector, CheckerTypeMemberProjectionPolicy } from '../out/type-system/checker-projector.js';
-import { CheckerExpressionTypeEvaluator } from '../out/type-system/expression-type-evaluator.js';
+import { CheckerExpressionTypeWorld } from '../out/type-system/expression-type-world.js';
 import { CheckerExpressionTypeEvaluationContext } from '../out/type-system/expression-type-context.js';
 import { CheckerExpressionTypeEvaluationResultKind } from '../out/type-system/expression-type-evaluation.js';
 import { CheckerTypeProjectionOrigin } from '../out/type-system/type-shape.js';
@@ -60,7 +60,7 @@ const scope = new BindingScopeMaterializer(store, projector).construct(new Bindi
   true,
   null,
 )).scope;
-const evaluator = new CheckerExpressionTypeEvaluator(store, projector);
+const evaluator = new CheckerExpressionTypeWorld(store, projector).evaluator();
 const failures = [];
 
 assertLiteralType('string literal', 'open', '"open"');

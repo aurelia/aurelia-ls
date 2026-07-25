@@ -42,10 +42,7 @@ import {
 import { catalogGroupLocalKey } from '../kernel/local-key.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
-import {
-  frameworkRegistrationKindForAdmission,
-  type RegistrationAdmissionProduct,
-} from '../registration/registration-admission.js';
+import type { RegistrationAdmissionProduct } from '../registration/registration-admission.js';
 import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import {
   FrameworkRegistrationCapability,
@@ -602,7 +599,7 @@ function readConfiguredRuntimeRendererCatalogRequests(
 ): readonly ConfiguredRuntimeRendererCatalogRequest[] {
   const requests: ConfiguredRuntimeRendererCatalogRequest[] = [];
   for (const admission of configuration.registrationAdmissions) {
-    const frameworkKind = frameworkRegistrationKindForAdmission(admission);
+    const frameworkKind = configuration.evaluationBindings.frameworkRegistrationKindForAdmissionEvidence(admission);
     if (frameworkKind == null) {
       continue;
     }

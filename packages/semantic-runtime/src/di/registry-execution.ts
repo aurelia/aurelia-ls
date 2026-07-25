@@ -34,7 +34,10 @@ export class DiRegistryExecutionResult {
   constructor(
     readonly value: EvaluationValue | null,
     readonly abruptCompletion: EvaluationExpressionAbruptCompletion | null,
+    /** Pressure that directly qualifies the returned value. */
     readonly openSeams: readonly EvaluationOpenSeam[],
+    /** Every unresolved boundary reached while executing effects, including discarded expression results. */
+    readonly auditOpenSeams: readonly EvaluationOpenSeam[],
     readonly handledInvocations: readonly StaticInvocationOccurrence<ts.CallExpression>[],
   ) {}
 }
@@ -44,6 +47,7 @@ export function executeDiRegistryFunction(
   registerFunction: EvaluationFunctionValue,
   registryValue: EvaluationValue,
   containerValue: EvaluationValue,
+  parameterValues: readonly EvaluationValue[],
   invocationNode: ts.Node,
   basePolicy: StaticEvaluationPolicy,
   baseRuntimeHost: StaticEvaluationRuntimeHost,
@@ -53,6 +57,7 @@ export function executeDiRegistryFunction(
   const evaluationRegisterFunction = graph?.adoptExternal(registerFunction) ?? registerFunction;
   const evaluationRegistryValue = graph?.adoptExternal(registryValue) ?? registryValue;
   const evaluationContainerValue = graph?.adoptExternal(containerValue) ?? containerValue;
+  const evaluationParameterValues = parameterValues.map((value) => graph?.adoptExternal(value) ?? value);
   const handledInvocations = new Set<StaticInvocationFrame['identity']>();
   const runtimeHost = delegateStaticEvaluationRuntimeHost(
     baseRuntimeHost,
@@ -77,13 +82,14 @@ export function executeDiRegistryFunction(
     invocationNode,
     basePolicy,
     runtimeHost,
-    [evaluationContainerValue],
+    [evaluationContainerValue, ...evaluationParameterValues],
     evaluationRegistryValue,
   );
   return new DiRegistryExecutionResult(
     result.value,
     result.abruptCompletion,
     result.openSeams,
+    result.auditOpenSeams,
     result.invocations.filter((invocation): invocation is StaticInvocationOccurrence<ts.CallExpression> =>
       invocation.kind === StaticInvocationKind.Call
       && ts.isCallExpression(invocation.node)

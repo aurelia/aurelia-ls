@@ -44,10 +44,7 @@ import {
   i18nTranslationSyntaxConfigurationForAdmission,
   type I18nTranslationSyntaxConfiguration,
 } from '../configuration/framework-capability-configuration.js';
-import {
-  frameworkRegistrationKindForAdmission,
-  type RegistrationAdmissionProduct,
-} from '../registration/registration-admission.js';
+import type { RegistrationAdmissionProduct } from '../registration/registration-admission.js';
 import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import {
   FrameworkRegistrationCapability,
@@ -810,7 +807,7 @@ function readConfiguredSyntaxCatalogRequests(
 ): readonly ConfiguredSyntaxCatalogRequest[] {
   const requests: ConfiguredSyntaxCatalogRequest[] = [];
   for (const admission of configuration.registrationAdmissions) {
-    const frameworkKind = frameworkRegistrationKindForAdmission(admission);
+    const frameworkKind = configuration.evaluationBindings.frameworkRegistrationKindForAdmissionEvidence(admission);
     if (frameworkKind == null) {
       continue;
     }

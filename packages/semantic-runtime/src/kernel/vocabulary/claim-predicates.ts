@@ -99,13 +99,39 @@ export const KernelClaimPredicates = {
       ),
     ),
 
-    /** A container accepts a registration admission for later resolver/resource/factory effects. */
-    AcceptsRegistration: defineClaimPredicate(
+    /** A container registration operation applies one exact registration admission. */
+    AppliesRegistration: defineClaimPredicate(
       KernelVocabularyNamespace.Di,
-      'accepts-registration',
-      'A container accepts a registration admission for later resolver, resource, or factory effects.',
+      'applies-registration',
+      'A container registration operation applies one exact registration admission.',
       claimSignature(
-        productEndpoint(KernelProductKinds.Di.Container),
+        productEndpoint(KernelProductKinds.Di.ContainerRegistration),
+        registrationAdmissionEndpoint(),
+      ),
+    ),
+
+    /** A container registration operation applies one reusable runtime registration value. */
+    UsesRegistrationValue: defineClaimPredicate(
+      KernelVocabularyNamespace.Di,
+      'uses-registration-value',
+      'A container registration operation applies one reusable runtime registration value.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Di.ContainerRegistration),
+        productEndpoint(
+          KernelProductKinds.Di.Resolver,
+          KernelProductKinds.Di.Registry,
+          KernelProductKinds.Di.ParameterizedRegistry,
+        ),
+      ),
+    ),
+
+    /** A reached registration operation conditionally admitted another registration product. */
+    AdmitsRegistration: defineClaimPredicate(
+      KernelVocabularyNamespace.Di,
+      'admits-registration',
+      'A reached registration operation conditionally admitted another registration product.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Di.ContainerRegistration),
         registrationAdmissionEndpoint(),
       ),
     ),
@@ -130,6 +156,7 @@ export const KernelClaimPredicates = {
           KernelProductKinds.Di.ResourceSlot,
           KernelProductKinds.Di.Issue,
           KernelProductKinds.Di.FactorySlot,
+          KernelProductKinds.Di.ContainerRegistration,
         ),
       ),
     ),

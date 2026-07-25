@@ -19,6 +19,43 @@ export const enum EvaluationValueRelationKind {
 const evaluationValueLineageRoots = new WeakMap<object, object>();
 const evaluationValuesWithIndeterminateIdentity = new WeakSet<object>();
 
+/**
+ * Candidate-local index keyed by evaluator runtime identity rather than one particular graph snapshot.
+ * The direct cache keeps repeated reads constant-time; representatives reconnect the first snapshot from each fork.
+ */
+export class EvaluationRuntimeIdentityIndex<TValue extends object> {
+  private readonly values = new WeakMap<object, TValue>();
+  private readonly representatives: { readonly value: EvaluationValue; readonly indexed: TValue }[] = [];
+
+  read(value: EvaluationValue): TValue | null {
+    const direct = this.values.get(value);
+    if (direct != null) {
+      return direct;
+    }
+    for (const representative of this.representatives) {
+      if (evaluationValuesShareLineage(value, representative.value)) {
+        this.values.set(value, representative.indexed);
+        return representative.indexed;
+      }
+    }
+    return null;
+  }
+
+  retain(value: EvaluationValue, indexed: TValue): void {
+    if (!evaluationValueHasRuntimeIdentity(value)) {
+      throw new Error(`Cannot index ${value.kind} by evaluator runtime identity.`);
+    }
+    const existing = this.read(value);
+    if (existing != null && existing !== indexed) {
+      throw new Error('Evaluator runtime identity is already associated with another indexed value.');
+    }
+    if (existing == null) {
+      this.representatives.push({ value, indexed });
+    }
+    this.values.set(value, indexed);
+  }
+}
+
 /** Preserve runtime identity when a session forks one identity-bearing evaluator value into another snapshot. */
 export function bindEvaluationValueLineage(source: EvaluationValue, target: EvaluationValue): void {
   if (!evaluationValueHasRuntimeIdentity(source) || !evaluationValueHasRuntimeIdentity(target)) {
@@ -156,7 +193,7 @@ function evaluationValueIdentityIsIndeterminate(value: EvaluationValue): boolean
     && evaluationValuesWithIndeterminateIdentity.has(value);
 }
 
-function evaluationValueHasRuntimeIdentity(value: EvaluationValue): boolean {
+export function evaluationValueHasRuntimeIdentity(value: EvaluationValue): boolean {
   switch (value.kind) {
     case EvaluationValueKind.RegularExpression:
     case EvaluationValueKind.Date:

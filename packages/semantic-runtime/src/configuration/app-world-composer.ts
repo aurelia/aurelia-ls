@@ -8,8 +8,12 @@ import type {
 import { DiWorldConstructor } from '../di/world-constructor.js';
 import {
   DiWorldConstructionEmission,
-  registrationAdmissionsVisibleToContainer,
+  registrationOperationsVisibleToContainer,
 } from '../di/world-construction.js';
+import {
+  frameworkRegistrationKindForOperation,
+  type ContainerRegistrationOperation,
+} from '../di/container-registration.js';
 import {
   DiResolveCallIssueMaterializer,
   type DiResolveCallIssueMaterialization,
@@ -65,7 +69,10 @@ import {
 } from './framework-service-customization.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
-import { DiProviderActivationView } from '../di/provider-activation.js';
+import {
+  DiProviderActivationView,
+  noDiProviderActivationValues,
+} from '../di/provider-activation.js';
 import {
   AppWorldResourceVisibilityComposer,
 } from './app-world-resource-visibility.js';
@@ -224,6 +231,7 @@ export class AureliaAppWorldComposer {
       typeSystem,
       kernelConfiguration,
       diWorld,
+      noDiProviderActivationValues,
     );
     const sourceIssues = [
       new DiResolveCallIssueMaterializer(this.store, this.publication).materialize(project, typeSystem),
@@ -345,9 +353,8 @@ class AppRootCompilerWorldFrame {
     if (container == null) {
       return null;
     }
-    const admissions = registrationAdmissionsVisibleToContainer(
+    const operations = registrationOperationsVisibleToContainer(
       container,
-      this.configuration.registrationAdmissions,
       this.diWorld,
       this.containerChainFacts,
     );
@@ -357,8 +364,8 @@ class AppRootCompilerWorldFrame {
     )) {
       return null;
     }
-    const syntax = syntaxForAdmissions(admissions, this.configuredSyntax);
-    const runtimeRenderers = runtimeRenderersForAdmissions(admissions, this.configuredRenderers);
+    const syntax = syntaxForOperations(operations, this.configuredSyntax);
+    const runtimeRenderers = runtimeRenderersForOperations(operations, this.configuredRenderers);
     const resources = this.resourceVisibilityComposer.construct(
       container,
       this.diWorld,
@@ -368,9 +375,7 @@ class AppRootCompilerWorldFrame {
     );
     const registeredSyntax = this.registeredSyntaxResourceMaterializer.materialize({
       localKey: `app-root:${appRoot.productHandle}`,
-      admissions: admissions.filter((admission): admission is ResourceRegistrationAdmission =>
-        admission instanceof ResourceRegistrationAdmission
-      ),
+      admissions: uniqueResourceRegistrationAdmissions(operations),
       visibleResources: resources,
       resourceDefinitions: this.resourceDefinitions,
     });
@@ -402,11 +407,11 @@ class AppRootCompilerWorldFrame {
   }
 }
 
-function runtimeRenderersForAdmissions(
-  admissions: readonly RegistrationAdmissionProduct[],
+function runtimeRenderersForOperations(
+  operations: readonly ContainerRegistrationOperation[],
   configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
 ): readonly BuiltInRuntimeRendererEmission[] {
-  const catalogProductHandles = catalogProductHandlesForAdmissions(admissions, configuredRenderers.selections);
+  const catalogProductHandles = catalogProductHandlesForOperations(operations, configuredRenderers.selections);
   return configuredRenderers.catalogEmission.renderers.filter((renderer) =>
     catalogProductHandles.has(renderer.catalogProductHandle)
   );
@@ -421,14 +426,14 @@ function containerForAppRoot(
     : containersByProduct.get(appRoot.container.productHandle) ?? null;
 }
 
-function syntaxForAdmissions(
-  admissions: readonly RegistrationAdmissionProduct[],
+function syntaxForOperations(
+  operations: readonly ContainerRegistrationOperation[],
   configuredSyntax: ConfiguredBuiltInSyntaxCatalogEmission,
 ): {
   readonly attributePatterns: readonly BuiltInAttributePatternEmission[];
   readonly bindingCommands: readonly BuiltInBindingCommandEmission[];
 } {
-  const catalogProductHandles = catalogProductHandlesForAdmissions(admissions, configuredSyntax.selections);
+  const catalogProductHandles = catalogProductHandlesForOperations(operations, configuredSyntax.selections);
   return {
     attributePatterns: configuredSyntax.catalogEmission.attributePatterns.filter((pattern) =>
       catalogProductHandles.has(pattern.catalogProductHandle)
@@ -441,29 +446,48 @@ function syntaxForAdmissions(
 
 interface ConfiguredCatalogSelection {
   readonly registrationAdmissionProductHandle: ProductHandle;
+  readonly frameworkKind: import('../registration/registration-reference.js').FrameworkRegistrationKind;
   readonly catalogProductHandles: readonly ProductHandle[];
 }
 
-function catalogProductHandlesForAdmissions(
-  admissions: readonly RegistrationAdmissionProduct[],
+function catalogProductHandlesForOperations(
+  operations: readonly ContainerRegistrationOperation[],
   selections: readonly ConfiguredCatalogSelection[],
 ): ReadonlySet<ProductHandle> {
-  const admissionProductHandles = new Set<ProductHandle>();
-  for (const admission of admissions) {
-    admissionProductHandles.add(admission.productHandle);
-  }
-  if (admissionProductHandles.size === 0) {
+  if (operations.length === 0) {
     return new Set();
   }
 
   const catalogProductHandles = new Set<ProductHandle>();
-  for (const selection of selections) {
-    if (!admissionProductHandles.has(selection.registrationAdmissionProductHandle)) {
+  for (const operation of operations) {
+    const frameworkKind = frameworkRegistrationKindForOperation(operation);
+    if (frameworkKind == null) {
       continue;
     }
-    for (const catalogProductHandle of selection.catalogProductHandles) {
-      catalogProductHandles.add(catalogProductHandle);
+    for (const selection of selections) {
+      if (
+        selection.registrationAdmissionProductHandle !== operation.admission.productHandle
+        || selection.frameworkKind !== frameworkKind
+      ) {
+        continue;
+      }
+      for (const catalogProductHandle of selection.catalogProductHandles) {
+        catalogProductHandles.add(catalogProductHandle);
+      }
     }
   }
   return catalogProductHandles;
+}
+
+function uniqueResourceRegistrationAdmissions(
+  operations: readonly ContainerRegistrationOperation[],
+): readonly ResourceRegistrationAdmission[] {
+  const byProduct = new Map<ProductHandle, ResourceRegistrationAdmission>();
+  for (const operation of operations) {
+    const admission = operation.admission;
+    if (admission instanceof ResourceRegistrationAdmission) {
+      byProduct.set(admission.productHandle, admission);
+    }
+  }
+  return [...byProduct.values()];
 }

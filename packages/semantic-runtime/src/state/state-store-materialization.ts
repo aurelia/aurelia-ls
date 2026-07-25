@@ -33,10 +33,7 @@ import {
   readFieldProvenance,
 } from '../kernel/provenance.js';
 import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
-import {
-  frameworkRegistrationKindForAdmission,
-  type RegistrationAdmissionProduct,
-} from '../registration/registration-admission.js';
+import { frameworkRegistrationKindForOperation } from '../di/container-registration.js';
 import {
   CheckerTypeProjector,
 } from '../type-system/checker-projector.js';
@@ -219,23 +216,16 @@ function readStateStoreConfigurationSeeds(
   typeSystem: TypeSystemProject | null,
 ): readonly StateStoreConfigurationProductSeed[] {
   const emission = configuration.readConfiguration();
-  const admissionsByProductHandle = new Map(
-    emission.registrationAdmissions.map((admission) => [admission.productHandle, admission]),
-  );
   const seeds: StateStoreConfigurationProductSeed[] = [];
   for (const operation of diWorld.registrationOperations) {
-    const admission = operation.admissionProductHandle == null
-      ? null
-      : admissionsByProductHandle.get(operation.admissionProductHandle) ?? null;
+    const admission = operation.admission;
     if (
-      admission == null
-      || frameworkRegistrationKindForAdmission(admission)
+      frameworkRegistrationKindForOperation(operation)
         !== FrameworkRegistrationKind.StateDefaultConfiguration
     ) {
       continue;
     }
     const contributions = configurationOptionContributionsForAdmission(
-      store,
       emission,
       admission,
     );
@@ -258,7 +248,6 @@ function readStateStoreConfigurationSeeds(
         publication,
         configuration.project.projectKey,
         operation,
-        admission,
         step,
         stepContributions,
         typeSystem,
@@ -276,7 +265,6 @@ function stateStoreConfigurationSeedForBuilderStep(
   publication: KernelPublicationContext,
   projectKey: string,
   operation: ContainerRegistrationOperation,
-  admission: RegistrationAdmissionProduct,
   step: ConfigurationStep,
   contributions: readonly ConfigurationOptionContribution[],
   typeSystem: TypeSystemProject | null,
@@ -288,7 +276,6 @@ function stateStoreConfigurationSeedForBuilderStep(
       publication,
       projectKey,
       operation,
-      admission,
       step,
       contributions,
       typeSystem,
@@ -300,7 +287,6 @@ function stateStoreConfigurationSeedForBuilderStep(
       publication,
       projectKey,
       operation,
-      admission,
       step,
       contributions,
       typeSystem,
@@ -324,7 +310,6 @@ function stateStoreConfigurationSeedForInit(
   publication: KernelPublicationContext,
   projectKey: string,
   operation: ContainerRegistrationOperation,
-  admission: RegistrationAdmissionProduct,
   step: ConfigurationStep,
   contributions: readonly ConfigurationOptionContribution[],
   typeSystem: TypeSystemProject | null,
@@ -336,7 +321,7 @@ function stateStoreConfigurationSeedForInit(
   const actionHandlers = actionHandlerContributions(argument, optionsOrHandler);
   return {
     projectKey,
-    ...stateStoreApplicationSeed(operation, admission, step),
+    ...stateStoreApplicationSeed(operation, step),
     name: DEFAULT_STATE_STORE_NAME,
     isDefault: true,
     initialStateKind: initialState?.value.valueKind ?? null,
@@ -359,7 +344,6 @@ function stateStoreConfigurationSeedForInit(
     fieldProvenance: stateStoreConfigurationFieldProvenance(
       publication,
       operation,
-      admission,
       step,
       null,
       initialState,
@@ -374,7 +358,6 @@ function stateStoreConfigurationSeedForWithStore(
   publication: KernelPublicationContext,
   projectKey: string,
   operation: ContainerRegistrationOperation,
-  admission: RegistrationAdmissionProduct,
   step: ConfigurationStep,
   contributions: readonly ConfigurationOptionContribution[],
   typeSystem: TypeSystemProject | null,
@@ -387,7 +370,7 @@ function stateStoreConfigurationSeedForWithStore(
   const actionHandlers = actionHandlerContributions(argument, optionsOrHandler);
   return {
     projectKey,
-    ...stateStoreApplicationSeed(operation, admission, step),
+    ...stateStoreApplicationSeed(operation, step),
     name: name?.value.valueKind === ConfigurationOptionValueKind.String ? name.value.value : null,
     isDefault: false,
     initialStateKind: initialState?.value.valueKind ?? null,
@@ -412,7 +395,6 @@ function stateStoreConfigurationSeedForWithStore(
     fieldProvenance: stateStoreConfigurationFieldProvenance(
       publication,
       operation,
-      admission,
       step,
       name,
       initialState,
@@ -424,7 +406,6 @@ function stateStoreConfigurationSeedForWithStore(
 
 function stateStoreApplicationSeed(
   operation: ContainerRegistrationOperation,
-  admission: RegistrationAdmissionProduct,
   step: ConfigurationStep,
 ): Pick<
   StateStoreConfigurationProductSeed,
@@ -438,12 +419,13 @@ function stateStoreApplicationSeed(
   | 'configurationValueSourceAddressHandle'
   | 'ownerIdentityHandle'
 > {
+  const admission = operation.admission;
   return {
     container: operation.container,
     registrationProductHandle: operation.productHandle,
     registrationAdmissionProductHandle: admission.productHandle,
     registrationIdentityHandle: operation.identityHandle,
-    registrationSourceAddressHandle: operation.admissionAddressHandle ?? operation.sourceAddressHandle,
+    registrationSourceAddressHandle: admission.sourceAddressHandle ?? operation.sourceAddressHandle,
     configurationStepProductHandle: step.productHandle,
     configurationStepIdentityHandle: step.identityHandle,
     configurationValueSourceAddressHandle: configurationValueSourceAddressHandleForAdmission(admission),
@@ -542,13 +524,13 @@ function argumentIndex(contribution: ConfigurationOptionContribution): number {
 function stateStoreConfigurationFieldProvenance(
   publication: KernelPublicationContext,
   operation: ContainerRegistrationOperation,
-  admission: RegistrationAdmissionProduct,
   step: ConfigurationStep,
   name: ConfigurationOptionContribution | null,
   initialState: ConfigurationOptionContribution | null,
   optionsOrHandler: ConfigurationOptionContribution | null,
   actionHandlers: readonly ConfigurationOptionContribution[],
 ): StateStoreConfigurationProductSeed['fieldProvenance'] {
+  const admission = operation.admission;
   const containerProvenance = operation.container.productHandle == null
     ? null
     : productProvenanceHandle(publication, operation.container.productHandle);

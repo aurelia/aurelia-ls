@@ -296,8 +296,8 @@ export class ConfigurationStepMaterializer {
       appTasks.push(...stepEmission.appTasks);
       optionContributions.push(...stepEmission.optionContributions);
       registrationAdmissions.push(...stepEmission.registrationAdmissions);
-      for (const [productHandle, value] of stepEmission.registrationValuesByAdmissionProduct) {
-        this.evaluationBindings.bindRegistrationValue(productHandle, value);
+      for (const [productHandle, value] of stepEmission.registrationCarriersByAdmissionProduct) {
+        this.evaluationBindings.bindRegistrationCarrier(productHandle, value);
       }
       containers.push(...stepEmission.createdContainers);
       if (stepEmission.authoredContainer != null) {
@@ -345,7 +345,7 @@ export class ConfigurationStepMaterializer {
     readonly appTasks: readonly AppTaskDefinition[];
     readonly optionContributions: readonly ConfigurationOptionContribution[];
     readonly registrationAdmissions: readonly RegistrationAdmissionProduct[];
-    readonly registrationValuesByAdmissionProduct: ReadonlyMap<ProductHandle, EvaluationValue>;
+    readonly registrationCarriersByAdmissionProduct: RegistrationKernelEmission['evaluatedCarriersByAdmissionProduct'];
     readonly authoredContainer: Container | null;
     readonly createdContainers: readonly Container[];
     readonly application: AureliaApplicationDraft | null;
@@ -474,6 +474,17 @@ export class ConfigurationStepMaterializer {
       stepClaims.producerClaimHandlesByProduct,
     );
     records.push(...options.records);
+    const configurationValueSourceNode = configurationValue?.node ?? observation.sourceNode;
+    options.emissions.forEach((emission, optionIndex) => {
+      this.evaluationBindings.bindProductSource(
+        emission.contribution.productHandle,
+        observation.optionContributions[optionIndex]!.sourceNode,
+      );
+      this.evaluationBindings.bindProductRuntimeValueSource(
+        emission.contribution.productHandle,
+        configurationValueSourceNode,
+      );
+    });
     if (configurationValue != null) {
       for (const emission of options.emissions) {
         this.evaluationBindings.bindOptionContributionConfigurationValue(
@@ -491,6 +502,12 @@ export class ConfigurationStepMaterializer {
       resources,
     );
     records.push(...registrationEmission.records);
+    for (const [productHandle, node] of registrationEmission.sourceNodesByAdmissionProduct) {
+      this.evaluationBindings.bindProductSource(productHandle, node);
+    }
+    for (const [productHandle, node] of registrationEmission.runtimeValueSourceNodesByAdmissionProduct) {
+      this.evaluationBindings.bindProductRuntimeValueSource(productHandle, node);
+    }
     const registrationProductHandles = registrationEmission.admissions.map((admission) => admission.productHandle);
     const registrationClaims = this.publication.recordsForStepRegistrationClaims(
       local,
@@ -516,6 +533,7 @@ export class ConfigurationStepMaterializer {
       registrationProductHandles,
       source,
     );
+    this.evaluationBindings.bindProductSource(step.productHandle, observation.sourceNode);
     records.push(...this.recordsForConfigurationStepProduct(
       local,
       observation,
@@ -532,7 +550,7 @@ export class ConfigurationStepMaterializer {
       appTasks: appTasks.emissions.map((emission) => emission.task),
       optionContributions: options.emissions.map((emission) => emission.contribution),
       registrationAdmissions: registrationEmission.admissions,
-      registrationValuesByAdmissionProduct: registrationEmission.evaluatedValuesByAdmissionProduct,
+      registrationCarriersByAdmissionProduct: registrationEmission.evaluatedCarriersByAdmissionProduct,
       authoredContainer: createdContainer,
       createdContainers: [
         ...(createdContainer == null ? [] : [createdContainer]),
@@ -725,6 +743,7 @@ export class ConfigurationStepMaterializer {
       observation.stepKind,
       sequenceReference,
       index,
+      observation.executionOrdinal,
       target?.identityHandle ?? null,
       target?.productHandle ?? null,
       producedProductHandles,
@@ -1047,7 +1066,7 @@ export class ConfigurationStepMaterializer {
     resources: ResourceDefinitionIndex | null,
   ): RegistrationKernelEmission {
     if (observation.registrationAdmissions.length === 0) {
-      return new RegistrationKernelEmission([], [], new Map());
+      return new RegistrationKernelEmission([], [], new Map(), new Map(), new Map(), new Map());
     }
     const enriched = observation.registrationAdmissions.map((admission) => {
       const appTaskEnriched = enrichAppTaskRegistration(admission, appTaskEmissions);
@@ -1061,6 +1080,7 @@ export class ConfigurationStepMaterializer {
         context.sourceFile,
         context.moduleKey,
         context.sourceFileAddressHandle,
+        (node) => context.sourceFileAddressHandleForNode(node),
         context.projectKey,
         context.typeSystem,
         RegistrationEmissionScope.ConfigurationStep,
@@ -1482,28 +1502,13 @@ function enrichAppTaskRegistration(
   if (appTask == null) {
     return observation;
   }
-  return new RegistrationAdmissionObservation(
-    observation.carrierKind,
-    observation.admissionKind,
-    observation.strategy,
-    observation.keyRole,
-    observation.sourceNode,
-    observation.targetKey,
-    new RegistrationValueObservation(
+  return observation.withRegisteredValue(
+    observation.registeredValue.withProductProjection(
       observation.registeredValue.valueKind,
       observation.registeredValue.localName,
-      observation.registeredValue.node,
-      observation.registeredValue.isDeclaration,
       appTask.task.productHandle,
       FrameworkRegistrationKind.AppTask,
-      observation.registeredValue.sourceFileAddressHandle,
-      observation.registeredValue.moduleKey,
-      observation.registeredValue.registryBody,
-      observation.registeredValue.keyObservation,
-      observation.registeredValue.evaluatedValue,
     ),
-    observation.registryParameters,
-    observation.openSeams,
   );
 }
 
@@ -1517,27 +1522,16 @@ function enrichResourceRegistration(
     return observation;
   }
 
-  return new RegistrationAdmissionObservation(
-    observation.carrierKind,
-    observation.admissionKind,
+  return observation.withRegisteredValueAndShape(
     RegistrationStrategy.Resource,
     RegistrationKeyRole.Unknown,
-    observation.sourceNode,
     null,
-    new RegistrationValueObservation(
+    observation.registeredValue.withProductProjection(
       RegistrationValueKind.ResourceDefinition,
       definition.target.localName ?? observation.registeredValue.localName,
-      observation.registeredValue.node,
-      observation.registeredValue.isDeclaration,
       definition.productHandle,
       observation.registeredValue.frameworkKind,
-      observation.registeredValue.sourceFileAddressHandle,
-      observation.registeredValue.moduleKey,
-      observation.registeredValue.registryBody,
-      observation.registeredValue.keyObservation,
-      observation.registeredValue.evaluatedValue,
     ),
-    observation.registryParameters,
     observation.openSeams.filter((seam) =>
       seam.openKind !== KernelVocabulary.Registration.OpenStrategy.key
     ),

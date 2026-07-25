@@ -37,6 +37,7 @@ import {
   DiIssueKind,
   DiIssuePhase,
   DiIssueSubjectKind,
+  DiRegistryApplicationFailureKind,
 } from './di-issue.js';
 import { DiFrameworkErrorCode } from './framework-error-code.js';
 import type { DiContainerApiCallSite } from './container-api-recognition.js';
@@ -427,6 +428,67 @@ export class DiIssuePublisher {
         stepKind,
         admissionKind,
         strategy,
+        failureKind: null,
+      },
+      sourceAddressHandle,
+    );
+    return new DiIssuePublication(issue, [
+      ...source.records,
+      new DiProductIdentity(
+        issue.identityHandle,
+        KernelVocabulary.Di.Issue.key,
+        issue.containerIdentityHandle,
+        null,
+        issue.sourceAddressHandle,
+      ),
+      new MaterializedProduct(
+        issue.productHandle,
+        KernelVocabulary.Di.Issue.key,
+        issue.identityHandle,
+        issue.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+    ]);
+  }
+
+  publishRegistryApplicationFailed(
+    local: string,
+    container: Container,
+    stepKind: string,
+    admissionKind: string,
+    strategy: string,
+    failureKind: DiRegistryApplicationFailureKind,
+    message: string,
+    sourceAddressHandle: AddressHandle | null,
+    resolutionFailureKind: ContainerResolutionFailureKind | null = null,
+  ): DiIssuePublication {
+    const source = recordsForDiIssueSource(
+      this.store,
+      local,
+      message,
+      sourceAddressHandle,
+      [EvidenceRole.Diagnostic, EvidenceRole.Registration],
+    );
+    const productHandle = this.store.handles.product(local);
+    const identityHandle = this.store.handles.identity(local);
+    const issue = new DiIssue(
+      productHandle,
+      identityHandle,
+      container.identityHandle,
+      container.productHandle,
+      DiIssuePhase.RegistryApplication,
+      DiIssueKind.RegistryApplicationFailed,
+      message,
+      'error',
+      resolutionFailureKind == null
+        ? null
+        : frameworkErrorCodeForContainerResolutionFailureKind(resolutionFailureKind),
+      {
+        kind: DiIssueSubjectKind.RegistrationCascade,
+        stepKind,
+        admissionKind,
+        strategy,
+        failureKind,
       },
       sourceAddressHandle,
     );

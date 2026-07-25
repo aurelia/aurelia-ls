@@ -60,6 +60,7 @@ export type ConfigurationStepField =
   | 'stepKind'
   | 'sequence'
   | 'ordinal'
+  | 'executionOrdinal'
   | 'target'
   | 'producedProducts'
   | 'registrationAdmissions'
@@ -149,6 +150,8 @@ export class ConfigurationStep {
     readonly sequence: ConfigurationSequenceReference | null,
     /** Order inside the owning sequence when known. */
     readonly ordinal: number | null,
+    /** Project-wide modeled execution order; null for declaration inventories that have not run. */
+    readonly executionOrdinal: number | null,
     /** Exact runtime product identity acted upon by this operation, when closed. */
     readonly targetIdentityHandle: IdentityHandle | null,
     /** Exact runtime product acted upon by this operation, when materialized. */

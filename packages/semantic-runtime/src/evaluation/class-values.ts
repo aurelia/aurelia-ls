@@ -163,9 +163,8 @@ export function evaluateStaticClassInstantiation(
   }
 
   readInstanceClassProperties(
-    callee.declaration,
+    callee,
     instanceEnvironment,
-    callee.environment,
     moduleKey,
     depth + 1,
     instance,
@@ -204,14 +203,37 @@ export function evaluateStaticClassInstantiation(
 }
 
 function readInstanceClassProperties(
-  declaration: ts.ClassLikeDeclaration,
+  classValue: EvaluationClassValue,
   initializerEnvironment: ModuleEnvironmentRecord,
-  methodEnvironment: ModuleEnvironmentRecord,
   moduleKey: string,
   depth: number,
   instance: EvaluationInstanceValue,
   host: StaticClassEvaluationHost,
 ): void {
+  const baseClass = classValue.baseClass;
+  if (baseClass != null) {
+    const baseModuleKey = baseClass.environment.moduleKey;
+    const baseEnvironment = baseClass.environment.createChild(
+      `${baseModuleKey}:instance-fields:${baseClass.declaration.getStart()}`,
+    );
+    baseEnvironment.initializeBinding(
+      'this',
+      instance,
+      EvaluationBindingKind.Parameter,
+      false,
+      baseClass.declaration,
+      [],
+    );
+    readInstanceClassProperties(
+      baseClass,
+      baseEnvironment,
+      baseModuleKey,
+      depth + 1,
+      instance,
+      host,
+    );
+  }
+  const declaration = classValue.declaration;
   for (const member of declaration.members) {
     if (hasModifier(member, ts.SyntaxKind.StaticKeyword) || hasModifier(member, ts.SyntaxKind.DeclareKeyword)) {
       continue;
@@ -232,7 +254,7 @@ function readInstanceClassProperties(
     if (ts.isMethodDeclaration(member) || ts.isGetAccessorDeclaration(member)) {
       instance.properties.set(name, new EvaluationObjectProperty(
         name,
-        new EvaluationFunctionValue(member, methodEnvironment, member),
+        new EvaluationFunctionValue(member, classValue.environment, member),
         member,
         EvaluationObjectPropertyState.Closed,
         host.consumeOpenSeamsSince(checkpoint),

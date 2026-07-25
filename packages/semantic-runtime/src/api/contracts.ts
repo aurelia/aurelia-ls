@@ -1992,6 +1992,7 @@ export interface SemanticDiIssueRow {
     readonly stepKind: string;
     readonly admissionKind: string;
     readonly strategy: string;
+    readonly failureKind: import('../di/di-issue.js').DiRegistryApplicationFailureKind | null;
   } | null;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {

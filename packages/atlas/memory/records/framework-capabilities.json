@@ -422,7 +422,8 @@
         "Use FrameworkCapabilityDemand.sourceAddressHandle as the authored demand locus, admissionSourceAddressHandles as exact registration admissions visible to the consulting app/compiler container, configurationSourceAddressHandles only for closed option values that exclude a surface, and packageEvidence only for local implementation availability.",
         "Treat FrameworkCapabilityAdmissionState.ConfiguredOut as distinct from NotAdmitted. Configured-out diagnostics may explain and navigate to the option source, but must not reuse the registration planner or invent a replacement option value.",
         "Treat host-dependent option membership as FrameworkCapabilityAdmissionState.AdmissionUnknown. Recovery catalogs may retain conservative members, but must use an explicit open variant and carry contribution-owned materialization open seams into blockingOpenSeamHandles; unknown membership produces no capability accusation.",
-        "Select app-world admissions through registrationAdmissionsVisibleToContainer(...). Package imports, project-wide providers, and sibling app-root registrations are not local admission evidence.",
+        "Select app-world evidence through registrationOperationsVisibleToContainer(...), then retain each exact operation.admission and effective operation framework kind. Package imports, project-wide providers, and sibling app-root registrations are not local admission evidence.",
+        "Treat DiRegistrationOpenSeamScope as already-typed registration-hiding evidence regardless of whether the exact seam kind belongs to DI, registration, or evaluation. Apply kind filtering only to raw configuration scopes that predate a DI application.",
         "Include the TemplateResourceCompilationEmission analysis-context product in template capability-demand identity. A shared component definition compiled under sibling app-root worlds must retain one demand and repair target per compiler cohort.",
         "Treat built-in resource and syntax catalog variants as membership projections over canonical definitions. Keep canonical member identity stable across configuration variants, and encode configuration state plus authored values with localKeyPart(...) so open recovery state cannot collide with a closed value.",
         "Determine plugin ownership from the resolver-selected visible resource and its built-in catalog header. Known plugin spelling is only an unresolved-resource fallback; an app-owned resource with the same name must not mint a capability demand.",
@@ -441,8 +442,8 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/di/world-construction.ts",
-          "symbolName": "registrationAdmissionsVisibleToContainer",
-          "summary": "Shared consulting-container-chain admission selector."
+          "symbolName": "registrationOperationsVisibleToContainer",
+          "summary": "Shared consulting-container-chain operation selector."
         },
         {
           "kind": "source",
@@ -477,7 +478,7 @@
         {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/di/world-construction.ts",
-          "symbolName": "registrationAdmissionsVisibleToContainer"
+          "symbolName": "registrationOperationsVisibleToContainer"
         },
         {
           "kind": "source-declaration-exists",

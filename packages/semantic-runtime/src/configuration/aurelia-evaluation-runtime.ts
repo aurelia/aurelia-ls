@@ -4,6 +4,7 @@ import {
   ModuleEnvironmentRecord,
 } from '../evaluation/environment.js';
 import type {
+  StaticClassValueObservationHost,
   StaticEvaluationRuntimeHost,
   StaticEvaluationRuntimeHostOperations,
   StaticEvaluationValueMetadataTransfer,
@@ -19,6 +20,7 @@ import {
   staticInvocationValue,
   type StaticInvocationDispatch,
   type StaticInvocationFrame,
+  type StaticInvocationIdentity,
 } from '../evaluation/invocation.js';
 import {
   EvaluationImportKind,
@@ -30,6 +32,15 @@ import {
   ModuleLoaderTransformStatus,
 } from '../evaluation/module-loader.js';
 import { EvaluationOpenSeamKind } from '../evaluation/seams.js';
+import {
+  closedStaticValueMemberValue,
+  readStaticValueProperty,
+} from '../evaluation/property-access.js';
+import {
+  hasAccessorModifier,
+  readPropertyName,
+  unwrapExpression,
+} from '../evaluation/ts-syntax.js';
 import { EvaluationValueEvidence } from '../evaluation/value-pressure.js';
 import {
   EvaluationBoundaryKind,
@@ -39,6 +50,7 @@ import {
   EvaluationArrayElement,
   EvaluationArrayShape,
   EvaluationArrayValue,
+  EvaluationClassValue,
   EvaluationFunctionValue,
   EvaluationStringValue,
   EvaluationUndefined,
@@ -49,6 +61,15 @@ import {
   EvaluationObjectValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
+import {
+  DiClassInjectionEvaluation,
+  DiEvaluatedInjectionDecoratorKind,
+  DiEvaluatedInjectDecorator,
+  DiEvaluatedNamedInjectionDecorator,
+  DiEvaluatedResolverDecorator,
+  DiOpenEvaluatedInjectionDecorator,
+  type DiEvaluatedInjectionDecorator,
+} from '../di/injection-metadata.js';
 import {
   AURELIA_RESOLVER_KEY_KIND_BY_EXPORT,
   aureliaResolverKeyKindForExportName,
@@ -148,6 +169,8 @@ const syntheticSource = ts.createSourceFile(
     function aliasedResourcesRegistry() {}
     function resolverFactory() {}
     function resolver() {}
+    function inject() {}
+    function injectDecorator() {}
     function Boolean(value) { return !!value; }
   `,
   ts.ScriptTarget.Latest,
@@ -163,7 +186,11 @@ const registrationFactoryEvaluationsByValue = new WeakMap<object, AureliaRegistr
 const appTaskEvaluationsByValue = new WeakMap<object, AureliaAppTaskEvaluation>();
 const aureliaSyntheticCallsByFunction = new WeakMap<EvaluationFunctionValue, AureliaSyntheticCall>();
 const aureliaResolveFunctions = new WeakSet<EvaluationFunctionValue>();
+const aureliaInjectFactoryFunctions = new WeakSet<EvaluationFunctionValue>();
+const aureliaInjectDecoratorArgumentsByFunction = new WeakMap<EvaluationFunctionValue, EvaluationArgumentList>();
+const aureliaResolverFactoryKindsByFunction = new WeakMap<EvaluationFunctionValue, DiResolverKeyKind>();
 const aureliaResolverEvaluationsByValue = new WeakMap<object, AureliaResolverEvaluation>();
+const aureliaClassInjectionEvaluationsByValue = new WeakMap<EvaluationClassValue, DiClassInjectionEvaluation>();
 const registryBodiesByObject = new WeakMap<EvaluationObjectValue, RegistryBodyReference>();
 const resolverBuilderObjects = new WeakSet<EvaluationObjectValue>();
 const consumedResolverBuilderObjects = new WeakSet<EvaluationObjectValue>();
@@ -258,6 +285,8 @@ export class AureliaFrameworkRegistrationFactoryEvaluation {
 /** Evaluator-local meaning of one concrete `Registration.*(...)` result. */
 export class AureliaRegistrationFactoryEvaluation {
   constructor(
+    /** Exact reached invocation that created this reusable Resolver or ParameterizedRegistry value. */
+    readonly invocationIdentity: StaticInvocationIdentity,
     readonly factoryName: string,
     readonly shape: RegistrationFactoryShape,
     readonly sourceNode: ts.CallExpression,
@@ -327,6 +356,7 @@ const aureliaStaticEvaluationRuntimeHostOperations: StaticEvaluationRuntimeHostO
       registrationFactoryEvaluationsByValue.set(
         target,
         new AureliaRegistrationFactoryEvaluation(
+          registrationFactory.invocationIdentity,
           registrationFactory.factoryName,
           registrationFactory.shape,
           registrationFactory.sourceNode,
@@ -358,6 +388,20 @@ const aureliaStaticEvaluationRuntimeHostOperations: StaticEvaluationRuntimeHostO
       if (aureliaResolveFunctions.has(source)) {
         aureliaResolveFunctions.add(target);
       }
+      if (aureliaInjectFactoryFunctions.has(source)) {
+        aureliaInjectFactoryFunctions.add(target);
+      }
+      const injectArguments = aureliaInjectDecoratorArgumentsByFunction.get(source);
+      if (injectArguments != null) {
+        aureliaInjectDecoratorArgumentsByFunction.set(
+          target,
+          forkEvaluationArgumentList(injectArguments, transfer),
+        );
+      }
+      const resolverFactoryKind = aureliaResolverFactoryKindsByFunction.get(source);
+      if (resolverFactoryKind != null) {
+        aureliaResolverFactoryKindsByFunction.set(target, resolverFactoryKind);
+      }
       const facadeModule = aureliaFacadeModulesByConstructor.get(source);
       if (facadeModule != null) {
         aureliaFacadeModulesByConstructor.set(target, facadeModule);
@@ -372,6 +416,15 @@ const aureliaStaticEvaluationRuntimeHostOperations: StaticEvaluationRuntimeHostO
           ? null
           : forkEvaluationArgumentList(resolverEvaluation.argumentList, transfer),
       ));
+    }
+    if (source.kind === EvaluationValueKind.Class && target.kind === EvaluationValueKind.Class) {
+      const injection = aureliaClassInjectionEvaluationsByValue.get(source);
+      if (injection != null) {
+        aureliaClassInjectionEvaluationsByValue.set(
+          target,
+          forkDiClassInjectionEvaluation(injection, transfer),
+        );
+      }
     }
     if (source.kind !== EvaluationValueKind.Object || target.kind !== EvaluationValueKind.Object) {
       return;
@@ -408,6 +461,40 @@ const aureliaStaticEvaluationRuntimeHostOperations: StaticEvaluationRuntimeHostO
     const resultEffect = resolverBuilderEffectsByResult.get(source);
     if (resultEffect != null) {
       resolverBuilderEffectsByResult.set(target, forkAureliaDefaultRegistrationEffect(resultEffect, transfer));
+    }
+  },
+
+  observeClassValue(
+    value: EvaluationClassValue,
+    host: StaticClassValueObservationHost,
+  ): void {
+    const classDecorators = evaluateAureliaInjectionDecorators(
+      ts.getDecorators(value.declaration) ?? [],
+      value,
+      host,
+    );
+    const fieldDecorators: DiEvaluatedNamedInjectionDecorator[] = [];
+    for (const member of value.declaration.members) {
+      if (!ts.isPropertyDeclaration(member) || hasAccessorModifier(member)) {
+        continue;
+      }
+      const evaluated = evaluateAureliaInjectionDecorators(
+        ts.getDecorators(member) ?? [],
+        value,
+        host,
+      );
+      for (const decorator of [...evaluated].reverse()) {
+        fieldDecorators.push(new DiEvaluatedNamedInjectionDecorator(
+          readPropertyName(member.name),
+          decorator,
+        ));
+      }
+    }
+    if (classDecorators.length > 0 || fieldDecorators.length > 0) {
+      aureliaClassInjectionEvaluationsByValue.set(
+        value,
+        new DiClassInjectionEvaluation(classDecorators, fieldDecorators),
+      );
     }
   },
 
@@ -907,6 +994,13 @@ export function aureliaResolverEvaluationForValue(
   return value == null ? null : aureliaResolverEvaluationsByValue.get(value) ?? null;
 }
 
+/** Class-definition-time Aurelia DI metadata retained on one evaluator class value. */
+export function aureliaClassInjectionEvaluationForValue(
+  value: EvaluationClassValue,
+): DiClassInjectionEvaluation | null {
+  return aureliaClassInjectionEvaluationsByValue.get(value) ?? null;
+}
+
 export const aureliaExternalEvaluationValueResolver: StaticModuleExternalValueResolver = {
   resolveImportValue(
     _fromModuleKey: string,
@@ -1014,6 +1108,9 @@ function aureliaDiExternalImportValue(
   if (entry.exportName === 'resolve') {
     return aureliaResolveFunction(entry.node);
   }
+  if (entry.exportName === 'inject') {
+    return aureliaInjectFactoryFunction();
+  }
   if (entry.exportName === 'DI') {
     return aureliaDiObject(entry.node, entry.moduleSpecifier);
   }
@@ -1055,6 +1152,12 @@ function aureliaExternalNamespaceValue(
     properties.set('resolve', new EvaluationObjectProperty(
       'resolve',
       aureliaResolveFunction(entry.node),
+      entry.node,
+      EvaluationObjectPropertyState.Closed,
+    ));
+    properties.set('inject', new EvaluationObjectProperty(
+      'inject',
+      aureliaInjectFactoryFunction(),
       entry.node,
       EvaluationObjectPropertyState.Closed,
     ));
@@ -1191,6 +1294,7 @@ function registrationFactoryValue(
   const call = frame.node as ts.CallExpression;
   const value = registryObject(call);
   registrationFactoryEvaluationsByValue.set(value, new AureliaRegistrationFactoryEvaluation(
+    frame.identity,
     factoryName,
     shape,
     call,
@@ -1482,6 +1586,114 @@ function syntheticCallProperty(
   return [name, new EvaluationObjectProperty(name, value, value.declaration, EvaluationObjectPropertyState.Closed)];
 }
 
+function evaluateAureliaInjectionDecorators(
+  decorators: readonly ts.Decorator[],
+  owner: EvaluationClassValue,
+  host: StaticClassValueObservationHost,
+): readonly DiEvaluatedInjectionDecorator[] {
+  return decorators.flatMap((decorator) => {
+    const evaluated = evaluateAureliaInjectionDecorator(decorator, owner, host);
+    return evaluated == null ? [] : [evaluated];
+  });
+}
+
+function evaluateAureliaInjectionDecorator(
+  decorator: ts.Decorator,
+  owner: EvaluationClassValue,
+  host: StaticClassValueObservationHost,
+): DiEvaluatedInjectionDecorator | null {
+  const expression = unwrapExpression(decorator.expression);
+  if (ts.isCallExpression(expression)) {
+    const callee = closedDecoratorReferenceEvidence(expression.expression, owner.environment);
+    if (callee?.value.kind !== EvaluationValueKind.Function) {
+      return null;
+    }
+    const isInject = aureliaInjectFactoryFunctions.has(callee.value);
+    const resolverKind = aureliaResolverFactoryKindsByFunction.get(callee.value) ?? null;
+    if (!isInject && resolverKind == null) {
+      return null;
+    }
+
+    const result = host.evaluateExpression(expression);
+    if (isInject) {
+      const argumentList = result.value.kind === EvaluationValueKind.Function
+        ? aureliaInjectDecoratorArgumentsByFunction.get(result.value) ?? null
+        : null;
+      return argumentList == null
+        ? new DiOpenEvaluatedInjectionDecorator(
+            decorator,
+            evaluatedDecoratorOpenReason(result, 'Aurelia inject(...) did not close to its decorator value.'),
+            result,
+          )
+        : new DiEvaluatedInjectDecorator(decorator, argumentList);
+    }
+    return aureliaResolverEvaluationsByValue.has(result.value)
+      ? new DiEvaluatedResolverDecorator(decorator, result)
+      : new DiOpenEvaluatedInjectionDecorator(
+          decorator,
+          evaluatedDecoratorOpenReason(result, 'Aurelia resolver factory did not close to its resolver value.'),
+          result,
+        );
+  }
+
+  const resolver = closedDecoratorReferenceEvidence(expression, owner.environment);
+  return resolver != null && aureliaResolverEvaluationsByValue.has(resolver.value)
+    ? new DiEvaluatedResolverDecorator(decorator, resolver)
+    : null;
+}
+
+/**
+ * Resolve decorator references without executing arbitrary getters or custom decorator code.
+ *
+ * Imported aliases, re-exports, namespace members, and exact local object aliases retain evaluator
+ * identity, so Aurelia DI decorators need no parallel syntax-name heuristic at this boundary.
+ */
+function closedDecoratorReferenceEvidence(
+  expression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+): EvaluationValueEvidence | null {
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) {
+    const evidence = environment.readEvidence(current.text);
+    return evidence == null || evidence.openSeams.length > 0 ? null : evidence;
+  }
+  if (ts.isPropertyAccessExpression(current)) {
+    const receiver = closedDecoratorReferenceEvidence(current.expression, environment);
+    if (receiver == null) {
+      return null;
+    }
+    const value = closedStaticValueMemberValue(
+      readStaticValueProperty(receiver.value, current.name.text, current),
+    );
+    return value == null ? null : new EvaluationValueEvidence(value, []);
+  }
+  if (
+    ts.isElementAccessExpression(current)
+    && current.argumentExpression != null
+    && ts.isStringLiteralLike(unwrapExpression(current.argumentExpression))
+  ) {
+    const receiver = closedDecoratorReferenceEvidence(current.expression, environment);
+    if (receiver == null) {
+      return null;
+    }
+    const propertyName = (unwrapExpression(current.argumentExpression) as ts.StringLiteralLike).text;
+    const value = closedStaticValueMemberValue(
+      readStaticValueProperty(receiver.value, propertyName, current),
+    );
+    return value == null ? null : new EvaluationValueEvidence(value, []);
+  }
+  return null;
+}
+
+function evaluatedDecoratorOpenReason(
+  evidence: EvaluationValueEvidence,
+  fallback: string,
+): string {
+  return evidence.value.kind === EvaluationValueKind.Unknown
+    ? evidence.value.reason
+    : fallback;
+}
+
 function aureliaResolveFunction(node: ts.Node): EvaluationFunctionValue {
   const value = syntheticFunctionForCall('resolve', (frame, host) =>
     evaluateAureliaResolveCall(frame, host)
@@ -1490,13 +1702,25 @@ function aureliaResolveFunction(node: ts.Node): EvaluationFunctionValue {
   return value;
 }
 
+function aureliaInjectFactoryFunction(): EvaluationFunctionValue {
+  const value = syntheticFunctionForCall('inject', (frame) => {
+    const decorator = syntheticFunctionValue('injectDecorator');
+    aureliaInjectDecoratorArgumentsByFunction.set(decorator, frame.argumentList);
+    return decorator;
+  });
+  aureliaInjectFactoryFunctions.add(value);
+  return value;
+}
+
 function aureliaResolverFactoryFunction(
   exportName: string,
   resolverKind: DiResolverKeyKind,
 ): EvaluationFunctionValue {
-  return syntheticFunctionForCall('resolverFactory', (frame) =>
+  const value = syntheticFunctionForCall('resolverFactory', (frame) =>
     aureliaResolverValue(resolverKind, frame.node, frame.argumentList)
   );
+  aureliaResolverFactoryKindsByFunction.set(value, resolverKind);
+  return value;
 }
 
 function aureliaResolverValue(
@@ -1558,6 +1782,51 @@ function forkEvaluationArgumentList(
     argumentList.shape,
     argumentList.outcome,
   );
+}
+
+function forkDiClassInjectionEvaluation(
+  source: DiClassInjectionEvaluation,
+  transfer: StaticEvaluationValueMetadataTransfer,
+): DiClassInjectionEvaluation {
+  return new DiClassInjectionEvaluation(
+    source.classDecorators.map((decorator) =>
+      forkEvaluatedInjectionDecorator(decorator, transfer)
+    ),
+    source.fieldDecorators.map((field) => new DiEvaluatedNamedInjectionDecorator(
+      field.fieldName,
+      forkEvaluatedInjectionDecorator(field.evaluation, transfer),
+    )),
+  );
+}
+
+function forkEvaluatedInjectionDecorator(
+  source: DiEvaluatedInjectionDecorator,
+  transfer: StaticEvaluationValueMetadataTransfer,
+): DiEvaluatedInjectionDecorator {
+  switch (source.kind) {
+    case DiEvaluatedInjectionDecoratorKind.Inject:
+      return new DiEvaluatedInjectDecorator(
+        source.decorator,
+        forkEvaluationArgumentList(source.argumentList, transfer),
+      );
+    case DiEvaluatedInjectionDecoratorKind.Resolver:
+      return new DiEvaluatedResolverDecorator(
+        source.decorator,
+        new EvaluationValueEvidence(
+          transfer.forkValue(source.resolver.value),
+          source.resolver.openSeams,
+        ),
+      );
+    case DiEvaluatedInjectionDecoratorKind.Open:
+      return new DiOpenEvaluatedInjectionDecorator(
+        source.decorator,
+        source.reason,
+        new EvaluationValueEvidence(
+          transfer.forkValue(source.evidence.value),
+          source.evidence.openSeams,
+        ),
+      );
+  }
 }
 
 function bindingModeObject(node: ts.Node): EvaluationObjectValue {

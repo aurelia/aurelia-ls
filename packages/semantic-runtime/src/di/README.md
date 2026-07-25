@@ -17,6 +17,9 @@ registration admission to a modeled container.
 - Emulate the runtime container's public methods over typed products and execute evaluator-known registry functions only
   when the configuration path proves the call. Do not execute user constructors, callbacks, getters, lifecycle hooks,
   transformers, or unresolved registry bodies.
+- Keep evaluator AST identity separate from the TypeScript Program epoch. DI recognizers that need checker semantics
+  accept `TypeSystemProject` and remap internally; a remap miss remains unknown/open rather than pairing a naked checker
+  with an evaluator node or publishing stale source coordinates.
 - Preserve provenance for which source/configuration fact created a container, applied a registration, or produced a
   slot.
 - Leave open seams for dynamic registration, unresolved keys, registry bodies that cannot be interpreted, custom default
@@ -48,7 +51,9 @@ The tooling model keeps those consequences distinct:
   router keys are recognized against their actual declaration packages before collapsing to one canonical runtime key;
   an app declaration that merely reuses names such as `IRepeatableHandler` or `IRouteContext` must remain distinct.
 - `ContainerConfiguration` names the runtime-shaped configuration policy.
-- `ContainerRegistrationOperation` names the act of spending an admission against a container.
+- `ContainerRegistrationOperation` names one occurrence of spending an admission against a container. It retains the
+  exact admission, the reusable runtime registration value when one exists, the evidence authority that selected the
+  runtime branch, and the effective framework package for that application.
 - `Resolver` names a runtime-shaped resolver value. Its `resolve(...)`, `register(...)`, and `getFactory(...)` methods
   return product answer records or apply caller-supplied slots; they do not execute callbacks or constructors.
   `ResolverStrategy` mirrors the framework's numeric resolver strategies (`instance`, `singleton`, `transient`,
@@ -210,10 +215,26 @@ registry/parameterized-registry products, framework-created AppTask products, an
 product/source/claim envelopes and the key authority shared instead of rebuilding them inside the world-construction
 traversal.
 
+Registration has three identities that must not be compressed into one another:
+
+- a registration admission is the normalized value offered to container registration;
+- a resolver, registry, or parameterized registry is a reusable runtime registration value;
+- a `ContainerRegistrationOperation` is one ordered application of that value/admission to one concrete container.
+
+One value may be applied repeatedly and one admission may reach several containers. The operation therefore retains
+both exact products and publishes `di.applies-registration`; when a reusable value exists it also publishes
+`di.uses-registration-value`. Exact evaluator evidence is authoritative even when it disproves a framework package
+suggested by source recognition. Post-spending consumers must read `frameworkRegistrationKindForOperation(...)`, not
+reclassify the admission.
+
 When DI spends a registration admission that is already open, the operation materialization retains the admission's
 exact open-seam handle. DI publishes another seam only when it discovers a new DI-owned blocker such as an unknown
 receiving container or an otherwise closed admission that cannot produce a slot. Do not translate registration reasons
 into parallel generic DI reasons.
+`DiRegistrationOpenSeamScope` is the semantic statement that the exact operation/container locus may hide further
+registration effects. Once DI publishes that scope, consumers must not discard it by reclassifying the seam's domain
+kind: evaluator-owned branch/call pressure can be the reason a registry application stayed incomplete. Raw
+configuration seams predate an application and still require registration-specific filtering.
 
 Capability admission spends that same materialization path before treating a seam as a blocker. A residual tied only
 to known framework admissions can block the capabilities those admissions carry; it cannot make unrelated plugin
@@ -258,7 +279,8 @@ The current spending path is intentionally narrow but end-to-end:
   that deferred task callback rather than being pre-installed into the configuration-time container world. The
   `state` package materialization layer separately publishes `StateDefaultConfiguration` store-configuration products
   from builder contributions so plugin-backed state is queryable before the deferred task executes;
-- every spent admission produces a `ContainerRegistrationOperation` product and a `di.accepts-registration` claim;
+- every spent admission produces a `ContainerRegistrationOperation`; the container produces that operation, the
+  operation applies the exact admission, and it uses the canonical registration value when one was materialized;
 - AppTask admissions additionally retain `RegisteredAppTask` evidence only when spent. Source-created tasks preserve
   the exact evaluator slot/key/callback value and receiving container for that occurrence; framework-minted tasks remain
   explicit definitions without fabricated source evaluation. Neither form executes the lifecycle callback during world

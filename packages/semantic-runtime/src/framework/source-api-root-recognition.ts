@@ -558,8 +558,7 @@ export function sourceRootSymbolForName(
   typeSystem: TypeSystemProject,
   name: ts.Identifier | ts.StringLiteralLike | ts.NumericLiteral,
 ): ts.Symbol | null {
-  const programName = typeSystem.readProgramNode(name) ?? name;
-  return symbolForExpression(typeSystem.checker, programName);
+  return typeSystem.readProgramAliasedSymbolAtLocation(name);
 }
 
 /** Read a checker symbol for a class/property root name when the syntax can participate in ordinary property access. */
