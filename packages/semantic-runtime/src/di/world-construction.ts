@@ -22,6 +22,8 @@ import type { AppTaskDefinition } from '../configuration/app-task.js';
 import type { AureliaAppTaskEvaluation } from '../configuration/aurelia-evaluation-runtime.js';
 import type { DiIssue } from './di-issue.js';
 import type { ResourceIssue } from '../resources/resource-issue.js';
+import type { RegistrationAdmissionProduct } from '../registration/registration-admission.js';
+import type { DiContainerChainFacts } from './container-chain.js';
 
 /** Runtime resolver objects that can occupy a container resolver slot. */
 export type DiResolverProduct = Resolver | InstanceProvider;
@@ -85,4 +87,40 @@ export class DiWorldConstructionEmission {
   get appTasks(): readonly AppTaskDefinition[] {
     return this.registeredAppTasks.map((registration) => registration.task);
   }
+}
+
+/** Read each configuration admission spent into a container consulted by this container. */
+export function registrationAdmissionsVisibleToContainer(
+  container: Container,
+  admissions: readonly RegistrationAdmissionProduct[],
+  world: DiWorldConstructionEmission,
+  containerChainFacts: DiContainerChainFacts,
+): readonly RegistrationAdmissionProduct[] {
+  const admissionByProduct = new Map(admissions.map((admission) => [
+    admission.productHandle,
+    admission,
+  ]));
+  const consultingChain = new Set(
+    containerChainFacts.containerChainIdentityHandles(container.identityHandle),
+  );
+  const seen = new Set<ProductHandle>();
+  const result: RegistrationAdmissionProduct[] = [];
+  for (const operation of world.registrationOperations) {
+    const admissionProductHandle = operation.admissionProductHandle;
+    const operationContainerIdentityHandle = operation.container.identityHandle;
+    if (
+      admissionProductHandle == null
+      || operationContainerIdentityHandle == null
+      || !consultingChain.has(operationContainerIdentityHandle)
+      || seen.has(admissionProductHandle)
+    ) {
+      continue;
+    }
+    const admission = admissionByProduct.get(admissionProductHandle) ?? null;
+    if (admission != null) {
+      seen.add(admissionProductHandle);
+      result.push(admission);
+    }
+  }
+  return result;
 }

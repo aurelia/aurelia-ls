@@ -108,6 +108,7 @@ import {
   ObjectConfigurationOptionValue,
   StringArrayConfigurationOptionValue,
   StringConfigurationOptionValue,
+  UndefinedConfigurationOptionValue,
   UnknownConfigurationOptionValue,
 } from './configuration-option.js';
 import {
@@ -959,6 +960,8 @@ export class ConfigurationStepMaterializer {
         );
       case ConfigurationOptionValueKind.Null:
         return new NullConfigurationOptionValue(addressHandle);
+      case ConfigurationOptionValueKind.Undefined:
+        return new UndefinedConfigurationOptionValue(addressHandle);
       case ConfigurationOptionValueKind.Object:
         return new ObjectConfigurationOptionValue(null, addressHandle, observation.localName);
       case ConfigurationOptionValueKind.Array:

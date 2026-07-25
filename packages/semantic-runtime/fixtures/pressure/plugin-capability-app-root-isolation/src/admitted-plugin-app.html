@@ -1,0 +1,24 @@
+<template>
+  <h1 t="dashboard.title"></h1>
+  <p t.bind="titleKey"></p>
+
+  <ul>
+    <li virtual-repeat.for="entry of entries">
+      <span>${entry.label}</span>
+      <small>${$index}</small>
+    </li>
+  </ul>
+
+  <validation-container>
+    <input value.bind="displayName & validate">
+    <div validation-errors.bind="errors"></div>
+  </validation-container>
+
+  <input value.state="draft">
+  <button click.dispatch="{ type: 'save', value: draft }">Save</button>
+  <button click.dispatch:activity="{ type: 'refresh' }">Refresh</button>
+  <output>${ready & state}</output>
+  <output>${label & state:'activity'}</output>
+  <output>${readyFromStore}</output>
+  <output>${activityLabel}</output>
+</template>

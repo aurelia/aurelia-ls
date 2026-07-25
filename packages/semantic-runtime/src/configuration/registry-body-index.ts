@@ -1,5 +1,10 @@
 import ts from 'typescript';
-import { SourceSpanAddress, type SourceFileAddress } from '../kernel/address.js';
+import {
+  SourceSpanAddress,
+  sourceSpansEqual,
+  type SourceFileAddress,
+  type SourceSpanLocus,
+} from '../kernel/address.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import type { KernelStoreReadView } from '../kernel/store.js';
 import { StaticEvaluationSessionFork } from '../evaluation/evaluation-session.js';
@@ -327,18 +332,6 @@ function sourceAddressKey(
 ): string | null {
   const span = handle == null ? null : readSourceSpan(records, handle);
   return span == null ? null : `${span.fileHandle}:${span.start}:${span.end}`;
-}
-
-interface SourceSpanLocus {
-  readonly fileHandle: SourceFileAddress['handle'];
-  readonly start: number;
-  readonly end: number;
-}
-
-function sourceSpansEqual(left: SourceSpanLocus, right: SourceSpanLocus): boolean {
-  return left.fileHandle === right.fileHandle
-    && left.start === right.start
-    && left.end === right.end;
 }
 
 interface RegistrySequenceSpan {

@@ -62,9 +62,10 @@ async function discoverTypecheckableFixtureRoots(rootSpecs) {
 }
 
 async function collectTypecheckableFixtureRoots(root, discovered, include) {
+  const hasTsconfig = await fileExists(path.join(root, 'tsconfig.json'));
   const hasPackageTypecheck = await fileExists(path.join(root, 'package.json'))
-    && await fileExists(path.join(root, 'tsconfig.json'));
-  const hasSourceOnlyTypecheck = await fileExists(path.join(root, 'semantic-fixture.json'))
+    && hasTsconfig;
+  const hasSourceOnlyTypecheck = (hasTsconfig || await fileExists(path.join(root, 'semantic-fixture.json')))
     && (await collectTypeScriptFixtureSourceFiles(root)).length > 0;
   if (!hasPackageTypecheck && !hasSourceOnlyTypecheck) {
     for (const entry of await readdirIfExists(root)) {
@@ -163,6 +164,14 @@ async function typecheckFixture(root, pathMappings) {
 
 async function typecheckSourceOnlyFixture(root, sourceFiles, pathMappings) {
   const overlayPath = path.join(tempRoot, `${safeFileName(path.relative(packageRoot, root))}.tsconfig.json`);
+  const templateModulePath = path.join(tempRoot, 'fixture-template-modules.d.ts');
+  await writeFile(templateModulePath, [
+    "declare module '*.html' {",
+    '  const template: string;',
+    '  export default template;',
+    '}',
+    '',
+  ].join('\n'));
   await writeFile(overlayPath, JSON.stringify({
     compilerOptions: {
       target: 'ES2022',
@@ -177,7 +186,7 @@ async function typecheckSourceOnlyFixture(root, sourceFiles, pathMappings) {
       ignoreDeprecations: '6.0',
       noEmit: true,
     },
-    files: sourceFiles.map(slash),
+    files: [...sourceFiles, templateModulePath].map(slash),
   }, null, 2));
 
   const diagnostics = readTypecheckDiagnostics(overlayPath);

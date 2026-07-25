@@ -44,6 +44,7 @@ import {
 } from '../expression/parse-result-inspection.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
+import { BindingContextSlotAssignmentAccessKind } from '../configuration/scope.js';
 import {
   SemanticAppAnalysisDepth,
   semanticAppAnalysisDepthSatisfies,
@@ -229,7 +230,9 @@ interface TemplateCompletionAnswerContext {
 }
 
 interface TemplateDiagnosticsScanContext {
+  readonly store: KernelStore;
   readonly includeHandles: boolean;
+  readonly capabilityDemands: readonly FrameworkCapabilityDemand[];
   readonly routeConfigProductHandles: readonly ProductHandle[];
   readonly routeParameterEndpointPlans: ReadonlyMap<ProductHandle, RouteParameterEndpointPlan>;
   readonly i18nTranslationKeyProductHandles: readonly ProductHandle[];
@@ -1099,7 +1102,9 @@ function templateDiagnosticsScanContext(
   includeHandles: boolean,
 ): TemplateDiagnosticsScanContext {
   return {
+    store,
     includeHandles,
+    capabilityDemands: emission.capabilityDemands.readDemands(),
     routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
     routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
@@ -1115,7 +1120,11 @@ function templateDiagnosticRelations(
 ): TemplateDiagnosticRelations {
   let relations = context.diagnosticRelationsByResource.get(selection.resource);
   if (relations == null) {
-    relations = new TemplateDiagnosticRelations(selection.resource);
+    relations = new TemplateDiagnosticRelations(
+      context.store,
+      selection.resource,
+      frameworkCapabilityDemandsForSelection(context.capabilityDemands, selection),
+    );
     context.diagnosticRelationsByResource.set(selection.resource, relations);
   }
   return relations;
@@ -1130,7 +1139,7 @@ function templateDiagnosticRelationFields(
   return {
     diagnosticRelations: [{
       relationKind: origin.relationKind,
-      relatedDiagnosticIdentityHandle: origin.issue.identityHandle,
+      relatedDiagnosticIdentityHandle: origin.relatedDiagnosticIdentityHandle,
     }],
   };
 }
@@ -1581,15 +1590,28 @@ function frameworkCapabilityDemandDiagnosticRowsForSelection(
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
-  return frameworkCapabilityDemandsForSelection(emission, selection).flatMap((demand) => {
-    if (demand.admissionState === FrameworkCapabilityAdmissionState.Admitted) {
+  return frameworkCapabilityDemandsForSelection(
+    emission.capabilityDemands.readDemands(),
+    selection,
+  ).flatMap((demand) => {
+    if (
+      demand.admissionState !== FrameworkCapabilityAdmissionState.NotAdmitted
+      && demand.admissionState !== FrameworkCapabilityAdmissionState.ConfiguredOut
+    ) {
       return [];
     }
     const source = describeAddress(store, demand.sourceAddressHandle);
     if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
       return [];
     }
-    const diagnostic = frameworkCapabilityDemandDiagnostic(demand, source);
+    const diagnostic = frameworkCapabilityDemandDiagnostic(
+      demand,
+      source,
+      demand.configurationSourceAddressHandles.flatMap((handle) => {
+        const configurationSource = describeAddress(store, handle);
+        return configurationSource == null ? [] : [configurationSource];
+      }),
+    );
     const key = templateDiagnosticRowKey(diagnostic, source);
     if (context.seenRows.has(key)) {
       return [];
@@ -1748,6 +1770,9 @@ function runtimeBindingBehaviorIssueDiagnosticRowsForSelection(
         semanticProductHandle: issue.productHandle,
         sourceAddressHandle: issue.sourceAddressHandle,
       }),
+      ...templateDiagnosticRelationFields(
+        templateDiagnosticRelations(selection, context).forBindingBehaviorIssue(issue),
+      ),
       siteKind: TemplateCompletionSiteKind.AttributeValue,
       valueSiteKind: null,
       template: {
@@ -1782,6 +1807,9 @@ function runtimeValueConverterIssueDiagnosticRowsForSelection(
         semanticProductHandle: issue.productHandle,
         sourceAddressHandle: issue.sourceAddressHandle,
       }),
+      ...templateDiagnosticRelationFields(
+        templateDiagnosticRelations(selection, context).forValueConverterIssue(issue),
+      ),
       siteKind: TemplateCompletionSiteKind.AttributeValue,
       valueSiteKind: null,
       template: {
@@ -1912,12 +1940,13 @@ function compilerIssueBelongsToReachableAttribute(
 }
 
 function frameworkCapabilityDemandsForSelection(
-  emission: AureliaAppWorldProjectEmission,
+  demands: readonly FrameworkCapabilityDemand[],
   selection: TemplateCompletionResourceSelection,
 ): readonly FrameworkCapabilityDemand[] {
-  const definitionProductHandle = selection.resource.compilation.definition.productHandle;
-  return emission.capabilityDemands.readDemands().filter((demand) =>
-    demand.resourceDefinitionProductHandle === definitionProductHandle
+  const compilation = selection.resource.compilation;
+  return demands.filter((demand) =>
+    demand.resourceDefinitionProductHandle === compilation.definition.productHandle
+    && demand.analysisContextProductHandle === compilation.analysisContextProductHandle
   );
 }
 
@@ -2750,7 +2779,8 @@ function cursorScopeSlotMemberRow(
     memberKind: member?.memberKind ?? CheckerTypeMemberKind.Property,
     typeDisplay: slot.targetType?.display ?? member?.valueType?.display ?? null,
     isOptional: member?.isOptional ?? false,
-    isReadonly: member?.isReadonly ?? false,
+    isReadonly: slot.assignmentAccessKind === BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly
+      || (member?.isReadonly ?? false),
     source: describeAddress(store, sourceAddressHandle),
     declarationSource: describeAddress(store, declarationSourceAddressHandle),
     ...(includeHandles ? {

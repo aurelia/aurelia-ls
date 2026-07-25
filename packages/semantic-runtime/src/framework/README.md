@@ -18,6 +18,32 @@ accusation without provider proof; and `not-admitted` is the only state that sho
 `framework-capability-not-registered`. Known sibling/off-chain providers are not admission evidence for a mapped
 consulting container.
 
+Template syntax/resource demands spend the same consulting-container admission boundary, but can also be
+`configured-out`: the owning plugin/configuration is admitted while a closed option excludes the particular alias,
+resource, or syntax surface. Keep the evidence planes separate. `admissionSourceAddressHandles` identify exact
+registration values visible to the consulting world, `configurationSourceAddressHandles` identify exact option values
+that excluded a surface, and `packageEvidence` says only whether an implementation is locally available. None is a
+substitute for another. Catalog variants change effective membership while retaining canonical resource/syntax member
+identity; do not republish variant-local copies and then join consumers by names. Variant local keys must encode both
+configuration state and authored values through the shared local-key vocabulary so open recovery state cannot collide
+with a closed value that happens to use the same spelling.
+An open configuration is neither admitted membership nor exclusion. Compiler catalogs may retain conservative recovery
+members so later analysis remains useful, but `FrameworkCapabilityDemand` must report `admission-unknown`, retain the
+configuration contribution's materialization open seams in `blockingOpenSeamHandles`, and withhold accusatory
+diagnostics. A default-looking recovery catalog is not proof that the host-dependent option kept the framework default.
+
+Template capability demand identity includes both the resource definition and the
+`TemplateResourceCompilationEmission.analysisContextProductHandle`. A component definition may be compiled under
+multiple app-root compiler worlds with different admissions; queries and repairs must not collapse those cohorts.
+Resource ownership comes from the actual resolver-selected visible definition and its built-in catalog header. Known
+plugin names are an unresolved-resource fallback only, never authority over an app-owned resource with the same name.
+
+Attribute-pattern selection must retain both actual and counterfactual framework truth when necessary. An admitted
+generic pattern can be the compiler's actual winner while a more-specific known plugin pattern would have won if its
+capability were registered or configured in. The demand lane records that missing/configured-out capability without
+pretending the plugin command executed. Exact demand-to-application claims let diagnostic presentation group consequent
+unresolved-resource rows while preserving every raw diagnostic fact.
+
 Consulting-container proof spends typed producer results rather than reconstructing their generic records: spent AppTask
 rows retain the receiving container, activation-backed roots map through current resource/compiler worlds, and
 `container.get(...)` roots recurse through their owning container-root product. A direct source container root joins to

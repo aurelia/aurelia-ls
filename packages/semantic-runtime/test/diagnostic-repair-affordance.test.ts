@@ -119,6 +119,15 @@ const expectations: readonly RepairExpectation[] = [
     DiagnosticActionPlanReadiness.SourceEditPolicyOpen,
   ),
   repairExpectation(
+    DiagnosticSuggestionKind.ConfigureFrameworkCapability,
+    DiagnosticSuggestionActionKind.ConfigureFrameworkCapability,
+    DiagnosticSuggestionActionTargetKind.FrameworkCapability,
+    DiagnosticActionKind.ConfigureFrameworkCapability,
+    DiagnosticActionPlanKind.FrameworkCapabilityConfiguration,
+    DiagnosticActionChangeDomain.AppSource,
+    DiagnosticActionPlanReadiness.SourceEditPolicyOpen,
+  ),
+  repairExpectation(
     DiagnosticSuggestionKind.InspectOwnerType,
     DiagnosticSuggestionActionKind.InspectOwnerType,
     DiagnosticSuggestionActionTargetKind.OwnerType,
@@ -130,6 +139,12 @@ const expectations: readonly RepairExpectation[] = [
 ];
 
 describe("diagnostic repair affordance", () => {
+  test("covers every suggestion action kind", () => {
+    expect(new Set(expectations.map((entry) => entry.actionKind))).toEqual(
+      new Set(Object.values(DiagnosticSuggestionActionKind)),
+    );
+  });
+
   test.each(expectations)(
     "classifies $actionKind without suggestion-kind fallthrough",
     (expected) => {

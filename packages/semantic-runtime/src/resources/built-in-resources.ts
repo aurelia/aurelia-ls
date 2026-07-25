@@ -105,6 +105,7 @@ export type BuiltInResourceField =
 export type BuiltInResourceCatalogField =
   | 'packageId'
   | 'group'
+  | 'variantKey'
   | 'resources'
   | 'source';
 
@@ -833,6 +834,7 @@ export type BuiltInResource =
 export interface BuiltInResourceCatalogInput {
   readonly packageId: BuiltInResourcePackage;
   readonly group: BuiltInResourceGroup;
+  readonly variantKey?: string | null;
   readonly resources: readonly BuiltInResource[];
 }
 
@@ -852,6 +854,8 @@ export class BuiltInResourceCatalog {
     readonly packageId: BuiltInResourcePackage,
     /** Configuration group that admits the catalog. */
     readonly group: BuiltInResourceGroup,
+    /** Configuration-derived catalog variant, or null for the package default. */
+    readonly variantKey: string | null,
     /** Built-in resource headers in runtime registration order. */
     readonly resources: readonly BuiltInResource[],
     /** Source address for the framework catalog. */

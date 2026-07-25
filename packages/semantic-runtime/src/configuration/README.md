@@ -289,6 +289,26 @@ local package evidence yet" without inferring configuration from raw source name
 peer, dev, optional, and nearest workspace manifests; dynamic import and package-alias resolution remain outside this
 bounded release-trust lane.
 
+An admitted configuration does not imply that every optional surface is visible. I18n translation aliases and
+validation-html subscriber resources are derived from closed configuration options through
+`framework-capability-configuration.ts`. The resulting catalog variant changes membership but retains canonical member
+identity. A use of an excluded surface produces a `configured-out` demand with exact option-value sources, distinct from
+the registration-admission sources and package/import evidence. Repairs may explain which configuration excluded the
+surface, but must not invent a configuration edit when the intended replacement value is not provable.
+Variant identity spends both membership state and every closed option value through `localKeyPart(...)`; ad hoc escaping
+is not injective and must not be used for catalog identity. In particular, an open recovery catalog and a closed literal
+value named `open` are distinct variants.
+When an authored option cannot be closed, the catalog retains a conservative recovery surface under an explicitly open
+variant while the demand remains `admission-unknown`. The option contribution's existing materialization owns the
+blocking open-seam handles; consumers must spend those handles rather than treating the recovery default as effective
+configuration. Unknown membership produces no missing-registration or configured-out diagnostic.
+
+Configuration-option ownership uses the exact registered-value/configuration-value source relation shared with router
+options and compiler catalogs. Do not reintroduce source containment, call-step scanning, or plugin-local name matching
+to recover that relation. App-root/compiler-world registration visibility uses
+`registrationAdmissionsVisibleToContainer(...)`, which walks only the consulting container chain and retains exact
+admission operations; sibling app roots with the same imports do not share plugin capabilities.
+
 Evaluated object values that expose a `register` method are classified as IRegistry-shaped admissions. Imported or
 declaration-only values can also be admitted through the TypeChecker when their static type exposes a callable
 `register` member. That checker lane mirrors Aurelia's runtime `isRegistry` branch without executing arbitrary package

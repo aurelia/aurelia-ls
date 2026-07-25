@@ -146,6 +146,19 @@ export const KernelClaimPredicates = {
     ),
   },
   Framework: {
+    /** One authored framework capability demand is realized by an exact runtime expression-resource application. */
+    CapabilityDemandHasExpressionResourceApplication: defineClaimPredicate(
+      KernelVocabularyNamespace.Framework,
+      'capability-demand-has-expression-resource-application',
+      'An authored framework capability demand is realized by one exact runtime expression-resource application.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Framework.CapabilityDemand),
+        productEndpoint(
+          KernelProductKinds.Binding.BehaviorApplication,
+          KernelProductKinds.Binding.ValueConverterApplication,
+        ),
+      ),
+    ),
 
     /** A source-backed framework service root resolves or requests one DI key identity. */
     RootResolvesDiKey: defineClaimPredicate(

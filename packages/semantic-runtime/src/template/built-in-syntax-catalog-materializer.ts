@@ -1,8 +1,4 @@
-import {
-  ExternalAddress,
-  SourceSpanAddress,
-  sourceSpanContains,
-} from '../kernel/address.js';
+import { ExternalAddress } from '../kernel/address.js';
 import { uniqueByKey } from '../collections.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import {
@@ -30,7 +26,7 @@ import {
 import {
   KernelStoreBatch,
   type KernelStore,
-  type KernelStoreReadView,
+  type KernelMaterializationReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
@@ -40,10 +36,14 @@ import {
   type KernelPublicationContext,
   type KernelProductDetailPublication,
 } from '../kernel/publication.js';
-import { catalogVariantLocalKey } from '../kernel/local-key.js';
+import { catalogVariantLocalKey, localKeyPart } from '../kernel/local-key.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
-import { ConfigurationOptionValueKind } from '../configuration/configuration-option.js';
+import {
+  FrameworkCapabilityConfigurationState,
+  i18nTranslationSyntaxConfigurationForAdmission,
+  type I18nTranslationSyntaxConfiguration,
+} from '../configuration/framework-capability-configuration.js';
 import {
   frameworkRegistrationKindForAdmission,
   type RegistrationAdmissionProduct,
@@ -280,33 +280,37 @@ export class BuiltInSyntaxCatalogMaterializer {
     const records: KernelStoreRecord[] = [];
     const local = syntaxCatalogLocal(input);
     const source = this.recordsForSource(
-      `${local}:source`,
+      syntaxCatalogSourceLocal(input),
       input.packageId,
       input.group,
       `Framework built-in syntax catalog ${input.packageId}/${input.group}.`,
     );
     const handles = this.syntaxCatalogHandles(local);
-    records.push(...source.records);
-    const attributePatternEmissions = input.attributePatterns.map((pattern, index) =>
+    records.push(...source.records.filter((record) => this.publication.read(record.handle) == null));
+    const attributePatternEmissions = input.attributePatterns.map((pattern) =>
       this.recordsForAttributePattern(
         pattern,
-        `${local}:attribute-pattern:${index}`,
+        builtInAttributePatternLocal(input, pattern),
         handles.productHandle,
         handles.identityHandle,
         source,
       )
     );
-    const bindingCommandEmissions = input.bindingCommands.map((command, index) =>
+    const bindingCommandEmissions = input.bindingCommands.map((command) =>
       this.recordsForBindingCommand(
         command,
-        `${local}:binding-command:${index}`,
+        builtInBindingCommandLocal(input, command),
         handles.productHandle,
         handles.identityHandle,
         source,
       )
     );
-    records.push(...attributePatternEmissions.flatMap((emission) => emission.records));
-    records.push(...bindingCommandEmissions.flatMap((emission) => emission.records));
+    records.push(...attributePatternEmissions.flatMap((emission) =>
+      this.publication.read(emission.executable.productHandle) == null ? emission.records : []
+    ));
+    records.push(...bindingCommandEmissions.flatMap((emission) =>
+      this.publication.read(emission.executable.productHandle) == null ? emission.records : []
+    ));
 
     const executableProductHandles = executableProductHandlesForSyntaxCatalog(
       attributePatternEmissions,
@@ -802,7 +806,7 @@ class ConfiguredSyntaxCatalogRequest {
 
 function readConfiguredSyntaxCatalogRequests(
   configuration: ConfigurationKernelEmission,
-  store: KernelStoreReadView,
+  store: KernelMaterializationReadView,
 ): readonly ConfiguredSyntaxCatalogRequest[] {
   const requests: ConfiguredSyntaxCatalogRequest[] = [];
   for (const admission of configuration.registrationAdmissions) {
@@ -823,7 +827,7 @@ function syntaxCatalogInputsForAdmission(
   frameworkKind: FrameworkRegistrationKind,
   admission: RegistrationAdmissionProduct,
   configuration: ConfigurationKernelEmission,
-  store: KernelStoreReadView,
+  store: KernelMaterializationReadView,
 ): readonly BuiltInSyntaxCatalogInput[] {
   const inputs: BuiltInSyntaxCatalogInput[] = [];
   for (const capability of frameworkRegistrationCapabilitiesForKind(frameworkKind)) {
@@ -841,7 +845,9 @@ function syntaxCatalogInputsForAdmission(
         inputs.push(RuntimeHtmlBuiltInSyntaxCatalogs.PromiseTemplateControllerSyntax);
         break;
       case FrameworkRegistrationCapability.I18nTranslationSyntax:
-        inputs.push(i18nTranslationSyntaxCatalogInput(readI18nTranslationAttributeAliases(admission, configuration, store)));
+        inputs.push(i18nTranslationSyntaxCatalogInput(
+          i18nTranslationSyntaxConfigurationForAdmission(store, configuration, admission),
+        ));
         break;
       case FrameworkRegistrationCapability.StateBindingSyntax:
         inputs.push(ExtensionBuiltInSyntaxCatalogs.StateSyntax);
@@ -872,73 +878,27 @@ function syntaxCatalogInputsForAdmission(
   return inputs;
 }
 
-function readI18nTranslationAttributeAliases(
-  admission: RegistrationAdmissionProduct,
-  configuration: ConfigurationKernelEmission,
-  store: KernelStoreReadView,
-): readonly string[] | null {
-  let aliases: readonly string[] | null = null;
-
-  for (const contribution of configuration.optionContributions) {
-    if (!isI18nTranslationAliasContribution(contribution)) {
-      continue;
-    }
-    if (sourceSpanHandleContains(store, admission.sourceAddressHandle, contribution.sourceAddressHandle)) {
-      aliases = contribution.value.values;
-      continue;
-    }
-    for (const step of configuration.steps) {
-      if (
-        step.registrationAdmissionProductHandles.includes(admission.productHandle)
-        && step.producedProductHandles.includes(contribution.productHandle)
-      ) {
-        aliases = contribution.value.values;
-      }
-    }
-  }
-
-  return aliases;
-}
-
-function isI18nTranslationAliasContribution(
-  contribution: ConfigurationKernelEmission['optionContributions'][number],
-): contribution is ConfigurationKernelEmission['optionContributions'][number] & {
-  readonly value: { readonly valueKind: ConfigurationOptionValueKind.StringArray; readonly values: readonly string[] };
-} {
-  return contribution.optionPath.length === 1
-    && contribution.optionPath[0] === 'translationAttributeAliases'
-    && contribution.value.valueKind === ConfigurationOptionValueKind.StringArray;
-}
-
-function sourceSpanHandleContains(
-  store: KernelStoreReadView,
-  containerHandle: AddressHandle | null,
-  candidateHandle: AddressHandle | null,
-): boolean {
-  if (containerHandle == null || candidateHandle == null) {
-    return false;
-  }
-  const container = store.read(containerHandle);
-  const candidate = store.read(candidateHandle);
-  return container instanceof SourceSpanAddress
-    && candidate instanceof SourceSpanAddress
-    && sourceSpanContains(container, candidate);
-}
-
 function i18nTranslationSyntaxCatalogInput(
-  configuredAliases: readonly string[] | null,
+  configuration: I18nTranslationSyntaxConfiguration,
 ): BuiltInSyntaxCatalogInput {
-  if (configuredAliases == null || aliasesAreDefaultI18nTranslationAliases(configuredAliases)) {
+  if (
+    configuration.state !== FrameworkCapabilityConfigurationState.Open
+    && aliasesAreDefaultI18nTranslationAliases(configuration.recoveryAliases)
+  ) {
     return ExtensionBuiltInSyntaxCatalogs.I18nTranslationSyntax;
   }
 
-  const aliases = [...configuredAliases];
+  const aliases = [...configuration.recoveryAliases];
   const commandAliases = aliases.filter((alias) => alias !== 't');
   const bindCommandAliases = commandAliases.map((alias) => `${alias}.bind`);
   return {
     packageId: BuiltInSyntaxPackage.I18n,
     group: ExtensionBuiltInSyntaxCatalogs.I18nTranslationSyntax.group,
-    variantKey: `aliases:${aliases.map(encodeCatalogVariantPart).join(',')}`,
+    variantKey: [
+      'aliases',
+      configuration.state,
+      ...aliases,
+    ].map(localKeyPart).join(':'),
     attributePatterns: [
       new I18nTranslationAttributePattern(null, null, null, [], aliases),
       new I18nTranslationBindAttributePattern(null, null, null, [], aliases),
@@ -956,16 +916,47 @@ function aliasesAreDefaultI18nTranslationAliases(aliases: readonly string[]): bo
   return aliases.length === 1 && aliases[0] === 't';
 }
 
-function encodeCatalogVariantPart(part: string): string {
-  return encodeURIComponent(part).replace(/%/g, '~');
-}
-
 function syntaxCatalogInputKey(input: BuiltInSyntaxCatalogInput): string {
   return catalogVariantLocalKey(input);
 }
 
 function syntaxCatalogLocal(input: BuiltInSyntaxCatalogInput): string {
   return `built-in-syntax:${catalogVariantLocalKey(input)}`;
+}
+
+function syntaxCatalogSourceLocal(input: BuiltInSyntaxCatalogInput): string {
+  return [
+    'built-in-syntax-source',
+    localKeyPart(input.packageId),
+    localKeyPart(input.group),
+  ].join(':');
+}
+
+function builtInAttributePatternLocal(
+  input: BuiltInSyntaxCatalogInput,
+  pattern: BuiltInAttributePattern,
+): string {
+  return [
+    'built-in-attribute-pattern',
+    localKeyPart(input.packageId),
+    localKeyPart(input.group),
+    localKeyPart(pattern.targetName),
+    localKeyPart(JSON.stringify(pattern.patterns.map((entry) => [entry.pattern, entry.symbols]))),
+  ].join(':');
+}
+
+function builtInBindingCommandLocal(
+  input: BuiltInSyntaxCatalogInput,
+  command: BuiltInBindingCommand,
+): string {
+  return [
+    'built-in-binding-command',
+    localKeyPart(input.packageId),
+    localKeyPart(input.group),
+    localKeyPart(command.targetName),
+    localKeyPart(command.name),
+    localKeyPart(JSON.stringify(command.aliases)),
+  ].join(':');
 }
 
 function syntaxCatalogIdentityDiscriminator(catalog: BuiltInSyntaxCatalog): string {

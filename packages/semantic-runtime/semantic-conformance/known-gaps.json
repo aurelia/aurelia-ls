@@ -1,5 +1,27 @@
 {
   "$schema": "./schema.semantic-conformance-known-gaps.v1.json",
   "schemaVersion": "semantic-conformance-known-gaps.v1",
-  "knownGaps": []
+  "knownGaps": [
+    {
+      "assertionId": "state-and-virtualization-static-projection/state-scope-completion-reuses-projected-store-type",
+      "status": "known-gap",
+      "failureBucket": "query-projection-data-loss",
+      "firstObserved": "2026-07-25",
+      "rationale": "Cursor scope materialization proves the configured state type, but template completions reopen at the binding-scope-detail boundary and return no candidates instead of reusing that projection."
+    },
+    {
+      "assertionId": "state-and-virtualization-static-projection/state-reference-and-rename-cover-contextual-initial-state-property",
+      "status": "known-gap",
+      "failureBucket": "typescript-reference-semantics",
+      "firstObserved": "2026-07-25",
+      "rationale": "The checker-symbol scan reaches declarations and ordinary selector uses but omits a contextually typed object-literal property that TypeScript language-service reference semantics treat as the same state member."
+    },
+    {
+      "assertionId": "state-and-virtualization-static-projection/unadmitted-virtual-repeat-local-remains-recovery-honest",
+      "status": "known-gap",
+      "failureBucket": "recovery-scope-epistemics",
+      "firstObserved": "2026-07-25",
+      "rationale": "The missing virtual-repeat resource still produces a useful recovered iterator local, but the public cursor answer claims complete closure and carries no missing-capability blocker."
+    }
+  ]
 }

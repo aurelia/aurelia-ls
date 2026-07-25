@@ -30,6 +30,8 @@ export enum DiagnosticSuggestionKind {
   FixTemplateSyntax = 'fix-template-syntax',
   /** Register a framework or plugin capability already demanded by authored syntax. */
   RegisterFrameworkCapability = 'register-framework-capability',
+  /** Re-enable a framework/plugin surface excluded by otherwise-admitted app configuration. */
+  ConfigureFrameworkCapability = 'configure-framework-capability',
   /** Repair a template-authored router instruction without inventing a destination. */
   FixRouterInstruction = 'fix-router-instruction',
   /** Declare a missing source member when its owner and insertion target are provable. */
@@ -79,6 +81,8 @@ export enum DiagnosticSuggestionActionKind {
   RewriteTemplateSyntax = 'rewrite-template-syntax',
   /** Change framework or plugin capability admission in app configuration. */
   RegisterFrameworkCapability = 'register-framework-capability',
+  /** Change options on an admitted framework or plugin configuration. */
+  ConfigureFrameworkCapability = 'configure-framework-capability',
   /** Inspect type facts before selecting a mutating action. */
   InspectOwnerType = 'inspect-owner-type',
 }
@@ -160,6 +164,8 @@ export enum DiagnosticActionKind {
   ResolveRuntimeBoundary = 'resolve-runtime-boundary',
   /** Register a framework/plugin capability that authored template syntax or resources already demand. */
   RegisterFrameworkCapability = 'register-framework-capability',
+  /** Change an admitted framework/plugin configuration so the demanded surface is available. */
+  ConfigureFrameworkCapability = 'configure-framework-capability',
 }
 
 export enum DiagnosticActionPlanKind {
@@ -183,6 +189,8 @@ export enum DiagnosticActionPlanKind {
   RuntimeBoundaryDeclaration = 'runtime-boundary-declaration',
   /** Register an Aurelia framework/plugin configuration or registration group in app source. */
   FrameworkCapabilityRegistration = 'framework-capability-registration',
+  /** Change options on an already-admitted Aurelia framework/plugin configuration. */
+  FrameworkCapabilityConfiguration = 'framework-capability-configuration',
   /** Register or import an Aurelia resource into an app/compiler resource scope. */
   ResourceRegistration = 'resource-registration',
   /** Register an app-owned DI service needed by a framework feature. */
@@ -316,6 +324,8 @@ function diagnosticActionKindForSuggestion(
       return DiagnosticActionKind.ResolveRuntimeBoundary;
     case DiagnosticSuggestionActionKind.RegisterFrameworkCapability:
       return DiagnosticActionKind.RegisterFrameworkCapability;
+    case DiagnosticSuggestionActionKind.ConfigureFrameworkCapability:
+      return DiagnosticActionKind.ConfigureFrameworkCapability;
     case DiagnosticSuggestionActionKind.RewriteExpression:
       return suggestion?.suggestionKind === DiagnosticSuggestionKind.FixRouterInstruction
         ? DiagnosticActionKind.RewriteRouterInstruction
@@ -361,6 +371,8 @@ function diagnosticActionPlanKindForAction(
       return DiagnosticActionPlanKind.RuntimeBoundaryDeclaration;
     case DiagnosticActionKind.RegisterFrameworkCapability:
       return DiagnosticActionPlanKind.FrameworkCapabilityRegistration;
+    case DiagnosticActionKind.ConfigureFrameworkCapability:
+      return DiagnosticActionPlanKind.FrameworkCapabilityConfiguration;
     case DiagnosticActionKind.RegisterResource:
       return DiagnosticActionPlanKind.ResourceRegistration;
     case DiagnosticActionKind.RegisterService:
@@ -387,6 +399,7 @@ export function diagnosticActionChangeDomainForPlan(
     case DiagnosticActionPlanKind.SourceAssignmentTypeAlignment:
     case DiagnosticActionPlanKind.SourceWriteabilityAlignment:
     case DiagnosticActionPlanKind.FrameworkCapabilityRegistration:
+    case DiagnosticActionPlanKind.FrameworkCapabilityConfiguration:
     case DiagnosticActionPlanKind.ResourceRegistration:
     case DiagnosticActionPlanKind.ServiceRegistration:
     case DiagnosticActionPlanKind.ObservationConfiguration:
@@ -415,6 +428,7 @@ function diagnosticActionPlanReadinessForAffordance(
 
   if (
     planKind === DiagnosticActionPlanKind.FrameworkCapabilityRegistration
+    || planKind === DiagnosticActionPlanKind.FrameworkCapabilityConfiguration
   ) {
     return DiagnosticActionPlanReadiness.SourceEditPolicyOpen;
   }

@@ -2686,6 +2686,7 @@ export interface SemanticDialogIssuesResult {
 export type SemanticFrameworkCapabilityDemandActionability =
   | 'registered'
   | 'missing-registration'
+  | 'configuration-excludes-surface'
   | 'registration-status-unknown'
   | 'provider-visible-chain-unproven';
 
@@ -2715,6 +2716,9 @@ export interface SemanticFrameworkCapabilityDemandRow {
   readonly authoredName: string;
   readonly source: SemanticSourceReference | null;
   readonly templateSource: SemanticSourceReference | null;
+  readonly admissionSources: readonly SemanticSourceReference[];
+  readonly configurationSources: readonly SemanticSourceReference[];
+  readonly blockingOpenSeamSources: readonly SemanticSourceReference[];
   readonly blockingOpenSeamCount: number;
   readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
   readonly summary: string;
@@ -2725,6 +2729,9 @@ export interface SemanticFrameworkCapabilityDemandRow {
     readonly sourceAddressHandle: AddressHandle | null;
     readonly templateSourceAddressHandle: AddressHandle | null;
     readonly resourceDefinitionProductHandle: ProductHandle | null;
+    readonly analysisContextProductHandle: ProductHandle | null;
+    readonly admissionSourceAddressHandles: readonly AddressHandle[];
+    readonly configurationSourceAddressHandles: readonly AddressHandle[];
     readonly blockingOpenSeamHandles: readonly OpenSeamHandle[];
   };
 }
@@ -3742,6 +3749,7 @@ export type SemanticTemplateCursorDiagnosticKind =
   | 'expression-parse-error'
   | 'template-compiler-error'
   | 'framework-capability-not-registered'
+  | 'framework-capability-configured-out'
   | 'runtime-controller-framework-error'
   | 'runtime-renderer-framework-error'
   | 'runtime-binding-framework-error'

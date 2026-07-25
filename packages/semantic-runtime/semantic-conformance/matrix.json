@@ -14713,6 +14713,1400 @@
           ]
         }
       ]
+    },
+    {
+      "id": "plugin-app-root-capability-isolation",
+      "fixture": "fixtures/pressure/plugin-capability-app-root-isolation",
+      "aureliaDomain": "plugin-capability-admission",
+      "capability": "framework-capability-admission",
+      "domainAxis": "plugin-capabilities",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/admitted-plugin-app.html",
+      "requirement": "Plugin resources, syntax, diagnostics, and repairs are admitted through the consulting app root only, with exact registration provenance and no sibling-world leakage.",
+      "cases": [
+        {
+          "id": "app-roots-retain-distinct-compiler-world-admissions",
+          "expectations": [
+            {
+              "name": "app topology",
+              "query": { "kind": "app-topology" },
+              "rows": [
+                {
+                  "rowPath": "value.appRoots",
+                  "fields": {
+                    "component.className": "AdmittedPluginApp",
+                    "registrationAdmissions": 5,
+                    "compiledTemplates": 1
+                  },
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.appRoots",
+                  "fields": {
+                    "component.className": "UnadmittedPluginApp",
+                    "registrationAdmissions": 1,
+                    "compiledTemplates": 1
+                  },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "admitted-surfaces-retain-registration-provenance",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "t",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "admitted",
+                    "actionability": "registered"
+                  },
+                  "sourceField": "admissionSources.0",
+                  "source": { "sourceFile": "src/main.ts", "marker": "I18nConfiguration", "markerOccurrence": 2, "token": "I18nConfiguration" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "virtual-repeat.for",
+                    "requiredCapability": "ui-virtualization.default-resources",
+                    "admissionState": "admitted",
+                    "actionability": "registered"
+                  },
+                  "sourceField": "admissionSources.0",
+                  "source": { "sourceFile": "src/main.ts", "marker": "DefaultVirtualizationConfiguration", "markerOccurrence": 2, "token": "DefaultVirtualizationConfiguration" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "validation-container",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "admitted",
+                    "actionability": "registered"
+                  },
+                  "sourceField": "admissionSources.0",
+                  "source": { "sourceFile": "src/main.ts", "marker": "ValidationHtmlConfiguration", "markerOccurrence": 2, "token": "ValidationHtmlConfiguration" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "value.state",
+                    "requiredCapability": "state.binding-syntax",
+                    "admissionState": "admitted",
+                    "actionability": "registered"
+                  },
+                  "sourceField": "admissionSources.0",
+                  "source": {
+                    "sourceFile": "src/main.ts",
+                    "marker": "StateDefaultConfiguration\n    .init(initialDashboardState)\n    .withStore('activity', initialActivityState)",
+                    "token": "StateDefaultConfiguration\n    .init(initialDashboardState)\n    .withStore('activity', initialActivityState)"
+                  },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "state",
+                    "requiredCapability": "state.default-resources",
+                    "admissionState": "admitted",
+                    "actionability": "registered"
+                  },
+                  "sourceField": "admissionSources.0",
+                  "source": {
+                    "sourceFile": "src/main.ts",
+                    "marker": "StateDefaultConfiguration\n    .init(initialDashboardState)\n    .withStore('activity', initialActivityState)",
+                    "token": "StateDefaultConfiguration\n    .init(initialDashboardState)\n    .withStore('activity', initialActivityState)"
+                  },
+                  "count": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "admission-source-file-filter-retains-related-demands",
+          "sourceFile": "src/main.ts",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "t",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "admitted"
+                  },
+                  "sourceField": "admissionSources.0",
+                  "source": { "marker": "I18nConfiguration", "markerOccurrence": 2, "token": "I18nConfiguration" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "virtual-repeat.for",
+                    "requiredCapability": "ui-virtualization.default-resources",
+                    "admissionState": "admitted"
+                  },
+                  "sourceField": "admissionSources.0",
+                  "source": { "marker": "DefaultVirtualizationConfiguration", "markerOccurrence": 2, "token": "DefaultVirtualizationConfiguration" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "unadmitted-root-does-not-inherit-sibling-plugins",
+          "sourceFile": "src/unadmitted-plugin-app.html",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "t",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "not-admitted",
+                    "admissionSources": []
+                  },
+                  "source": { "marker": "t=\"dashboard.title\"", "token": "t=\"dashboard.title\"" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "t.bind",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "not-admitted",
+                    "admissionSources": []
+                  },
+                  "source": { "marker": "t.bind=\"titleKey\"", "token": "t.bind=\"titleKey\"" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "virtual-repeat.for",
+                    "requiredCapability": "ui-virtualization.default-resources",
+                    "admissionState": "not-admitted",
+                    "admissionSources": []
+                  },
+                  "source": { "marker": "virtual-repeat.for=\"entry of entries\"", "token": "virtual-repeat.for=\"entry of entries\"" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "validate",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "not-admitted",
+                    "admissionSources": []
+                  },
+                  "source": { "marker": "displayName & validate", "token": "validate" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "value.state",
+                    "requiredCapability": "state.binding-syntax",
+                    "admissionState": "not-admitted",
+                    "admissionSources": []
+                  },
+                  "source": { "marker": "value.state=\"ready\"", "token": "value.state=\"ready\"" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "state",
+                    "requiredCapability": "state.default-resources",
+                    "admissionState": "not-admitted",
+                    "admissionSources": []
+                  },
+                  "source": { "marker": "ready & state", "token": "state" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "value.bind",
+                    "requiredCapability": "runtime-html.default-binding-syntax",
+                    "admissionState": "admitted"
+                  },
+                  "sourceField": "admissionSources.0",
+                  "source": { "sourceFile": "src/main.ts", "marker": "StandardConfiguration", "markerOccurrence": 3, "token": "StandardConfiguration" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "admitted-root-is-diagnostic-clean",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "count": 0 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "unadmitted-diagnostics-preserve-primary-causes",
+          "sourceFile": "src/unadmitted-plugin-app.html",
+          "expectations": [
+            {
+              "name": "app diagnostic presentation",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "equals": {
+                "value.presentation.rawRowCount": 11,
+                "value.presentation.primaryCount": 9,
+                "value.presentation.contextualCount": 2
+              },
+              "rows": [
+                {
+                  "rowPath": "value.presentation.groups",
+                  "fields": {
+                    "rawRowCount": 2,
+                    "related.0.relation": "derived-consequence"
+                  },
+                  "count": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "shared-component-retains-per-root-capability-context",
+          "sourceFile": "src/shared-plugin-app.html",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "t",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "admitted",
+                    "actionability": "registered"
+                  },
+                  "source": { "marker": "t=\"shared.title\"", "token": "t=\"shared.title\"" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "t",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "not-admitted",
+                    "actionability": "missing-registration"
+                  },
+                  "source": { "marker": "t=\"shared.title\"", "token": "t=\"shared.title\"" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-not-registered",
+                    "missingInput": "i18n.translation-syntax",
+                    "selectedMemberName": "t"
+                  },
+                  "source": { "marker": "t=\"shared.title\"", "token": "t=\"shared.title\"" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "template code actions",
+              "query": { "kind": "template-code-actions", "cursor": { "marker": "t=\"shared.title\"", "token": "t" } },
+              "rows": [
+                {
+                  "rowPath": "value.rows[].edits",
+                  "fields": {
+                    "editKind": "register-framework-capability",
+                    "oldText": "",
+                    "newText": ".register(I18nConfiguration)\n  "
+                  },
+                  "source": { "sourceFile": "src/main.ts", "marker": ".app({", "markerOccurrence": 4, "position": "before-marker" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "i18n-registration-edit-targets-owning-app-root",
+          "sourceFile": "src/unadmitted-plugin-app.html",
+          "expectations": [
+            {
+              "name": "template code actions",
+              "query": { "kind": "template-code-actions", "cursor": { "marker": "t=\"dashboard.title\"", "token": "t" } },
+              "rows": [
+                {
+                  "rowPath": "value.rows",
+                  "fields": {
+                    "title": "Register I18nConfiguration for i18n.translation-syntax",
+                    "repair.planKind": "framework-capability-registration",
+                    "repair.readiness": "source-edit-policy-open"
+                  },
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.rows[].edits",
+                  "fields": {
+                    "editKind": "register-framework-capability",
+                    "oldText": "",
+                    "newText": ".register(I18nConfiguration)\n  "
+                  },
+                  "source": { "sourceFile": "src/main.ts", "marker": ".app({", "markerOccurrence": 2, "position": "before-marker" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "virtualization-registration-edit-targets-owning-app-root",
+          "sourceFile": "src/unadmitted-plugin-app.html",
+          "expectations": [
+            {
+              "name": "template code actions",
+              "query": { "kind": "template-code-actions", "cursor": { "marker": "virtual-repeat.for=\"entry of entries\"", "token": "virtual-repeat" } },
+              "rows": [
+                {
+                  "rowPath": "value.rows[].edits",
+                  "fields": {
+                    "editKind": "register-framework-capability",
+                    "oldText": "",
+                    "newText": ".register(DefaultVirtualizationConfiguration)\n  "
+                  },
+                  "source": { "sourceFile": "src/main.ts", "marker": ".app({", "markerOccurrence": 2, "position": "before-marker" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "validation-registration-edit-targets-owning-app-root",
+          "sourceFile": "src/unadmitted-plugin-app.html",
+          "expectations": [
+            {
+              "name": "template code actions",
+              "query": { "kind": "template-code-actions", "cursor": { "marker": "<validation-container>", "token": "validation-container" } },
+              "rows": [
+                {
+                  "rowPath": "value.rows[].edits",
+                  "fields": {
+                    "editKind": "register-framework-capability",
+                    "oldText": "",
+                    "newText": ".register(ValidationHtmlConfiguration)\n  "
+                  },
+                  "source": { "sourceFile": "src/main.ts", "marker": ".app({", "markerOccurrence": 2, "position": "before-marker" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "state-registration-remains-guided-without-invented-initial-state",
+          "sourceFile": "src/unadmitted-plugin-app.html",
+          "expectations": [
+            {
+              "name": "state diagnostic guidance",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-not-registered",
+                    "missingInput": "state.default-resources",
+                    "selectedMemberName": "state",
+                    "suggestion.actionKind": "register-framework-capability",
+                    "suggestion.actionTarget.typeDisplay": "@aurelia/state"
+                  },
+                  "source": { "marker": "ready & state", "token": "state" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "no unsafe state code action",
+              "query": { "kind": "template-code-actions", "cursor": { "marker": "ready & state", "token": "state" } },
+              "rows": [
+                { "rowPath": "value.rows", "count": 0 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "i18n-translation-syntax-configuration",
+      "fixture": "fixtures/pressure/i18n-custom-translation-alias",
+      "aureliaDomain": "plugin-capability-admission",
+      "capability": "i18n-translation-syntax",
+      "domainAxis": "plugin-capabilities",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/i18n-custom-alias-app.html",
+      "requirement": "Configured i18n translation aliases participate in compiler syntax, navigation, and capability admission while excluded canonical forms retain exact configuration provenance.",
+      "cases": [
+        {
+          "id": "custom-alias-resolves-canonical-command-with-authored-name",
+          "cursor": { "marker": "i18n=\"dashboard.title\"", "token": "i18n" },
+          "expectations": [
+            {
+              "name": "template cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "binding-command-name",
+                "value.selectedDefinition.resourceKind": "binding-command",
+                "value.selectedDefinition.name": "t",
+                "value.selectedDefinition.matchedName": "i18n"
+              }
+            },
+            {
+              "name": "template references",
+              "query": { "kind": "template-references", "options": { "page": { "size": 100 } } },
+              "closure": "complete",
+              "rows": [
+                {
+                  "fields": {
+                    "referenceKind": "resource-usage",
+                    "name": "i18n"
+                  },
+                  "source": { "marker": "i18n=\"dashboard.title\"", "token": "i18n" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "framework-owned alias rename refusal",
+              "query": { "kind": "template-rename" },
+              "outcomes": ["miss"],
+              "equals": {
+                "value.status": "not-available",
+                "value.reason": "unsupported-resource-kind",
+                "value.selectedMemberName": "i18n",
+                "value.placeholder": "i18n",
+                "value.edits.length": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "configured-aliases-and-excluded-canonical-forms",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "i18n",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "admitted"
+                  },
+                  "source": { "marker": "i18n=\"dashboard.title\"", "token": "i18n=\"dashboard.title\"" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "i18n.bind",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "admitted"
+                  },
+                  "source": { "marker": "i18n.bind=\"titleKey\"", "token": "i18n.bind=\"titleKey\"" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "t",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "configured-out",
+                    "actionability": "configuration-excludes-surface"
+                  },
+                  "sourceField": "configurationSources.0",
+                  "source": { "sourceFile": "src/main.ts", "marker": "options.translationAttributeAliases = ['i18n']", "token": "options.translationAttributeAliases = ['i18n']" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "t.bind",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "configured-out",
+                    "actionability": "configuration-excludes-surface"
+                  },
+                  "sourceField": "configurationSources.0",
+                  "source": { "sourceFile": "src/main.ts", "marker": "options.translationAttributeAliases = ['i18n']", "token": "options.translationAttributeAliases = ['i18n']" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "t.bind",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "configured-out"
+                  },
+                  "sourceField": "admissionSources.0",
+                  "source": { "sourceFile": "src/main.ts", "marker": "customI18n", "markerOccurrence": 2, "token": "customI18n" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "configured-out-surfaces-produce-guidance-without-unsafe-edits",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-configured-out",
+                    "missingInput": "i18n.translation-syntax",
+                    "selectedMemberName": "t",
+                    "suggestion.actionKind": "configure-framework-capability"
+                  },
+                  "source": { "marker": "t=\"legacy.title\"", "token": "t=\"legacy.title\"" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-configured-out",
+                    "missingInput": "i18n.translation-syntax",
+                    "selectedMemberName": "t.bind",
+                    "suggestion.actionKind": "configure-framework-capability"
+                  },
+                  "source": { "marker": "t.bind=\"titleKey\"", "token": "t.bind=\"titleKey\"" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "canonical translation command has no speculative edit",
+              "query": { "kind": "template-code-actions", "cursor": { "marker": "t=\"legacy.title\"", "token": "t" } },
+              "rows": [
+                { "rowPath": "value.rows", "count": 0 }
+              ]
+            },
+            {
+              "name": "canonical translation bind command has no speculative edit",
+              "query": { "kind": "template-code-actions", "cursor": { "marker": "t.bind=\"titleKey\"", "token": "t" } },
+              "rows": [
+                { "rowPath": "value.rows", "count": 0 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "validation-html-resource-configuration",
+      "fixture": "fixtures/pressure/validation-html-configured-resources",
+      "aureliaDomain": "plugin-capability-admission",
+      "capability": "validation-html-resource-configuration",
+      "domainAxis": "plugin-capabilities",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/validation-core-only-app.html",
+      "requirement": "ValidationHtmlConfiguration always admits validate, independently admits validation-errors, and treats false, empty, null, and undefined subscriber options with framework-compatible source-backed semantics.",
+      "cases": [
+        {
+          "id": "false-and-empty-options-disable-only-owned-surfaces",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "validate",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "admitted"
+                  },
+                  "source": { "marker": "displayName & validate", "token": "validate" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "validation-errors.bind",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "configured-out"
+                  },
+                  "sourceField": "configurationSources.0",
+                  "source": { "sourceFile": "src/main.ts", "marker": "options.UseSubscriberCustomAttribute = false", "token": "options.UseSubscriberCustomAttribute = false" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "validation-container",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "configured-out"
+                  },
+                  "sourceField": "configurationSources.0",
+                  "source": { "sourceFile": "src/main.ts", "marker": "options.SubscriberCustomElementTemplate = ''", "token": "options.SubscriberCustomElementTemplate = ''" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "validation-container",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "configured-out"
+                  },
+                  "sourceField": "admissionSources.0",
+                  "source": { "sourceFile": "src/main.ts", "marker": "coreOnlyValidation", "markerOccurrence": 2, "token": "coreOnlyValidation" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "null-template-disables-container-but-keeps-errors-subscriber",
+          "sourceFile": "src/validation-null-template-app.html",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "validation-errors.bind",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "admitted"
+                  },
+                  "source": { "marker": "validation-errors.bind=\"errors\"", "token": "validation-errors.bind=\"errors\"" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "validation-container",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "configured-out"
+                  },
+                  "sourceField": "configurationSources.0",
+                  "source": { "sourceFile": "src/main.ts", "marker": "options.SubscriberCustomElementTemplate = null as unknown as string", "token": "options.SubscriberCustomElementTemplate = null as unknown as string" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "validation-errors.bind",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "configured-out"
+                  },
+                  "absent": true
+                }
+              ]
+            },
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-configured-out",
+                    "selectedMemberName": "validation-container",
+                    "suggestion.actionKind": "configure-framework-capability"
+                  },
+                  "source": {
+                    "marker": "<validation-container>\n    <div validation-errors.bind=\"errors\"></div>\n  </validation-container>",
+                    "token": "<validation-container>\n    <div validation-errors.bind=\"errors\"></div>\n  </validation-container>"
+                  },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "undefined-template-disables-container-but-keeps-errors-subscriber",
+          "sourceFile": "src/validation-undefined-template-app.html",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "validation-errors.bind",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "admitted"
+                  },
+                  "source": { "marker": "validation-errors.bind=\"errors\"", "token": "validation-errors.bind=\"errors\"" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "validation-container",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "configured-out"
+                  },
+                  "sourceField": "configurationSources.0",
+                  "source": { "sourceFile": "src/main.ts", "marker": "options.SubscriberCustomElementTemplate = undefined as unknown as string", "token": "options.SubscriberCustomElementTemplate = undefined as unknown as string" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "validation-errors.bind",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "configured-out"
+                  },
+                  "absent": true
+                }
+              ]
+            },
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-configured-out",
+                    "selectedMemberName": "validation-container",
+                    "suggestion.actionKind": "configure-framework-capability"
+                  },
+                  "source": {
+                    "marker": "<validation-container>\n    <div validation-errors.bind=\"errors\"></div>\n  </validation-container>",
+                    "token": "<validation-container>\n    <div validation-errors.bind=\"errors\"></div>\n  </validation-container>"
+                  },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "configured-out-validation-surfaces-have-no-speculative-edit",
+          "expectations": [
+            {
+              "name": "template code actions",
+              "query": { "kind": "template-code-actions", "cursor": { "marker": "validation-errors.bind=\"errors\"", "token": "validation-errors" } },
+              "rows": [
+                { "rowPath": "value.rows", "count": 0 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "state-and-virtualization-static-projection",
+      "fixture": "fixtures/pressure/plugin-capability-app-root-isolation",
+      "aureliaDomain": "plugin-capability-admission",
+      "capability": "plugin-static-semantic-projection",
+      "domainAxis": "type-system",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/admitted-plugin-app.html",
+      "requirement": "Admitted state and virtualization plugins project store, scope, type, navigation, and edit facts without claiming execution semantics or losing admission honesty.",
+      "cases": [
+        {
+          "id": "default-and-named-state-stores-retain-source-identity",
+          "expectations": [
+            {
+              "name": "state stores",
+              "query": { "kind": "state-stores", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "name": "default",
+                    "isDefault": true,
+                    "initialStateKind": "object"
+                  },
+                  "source": {
+                    "sourceFile": "src/main.ts",
+                    "marker": "StateDefaultConfiguration\n    .init(initialDashboardState)",
+                    "token": "StateDefaultConfiguration\n    .init(initialDashboardState)"
+                  },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "name": "activity",
+                    "isDefault": false,
+                    "initialStateKind": "object"
+                  },
+                  "source": {
+                    "sourceFile": "src/main.ts",
+                    "marker": "StateDefaultConfiguration\n    .init(initialDashboardState)\n    .withStore('activity', initialActivityState)",
+                    "token": "StateDefaultConfiguration\n    .init(initialDashboardState)\n    .withStore('activity', initialActivityState)"
+                  },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "state getter bindings",
+              "query": { "kind": "state-getter-bindings", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "targetName": "readyFromStore",
+                    "storeName": null,
+                    "storeResolutionKind": "default-store",
+                    "selectorReturnType": "boolean",
+                    "targetMemberType": "boolean",
+                    "openReason": null
+                  },
+                  "source": { "sourceFile": "src/admitted-plugin-app.ts", "marker": "@fromState<DashboardState, boolean>((state) => state.ready)", "token": "@fromState<DashboardState, boolean>((state) => state.ready)" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "targetName": "activityLabel",
+                    "storeName": "activity",
+                    "storeResolutionKind": "named-store",
+                    "selectorReturnType": "string",
+                    "targetMemberType": "string",
+                    "openReason": null
+                  },
+                  "source": { "sourceFile": "src/admitted-plugin-app.ts", "marker": "@fromState<ActivityState, string>('activity', (state) => state.label)", "token": "@fromState<ActivityState, string>('activity', (state) => state.label)" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "state-scope-members-are-typed-and-read-only",
+          "expectations": [
+            {
+              "name": "default state cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "ready & state", "token": "ready" } },
+              "equals": {
+                "value.selectedMemberName": "ready",
+                "value.selectedMember.typeDisplay": "boolean",
+                "value.selectedMember.isReadonly": true
+              }
+            },
+            {
+              "name": "named state cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "label & state:'activity'", "token": "label" } },
+              "equals": {
+                "value.selectedMemberName": "label",
+                "value.selectedMember.typeDisplay": "string",
+                "value.selectedMember.isReadonly": true
+              }
+            },
+            {
+              "name": "state command target cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "value.state=\"draft\"", "token": "draft" } },
+              "equals": {
+                "value.selectedMemberName": "draft",
+                "value.selectedMember.typeDisplay": "string",
+                "value.selectedMember.isReadonly": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "state-scope-completion-reuses-projected-store-type",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "${ready & state}", "position": "before-marker", "offsetDelta": 2 },
+                "options": { "page": { "size": 100 } }
+              },
+              "closure": "complete",
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "ready" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "name": "draft" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "state-reference-and-rename-cover-contextual-initial-state-property",
+          "cursor": { "marker": "ready & state", "token": "ready" },
+          "expectations": [
+            {
+              "name": "template references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "referenceKind": "typescript-usage",
+                    "name": "ready"
+                  },
+                  "source": { "sourceFile": "src/state.ts", "marker": "initialDashboardState: DashboardState = {\n  ready: true", "token": "ready" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "template rename",
+              "query": { "kind": "template-rename", "options": { "newName": "enabled" } },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": {
+                    "oldText": "ready",
+                    "newText": "enabled"
+                  },
+                  "source": { "sourceFile": "src/state.ts", "marker": "initialDashboardState: DashboardState = {\n  ready: true", "token": "ready" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "virtual-repeat-local-navigation-and-rename",
+          "cursor": { "marker": "virtual-repeat.for=\"entry of entries\"", "token": "entry" },
+          "expectations": [
+            {
+              "name": "template cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedMemberName": "entry",
+                "value.selectedMember.typeDisplay": "AdmittedEntry",
+                "value.selectedDefinition.name": "virtual-repeat",
+                "value.selectedDefinition.resourceKind": "template-controller"
+              }
+            },
+            {
+              "name": "template references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "entry" }, "source": { "marker": "virtual-repeat.for=\"entry of entries\"", "token": "entry" }, "count": 1 },
+                { "fields": { "referenceKind": "template-usage", "name": "entry" }, "source": { "marker": "${entry.label}", "token": "entry" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "template rename",
+              "query": { "kind": "template-rename", "options": { "newName": "record" } },
+              "equals": {
+                "value.status": "available",
+                "value.templateReferenceCount": 1,
+                "value.typeScriptReferenceCount": 0,
+                "value.edits.length": 2
+              },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "oldText": "entry", "newText": "record" }, "source": { "marker": "virtual-repeat.for=\"entry of entries\"", "token": "entry" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "oldText": "entry", "newText": "record" }, "source": { "marker": "${entry.label}", "token": "entry" }, "oldTextMatchesSource": true, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "virtual-repeat-override-context-is-read-only",
+          "expectations": [
+            {
+              "name": "template cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${$index}", "token": "$index" } },
+              "equals": {
+                "value.selectedMemberName": "$index",
+                "value.selectedMember.typeDisplay": "number",
+                "value.selectedMember.isReadonly": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "unadmitted-virtual-repeat-local-remains-recovery-honest",
+          "sourceFile": "src/unadmitted-plugin-app.html",
+          "expectations": [
+            {
+              "name": "template cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "virtual-repeat.for=\"entry of entries\"", "token": "entry" } },
+              "closure": "open",
+              "equals": {
+                "value.selectedMemberName": "entry",
+                "value.selectedMember.typeDisplay": "UnadmittedEntry",
+                "value.missingInputs.0": "ui-virtualization.default-resources"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "i18n-open-translation-syntax-configuration",
+      "fixture": "fixtures/pressure/plugin-capability-open-configuration",
+      "aureliaDomain": "plugin-capability-admission",
+      "capability": "i18n-translation-syntax",
+      "domainAxis": "plugin-capabilities",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/open-i18n-app.html",
+      "requirement": "Host-dependent i18n aliases retain a recoverable compiler surface while capability admission stays open, publishes its blockers, and does not accuse the app of a missing or excluding registration.",
+      "cases": [
+        {
+          "id": "open-alias-membership-retains-blockers-without-accusation",
+          "cursor": { "marker": "t=\"dashboard.title\"", "token": "t" },
+          "expectations": [
+            {
+              "name": "template cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "binding-command-name",
+                "value.selectedDefinition.name": "t",
+                "value.selectedDefinition.resourceKind": "binding-command"
+              }
+            },
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "t",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "admission-unknown",
+                    "actionability": "registration-status-unknown",
+                    "blockingOpenSeamSources.length": 1,
+                    "blockingOpenSeamCount": 1
+                  },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "t.bind",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "admission-unknown",
+                    "actionability": "registration-status-unknown",
+                    "blockingOpenSeamSources.length": 1,
+                    "blockingOpenSeamCount": 1
+                  },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "t-params.bind",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "admitted",
+                    "actionability": "registered",
+                    "blockingOpenSeamCount": 0
+                  },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-not-registered",
+                    "selectedMemberName": "t"
+                  },
+                  "absent": true
+                },
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-configured-out",
+                    "selectedMemberName": "t"
+                  },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "open-alias-blocker-source-filter-retains-demands",
+          "sourceFile": "src/plugin-options.ts",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "t",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "admission-unknown",
+                    "blockingOpenSeamSources.length": 1
+                  },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "t.bind",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "admission-unknown",
+                    "blockingOpenSeamSources.length": 1
+                  },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "i18n-translation-catalog-variant-identity",
+      "fixture": "fixtures/pressure/plugin-capability-open-configuration",
+      "aureliaDomain": "plugin-capability-admission",
+      "capability": "i18n-translation-syntax",
+      "domainAxis": "plugin-capabilities",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/closed-open-alias-app.html",
+      "requirement": "Open recovery catalogs and closed authored-alias catalogs retain collision-free identity across app roots, including aliases that resemble the catalog key encoding.",
+      "cases": [
+        {
+          "id": "literal-open-alias-does-not-alias-open-configuration-state",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "open",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "admitted",
+                    "actionability": "registered",
+                    "blockingOpenSeamCount": 0
+                  },
+                  "source": { "marker": "open=\"closed.open\"", "token": "open=\"closed.open\"" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "encoded-punctuation-alias-retains-own-catalog",
+          "sourceFile": "src/hash-alias-app.html",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "x#y",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "admitted",
+                    "actionability": "registered"
+                  },
+                  "source": { "marker": "x#y=\"closed.hash\"", "token": "x#y=\"closed.hash\"" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "escape-shaped-alias-does-not-collide-with-punctuation-alias",
+          "sourceFile": "src/escaped-alias-app.html",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "x~23y",
+                    "requiredCapability": "i18n.translation-syntax",
+                    "admissionState": "admitted",
+                    "actionability": "registered"
+                  },
+                  "source": { "marker": "x~23y=\"closed.escaped\"", "token": "x~23y=\"closed.escaped\"" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "app-resource-plugin-spelling-shadowing",
+      "fixture": "fixtures/pressure/plugin-capability-resource-shadowing",
+      "aureliaDomain": "plugin-capability-admission",
+      "capability": "framework-capability-admission",
+      "domainAxis": "plugin-capabilities",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/plugin-capability-resource-shadowing-app.html",
+      "requirement": "An app-owned resource selected by the compiler remains authoritative even when its lookup name matches a known plugin resource; spelling alone must not mint plugin capability demands or repairs.",
+      "cases": [
+        {
+          "id": "resolved-app-resources-do-not-masquerade-as-plugin-demands",
+          "expectations": [
+            {
+              "name": "custom element cursor identity",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<validation-container>", "token": "validation-container" } },
+              "equals": {
+                "value.selectedDefinition.name": "validation-container",
+                "value.selectedDefinition.resourceKind": "custom-element"
+              }
+            },
+            {
+              "name": "custom attribute cursor identity",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "validation-errors", "token": "validation-errors" } },
+              "equals": {
+                "value.selectedDefinition.name": "validation-errors",
+                "value.selectedDefinition.resourceKind": "custom-attribute"
+              }
+            },
+            {
+              "name": "value converter cursor identity",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "label | t", "token": "t" } },
+              "equals": {
+                "value.selectedDefinition.name": "t",
+                "value.selectedDefinition.resourceKind": "value-converter"
+              }
+            },
+            {
+              "name": "binding behavior cursor identity",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "value & state", "token": "state" } },
+              "equals": {
+                "value.selectedDefinition.name": "state",
+                "value.selectedDefinition.resourceKind": "binding-behavior"
+              }
+            },
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "handles", "page": { "size": 100 } } },
+              "outcomes": ["hit", "partial", "miss"],
+              "rows": [
+                { "fields": { "authoredName": "validation-container", "requiredCapability": "validation-html.default-resources" }, "absent": true },
+                { "fields": { "authoredName": "validation-errors", "requiredCapability": "validation-html.default-resources" }, "absent": true },
+                { "fields": { "authoredName": "t", "requiredCapability": "i18n.default-resources" }, "absent": true },
+                { "fields": { "authoredName": "state", "requiredCapability": "state.default-resources" }, "absent": true }
+              ]
+            },
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 100 } } },
+              "outcomes": ["hit", "partial", "miss"],
+              "rows": [
+                { "fields": { "diagnosticKind": "framework-capability-not-registered" }, "absent": true }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "validation-html-open-resource-configuration",
+      "fixture": "fixtures/pressure/plugin-capability-open-configuration",
+      "aureliaDomain": "plugin-capability-admission",
+      "capability": "validation-html-resource-configuration",
+      "domainAxis": "plugin-capabilities",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/open-validation-app.html",
+      "requirement": "Host-dependent ValidationHtml subscriber options keep the always-admitted validate behavior distinct from open subscriber resource membership and suppress unsupported repair guidance.",
+      "cases": [
+        {
+          "id": "open-subscriber-membership-retains-blockers-without-accusation",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "validate",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "admitted",
+                    "actionability": "registered",
+                    "blockingOpenSeamCount": 0
+                  },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "validation-errors.bind",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "admission-unknown",
+                    "actionability": "registration-status-unknown",
+                    "blockingOpenSeamSources.length": 1,
+                    "blockingOpenSeamCount": 1
+                  },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "validation-container",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "admission-unknown",
+                    "actionability": "registration-status-unknown",
+                    "blockingOpenSeamSources.length": 1,
+                    "blockingOpenSeamCount": 1
+                  },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-not-registered",
+                    "selectedMemberName": "validation-errors.bind"
+                  },
+                  "absent": true
+                },
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-configured-out",
+                    "selectedMemberName": "validation-container"
+                  },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "open-validation-blocker-source-filter-retains-demands",
+          "sourceFile": "src/plugin-options.ts",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "authoredName": "validation-errors.bind",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "admission-unknown",
+                    "blockingOpenSeamSources.length": 1
+                  },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "authoredName": "validation-container",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "admission-unknown",
+                    "blockingOpenSeamSources.length": 1
+                  },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

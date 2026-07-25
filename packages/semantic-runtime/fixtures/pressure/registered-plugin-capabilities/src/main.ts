@@ -6,12 +6,23 @@ import { DefaultVirtualizationConfiguration } from '@aurelia/ui-virtualization';
 import { ValidationHtmlConfiguration } from '@aurelia/validation-html';
 import { RegisteredPluginCapabilitiesApp } from './registered-plugin-capabilities-app';
 
+export const initialDashboardState = {
+  ready: true,
+  title: 'Dashboard',
+};
+
+export const initialMainState = {
+  queued: 0,
+};
+
 new Aurelia()
   .register(
     StandardConfiguration,
     I18nConfiguration,
     RouterConfiguration,
-    StateDefaultConfiguration.init({}),
+    StateDefaultConfiguration
+      .init(initialDashboardState)
+      .withStore('main', initialMainState),
     DefaultVirtualizationConfiguration,
     ValidationHtmlConfiguration,
   )

@@ -64,6 +64,7 @@ import {
   routerIssueDiagnosticRepairProjection,
 } from './router-diagnostic-policy.js';
 import {
+  FrameworkCapabilityAdmissionState,
   FrameworkCapabilityAvailabilityState,
   FrameworkCapabilityDemandKind,
   FrameworkCapabilityDemandSiteKind,
@@ -714,12 +715,48 @@ export function templateCompilerErrorDiagnostic(
 export function frameworkCapabilityDemandDiagnostic(
   demand: FrameworkCapabilityDemand,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+  configurationSources: readonly NonNullable<SemanticTemplateDiagnosticRow['source']>[] = [],
 ): SemanticTemplateCursorDiagnosticRow {
   const capabilityLabel = frameworkCapabilityDemandLabel(demand);
   const moduleName = demand.recommendedModuleName ?? demand.candidateModuleNames[0] ?? null;
   const availabilitySummary = demand.availabilityState === FrameworkCapabilityAvailabilityState.EvidenceFound
     ? `Availability evidence was found for ${moduleName ?? 'a candidate package'}.`
     : 'No local manifest or import evidence was found for a package that provides this capability.';
+  if (demand.admissionState === FrameworkCapabilityAdmissionState.ConfiguredOut) {
+    return {
+      diagnosticKind: 'framework-capability-configured-out',
+      diagnosticAuthority: 'semantic-authoring-policy',
+      frameworkErrorCode: null,
+      severity: 'error',
+      summary: `${frameworkCapabilityDemandSiteLabel(demand)} "${demand.authoredName}" uses ${capabilityLabel}, but the admitted app configuration excludes that surface.`,
+      missingInput: demand.requiredCapability,
+      missingInputs: [demand.requiredCapability],
+      source,
+      relatedInformation: configurationSources.map((configurationSource) => ({
+        message: 'This configuration excludes the demanded framework surface.',
+        source: configurationSource,
+      })),
+      selectedMemberName: demand.authoredName,
+      ownerTypeDisplay: null,
+      ownerTypeShapeKind: null,
+      ownerTypeOrigin: null,
+      suggestion: {
+        suggestionKind: 'configure-framework-capability',
+        actionKind: 'configure-framework-capability',
+        actionTarget: suggestionActionTarget(
+          'framework-capability',
+          configurationSources.length === 1 ? configurationSources[0]! : null,
+          demand.requiredCapability,
+          moduleName,
+        ),
+        summary: frameworkCapabilityConfigurationSuggestion(demand),
+        targetMemberName: demand.requiredCapability,
+        ownerTypeDisplay: null,
+        valueTypeDisplay: moduleName,
+        valueTypeSource: null,
+      },
+    };
+  }
   return {
     diagnosticKind: 'framework-capability-not-registered',
     diagnosticAuthority: 'semantic-authoring-policy',
@@ -1922,12 +1959,34 @@ function frameworkCapabilityRegistrationSuggestion(
     case FrameworkCapabilityDemandKind.ValidationServiceResolvers:
     case FrameworkCapabilityDemandKind.RouterDefaultResources:
     case FrameworkCapabilityDemandKind.UiVirtualizationDefaultResources:
-    case FrameworkCapabilityDemandKind.StateDefaultResources:
-    case FrameworkCapabilityDemandKind.StateBindingSyntax:
     case FrameworkCapabilityDemandKind.DialogServiceResolvers:
       return moduleName == null
         ? `Register ${registrationName} with the app container.`
         : `Register ${registrationName} from ${moduleName} with the app container.`;
+    case FrameworkCapabilityDemandKind.StateDefaultResources:
+    case FrameworkCapabilityDemandKind.StateBindingSyntax:
+      return moduleName == null
+        ? 'Initialize StateDefaultConfiguration with app state, then register the returned configuration with the app container.'
+        : `Initialize StateDefaultConfiguration from ${moduleName} with app state, then register the returned configuration with the app container.`;
+  }
+}
+
+function frameworkCapabilityConfigurationSuggestion(
+  demand: FrameworkCapabilityDemand,
+): string {
+  switch (demand.demandKind) {
+    case FrameworkCapabilityDemandKind.I18nTranslationSyntax:
+      return `Include "${demand.authoredName.replace(/\.bind$/u, '')}" in I18nConfiguration.translationAttributeAliases.`;
+    case FrameworkCapabilityDemandKind.ValidationHtmlDefaultResources:
+      if (demand.authoredName === 'validation-errors.bind' || demand.authoredName === 'validation-errors') {
+        return 'Enable ValidationHtmlConfiguration.UseSubscriberCustomAttribute.';
+      }
+      if (demand.authoredName === 'validation-container') {
+        return 'Provide a non-empty ValidationHtmlConfiguration.SubscriberCustomElementTemplate.';
+      }
+      return 'Enable the demanded validation-html resource in ValidationHtmlConfiguration.';
+    default:
+      return `Change the admitted framework configuration so it includes "${demand.authoredName}".`;
   }
 }
 

@@ -18,6 +18,7 @@ import {
   EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
+import { SemanticClaim } from '../kernel/claim.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import type {
   BindingBehaviorExpression,
@@ -48,6 +49,7 @@ import {
 import {
   KernelStoreBatch,
   type KernelStore,
+  type KernelMaterializationReadView,
   type KernelStoreReadView,
   type KernelStoreRecord,
 } from '../kernel/store.js';
@@ -57,11 +59,17 @@ import {
 import { uniqueStrings } from '../kernel/collections.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
+import {
+  FrameworkCapabilityConfigurationMembership,
+  i18nTranslationSyntaxConfigurationForAdmission,
+  validationHtmlResourceConfigurationForAdmission,
+} from '../configuration/framework-capability-configuration.js';
 import type { AppTaskDefinition } from '../configuration/app-task.js';
 import {
   type DiContainerChainFacts,
 } from '../di/container-chain.js';
 import type { DiWorldConstructionEmission } from '../di/world-construction.js';
+import { registrationAdmissionsVisibleToContainer } from '../di/world-construction.js';
 import {
   FrameworkRegistrationCapability,
   frameworkRegistrationAdmissionCarriesCapability,
@@ -72,8 +80,12 @@ import {
   frameworkRegistrationKindForAdmission,
   type RegistrationAdmissionProduct,
 } from '../registration/registration-admission.js';
+import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
+  compileAttributePatternDefinition,
+  isBetterAttributePatternScore,
+  type AttributePatternScore,
   type AttributeSyntax,
 } from '../template/attribute-syntax.js';
 import {
@@ -81,13 +93,17 @@ import {
   BuiltInSyntaxGroup,
   findUniqueBuiltInBindingCommandByName,
   parseBuiltInAttributeSyntax,
+  type BuiltInAttributePattern,
   type BuiltInBindingCommand,
 } from '../template/built-in-syntax.js';
 import {
   bindingBehaviorResourceOccurrences,
   valueConverterResourceOccurrences,
 } from '../template/expression-resource-occurrence.js';
-import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
+import {
+  findVisibleTemplateResource,
+  readBuiltInVisibleTemplateResource,
+} from '../template/compiler-resource-lookup.js';
 import {
   runtimeAcceptedBindingExpressionAstForParse,
 } from '../template/expression-parse-projection.js';
@@ -154,6 +170,10 @@ interface CapabilityDemandSite {
   readonly localKeyParts?: readonly string[];
   readonly templateSourceAddressHandle?: AddressHandle | null;
   readonly resourceDefinitionProductHandle?: ProductHandle | null;
+  readonly analysisContextProductHandle?: ProductHandle | null;
+  readonly admissionSourceAddressHandles?: readonly AddressHandle[];
+  readonly configurationSourceAddressHandles?: readonly AddressHandle[];
+  readonly expressionResourceApplicationProductHandles?: readonly ProductHandle[];
   readonly sourceRecords?: readonly KernelStoreRecord[];
 }
 
@@ -249,6 +269,18 @@ export class FrameworkCapabilityDemandMaterializer {
       site.ownerIdentityHandle,
       site.templateSourceAddressHandle ?? site.resource?.compilation.unit.templateSource.sourceAddressHandle ?? null,
       site.resourceDefinitionProductHandle ?? site.resource?.compilation.definition.productHandle ?? null,
+      site.analysisContextProductHandle ?? site.resource?.compilation.analysisContextProductHandle ?? null,
+      site.admissionSourceAddressHandles ?? [],
+      site.configurationSourceAddressHandles ?? [],
+    );
+    const applicationClaims = (site.expressionResourceApplicationProductHandles ?? []).map(
+      (applicationProductHandle, applicationIndex) => new SemanticClaim(
+        this.store.handles.claim(`${local}:expression-resource-application:${applicationIndex}`),
+        productHandle,
+        KernelVocabulary.Framework.CapabilityDemandHasExpressionResourceApplication.key,
+        applicationProductHandle,
+        provenanceHandle,
+      ),
     );
     const records = [
       ...(site.sourceRecords ?? []),
@@ -274,10 +306,12 @@ export class FrameworkCapabilityDemandMaterializer {
         site.sourceAddressHandle,
         provenanceHandle,
       ),
+      ...applicationClaims,
       new MaterializationRecord(
         this.store.handles.materialization(local),
         identityHandle,
         [productHandle],
+        applicationClaims.map((claim) => claim.handle),
       ),
     ];
     return new CapabilityDemandPublication(demand, records);
@@ -294,14 +328,20 @@ function capabilityDemandSites(
   serviceRoots: readonly FrameworkServiceRoot[],
   serviceRootEnrichment: FrameworkServiceRootEnrichmentProjectResult,
 ): readonly CapabilityDemandSite[] {
+  const templateAdmissions = new TemplateCapabilityAdmissionContext(
+    publication,
+    configuration,
+    diWorld,
+    containerChainFacts,
+  );
   return uniqueDemandSites([
     ...templates.resources,
     ...templates.authoringResources,
   ].flatMap((resource) => [
-    ...syntaxCapabilityDemandSites(resource),
-    ...bindingCommandCapabilityDemandSites(resource),
-    ...resourceCapabilityDemandSites(resource),
-    ...expressionResourceCapabilityDemandSites(publication, resource),
+    ...syntaxCapabilityDemandSites(resource, templateAdmissions),
+    ...bindingCommandCapabilityDemandSites(resource, templateAdmissions),
+    ...resourceCapabilityDemandSites(publication, resource, templateAdmissions),
+    ...expressionResourceCapabilityDemandSites(publication, resource, templateAdmissions),
   ]).concat(sourceServiceApiCapabilityDemandSites(
     publication,
     typeSystem,
@@ -676,6 +716,185 @@ function uniqueIdentityHandleOrNull(
     : null;
 }
 
+class TemplateCapabilityAdmission {
+  constructor(
+    readonly admissionState: FrameworkCapabilityAdmissionState,
+    readonly admissionSourceAddressHandles: readonly AddressHandle[] = [],
+    readonly configurationSourceAddressHandles: readonly AddressHandle[] = [],
+    readonly blockingOpenSeamHandles: readonly OpenSeamHandle[] = [],
+  ) {}
+}
+
+class TemplateCapabilityAdmissionContext {
+  private readonly admissionsByContainer = new Map<ProductHandle, readonly RegistrationAdmissionProduct[]>();
+
+  constructor(
+    private readonly store: KernelMaterializationReadView,
+    private readonly configuration: ConfigurationKernelEmission,
+    private readonly world: DiWorldConstructionEmission,
+    private readonly containerChainFacts: DiContainerChainFacts,
+  ) {}
+
+  forSyntax(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    syntax: AttributeSyntax,
+    demand: CapabilityDemandDescriptor,
+    admitted: boolean,
+  ): TemplateCapabilityAdmission {
+    const admissionSources = this.admissionSourceAddressHandles(resource, demand.requiredCapability);
+    if (demand.requiredCapability === FrameworkRegistrationCapability.I18nTranslationSyntax) {
+      return this.forConfiguredSurface(
+        resource,
+        demand.requiredCapability,
+        admitted,
+        (admission) => {
+          const configuration = i18nTranslationSyntaxConfigurationForAdmission(
+            this.store,
+            this.configuration,
+            admission,
+          );
+          return {
+            membership: configuration.membership(syntax.rawName),
+            exclusionSourceAddressHandle: configuration.exclusionSourceAddressHandle(syntax.rawName),
+            openSeamHandles: configuration.openSeamHandles,
+          };
+        },
+      );
+    }
+    return new TemplateCapabilityAdmission(
+      admissionStateForBoolean(admitted),
+      admissionSources,
+    );
+  }
+
+  forResource(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    builtIn: BuiltInResource,
+    demand: CapabilityDemandDescriptor,
+    admitted: boolean,
+  ): TemplateCapabilityAdmission {
+    const admissionSources = this.admissionSourceAddressHandles(resource, demand.requiredCapability);
+    if (builtIn.packageId === BuiltInResourcePackage.ValidationHtml) {
+      return this.forConfiguredSurface(
+        resource,
+        demand.requiredCapability,
+        admitted,
+        (admission) => {
+          const configuration = validationHtmlResourceConfigurationForAdmission(
+            this.store,
+            this.configuration,
+            admission,
+          );
+          return {
+            membership: configuration.membership(builtIn.name),
+            exclusionSourceAddressHandle: configuration.exclusionSourceAddressHandle(builtIn.name),
+            openSeamHandles: configuration.openSeamHandles(builtIn.name),
+          };
+        },
+      );
+    }
+    return new TemplateCapabilityAdmission(
+      admissionStateForBoolean(admitted),
+      admissionSources,
+    );
+  }
+
+  forCapability(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    capability: FrameworkRegistrationCapability,
+    admitted: boolean,
+  ): TemplateCapabilityAdmission {
+    return new TemplateCapabilityAdmission(
+      admissionStateForBoolean(admitted),
+      this.admissionSourceAddressHandles(resource, capability),
+    );
+  }
+
+  private forConfiguredSurface(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    capability: FrameworkRegistrationCapability,
+    admitted: boolean,
+    configurationForAdmission: (admission: RegistrationAdmissionProduct) => ConfiguredSurfaceMembership,
+  ): TemplateCapabilityAdmission {
+    const admissions = this.admissionsForResource(resource)
+      .filter((admission) => frameworkRegistrationAdmissionCarriesCapability(admission, capability));
+    const admissionSources = [...new Set(admissions.flatMap((admission) =>
+      admission.sourceAddressHandle == null ? [] : [admission.sourceAddressHandle]
+    ))];
+    if (admissions.length === 0) {
+      return new TemplateCapabilityAdmission(
+        FrameworkCapabilityAdmissionState.NotAdmitted,
+        admissionSources,
+      );
+    }
+    const memberships = admissions.map(configurationForAdmission);
+    if (memberships.some((membership) =>
+      membership.membership === FrameworkCapabilityConfigurationMembership.Included
+    )) {
+      return new TemplateCapabilityAdmission(
+        admitted
+          ? FrameworkCapabilityAdmissionState.Admitted
+          : FrameworkCapabilityAdmissionState.AdmissionUnknown,
+        admissionSources,
+      );
+    }
+    const openMemberships = memberships.filter((membership) =>
+      membership.membership === FrameworkCapabilityConfigurationMembership.Open
+    );
+    if (openMemberships.length > 0) {
+      return new TemplateCapabilityAdmission(
+        FrameworkCapabilityAdmissionState.AdmissionUnknown,
+        admissionSources,
+        [],
+        [...new Set(openMemberships.flatMap((membership) => membership.openSeamHandles))],
+      );
+    }
+    return new TemplateCapabilityAdmission(
+      FrameworkCapabilityAdmissionState.ConfiguredOut,
+      admissionSources,
+      [...new Set(memberships.flatMap((membership) =>
+        membership.exclusionSourceAddressHandle == null ? [] : [membership.exclusionSourceAddressHandle]
+      ))],
+    );
+  }
+
+  private admissionSourceAddressHandles(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    capability: FrameworkRegistrationCapability,
+  ): readonly AddressHandle[] {
+    return [...new Set(this.admissionsForResource(resource)
+      .filter((admission) => frameworkRegistrationAdmissionCarriesCapability(admission, capability))
+      .flatMap((admission) => admission.sourceAddressHandle == null ? [] : [admission.sourceAddressHandle]))];
+  }
+
+  private admissionsForResource(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+  ): readonly RegistrationAdmissionProduct[] {
+    const container = resource.compilation.compilerWorld.container;
+    const containerProductHandle = container.productHandle;
+    if (containerProductHandle == null) {
+      return [];
+    }
+    let admissions = this.admissionsByContainer.get(containerProductHandle);
+    if (admissions == null) {
+      admissions = registrationAdmissionsVisibleToContainer(
+        container,
+        this.configuration.registrationAdmissions,
+        this.world,
+        this.containerChainFacts,
+      );
+      this.admissionsByContainer.set(containerProductHandle, admissions);
+    }
+    return admissions;
+  }
+}
+
+interface ConfiguredSurfaceMembership {
+  readonly membership: FrameworkCapabilityConfigurationMembership;
+  readonly exclusionSourceAddressHandle: AddressHandle | null;
+  readonly openSeamHandles: readonly OpenSeamHandle[];
+}
+
 function admissionStateForBoolean(
   admitted: boolean,
 ): FrameworkCapabilityAdmissionState {
@@ -684,8 +903,42 @@ function admissionStateForBoolean(
     : FrameworkCapabilityAdmissionState.NotAdmitted;
 }
 
+function compilerWorldBuiltInAttributePatternMatchForSyntax(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  syntax: AttributeSyntax,
+): readonly [handler: BuiltInAttributePattern, score: AttributePatternScore] | null {
+  const compiledPatternProductHandle = syntax.compiledPatternProductHandle;
+  if (compiledPatternProductHandle == null) {
+    return null;
+  }
+  const pattern = resource.compilation.compilerWorld.attributePatterns.find((candidate) =>
+    candidate.handler != null
+    && candidate.compiledPatterns.some((compiled) => compiled.productHandle === compiledPatternProductHandle)
+  ) ?? null;
+  const compiled = pattern?.compiledPatterns.find((candidate) =>
+    candidate.productHandle === compiledPatternProductHandle
+  ) ?? null;
+  return pattern?.handler != null && compiled != null
+    ? [pattern.handler, compiled.score]
+    : null;
+}
+
+function compilerWorldBuiltInBindingCommand(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  commandName: string,
+): BuiltInBindingCommand | null {
+  const executable = resource.compilation.compilerWorld.bindingCommandResolver.get(commandName);
+  if (executable == null) {
+    return null;
+  }
+  return resource.compilation.compilerWorld.bindingCommands.find((command) =>
+    command.executable.productHandle === executable.productHandle
+  )?.handler ?? null;
+}
+
 function syntaxCapabilityDemandSites(
   resource: TemplateResourceRuntimeAnalysisEmission,
+  admissionContext: TemplateCapabilityAdmissionContext,
 ): readonly CapabilityDemandSite[] {
   const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
   return resource.compilation.authoredAttributeSyntaxes.flatMap((syntax) => {
@@ -695,20 +948,50 @@ function syntaxCapabilityDemandSites(
     ) {
       return [];
     }
-    const parsed = parseBuiltInAttributeSyntax(syntax.rawName, syntax.rawValue);
-    if (parsed.handler == null) {
+    const admittedPattern = compilerWorldBuiltInAttributePatternMatchForSyntax(resource, syntax);
+    const admittedHandler = admittedPattern?.[0] ?? null;
+    const handler = admittedHandler ?? parseBuiltInAttributeSyntax(syntax.rawName, syntax.rawValue).handler;
+    if (handler == null) {
       return [];
     }
-    const demand = capabilityForBuiltInSyntaxGroup(parsed.handler.group);
+    const demand = capabilityForBuiltInSyntaxGroup(handler.group);
     if (demand == null) {
       return [];
     }
-    return [siteForAttributeSyntax(resource, syntax, demand, compilerWorldAdmitsBuiltInSyntaxGroup(resource, parsed.handler.group))];
+    const sites = [siteForAttributeSyntax(
+      resource,
+      syntax,
+      demand,
+      admissionContext.forSyntax(resource, syntax, demand, admittedHandler != null),
+    )];
+    const knownPattern = parseBuiltInAttributeSyntax(syntax.rawName, syntax.rawValue);
+    if (
+      admittedPattern != null
+      && knownPattern.handler != null
+      && knownPattern.pattern != null
+      && knownPattern.handler.group !== admittedHandler?.group
+      && isBetterAttributePatternScore(
+        compileAttributePatternDefinition(knownPattern.pattern).score,
+        admittedPattern[1],
+      )
+    ) {
+      const knownDemand = capabilityForBuiltInSyntaxGroup(knownPattern.handler.group);
+      if (knownDemand != null) {
+        sites.push(siteForAttributeSyntax(
+          resource,
+          syntax,
+          knownDemand,
+          admissionContext.forSyntax(resource, syntax, knownDemand, false),
+        ));
+      }
+    }
+    return sites;
   });
 }
 
 function bindingCommandCapabilityDemandSites(
   resource: TemplateResourceRuntimeAnalysisEmission,
+  admissionContext: TemplateCapabilityAdmissionContext,
 ): readonly CapabilityDemandSite[] {
   const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
   return resource.compilation.authoredAttributeSyntaxes.flatMap((syntax) => {
@@ -722,7 +1005,8 @@ function bindingCommandCapabilityDemandSites(
     if (commandName == null) {
       return [];
     }
-    const command = findUniqueBuiltInBindingCommandByName(commandName);
+    const admittedCommand = compilerWorldBuiltInBindingCommand(resource, commandName);
+    const command = admittedCommand ?? findUniqueBuiltInBindingCommandByName(commandName);
     if (command == null) {
       return [];
     }
@@ -730,13 +1014,19 @@ function bindingCommandCapabilityDemandSites(
     if (demand == null) {
       return [];
     }
-    const admitted = resource.compilation.compilerWorld.bindingCommandResolver.get(commandName) != null;
-    return [siteForAttributeSyntax(resource, syntax, demand, admitted)];
+    return [siteForAttributeSyntax(
+      resource,
+      syntax,
+      demand,
+      admissionContext.forSyntax(resource, syntax, demand, admittedCommand != null),
+    )];
   });
 }
 
 function resourceCapabilityDemandSites(
+  publication: KernelPublicationContext,
   resource: TemplateResourceRuntimeAnalysisEmission,
+  admissionContext: TemplateCapabilityAdmissionContext,
 ): readonly CapabilityDemandSite[] {
   const attributesByProduct = new Map(resource.compilation.html.attributes.map((attribute) => [attribute.productHandle, attribute]));
   const ownersByAttributeProduct = htmlElementAttributeOwnersByAttributeProduct(
@@ -746,20 +1036,30 @@ function resourceCapabilityDemandSites(
   const compilerReachableNodes = resourceLocalCompilerReachableHtmlNodeProductHandles(resource);
   const compilerReachableAttributes = resourceLocalCompilerReachableHtmlAttributeProductHandles(resource);
   return [
-    ...elementResourceCapabilityDemandSites(resource, ownersByAttributeProduct, compilerReachableNodes),
+    ...elementResourceCapabilityDemandSites(
+      publication,
+      resource,
+      ownersByAttributeProduct,
+      compilerReachableNodes,
+      admissionContext,
+    ),
     ...attributeResourceCapabilityDemandSites(
+      publication,
       resource,
       attributesByProduct,
       ownersByAttributeProduct,
       compilerReachableAttributes,
+      admissionContext,
     ),
   ];
 }
 
 function elementResourceCapabilityDemandSites(
+  publication: KernelPublicationContext,
   resource: TemplateResourceRuntimeAnalysisEmission,
   ownersByAttributeProduct: ReadonlyMap<string, HtmlElementAttributeOwner>,
   compilerReachableNodes: ReadonlySet<ProductHandle>,
+  admissionContext: TemplateCapabilityAdmissionContext,
 ): readonly CapabilityDemandSite[] {
   const elementOwners = elementOwnersForResource(resource, ownersByAttributeProduct);
   return elementOwners.flatMap((owner) => {
@@ -767,7 +1067,10 @@ function elementResourceCapabilityDemandSites(
       return [];
     }
     const lookupName = htmlElementLookupName(owner.element, owner);
-    const builtIn = builtInResourceFor(ResourceDefinitionKind.CustomElement, lookupName);
+    const selected = resource.compilation.compilerWorld.resourceResolver.el(lookupName);
+    const builtIn = selected == null
+      ? builtInResourceFor(ResourceDefinitionKind.CustomElement, lookupName)
+      : readBuiltInVisibleTemplateResource(publication, selected);
     if (builtIn == null) {
       return [];
     }
@@ -775,16 +1078,23 @@ function elementResourceCapabilityDemandSites(
     if (demand == null) {
       return [];
     }
-    const admitted = resource.compilation.compilerWorld.resourceResolver.el(lookupName) != null;
-    return [siteForElementResource(resource, owner.element, lookupName, demand, admitted)];
+    return [siteForElementResource(
+      resource,
+      owner.element,
+      lookupName,
+      demand,
+      admissionContext.forResource(resource, builtIn, demand, selected != null),
+    )];
   });
 }
 
 function attributeResourceCapabilityDemandSites(
+  publication: KernelPublicationContext,
   resource: TemplateResourceRuntimeAnalysisEmission,
   attributesByProduct: ReadonlyMap<string, HtmlAttribute>,
   ownersByAttributeProduct: ReadonlyMap<string, HtmlElementAttributeOwner>,
   compilerReachableAttributes: ReadonlySet<ProductHandle>,
+  admissionContext: TemplateCapabilityAdmissionContext,
 ): readonly CapabilityDemandSite[] {
   return resource.compilation.attributeSyntax.syntaxes.flatMap((syntax) => {
     if (
@@ -799,22 +1109,33 @@ function attributeResourceCapabilityDemandSites(
     const owner = syntax.attribute.productHandle == null
       ? null
       : ownersByAttributeProduct.get(syntax.attribute.productHandle) ?? null;
-    const builtIn = builtInAttributeResourceForSyntax(syntax, attribute, owner);
-    if (builtIn == null) {
+    const selected = resource.compilation.compilerWorld.resourceResolver.attr(syntax.target);
+    const builtIn = selected == null
+      ? builtInAttributeResourceForSyntax(syntax, attribute, owner)
+      : readBuiltInVisibleTemplateResource(publication, selected);
+    if (
+      builtIn == null
+      || suppressBuiltInAttributeResourceDemand(builtIn, syntax, attribute, owner)
+    ) {
       return [];
     }
     const demand = capabilityForBuiltInResource(builtIn);
     if (demand == null) {
       return [];
     }
-    const admitted = resource.compilation.compilerWorld.resourceResolver.attr(syntax.target) != null;
-    return [siteForAttributeSyntax(resource, syntax, demand, admitted)];
+    return [siteForAttributeSyntax(
+      resource,
+      syntax,
+      demand,
+      admissionContext.forResource(resource, builtIn, demand, selected != null),
+    )];
   });
 }
 
 function expressionResourceCapabilityDemandSites(
   publication: KernelPublicationContext,
   resource: TemplateResourceRuntimeAnalysisEmission,
+  admissionContext: TemplateCapabilityAdmissionContext,
 ): readonly CapabilityDemandSite[] {
   return resourceLocalEffectiveTemplateExpressionParses(publication, resource).flatMap((parse, parseIndex) => {
     const expression = runtimeAcceptedBindingExpressionAstForParse(parse);
@@ -829,6 +1150,7 @@ function expressionResourceCapabilityDemandSites(
           parse,
           converter,
           `parse:${parseIndex}:value-converter:${converterIndex}`,
+          admissionContext,
         )
       ),
       ...bindingBehaviorResourceOccurrences(expression).flatMap(({ expression: behavior }, behaviorIndex) =>
@@ -838,6 +1160,7 @@ function expressionResourceCapabilityDemandSites(
           parse,
           behavior,
           `parse:${parseIndex}:binding-behavior:${behaviorIndex}`,
+          admissionContext,
         )
       ),
     ];
@@ -848,14 +1171,17 @@ function siteForAttributeSyntax(
   resource: TemplateResourceRuntimeAnalysisEmission,
   syntax: AttributeSyntax,
   demand: CapabilityDemandDescriptor,
-  admitted: boolean,
+  admission: TemplateCapabilityAdmission,
 ): CapabilityDemandSite {
   return {
     siteKind: FrameworkCapabilityDemandSiteKind.TemplateAttribute,
     demandKind: demand.demandKind,
     requiredCapability: demand.requiredCapability,
     authoredName: syntax.rawName,
-    admissionState: admissionStateForBoolean(admitted),
+    admissionState: admission.admissionState,
+    blockingOpenSeamHandles: admission.blockingOpenSeamHandles,
+    admissionSourceAddressHandles: admission.admissionSourceAddressHandles,
+    configurationSourceAddressHandles: admission.configurationSourceAddressHandles,
     sourceAddressHandle: syntax.sourceAddressHandle,
     ownerIdentityHandle: syntax.identityHandle,
     resource,
@@ -867,14 +1193,17 @@ function siteForElementResource(
   element: HtmlElement,
   lookupName: string,
   demand: CapabilityDemandDescriptor,
-  admitted: boolean,
+  admission: TemplateCapabilityAdmission,
 ): CapabilityDemandSite {
   return {
     siteKind: FrameworkCapabilityDemandSiteKind.TemplateElement,
     demandKind: demand.demandKind,
     requiredCapability: demand.requiredCapability,
     authoredName: lookupName,
-    admissionState: admissionStateForBoolean(admitted),
+    admissionState: admission.admissionState,
+    blockingOpenSeamHandles: admission.blockingOpenSeamHandles,
+    admissionSourceAddressHandles: admission.admissionSourceAddressHandles,
+    configurationSourceAddressHandles: admission.configurationSourceAddressHandles,
     sourceAddressHandle: element.sourceAddressHandle,
     ownerIdentityHandle: element.identityHandle,
     resource,
@@ -887,6 +1216,7 @@ function siteForExpressionResource(
   parse: TemplateExpressionParse,
   expression: ValueConverterExpression | BindingBehaviorExpression,
   localPart: string,
+  admissionContext: TemplateCapabilityAdmissionContext,
 ): readonly CapabilityDemandSite[] {
   const isValueConverter = expression.$kind === 'ValueConverter';
   const siteKind = isValueConverter
@@ -897,14 +1227,6 @@ function siteForExpressionResource(
     : ResourceDefinitionKind.BindingBehavior;
   const authoredName = expression.name.name;
   const nameSpan = expression.name.span;
-  const builtIn = builtInResourceFor(resourceKind, authoredName);
-  if (builtIn == null) {
-    return [];
-  }
-  const demand = capabilityForBuiltInResource(builtIn);
-  if (demand == null) {
-    return [];
-  }
   const expressionSource = sourceAddressForRuntimeExpressionSpan(
     publication,
     [
@@ -917,30 +1239,71 @@ function siteForExpressionResource(
     parse.sourceAddressHandle,
     nameSpan,
   );
-  const planEntries = isValueConverter
-    ? resource.runtimeAnalysis.expressionResourcePlan.readValueConverterEntries(
-        parse.productHandle,
-        expression,
-      )
-    : resource.runtimeAnalysis.expressionResourcePlan.readBindingBehaviorEntries(
-        parse.productHandle,
-        expression,
-      );
-  const admitted = planEntries.length === 0
-    ? findVisibleTemplateResource(
-        resource.compilation.compilerWorld.resourceScope,
-        resourceKind,
-        authoredName,
-      ) != null
-    : planEntries.every((entry) => entry.resource != null);
+  const plan = resource.runtimeAnalysis.expressionResourcePlan;
+  const planFacts = isValueConverter
+    ? (() => {
+        const entries = plan.readValueConverterEntries(parse.productHandle, expression);
+        return {
+          admitted: entries.length === 0
+            ? null
+            : entries.every((entry) => entry.resource != null),
+          selectedBuiltIn: entries.find((entry) => entry.builtInResource != null)?.builtInResource ?? null,
+          hasUnresolvedResource: entries.length === 0 || entries.some((entry) => entry.resource == null),
+          applicationProductHandles: entries.flatMap((entry) =>
+            resource.runtimeAnalysis.valueConverter.readApplicationsForPlanEntry(entry).map((application) =>
+              application.productHandle
+            )
+          ),
+        };
+      })()
+    : (() => {
+        const entries = plan.readBindingBehaviorEntries(parse.productHandle, expression);
+        return {
+          admitted: entries.length === 0
+            ? null
+            : entries.every((entry) => entry.resource != null),
+          selectedBuiltIn: entries.find((entry) => entry.builtInResource != null)?.builtInResource ?? null,
+          hasUnresolvedResource: entries.length === 0 || entries.some((entry) => entry.resource == null),
+          applicationProductHandles: entries.flatMap((entry) =>
+            resource.runtimeAnalysis.bindingBehavior.readApplicationsForPlanEntry(entry).map((application) =>
+              application.productHandle
+            )
+          ),
+        };
+      })();
+  const visibleResource = findVisibleTemplateResource(
+    resource.compilation.compilerWorld.resourceScope,
+    resourceKind,
+    authoredName,
+  );
+  const visibleBuiltIn = readBuiltInVisibleTemplateResource(publication, visibleResource);
+  const builtIn = planFacts.selectedBuiltIn
+    ?? (
+      planFacts.hasUnresolvedResource
+        ? visibleResource == null
+          ? builtInResourceFor(resourceKind, authoredName)
+          : visibleBuiltIn
+        : null
+    );
+  if (builtIn == null) {
+    return [];
+  }
+  const demand = capabilityForBuiltInResource(builtIn);
+  if (demand == null) {
+    return [];
+  }
+  const admitted = planFacts.admitted ?? visibleResource != null;
+  const admission = admissionContext.forCapability(resource, demand.requiredCapability, admitted);
   return [{
     siteKind,
     demandKind: demand.demandKind,
     requiredCapability: demand.requiredCapability,
     authoredName,
-    admissionState: admissionStateForBoolean(admitted),
+    admissionState: admission.admissionState,
+    admissionSourceAddressHandles: admission.admissionSourceAddressHandles,
     sourceAddressHandle: expressionSource.handle,
     ownerIdentityHandle: parse.identityHandle,
+    expressionResourceApplicationProductHandles: planFacts.applicationProductHandles,
     resource,
     sourceRecords: expressionSource.records,
   }];
@@ -1076,15 +1439,6 @@ function sourceServiceApiDemandDescriptor(
   }
 }
 
-function compilerWorldAdmitsBuiltInSyntaxGroup(
-  resource: TemplateResourceRuntimeAnalysisEmission,
-  group: BuiltInSyntaxGroup,
-): boolean {
-  const world = resource.compilation.compilerWorld;
-  return world.attributePatterns.some((pattern) => pattern.handler?.group === group)
-    || world.bindingCommands.some((command) => command.handler?.group === group);
-}
-
 function builtInResourceFor(
   resourceKind: ResourceDefinitionKind,
   name: string,
@@ -1167,6 +1521,7 @@ function uniqueDemandSites(
   for (const site of sites) {
     const key = [
       site.resourceDefinitionProductHandle ?? site.resource?.compilation.definition.productHandle ?? site.localKeyParts?.join(':') ?? '',
+      site.analysisContextProductHandle ?? site.resource?.compilation.analysisContextProductHandle ?? '',
       site.siteKind,
       site.requiredCapability,
       site.authoredName,
@@ -1190,6 +1545,7 @@ function frameworkCapabilityDemandLocalKey(
     'framework-capability-demand',
     projectKey,
     ...(site.localKeyParts ?? [
+      localKeyPart(site.analysisContextProductHandle ?? site.resource?.compilation.analysisContextProductHandle ?? 'no-analysis-context'),
       localKeyPart(site.resource?.compilation.localKey ?? 'unknown'),
       index.toString(),
       localKeyPart(site.authoredName),

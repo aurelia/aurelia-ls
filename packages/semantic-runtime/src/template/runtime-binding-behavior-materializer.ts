@@ -78,6 +78,10 @@ export class RuntimeBindingBehaviorEmission {
     readonly applications: readonly RuntimeBindingBehaviorApplication[],
     readonly issues: readonly RuntimeBindingBehaviorIssue[],
     readonly records: readonly KernelStoreRecord[],
+    private readonly applicationsByPlanEntry: ReadonlyMap<
+      RuntimeBindingBehaviorPlanEntry,
+      readonly RuntimeBindingBehaviorApplication[]
+    >,
   ) {
     for (const application of applications) {
       if (application.binding.productHandle == null) {
@@ -99,6 +103,12 @@ export class RuntimeBindingBehaviorEmission {
 
   readIssuesForBinding(productHandle: ProductHandle): readonly RuntimeBindingBehaviorIssue[] {
     return this.issuesByBinding.get(productHandle) ?? [];
+  }
+
+  readApplicationsForPlanEntry(
+    entry: RuntimeBindingBehaviorPlanEntry,
+  ): readonly RuntimeBindingBehaviorApplication[] {
+    return this.applicationsByPlanEntry.get(entry) ?? [];
   }
 }
 
@@ -151,6 +161,10 @@ export class RuntimeBindingBehaviorMaterializer {
     const source = this.recordsForSource(input.localKey);
     const applications: RuntimeBindingBehaviorApplication[] = [];
     const issues: RuntimeBindingBehaviorIssue[] = [];
+    const applicationsByPlanEntry = new Map<
+      RuntimeBindingBehaviorPlanEntry,
+      readonly RuntimeBindingBehaviorApplication[]
+    >();
     const records: KernelStoreRecord[] = [...source.records];
 
     for (const entry of input.expressionResourcePlan.behaviorEntries) {
@@ -163,11 +177,12 @@ export class RuntimeBindingBehaviorMaterializer {
         source,
       );
       applications.push(...publication.applications);
+      applicationsByPlanEntry.set(entry, publication.applications);
       issues.push(...publication.issues);
       records.push(...publication.records);
     }
 
-    return new RuntimeBindingBehaviorEmission(applications, issues, records);
+    return new RuntimeBindingBehaviorEmission(applications, issues, records, applicationsByPlanEntry);
   }
 
   private bindingBehaviorPublication(

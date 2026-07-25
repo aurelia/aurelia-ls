@@ -305,7 +305,7 @@ export type BuiltInSyntaxCatalogField =
   | 'attributePatterns'
   | 'bindingCommands'
   | 'package'
-  | 'variant'
+  | 'variantKey'
   | 'group'
   | 'source';
 

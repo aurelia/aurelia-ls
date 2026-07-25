@@ -9,6 +9,8 @@ import {
 import {
   FrameworkRegistrationCapability,
 } from '../registration/framework-registration-manifest.js';
+import { uniqueByKey } from '../collections.js';
+import { OpenSeam } from '../kernel/open-seam.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   SemanticAppQueryKind,
@@ -25,6 +27,7 @@ import {
 import {
   describeAddress,
   semanticSourceReferenceMatchesFilePath,
+  type SemanticSourceReference,
 } from './source-reference.js';
 
 /** Project framework capability-demand products into the public app-query row surface. */
@@ -59,6 +62,9 @@ export function frameworkCapabilityDemandsDisplayText(
   }
   if (rows.some((row) => row.admissionState === FrameworkCapabilityAdmissionState.NotAdmitted)) {
     lines.push('Missing registrations are diagnostic/action candidates; edit placement remains source-edit-policy-open until a bootstrap/import planner chooses the exact change.');
+  }
+  if (rows.some((row) => row.admissionState === FrameworkCapabilityAdmissionState.ConfiguredOut)) {
+    lines.push('Configured-out surfaces have an admitted provider but are excluded by closed app configuration; repair belongs at the retained configuration source.');
   }
   if (rows.some((row) => row.admissionState === FrameworkCapabilityAdmissionState.AdmissionUnknown)) {
     lines.push('Unknown admissions should be inspected with open-seam rows before accusing a missing registration.');
@@ -136,6 +142,22 @@ function frameworkCapabilityDemandRow(
 ): SemanticFrameworkCapabilityDemandRow {
   const source = describeAddress(store, demand.sourceAddressHandle);
   const templateSource = describeAddress(store, demand.templateSourceAddressHandle);
+  const blockingOpenSeamSources = uniqueByKey(
+    demand.blockingOpenSeamHandles.flatMap((handle): readonly SemanticSourceReference[] => {
+      const seam = store.read(handle);
+      if (!(seam instanceof OpenSeam)) {
+        return [];
+      }
+      return [
+        seam.addressHandle,
+        ...seam.reasonSources.map((reasonSource) => reasonSource.addressHandle),
+      ].flatMap((handle) => {
+        const source = describeAddress(store, handle);
+        return source == null ? [] : [source];
+      });
+    }),
+    (source) => JSON.stringify(source),
+  );
   return {
     projectKey: demand.projectKey,
     siteKind: demand.siteKind,
@@ -153,6 +175,15 @@ function frameworkCapabilityDemandRow(
     authoredName: demand.authoredName,
     source,
     templateSource,
+    admissionSources: demand.admissionSourceAddressHandles.flatMap((handle) => {
+      const source = describeAddress(store, handle);
+      return source == null ? [] : [source];
+    }),
+    configurationSources: demand.configurationSourceAddressHandles.flatMap((handle) => {
+      const source = describeAddress(store, handle);
+      return source == null ? [] : [source];
+    }),
+    blockingOpenSeamSources,
     blockingOpenSeamCount: demand.blockingOpenSeamHandles.length,
     relatedQueryKind: relatedQueryKindForCapability(demand.requiredCapability),
     summary: frameworkCapabilityDemandSummary(demand),
@@ -164,6 +195,9 @@ function frameworkCapabilityDemandRow(
         sourceAddressHandle: demand.sourceAddressHandle,
         templateSourceAddressHandle: demand.templateSourceAddressHandle,
         resourceDefinitionProductHandle: demand.resourceDefinitionProductHandle,
+        analysisContextProductHandle: demand.analysisContextProductHandle,
+        admissionSourceAddressHandles: demand.admissionSourceAddressHandles,
+        configurationSourceAddressHandles: demand.configurationSourceAddressHandles,
         blockingOpenSeamHandles: demand.blockingOpenSeamHandles,
       },
     } : {}),
@@ -195,6 +229,8 @@ function frameworkCapabilityDemandActionability(
   switch (demand.admissionState) {
     case FrameworkCapabilityAdmissionState.Admitted:
       return 'registered';
+    case FrameworkCapabilityAdmissionState.ConfiguredOut:
+      return 'configuration-excludes-surface';
     case FrameworkCapabilityAdmissionState.NotAdmitted:
       return 'missing-registration';
     case FrameworkCapabilityAdmissionState.AdmissionUnknown:
@@ -222,6 +258,9 @@ function frameworkCapabilityDemandRowMatchesSourceFile(
 ): boolean {
   return semanticSourceReferenceMatchesFilePath(row.source, sourceFilePath)
     || semanticSourceReferenceMatchesFilePath(row.templateSource, sourceFilePath)
+    || row.admissionSources.some((source) => semanticSourceReferenceMatchesFilePath(source, sourceFilePath))
+    || row.configurationSources.some((source) => semanticSourceReferenceMatchesFilePath(source, sourceFilePath))
+    || row.blockingOpenSeamSources.some((source) => semanticSourceReferenceMatchesFilePath(source, sourceFilePath))
     || row.packageEvidence.some((evidence) => semanticSourceReferenceMatchesFilePath(evidence.source, sourceFilePath));
 }
 

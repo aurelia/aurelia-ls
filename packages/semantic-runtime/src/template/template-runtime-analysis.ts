@@ -784,12 +784,12 @@ function skippedBindingValueChannel(phases: TemplateRuntimeAnalysisPhaseTiming[]
 
 function skippedBindingBehavior(phases: TemplateRuntimeAnalysisPhaseTiming[]): RuntimeBindingBehaviorEmission {
   recordSkippedTemplateRuntimeAnalysisPhase(phases, 'binding-behavior');
-  return new RuntimeBindingBehaviorEmission([], [], []);
+  return new RuntimeBindingBehaviorEmission([], [], [], new Map());
 }
 
 function skippedValueConverter(phases: TemplateRuntimeAnalysisPhaseTiming[]): RuntimeValueConverterEmission {
   recordSkippedTemplateRuntimeAnalysisPhase(phases, 'value-converter');
-  return new RuntimeValueConverterEmission([], [], []);
+  return new RuntimeValueConverterEmission([], [], [], new Map());
 }
 
 function skippedBindingDataFlow(phases: TemplateRuntimeAnalysisPhaseTiming[]): RuntimeBindingDataFlowEmission {

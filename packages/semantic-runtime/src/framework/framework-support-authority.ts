@@ -154,7 +154,7 @@ export class FrameworkSupportAuthority implements SemanticRuntimeSupport {
   ): BuiltInResourceCatalogEmission {
     const emissions = this.uniqueEmissions(
       inputs,
-      catalogGroupLocalKey,
+      catalogVariantLocalKey,
       this.resourcesByKey,
       'resource',
       (publication, input) => new BuiltInResourceCatalogMaterializer(this.store, publication).materialize([input]),

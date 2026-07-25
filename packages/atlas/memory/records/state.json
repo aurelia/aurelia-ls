@@ -151,6 +151,88 @@
       ],
       "createdAt": "2026-05-14",
       "updatedAt": "2026-05-30"
+    },
+    {
+      "id": "frontier:state-store-container-ownership",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "state",
+        "configuration",
+        "di",
+        "type-system",
+        "runtime-lifecycle",
+        "api"
+      ],
+      "summary": "State store configuration must spend DI registration and resolver-container ownership before compiler worlds, controller bindings, types, and diagnostics select visible stores.",
+      "rationale": "The bounded plugin-capability pass found that semantic-runtime already retains exact default/named store configuration, DI registration operations, resolver lookup owners, compiler consulting containers, and runtime controller frames, but drops the ownership join before state materialization. Builder mutations are scanned and names are grouped project-wide, then the global store array feeds every expression world, template state scope, @fromState binding, and missing-store diagnostic. Two roots with same-named incompatible stores can therefore leak types, produce false duplicates, or suppress missing-store diagnostics. The repair is an ownership reconnection, not deeper reducer/effect execution.",
+      "guidance": [
+        "Do not patch individual state queries with app-root or source-file filters. AppRoot is a selection context, while container admission, inheritance, and shadowing determine persistent visibility.",
+        "Preserve exact evaluator configuration-value origin on ConfigurationStepObservation so StateDefaultConfiguration.init(...) and .withStore(...) values can join to the registration operation that admitted the configuration.",
+        "Materialize StateStoreConfiguration from admitted ContainerRegistrationOperation rows and retain the registration operation and receiving container. Select visible stores through the effective IStoreRegistry resolver owner for the consulting compiler or runtime controller container.",
+        "Use one selector for expression worlds, state binding scopes, state/dispatch commands, & state, @fromState, and store lookup diagnostics. Arbitrary user IStoreRegistry providers make absence open rather than confidently missing.",
+        "Split source recognition of @fromState from controller-applied StateGetterBinding publication. RuntimeControllerFrame is the applied owner, matching the existing WatchDefinition to RuntimeWatcher to RuntimeControllerFrame precedent.",
+        "Keep the public StateStores query project-wide, but expose operation/container/definition/controller ownership so IDE, MCP, and future AOT consumers can select an honest cohort.",
+        "Before implementation, add pressure with two admitted roots that define conflicting same-named stores, parent-container inheritance, child shadowing, and custom-registry openness. Reducers, effects, middleware, transitions, subscriptions, and asynchronous dispatch remain outside this frontier."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/state/state-store-materialization.ts",
+          "symbolName": "StateStoreConfigurationMaterializationProjectPass",
+          "summary": "Current project-wide builder scan where registration/container ownership is lost."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-registration.ts",
+          "symbolName": "ContainerRegistrationOperation",
+          "summary": "Canonical registration admission into a concrete container."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-lookup.ts",
+          "symbolName": "ContainerResolverLookup",
+          "summary": "Effective provider-owner result after container inheritance and shadowing."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/state/state-getter-binding-materialization.ts",
+          "symbolName": "StateGetterBindingMaterializationProjectPass",
+          "summary": "Current source-owned global store resolution for @fromState bindings."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/state/store-lookup-issues.ts",
+          "symbolName": "StateStoreLookupIssueMaterializer",
+          "summary": "Current global-name missing-store and duplicate-store diagnostic consumer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-controller.ts",
+          "symbolName": "RuntimeControllerFrame",
+          "summary": "Applied controller/container owner for future StateGetterBinding publication."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/state/state-store-materialization.ts",
+          "symbolName": "StateStoreConfigurationMaterializationProjectPass"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/state/state-getter-binding-materialization.ts",
+          "symbolName": "StateGetterBindingMaterializationProjectPass"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-controller.ts",
+          "symbolName": "RuntimeControllerFrame"
+        }
+      ],
+      "createdAt": "2026-07-25",
+      "updatedAt": "2026-07-25"
     }
   ]
 }

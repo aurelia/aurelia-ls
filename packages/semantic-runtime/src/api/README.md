@@ -540,19 +540,29 @@ not treated as portal bindables. Runtime binding diagnostics also include i18n `
 missing `t`/`t.bind` keys (`AUR4000`), duplicate `t-params.bind` on the same translated element (`AUR4001`), and
 dynamic key expressions whose checker type is definitely not string-compatible (`AUR4002`).
 Unmet framework capability demands surface as `framework-capability-not-registered` rows rather than generic
-`template-compiler-error` rows. The producer currently covers runtime-html shorthand syntax, i18n/state plugin syntax,
-router/validation-html/ui-virtualization built-in resources, and expression-owned value-converter/binding-behavior
-resources. Authored sites remain inert or unresolved when their framework capability is not registered, while the
-diagnostic suggestion targets the framework capability and includes manifest/import availability evidence when present.
-When no local manifest/import evidence exists, the suggestion says so instead of implying the package is already
-available. Diagnostic-action classification treats these rows as app-source framework-capability registration pressure
-with source-edit policy open until a later planner proves the bootstrap edit location. `TemplateCodeActions` can now
-promote supported rows to exact source operations when local package/import evidence exists and the owning template
-world can be routed back to an app-root `.app(...)` configuration chain.
+`template-compiler-error` rows. A separately closed `framework-capability-configured-out` row means that the owning
+plugin/configuration is admitted but an exact option value excludes the requested alias, resource, or syntax surface.
+The producer covers runtime-html shorthand syntax, i18n/state plugin syntax, router/validation-html/ui-virtualization
+built-in resources, and expression-owned value-converter/binding-behavior resources. Authored sites remain inert or
+unresolved when their capability is unavailable; diagnostics retain exact registration-admission sources,
+configured-out option sources, and manifest/import availability evidence as three distinct planes.
+When no local manifest/import evidence exists, registration guidance says so instead of implying the package is already
+available. Diagnostic-action classification treats missing registration as app-source capability-registration pressure.
+`TemplateCodeActions` can promote supported rows to exact source operations when local package/import evidence exists and
+the owning template world can be routed back to an app-root `.app(...)` chain. Configured-out rows remain guidance unless
+a source planner can prove the intended configuration replacement; the current implementation deliberately invents no
+such edit.
 `FrameworkCapabilityDemands` exposes the underlying authored demand rows directly, including admission state,
-package/import availability evidence, source-file scoping, related issue lanes, and compact actionability posture.
-Use it to inspect registered, missing, unknown, and chain-unproven capability demand facts without changing which rows
-become diagnostics.
+registration-admission sources, configured-out option sources, package/import availability evidence, source-file
+scoping, related issue lanes, and compact actionability posture. Use it to inspect admitted, configured-out, missing,
+unknown, and chain-unproven capability demand facts without changing which rows become diagnostics.
+Each template demand also exposes its compiler analysis-context handle. The same component definition can be compiled
+under more than one app-root world, so consumers must join by definition plus analysis context rather than collapsing
+rows by source or resource spelling. Built-in ownership follows the resolver-selected resource catalog member; a known
+plugin spelling is consulted only when no resource resolved.
+Host-dependent plugin options are projected as unknown demands with blocking open-seam handles even when compilation
+uses a conservative default-shaped catalog for recovery. Template diagnostics intentionally emit only for
+`not-admitted` and `configured-out`; an open option is inspection pressure, not evidence for either accusation.
 Weak-member template diagnostics reuse the cursor-info member-owner path and therefore must use each resource's
 runtime-analysis expression world. This keeps diagnostic rows aligned with completion/cursor answers for binding
 behavior lifecycle cases such as i18n `t.bind` evaluate-only keys versus `t-params.bind` source-scope projection.
@@ -666,6 +676,9 @@ all-or-nothing rule as replacements. Equivalent-plan deduplication merges the
 source diagnostic evidence instead of choosing one representative diagnostic. The split is intentional: a diagnostic
 may be guided or `source-edit-policy-open` while one returned quick fix carries a concrete multi-edit plan, because the
 source planner has crossed the stricter authored-operation boundary for that app context.
+`configure-framework-capability` is a distinct structured suggestion for a surface excluded by closed plugin options.
+It does not become a code action merely because the option source is known: the intended new value, alias policy, or
+subscriber template is product intent and must be proven by a dedicated planner before an edit is safe.
 `TemplateInlayHints` is the IDE-shaped template hint projection. Rows are source-file filterable and currently expose
 implicit binding-mode resolution: authored default `.bind` command intent, the resolved runtime binding mode, a
 display-friendly mode label, and exact authored insertion source. The row's primary `source` is the attribute-name span

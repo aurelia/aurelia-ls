@@ -80,8 +80,15 @@ export class SourceFileAddress {
   ) {}
 }
 
+/** Minimal authored source locus shared by stored addresses and transient evaluator evidence. */
+export interface SourceSpanLocus {
+  readonly fileHandle: AddressHandle;
+  readonly start: number;
+  readonly end: number;
+}
+
 /** Address for a meaningful source range inside one file. */
-export class SourceSpanAddress {
+export class SourceSpanAddress implements SourceSpanLocus {
   /** String discriminator for serialized source-span address records. */
   readonly kind = 'source-span-address' as const;
 
@@ -106,6 +113,15 @@ export function sourceSpanContains(
   return outer.fileHandle === inner.fileHandle
     && outer.start <= inner.start
     && inner.end <= outer.end;
+}
+
+export function sourceSpansEqual(
+  left: SourceSpanLocus,
+  right: SourceSpanLocus,
+): boolean {
+  return left.fileHandle === right.fileHandle
+    && left.start === right.start
+    && left.end === right.end;
 }
 
 export function sourceSpanContainsOffset(

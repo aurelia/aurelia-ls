@@ -1518,16 +1518,16 @@ function registerFrameworkCapabilityCodeActionForDiagnostic(
     return null;
   }
   const actionSource = semanticExactSourceReference(diagnostic.suggestion.actionTarget?.source ?? diagnostic.source);
-  const resource = templateResourceForDiagnosticSource(store, emission, actionSource);
-  if (resource == null) {
-    return null;
-  }
   const demand = frameworkCapabilityDemandForDiagnostic(store, emission, diagnostic, actionSource);
   if (
     demand == null
     || demand.admissionState !== FrameworkCapabilityAdmissionState.NotAdmitted
     || demand.availabilityState !== FrameworkCapabilityAvailabilityState.EvidenceFound
   ) {
+    return null;
+  }
+  const resource = templateResourceForCapabilityDemand(emission, demand);
+  if (resource == null) {
     return null;
   }
 
@@ -1580,11 +1580,43 @@ function frameworkCapabilityDemandForDiagnostic(
   if (requiredCapability == null) {
     return null;
   }
-  return emission.capabilityDemands.readDemands().find((demand) => {
+  const demands = emission.capabilityDemands.readDemands();
+  const identified = diagnostic.diagnosticIdentityHandle == null
+    ? null
+    : demands.find((demand) => demand.identityHandle === diagnostic.diagnosticIdentityHandle) ?? null;
+  if (
+    identified != null
+    && identified.requiredCapability === requiredCapability
+    && identified.admissionState === FrameworkCapabilityAdmissionState.NotAdmitted
+  ) {
+    return identified;
+  }
+  const candidates = demands.filter((demand) => {
     const demandSource = semanticExactSourceReference(describeAddress(store, demand.sourceAddressHandle));
     return demand.requiredCapability === requiredCapability
+      && demand.admissionState === FrameworkCapabilityAdmissionState.NotAdmitted
       && sourceReferencesMatchExactSpan(demandSource, actionSource);
-  }) ?? null;
+  });
+  return candidates.length === 1 ? candidates[0]! : null;
+}
+
+function templateResourceForCapabilityDemand(
+  emission: AureliaAppWorldProjectEmission,
+  demand: FrameworkCapabilityDemand,
+): TemplateResourceEmission | null {
+  if (
+    demand.analysisContextProductHandle == null
+    || demand.resourceDefinitionProductHandle == null
+  ) {
+    return null;
+  }
+  return [
+    ...emission.templates.resources,
+    ...emission.templates.authoringResources,
+  ].find((resource) =>
+    resource.compilation.analysisContextProductHandle === demand.analysisContextProductHandle
+    && resource.compilation.definition.productHandle === demand.resourceDefinitionProductHandle
+  ) ?? null;
 }
 
 function frameworkRegistrationAdmissionEdits(

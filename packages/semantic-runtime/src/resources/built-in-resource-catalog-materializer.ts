@@ -41,9 +41,13 @@ import {
   type KernelPublicationContext,
   type KernelProductDetailPublication,
 } from '../kernel/publication.js';
-import { catalogGroupLocalKey, localKeyPart } from '../kernel/local-key.js';
+import { catalogVariantLocalKey, localKeyPart } from '../kernel/local-key.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
+import {
+  FrameworkCapabilityConfigurationState,
+  validationHtmlResourceConfigurationForAdmission,
+} from '../configuration/framework-capability-configuration.js';
 import {
   frameworkRegistrationKindForAdmission,
   type RegistrationAdmissionProduct,
@@ -454,19 +458,24 @@ export class BuiltInResourceCatalogMaterializer {
   } {
     const local = resourceCatalogLocal(input);
     const source = this.recordsForSource(
-      `${local}:source`,
+      resourceCatalogSourceLocal(input),
       input.packageId,
       input.group,
       `Framework built-in resource catalog ${input.packageId}/${input.group}.`,
     );
     const handles = this.catalogHandles(local);
-    const resourceEmissions = this.resourceEmissionsForCatalog(input, local, source);
+    const resourceEmissions = this.resourceEmissionsForCatalog(input, source);
     const materializedResources = resourceEmissions.map((emission) => emission.resource);
     const catalog = this.createCatalog(input, handles, source, materializedResources);
     const catalogClaims = this.catalogClaimsForResources(local, handles.productHandle, resourceEmissions, source);
     const records = [
-      ...source.records,
-      ...resourceEmissions.flatMap((emission) => emission.records),
+      ...source.records.filter((record) => this.publication.read(record.handle) == null),
+      ...resourceEmissions.flatMap((emission) =>
+        emission.resource.productHandle != null
+        && this.publication.read(emission.resource.productHandle) != null
+          ? []
+          : emission.records
+      ),
       ...this.recordsForCatalogProduct(
         local,
         input,
@@ -496,13 +505,12 @@ export class BuiltInResourceCatalogMaterializer {
 
   private resourceEmissionsForCatalog(
     input: BuiltInResourceCatalogInput,
-    local: string,
     source: BuiltInResourceSourceSet,
   ): readonly BuiltInResourcePublication[] {
-    return input.resources.map((resource, index) =>
+    return input.resources.map((resource) =>
       this.resourcePublication.recordsForResource(
         resource,
-        `${local}:resource:${localKeyPart(resource.resourceKind)}:${localKeyPart(resource.name)}:${index}`,
+        builtInResourceLocal(input, resource),
         source,
       )
     );
@@ -519,6 +527,7 @@ export class BuiltInResourceCatalogMaterializer {
       handles.identityHandle,
       input.packageId,
       input.group,
+      input.variantKey ?? null,
       resources,
       source.addressHandle,
       [],
@@ -572,7 +581,7 @@ export class BuiltInResourceCatalogMaterializer {
       KernelVocabulary.Resource.BuiltInCatalog.key,
       null,
       source.addressHandle,
-      `${input.packageId}:${input.group}`,
+      `${input.packageId}:${input.group}:${input.variantKey ?? 'default'}`,
     );
   }
 
@@ -671,10 +680,23 @@ export class BuiltInResourceTargetProjectionMaterializer {
     const targetTypes = new BuiltInResourceTargetTypeProjector(this.store, typeSystem, this.publication);
     const records: KernelStoreRecord[] = [];
     const details: KernelProductDetailPublication<unknown>[] = [];
+    const projectedByHeader = new Map<ProductHandle, BuiltInResourceEmission>();
     const resources = catalogEmission.resources.map((resource) => {
+      const headerHandle = resource.resource.productHandle;
+      const projected = headerHandle == null ? null : projectedByHeader.get(headerHandle) ?? null;
+      if (projected != null) {
+        return new BuiltInResourceEmission(
+          resource.catalogProductHandle,
+          resource.resource,
+          projected.definition,
+        );
+      }
       const projection = this.projectResource(resource, typeSystem, targetTypes);
       records.push(...projection.records);
       details.push(...projection.details);
+      if (headerHandle != null) {
+        projectedByHeader.set(headerHandle, projection.emission);
+      }
       return projection.emission;
     });
     this.publication.publish(new KernelPublicationPlan(
@@ -788,7 +810,7 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
     configuration: ConfigurationKernelEmission,
     typeSystem: TypeSystemProject | null = null,
   ): ConfiguredBuiltInResourceCatalogEmission {
-    const selectionRequests = readConfiguredResourceCatalogRequests(configuration);
+    const selectionRequests = readConfiguredResourceCatalogRequests(this.publication, configuration);
     const catalogEmission = this.catalogEmissionForRequests(selectionRequests, typeSystem);
     const selectionEmission = this.selectionEmissionForRequests(selectionRequests, catalogEmission);
     this.publication.publish(new KernelPublicationPlan(
@@ -825,7 +847,7 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
     readonly records: readonly KernelStoreRecord[];
     readonly selections: readonly ConfiguredBuiltInResourceCatalogSelection[];
   } {
-    const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogGroupLocalKey(catalog), catalog]));
+    const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogVariantLocalKey(catalog), catalog]));
     const records: KernelStoreRecord[] = [];
     const selections: ConfiguredBuiltInResourceCatalogSelection[] = [];
     for (const request of selectionRequests) {
@@ -979,6 +1001,7 @@ class ConfiguredResourceCatalogRequest {
 }
 
 function readConfiguredResourceCatalogRequests(
+  store: KernelPublicationContext,
   configuration: ConfigurationKernelEmission,
 ): readonly ConfiguredResourceCatalogRequest[] {
   const requests: ConfiguredResourceCatalogRequest[] = [];
@@ -987,7 +1010,7 @@ function readConfiguredResourceCatalogRequests(
     if (frameworkKind == null) {
       continue;
     }
-    const catalogInputs = catalogInputsForFrameworkKind(frameworkKind);
+    const catalogInputs = catalogInputsForAdmission(store, frameworkKind, admission, configuration);
     if (catalogInputs.length === 0) {
       continue;
     }
@@ -996,8 +1019,11 @@ function readConfiguredResourceCatalogRequests(
   return requests;
 }
 
-function catalogInputsForFrameworkKind(
+function catalogInputsForAdmission(
+  store: KernelPublicationContext,
   frameworkKind: FrameworkRegistrationKind,
+  admission: RegistrationAdmissionProduct,
+  configuration: ConfigurationKernelEmission,
 ): readonly BuiltInResourceCatalogInput[] {
   const inputs: BuiltInResourceCatalogInput[] = [];
   for (const capability of frameworkRegistrationCapabilitiesForKind(frameworkKind)) {
@@ -1018,7 +1044,9 @@ function catalogInputsForFrameworkKind(
         inputs.push(StateBuiltInResourceCatalogs.DefaultResources);
         break;
       case FrameworkRegistrationCapability.ValidationHtmlDefaultResources:
-        inputs.push(ValidationHtmlBuiltInResourceCatalogs.DefaultResources);
+        inputs.push(validationHtmlResourceCatalogInput(
+          validationHtmlResourceConfigurationForAdmission(store, configuration, admission),
+        ));
         break;
       case FrameworkRegistrationCapability.RuntimeHtmlCompilerServices:
       case FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingSyntax:
@@ -1046,12 +1074,61 @@ function catalogInputsForFrameworkKind(
   return inputs;
 }
 
+function validationHtmlResourceCatalogInput(
+  configuration: ReturnType<typeof validationHtmlResourceConfigurationForAdmission>,
+): BuiltInResourceCatalogInput {
+  if (
+    configuration.subscriberCustomAttribute.state !== FrameworkCapabilityConfigurationState.Open
+    && configuration.subscriberCustomElement.state !== FrameworkCapabilityConfigurationState.Open
+    && configuration.subscriberCustomAttribute.recoveryValue
+    && configuration.subscriberCustomElement.recoveryValue
+  ) {
+    return ValidationHtmlBuiltInResourceCatalogs.DefaultResources;
+  }
+  return {
+    packageId: ValidationHtmlBuiltInResourceCatalogs.DefaultResources.packageId,
+    group: ValidationHtmlBuiltInResourceCatalogs.DefaultResources.group,
+    variantKey: [
+      'subscriber-attribute',
+      configuration.subscriberCustomAttribute.state,
+      configuration.subscriberCustomAttribute.recoveryValue,
+      'subscriber-element',
+      configuration.subscriberCustomElement.state,
+      configuration.subscriberCustomElement.recoveryValue,
+    ].map((part) => localKeyPart(String(part))).join(':'),
+    resources: ValidationHtmlBuiltInResourceCatalogs.DefaultResources.resources.filter((resource) =>
+      configuration.recoveryCatalogIncludes(resource.name)
+    ),
+  };
+}
+
 function resourceCatalogInputKey(input: BuiltInResourceCatalogInput): string {
-  return catalogGroupLocalKey(input);
+  return catalogVariantLocalKey(input);
 }
 
 function resourceCatalogLocal(input: BuiltInResourceCatalogInput): string {
-  return `built-in-resource:${catalogGroupLocalKey(input)}`;
+  return `built-in-resource:${catalogVariantLocalKey(input)}`;
+}
+
+function resourceCatalogSourceLocal(input: BuiltInResourceCatalogInput): string {
+  return [
+    'built-in-resource-source',
+    localKeyPart(input.packageId),
+    localKeyPart(input.group),
+  ].join(':');
+}
+
+function builtInResourceLocal(
+  input: BuiltInResourceCatalogInput,
+  resource: BuiltInResource,
+): string {
+  return [
+    'built-in-resource-definition',
+    localKeyPart(input.packageId),
+    localKeyPart(input.group),
+    localKeyPart(resource.resourceKind),
+    localKeyPart(resource.name),
+  ].join(':');
 }
 
 function resourcePublicationClaimHandles(

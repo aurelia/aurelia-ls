@@ -31,3 +31,12 @@ known syntax or resource is used before its framework registration is admitted. 
 `source-edit-policy-open`: the demand site and candidate package do not prove bootstrap placement or import policy.
 `TemplateCodeActions` crosses that boundary only when `source-plan` proves an app-root `.app(...)` chain and local
 package/import evidence. State-store and AppTask admissions remain guidance until their source intent is modeled.
+
+`configure-framework-capability` is not registration pressure. It means the owning capability is admitted but an exact,
+closed configuration value excludes the requested surface. The suggestion retains that configuration source for
+explanation and navigation, but remains `source-edit-policy-open`: knowing where an option lives does not prove which
+alias, subscriber template, or resource policy the author intended. Do not route this through the registration planner
+or synthesize a replacement value from the requested template spelling.
+
+Open plugin configuration is earlier than action classification. Its demand remains `admission-unknown` with blocking
+open-seam handles and produces no capability diagnostic or repair candidate until membership closes.

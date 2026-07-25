@@ -540,6 +540,7 @@ describe('product-detail structural references', () => {
     );
 
     const definitionProduct = handles.product('resource-definition');
+    const analysisContextProduct = handles.product('template-analysis-context');
     const demand = new FrameworkCapabilityDemand(
       handles.product('capability-demand'),
       handles.identity('capability-demand'),
@@ -559,10 +560,14 @@ describe('product-detail structural references', () => {
       null,
       sourceAddress,
       definitionProduct,
+      analysisContextProduct,
     );
     expectExactProductDetailReferences(
       FrameworkProductDetails.CapabilityDemand.referencesFor(demand),
-      [[ResourceDetailDescriptors.Definition, definitionProduct]],
+      [
+        [ResourceDetailDescriptors.Definition, definitionProduct],
+        [TemplateDetailDescriptors.World, analysisContextProduct],
+      ],
     );
 
     const headerProduct = handles.product('built-in-resource-header');

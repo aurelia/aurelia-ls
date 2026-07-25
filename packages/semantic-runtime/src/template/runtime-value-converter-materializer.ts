@@ -98,6 +98,10 @@ export class RuntimeValueConverterEmission {
     readonly applications: readonly RuntimeValueConverterApplication[],
     readonly issues: readonly RuntimeValueConverterIssue[],
     readonly records: readonly KernelStoreRecord[],
+    private readonly applicationsByPlanEntry: ReadonlyMap<
+      RuntimeValueConverterPlanEntry,
+      readonly RuntimeValueConverterApplication[]
+    >,
   ) {
     for (const application of applications) {
       if (application.binding.productHandle == null) {
@@ -119,6 +123,12 @@ export class RuntimeValueConverterEmission {
 
   readIssuesForBinding(productHandle: ProductHandle): readonly RuntimeValueConverterIssue[] {
     return this.issuesByBinding.get(productHandle) ?? [];
+  }
+
+  readApplicationsForPlanEntry(
+    entry: RuntimeValueConverterPlanEntry,
+  ): readonly RuntimeValueConverterApplication[] {
+    return this.applicationsByPlanEntry.get(entry) ?? [];
   }
 }
 
@@ -172,6 +182,10 @@ export class RuntimeValueConverterMaterializer {
     const source = this.recordsForSource(input.localKey);
     const applications: RuntimeValueConverterApplication[] = [];
     const issues: RuntimeValueConverterIssue[] = [];
+    const applicationsByPlanEntry = new Map<
+      RuntimeValueConverterPlanEntry,
+      readonly RuntimeValueConverterApplication[]
+    >();
     const records: KernelStoreRecord[] = [...source.records];
 
     for (const entry of input.expressionResourcePlan.converterEntries) {
@@ -183,11 +197,12 @@ export class RuntimeValueConverterMaterializer {
         source,
       );
       applications.push(...publication.applications);
+      applicationsByPlanEntry.set(entry, publication.applications);
       issues.push(...publication.issues);
       records.push(...publication.records);
     }
 
-    return new RuntimeValueConverterEmission(applications, issues, records);
+    return new RuntimeValueConverterEmission(applications, issues, records, applicationsByPlanEntry);
   }
 
   private valueConverterPublication(

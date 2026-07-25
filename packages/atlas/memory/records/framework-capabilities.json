@@ -404,6 +404,94 @@
       ],
       "createdAt": "2026-06-12",
       "updatedAt": "2026-07-22"
+    },
+    {
+      "id": "decision:framework-capability-admission-evidence-planes",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "framework-capabilities",
+        "configuration",
+        "di",
+        "diagnostics",
+        "api"
+      ],
+      "summary": "Framework capability demands keep authored use, consulting-world registration admission, configured-out option values, and package availability as distinct evidence planes.",
+      "rationale": "The plugin-capability deep pass proved that package presence, DI admission, and effective syntax/resource membership answer different questions. I18n aliases and validation-html subscriber options can exclude one surface from an admitted configuration; sibling app roots can share imports while admitting different plugins; and an admitted generic attribute pattern can win actual compilation while masking a more-specific plugin pattern that would win if registered. Collapsing these states produced incorrect diagnostics, unsafe registration advice, app-root leakage, and variant-local resource identities.",
+      "guidance": [
+        "Use FrameworkCapabilityDemand.sourceAddressHandle as the authored demand locus, admissionSourceAddressHandles as exact registration admissions visible to the consulting app/compiler container, configurationSourceAddressHandles only for closed option values that exclude a surface, and packageEvidence only for local implementation availability.",
+        "Treat FrameworkCapabilityAdmissionState.ConfiguredOut as distinct from NotAdmitted. Configured-out diagnostics may explain and navigate to the option source, but must not reuse the registration planner or invent a replacement option value.",
+        "Treat host-dependent option membership as FrameworkCapabilityAdmissionState.AdmissionUnknown. Recovery catalogs may retain conservative members, but must use an explicit open variant and carry contribution-owned materialization open seams into blockingOpenSeamHandles; unknown membership produces no capability accusation.",
+        "Select app-world admissions through registrationAdmissionsVisibleToContainer(...). Package imports, project-wide providers, and sibling app-root registrations are not local admission evidence.",
+        "Include the TemplateResourceCompilationEmission analysis-context product in template capability-demand identity. A shared component definition compiled under sibling app-root worlds must retain one demand and repair target per compiler cohort.",
+        "Treat built-in resource and syntax catalog variants as membership projections over canonical definitions. Keep canonical member identity stable across configuration variants, and encode configuration state plus authored values with localKeyPart(...) so open recovery state cannot collide with a closed value.",
+        "Determine plugin ownership from the resolver-selected visible resource and its built-in catalog header. Known plugin spelling is only an unresolved-resource fallback; an app-owned resource with the same name must not mint a capability demand.",
+        "Attribute-pattern demand materialization must retain the actual admitted winner and any more-specific known framework pattern that would outrank it if admitted. This preserves missing/configured-out capability evidence without pretending the absent command executed.",
+        "Relate a capability demand to the exact expression/resource application through a typed claim. Diagnostic presentation may group consequent unresolved-resource rows under the capability cause, but raw rows remain available.",
+        "Use the plugin-capability-admission semantic-conformance domain as the executable contract: app-root isolation, i18n alias configuration, validation resource options, state static projection, and virtualization scope recovery are covered there."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/framework/capability-demand.ts",
+          "symbolName": "FrameworkCapabilityDemand",
+          "summary": "Product carrying the separate admission, configuration, and package evidence planes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/world-construction.ts",
+          "symbolName": "registrationAdmissionsVisibleToContainer",
+          "summary": "Shared consulting-container-chain admission selector."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/framework/capability-demand-materializer.ts",
+          "symbolName": "FrameworkCapabilityDemandMaterializer",
+          "summary": "Demand, pattern-precedence, app-world admission, and exact application-relation materialization."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/framework-capability-configuration.ts",
+          "symbolName": "FrameworkCapabilityConfigurationMembership",
+          "summary": "Closed included/excluded and open option membership derived from exact admitted configuration contributions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/framework-projections.ts",
+          "symbolName": "readFrameworkCapabilityDemandRows",
+          "summary": "Public capability-demand projection preserving all evidence planes."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/semantic-runtime/scripts/contract-semantic-conformance.mjs --aurelia-domain plugin-capability-admission",
+          "summary": "Focused executable contract for the bounded plugin capability pass."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/framework/capability-demand.ts",
+          "symbolName": "FrameworkCapabilityAdmissionState"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/world-construction.ts",
+          "symbolName": "registrationAdmissionsVisibleToContainer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/framework/capability-demand-materializer.ts",
+          "symbolName": "FrameworkCapabilityDemandMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/framework-capability-configuration.ts",
+          "symbolName": "FrameworkCapabilityConfigurationMembership"
+        }
+      ],
+      "createdAt": "2026-07-25",
+      "updatedAt": "2026-07-25"
     }
   ]
 }

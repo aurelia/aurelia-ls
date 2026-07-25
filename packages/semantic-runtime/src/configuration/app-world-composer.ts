@@ -6,7 +6,10 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import { DiWorldConstructor } from '../di/world-constructor.js';
-import { DiWorldConstructionEmission } from '../di/world-construction.js';
+import {
+  DiWorldConstructionEmission,
+  registrationAdmissionsVisibleToContainer,
+} from '../di/world-construction.js';
 import {
   DiResolveCallIssueMaterializer,
   type DiResolveCallIssueMaterialization,
@@ -342,7 +345,12 @@ class AppRootCompilerWorldFrame {
     if (container == null) {
       return null;
     }
-    const admissions = registrationAdmissionsSpentIntoContainer(container, this.configuration, this.diWorld);
+    const admissions = registrationAdmissionsVisibleToContainer(
+      container,
+      this.configuration.registrationAdmissions,
+      this.diWorld,
+      this.containerChainFacts,
+    );
     if (!this.containerChainFacts.providerIsOnConsultingChain(
       this.templateCompilerKeyIdentityHandle,
       container.identityHandle,
@@ -429,24 +437,6 @@ function syntaxForAdmissions(
       catalogProductHandles.has(command.catalogProductHandle)
     ),
   };
-}
-
-function registrationAdmissionsSpentIntoContainer(
-  container: Container,
-  configuration: ConfigurationKernelEmission,
-  diWorld: DiWorldConstructionEmission,
-): readonly RegistrationAdmissionProduct[] {
-  const admissionByProduct = new Map(configuration.registrationAdmissions.map((admission) => [
-    admission.productHandle,
-    admission,
-  ]));
-  return diWorld.registrationOperations.flatMap((operation) => {
-    if (operation.container.productHandle !== container.productHandle || operation.admissionProductHandle == null) {
-      return [];
-    }
-    const admission = admissionByProduct.get(operation.admissionProductHandle) ?? null;
-    return admission == null ? [] : [admission];
-  });
 }
 
 interface ConfiguredCatalogSelection {

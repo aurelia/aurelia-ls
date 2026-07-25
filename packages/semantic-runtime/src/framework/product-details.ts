@@ -5,6 +5,7 @@ import {
 } from '../kernel/detail-references.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
 import { ResourceDetailDescriptors } from '../resources/detail-descriptors.js';
+import { TemplateDetailDescriptors } from '../template/detail-descriptors.js';
 import { FrameworkDetailDescriptors } from './detail-descriptors.js';
 
 export const FrameworkProductDetails = {
@@ -27,6 +28,9 @@ export const FrameworkProductDetails = {
         demand.ownerIdentityHandle,
         demand.templateSourceAddressHandle,
         demand.resourceDefinitionProductHandle,
+        demand.analysisContextProductHandle,
+        ...demand.admissionSourceAddressHandles,
+        ...demand.configurationSourceAddressHandles,
       ),
       kernelRecordReferences(
         ...demand.packageEvidence.map((evidence) => evidence.sourceAddressHandle),
@@ -34,6 +38,10 @@ export const FrameworkProductDetails = {
       [kernelProductDetailReference(
         ResourceDetailDescriptors.Definition,
         demand.resourceDefinitionProductHandle,
+      )],
+      [kernelProductDetailReference(
+        TemplateDetailDescriptors.World,
+        demand.analysisContextProductHandle,
       )],
     ),
   ),

@@ -2496,7 +2496,9 @@ function optionValueObservationForEvaluation(
     case 'module-namespace':
     case 'boundary-value':
     case 'promise':
+      return optionValueObservation(expression, ConfigurationOptionValueKind.Unknown, traceName);
     case 'undefined':
+      return optionValueObservation(expression, ConfigurationOptionValueKind.Undefined, traceName);
     case 'unknown':
       return optionValueObservation(expression, ConfigurationOptionValueKind.Unknown, traceName);
   }

@@ -3,6 +3,10 @@ import type { AppRoot, AppRootReference } from '../configuration/app-root.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
 import type { ConfigurationOptionContribution } from '../configuration/configuration-option.js';
 import { ConfigurationOptionValueKind } from '../configuration/configuration-option.js';
+import {
+  configurationOptionContributionsForAdmission,
+  configurationValueSourceAddressHandleForAdmission,
+} from '../configuration/configuration-option-ownership.js';
 import type { ConfigurationRecognitionProjectResult } from '../configuration/configuration-recognition-project-pass.js';
 import type { ContainerRegistrationOperation } from '../di/container-registration.js';
 import type { DiWorldConstructionEmission } from '../di/world-construction.js';
@@ -30,8 +34,6 @@ import type {
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
-  FrameworkRegistrationAdmission,
-  RegistryRegistrationAdmission,
   frameworkRegistrationKindForAdmission,
   type RegistrationAdmissionProduct,
 } from '../registration/registration-admission.js';
@@ -321,23 +323,6 @@ function routerOptionsSeeds(
         : [[appRoot.container.productHandle, appRoot] as const]
     ),
   );
-  const contributionsByConfigurationValue = new Map<string, ConfigurationOptionContribution[]>();
-  for (const contribution of configuration.optionContributions) {
-    if (contribution.configurationKind !== FrameworkRegistrationKind.RouterConfiguration) {
-      continue;
-    }
-    const key = configurationValueSourceKey(store, contribution.configurationValueSourceAddressHandle);
-    if (key == null) {
-      continue;
-    }
-    const contributions = contributionsByConfigurationValue.get(key);
-    if (contributions == null) {
-      contributionsByConfigurationValue.set(key, [contribution]);
-    } else {
-      contributions.push(contribution);
-    }
-  }
-
   const usesByAppRoot = new Map<ProductHandle, RouterRegistrationUse[]>();
   for (const operation of diWorld.registrationOperations) {
     const admission = operation.admissionProductHandle == null
@@ -371,42 +356,17 @@ function routerOptionsSeeds(
       continue;
     }
     const use = uses[0]!;
-    const configurationValueSourceAddressHandle = registrationValueSourceAddressHandle(use.admission);
-    const contributionKey = configurationValueSourceKey(store, configurationValueSourceAddressHandle);
+    const configurationValueSourceAddressHandle = configurationValueSourceAddressHandleForAdmission(use.admission);
     seeds.push({
       ...use,
-      contributions: contributionKey == null
-        ? []
-        : contributionsByConfigurationValue.get(contributionKey) ?? [],
+      contributions: configurationOptionContributionsForAdmission(store, configuration, use.admission)
+        .filter((contribution) =>
+          contribution.configurationKind === FrameworkRegistrationKind.RouterConfiguration
+        ),
       configurationValueSourceAddressHandle,
     });
   }
   return { seeds, duplicateGroups };
-}
-
-function registrationValueSourceAddressHandle(
-  admission: RegistrationAdmissionProduct,
-): AddressHandle | null {
-  if (admission instanceof FrameworkRegistrationAdmission) {
-    return admission.registeredValue?.addressHandle ?? null;
-  }
-  if (admission instanceof RegistryRegistrationAdmission) {
-    return admission.registryValue?.addressHandle ?? null;
-  }
-  return null;
-}
-
-function configurationValueSourceKey(
-  store: KernelStoreReadView,
-  addressHandle: AddressHandle | null,
-): string | null {
-  if (addressHandle == null) {
-    return null;
-  }
-  const address = store.read(addressHandle);
-  return address?.kind === 'source-span-address'
-    ? `${address.fileHandle}\0${address.start}\0${address.end}`
-    : null;
 }
 
 function foldRouterOptions(
