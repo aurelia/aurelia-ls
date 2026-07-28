@@ -209,7 +209,7 @@ function instructionSemanticTokenRows(
   handles: boolean,
 ): readonly SemanticTemplateSemanticTokenRow[] {
   const rows: SemanticTemplateSemanticTokenRow[] = [];
-  for (const instruction of resourceLocalTemplateInstructions(store, resource)) {
+  for (const instruction of resourceLocalTemplateInstructions(resource)) {
     switch (instruction.instructionKind) {
       case TemplateInstructionKind.HydrateElement:
         if (instruction.definitionProductHandle == null) {
@@ -252,8 +252,8 @@ function dynamicInstructionSyntaxSemanticTokenRows(
   resource: TemplateResourceEmission,
   handles: boolean,
 ): readonly SemanticTemplateSemanticTokenRow[] {
-  return resourceLocalDynamicTemplateInstructions(store, resource).flatMap((instruction) => {
-    const syntax = capturedAttributeSyntaxForDynamicInstruction(store, instruction);
+  return resourceLocalDynamicTemplateInstructions(resource).flatMap((instruction) => {
+    const syntax = capturedAttributeSyntaxForDynamicInstruction(resource, instruction);
     if (syntax == null) {
       return [];
     }

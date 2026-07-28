@@ -56,10 +56,10 @@ import {
   RuntimeExpressionResourceLifecycleEffectKind,
   RuntimeExpressionResourceLifecycleEffects,
   RuntimeExpressionResourceBindReachability,
-  RuntimeExpressionResourcePhaseReachability,
   RuntimeExpressionResourceSignal,
   RuntimeExpressionResourceValueState,
 } from './runtime-expression-resource.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 import { bindingModeForBindingBehaviorName } from './runtime-binding-mode-behavior.js';
 
 export class RuntimeBindingBehaviorMaterializationRequest {
@@ -269,10 +269,10 @@ export class RuntimeBindingBehaviorMaterializer {
       entry.bindReachability,
       phaseReachability,
       entry.bindOrder,
-      phaseReachability === RuntimeExpressionResourcePhaseReachability.Reached
+      phaseReachability === RuntimeOperationReachability.Reached
         ? entry.phaseOrder
         : null,
-      phaseReachability === RuntimeExpressionResourcePhaseReachability.Reached && entry.issue == null
+      phaseReachability === RuntimeOperationReachability.Reached && entry.issue == null
         ? lifecycleEffects
         : RuntimeExpressionResourceLifecycleEffects.none,
       behavior.args.map((argument) => argument.span),
@@ -367,14 +367,14 @@ function bindingBehaviorPhaseReachability(
   plan: RuntimeExpressionResourcePlan,
   entry: RuntimeBindingBehaviorPlanEntry,
   phase: RuntimeBindingBehaviorApplicationPhase,
-): RuntimeExpressionResourcePhaseReachability {
+): RuntimeOperationReachability {
   if (entry.bindReachability !== RuntimeExpressionResourceBindReachability.Reached) {
-    return RuntimeExpressionResourcePhaseReachability.BlockedByOuterFailure;
+    return RuntimeOperationReachability.BlockedByOuterFailure;
   }
   if (phase === RuntimeBindingBehaviorApplicationPhase.Unbind) {
     return plan.readPostBindPhaseReachability(entry);
   }
-  return RuntimeExpressionResourcePhaseReachability.Reached;
+  return RuntimeOperationReachability.Reached;
 }
 
 function lifecycleEffectsForBindingBehavior(

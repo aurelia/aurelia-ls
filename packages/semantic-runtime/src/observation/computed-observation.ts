@@ -4,7 +4,6 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import type { FieldProvenance } from '../kernel/provenance.js';
 
 export const enum ComputedObservationMemberKind {
   Getter = 'getter',
@@ -23,15 +22,6 @@ export const enum ComputedObservationDependencyMode {
   /** The dependency declaration is present but not statically closed enough for this substrate yet. */
   Open = 'open',
 }
-
-export type ComputedObservationDefinitionField =
-  | 'member'
-  | 'dependencyMode'
-  | 'dependencyKeys'
-  | 'dependencyFunctionCount'
-  | 'flush'
-  | 'deep'
-  | 'source';
 
 /**
  * Source-backed framework `@computed` dependency declaration.
@@ -58,7 +48,6 @@ export class ComputedObservationDefinition {
     readonly flush: 'sync' | 'async',
     readonly deep: boolean | null,
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<ComputedObservationDefinitionField>[] = [],
   ) {}
 }
 

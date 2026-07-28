@@ -170,8 +170,13 @@ import {
   resourceLocalCompilerReachableHtmlAttributeProductHandles,
 } from '../template/runtime-resource-ownership.js';
 import {
+  runtimeExpressionAccessUsesForTemplateExpression,
   resourceLocalEffectiveTemplateExpressionParses,
 } from '../template/template-expression-selection.js';
+import {
+  RuntimeExpressionAccessForm,
+  type RuntimeExpressionAccessUse,
+} from '../runtime-expression/runtime-expression-access-use.js';
 import {
   TemplateTypeSystemOverlayBuilder,
   type TemplateTypeSystemOverlayEmission,
@@ -1410,7 +1415,17 @@ function expressionRootDiagnosticSites(
     if (!ExpressionParseResultInspector.hasCanonicalAst(parse.result)) {
       continue;
     }
+    const accessUses = runtimeExpressionAccessUsesForTemplateExpression(resource, parse.productHandle);
     for (const access of ExpressionParseResultInspector.scopeAccesses(parse.result)) {
+      const matchingAccessUses = accessUses.filter((accessUse) =>
+        runtimeExpressionAccessUseMatchesScopeAccess(store, accessUse, access)
+      );
+      if (
+        matchingAccessUses.length === 0
+        || matchingAccessUses.every((accessUse) => accessUse.lexicalLocal)
+      ) {
+        continue;
+      }
       const key = `${parse.productHandle}:${access.name.span.start}:${access.name.span.end}:${access.name.name}:${access.ancestor}`;
       if (seen.has(key)) {
         continue;
@@ -1424,6 +1439,23 @@ function expressionRootDiagnosticSites(
     || left.access.name.span.end - right.access.name.span.end
     || left.access.name.name.localeCompare(right.access.name.name)
   );
+}
+
+function runtimeExpressionAccessUseMatchesScopeAccess(
+  store: KernelStore,
+  accessUse: RuntimeExpressionAccessUse,
+  access: ExpressionScopeAccess,
+): boolean {
+  if (
+    accessUse.accessForm !== RuntimeExpressionAccessForm.Scope
+    && accessUse.accessForm !== RuntimeExpressionAccessForm.ScopeCall
+  ) {
+    return false;
+  }
+  const source = sourceSpanAddressForAddress(store, accessUse.nameSourceAddressHandle);
+  return source != null
+    && source.start === access.name.span.start
+    && source.end === access.name.span.end;
 }
 
 function typeSystemGlobalThisValueExists(
@@ -2768,12 +2800,16 @@ function cursorScopeSlotMemberRow(
   const member = slot.targetTypeMemberHandle == null
     ? null
     : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetTypeMemberHandle);
-  const sourceAddressHandle = slot.sourceAddressHandle
+  const sourceAddressHandle = selection.declarationSourceAddressHandle
+    ?? slot.sourceAddressHandle
     ?? (member == null ? null : checkerTypeMemberSourceAddressHandle(store, member));
-  const declarationSourceAddressHandle = member == null
-    ? null
-    : checkerTypeMemberSourceAddressHandle(store, member);
-  const ownerProductHandle = member?.ownerType.productHandle ?? scope.productHandle;
+  const declarationSourceAddressHandle = selection.declarationSourceAddressHandle
+    ?? (member == null
+      ? null
+      : checkerTypeMemberSourceAddressHandle(store, member));
+  const ownerProductHandle = member?.ownerType.productHandle
+    ?? selection.ownerProductHandle
+    ?? scope.productHandle;
   return {
     name: slot.name,
     memberKind: member?.memberKind ?? CheckerTypeMemberKind.Property,

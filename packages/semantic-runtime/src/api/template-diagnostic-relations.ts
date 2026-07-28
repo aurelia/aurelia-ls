@@ -7,6 +7,7 @@ import type { SourceSpan } from '../expression/source-span.js';
 import type { FrameworkCapabilityDemand } from '../framework/capability-demand.js';
 import type { IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
+import { sourceSpanAddressForAddress } from '../kernel/source-address.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { RuntimeBindingDataFlow } from '../observation/runtime-binding-observation.js';
 import {
@@ -28,9 +29,13 @@ import {
 } from '../template/runtime-value-converter.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from '../template/template-compilation-project-pass.js';
 import {
-  bindingScopeForTemplateExpressionParse,
+  runtimeExpressionAccessUsesForTemplateExpression,
 } from '../template/template-expression-selection.js';
 import type { TemplateExpressionParse } from '../template/value-site.js';
+import {
+  RuntimeExpressionAccessForm,
+  type RuntimeExpressionAccessUse,
+} from '../runtime-expression/runtime-expression-access-use.js';
 import { SemanticDiagnosticRelationKind } from './contracts.js';
 
 export interface TemplateDiagnosticRelationOrigin {
@@ -184,21 +189,33 @@ export class TemplateDiagnosticRelations {
     parse: TemplateExpressionParse,
     subjectSpan: SourceSpan,
   ): TemplateDiagnosticRelationOrigin | null {
-    const scope = bindingScopeForTemplateExpressionParse(this.resource, parse);
-    if (scope == null) {
-      return null;
-    }
+    const accessUses = runtimeExpressionAccessUsesForTemplateExpression(
+      this.resource,
+      parse.productHandle,
+    );
     const origins = new Map<ProductHandle, RepeatSourceIssueOrigin>();
     for (const access of ExpressionParseResultInspector.scopeAccesses(parse.result)) {
       if (access.span.start < subjectSpan.start || subjectSpan.end < access.span.end) {
         continue;
       }
-      const located = scope.locate(access.name.name, access.ancestor);
-      const origin = located.scope == null
-        ? null
-        : this.repeatSourceIssueForSlot(located.scope, access.name.name);
-      if (origin != null) {
-        origins.set(origin.issue.productHandle, origin);
+      for (const accessUse of accessUses) {
+        if (
+          accessUse.lexicalLocal
+          || !runtimeExpressionAccessUseMatchesScopeAccess(this.store, accessUse, access.name.span)
+        ) {
+          continue;
+        }
+        for (const target of accessUse.targetLinks) {
+          if (target.authorityProductHandle == null) {
+            continue;
+          }
+          for (const scope of this.scopesForContextAuthority(target.authorityProductHandle)) {
+            const origin = this.repeatSourceIssueForSlot(scope, access.name.name);
+            if (origin != null) {
+              origins.set(origin.issue.productHandle, origin);
+            }
+          }
+        }
       }
     }
     const origin = origins.size === 1 ? origins.values().next().value ?? null : null;
@@ -208,6 +225,15 @@ export class TemplateDiagnosticRelations {
         relationKind: SemanticDiagnosticRelationKind.DerivedConsequence,
         relatedDiagnosticIdentityHandle: origin.issue.identityHandle,
       };
+  }
+
+  private scopesForContextAuthority(
+    authorityProductHandle: ProductHandle,
+  ): readonly BindingScope[] {
+    return this.resource.runtimeAnalysis.scopes.readScopes().filter((scope) =>
+      scope.bindingContext.productHandle === authorityProductHandle
+      || scope.overrideContext.productHandle === authorityProductHandle
+    );
   }
 
   private capabilityDemandForBindingBehaviorIssue(
@@ -285,6 +311,23 @@ export class TemplateDiagnosticRelations {
     }
     return null;
   }
+}
+
+function runtimeExpressionAccessUseMatchesScopeAccess(
+  store: KernelStore,
+  accessUse: RuntimeExpressionAccessUse,
+  nameSpan: SourceSpan,
+): boolean {
+  if (
+    accessUse.accessForm !== RuntimeExpressionAccessForm.Scope
+    && accessUse.accessForm !== RuntimeExpressionAccessForm.ScopeCall
+  ) {
+    return false;
+  }
+  const source = sourceSpanAddressForAddress(store, accessUse.nameSourceAddressHandle);
+  return source != null
+    && source.start === nameSpan.start
+    && source.end === nameSpan.end;
 }
 
 function bindingExpressionKey(

@@ -793,12 +793,12 @@
         "provenance",
         "recursive-rendering"
       ],
-      "summary": "Public binding-family API rows should be source-owned by the authored resource before using recursive aggregate render ownership.",
-      "rationale": "Recursive child custom-element rendering is necessary topology evidence, but aggregate render rows can duplicate binding facts under parent resources. Diagnostics, app summaries, and authoring verification need the exact template that authored the binding source span, especially for captured wrapper attributes whose runtime binding renders inside a child component.",
+      "summary": "Public binding-family API rows spend authored instruction ownership before recursive aggregate render context.",
+      "rationale": "Recursive child custom-element rendering is necessary topology evidence, but aggregate render rows can duplicate binding facts under parent resources. Source spans overlap for same-file compiler-local templates, while projection and captured transfer can execute under a controller other than the authoring component. The binding's compiled instruction, plus the normalized captured-AttrSyntax origin for runtime-created instructions, is the exact common ownership authority.",
       "guidance": [
         "Use resource-local runtime binding helpers before projecting binding, target-access, target-operation, source-operation, binding-behavior, value-channel, data-flow, or observed-dependency rows from a resource runtime analysis.",
-        "Prefer authored source-span containment in the resource template as the row owner. Captured `...$attrs` expressions remain owned by the parent usage template that authored them, even when the inner binding renders inside the wrapper component.",
-        "Treat render-controller ownership as a fallback only when a row has no exact source span. If that fallback becomes common, thread sharper source addresses or render contexts instead of widening ownership.",
+        "Binding-backed rows join through the exact owning compiled instruction. Runtime-created spread instructions spend their normalized captured-AttrSyntax origin claim, so captured `...$attrs` remain owned by the parent usage template even when the inner binding renders inside the wrapper component.",
+        "Render and source controllers describe execution, lookup, and DI environments; they are not authored-resource ownership. Use source-span containment only for rows that genuinely lack a binding/instruction product.",
         "Keep recursive aggregate render products available for controller topology, child scopes, wrapper captures, and component-role evidence; do not remove them just to make API row ownership simpler.",
         "When template diagnostics show a correct expression source but a broader template carrier, inspect runtime-resource ownership before adding diagnostic-local correction code."
       ],
@@ -812,7 +812,13 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/kernel/source-address.ts",
           "symbolName": "sourceSpanAddressForAddress",
-          "summary": "Narrowing helper that follows kernel addresses to exact source spans."
+          "summary": "Fallback ownership helper for products that genuinely lack binding/instruction identity."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-rendering-materializer.ts",
+          "symbolName": "RuntimeRenderingEmission",
+          "summary": "Indexes binding-to-instruction and dynamic-instruction-to-captured-syntax authority."
         },
         {
           "kind": "source",
@@ -847,7 +853,7 @@
         }
       ],
       "createdAt": "2026-05-19",
-      "updatedAt": "2026-05-19"
+      "updatedAt": "2026-07-28"
     },
     {
       "id": "decision:mcp-preview-release-tarball",

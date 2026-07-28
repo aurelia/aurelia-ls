@@ -3,11 +3,11 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import type { FieldProvenance } from '../kernel/provenance.js';
 import {
   ComputedObservationDependencyMode,
 } from './computed-observation.js';
 import type { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
+import type { RuntimeExpressionAccessUse } from '../runtime-expression/runtime-expression-access-use.js';
 
 export const enum ComputedObserverRuntimeKind {
   ComputedObserver = 'computed-observer',
@@ -20,31 +20,6 @@ export const enum ComputedObserverSourceTriggerKind {
   /** A decorated getter supplied an ObservableGetter.getObserver hook. */
   GetterOwnedObserver = 'getter-owned-observer',
 }
-
-export type ComputedObserverSourceField =
-  | 'observerKind'
-  | 'triggerKind'
-  | 'className'
-  | 'memberName'
-  | 'dependencyMode'
-  | 'dependencyKeys'
-  | 'dependencyFunctionCount'
-  | 'flush'
-  | 'deep'
-  | 'observedDependencies'
-  | 'source';
-
-export type ComputedObserverObservedDependencyField =
-  | 'computedObserver'
-  | 'dependencyKind'
-  | 'expressionKind'
-  | 'sourceName'
-  | 'sourceRootName'
-  | 'memberName'
-  | 'keyExpression'
-  | 'methodName'
-  | 'span'
-  | 'source';
 
 export class ComputedObserverSourceReference {
   constructor(
@@ -78,9 +53,9 @@ export class ComputedObserverSource {
     readonly dependencyFunctionCount: number,
     readonly flush: 'sync' | 'async',
     readonly deep: boolean | null,
+    readonly accessUses: readonly RuntimeExpressionAccessUse[],
     readonly observedDependencies: readonly ComputedObserverObservedDependency[],
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<ComputedObserverSourceField>[] = [],
   ) {}
 
   toReference(): ComputedObserverSourceReference {
@@ -99,6 +74,8 @@ export class ComputedObserverObservedDependency {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly computedObserver: ComputedObserverSourceReference,
+    /** Exact authored or generated access occurrence that induced this observation effect. */
+    readonly accessUseProductHandle: ProductHandle,
     readonly dependencyKind: RuntimeObservedDependencyKind,
     readonly expressionKind: string,
     readonly sourceName: string | null,
@@ -109,7 +86,6 @@ export class ComputedObserverObservedDependency {
     readonly spanStart: number | null,
     readonly spanEnd: number | null,
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<ComputedObserverObservedDependencyField>[] = [],
   ) {}
 }
 
@@ -124,5 +100,9 @@ export class ComputedObserverSourceProjectResult {
 
   readObservedDependencies(): readonly ComputedObserverObservedDependency[] {
     return this.computedObservers.flatMap((observer) => observer.observedDependencies);
+  }
+
+  readAccessUses(): readonly RuntimeExpressionAccessUse[] {
+    return this.computedObservers.flatMap((observer) => observer.accessUses);
   }
 }

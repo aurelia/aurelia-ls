@@ -533,15 +533,17 @@ classification, expression parsing, and instruction lowering converge on the sam
   than preloading cohort-wide template objects into every frame. This routing is required before runtime groups can gain
   narrower ownership; do not restore cohort-wide frame preloading here.
   Recursive rendering intentionally exposes child bindings in a parent aggregate analysis as well as the child's own
-  analysis. `runtime-resource-ownership.ts` is the shared source/controller ownership boundary used by public binding
+  analysis. `runtime-resource-ownership.ts` is the shared authored-instruction ownership boundary used by public binding
   projections and project-level source-owned producers. It also projects source-local dynamic instructions, expression
   parses, and value sites from recursive aggregate render products. Cursor, diagnostics, semantic-token, completion,
   capability-demand, and overlay consumers must select resource-local rows there rather than treating every recursively
   visible child expression or instruction as a new fact authored by the parent. Instruction-to-scope replay may still
   use aggregate render context through `template-expression-selection.ts`; source ownership and runtime reachability are
-  deliberately different questions. Runtime spread compilation retains its captured `AttrSyntax` product, so dynamic
-  sites and instructions spend that exact origin before falling back to source-span containment; this keeps nested
-  same-file local-template ranges from becoming an ownership heuristic.
+  deliberately different questions. Binding-backed rows spend their exact owning compiled instruction. Runtime spread
+  compilation retains a normalized claim from each dynamic instruction to its captured `AttrSyntax`, and
+  `RuntimeRenderingEmission` indexes that relation for the same ownership path; this keeps projected content, captured
+  transfer, and nested same-file local templates from being guessed through source spans or execution controllers.
+  Source containment remains only for rows that genuinely have no binding/instruction product.
   Custom-element controllers publish `configuration.controller-uses-compiled-template` claims; template-controller
   controllers publish `configuration.controller-uses-instruction-sequence` claims for their nested child sequence. Those
   controllers also materialize an `IViewFactory` product with a generated embedded custom-element definition, matching
@@ -589,6 +591,8 @@ classification, expression parsing, and instruction lowering converge on the sam
   materialization has attached modeled `Scope` references, so their `scope` fields do not freeze too early.
   `RuntimeRenderingEmission` indexes the exact binding-to-expression-product relation emitted by renderers. Consumers
   must spend that relation rather than reconstructing a guessed binding owner from compiler instruction shape.
+  It also indexes the normalized dynamic-instruction-to-captured-`AttrSyntax` claim; resource-local projections must
+  spend that authored origin rather than rescanning claims or inferring ownership from the receiving render controller.
   Every runtime binding has exactly one `RuntimeBindingRenderContext`; later expression-resource, source-value,
   observation/data-flow, i18n, converter, bound-controller, and template-scope phases must spend its exact source
   controller, compiler resource scope, and active container. Missing context is an internal invariant failure, not a
@@ -993,6 +997,17 @@ expression span converge; otherwise it stays open instead of letting overlays, c
 the first compatible binding by runtime emission order. Cursor completions should pass the selected
 ambient `BindingScope` into that selector when they have it; the selector can then spend the rendered-binding
 projection instead of falling back to a raw known-scope checker context for repeated controller applications.
+The ambient scope narrows which rendered binding application is relevant; it is not the binding's source-evaluation
+scope. Once an application is selected, `RuntimeBindingSourceExpressionContextProjector` derives that source from the
+instruction scope and the immutable binding-expression scope table. Passing the ambient child scope into that
+projection accepts expressions against locals Aurelia has not created yet. Template-controller condition, iterable,
+promise, and value creators likewise evaluate from the predecessor/parent scope that creates the child scope; only the
+leaf expression probe runs in the completed child scope.
+Arrow callback scopes follow the same authority split. The parser owns callback declarations and authored `$this` /
+`$parent` paths; `BindingScope` owns evaluation lookup; runtime expression access uses join both to exact declaration or
+context targets. Cursor recovery may use a focused parse that omits an already-completed callback parameter, so
+declaration/token selection falls back to the stable materialized parse while frontier state remains cursor-local.
+Do not publish speculative callback/narrowing context handles or rebuild callback-local name sets in query consumers.
 `template-scope-replay.ts` owns the shared
 scope-chain replay, same-level synthetic-scope source replay, and `$this`/`$parent` alias reachability policy
 that generated overlays, cursor explanations, diagnostics, and future continuation/edit surfaces should reuse before

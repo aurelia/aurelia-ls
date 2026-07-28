@@ -6,6 +6,8 @@ import type {
   CallScopeExpression,
   ExpressionAstNode,
 } from '../expression/ast.js';
+import { aureliaArrayMethodSemanticsFor } from '../expression/array-method-semantics.js';
+import type { SourceSpan } from '../expression/source-span.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
 import {
@@ -34,13 +36,14 @@ import {
   observedDependencyWithMemberSourceForCheckerType,
 } from './observed-dependency-member-source.js';
 import {
-  runtimeObservedDependencySemanticKey,
   type RuntimeObservedDependencyDraft,
 } from './runtime-observed-dependency-draft.js';
+import { ensureSourceFileAddressForCheckerNode } from '../type-system/declaration-source.js';
 import {
   connectableDraftsForTrackableDependencyKey,
   readTrackableMethodDependency,
 } from './trackable-method-dependency-recognition.js';
+import type { RuntimeTemplateArrayMethodPolicy } from '../runtime-expression/template-access-use-collector.js';
 
 export interface RuntimeTrackableMethodObservedDependencyRequest {
   /** Checker expression request that owns source expression, runtime Scope, source address, and evaluator mode. */
@@ -48,6 +51,20 @@ export interface RuntimeTrackableMethodObservedDependencyRequest {
   readonly store: KernelStore;
   readonly publication: KernelPublicationContext;
   readonly evaluator: CheckerExpressionTypeEvaluator;
+  readonly canUseRuntimeArrayMethod: RuntimeTemplateArrayMethodPolicy | null;
+}
+
+/** One trackable method execution together with the exact template invocation that admits it. */
+export interface RuntimeTrackableMethodObservedDependencyDraft {
+  readonly declaration: ts.MethodDeclaration;
+  readonly dependencies: readonly RuntimeObservedDependencyDraft[];
+  readonly invocationSourceSpan: SourceSpan;
+  readonly methodName: string;
+}
+
+interface RuntimeTrackableMethodDependencyDraft {
+  readonly declaration: ts.MethodDeclaration;
+  readonly dependencies: readonly RuntimeObservedDependencyDraft[];
 }
 
 /**
@@ -59,22 +76,19 @@ export interface RuntimeTrackableMethodObservedDependencyRequest {
  */
 export function collectRuntimeTrackableMethodObservedDependencyDrafts(
   request: RuntimeTrackableMethodObservedDependencyRequest,
-): readonly RuntimeObservedDependencyDraft[] {
+): readonly RuntimeTrackableMethodObservedDependencyDraft[] {
   const collector = new RuntimeTrackableMethodObservedDependencyCollector(request);
   collector.visit(request.checkerContext.expression);
   return collector.read();
 }
 
 class RuntimeTrackableMethodObservedDependencyCollector {
-  private readonly rows = new Map<string, RuntimeObservedDependencyDraft>();
+  private readonly rows: RuntimeTrackableMethodObservedDependencyDraft[] = [];
 
   constructor(private readonly request: RuntimeTrackableMethodObservedDependencyRequest) {}
 
-  read(): readonly RuntimeObservedDependencyDraft[] {
-    return [...this.rows.values()].sort((left, right) =>
-      `${left.dependencyKind}:${left.sourceName ?? ''}:${left.methodName ?? ''}:${left.expressionKind}`
-        .localeCompare(`${right.dependencyKind}:${right.sourceName ?? ''}:${right.methodName ?? ''}:${right.expressionKind}`)
-    );
+  read(): readonly RuntimeTrackableMethodObservedDependencyDraft[] {
+    return [...this.rows];
   }
 
   visit(expression: ExpressionAstNode | null): void {
@@ -89,7 +103,7 @@ class RuntimeTrackableMethodObservedDependencyCollector {
       case 'CallMember':
         this.recordCallMember(expression);
         this.visit(expression.object);
-        expression.args.forEach((arg) => this.visit(arg));
+        expression.args.forEach((arg) => this.visitCallMemberArgument(expression, arg));
         return;
       case 'CallFunction':
         this.visit(expression.func);
@@ -175,11 +189,27 @@ class RuntimeTrackableMethodObservedDependencyCollector {
   private recordCallScope(expression: CallScopeExpression): void {
     const lookup = this.request.checkerContext.scope.locate(expression.name.name, expression.ancestor);
     const slotMember = checkerTypeMemberForSlot(this.request.publication, lookup.slot);
-    if (slotMember != null) {
-      this.recordTrackableTypeMember(slotMember);
+    if (slotMember != null && this.recordTrackableTypeMember(slotMember, expression, expression.name.name)) {
+      return;
     }
     const ownerType = readCheckerTypeShape(this.request.publication, lookup.context?.contextType ?? null);
-    this.recordTrackableMember(ownerType, expression.name.name);
+    this.recordTrackableMember(ownerType, expression.name.name, expression);
+  }
+
+  private visitCallMemberArgument(
+    call: CallMemberExpression,
+    argument: ExpressionAstNode,
+  ): void {
+    const semantics = aureliaArrayMethodSemanticsFor(call.name.name);
+    const synchronous = argument.$kind === 'ArrowFunction'
+      && semantics?.callbackParameterShape != null
+      && (this.request.canUseRuntimeArrayMethod?.(
+        call,
+        this.request.checkerContext.expression,
+      ) ?? true);
+    this.visit(synchronous && argument.$kind === 'ArrowFunction'
+      ? argument.body
+      : argument);
   }
 
   private recordCallMember(expression: CallMemberExpression): void {
@@ -207,21 +237,20 @@ class RuntimeTrackableMethodObservedDependencyCollector {
     if (member == null) {
       return;
     }
-    const trackableDependencies = trackableDependenciesForMember(
+    const trackableDependency = trackableDependenciesForMember(
       this.request.store,
       this.request.publication,
       member,
     );
-    if (trackableDependencies.length > 0) {
-      for (const dependency of trackableDependencies) {
-        this.add(dependency);
-      }
+    if (trackableDependency != null) {
+      this.add(trackableDependency, expression, expression.name.name);
     }
   }
 
   private recordTrackableMember(
     ownerType: CheckerTypeShape | null,
     methodName: string,
+    invocation: CallScopeExpression,
   ): void {
     const member = ownerType == null
       ? null
@@ -231,25 +260,37 @@ class RuntimeTrackableMethodObservedDependencyCollector {
         ownerType.productHandle ?? `${this.request.checkerContext.localKey}:trackable-method-owner`,
       ).find((candidate) => candidate.name === methodName) ?? null;
     if (member != null) {
-      this.recordTrackableTypeMember(member);
+      this.recordTrackableTypeMember(member, invocation, methodName);
     }
   }
 
-  private recordTrackableTypeMember(member: CheckerTypeMember): void {
-    for (const dependency of trackableDependenciesForMember(
+  private recordTrackableTypeMember(
+    member: CheckerTypeMember,
+    invocation: CallScopeExpression | CallMemberExpression,
+    methodName: string,
+  ): boolean {
+    const dependency = trackableDependenciesForMember(
       this.request.store,
       this.request.publication,
       member,
-    )) {
-      this.add(dependency);
+    );
+    if (dependency != null) {
+      this.add(dependency, invocation, methodName);
     }
+    return dependency != null;
   }
 
-  private add(row: RuntimeObservedDependencyDraft): void {
-    const key = runtimeObservedDependencySemanticKey(row);
-    if (!this.rows.has(key)) {
-      this.rows.set(key, row);
-    }
+  private add(
+    dependency: RuntimeTrackableMethodDependencyDraft,
+    invocation: CallScopeExpression | CallMemberExpression,
+    methodName: string,
+  ): void {
+    this.rows.push({
+      declaration: dependency.declaration,
+      dependencies: dependency.dependencies,
+      invocationSourceSpan: invocation.span,
+      methodName,
+    });
   }
 }
 
@@ -267,42 +308,56 @@ function trackableDependenciesForMember(
   store: KernelStore,
   publication: KernelPublicationContext,
   member: CheckerTypeMember,
-): readonly RuntimeObservedDependencyDraft[] {
+): RuntimeTrackableMethodDependencyDraft | null {
   const carrier = member.carrier;
   if (carrier == null) {
-    return [];
+    return null;
   }
   const method = carrier.declarations.find(ts.isMethodDeclaration) ?? null;
   if (method == null) {
-    return [];
+    return null;
   }
   const dependency = readTrackableMethodDependency(method);
   if (dependency == null || dependency.dependencyMode === ComputedObservationDependencyMode.Disabled) {
-    return [];
+    return null;
   }
   if (dependency.dependencyMode === ComputedObservationDependencyMode.ProxyAutoTrack) {
-    return methodBodyProxyDependencies(store, publication, method, carrier.checker);
+    return {
+      declaration: method,
+      dependencies: methodBodyProxyDependencies(store, publication, method, carrier.checker),
+    };
   }
+  const sourceFileAddressHandle = ensureSourceFileAddressForCheckerNode(
+    publication,
+    carrier.checker,
+    method.getSourceFile(),
+  ).handle;
   const receiverType = member.ownerType.productHandle == null
     ? null
     : readCheckerTypeShape(publication, member.ownerType)?.carrier?.type ?? null;
-  return [
-    ...dependency.dependencyKeyReads.flatMap((key) =>
-      connectableDraftsForTrackableDependencyKey(key)
-        .map((draft) => trackableReceiverDependencyDraft(
-          publication,
-          carrier.checker,
-          receiverType,
-          draft,
-        ))
-    ),
-    ...dependency.dependencyFunctions.flatMap((fn) =>
-      ProxyObservable.collectObservedDependencyDrafts(
-        fn,
-        ProxyObservable.typeContextForChecker(carrier.checker, store, publication),
-      )
-    ),
-  ].map(withoutSourceSpan);
+  return {
+    declaration: method,
+    dependencies: [
+      ...dependency.dependencyKeyReads.flatMap((key) =>
+        connectableDraftsForTrackableDependencyKey(key)
+          .map((draft) => ({
+            ...trackableReceiverDependencyDraft(
+              publication,
+              carrier.checker,
+              receiverType,
+              draft,
+            ),
+            sourceFileAddressHandle,
+          }))
+      ),
+      ...dependency.dependencyFunctions.flatMap((fn) =>
+        ProxyObservable.collectObservedDependencyOccurrenceDrafts(
+          fn,
+          ProxyObservable.typeContextForChecker(carrier.checker, store, publication),
+        )
+      ),
+    ],
+  };
 }
 
 function methodBodyProxyDependencies(
@@ -311,14 +366,14 @@ function methodBodyProxyDependencies(
   method: ts.MethodDeclaration,
   checker: ts.TypeChecker,
 ): readonly RuntimeObservedDependencyDraft[] {
-  return ProxyObservable.collectObservedDependencyDrafts(
+  return ProxyObservable.collectObservedDependencyOccurrenceDrafts(
     method,
     ProxyObservable.typeContextForChecker(checker, store, publication),
     {
       rootNames: ['this'],
       parameterRootNames: true,
     },
-  ).map(withoutSourceSpan);
+  );
 }
 
 function trackableReceiverDependencyDraft<TDraft extends RuntimeObservedDependencyDraft>(
@@ -333,17 +388,4 @@ function trackableReceiverDependencyDraft<TDraft extends RuntimeObservedDependen
     receiverType,
     draft,
   );
-}
-
-function withoutSourceSpan<TDraft extends RuntimeObservedDependencyDraft>(
-  draft: TDraft,
-): TDraft {
-  return {
-    ...draft,
-    memberNameSpanStart: null,
-    memberNameSpanEnd: null,
-    scopeLookupAncestor: null,
-    spanStart: null,
-    spanEnd: null,
-  };
 }

@@ -22,10 +22,10 @@ const app = await runtime.openApp({
 
 const expectedEffects = [
   ExpectedSemanticEffect.exactly(
-    'The fixture should expose eight getter observer sources: seven decorator-owned and one plain getter descriptor.',
+    'The fixture should expose eleven getter observer sources: nine decorator-owned and two plain getter descriptors.',
     'computed-observer-source',
     'app',
-    8,
+    11,
     null,
     [],
     'signature',
@@ -237,7 +237,7 @@ const expectedEffects = [
     'Decorator metadata should remain a separate definition lane and still include the method declaration.',
     'computed-observation-definition',
     'app',
-    8,
+    10,
     null,
     [],
     'signature',
@@ -252,6 +252,34 @@ const verification = verifyFixtureEffects(
 const failures = verification.effectResults
   .filter((result) => result.outcome !== 'satisfied')
   .map((result) => result.summary);
+const detailedObservedDependencies = app.ask({
+  kind: 'computed-observer-observed-dependencies',
+  detail: 'handles',
+  page: { size: 400 },
+}).value.rows;
+const mutationDependencies = detailedObservedDependencies.filter((row) =>
+  row.memberName === 'mutationRoleProbe'
+);
+if (!mutationDependencies.some((row) =>
+  row.accessUse.targetLinks.some((target) =>
+    target.authorityProductHandle != null
+    && target.targetIdentityHandle != null
+    && target.declarationSourceAddressHandle != null
+  )
+)) {
+  failures.push('Detailed computed dependencies should retain handles on nested access-use targets.');
+}
+const qualifiedMutationDependencies = mutationDependencies.filter((row) =>
+  row.accessUse.executionQualifiers.length > 0
+);
+if (
+  qualifiedMutationDependencies.length === 0
+  || !qualifiedMutationDependencies.every((row) =>
+    row.accessUse.executionQualifiers.every((qualifier) => qualifier.sourceAddressHandle != null)
+  )
+) {
+  failures.push('Detailed computed dependencies should retain handles on nested access-use qualifiers.');
+}
 
 const summary = {
   fixture: 'computed-decorator-contexts',

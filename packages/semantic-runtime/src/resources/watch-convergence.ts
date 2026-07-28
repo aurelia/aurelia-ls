@@ -13,6 +13,7 @@ import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { EvaluationRead } from '../evaluation/expression-reader.js';
 import {
   closedStaticValueMemberValue,
+  readStaticOwnProperty,
   readStaticValueProperty,
 } from '../evaluation/property-access.js';
 import { hasStaticModifier } from '../evaluation/ts-syntax.js';
@@ -49,7 +50,10 @@ import {
   readStaticClassProperty,
   targetReferenceForFunction,
 } from './resource-convergence-support.js';
-import { sourceSpanAddressForNode } from './resource-source-address.js';
+import {
+  sourceSpanAddressForNode,
+  templateCarrierExpression,
+} from './resource-source-address.js';
 import {
   WatchCallbackDefinition,
   WatchCallbackKind,
@@ -776,17 +780,33 @@ function readWatchListEntry(
     return new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch array entry did not close to a static object.', node, [OpenSeamReasonKind.ResourceWatchOpen]));
   }
   const source = node == null ? null : sourceSpanAddressForNode(store, context, node, local, SourceSpanRole.Value);
+  const expressionProperty = readStaticOwnProperty(value, 'expression');
+  const callbackProperty = readStaticOwnProperty(value, 'callback');
   const expressionRead = readStaticValueProperty(value, 'expression', node);
   const callbackRead = readStaticValueProperty(value, 'callback', node);
   const flushRead = readStaticValueProperty(value, 'flush', node);
   const expressionValue = closedStaticValueMemberValue(expressionRead);
   const callbackValue = closedStaticValueMemberValue(callbackRead);
   const flushValue = closedStaticValueMemberValue(flushRead);
+  const expressionSource = sourceSpanAddressForNode(
+    store,
+    context,
+    watchValueSourceNode(expressionValue, expressionProperty?.node ?? null),
+    `${local}:expression`,
+    SourceSpanRole.Value,
+  );
+  const callbackSource = sourceSpanAddressForNode(
+    store,
+    context,
+    watchValueSourceNode(callbackValue, callbackProperty?.node ?? null),
+    `${local}:callback`,
+    SourceSpanRole.Value,
+  );
   const expression = expressionValue != null
-    ? readWatchExpression(expressionValue, source?.addressHandle ?? null)
+    ? readWatchExpression(expressionValue, expressionSource?.addressHandle ?? null)
     : null;
   const callback = callbackValue != null
-    ? readWatchCallback(callbackValue, source?.addressHandle ?? null)
+    ? readWatchCallback(callbackValue, callbackSource?.addressHandle ?? null)
     : null;
   const flush = flushValue != null
     ? readWatchFlushValue(flushValue)
@@ -805,8 +825,20 @@ function readWatchListEntry(
       targetClass,
       ownerIdentityHandle,
       provenanceHandle,
-      source?.records ?? [],
+      [
+        ...source?.records ?? [],
+        ...expressionSource?.records ?? [],
+        ...callbackSource?.records ?? [],
+      ],
     );
+}
+
+function watchValueSourceNode(
+  value: EvaluationValue | null,
+  propertyNode: ts.Node | null,
+): ts.Node | null {
+  return value?.node
+    ?? (propertyNode == null ? null : templateCarrierExpression(propertyNode));
 }
 
 function watchEntry(
@@ -876,7 +908,12 @@ function readWatchPropertyKey(
     return new WatchPropertyKeyDefinition(WatchPropertyKeyKind.String, value.value, null, new ResourceTargetReference(null, addressHandle, value.value));
   }
   return value?.kind === EvaluationValueKind.Number
-    ? new WatchPropertyKeyDefinition(WatchPropertyKeyKind.Number, String(value.value), value.value)
+    ? new WatchPropertyKeyDefinition(
+        WatchPropertyKeyKind.Number,
+        String(value.value),
+        value.value,
+        new ResourceTargetReference(null, addressHandle, String(value.value)),
+      )
     : null;
 }
 

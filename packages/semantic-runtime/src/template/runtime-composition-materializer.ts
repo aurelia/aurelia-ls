@@ -80,9 +80,6 @@ import {
   instructionScopeLookup,
 } from '../observation/runtime-binding-expression.js';
 import {
-  RuntimeBindingExpressionScopeProjector,
-} from '../observation/runtime-binding-expression-scope.js';
-import {
   RuntimeBindingSourceExpressionContextProjector,
   RuntimeBindingSourceExpressionProjectionKind,
 } from '../observation/runtime-binding-source-expression-context.js';
@@ -346,15 +343,10 @@ export class RuntimeCompositionMaterializer {
     const records: KernelStoreRecord[] = [...source.records];
     const bindingsByProduct = new Map(input.runtimeRendering.bindings.map((binding) => [binding.productHandle, binding]));
     const scopesByInstruction = instructionScopeLookup(input.scopes.instructionScopes);
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-      this.store,
-      input.expressionWorld,
-      input.expressionResourcePlan,
-    );
     const sourceExpressionContexts = new RuntimeBindingSourceExpressionContextProjector(
       input.runtimeRendering,
       scopesByInstruction,
-      bindingExpressionScopes,
+      input.scopes.bindingExpressionScopes,
     );
     const asyncTypeProjector = new CheckerAsyncTypeProjector(
       this.store,
@@ -368,12 +360,12 @@ export class RuntimeCompositionMaterializer {
       const local = `${input.localKey}:composition:${index}`;
       const bindings = auComposeBindings(input.controllerBind, controller, bindingsByProduct);
       const staticInputs = staticAuComposeInputs(this.publication, controller);
-      const template = this.evaluateBinding(input, bindings.template, sourceExpressionContexts, bindingExpressionScopes);
-      const component = this.evaluateBinding(input, bindings.component, sourceExpressionContexts, bindingExpressionScopes);
-      const model = this.evaluateModelInput(input, bindings.model, sourceExpressionContexts, bindingExpressionScopes, staticInputs.model);
-      const scopeBehavior = this.evaluateBinding(input, bindings.scopeBehavior, sourceExpressionContexts, bindingExpressionScopes);
-      const tag = this.evaluateBinding(input, bindings.tag, sourceExpressionContexts, bindingExpressionScopes);
-      const flushMode = this.evaluateBinding(input, bindings.flushMode, sourceExpressionContexts, bindingExpressionScopes);
+      const template = this.evaluateBinding(input, bindings.template, sourceExpressionContexts);
+      const component = this.evaluateBinding(input, bindings.component, sourceExpressionContexts);
+      const model = this.evaluateModelInput(input, bindings.model, sourceExpressionContexts, staticInputs.model);
+      const scopeBehavior = this.evaluateBinding(input, bindings.scopeBehavior, sourceExpressionContexts);
+      const tag = this.evaluateBinding(input, bindings.tag, sourceExpressionContexts);
+      const flushMode = this.evaluateBinding(input, bindings.flushMode, sourceExpressionContexts);
       const templateInputType = awaitedCompositionInputType(
         asyncTypeProjector,
         template,
@@ -770,7 +762,6 @@ export class RuntimeCompositionMaterializer {
     input: RuntimeCompositionMaterializationRequest,
     binding: RuntimeBinding | null,
     sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector,
-    bindingExpressionScopes: RuntimeBindingExpressionScopeProjector,
   ): EvaluatedBinding {
     if (binding == null) {
       return new EvaluatedBinding(null, null, null);
@@ -826,11 +817,10 @@ export class RuntimeCompositionMaterializer {
     input: RuntimeCompositionMaterializationRequest,
     binding: RuntimeBinding | null,
     sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector,
-    bindingExpressionScopes: RuntimeBindingExpressionScopeProjector,
     staticModel: string | null,
   ): EvaluatedBinding {
     if (binding != null || staticModel == null) {
-      return this.evaluateBinding(input, binding, sourceExpressionContexts, bindingExpressionScopes);
+      return this.evaluateBinding(input, binding, sourceExpressionContexts);
     }
     return new EvaluatedBinding(
       null,

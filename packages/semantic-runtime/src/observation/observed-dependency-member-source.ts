@@ -4,6 +4,11 @@ import type {
   BindingScope,
 } from '../configuration/scope.js';
 import {
+  RuntimeExpressionAccessTargetResolution,
+  type RuntimeExpressionAccessUse,
+} from '../runtime-expression/runtime-expression-access-use.js';
+import { TypeSystemHotDetails } from '../type-system/product-details.js';
+import {
   localKeyPart,
 } from '../kernel/local-key.js';
 import type { KernelPublicationContext } from '../kernel/publication.js';
@@ -20,6 +25,9 @@ import type {
 import type {
   CheckerExpressionTypeEvaluator,
 } from '../type-system/expression-type-evaluator.js';
+import {
+  CheckerTypeMember,
+} from '../type-system/type-shape.js';
 import {
   type RuntimeBindingObservedDependency,
   RuntimeObservedMemberSourceState,
@@ -69,6 +77,33 @@ export function observedMemberSourceFields(
       observedMemberSourceAddressHandle: projection.observedMemberSourceAddressHandle,
       observedMemberSourceRoute: projection.observedMemberSourceRoute,
     };
+}
+
+/** Reuses the target already closed for an access occurrence instead of re-projecting its spelling. */
+export function observedMemberSourceForRuntimeExpressionAccessUse(
+  publication: KernelPublicationContext,
+  accessUse: RuntimeExpressionAccessUse,
+): RuntimeObservedMemberSourceProjection | null {
+  if (
+    accessUse.targetResolution !== RuntimeExpressionAccessTargetResolution.Exact
+    || accessUse.targetLinks.length !== 1
+  ) {
+    return null;
+  }
+  const target = accessUse.targetLinks[0]!;
+  const member = target.targetTypeMemberHandle == null
+    ? null
+    : publication.readHotDetail(TypeSystemHotDetails.TypeMember, target.targetTypeMemberHandle);
+  if (!(member instanceof CheckerTypeMember) && target.declarationSourceAddressHandle == null) {
+    return null;
+  }
+  return {
+    observedMemberKind: member instanceof CheckerTypeMember ? member.memberKind : null,
+    observedMemberSourceAddressHandle: target.declarationSourceAddressHandle,
+    observedMemberSourceRoute: target.declarationSourceAddressHandle == null
+      ? null
+      : RuntimeObservedMemberSourceRoute.MemberDeclaration,
+  };
 }
 
 export function observedMemberSourceStateForBindingDependency(input: {

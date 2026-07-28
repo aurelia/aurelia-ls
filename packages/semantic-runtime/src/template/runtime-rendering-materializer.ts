@@ -79,6 +79,7 @@ import {
 } from './compiler-world.js';
 import { TemplateProductDetails } from './product-details.js';
 import { ObservationProductDetails } from '../observation/product-details.js';
+import { RuntimeExpressionProductDetails } from '../runtime-expression/product-details.js';
 import {
   RuntimeControllerCreationKind,
   type RuntimeControllerFrame,
@@ -204,6 +205,7 @@ export class RuntimeRenderingEmission {
   private readonly syntheticControllersByOwnerInstruction = new Map<ProductHandle, RuntimeControllerFrame[]>();
   private readonly contentProjectionViewsByOutletController = new Map<ProductHandle, RuntimeContentProjectionView[]>();
   private readonly dynamicInstructionContextsByProduct = new Map<ProductHandle, RuntimeDynamicInstructionContext>();
+  private readonly dynamicInstructionOriginSyntaxByProduct = new Map<ProductHandle, ProductHandle>();
   private readonly controllersByProduct = new Map<ProductHandle, RuntimeControllerFrame>();
 
   constructor(
@@ -311,6 +313,25 @@ export class RuntimeRenderingEmission {
     for (const context of dynamicInstructionContexts) {
       this.dynamicInstructionContextsByProduct.set(context.instructionProductHandle, context);
     }
+    for (const record of records) {
+      if (
+        record.kind !== 'semantic-claim'
+        || record.predicateKey
+          !== KernelVocabulary.Instruction.DynamicInstructionOriginatesFromCapturedAttributeSyntax.key
+      ) {
+        continue;
+      }
+      const existing = this.dynamicInstructionOriginSyntaxByProduct.get(record.subjectHandle as ProductHandle);
+      if (existing != null && existing !== record.objectHandle) {
+        throw new Error(
+          `Runtime-created instruction '${record.subjectHandle}' has conflicting captured attribute origins.`,
+        );
+      }
+      this.dynamicInstructionOriginSyntaxByProduct.set(
+        record.subjectHandle as ProductHandle,
+        record.objectHandle as ProductHandle,
+      );
+    }
   }
 
   /** Returns the materialized runtime bindings for a lowered instruction across all recursive render contexts. */
@@ -398,6 +419,11 @@ export class RuntimeRenderingEmission {
 
   readDynamicInstructionContext(productHandle: ProductHandle): RuntimeDynamicInstructionContext | null {
     return this.dynamicInstructionContextsByProduct.get(productHandle) ?? null;
+  }
+
+  /** Exact authored AttrSyntax whose runtime compile produced this dynamic instruction. */
+  readDynamicInstructionOriginSyntaxProductHandle(productHandle: ProductHandle): ProductHandle | null {
+    return this.dynamicInstructionOriginSyntaxByProduct.get(productHandle) ?? null;
   }
 }
 
@@ -513,6 +539,10 @@ export class RuntimeRenderingMaterializer {
         ...publishProductDetails(TemplateProductDetails.RuntimeBinding, emission.bindings),
         ...publishProductDetails(TemplateProductDetails.RuntimeWatcher, emission.watchers),
         ...publishProductDetails(
+          RuntimeExpressionProductDetails.AccessUse,
+          emission.watchers.flatMap((watcher) => watcher.accessUses),
+        ),
+        ...publishProductDetails(
           ObservationProductDetails.RuntimeWatcherObservedDependency,
           emission.watchers.flatMap((watcher) => watcher.observedDependencies),
         ),
@@ -560,6 +590,7 @@ export class RuntimeRenderingMaterializer {
         input.definition,
         input.compilerWorld.container,
         source,
+        input.expressionWorld,
         input.typeSystem,
         input.projectKey,
         input.resourceDefinitions,
@@ -1442,6 +1473,7 @@ export class RuntimeRenderingMaterializer {
       createChildController: (creation) => {
         const controller = this.controllerCreation.createChildController(
           creation,
+          state.input.expressionWorld,
           state.input.typeSystem,
           state.observerLocator,
           state.source,

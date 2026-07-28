@@ -1,4 +1,5 @@
 import type { BindingScope } from '../configuration/scope.js';
+import type { BindingScopeConstructionEmission } from '../configuration/scope-materializer.js';
 import type { Container } from '../di/container.js';
 import type {
   ExpressionAstNode,
@@ -6,6 +7,7 @@ import type {
 } from '../expression/ast.js';
 import { ValueConverterExpression } from '../expression/ast.js';
 import { unwrapExpressionAstNodeParens } from '../expression/parse-result-inspection.js';
+import { expressionSourceSpanContains } from '../expression/source-span.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import { auLink } from '../kernel/au-link.js';
 import type { KernelSourceFileReadView } from '../kernel/store.js';
@@ -19,8 +21,8 @@ import type { RuntimeExpressionResourcePlan } from '../template/runtime-expressi
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import {
   RuntimeExpressionResourceBindReachability,
-  type RuntimeExpressionResourcePhaseReachability,
 } from '../template/runtime-expression-resource.js';
+import type { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 
 export class RuntimeBindingExpressionScopeProjection {
   constructor(
@@ -31,6 +33,116 @@ export class RuntimeBindingExpressionScopeProjection {
     /** Reason a scope-changing binding behavior could not close, when applicable. */
     readonly openReason: string | null,
   ) {}
+}
+
+class RuntimeBindingExpressionScopeProjectionEntry {
+  constructor(
+    readonly bindingScopeKey: string,
+    readonly authoredExpression: ExpressionAstNode,
+    readonly projection: RuntimeBindingExpressionScopeProjection,
+  ) {}
+}
+
+/** Read-only authority for binding-behavior source-scope handoffs materialized during template scope construction. */
+export interface RuntimeBindingExpressionScopeProjectionReader {
+  project(input: RuntimeBindingExpressionScopeProjectionRequest): RuntimeBindingExpressionScopeProjection;
+  projectSourceExpressions(
+    input: RuntimeBindingExpressionScopeProjectionRequest,
+  ): readonly RuntimeBindingExpressionScopeProjection[];
+  sourceEvaluationReachability(bindingProductHandle: ProductHandle): RuntimeOperationReachability;
+}
+
+/** Immutable source-scope handoffs shared by every post-scope runtime-analysis and query consumer. */
+export class RuntimeBindingExpressionScopeProjectionTable implements RuntimeBindingExpressionScopeProjectionReader {
+  private readonly projectionsByBindingScope = new Map<
+    string,
+    readonly RuntimeBindingExpressionScopeProjectionEntry[]
+  >();
+
+  constructor(
+    private readonly projections: ReadonlyMap<string, RuntimeBindingExpressionScopeProjectionEntry>,
+    private readonly unparsedBindingScopes: ReadonlyMap<string, BindingScope>,
+    private readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
+  ) {
+    const grouped = new Map<string, RuntimeBindingExpressionScopeProjectionEntry[]>();
+    for (const entry of projections.values()) {
+      const entries = grouped.get(entry.bindingScopeKey);
+      if (entries == null) {
+        grouped.set(entry.bindingScopeKey, [entry]);
+      } else {
+        entries.push(entry);
+      }
+    }
+    for (const [key, entries] of grouped) {
+      this.projectionsByBindingScope.set(key, entries);
+    }
+  }
+
+  project(
+    input: RuntimeBindingExpressionScopeProjectionRequest,
+  ): RuntimeBindingExpressionScopeProjection {
+    const retained = this.projections.get(runtimeBindingExpressionScopeProjectionKey(input));
+    if (retained != null) {
+      return retained.projection;
+    }
+    const bindingScopeKey = runtimeBindingExpressionScopeKey(input.bindingProductHandle, input.scope.productHandle);
+    const enclosing = smallestEnclosingRuntimeBindingExpressionScopeProjection(
+      this.projectionsByBindingScope.get(bindingScopeKey) ?? [],
+      input.expression,
+    );
+    if (enclosing != null) {
+      const sourceExpressionContainsSelection = expressionSourceSpanContains(
+        enclosing.projection.expression.span,
+        input.expression.span,
+      );
+      return new RuntimeBindingExpressionScopeProjection(
+        input.expression,
+        sourceExpressionContainsSelection ? enclosing.projection.scope : input.scope,
+        sourceExpressionContainsSelection ? enclosing.projection.openReason : null,
+      );
+    }
+    const containing = commonRuntimeBindingExpressionScopeProjectionForContainedEntries(
+      this.projectionsByBindingScope.get(bindingScopeKey) ?? [],
+      input.expression,
+    );
+    if (containing != null) {
+      return new RuntimeBindingExpressionScopeProjection(
+        input.expression,
+        containing.scope,
+        containing.openReason,
+      );
+    }
+    const unparsedScope = this.unparsedBindingScopes.get(bindingScopeKey);
+    return unparsedScope != null
+      ? new RuntimeBindingExpressionScopeProjection(input.expression, unparsedScope, null)
+      : new RuntimeBindingExpressionScopeProjection(
+      input.expression,
+      null,
+      'The rendered binding source-scope handoff was not materialized during template scope construction.',
+    );
+  }
+
+  projectSourceExpressions(
+    input: RuntimeBindingExpressionScopeProjectionRequest,
+  ): readonly RuntimeBindingExpressionScopeProjection[] {
+    const expression = unwrapExpressionAstNodeParens(input.expression);
+    if (expression.$kind !== 'Interpolation') {
+      return [this.project(input)];
+    }
+    return expression.expressions.map((part, index) =>
+      this.project({
+        ...input,
+        expression: part,
+        localKey: `${input.localKey}:interpolation-part:${index}`,
+      })
+    );
+  }
+
+  sourceEvaluationReachability(
+    bindingProductHandle: ProductHandle,
+  ): RuntimeOperationReachability {
+    return this.expressionResourcePlan.readSourceEvaluationReachability(bindingProductHandle);
+  }
 }
 
 export interface RuntimeBindingExpressionScopeProjectionRequest {
@@ -53,7 +165,11 @@ export interface RuntimeBindingExpressionScopeProjectionRequest {
  * source reads happen against the store-backed scope rather than the original instruction scope.
  */
 @auLink('runtime:astBind')
-export class RuntimeBindingExpressionScopeProjector {
+export class RuntimeBindingExpressionScopeProjector implements RuntimeBindingExpressionScopeProjectionReader {
+  private readonly projections = new Map<string, RuntimeBindingExpressionScopeProjectionEntry>();
+  private readonly unparsedBindingScopes = new Map<string, BindingScope>();
+  private readonly scopeEmissions = new Map<ProductHandle, BindingScopeConstructionEmission>();
+
   constructor(
     readonly kernel: KernelSourceFileReadView,
     readonly expressionWorld: CheckerExpressionTypeWorld,
@@ -63,7 +179,12 @@ export class RuntimeBindingExpressionScopeProjector {
   project(
     input: RuntimeBindingExpressionScopeProjectionRequest,
   ): RuntimeBindingExpressionScopeProjection {
-    return this.projectAstBindEffects(
+    const key = runtimeBindingExpressionScopeProjectionKey(input);
+    const retained = this.projections.get(key);
+    if (retained != null) {
+      return retained.projection;
+    }
+    const projection = this.projectAstBindEffects(
       unwrapExpressionAstNodeParens(input.expression),
       input.scope,
       input.localKey,
@@ -71,6 +192,22 @@ export class RuntimeBindingExpressionScopeProjector {
       input.bindingProductHandle,
       input.resourceScope,
       input.activeContainer,
+    );
+    this.projections.set(key, new RuntimeBindingExpressionScopeProjectionEntry(
+      runtimeBindingExpressionScopeKey(input.bindingProductHandle, input.scope.productHandle),
+      input.expression,
+      projection,
+    ));
+    return projection;
+  }
+
+  retainUnparsedBindingScope(
+    bindingProductHandle: ProductHandle,
+    scope: BindingScope,
+  ): void {
+    this.unparsedBindingScopes.set(
+      runtimeBindingExpressionScopeKey(bindingProductHandle, scope.productHandle),
+      scope,
     );
   }
 
@@ -93,8 +230,20 @@ export class RuntimeBindingExpressionScopeProjector {
   /** Whether the rendered binding completed `astBind(...)` and can enter source evaluation. */
   sourceEvaluationReachability(
     bindingProductHandle: ProductHandle,
-  ): RuntimeExpressionResourcePhaseReachability {
+  ): RuntimeOperationReachability {
     return this.expressionResourcePlan.readSourceEvaluationReachability(bindingProductHandle);
+  }
+
+  readScopeEmissions(): readonly BindingScopeConstructionEmission[] {
+    return [...this.scopeEmissions.values()];
+  }
+
+  toProjectionTable(): RuntimeBindingExpressionScopeProjectionTable {
+    return new RuntimeBindingExpressionScopeProjectionTable(
+      new Map(this.projections),
+      new Map(this.unparsedBindingScopes),
+      this.expressionResourcePlan,
+    );
   }
 
   private projectAstBindEffects(
@@ -160,7 +309,7 @@ export class RuntimeBindingExpressionScopeProjector {
       ? this.projectStateBindingBehaviorScope(
           unwrapped,
           scope,
-          localKey,
+          bindingProductHandle,
           sourceAddressHandle,
           activeContainer,
         )
@@ -211,7 +360,7 @@ export class RuntimeBindingExpressionScopeProjector {
   private projectStateBindingBehaviorScope(
     expression: ExpressionAstNode & { readonly $kind: 'BindingBehavior' },
     scope: BindingScope | null,
-    localKey: string,
+    bindingProductHandle: ProductHandle,
     sourceAddressHandle: AddressHandle | null,
     activeContainer: Container | null,
   ): RuntimeBindingExpressionScopeProjection {
@@ -237,15 +386,76 @@ export class RuntimeBindingExpressionScopeProjector {
     ).scopeForBindingBehavior(
       expression,
       scope,
-      `${localKey}:state-binding-behavior:${expression.span.start}:${expression.span.end}`,
+      bindingProductHandle,
       sourceAddressHandle,
     );
+    if (stateScope.emission != null) {
+      this.scopeEmissions.set(stateScope.emission.scope.productHandle, stateScope.emission);
+    }
     return new RuntimeBindingExpressionScopeProjection(
       expression.expression,
       stateScope.scope,
       stateScope.openReason,
     );
   }
+}
+
+function runtimeBindingExpressionScopeProjectionKey(
+  input: RuntimeBindingExpressionScopeProjectionRequest,
+): string {
+  return [
+    input.bindingProductHandle,
+    input.scope.productHandle,
+    input.expression.span.file?.id ?? '',
+    input.expression.span.start,
+    input.expression.span.end,
+  ].join('\0');
+}
+
+function runtimeBindingExpressionScopeKey(
+  bindingProductHandle: ProductHandle,
+  scopeProductHandle: ProductHandle,
+): string {
+  return `${bindingProductHandle}\0${scopeProductHandle}`;
+}
+
+function smallestEnclosingRuntimeBindingExpressionScopeProjection(
+  entries: readonly RuntimeBindingExpressionScopeProjectionEntry[],
+  expression: ExpressionAstNode,
+): RuntimeBindingExpressionScopeProjectionEntry | null {
+  let selected: RuntimeBindingExpressionScopeProjectionEntry | null = null;
+  for (const entry of entries) {
+    if (!expressionSourceSpanContains(entry.authoredExpression.span, expression.span)) {
+      continue;
+    }
+    if (
+      selected == null
+      || entry.authoredExpression.span.end - entry.authoredExpression.span.start
+        < selected.authoredExpression.span.end - selected.authoredExpression.span.start
+    ) {
+      selected = entry;
+    }
+  }
+  return selected;
+}
+
+function commonRuntimeBindingExpressionScopeProjectionForContainedEntries(
+  entries: readonly RuntimeBindingExpressionScopeProjectionEntry[],
+  expression: ExpressionAstNode,
+): RuntimeBindingExpressionScopeProjection | null {
+  const contained = entries.filter((entry) =>
+    expressionSourceSpanContains(expression.span, entry.authoredExpression.span)
+  );
+  const first = contained[0]?.projection ?? null;
+  if (first == null) {
+    return null;
+  }
+  return contained.every((entry) =>
+    entry.projection.scope?.productHandle === first.scope?.productHandle
+    && entry.projection.openReason === first.openReason
+  )
+    ? first
+    : null;
 }
 
 /** True when the binding source can change Scope during `astBind(...)` under the modeled semantic-runtime rules. */

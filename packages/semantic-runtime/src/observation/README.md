@@ -71,9 +71,11 @@ static type surfaces rather than hydrated runtime values.
   owners and should stay in their renderer/binding publication lanes.
   Controller-owned runtime watcher products live in the template substrate rather than this folder: `ComputedWatcher`
   and `ExpressionWatcher` are lifecycle/binding products created from resource `definition.watches`, while computed
-  observation definitions are source declarations. Expression watchers now publish execution-level observed-dependency
-  rows by parsing the accepted string property expression against the string-body source span and reusing the same
-  `astEvaluate` connectable dependency collector as binding-owned observed dependencies. Computed watchers now have a first TypeScript-body projection for
+  observation definitions are source declarations. Expression watchers publish owner-qualified access uses by parsing
+  the accepted string property expression against the string-body source span, then derive execution-level
+  observed-dependency rows through the same `astEvaluate` connectable policy as bindings. Their scope/member targets
+  spend the shared root-expression target resolver rather than a watcher-local string-path projection. Computed
+  watchers now have a first TypeScript-body projection for
   `ProxyObservable` property and collection reads over the wrapped dependency function parameter, including simple local
   aliases/destructuring that keep dependency functions readable. Collection method rows are TypeChecker-discriminated
   when receiver types are available, so string `includes(...)` and plain object `get(...)` keep their property-read rows
@@ -111,9 +113,9 @@ static type surfaces rather than hydrated runtime values.
   Open explicit deps must not fall back to getter-body proxy observation, because that would imply a different runtime
   observer.
   `source-observed-dependency-publication.ts` owns the shared source-observer-owned dependency publication shape used
-  by runtime effects and computed observer sources. It receives the admitted source-file handle from the source site and
-  materializes exact dependency spans directly, rather than rediscovering a file from the broader effect/observer carrier
-  address. Binding-owned and watcher-owned observed dependencies remain in their binding/template publication lanes
+  by runtime effects and computed observer sources. It receives the inducing access use's already-published source
+  address and never rediscovers a file or rereads a sibling detail before the enclosing batch commits. Binding-owned and
+  watcher-owned observed dependencies remain in their binding/template publication lanes
   because their owners are concrete runtime bindings/watchers rather than source observer availability/effect products.
   Binding-owned observed-dependency rows now carry exact per-dependency source spans when the binding carrier can be
   narrowed to an admitted source file, TypeChecker member kind and member declaration source for member reads when the
@@ -529,8 +531,9 @@ static type surfaces rather than hydrated runtime values.
   the caller's projector across a resource boundary.
 - `binding-value-channel-materializer.ts` publishes runtime value-channel products, claims, product-level provenance,
   and open seams between target-side products and data flow. Value-channel fields are generated from binding, target,
-  observer, and checker facts, so they should not receive same-handle field provenance unless a future source product
-  gives an individual field a distinct authored span or contribution. I18n `TranslationBinding` products remain
+  observer, and checker facts. They do not carry empty field-provenance arrays: add field provenance only if a future
+  source product gives one field a distinct authored witness that is not already owned by the product or a linked
+  access use. I18n `TranslationBinding` products remain
   runtime expression bindings for source-expression, overlay, i18n lifecycle, and `t-params.bind` source-flow
   consumers, but they do not enter the generic value-channel materializer; `TranslationBinding.create/bind` target
   semantics are owned by the i18n grouping and issue lanes.
@@ -762,13 +765,19 @@ has target/value-channel/scope context and a source expression that a connectabl
 Dynamic keyed reads such as `items[selectedIndex]` preserve both `keyExpression` and the keyed source display;
 downstream reads below the keyed value keep their full route, and the keyed row can point to the owner source when
 there is no static member declaration to point at.
-`RuntimeBindingExpressionScopeProjector` projects binding-behavior bind-time scope handoffs before collecting those
-rows. In particular, `& state` changes the binding's later source-evaluation scope through `binding.useScope(...)`, so
-observed dependencies and source writeability must route through the store-backed scope. This applies to interpolation
-holes too: runtime-html binds each part as an `InterpolationPartBinding`, and each part calls `astBind(...)` on its own
-expression before evaluation. Binding-behavior arguments are not collected as observed dependencies because Aurelia
-evaluates them from `astBind(...)` with no active connectable; value-converter arguments still participate because
-`astEvaluate(...)` evaluates them during source reads.
+Template scope construction publishes one immutable binding-expression scope projection table after applying
+binding-behavior bind-time handoffs. In particular, `& state` changes the binding's later source-evaluation scope through
+`binding.useScope(...)`, so access uses, observed dependencies, source typing, and writeability all read the same
+store-backed scope projection. This applies to interpolation holes too: runtime-html binds each part as an
+`InterpolationPartBinding`, and each part calls `astBind(...)` on its own expression before evaluation. Binding-behavior
+arguments are untracked bind-phase access uses because Aurelia evaluates them from `astBind(...)` with no active
+connectable; value-converter arguments participate in source observation because `astEvaluate(...)` evaluates them
+during source reads.
+That table is populated during scope construction and then reused rather than recreated by data-flow, overlay, or
+query consumers. Exact binding/scope/expression matches win; an incomplete or nested editor expression may inherit the
+smallest enclosing retained projection, while an aggregate interpolation may reuse a source scope only when all
+contained part projections converge. Even an unparsed binding retains its instruction scope. This fallback order
+preserves one materialized source environment without treating an ambient child-view scope as the binding's source.
 `RuntimeBindingSourceExpressionContextProjector` is the binding-owned handoff from rendered binding products into
 expression consumers. It combines `RuntimeInstructionScopeLookup`, binding-behavior source-scope projection, and the
 rendering controller's `strict` flag before value channels, data-flow, source-value consumers, or router/composition
@@ -818,12 +827,18 @@ Template TypeScript overlays use the same projector for source-scope-changing bi
 copied binding source expression. The child view created by a template controller keeps the framework parent scope that
 created the view; the state binding behavior changes the binding's source evaluation scope, not the synthetic view's
 ancestry.
-Observed-dependency collection also enters through this projector. `projectSourceExpressions(...)` preserves the same
-binding-behavior lifecycle choice while splitting interpolation holes and evaluating trackable method calls in the
-projected source scope. This keeps binding-owned dependency rows aligned with data-flow and overlay rows for
-`& state`, i18n evaluate-only keys, recursive render-context scopes, strict/non-strict nullish policy, and post-bind
-source-evaluation reachability. A blocked expression remains inspectable to overlays and diagnostics but contributes no
-connectable runtime dependency rows.
+Runtime expression access-use materialization reads that projection table, splits interpolation operations, and retains
+trackable method handoffs in the projected source scope. Observation effects are then derived from the durable access
+uses. This keeps binding-owned dependency rows aligned with data-flow and overlay rows for `& state`, i18n evaluate-only
+keys, recursive render-context scopes, strict/non-strict nullish policy, and post-bind source-evaluation reachability. A
+blocked expression remains an access fact inspectable by overlays and diagnostics but contributes no connectable runtime
+dependency row. See [../runtime-expression/README.md](../runtime-expression/README.md) for the owning access-use
+contract.
+Binding transport and access occurrence cardinality are deliberately independent. One interpolation/class/style
+binding still publishes one aggregate data-flow transport, while each interpolation hole keeps its own operation and
+access-use rows. The transport's source projection therefore uses the aggregate expression plus the common retained
+scope; it must not disappear merely because the occurrence lane contains several holes, and it must not be cloned once
+per hole.
 Recursive rendering can expose one child binding through both its parent aggregate analysis and its own resource
 analysis. Project-wide observation producers therefore select `resourceLocalBindingObservedDependencies(...)` through
 the template runtime ownership boundary before publishing source-owned facts. Handle identity is compilation-context
@@ -832,18 +847,19 @@ same template token.
 Member-source and collection-owner projection for those dependency rows spend the same
 `CheckerExpressionTypeEvaluationContext` produced from the source projection, so strict/nullish policy,
 source address, and binding-behavior lifecycle do not diverge after dependency collection has already selected the
-right source expression. `observed-dependency-member-source.ts` owns that best-known member/source projection for both
-checker-symbol drafts and binding-expression drafts; binding data-flow should call
-`observedMemberSourceForBindingDependency(...)` rather than keeping a private scope/member walker. Source
+right source expression. Ordinary dependency rows reuse the exact target on their inducing access use.
+`observed-dependency-member-source.ts` remains the effect-specific bridge for collection receivers, explicit
+declarative dependency keys, and honest owner-value fallback where the operation target and observed value carrier are
+not the same semantic object. Source
 write-capability checks and value-converter `fromView` writeback also spend that same context; each converter method is
 evaluated from a converter-expression child context instead of a locally reassembled scope/local/source/runtime bundle.
 Do not pass parallel expression/scope/source/runtime parameters into data-flow assignment checks when the binding-source
 projection already owns the runtime evaluator mode. The trackable-method dependency collector receives that same
 context too, so `@computed`/`@astTrack` method-owner reads cannot drift away from the source expression that the
 connectable pass selected.
-`RuntimeWatcherObservedDependency` is the sibling execution-product boundary for watcher reads: expression watchers reuse
-this connectable collector, while computed watchers use the first `ProxyObservable.collectObservedDependencyDrafts` pass over
-wrapped dependency function bodies, local aliases, and object destructuring. That proxy pass uses TypeChecker receiver
+`RuntimeWatcherObservedDependency` is the sibling execution-product boundary for watcher reads. Expression watchers and
+computed watchers first publish owner-qualified access uses; computed watcher TypeScript-body collection walks wrapped
+dependency function bodies, local aliases, and object destructuring. That proxy projection uses TypeChecker receiver
 facts to accept array/map/set collection methods and reject ordinary string/object method false positives when the type
 surface is visible, while staying open/permissive for weak runtime-shaped values. Callback parameters, loop variables,
 destructured values, and local aliases become proxy roots only when the projected value can pass framework
@@ -876,9 +892,10 @@ Proxy-observation checker reads must go through the module-local Program-node re
 TypeScript checker facts belong to the admitted `Program` source file; bypassing that remap reintroduces stale-node
 false negatives and makes collection-policy branches look weaker than the project actually is.
 
-Observed-dependency products are semantic dependency rows rather than raw read-event counters. Framework
-`BindingObserverRecord` dedupes subscriptions by observer identity inside a connectable run; semantic-runtime mirrors the
-same intent by deduping drafts through `runtime-observed-dependency-draft.ts` on dependency identity instead of parser
-span. A row can still carry a source span as evidence for the first read that introduced the dependency, and call/trackable
-rows can remain visible when they explain authoring guidance, but repeated reads of the same `this.state` property should
-not multiply just because they appeared at several locations in one getter or expression.
+Access-use and observed-dependency products conserve semantic occurrences, including repeated reads of the same member
+at different authored loci. Framework `BindingObserverRecord` coalesces live subscriptions by observer identity inside
+one connectable execution, but that runtime optimization is a later execution-plan or summary concern. It must not erase
+authored source locations, control-flow qualifiers, or method-body handoff evidence from the substrate or public rows.
+The observation hot records intentionally have no generic `fieldProvenance` arrays: every former producer supplied an
+empty array. Exact authored evidence belongs to the owner product, source address, member declaration target, and
+required access-use lineage. Reintroduce a field-level witness only for a genuinely distinct source contribution.

@@ -2,6 +2,7 @@
   <spread-card ...spreadState></spread-card>
   <spread-card ...spreadContainer.details></spread-card>
   <spread-card ...$bindables="spreadState"></spread-card>
+  <spread-card ...$bindables="spreadState & missingSpreadBehavior"></spread-card>
   <spread-card $bindables.spread="spreadState"></spread-card>
   <spread-card ...$bindables="spreadState | spreadIdentity"></spread-card>
   <spread-card ...$bindables="{ title: spreadState.title, count: spreadState.count, tone: spreadState.tone }"></spread-card>

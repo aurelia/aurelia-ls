@@ -41,13 +41,10 @@ import {
   checkerSymbolValueType,
 } from './checker-node-helpers.js';
 import {
-  checkerDeclarationsAreReadonly,
   checkerSymbolMemberKind,
   declarationsForCheckerSymbol,
 } from './checker-member-surface.js';
 import {
-  checkerSymbolMemberSourceProjection,
-  checkerSymbolMemberValueSourceProjection,
   checkerTypeMemberSourceAddressHandle,
   checkerTypeMemberValueSourceAddressHandle,
 } from './checker-type-member-source.js';
@@ -94,6 +91,8 @@ export interface CheckerTypeShapeMemberValueAccess {
   readonly accessKind: CheckerTypeShapeMemberValueAccessKind;
   readonly memberName: string;
   readonly memberKind: CheckerTypeMemberKind | null;
+  /** Exact projected member authority, when the access resolves a declaration or governing index signature. */
+  readonly member: CheckerTypeMember | null;
   readonly valueType: CheckerTypeShape | null;
   readonly valueReference: CheckerTypeReference | null;
   readonly declarations: readonly ts.Declaration[];
@@ -109,6 +108,8 @@ export class CheckerTypeShapeRuntimeObjectMemberAccess {
     /** Value type on the branch where the object/member guard succeeds. */
     readonly valueType: CheckerTypeShape | null,
     readonly memberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null,
+    /** Exact projected member shared by every admitted runtime lane, when one can be proven. */
+    readonly member: CheckerTypeMember | null,
     /** Declaration source shared by every admitted runtime lane, when one can be proven. */
     readonly memberSourceAddressHandle: AddressHandle | null,
   ) {}
@@ -164,6 +165,7 @@ export class CheckerTypeShapeAccess {
         CheckerTypeShapeMemberValueAccessKind.Type,
         memberName,
         CheckerTypeMemberKind.Property,
+        null,
         ownerType,
         ownerType.toReference(),
         [],
@@ -187,6 +189,7 @@ export class CheckerTypeShapeAccess {
           : CheckerTypeShapeMemberValueAccessKind.Type,
         memberName,
         member.memberKind,
+        member,
         valueType,
         valueType?.toReference() ?? member.valueType,
         member.carrier?.declarations ?? [],
@@ -197,30 +200,24 @@ export class CheckerTypeShapeAccess {
 
     const checkerMember = checkerMemberForOwnerType(ownerType, memberName);
     if (checkerMember != null) {
-      const memberSourceAddressHandle = this.checkerMemberSourceAddressHandle(checkerMember);
-      const checkerMemberType = this.checkerMemberValueType(ownerType, checkerMember, memberName, localKey);
-      if (checkerMemberType != null) {
-        return checkerTypeMemberValueAccessResult(
-          CheckerTypeShapeMemberValueAccessKind.Type,
-          memberName,
-          checkerSymbolMemberKind(checkerMember.symbol, checkerMember.declarations),
-          checkerMemberType,
-          checkerMemberType.toReference(),
-          checkerMember.declarations,
-          memberSourceAddressHandle,
-          this.checkerMemberValueSourceAddressHandle(checkerMember)
-            ?? memberSourceAddressHandle,
-        );
-      }
+      const projectedMember = this.projector.ensureOwnedMember(ownerType, checkerMember.symbol);
+      const checkerMemberType = this.declaredMemberValueType(projectedMember, localKey);
+      const memberSourceAddressHandle = checkerTypeMemberSourceAddressHandle(
+        this.projector.publication,
+        projectedMember,
+      );
       return checkerTypeMemberValueAccessResult(
-        CheckerTypeShapeMemberValueAccessKind.MissingValueType,
+        checkerMemberType == null
+          ? CheckerTypeShapeMemberValueAccessKind.MissingValueType
+          : CheckerTypeShapeMemberValueAccessKind.Type,
         memberName,
-        checkerSymbolMemberKind(checkerMember.symbol, checkerMember.declarations),
-        null,
-        null,
+        projectedMember.memberKind,
+        projectedMember,
+        checkerMemberType,
+        checkerMemberType?.toReference() ?? projectedMember.valueType,
         checkerMember.declarations,
         memberSourceAddressHandle,
-        this.checkerMemberValueSourceAddressHandle(checkerMember)
+        checkerTypeMemberValueSourceAddressHandle(this.projector.publication, projectedMember)
           ?? memberSourceAddressHandle,
       );
     }
@@ -231,6 +228,7 @@ export class CheckerTypeShapeAccess {
         CheckerTypeShapeMemberValueAccessKind.Type,
         memberName,
         CheckerTypeMemberKind.IndexSignature,
+        null,
         stringIndexMemberType,
         stringIndexMemberType.toReference(),
         [],
@@ -242,6 +240,7 @@ export class CheckerTypeShapeAccess {
     return checkerTypeMemberValueAccessResult(
       CheckerTypeShapeMemberValueAccessKind.Missing,
       memberName,
+      null,
       null,
       null,
       null,
@@ -270,20 +269,15 @@ export class CheckerTypeShapeAccess {
         memberName,
         carrier.declarations[0] ?? null,
       );
-      const memberSource = admission.memberSymbol == null
+      const member = admission.memberSymbol == null
         ? null
-        : checkerSymbolMemberSourceProjection(
-            this.projector.publication,
-            carrier.checker,
-            admission.memberSymbol,
-          );
-      const memberValueSource = admission.memberSymbol == null
+        : this.projector.ensureOwnedMember(ownerType, admission.memberSymbol);
+      const memberSourceAddressHandle = member == null
         ? null
-        : checkerSymbolMemberValueSourceProjection(
-            this.projector.publication,
-            carrier.checker,
-            admission.memberSymbol,
-          );
+        : checkerTypeMemberSourceAddressHandle(this.projector.publication, member);
+      const memberValueSourceAddressHandle = member == null
+        ? null
+        : checkerTypeMemberValueSourceAddressHandle(this.projector.publication, member);
       const valueType = admission.valueType == null
         ? null
         : this.projector.ensureProjection({
@@ -292,8 +286,8 @@ export class CheckerTypeShapeAccess {
           type: admission.valueType,
           origin: CheckerTypeProjectionOrigin.TypeChecker,
           sourceNode: carrier.declarations[0] ?? null,
-          sourceAddressHandle: memberValueSource?.sourceAddressHandle
-            ?? memberSource?.sourceAddressHandle
+          sourceAddressHandle: memberValueSourceAddressHandle
+            ?? memberSourceAddressHandle
             ?? ownerType.sourceAddressHandle,
           ownerIdentityHandle: ownerType.identityHandle,
           display: carrier.checker.typeToString(admission.valueType),
@@ -302,8 +296,9 @@ export class CheckerTypeShapeAccess {
       return new CheckerTypeShapeRuntimeObjectMemberAccess(
         admission.kind,
         valueType,
-        memberSource?.memberKind ?? null,
-        memberSource?.sourceAddressHandle ?? null,
+        member?.memberKind ?? null,
+        member,
+        memberSourceAddressHandle,
       );
     }
 
@@ -315,6 +310,7 @@ export class CheckerTypeShapeAccess {
           : CheckerRuntimeObjectMemberAdmissionKind.Guaranteed,
         this.declaredMemberValueType(member, localKey),
         member.memberKind,
+        member,
         checkerTypeMemberSourceAddressHandle(this.projector.publication, member),
       );
     }
@@ -323,6 +319,7 @@ export class CheckerTypeShapeAccess {
         CheckerRuntimeObjectMemberAdmissionKind.Conditional,
         this.resolveReference(ownerType.indexedValueType),
         CheckerTypeMemberKind.IndexSignature,
+        null,
         null,
       );
     }
@@ -333,6 +330,7 @@ export class CheckerTypeShapeAccess {
           ownerType,
           null,
           null,
+          null,
         );
       case CheckerTypeShapeKind.Unknown:
       case CheckerTypeShapeKind.TypeParameter:
@@ -340,6 +338,7 @@ export class CheckerTypeShapeAccess {
       case CheckerTypeShapeKind.Union:
         return new CheckerTypeShapeRuntimeObjectMemberAccess(
           CheckerRuntimeObjectMemberAdmissionKind.Open,
+          null,
           null,
           null,
           null,
@@ -364,12 +363,14 @@ export class CheckerTypeShapeAccess {
               }),
           null,
           null,
+          null,
         );
       case CheckerTypeShapeKind.Primitive:
       case CheckerTypeShapeKind.Function:
       case CheckerTypeShapeKind.Never:
         return new CheckerTypeShapeRuntimeObjectMemberAccess(
           CheckerRuntimeObjectMemberAdmissionKind.Impossible,
+          null,
           null,
           null,
           null,
@@ -442,13 +443,9 @@ export class CheckerTypeShapeAccess {
           !mappedReadonly,
         );
       }
-      return checkerTypeMemberWriteAccessFromSurface(
-        checkerMember.symbol.getName(),
-        memberKind,
-        checkerDeclarationsAreReadonly(checkerMember.declarations),
-        checkerMember.declarations,
-        this.checkerMemberValueSourceAddressHandle(checkerMember)
-          ?? this.checkerMemberSourceAddressHandle(checkerMember),
+      return checkerTypeMemberWriteAccess(
+        this.projector.ensureOwnedMember(ownerType, checkerMember.symbol),
+        this.projector.publication,
       );
     }
 
@@ -676,20 +673,29 @@ export class CheckerTypeShapeAccess {
     keyType: CheckerTypeShape,
     localKey: string,
   ): readonly CheckerTypeShape[] | null {
+    const accesses = this.finiteKeyedMemberValueAccesses(ownerType, keyType, localKey);
+    return accesses?.map((access) => access.valueType!) ?? null;
+  }
+
+  finiteKeyedMemberValueAccesses(
+    ownerType: CheckerTypeShape,
+    keyType: CheckerTypeShape,
+    localKey: string,
+  ): readonly CheckerTypeShapeMemberValueAccess[] | null {
     const propertyKeys = finitePropertyKeysForKeyType(keyType);
     if (propertyKeys.length === 0) {
       return null;
     }
 
-    const valueTypes: CheckerTypeShape[] = [];
+    const accesses: CheckerTypeShapeMemberValueAccess[] = [];
     for (const propertyKey of propertyKeys) {
-      const valueType = this.memberValueType(ownerType, propertyKey, `${localKey}:${localKeyPart(propertyKey)}`);
-      if (valueType == null) {
+      const access = this.memberValueAccess(ownerType, propertyKey, `${localKey}:${localKeyPart(propertyKey)}`);
+      if (access.valueType == null) {
         return null;
       }
-      valueTypes.push(valueType);
+      accesses.push(access);
     }
-    return valueTypes;
+    return accesses;
   }
 
   stringIndexMemberValueType(
@@ -755,60 +761,6 @@ export class CheckerTypeShapeAccess {
     } satisfies CheckerTypeProjectionRequest);
   }
 
-  private checkerMemberValueType(
-    ownerType: CheckerTypeShape,
-    member: CheckerTypeShapeCheckerMember,
-    memberName: string,
-    localKey: string,
-  ): CheckerTypeShape | null {
-    const carrier = ownerType.carrier;
-    if (carrier == null) {
-      return null;
-    }
-    const location = carrier.declarations[0]
-      ?? member.symbol.valueDeclaration
-      ?? member.declarations[0]
-      ?? null;
-    if (location == null) {
-      return null;
-    }
-    const valueType = carrier.checker.getTypeOfSymbolAtLocation(member.symbol, location);
-    return this.projector.ensureProjection({
-      localKey: `${localKey}:checker-member`,
-      checker: carrier.checker,
-      type: valueType,
-      origin: CheckerTypeProjectionOrigin.TypeChecker,
-      sourceNode: location,
-      sourceAddressHandle: this.checkerMemberValueSourceAddressHandle(member)
-        ?? this.checkerMemberSourceAddressHandle(member)
-        ?? ownerType.sourceAddressHandle,
-      ownerIdentityHandle: ownerType.identityHandle,
-      display: carrier.checker.typeToString(valueType),
-      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
-    } satisfies CheckerTypeProjectionRequest);
-  }
-
-  private checkerMemberValueSourceAddressHandle(
-    member: CheckerTypeShapeCheckerMember,
-  ): AddressHandle | null {
-    return checkerSymbolMemberValueSourceProjection(
-      this.projector.publication,
-      member.checker,
-      member.symbol,
-      member.declarations,
-    ).sourceAddressHandle;
-  }
-
-  private checkerMemberSourceAddressHandle(
-    member: CheckerTypeShapeCheckerMember,
-  ): AddressHandle | null {
-    return checkerSymbolMemberSourceProjection(
-      this.projector.publication,
-      member.checker,
-      member.symbol,
-      member.declarations,
-    ).sourceAddressHandle;
-  }
 }
 
 export function checkerTypeMemberWriteAccess(
@@ -971,6 +923,7 @@ function checkerTypeMemberValueAccessResult(
   accessKind: CheckerTypeShapeMemberValueAccessKind,
   memberName: string,
   memberKind: CheckerTypeMemberKind | null,
+  member: CheckerTypeMember | null,
   valueType: CheckerTypeShape | null,
   valueReference: CheckerTypeReference | null,
   declarations: readonly ts.Declaration[],
@@ -981,6 +934,7 @@ function checkerTypeMemberValueAccessResult(
     accessKind,
     memberName,
     memberKind,
+    member,
     valueType,
     valueReference,
     declarations,

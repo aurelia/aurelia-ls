@@ -1,6 +1,10 @@
 import type { BindingScope } from '../configuration/scope.js';
 import type { Container } from '../di/container.js';
-import type { ExpressionAstNode } from '../expression/ast.js';
+import type {
+  BindingBehaviorExpression,
+  ExpressionAstNode,
+  ValueConverterExpression,
+} from '../expression/ast.js';
 import { unwrapExpressionAstNodeParens } from '../expression/parse-result-inspection.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
@@ -19,9 +23,9 @@ import {
 import type { RuntimeExpressionBinding } from './runtime-binding-expression.js';
 import type { RuntimeInstructionScopeLookup } from './runtime-binding-expression.js';
 import {
-  RuntimeBindingExpressionScopeProjector,
+  type RuntimeBindingExpressionScopeProjectionReader,
 } from './runtime-binding-expression-scope.js';
-import { RuntimeExpressionResourcePhaseReachability } from '../template/runtime-expression-resource.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 
 export const enum RuntimeBindingSourceExpressionProjectionKind {
   /** The binding source expression has a modeled runtime Scope and can be passed to expression consumers. */
@@ -47,7 +51,7 @@ export interface RuntimeBindingSourceExpressionContextProjection {
   /** Active runtime container visible to source-expression DI and binding-behavior handoff. */
   readonly activeContainer: Container | null;
   /** Source-scope projector that owns later nested binding-behavior handoffs for this expression read. */
-  readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjector;
+  readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader;
   /** Rendering-controller strict mode passed into Aurelia `astEvaluate` / `astAssign`. */
   readonly strictBinding: boolean | null;
   /** Authored source address for the owning runtime binding. */
@@ -57,7 +61,7 @@ export interface RuntimeBindingSourceExpressionContextProjection {
   /** Whether the owning runtime binding applies binding-behavior bind side effects before source evaluation. */
   readonly bindingBehavior: CheckerExpressionTypeBindingBehaviorEvaluation;
   /** Whether the binding completed `astBind(...)` far enough to enter source evaluation. */
-  readonly sourceEvaluationReachability: RuntimeExpressionResourcePhaseReachability;
+  readonly sourceEvaluationReachability: RuntimeOperationReachability;
 }
 
 export interface RuntimeBindingSourceExpressionOpenProjection {
@@ -110,7 +114,7 @@ export interface RuntimeSourceExpressionLifecycleProjectionRequest {
   /** Whether the owner applies binding-behavior bind side effects before source evaluation. */
   readonly bindingBehavior: CheckerExpressionTypeBindingBehaviorEvaluation;
   /** Source-scope projector that owns binding-behavior `bind(...)` handoff for this read chain. */
-  readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjector;
+  readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader;
 }
 
 /** Projects a runtime binding source into the exact Scope/strict context used by Aurelia expression consumers. */
@@ -118,7 +122,7 @@ export class RuntimeBindingSourceExpressionContextProjector {
   constructor(
     private readonly runtimeBindings: RuntimeRenderingEmission,
     private readonly instructionScopes: RuntimeInstructionScopeLookup,
-    private readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjector,
+    private readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader,
   ) {}
 
   projectSource(
@@ -202,7 +206,7 @@ export class RuntimeBindingSourceExpressionContextProjector {
 /** Projects one runtime binding source when the caller already owns the exact source Scope. */
 export function projectRuntimeBindingSourceExpressionInScope(
   runtimeBindings: RuntimeRenderingEmission,
-  bindingExpressionScopes: RuntimeBindingExpressionScopeProjector,
+  bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader,
   input: RuntimeBindingSourceExpressionKnownScopeProjectionRequest,
 ): RuntimeBindingSourceExpressionProjection {
   const renderContext = runtimeBindings.requireRenderContextForBinding(input.binding.productHandle);
@@ -223,7 +227,7 @@ export function projectRuntimeBindingSourceExpressionInScope(
 /** Projects all evaluated source expressions, including interpolation holes, for a known source Scope. */
 export function projectRuntimeBindingSourceExpressionsInScope(
   runtimeBindings: RuntimeRenderingEmission,
-  bindingExpressionScopes: RuntimeBindingExpressionScopeProjector,
+  bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader,
   input: RuntimeBindingSourceExpressionKnownScopeProjectionRequest,
 ): readonly RuntimeBindingSourceExpressionProjection[] {
   const renderContext = runtimeBindings.requireRenderContextForBinding(input.binding.productHandle);
@@ -335,7 +339,7 @@ export function projectRuntimeSourceExpressionWithLifecycle(
     bindingBehavior: input.bindingBehavior,
     bindingExpressionScopes: input.bindingExpressionScopes,
     sourceEvaluationReachability: input.bindingBehavior === CheckerExpressionTypeBindingBehaviorEvaluation.AstEvaluateOnly
-      ? RuntimeExpressionResourcePhaseReachability.Reached
+      ? RuntimeOperationReachability.Reached
       : input.bindingExpressionScopes.sourceEvaluationReachability(input.bindingProductHandle),
   };
 }
@@ -343,10 +347,11 @@ export function projectRuntimeSourceExpressionWithLifecycle(
 export function projectRuntimeSourceExpressionsWithLifecycle(
   input: RuntimeSourceExpressionLifecycleProjectionRequest,
 ): readonly RuntimeBindingSourceExpressionProjection[] {
+  const authoredParts = runtimeBindingSourceExpressionParts(input.expression);
   if (input.bindingBehavior === CheckerExpressionTypeBindingBehaviorEvaluation.AstEvaluateOnly) {
-    return evaluateOnlySourceExpressions(input.expression).map((expression, index) => ({
+    return authoredParts.map((expression, index) => ({
       kind: RuntimeBindingSourceExpressionProjectionKind.Context,
-      authoredExpression: input.expression,
+      authoredExpression: expression,
       bindScope: input.sourceScope,
       expression,
       scope: input.sourceScope,
@@ -358,7 +363,7 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
       localKey: index === 0 ? input.localKey : `${input.localKey}:expression:${index}`,
       bindingBehavior: input.bindingBehavior,
       bindingExpressionScopes: input.bindingExpressionScopes,
-      sourceEvaluationReachability: RuntimeExpressionResourcePhaseReachability.Reached,
+      sourceEvaluationReachability: RuntimeOperationReachability.Reached,
     }));
   }
   return input.bindingExpressionScopes.projectSourceExpressions({
@@ -378,7 +383,7 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
       }
     : {
         kind: RuntimeBindingSourceExpressionProjectionKind.Context,
-        authoredExpression: input.expression,
+        authoredExpression: authoredParts[index] ?? input.expression,
         bindScope: input.sourceScope,
         expression: projected.expression,
         scope: projected.scope,
@@ -396,7 +401,7 @@ export function projectRuntimeSourceExpressionsWithLifecycle(
       });
 }
 
-function evaluateOnlySourceExpressions(
+export function runtimeBindingSourceExpressionParts(
   expression: ExpressionAstNode,
 ): readonly ExpressionAstNode[] {
   const unwrapped = unwrapEvaluateOnlyExpression(expression);

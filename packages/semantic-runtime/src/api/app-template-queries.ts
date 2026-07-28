@@ -11,7 +11,6 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
-import type { BindingContextSlot } from '../configuration/scope.js';
 import {
   diagnosticRepairAffordanceForSuggestion,
 } from '../diagnostic-action/action.js';
@@ -65,8 +64,6 @@ import {
   SemanticRuntimeAnswerClosure,
   SemanticRuntimeAnswerOutcome,
   type SemanticAppQuery,
-  type SemanticBindingDataFlowRow,
-  type SemanticBindingObservedDependencyRow,
   type SemanticRuntimeAnswer,
   type SemanticRuntimePageInput,
   type SemanticTemplateCompilationResult,
@@ -99,10 +96,6 @@ import {
   type SemanticTemplateSemanticTokensResult,
 } from './contracts.js';
 import {
-  readBindingDataFlowRows,
-  readBindingObservedDependencyRows,
-} from './binding-projections.js';
-import {
   readTemplateSemanticTokenRows,
 } from './template-semantic-tokens.js';
 import {
@@ -119,16 +112,14 @@ import {
   resourceLocalBindingTargetAccesses,
   resourceLocalBindingTargetOperations,
   resourceLocalBindingValueChannels,
+  resourceLocalRuntimeExpressionAccessUses,
   resourceLocalRuntimeBindings,
   resourceLocalDynamicTemplateInstructions,
   resourceLocalCompilerReachableHtmlAttributeProductHandles,
   resourceLocalAuthoredTemplateValueSites,
 } from '../template/runtime-resource-ownership.js';
 import {
-  bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset,
-  RuntimeBindingSourceEnvironmentSelectionKind,
   resourceLocalEffectiveTemplateExpressionParses,
-  runtimeExpressionBindingsForTemplateExpressionParse,
 } from '../template/template-expression-selection.js';
 import {
   HydrateAttributeInstruction,
@@ -149,7 +140,6 @@ import { TemplateProductDetails } from '../template/product-details.js';
 import type { BindingCommandExecutable } from '../template/binding-command-execution.js';
 import { sourceSpanFromBounds } from '../expression/source-span.js';
 import { isAureliaExpressionIdentifier } from '../expression/expression-scanner.js';
-import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
 import { bindableAttributeNameForProperty } from '../resources/bindable-attribute.js';
 import type { BindableDefinitionReference } from '../resources/bindable-definition.js';
 import {
@@ -172,6 +162,14 @@ import {
   isValueConverterOccurrence,
 } from '../template/expression-resource-occurrence.js';
 import type { GenerationAuthority } from '../kernel/generation-authority.js';
+import type { RuntimeBindingObservedDependency } from '../observation/runtime-binding-observation.js';
+import {
+  RuntimeExpressionAccessForm,
+  RuntimeExpressionAccessOrigin,
+  RuntimeExpressionAccessTargetResolution,
+  type RuntimeExpressionAccessTargetLink,
+  type RuntimeExpressionAccessUse,
+} from '../runtime-expression/runtime-expression-access-use.js';
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
@@ -803,6 +801,7 @@ export class SemanticAppTemplateQueries {
     handles: boolean,
   ): readonly TemplateReferenceContext[] {
     return [
+      this.templateLexicalReferenceContext(query, handles),
       // Template-origin first; TypeScript-origin cursors (Find References in a .ts file) fall back to
       // the TypeScript reference context so template usages of a view-model member are reachable from
       // the declaration side too. Reference providers merge client-side, so answering here is safe.
@@ -812,6 +811,62 @@ export class SemanticAppTemplateQueries {
       this.templateResourceReferenceContext(query, handles),
       this.templateReferenceContextFromTypeScript(query, handles),
     ].filter((context): context is TemplateReferenceContext => context != null);
+  }
+
+  private templateLexicalReferenceContext(
+    query: SemanticAppQuery,
+    handles: boolean,
+  ): TemplateReferenceContext | null {
+    const cursor = query.cursor;
+    if (cursor?.offset == null) {
+      return null;
+    }
+    for (const site of this.templateRuntimeExpressionAccessSites()) {
+      const accessUse = site.accessUse;
+      if (
+        !accessUse.lexicalLocal
+        || (
+          accessUse.accessForm !== RuntimeExpressionAccessForm.Scope
+          && accessUse.accessForm !== RuntimeExpressionAccessForm.ScopeCall
+        )
+        || accessUse.targetResolution !== RuntimeExpressionAccessTargetResolution.Exact
+        || accessUse.targetLinks.length !== 1
+      ) {
+        continue;
+      }
+      const target = accessUse.targetLinks[0] ?? null;
+      if (target == null) {
+        continue;
+      }
+      const targetSource = semanticExactSourceReference(describeAddress(
+        this.store,
+        target.declarationSourceAddressHandle,
+      ));
+      const accessSource = runtimeExpressionAccessNameSource(this.store, accessUse);
+      if (
+        targetSource == null
+        || (
+          !semanticSourceReferenceContainsFileOffset(accessSource, cursor.filePath, cursor.offset)
+          && !semanticSourceReferenceContainsFileOffset(targetSource, cursor.filePath, cursor.offset)
+        )
+      ) {
+        continue;
+      }
+      const selectedMemberName = this.authoredTextForSource(targetSource);
+      if (selectedMemberName == null || !isValidRenameIdentifier(selectedMemberName)) {
+        return null;
+      }
+      return this.templateReferenceContextForTarget({
+        selectedMemberName,
+        targetSource,
+        targetIdentityHandle: target.targetIdentityHandle,
+        declarationSource: targetSource,
+        declarationSourceAddressHandle: target.declarationSourceAddressHandle,
+        renameSurface: TemplateRenameSurface.Member,
+        includeTypeScriptReferences: false,
+      }, handles);
+    }
+    return null;
   }
 
   private templateReferenceContextForCursor(
@@ -852,29 +907,49 @@ export class SemanticAppTemplateQueries {
       return null;
     }
 
-    const observedRows = readBindingObservedDependencyRows(this.emission, this.store, handles);
-    const activeObservedRow = observedRows.find((row) =>
-      unprovenObservedMemberRowContainsCursor(row, selectedMemberName, cursor)
+    const accessSites = this.templateRuntimeExpressionAccessSites();
+    const activeSite = accessSites.find((site) =>
+      unprovenRuntimeExpressionAccessContainsCursor(
+        this.store,
+        site.accessUse,
+        selectedMemberName,
+        cursor,
+        (source) => this.authoredTextForSource(source),
+      )
     ) ?? null;
-    if (activeObservedRow == null) {
+    if (activeSite == null) {
       return null;
     }
-    const activeSource = semanticExactSourceReference(activeObservedRow.memberTokenSource ?? null);
+    const activeSource = runtimeExpressionAccessNameSource(this.store, activeSite.accessUse);
     if (activeSource == null) {
       return null;
     }
-    const activeRow = openMemberTemplateReferenceRowForObservedDependency(
-      activeObservedRow,
+    const activeRow = templateReferenceRowForRuntimeExpressionAccess(
+      this.store,
+      activeSite,
       selectedMemberName,
       activeSource,
+      null,
       handles,
     );
-    const candidateRows = unprovenSameNameCandidateRows(
-      observedRows,
-      selectedMemberName,
-      activeSource,
-      handles,
-    ).filter((row) => !sourceReferencesMatchExactSpan(row.source, activeSource));
+    const candidateRows = uniqueSortedTemplateReferenceRows(accessSites
+      .filter((site) =>
+        site !== activeSite
+        && runtimeExpressionAccessIsUnprovenSameNameCandidate(
+          this.store,
+          site.accessUse,
+          selectedMemberName,
+          (source) => this.authoredTextForSource(source),
+        )
+      )
+      .map((site) => templateReferenceRowForRuntimeExpressionAccess(
+        this.store,
+        site,
+        selectedMemberName,
+        activeSource,
+        null,
+        handles,
+      )));
 
     return {
       selectedMemberName,
@@ -1197,47 +1272,78 @@ export class SemanticAppTemplateQueries {
     targetSourceAddressHandle: AddressHandle | null,
     handles: boolean,
   ): ReferenceRowsForTarget {
-    const observedRows = readBindingObservedDependencyRows(this.emission, this.store, handles);
-    const observedUsageRows = observedRows
-      .filter((row) =>
-        row.source != null
-        // Only member-declaration routes prove the row observes the selected member; owner-value
-        // routes carry the owner's declaration and would match the wrong symbol (e.g. a
-        // `shellTone.label` row whose best source is the `shellTone` declaration must not become a
-        // usage of `shellTone` itself).
-        && row.observedMemberSourceRoute === 'member-declaration'
-        && observedTargetSources.some((source) => sourceReferencesMatchExactSpan(row.observedMemberSource, source))
-      )
-      .map((row) => templateReferenceRowForObservedDependency(row, selectedMemberName, targetSource, handles));
-    const assignmentUsageRows = readBindingDataFlowRows(this.emission, this.store, handles)
-      .filter((row) =>
-        row.sourceAssignmentOccurrenceSource != null
-        && row.sourceAssignmentTargetSource != null
-        && observedTargetSources.some((source) =>
-          sourceReferencesMatchExactSpan(row.sourceAssignmentTargetSource, source)
-        )
-        && !sourceReferencesMatchExactSpan(row.sourceAssignmentOccurrenceSource, targetSource)
-      )
-      .map((row) => templateReferenceRowForSourceAssignment(row, selectedMemberName, targetSource, handles));
-    const authoredScopeUsageRows = authoredScopeReferenceRowsForTarget(
-      this.store,
-      [...this.emission.templates.resources, ...this.emission.templates.authoringResources],
-      this.emission.templates.expressionWorld,
-      selectedMemberName,
-      targetSource,
-      observedTargetSources,
-      targetIdentityHandle,
-      targetSourceAddressHandle,
-      handles,
-    );
+    const accessSites = this.templateRuntimeExpressionAccessSites();
+    const templateUsageRows: SemanticTemplateReferenceRow[] = [];
+    const candidateRows: SemanticTemplateReferenceRow[] = [];
+    for (const site of accessSites) {
+      const targetLink = matchingRuntimeExpressionAccessTarget(
+        this.store,
+        site.accessUse,
+        observedTargetSources,
+        targetIdentityHandle,
+        targetSourceAddressHandle,
+      );
+      if (targetLink != null) {
+        const row = templateReferenceRowForRuntimeExpressionAccess(
+          this.store,
+          site,
+          selectedMemberName,
+          targetSource,
+          targetLink,
+          handles,
+        );
+        if (!sourceReferencesMatchExactSpan(row.source, targetSource)) {
+          templateUsageRows.push(row);
+        }
+        continue;
+      }
+      if (runtimeExpressionAccessIsUnprovenSameNameCandidate(
+        this.store,
+        site.accessUse,
+        selectedMemberName,
+        (source) => this.authoredTextForSource(source),
+      )) {
+        candidateRows.push(templateReferenceRowForRuntimeExpressionAccess(
+          this.store,
+          site,
+          selectedMemberName,
+          targetSource,
+          null,
+          handles,
+        ));
+      }
+    }
     return {
-      templateUsageRows: uniqueSortedTemplateReferenceRows([
-        ...observedUsageRows,
-        ...assignmentUsageRows,
-        ...authoredScopeUsageRows,
-      ]),
-      candidateRows: unprovenSameNameCandidateRows(observedRows, selectedMemberName, targetSource, handles),
+      templateUsageRows: uniqueSortedTemplateReferenceRows(templateUsageRows),
+      candidateRows: uniqueSortedTemplateReferenceRows(candidateRows),
     };
+  }
+
+  private templateRuntimeExpressionAccessSites(): readonly TemplateRuntimeExpressionAccessSite[] {
+    const sites: TemplateRuntimeExpressionAccessSite[] = [];
+    for (const resource of [...this.emission.templates.resources, ...this.emission.templates.authoringResources]) {
+      const observedByAccessUse = new Map<ProductHandle, RuntimeBindingObservedDependency>();
+      for (const dependency of resourceLocalBindingObservedDependencies(this.store, resource)) {
+        if (!observedByAccessUse.has(dependency.accessUseProductHandle)) {
+          observedByAccessUse.set(dependency.accessUseProductHandle, dependency);
+        }
+      }
+      for (const accessUse of resourceLocalRuntimeExpressionAccessUses(this.store, resource)) {
+        const binding = resource.runtimeAnalysis.runtimeRendering.readBinding(accessUse.ownerProductHandle);
+        if (binding == null) {
+          throw new Error(
+            `Template runtime access use '${accessUse.productHandle}' has no owning runtime binding.`,
+          );
+        }
+        sites.push({
+          definitionName: resource.compilation.definition.name,
+          bindingKind: binding.bindingKind,
+          accessUse,
+          observedDependency: observedByAccessUse.get(accessUse.productHandle) ?? null,
+        });
+      }
+    }
+    return sites;
   }
 
   /** Project the TypeScript-origin reference context into the template-origin context shape. */
@@ -1440,6 +1546,13 @@ interface ResourceReferenceTarget {
 interface ReferenceRowsForTarget {
   readonly templateUsageRows: readonly SemanticTemplateReferenceRow[];
   readonly candidateRows: readonly SemanticTemplateReferenceRow[];
+}
+
+interface TemplateRuntimeExpressionAccessSite {
+  readonly definitionName: string;
+  readonly bindingKind: SemanticTemplateReferenceRow['bindingKind'];
+  readonly accessUse: RuntimeExpressionAccessUse;
+  readonly observedDependency: RuntimeBindingObservedDependency | null;
 }
 
 interface TypeScriptReferenceContext {
@@ -2524,6 +2637,7 @@ function templateReferenceDeclarationRow(
     targetSource,
     ...(handles ? {
       handles: {
+        accessUseProductHandle: null,
         observedDependencyProductHandle: null,
         expressionProductHandle: null,
         bindingProductHandle: null,
@@ -2645,6 +2759,7 @@ function bindableAttributeReferenceRow(
     targetSource,
     ...(handles ? {
       handles: {
+        accessUseProductHandle: null,
         observedDependencyProductHandle: null,
         expressionProductHandle: null,
         bindingProductHandle: null,
@@ -2782,7 +2897,7 @@ function attributeResourceReferenceRows(
           SemanticTemplateResourceUsageKind.AttributeTarget,
         )];
   });
-  const dynamicRows = resourceLocalDynamicTemplateInstructions(store, resource).flatMap((instruction): readonly SemanticTemplateReferenceRow[] => {
+  const dynamicRows = resourceLocalDynamicTemplateInstructions(resource).flatMap((instruction): readonly SemanticTemplateReferenceRow[] => {
     if (
       !(instruction instanceof HydrateAttributeInstruction)
       || instruction.definitionProductHandle == null
@@ -2791,7 +2906,7 @@ function attributeResourceReferenceRows(
     ) {
       return [];
     }
-    const syntax = capturedAttributeSyntaxForDynamicInstruction(store, instruction);
+    const syntax = capturedAttributeSyntaxForDynamicInstruction(resource, instruction);
     const token = syntax == null ? null : attributeSyntaxTargetTokenSource(store, syntax);
     return token == null
       ? []
@@ -2830,6 +2945,7 @@ function resourceUsageReferenceRow(
     targetSource: target.targetSource,
     ...(handles ? {
       handles: {
+        accessUseProductHandle: null,
         observedDependencyProductHandle: null,
         expressionProductHandle,
         bindingProductHandle,
@@ -3232,217 +3348,112 @@ function sourceSlice(
   );
 }
 
-function authoredScopeReferenceRowsForTarget(
+function matchingRuntimeExpressionAccessTarget(
   store: KernelStore,
-  resources: readonly TemplateResourceEmission[],
-  expressionWorld: AureliaAppWorldProjectEmission['templates']['expressionWorld'],
-  selectedMemberName: string,
-  targetSource: SemanticSourceReference,
+  accessUse: RuntimeExpressionAccessUse,
   targetSources: readonly SemanticSourceReference[],
   targetIdentityHandle: IdentityHandle | null,
   targetSourceAddressHandle: AddressHandle | null,
-  handles: boolean,
-): readonly SemanticTemplateReferenceRow[] {
-  return uniqueSortedTemplateReferenceRows(resources.flatMap((resource) =>
-    resourceLocalEffectiveTemplateExpressionParses(store, resource).flatMap((parse) => {
-      if (!ExpressionParseResultInspector.hasCanonicalAst(parse.result)) {
-        return [];
-      }
-      const carrier = semanticExactSourceReference(describeAddress(store, parse.sourceAddressHandle));
-      const sourcePath = carrier?.path;
-      if (sourcePath == null) {
-        return [];
-      }
-      const bindings = runtimeExpressionBindingsForTemplateExpressionParse(resource, parse);
-      const bindingKinds = new Set(bindings.map((binding) => binding.bindingKind));
-      const bindingProductHandles = new Set(bindings.map((binding) => binding.productHandle));
-      const bindingKind = bindingKinds.size === 1 ? [...bindingKinds][0]! : null;
-      const bindingProductHandle = bindingProductHandles.size === 1 ? [...bindingProductHandles][0]! : null;
-      return ExpressionParseResultInspector.scopeAccesses(parse.result).flatMap((access): readonly SemanticTemplateReferenceRow[] => {
-        if (access.name.name !== selectedMemberName) {
-          return [];
-        }
-        const selection = bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset(
-          store,
-          resource,
-          expressionWorld,
-          parse,
-          access.name.span.start,
-        );
-        if (
-          selection.kind !== RuntimeBindingSourceEnvironmentSelectionKind.Context
-          || !scopeSlotMatchesReferenceTarget(
-            store,
-            selection.scope.locate(access.name.name, access.ancestor).slot,
-            targetSources,
-            targetIdentityHandle,
-          )
-        ) {
-          return [];
-        }
-        const source = sourceReferenceForParserSpan(sourcePath, access.name.span, 'name', carrier);
-        if (sourceReferencesMatchExactSpan(source, targetSource)) {
-          return [];
-        }
-        return [{
-          referenceKind: SemanticTemplateReferenceKind.TemplateUsage,
-          name: access.name.name,
-          definitionName: resource.compilation.definition.name,
-          bindingKind,
-          dependencyKind: null,
-          source,
-          targetSource,
-          ...(handles ? {
-            handles: {
-              observedDependencyProductHandle: null,
-              expressionProductHandle: parse.productHandle,
-              bindingProductHandle,
-              sourceAddressHandle: null,
-              targetSourceAddressHandle,
-            },
-          } : {}),
-        }];
-      });
-    })
-  ));
+): RuntimeExpressionAccessTargetLink | null {
+  for (const target of accessUse.targetLinks) {
+    if (
+      targetSourceAddressHandle != null
+      && target.declarationSourceAddressHandle === targetSourceAddressHandle
+    ) {
+      return target;
+    }
+    if (
+      targetIdentityHandle != null
+      && target.targetIdentityHandle === targetIdentityHandle
+    ) {
+      return target;
+    }
+    const declarationSource = semanticExactSourceReference(describeAddress(
+      store,
+      target.declarationSourceAddressHandle,
+    ));
+    if (
+      declarationSource != null
+      && targetSources.some((source) => sourceReferencesMatchExactSpan(declarationSource, source))
+    ) {
+      return target;
+    }
+  }
+  return null;
 }
 
-function scopeSlotMatchesReferenceTarget(
+function templateReferenceRowForRuntimeExpressionAccess(
   store: KernelStore,
-  slot: BindingContextSlot | null,
-  targetSources: readonly SemanticSourceReference[],
-  targetIdentityHandle: IdentityHandle | null,
-): boolean {
-  if (slot == null) {
-    return false;
-  }
-  if (
-    targetIdentityHandle != null
-    && slot.targetIdentityHandle != null
-    && slot.targetIdentityHandle === targetIdentityHandle
-  ) {
-    return true;
-  }
-  const slotSource = semanticExactSourceReference(describeAddress(store, slot.sourceAddressHandle));
-  return slotSource != null && targetSources.some((source) => sourceReferencesMatchExactSpan(slotSource, source));
-}
-
-function templateReferenceRowForObservedDependency(
-  row: SemanticBindingObservedDependencyRow,
+  site: TemplateRuntimeExpressionAccessSite,
   selectedMemberName: string,
   targetSource: SemanticSourceReference,
+  matchedTarget: RuntimeExpressionAccessTargetLink | null,
   handles: boolean,
 ): SemanticTemplateReferenceRow {
-  // Prefer the authored member-name token over the whole expression span so references highlight
-  // and rename edit exactly the token (`searchText`, not `state.items.searchText`).
-  const tokenSource = semanticExactSourceReference(row.memberTokenSource ?? null);
-  return {
-    referenceKind: SemanticTemplateReferenceKind.TemplateUsage,
-    name: tokenSource != null
-      ? row.memberName ?? row.methodName ?? row.sourceRootName ?? selectedMemberName
-      : row.sourceName ?? row.memberName ?? row.methodName ?? selectedMemberName,
-    definitionName: row.definitionName,
-    bindingKind: row.bindingKind,
-    dependencyKind: row.dependencyKind,
-    source: tokenSource ?? semanticExactSourceReference(row.source),
-    targetSource,
-    ...(handles ? {
-      handles: {
-        observedDependencyProductHandle: row.handles?.observedDependencyProductHandle ?? null,
-        expressionProductHandle: row.handles?.expressionProductHandle ?? null,
-        bindingProductHandle: row.handles?.bindingProductHandle ?? null,
-        sourceAddressHandle: row.handles?.sourceAddressHandle ?? null,
-        targetSourceAddressHandle: row.handles?.observedMemberSourceAddressHandle ?? null,
-      },
-    } : {}),
-  };
-}
-
-function templateReferenceRowForSourceAssignment(
-  row: SemanticBindingDataFlowRow,
-  selectedMemberName: string,
-  targetSource: SemanticSourceReference,
-  handles: boolean,
-): SemanticTemplateReferenceRow {
+  const accessUse = site.accessUse;
   return {
     referenceKind: SemanticTemplateReferenceKind.TemplateUsage,
     name: selectedMemberName,
-    definitionName: row.definitionName,
-    bindingKind: row.bindingKind,
-    dependencyKind: null,
-    source: semanticExactSourceReference(row.sourceAssignmentOccurrenceSource),
+    definitionName: site.definitionName,
+    bindingKind: site.bindingKind,
+    dependencyKind: site.observedDependency?.dependencyKind ?? null,
+    source: runtimeExpressionAccessNameSource(store, accessUse),
     targetSource,
     ...(handles ? {
       handles: {
-        observedDependencyProductHandle: null,
-        expressionProductHandle: row.handles?.expressionProductHandle ?? null,
-        bindingProductHandle: row.handles?.bindingProductHandle ?? null,
-        sourceAddressHandle: row.handles?.sourceAddressHandle ?? null,
-        targetSourceAddressHandle: row.handles?.sourceAssignmentTargetSourceAddressHandle ?? null,
+        accessUseProductHandle: accessUse.productHandle,
+        observedDependencyProductHandle: site.observedDependency?.productHandle ?? null,
+        expressionProductHandle: accessUse.expressionProductHandle,
+        bindingProductHandle: accessUse.ownerProductHandle,
+        sourceAddressHandle: accessUse.nameSourceAddressHandle ?? accessUse.sourceAddressHandle,
+        targetSourceAddressHandle: matchedTarget?.declarationSourceAddressHandle ?? null,
       },
     } : {}),
   };
 }
 
-function openMemberTemplateReferenceRowForObservedDependency(
-  row: SemanticBindingObservedDependencyRow,
-  selectedMemberName: string,
-  targetSource: SemanticSourceReference,
-  handles: boolean,
-): SemanticTemplateReferenceRow {
-  const referenceRow = templateReferenceRowForObservedDependency(
-    row,
-    selectedMemberName,
-    targetSource,
-    handles,
-  );
-  return referenceRow.handles == null
-    ? referenceRow
-    : {
-        ...referenceRow,
-        handles: {
-          ...referenceRow.handles,
-          targetSourceAddressHandle: null,
-        },
-      };
+function runtimeExpressionAccessNameSource(
+  store: KernelStore,
+  accessUse: RuntimeExpressionAccessUse,
+): SemanticSourceReference | null {
+  return semanticExactSourceReference(describeAddress(
+    store,
+    accessUse.nameSourceAddressHandle ?? accessUse.sourceAddressHandle,
+  ));
 }
 
-/**
- * Same-name template usages whose provenance cannot prove a relationship to the selected symbol
- * (owner-value routes on weak, dynamic, keyed, or index-signature-shaped owners). Same-name rows
- * whose member-declaration route points at a DIFFERENT declaration are proven-different symbols and
- * are deliberately not candidates, matching TypeScript's treatment of shadowed names.
- */
-function unprovenSameNameCandidateRows(
-  observedRows: readonly SemanticBindingObservedDependencyRow[],
+function runtimeExpressionAccessIsUnprovenSameNameCandidate(
+  store: KernelStore,
+  accessUse: RuntimeExpressionAccessUse,
   selectedMemberName: string,
-  targetSource: SemanticSourceReference,
-  handles: boolean,
-): readonly SemanticTemplateReferenceRow[] {
-  const rows = observedRows
-    .filter((row) =>
-      row.source != null
-      && row.observedMemberSourceRoute !== 'member-declaration'
-      && (row.memberName === selectedMemberName
-        || (row.memberName == null && row.sourceName === selectedMemberName))
+  authoredTextForSource: (source: SemanticSourceReference | null) => string | null,
+): boolean {
+  if (
+    accessUse.origin !== RuntimeExpressionAccessOrigin.Authored
+    || (
+      accessUse.targetResolution !== RuntimeExpressionAccessTargetResolution.Open
+      && accessUse.targetResolution !== RuntimeExpressionAccessTargetResolution.IndexSignature
     )
-    .map((row) => templateReferenceRowForObservedDependency(row, selectedMemberName, targetSource, handles));
-  return [...uniqueTemplateReferenceRows(rows)]
-    .sort((left, right) =>
-      (left.source?.path ?? '').localeCompare(right.source?.path ?? '')
-      || (left.source?.start ?? -1) - (right.source?.start ?? -1)
-    );
+  ) {
+    return false;
+  }
+  return authoredTextForSource(runtimeExpressionAccessNameSource(store, accessUse)) === selectedMemberName;
 }
 
-function unprovenObservedMemberRowContainsCursor(
-  row: SemanticBindingObservedDependencyRow,
+function unprovenRuntimeExpressionAccessContainsCursor(
+  store: KernelStore,
+  accessUse: RuntimeExpressionAccessUse,
   selectedMemberName: string,
   cursor: NonNullable<SemanticAppQuery['cursor']>,
+  authoredTextForSource: (source: SemanticSourceReference | null) => string | null,
 ): boolean {
-  return row.source != null
-    && row.observedMemberSourceRoute !== 'member-declaration'
-    && row.memberName === selectedMemberName
-    && semanticSourceReferenceContainsFileOffset(row.memberTokenSource ?? null, cursor.filePath, cursor.offset);
+  const source = runtimeExpressionAccessNameSource(store, accessUse);
+  return runtimeExpressionAccessIsUnprovenSameNameCandidate(
+    store,
+    accessUse,
+    selectedMemberName,
+    authoredTextForSource,
+  ) && semanticSourceReferenceContainsFileOffset(source, cursor.filePath, cursor.offset);
 }
 
 function uniqueTemplateReferenceRows(

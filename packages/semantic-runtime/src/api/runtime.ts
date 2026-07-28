@@ -180,6 +180,7 @@ import {
   readValueConverterApplicationRows,
   readBindingValueChannelSummary,
   readBindingValueChannelRows,
+  readRuntimeExpressionAccessUseRows,
   readTargetOperationRows,
 } from './binding-projections.js';
 import {
@@ -347,6 +348,7 @@ import {
   type SemanticProxyObservableEscapesResult,
   type SemanticRuntimeEffectObservedDependenciesResult,
   type SemanticRuntimeEffectResult,
+  type SemanticRuntimeExpressionAccessUseResult,
   type SemanticResourceDefinitionsResult,
   type SemanticResourceIssuesResult,
   type SemanticResourceVisibilityResult,
@@ -2818,6 +2820,8 @@ export class SemanticApp {
         return answerCurrentQuery(() => this.runtimeEffectObservedDependencies(query.page, query.detail));
       case SemanticAppQueryKind.ProxyObservableEscapes:
         return answerCurrentQuery(() => this.proxyObservableEscapes(query.page, query.detail));
+      case SemanticAppQueryKind.RuntimeExpressionAccessUses:
+        return answerCurrentQuery(() => this.runtimeExpressionAccessUses(query.page, query.detail));
       case SemanticAppQueryKind.StateStores:
         return answerCurrentQuery(() => this.stateStores(query.page, query.detail));
       case SemanticAppQueryKind.StateGetterBindings:
@@ -4479,6 +4483,40 @@ export class SemanticApp {
     return answer(
       outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} runtime binding data-flow row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  runtimeExpressionAccessUses(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRuntimeExpressionAccessUseResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticRuntimeExpressionAccessUseResult>({
+      kind: SemanticAppQueryKind.RuntimeExpressionAccessUses,
+      page,
+      detail,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const unsupported = this.requireAnalysisDepth(
+      SemanticAppAnalysisDepth.BindingObservation,
+      'runtime expression access-use rows',
+      { rows: [] } satisfies SemanticRuntimeExpressionAccessUseResult,
+    );
+    if (unsupported != null) {
+      return unsupported;
+    }
+    const rows = readRuntimeExpressionAccessUseRows(
+      this.emission,
+      this.runtime.workspace.store,
+      includeHandles(detail),
+    );
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} runtime expression access-use row(s).`,
       { rows: paged.rows },
       paged.page,
     );

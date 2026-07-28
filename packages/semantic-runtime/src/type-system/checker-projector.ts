@@ -337,6 +337,45 @@ export class CheckerTypeProjector {
     return members.map((member) => existingByHandle.get(member.detailHandle) ?? member);
   }
 
+  /**
+   * Publish one checker member under an already-projected owner without materializing the owner's complete surface.
+   *
+   * Expression access frequently starts from intentionally lazy type shapes. Reuse the same member constructor and
+   * declaration publication as eager projection so downstream consumers do not need a raw-symbol fallback island.
+   */
+  ensureOwnedMember(
+    owner: CheckerTypeShape,
+    symbol: ts.Symbol,
+  ): CheckerTypeMember {
+    const existing = owner.members.find((member) => member.name === symbol.getName()) ?? null;
+    if (existing != null) {
+      return existing;
+    }
+    const carrier = owner.carrier;
+    if (carrier == null) {
+      throw new Error(`Type shape '${owner.productHandle}' has no checker carrier for member '${symbol.getName()}'.`);
+    }
+    const localKey = `borrowed-member-surface:${localKeyPart(owner.productHandle)}`;
+    const records: KernelStoreRecord[] = [];
+    const member = this.memberForType({
+      localKey,
+      checker: carrier.checker,
+      type: carrier.type,
+      origin: owner.origin,
+      sourceNode: carrier.declarations[0] ?? null,
+      sourceAddressHandle: owner.sourceAddressHandle,
+      ownerIdentityHandle: owner.identityHandle,
+      display: owner.display,
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+    }, owner.toReference(), records, symbol);
+    if (records.length > 0) {
+      this.publication.publish(new KernelPublicationPlan(
+        new KernelStoreBatch(records, `type-system-member-source:${member.detailHandle}`),
+      ));
+    }
+    return this.ensureOwnedMembers(owner, [member])[0]!;
+  }
+
   private recordsForType(
     input: CheckerTypeProjectionRequest,
     descriptor: CheckerTypeDescriptor = checkerTypeDescriptor(input),

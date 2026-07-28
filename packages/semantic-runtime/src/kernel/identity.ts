@@ -638,6 +638,25 @@ export class CompilerIdentity {
   ) {}
 }
 
+/** Identity for a source-backed expression operation or access after runtime ownership pairing. */
+export class RuntimeExpressionIdentity {
+  /** String discriminator for serialized runtime-expression identity records. */
+  readonly kind = 'runtime-expression-identity' as const;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Controlled product kind represented by this identity. */
+    readonly productKindKey: ProductKindKey,
+    /** Runtime binding, watcher, effect-plan, or computed-observer identity that owns the operation. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Exact source address for the expression operation or access. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Operation-local source label for traces when one exists. */
+    readonly localName: string | null = null,
+  ) {}
+}
+
 /** Identity for a template across authored, transformed, and compiled phases. */
 export class TemplateIdentity {
   /** String discriminator for serialized template identity records. */
@@ -745,6 +764,7 @@ export type SemanticIdentity =
   | FetchClientIdentity
   | DialogIdentity
   | CompilerIdentity
+  | RuntimeExpressionIdentity
   | TemplateIdentity
   | TemplateNodeIdentity
   | BindingIdentity

@@ -70,9 +70,6 @@ import {
   isRuntimeValueChannelBinding,
 } from './runtime-binding-expression.js';
 import {
-  RuntimeBindingExpressionScopeProjector,
-} from './runtime-binding-expression-scope.js';
-import {
   RuntimeBindingSourceExpressionContextProjector,
 } from './runtime-binding-source-expression-context.js';
 import {
@@ -182,11 +179,7 @@ export class RuntimeBindingValueChannelMaterializer {
     const source = this.recordsForSource(input.localKey);
     records.push(...source.records);
     const instructionScopes = instructionScopeLookup(input.scopes.instructionScopes);
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-      this.store,
-      input.expressionWorld,
-      input.expressionResourcePlan,
-    );
+    const bindingExpressionScopes = input.scopes.bindingExpressionScopes;
     const sourceExpressionContexts = new RuntimeBindingSourceExpressionContextProjector(
       input.runtimeBindings,
       instructionScopes,
@@ -340,8 +333,10 @@ export class RuntimeBindingValueChannelMaterializer {
       target.targetAccess?.propertyType ?? null,
       draft.runtimeValueType,
       result.realization,
+      result.admittedSourceOwnerType,
       result.admittedSourceValueType,
       result.admittedSourceMemberKind,
+      result.admittedSourceMemberHandle,
       result.admittedSourceMemberSourceAddressHandle,
       draft.valueDomain,
       draft.primitiveValueDomain ?? [],

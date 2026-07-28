@@ -87,7 +87,6 @@ export class ComputedObservationMaterializer {
       site.flush,
       site.deep,
       product.sourceAddressHandle,
-      [],
     );
     return new ComputedObservationDefinitionPublication(definition, product.records);
   }

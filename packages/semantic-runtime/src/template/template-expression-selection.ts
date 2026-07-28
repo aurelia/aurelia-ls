@@ -1,8 +1,11 @@
 import type { BindingScope } from '../configuration/scope.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
+import { expressionSourceSpansEqual } from '../expression/source-span.js';
 import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
+import { sourceSpanContainsOffset } from '../kernel/address.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
+import { sourceSpanAddressForAddress } from '../kernel/source-address.js';
 import type { KernelStore, KernelStoreReadView } from '../kernel/store.js';
 import {
   instructionScopeLookup,
@@ -11,16 +14,17 @@ import {
   type RuntimeExpressionBinding,
 } from '../observation/runtime-binding-expression.js';
 import {
-  RuntimeBindingExpressionScopeProjector,
-} from '../observation/runtime-binding-expression-scope.js';
-import {
   bindingBehaviorEvaluationForRuntimeBindingSource,
   RuntimeBindingSourceExpressionContextProjector,
   RuntimeBindingSourceExpressionProjectionKind,
   type RuntimeBindingSourceExpressionContextProjection,
 } from '../observation/runtime-binding-source-expression-context.js';
 import { CheckerExpressionTypeBindingBehaviorEvaluation } from '../type-system/expression-type-context.js';
-import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
+import {
+  RuntimeExpressionAccessOwnerKind,
+  RuntimeExpressionOperationKind,
+  type RuntimeExpressionAccessUse,
+} from '../runtime-expression/runtime-expression-access-use.js';
 import type { TemplateResourceScope } from './compiler-world.js';
 import { bindingExpressionAstForProductAtOffset } from './expression-parse-product.js';
 import {
@@ -176,7 +180,6 @@ export function runtimeExpressionBindingsForTemplateExpressionParse(
 export function bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOffset(
   store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
-  expressionWorld: CheckerExpressionTypeWorld,
   expressionParse: TemplateExpressionParse,
   offset: number,
   ambientScope: BindingScope | null = null,
@@ -194,27 +197,39 @@ export function bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOff
       ambientScope,
     );
   }
-  const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-    store,
-    expressionWorld,
-    resource.runtimeAnalysis.expressionResourcePlan,
+  const sourceExpressions = new RuntimeBindingSourceExpressionContextProjector(
+    resource.runtimeAnalysis.runtimeRendering,
+    instructionScopeLookup(resource.runtimeAnalysis.scopes.instructionScopes),
+    resource.runtimeAnalysis.scopes.bindingExpressionScopes,
   );
-  const selection = selectRuntimeBindingSourceContextProjection({
-    bindings,
-    expression,
-    localKey: `template-expression-selection:${expressionParse.productHandle}:source-scope`,
-    sourceScope: ambientScope ?? bindingScopeForTemplateExpressionParse(resource, expressionParse),
-    sourceExpressions: new RuntimeBindingSourceExpressionContextProjector(
-      resource.runtimeAnalysis.runtimeRendering,
-      instructionScopeLookup(resource.runtimeAnalysis.scopes.instructionScopes),
-      bindingExpressionScopes,
-    ),
-    bindingBehaviorForBinding: (binding) => bindingBehaviorEvaluationForTemplateExpression(
-      resource,
-      expressionParse.productHandle,
-      binding,
-    ),
-  });
+  const accessUses = runtimeExpressionAccessUsesForTemplateExpressionAtOffset(
+    store,
+    resource,
+    expressionParse.productHandle,
+    offset,
+  );
+  const accessUseOwnsSourceEnvironment = accessUses.some((accessUse) =>
+    bindingBehaviorEvaluationForRuntimeExpressionAccessUse(accessUse) != null
+  );
+  const selection = accessUseOwnsSourceEnvironment
+    ? selectRuntimeExpressionAccessUseSourceContextProjection({
+        resource,
+        accessUses,
+        expression,
+        localKey: `template-expression-selection:${expressionParse.productHandle}:access-use-source-scope`,
+        sourceExpressions,
+      })
+    : selectRuntimeBindingSourceContextProjection({
+        bindings,
+        expression,
+        localKey: `template-expression-selection:${expressionParse.productHandle}:source-scope`,
+        sourceExpressions,
+        bindingBehaviorForBinding: (binding) => bindingBehaviorEvaluationForTemplateExpression(
+          resource,
+          expressionParse.productHandle,
+          binding,
+        ),
+      });
   return selection.kind === RuntimeBindingSourceContextProjectionSelectionKind.Open
     ? {
         kind: RuntimeBindingSourceEnvironmentSelectionKind.Open,
@@ -288,7 +303,6 @@ export function selectRuntimeBindingSourceContextProjection(
     readonly bindings: readonly RuntimeExpressionBinding[];
     readonly expression: ExpressionAstNode;
     readonly localKey: string;
-    readonly sourceScope?: BindingScope | null;
     readonly sourceExpressions: RuntimeBindingSourceExpressionContextProjector;
     readonly bindingBehaviorForBinding: (
       binding: RuntimeExpressionBinding,
@@ -303,7 +317,6 @@ export function selectRuntimeBindingSourceContextProjection(
         binding,
         expression: input.expression,
         localKey: input.localKey,
-        sourceScope: input.sourceScope,
       },
       input.bindingBehaviorForBinding(binding),
     );
@@ -313,7 +326,61 @@ export function selectRuntimeBindingSourceContextProjection(
     }
     projections.push(projection);
   }
+  return selectConvergedRuntimeBindingSourceContextProjection(projections, openReason);
+}
 
+function selectRuntimeExpressionAccessUseSourceContextProjection(
+  input: {
+    readonly resource: TemplateResourceRuntimeAnalysisEmission;
+    readonly accessUses: readonly RuntimeExpressionAccessUse[];
+    readonly expression: ExpressionAstNode;
+    readonly localKey: string;
+    readonly sourceExpressions: RuntimeBindingSourceExpressionContextProjector;
+  },
+): RuntimeBindingSourceContextProjectionSelectionResult {
+  const projections: RuntimeBindingSourceExpressionContextProjection[] = [];
+  let openReason: string | null = null;
+  const scopes = input.resource.runtimeAnalysis.scopes.readScopes();
+  for (const accessUse of input.accessUses) {
+    if (accessUse.ownerKind !== RuntimeExpressionAccessOwnerKind.Binding) {
+      openReason ??= 'Template expression access use is not owned by a runtime binding.';
+      continue;
+    }
+    const binding = input.resource.runtimeAnalysis.runtimeRendering.readBinding(accessUse.ownerProductHandle);
+    const sourceScope = accessUse.scopeProductHandle == null
+      ? null
+      : scopes.find((scope) => scope.productHandle === accessUse.scopeProductHandle) ?? null;
+    if (binding == null || !isRuntimeExpressionBinding(binding) || sourceScope == null) {
+      openReason ??= 'Runtime expression access use did not retain its binding-owned source environment.';
+      continue;
+    }
+    const bindingBehavior = bindingBehaviorEvaluationForRuntimeExpressionAccessUse(accessUse);
+    if (bindingBehavior == null) {
+      openReason ??= `Runtime expression operation '${accessUse.operationKind}' has no cursor source-context projection.`;
+      continue;
+    }
+    const projection = input.sourceExpressions.projectSourceWithBindingBehavior(
+      {
+        binding,
+        expression: input.expression,
+        localKey: input.localKey,
+        sourceScope,
+      },
+      bindingBehavior,
+    );
+    if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
+      openReason ??= projection.openReason;
+      continue;
+    }
+    projections.push(projection);
+  }
+  return selectConvergedRuntimeBindingSourceContextProjection(projections, openReason);
+}
+
+function selectConvergedRuntimeBindingSourceContextProjection(
+  projections: readonly RuntimeBindingSourceExpressionContextProjection[],
+  openReason: string | null,
+): RuntimeBindingSourceContextProjectionSelectionResult {
   const first = projections[0] ?? null;
   if (first == null) {
     return {
@@ -344,6 +411,48 @@ export function selectRuntimeBindingSourceContextProjection(
     kind: RuntimeBindingSourceContextProjectionSelectionKind.Context,
     projection: first,
   };
+}
+
+export function runtimeExpressionAccessUsesForTemplateExpressionAtOffset(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  expressionProductHandle: ProductHandle,
+  offset: number,
+): readonly RuntimeExpressionAccessUse[] {
+  const accessUses = runtimeExpressionAccessUsesForTemplateExpression(
+    resource,
+    expressionProductHandle,
+  )
+    .filter((accessUse) => accessUse.nameSourceAddressHandle != null);
+  const selected = accessUses.filter((accessUse) => {
+    const source = sourceSpanAddressForAddress(store, accessUse.nameSourceAddressHandle);
+    return source != null && sourceSpanContainsOffset(source, offset);
+  });
+  return selected.length > 0 ? selected : accessUses;
+}
+
+/** Runtime access occurrences owned by one effective template expression product. */
+export function runtimeExpressionAccessUsesForTemplateExpression(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  expressionProductHandle: ProductHandle,
+): readonly RuntimeExpressionAccessUse[] {
+  return resource.runtimeAnalysis.expressionAccessUses
+    .readAccessUsesForExpressionProduct(expressionProductHandle)
+    .filter((accessUse) => accessUse.ownerKind === RuntimeExpressionAccessOwnerKind.Binding);
+}
+
+function bindingBehaviorEvaluationForRuntimeExpressionAccessUse(
+  accessUse: RuntimeExpressionAccessUse,
+): CheckerExpressionTypeBindingBehaviorEvaluation | null {
+  switch (accessUse.operationKind) {
+    // Repeat invokes astEvaluate directly for key/contextual expressions; these authored accesses belong to the
+    // repeated-item Scope but never enter the iterator binding's astBind lifecycle.
+    case RuntimeExpressionOperationKind.RepeatKey:
+    case RuntimeExpressionOperationKind.RepeatContextual:
+      return CheckerExpressionTypeBindingBehaviorEvaluation.AstEvaluateOnly;
+    default:
+      return null;
+  }
 }
 
 export function bindingBehaviorEvaluationForTemplateExpression(
@@ -481,16 +590,7 @@ function runtimeBindingSourceContextProjectionsMatch(
     && left.bindingBehavior === right.bindingBehavior
     && left.sourceEvaluationReachability === right.sourceEvaluationReachability
     && left.expression.$kind === right.expression.$kind
-    && expressionSpansMatch(left.expression, right.expression)
+    && expressionSourceSpansEqual(left.expression.span, right.expression.span)
     && left.authoredExpression.$kind === right.authoredExpression.$kind
-    && expressionSpansMatch(left.authoredExpression, right.authoredExpression);
-}
-
-function expressionSpansMatch(
-  left: ExpressionAstNode,
-  right: ExpressionAstNode,
-): boolean {
-  return left.span.start === right.span.start
-    && left.span.end === right.span.end
-    && left.span.file?.id === right.span.file?.id;
+    && expressionSourceSpansEqual(left.authoredExpression.span, right.authoredExpression.span);
 }

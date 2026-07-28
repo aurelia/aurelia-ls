@@ -119,7 +119,8 @@ export function sourceAddressForRuntimeExpressionSpan(
   span: SourceSpan,
   role: SourceSpanRole = SourceSpanRole.Name,
 ): RuntimeExpressionSourceAddress {
-  const sourceFileAddressHandle = sourceFileHandleForAddress(store, carrierAddressHandle);
+  const sourceFileAddressHandle = sourceAddressHandleForRuntimeExpressionSpan(span)
+    ?? sourceFileHandleForAddress(store, carrierAddressHandle);
   if (sourceFileAddressHandle == null) {
     return {
       handle: carrierAddressHandle,

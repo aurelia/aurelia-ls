@@ -157,9 +157,6 @@ import {
   type RuntimeExpressionBinding,
 } from '../observation/runtime-binding-expression.js';
 import {
-  RuntimeBindingExpressionScopeProjector,
-} from '../observation/runtime-binding-expression-scope.js';
-import {
   checkerContextForRuntimeBindingBehaviorArguments,
   RuntimeBindingSourceExpressionContextProjector,
 } from '../observation/runtime-binding-source-expression-context.js';
@@ -418,11 +415,7 @@ export class TemplateTypeSystemOverlayBuilder {
         sourceExpressions: new RuntimeBindingSourceExpressionContextProjector(
           resource.runtimeAnalysis.runtimeRendering,
           instructionScopeLookup(resource.runtimeAnalysis.scopes.instructionScopes),
-          new RuntimeBindingExpressionScopeProjector(
-            this.store,
-            expressionWorld,
-            resource.runtimeAnalysis.expressionResourcePlan,
-          ),
+          resource.runtimeAnalysis.scopes.bindingExpressionScopes,
         ),
       },
     };
@@ -764,7 +757,6 @@ export class TemplateTypeSystemOverlayBuilder {
       bindings,
       expression,
       localKey,
-      sourceScope: ambientScope,
       sourceExpressions: projectors.sourceExpressions,
       bindingBehaviorForBinding: (binding) => bindingBehaviorEvaluationForTemplateExpression(
         resource,
@@ -1362,7 +1354,7 @@ export class TemplateTypeSystemOverlayBuilder {
           skipped,
           parse,
           sourceAddressHandle,
-          scope,
+          parentScope,
           projectors,
           baseExpressionContext,
           overlayFileName,
@@ -1374,7 +1366,7 @@ export class TemplateTypeSystemOverlayBuilder {
           skipped,
           parse,
           sourceAddressHandle,
-          scope,
+          parentScope,
           projectors,
           baseExpressionContext,
           overlayFileName,

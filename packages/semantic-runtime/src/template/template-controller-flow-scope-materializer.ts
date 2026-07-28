@@ -16,7 +16,7 @@ import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import {
-  RuntimeBindingExpressionScopeProjector,
+  type RuntimeBindingExpressionScopeProjectionReader,
 } from '../observation/runtime-binding-expression-scope.js';
 import {
   RuntimeBindingSourceExpressionProjectionKind,
@@ -96,6 +96,7 @@ export class TemplateControllerFlowScopeMaterializer {
     private readonly scopeMaterializer: BindingScopeMaterializer,
     private readonly scopeNarrower: CheckerExpressionScopeNarrower,
     private readonly typeSupport: TemplateScopeTypeProjector,
+    private readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader,
     private readonly scopeIssuePublisher: RuntimeBindingScopeIssuePublisher,
     private readonly constructScopeEffects: (
       frame: TemplateScopeConstructionFrame,
@@ -784,12 +785,7 @@ export class TemplateControllerFlowScopeMaterializer {
       };
     }
 
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-      this.store,
-      input.expressionWorld,
-      input.expressionResourcePlan,
-    );
-    const projection = projectRuntimeBindingSourceExpressionInScope(input.runtimeBindings, bindingExpressionScopes, {
+    const projection = projectRuntimeBindingSourceExpressionInScope(input.runtimeBindings, this.bindingExpressionScopes, {
       binding,
       expression,
       localKey,

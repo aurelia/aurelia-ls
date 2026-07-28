@@ -33,6 +33,8 @@ Keep the runtime-emulation split visible. Module evaluation, configuration admis
 - `inquiry`: selectors, loci, answer envelopes, projection lanes, continuations, and consumer policy boundaries above the kernel.
 - `evaluation`: ECMAScript-shaped static module, expression, environment, value, and seam substrate.
 - `type-system`: TypeChecker projection substrate for synthetic expression and template-local member surfaces.
+- `runtime-expression`: owner-qualified runtime expression access occurrences, exact operation slots, target closure,
+  execution semantics, and source provenance before observation or consumer projection.
 - `observation`: TypeChecker-backed ObserverLocator lookup, observer/accessor value channels, and source/target data
   flow.
 - `resources`: resource recognition, resource definition models, definition contributions, and resource provenance before DI admission or template compilation.
@@ -85,6 +87,8 @@ watchpoints, and current shape:
   modeling, and evaluator issue publication.
 - [type-system/README.md](./type-system/README.md) owns TypeChecker-backed expression, scope, member, and type-surface
   projection.
+- [runtime-expression/README.md](./runtime-expression/README.md) owns expression access occurrences, operation slots,
+  target closure, execution semantics, and the observation-derivation boundary.
 - [observation/README.md](./observation/README.md) owns observer-locator, value-channel, and binding data-flow emulation
   boundaries.
 - [router/README.md](./router/README.md) owns route config, route expression, route context, route recognizer, and

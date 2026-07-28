@@ -27,7 +27,7 @@ import {
   KernelStoreBatch,
   type KernelPublicationContext,
 } from '../kernel/publication.js';
-import type { KernelSourceFileReadView, KernelStoreRecord } from '../kernel/store.js';
+import type { KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   RuntimeBindingSourceValueEvaluator,
@@ -47,9 +47,6 @@ import {
   instructionScopeLookup,
   isRuntimeExpressionBinding,
 } from '../observation/runtime-binding-expression.js';
-import {
-  RuntimeBindingExpressionScopeProjector,
-} from '../observation/runtime-binding-expression-scope.js';
 import {
   RuntimeBindingSourceExpressionContextProjector,
   RuntimeBindingSourceExpressionProjectionKind,
@@ -320,7 +317,6 @@ export class RouteInstructionMaterializationProjectPass {
     state: RouteInstructionMaterializationState,
   ): void {
     const site = routerResourceInstructionSite(
-      state.sourceValueEvaluator.kernel,
       store,
       controller,
       routeContext,
@@ -493,7 +489,6 @@ function rootRouteContextsByParentContainerIdentity(
 }
 
 function routerResourceInstructionSite(
-  kernelStore: KernelSourceFileReadView,
   store: KernelPublicationContext,
   controller: RuntimeControllerFrame,
   routeContext: RouteContextModel | null,
@@ -516,11 +511,6 @@ function routerResourceInstructionSite(
     return null;
   }
   const instructionScopes = instructionScopeLookup(runtimeAnalysis.scopes.instructionScopes);
-  const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-    kernelStore,
-    runtimeAnalysis.expressionWorld,
-    runtimeAnalysis.expressionResourcePlan,
-  );
   const host = htmlElementForInstruction(store, instruction);
   return {
     kind,
@@ -531,7 +521,7 @@ function routerResourceInstructionSite(
     sourceExpressionContexts: new RuntimeBindingSourceExpressionContextProjector(
       runtimeAnalysis.runtimeRendering,
       instructionScopes,
-      bindingExpressionScopes,
+      runtimeAnalysis.scopes.bindingExpressionScopes,
     ),
     host,
     sourceAddressHandle: instruction.sourceAddressHandle ?? controller.sourceAddressHandle,

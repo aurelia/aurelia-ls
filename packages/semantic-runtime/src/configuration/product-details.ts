@@ -157,6 +157,8 @@ function scopeCreatorReferences(
       case BindingScopeCreatorKind.TemplateControllerValueScope:
       case BindingScopeCreatorKind.ContentProjection:
         return TemplateDetailDescriptors.Instruction;
+      case BindingScopeCreatorKind.StateBindingBehavior:
+        return TemplateDetailDescriptors.RuntimeBinding;
     }
   })();
   return mergeKernelDetailReferences(

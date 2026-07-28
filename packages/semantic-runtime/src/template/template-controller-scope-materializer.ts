@@ -38,12 +38,17 @@ import {
 import type { DiProviderActivationView } from '../di/provider-activation.js';
 import {
   expressionProductHandleForBinding,
+  instructionScopeLookup,
   isRuntimeExpressionBinding,
+  runtimeBindingSourceExpression,
   type RuntimeExpressionBinding,
 } from '../observation/runtime-binding-expression.js';
 import {
   RuntimeBindingExpressionScopeProjector,
+  type RuntimeBindingExpressionScopeProjectionReader,
 } from '../observation/runtime-binding-expression-scope.js';
+import { runtimeBindingSourceLifecycle } from '../observation/runtime-binding-source-lifecycle.js';
+import { runtimeAssignmentInputScopeForAccessScope } from '../observation/binding-source-write-capability.js';
 import {
   type RuntimeBindingSourceExpressionContextProjection,
   RuntimeBindingSourceExpressionProjectionKind,
@@ -202,6 +207,7 @@ type TemplateScopeConstructionFinePhaseName =
   | 'listener-event-scope'
   | 'state-binding-command-scope'
   | 'state-dispatch-event-scope'
+  | 'binding-expression-scope-handoffs'
   | 'template-controller-scope'
   | 'template-controller-child-sequence'
   | 'runtime-assignment-scope'
@@ -312,6 +318,8 @@ export class TemplateScopeConstructionEmission {
     readonly openSeams: readonly OpenSeam[],
     /** Scope materializer emissions, including root scope. */
     readonly scopeEmissions: readonly BindingScopeConstructionEmission[],
+    /** Immutable rendered-binding source-scope handoffs shared by all later analysis and query consumers. */
+    readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader,
   ) {}
 
   readScopes(): readonly BindingScope[] {
@@ -376,6 +384,7 @@ class TemplateScopeConstructionServices {
   constructor(
     readonly scopeMaterializer: BindingScopeMaterializer,
     readonly scopeNarrower: CheckerExpressionScopeNarrower,
+    readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjector,
     readonly typeSupport: TemplateScopeTypeProjector,
     readonly controllerFlow: TemplateControllerFlowScopeMaterializer,
   ) {}
@@ -519,7 +528,8 @@ export class TemplateScopeConstructionFrame {
       this.scopeIssues,
       this.scopeIssueRecords,
       this.openSeams,
-      this.scopeEmissions,
+      distinctScopeConstructionEmissions(this.scopeEmissions),
+      this.services.bindingExpressionScopes.toProjectionTable(),
     );
   }
 }
@@ -547,6 +557,9 @@ export class TemplateControllerScopeMaterializer {
     const frame = TemplateScopeConstructionFrame.create(input, root, services);
     this.measure(input, 'render-targets', () => this.constructRenderTargets(frame));
     this.measure(input, 'dynamic-instruction-scopes', () => this.captureDynamicInstructionScopes(frame));
+    this.measure(input, 'binding-expression-scope-handoffs', () =>
+      this.completeBindingExpressionScopeHandoffs(frame)
+    );
     return this.measure(input, 'publication', () => this.publishScopeConstruction(frame));
   }
 
@@ -554,21 +567,93 @@ export class TemplateControllerScopeMaterializer {
     const projector = input.expressionWorld.projector;
     const scopeMaterializer = new BindingScopeMaterializer(this.store, projector);
     const scopeNarrower = new CheckerExpressionScopeNarrower(this.store, projector);
-    const typeSupport = new TemplateScopeTypeProjector(this.store, projector);
+    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
+      this.store,
+      input.expressionWorld,
+      input.expressionResourcePlan,
+    );
+    const typeSupport = new TemplateScopeTypeProjector(
+      this.store,
+      projector,
+      bindingExpressionScopes,
+    );
     return new TemplateScopeConstructionServices(
       scopeMaterializer,
       scopeNarrower,
+      bindingExpressionScopes,
       typeSupport,
       new TemplateControllerFlowScopeMaterializer(
         this.store,
         scopeMaterializer,
         scopeNarrower,
         typeSupport,
+        bindingExpressionScopes,
         this.scopeIssuePublisher,
         this.constructScopeEffects.bind(this),
         this.constructRuntimeAssignmentStateForBinding.bind(this),
       ),
     );
+  }
+
+  private completeBindingExpressionScopeHandoffs(
+    frame: TemplateScopeConstructionFrame,
+  ): void {
+    const scopes = instructionScopeLookup(frame.instructionScopes);
+    for (const binding of frame.input.runtimeBindings.bindings) {
+      if (!isRuntimeExpressionBinding(binding)) {
+        continue;
+      }
+      const expression = runtimeBindingSourceExpression(
+        frame.input.expressionWorld.projector.publication,
+        binding,
+      );
+      const sourceScope = scopes.scopeForBinding(frame.input.runtimeBindings, binding);
+      if (sourceScope == null) {
+        continue;
+      }
+      if (expression == null) {
+        frame.services.bindingExpressionScopes.retainUnparsedBindingScope(
+          binding.productHandle,
+          sourceScope,
+        );
+        continue;
+      }
+      const renderContext = frame.input.runtimeBindings.requireRenderContextForBinding(binding.productHandle);
+      frame.services.bindingExpressionScopes.projectSourceExpressions({
+        bindingProductHandle: binding.productHandle,
+        expression,
+        scope: sourceScope,
+        localKey: `${frame.input.localKey}:binding-source:${binding.productHandle}`,
+        sourceAddressHandle: binding.sourceAddressHandle,
+        resourceScope: renderContext.resourceScope,
+        activeContainer: renderContext.requireActiveContainer(),
+      });
+      const lifecycle = runtimeBindingSourceLifecycle(binding, frame.input.expressionResourcePlan);
+      const assignmentTarget = lifecycle.includesSourceAssignment
+        ? runtimeAssignmentTargetAstForExpression(expression)
+        : null;
+      const assignmentScope = assignmentTarget?.$kind === 'AccessScope'
+        ? runtimeAssignmentInputScopeForAccessScope(
+            assignmentTarget,
+            binding.instructionProductHandle,
+            sourceScope,
+          )
+        : sourceScope;
+      if (assignmentTarget != null) {
+        frame.services.bindingExpressionScopes.project({
+          bindingProductHandle: binding.productHandle,
+          expression: assignmentTarget,
+          scope: assignmentScope,
+          localKey: `${frame.input.localKey}:binding-source-assignment:${binding.productHandle}`,
+          sourceAddressHandle: binding.sourceAddressHandle,
+          resourceScope: renderContext.resourceScope,
+          activeContainer: renderContext.requireActiveContainer(),
+        });
+      }
+    }
+    for (const emission of frame.services.bindingExpressionScopes.readScopeEmissions()) {
+      frame.addDerivedScope(emission);
+    }
   }
 
   private constructRenderTargets(frame: TemplateScopeConstructionFrame): void {
@@ -680,7 +765,7 @@ export class TemplateControllerScopeMaterializer {
     const instructionScopeRecords = this.recordsForInstructionScopeApplications(frame.input.localKey, frame.instructionScopes);
     const templateControllerLinkRecords = this.recordsForTemplateControllerLinks(frame.input.localKey, frame.templateControllerLinks);
     const scopePlan = frame.services.scopeMaterializer.publicationPlan(
-      frame.scopeEmissions,
+      distinctScopeConstructionEmissions(frame.scopeEmissions),
       `template-scope:${frame.input.localKey}:binding-scopes`,
     );
     frame.input.expressionWorld.projector.publication.publish(new KernelPublicationPlan(
@@ -1168,14 +1253,9 @@ export class TemplateControllerScopeMaterializer {
     if (expression == null) {
       return null;
     }
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-      this.store,
-      input.expressionWorld,
-      input.expressionResourcePlan,
-    );
     const projection = projectRuntimeBindingSourceExpressionInScope(
       input.runtimeBindings,
-      bindingExpressionScopes,
+      services.bindingExpressionScopes,
       {
         binding,
         expression,
@@ -1965,17 +2045,16 @@ export class TemplateControllerScopeMaterializer {
       .requireRenderContextForBinding(runtimeBinding.productHandle)
       .resourceScope;
     const evaluator = frame.input.expressionWorld.evaluator(resourceScope);
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-      this.store,
-      frame.input.expressionWorld,
-      frame.input.expressionResourcePlan,
+    const projection = projectRuntimeBindingSourceExpressionInScope(
+      frame.input.runtimeBindings,
+      frame.services.bindingExpressionScopes,
+      {
+        binding: runtimeBinding,
+        expression,
+        localKey: `${frame.input.localKey}:scope:${localSuffix}:runtime-assignment-writeback`,
+        sourceScope: parent,
+      },
     );
-    const projection = projectRuntimeBindingSourceExpressionInScope(frame.input.runtimeBindings, bindingExpressionScopes, {
-      binding: runtimeBinding,
-      expression,
-      localKey: `${frame.input.localKey}:scope:${localSuffix}:runtime-assignment-writeback`,
-      sourceScope: parent,
-    });
     if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
       return null;
     }
@@ -2274,11 +2353,6 @@ export class TemplateControllerScopeMaterializer {
           input.sourceValueActivationView ?? null,
           renderContext.requireActiveContainer(),
         );
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-      input.expressionWorld.projector.publication,
-      input.expressionWorld,
-      input.expressionResourcePlan,
-    );
     const iteratorProjection = this.measure(input, 'iterator-type-projection', () =>
       frame.services.typeSupport.iteratorProjection(input, parent, effect, localSuffix)
     );
@@ -2290,7 +2364,7 @@ export class TemplateControllerScopeMaterializer {
       sourceValueEvaluator,
       binding,
       resourceScope: renderContext?.resourceScope ?? null,
-      bindingExpressionScopes,
+      bindingExpressionScopes: frame.services.bindingExpressionScopes,
       iteratorProjection,
       localTypes: new Map(iteratorProjection.localProjection.locals.map((local) => [local.name, local.typeReference])),
       readInstruction: (productHandle) => frame.readInstruction(productHandle),
@@ -2612,14 +2686,9 @@ export class TemplateControllerScopeMaterializer {
       return null;
     }
     const renderContext = input.runtimeBindings.requireRenderContextForBinding(binding.productHandle);
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-      input.expressionWorld.projector.publication,
-      input.expressionWorld,
-      input.expressionResourcePlan,
-    );
     const contextProjection = projectRuntimeBindingSourceValueContextInScope({
       runtimeBindings: input.runtimeBindings,
-      bindingExpressionScopes,
+      bindingExpressionScopes: frame.services.bindingExpressionScopes,
       binding,
       expression,
       localKey: `${input.localKey}:let:${effect.productHandle}:source-value`,
@@ -2909,6 +2978,16 @@ function uniqueTemplateControllerLinks(
     unique.push(link);
   }
   return unique;
+}
+
+function distinctScopeConstructionEmissions(
+  emissions: readonly BindingScopeConstructionEmission[],
+): readonly BindingScopeConstructionEmission[] {
+  const byScope = new Map<ProductHandle, BindingScopeConstructionEmission>();
+  for (const emission of emissions) {
+    byScope.set(emission.scope.productHandle, emission);
+  }
+  return [...byScope.values()];
 }
 
 function runtimeScopeIssueKind(

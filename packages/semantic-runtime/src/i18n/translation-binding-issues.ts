@@ -65,9 +65,6 @@ import {
   type RuntimeInstructionScopeLookup,
 } from '../observation/runtime-binding-expression.js';
 import {
-  RuntimeBindingExpressionScopeProjector,
-} from '../observation/runtime-binding-expression-scope.js';
-import {
   checkerContextForRuntimeBindingSourceExpressionProjection,
   RuntimeBindingSourceExpressionContextProjector,
   RuntimeBindingSourceExpressionProjectionKind,
@@ -159,11 +156,6 @@ export class I18nTranslationBindingIssueMaterializer {
     const records: KernelStoreRecord[] = [...source.records];
     const issues: RuntimeBindingIssue[] = [];
     const instructionScopes = instructionScopeLookup(input.scopes.instructionScopes);
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-      this.store,
-      input.expressionWorld,
-      input.expressionResourcePlan,
-    );
     const context: TranslationBindingIssueContext = {
       runtimeRendering: input.runtimeRendering,
       expressionWorld: input.expressionWorld,
@@ -171,7 +163,7 @@ export class I18nTranslationBindingIssueMaterializer {
       sourceExpressionContexts: new RuntimeBindingSourceExpressionContextProjector(
         input.runtimeRendering,
         instructionScopes,
-        bindingExpressionScopes,
+        input.scopes.bindingExpressionScopes,
       ),
     };
 

@@ -176,7 +176,7 @@ export class ExpressionParseResultInspector {
     return accessSpans;
   }
 
-  /** Authored scope roots, excluding arrow parameters whose identity is local to the expression. */
+  /** Authored scope-root syntax. Semantic local/ambient classification belongs to runtime access-use products. */
   static scopeAccesses(
     result: ExpressionParseResult,
   ): readonly ExpressionScopeAccess[] {
@@ -401,31 +401,13 @@ function collectMemberAccessSpans(
 function collectScopeAccesses(
   expression: ExpressionAstNode,
   accesses: ExpressionScopeAccess[],
-  lexicalNames: ReadonlySet<string> = new Set(),
 ): void {
-  if (
-    isScopeAccessExpression(expression)
-    && expression.name.name.length > 0
-    && !scopeAccessIsLexicalLocal(expression, lexicalNames)
-  ) {
-    accesses.push(expression);
-  }
-  const childLexicalNames = expression.$kind === 'ArrowFunction'
-    ? new Set([...lexicalNames, ...expression.args.map((argument) => argument.name.name)])
-    : lexicalNames;
-  findInExpressionChildren(expression, (child) => {
-    collectScopeAccesses(child, accesses, childLexicalNames);
+  findInExpression(expression, (candidate) => {
+    if (isScopeAccessExpression(candidate) && candidate.name.name.length > 0) {
+      accesses.push(candidate);
+    }
     return null;
   });
-}
-
-function scopeAccessIsLexicalLocal(
-  expression: ExpressionScopeAccess,
-  lexicalNames: ReadonlySet<string>,
-): boolean {
-  return expression.ancestor === 0
-    && expression.authoredScopePath == null
-    && lexicalNames.has(expression.name.name);
 }
 
 type MemberAccessExpression =
@@ -470,10 +452,30 @@ function bindingIdentifierForNodeOffset(
   expression: ExpressionAstNode,
   offset: number,
 ): BindingIdentifier | null {
-  return findInExpressionAtOffset(expression, offset, (candidate) =>
-    candidate.$kind === 'BindingIdentifier' && expressionSpanContainsOffset(candidate.name.span, offset)
-      ? candidate
-      : null
+  if (!expressionSpanContainsOffset(expression.span, offset)) {
+    return null;
+  }
+  if (expression.$kind === 'ArrowFunction') {
+    for (const parameter of expression.args) {
+      const selected = bindingIdentifierForNodeOffset(parameter, offset);
+      if (selected != null) {
+        return selected;
+      }
+    }
+    return bindingIdentifierForNodeOffset(expression.body, offset);
+  }
+  if (expression.$kind === 'ForOfStatement') {
+    return bindingIdentifierForNodeOffset(expression.declaration, offset)
+      ?? bindingIdentifierForNodeOffset(expression.iterable, offset);
+  }
+  if (expression.$kind === 'BindingIdentifier') {
+    return expressionSpanContainsOffset(expression.name.span, offset)
+      ? expression
+      : null;
+  }
+  return findInExpressionChildren(
+    expression,
+    (child) => bindingIdentifierForNodeOffset(child, offset),
   );
 }
 

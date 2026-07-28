@@ -1,5 +1,9 @@
 import { auLink } from '../kernel/au-link.js';
 import type {
+  AccessKeyedExpression,
+  AccessMemberExpression,
+  AccessScopeExpression,
+  AccessThisExpression,
   ArrayLiteralExpression,
   ArrowFunction,
   BinaryExpression,
@@ -21,12 +25,17 @@ import type {
 } from '../expression/ast.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import { MaterializedProduct } from '../kernel/materialization.js';
 import type { ProductDetailReadView } from '../kernel/product-details.js';
 import type { KernelStore } from '../kernel/store.js';
 import { StateBindingScopeProjector } from '../state/state-binding-scope.js';
 import type { StateStoreVisibilitySelection } from '../state/state-store-visibility.js';
 import {
   BindingScope,
+  BindingContextKind,
+  BindingScopeLookupKind,
+  type BindingScopeContext,
+  type BindingScopeLocatedLookup,
 } from '../configuration/scope.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import {
@@ -85,6 +94,18 @@ import type { RuntimeValueConverterMethodName } from './value-converter-call-sur
 import { CheckerExpressionScopeProjector } from './expression-scope-projector.js';
 import { CheckerExpressionArrayMethodProjector } from './expression-array-method-projector.js';
 import { TypeSystemProductDetails } from './product-details.js';
+import {
+  CheckerExpressionAccessTarget,
+  CheckerExpressionAccessTargetResolution,
+} from './expression-access-target.js';
+
+export type CheckerExpressionAccessTargetExpression =
+  | AccessThisExpression
+  | AccessScopeExpression
+  | CallScopeExpression
+  | AccessMemberExpression
+  | CallMemberExpression
+  | AccessKeyedExpression;
 
 type CheckerExpressionCallableCallExpression =
   | CallScopeExpression
@@ -299,6 +320,103 @@ export class CheckerExpressionTypeEvaluator {
       : this.typeAccess.memberValueAccess(ownerShape, memberName, `${context.projectionLocalKey()}:member:${localKeyPart(memberName)}`);
   }
 
+  /** Recover the exact derived evaluation context for one occurrence inside the root expression. */
+  evaluationContextForExpression(
+    context: CheckerExpressionTypeEvaluationContext,
+    expression: ExpressionAstNode,
+  ): CheckerExpressionTypeEvaluationContext | null {
+    this.requireCurrent();
+    return this.memberOwners.contextForExpression(context, expression);
+  }
+
+  /** Resolve the declaration/scope authority reached by one exact authored access occurrence. */
+  resolveAccessTarget(
+    context: CheckerExpressionTypeEvaluationContext,
+    expression: CheckerExpressionAccessTargetExpression,
+  ): CheckerExpressionAccessTargetResolution {
+    this.requireCurrent();
+    const targetContext = this.memberOwners.contextForExpression(context, expression)
+      ?? context;
+    if (expression.$kind === 'AccessThis') {
+      const located = targetContext.scope.locateThis(expression.ancestor);
+      if (
+        located.lookupKind === BindingScopeLookupKind.MissingAncestor
+        || located.context == null
+      ) {
+        return CheckerExpressionAccessTargetResolution.open();
+      }
+      const authority = this.committedContextAuthority(located);
+      if (authority != null) {
+        return CheckerExpressionAccessTargetResolution.exact(new CheckerExpressionAccessTarget(
+          authority.productHandle,
+          authority.identityHandle,
+          null,
+          null,
+          authority.sourceAddressHandle,
+        ));
+      }
+      if (located.context.contextType == null) {
+        return CheckerExpressionAccessTargetResolution.open();
+      }
+      const contextShape = this.typeAccess.resolveReference(located.context.contextType);
+      return contextShape == null
+        ? CheckerExpressionAccessTargetResolution.open()
+        : CheckerExpressionAccessTargetResolution.exact(new CheckerExpressionAccessTarget(
+            contextShape.productHandle,
+            contextShape.identityHandle,
+            null,
+            null,
+            contextShape.declarationSourceAddressHandle ?? contextShape.sourceAddressHandle,
+          ));
+    }
+    if (expression.$kind === 'AccessScope' || expression.$kind === 'CallScope') {
+      const located = targetContext.scope.locate(expression.name.name, expression.ancestor);
+      if (located.lookupKind === BindingScopeLookupKind.MissingAncestor) {
+        return CheckerExpressionAccessTargetResolution.open();
+      }
+      if (located.slot != null) {
+        const authority = this.committedContextAuthority(located);
+        return CheckerExpressionAccessTargetResolution.exact(new CheckerExpressionAccessTarget(
+          authority?.productHandle ?? null,
+          located.slot.targetIdentityHandle,
+          located.slot.targetTypeMemberHandle,
+          located.slot.targetTypeSourceMemberHandle,
+          located.slot.sourceAddressHandle,
+        ));
+      }
+      if (located.context?.contextType == null) {
+        return CheckerExpressionAccessTargetResolution.open();
+      }
+      const contextShape = this.typeAccess.resolveReference(located.context.contextType);
+      return contextShape == null
+        ? CheckerExpressionAccessTargetResolution.open()
+        : this.access.resolveMemberTarget(
+            contextShape,
+            expression.name.name,
+            `${targetContext.projectionLocalKey()}:access-target:scope:${localKeyPart(expression.name.name)}`,
+          );
+    }
+
+    const targetOffset = expression.$kind === 'AccessKeyed'
+      ? expression.key.span.start
+      : expression.name.span.start;
+    const owner = this.memberOwners.evaluateAtOffset(targetContext, targetOffset);
+    if (owner?.kind !== CheckerExpressionTypeEvaluationResultKind.Type) {
+      return CheckerExpressionAccessTargetResolution.open();
+    }
+    const ownerShape = this.typeAccess.resolveReference(owner.typeReference);
+    if (ownerShape == null) {
+      return CheckerExpressionAccessTargetResolution.open();
+    }
+    return expression.$kind === 'AccessKeyed'
+      ? this.access.resolveKeyedTarget(expression, targetContext, ownerShape)
+      : this.access.resolveMemberTarget(
+          ownerShape,
+          expression.name.name,
+          `${targetContext.projectionLocalKey()}:access-target:member:${localKeyPart(expression.name.name)}`,
+        );
+  }
+
   memberValueAccessForReference(
     ownerReference: CheckerTypeReference | null,
     memberName: string,
@@ -312,6 +430,33 @@ export class CheckerExpressionTypeEvaluator {
     return ownerShape == null
       ? null
       : this.typeAccess.memberValueAccess(ownerShape, memberName, `${localKey}:member:${localKeyPart(memberName)}`);
+  }
+
+  private committedContextAuthority(
+    located: BindingScopeLocatedLookup,
+  ): BindingScopeContext | null {
+    let scope = located.scope;
+    let context = located.context;
+    while (scope != null && context != null) {
+      if (this.projector.publication.read(context.productHandle) instanceof MaterializedProduct) {
+        return context;
+      }
+      // Callback and narrowing scopes are evaluation state, not durable products. Preserve their lookup result while
+      // routing public authority to the nearest published context that represents the same semantic identity.
+      const predecessor = scope.predecessor;
+      if (predecessor == null) {
+        return null;
+      }
+      const predecessorContext = context.contextKind === BindingContextKind.Override
+        ? predecessor.overrideContext
+        : predecessor.bindingContext;
+      if (predecessorContext.identityHandle !== context.identityHandle) {
+        return null;
+      }
+      scope = predecessor;
+      context = predecessorContext;
+    }
+    return null;
   }
 
   evaluateIteratorProjection(

@@ -15,15 +15,6 @@ export const enum RuntimeExpressionResourceApplicationOrigin {
   BindingBehaviorProjection = 'binding-behavior-projection',
 }
 
-export const enum RuntimeExpressionResourcePhaseReachability {
-  /** The framework reaches this phase under the modeled binding lifecycle. */
-  Reached = 'reached',
-  /** An outer resource failed during `astBind(...)`, so this phase is not entered. */
-  BlockedByOuterFailure = 'blocked-by-outer-failure',
-  /** This resource's own bind step failed, so later phases are not entered. */
-  BlockedByBindFailure = 'blocked-by-bind-failure',
-}
-
 export const enum RuntimeExpressionResourceLifecycleEffectKind {
   /** A binding-mode behavior replaces or restores the binding mode. */
   BindingMode = 'binding-mode',

@@ -174,7 +174,6 @@ import type {
 } from '../template/instruction-ir.js';
 import type {
   RuntimeBindingDataFlowDirection,
-  RuntimeBindingRealization,
   RuntimeBindingSourceEvaluationKind,
   RuntimeObservedDependencyKind,
   RuntimeBindingDataFlowSourceAssignmentKind,
@@ -188,6 +187,24 @@ import type {
   RuntimeBindingValueChannelKind,
   RuntimeBindingValueChannelTargetMutationKind,
 } from '../observation/runtime-binding-observation.js';
+import type {
+  RuntimeOperationRealization,
+  RuntimeOperationReachability,
+} from '../runtime-expression/runtime-operation.js';
+import type {
+  RuntimeExpressionAccessCoverage,
+  RuntimeExpressionAccessForm,
+  RuntimeExpressionAccessOrigin,
+  RuntimeExpressionAccessOwnerKind,
+  RuntimeExpressionAccessPhase,
+  RuntimeExpressionAccessRole,
+  RuntimeExpressionAccessTargetResolution,
+  RuntimeExpressionAccessTracking,
+  RuntimeExpressionExecutionMaximum,
+  RuntimeExpressionExecutionMinimum,
+  RuntimeExpressionExecutionQualifierKind,
+  RuntimeExpressionOperationKind,
+} from '../runtime-expression/runtime-expression-access-use.js';
 import type {
   ObservationIssueKind,
   ObservationIssuePhase,
@@ -236,7 +253,6 @@ import type {
   RuntimeExpressionResourceApplicationOrigin,
   RuntimeExpressionResourceBindReachability,
   RuntimeExpressionResourceLifecycleEffectKind,
-  RuntimeExpressionResourcePhaseReachability,
   RuntimeExpressionResourceValueState,
 } from '../template/runtime-expression-resource.js';
 import type { RuntimeBindingIssuePhase } from '../template/runtime-binding-issue.js';
@@ -470,6 +486,7 @@ export const enum SemanticAppQueryKind {
   ValueConverterApplications = 'value-converter-applications',
   BindingValueChannels = 'binding-value-channels',
   BindingValueChannelSummary = 'binding-value-channel-summary',
+  RuntimeExpressionAccessUses = 'runtime-expression-access-uses',
   BindingDataFlows = 'binding-data-flows',
   BindingDataFlowSummary = 'binding-data-flow-summary',
   ControlUseInventory = 'control-use-inventory',
@@ -555,6 +572,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.ValueConverterApplications,
   SemanticAppQueryKind.BindingValueChannels,
   SemanticAppQueryKind.BindingValueChannelSummary,
+  SemanticAppQueryKind.RuntimeExpressionAccessUses,
   SemanticAppQueryKind.BindingDataFlows,
   SemanticAppQueryKind.BindingDataFlowSummary,
   SemanticAppQueryKind.ControlUseInventory,
@@ -2091,11 +2109,13 @@ export interface SemanticComputedObserverObservedDependencyRow {
   readonly dependencyMemberName: string | null;
   readonly keyExpression: string | null;
   readonly methodName: string | null;
+  readonly accessUse: SemanticRuntimeExpressionAccessUseOccurrenceRow;
   readonly spanStart: number | null;
   readonly spanEnd: number | null;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly computedObserverProductHandle: ProductHandle | null;
+    readonly accessUseProductHandle: ProductHandle;
     readonly observedDependencyProductHandle: ProductHandle;
     readonly observedDependencyIdentityHandle: IdentityHandle;
     readonly sourceAddressHandle: AddressHandle | null;
@@ -2136,6 +2156,7 @@ export interface SemanticRuntimeEffectObservedDependencyRow {
   readonly memberName: string | null;
   readonly keyExpression: string | null;
   readonly methodName: string | null;
+  readonly accessUse: SemanticRuntimeExpressionAccessUseOccurrenceRow;
   readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
   readonly observedMemberSource: SemanticSourceReference | null;
   readonly spanStart: number | null;
@@ -2143,6 +2164,7 @@ export interface SemanticRuntimeEffectObservedDependencyRow {
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly effectProductHandle: ProductHandle | null;
+    readonly accessUseProductHandle: ProductHandle;
     readonly observedDependencyProductHandle: ProductHandle;
     readonly observedDependencyIdentityHandle: IdentityHandle;
     readonly observedMemberSourceAddressHandle: AddressHandle | null;
@@ -3736,7 +3758,7 @@ export interface SemanticTemplateCursorMemberRow {
   /** TypeScript member declaration reached by the slot identity, when distinct from its scope source. */
   readonly declarationSource: SemanticSourceReference | null;
   readonly handles?: {
-    /** Durable type-shape or binding-scope product that owns this member surface. */
+    /** Durable type-shape, binding-scope, or expression-parse product that owns this member surface. */
     readonly ownerProductHandle: ProductHandle | null;
     /** Lightweight member-detail handle used for exact in-process follow-up reads. */
     readonly detailHandle: HotDetailHandle | null;
@@ -3942,6 +3964,7 @@ export interface SemanticTemplateReferenceRow {
   /** Declaration/member source that all returned template usages resolve to. */
   readonly targetSource: SemanticSourceReference | null;
   readonly handles?: {
+    readonly accessUseProductHandle: ProductHandle | null;
     readonly observedDependencyProductHandle: ProductHandle | null;
     readonly expressionProductHandle: ProductHandle | null;
     readonly bindingProductHandle: ProductHandle | null;
@@ -4305,6 +4328,7 @@ export interface SemanticRuntimeWatcherObservedDependencyRow {
   readonly memberName: string | null;
   readonly keyExpression: string | null;
   readonly methodName: string | null;
+  readonly accessUse: SemanticRuntimeExpressionAccessUseOccurrenceRow;
   readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
   readonly observedMemberSource: SemanticSourceReference | null;
   readonly spanStart: number | null;
@@ -4312,6 +4336,7 @@ export interface SemanticRuntimeWatcherObservedDependencyRow {
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly watcherProductHandle: ProductHandle | null;
+    readonly accessUseProductHandle: ProductHandle;
     readonly observedDependencyProductHandle: ProductHandle;
     readonly observedDependencyIdentityHandle: IdentityHandle;
     readonly observedMemberSourceAddressHandle: AddressHandle | null;
@@ -4691,7 +4716,7 @@ export interface SemanticBindingBehaviorApplicationRow {
   /** Depth in the effective runtime chain after reached behavior projections. */
   readonly runtimeChainDepth: number;
   readonly bindReachability: RuntimeExpressionResourceBindReachability | `${RuntimeExpressionResourceBindReachability}`;
-  readonly phaseReachability: RuntimeExpressionResourcePhaseReachability | `${RuntimeExpressionResourcePhaseReachability}`;
+  readonly phaseReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly bindOrder: number | null;
   /** Nominal order within the binding-behavior bind phase. */
   readonly phaseOrder: number | null;
@@ -4728,7 +4753,7 @@ export interface SemanticValueConverterApplicationRow {
   /** Depth in the effective runtime chain after reached behavior projections. */
   readonly runtimeChainDepth: number;
   readonly bindReachability: RuntimeExpressionResourceBindReachability | `${RuntimeExpressionResourceBindReachability}`;
-  readonly phaseReachability: RuntimeExpressionResourcePhaseReachability | `${RuntimeExpressionResourcePhaseReachability}`;
+  readonly phaseReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly bindOrder: number | null;
   /** Nominal execution order within this converter phase. */
   readonly phaseOrder: number | null;
@@ -4761,7 +4786,7 @@ export interface SemanticBindingValueChannelRow {
   readonly nullishDefaultState: RuntimeNodeObserverConfigFieldState | `${RuntimeNodeObserverConfigFieldState}` | null;
   readonly rawTargetPropertyType: string | null;
   readonly runtimeValueType: string | null;
-  readonly realization: RuntimeBindingRealization | `${RuntimeBindingRealization}`;
+  readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
   readonly admittedSourceValueType: string | null;
   readonly admittedSourceMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
   readonly admittedSourceMemberSource: SemanticSourceReference | null;
@@ -4871,7 +4896,7 @@ export interface SemanticBindingValueChannelSummaryRow {
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;
   readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind | `${RuntimeBindingValueChannelTargetMutationKind}`;
-  readonly realization: RuntimeBindingRealization | `${RuntimeBindingRealization}`;
+  readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
   readonly count: number;
   readonly bindingKinds: readonly (RuntimeBindingKind | `${RuntimeBindingKind}`)[];
   readonly authorities: readonly (RuntimeBindingValueChannelAuthority | `${RuntimeBindingValueChannelAuthority}`)[];
@@ -4915,7 +4940,7 @@ export interface SemanticBindingDataFlowValueConverterWritebackStageRow {
   readonly runtimeChainDepth: number;
   /** Runtime execution order; null when converter invocation is blocked. */
   readonly phaseOrder: number | null;
-  readonly phaseReachability: RuntimeExpressionResourcePhaseReachability | `${RuntimeExpressionResourcePhaseReachability}`;
+  readonly phaseReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly projectionState: RuntimeValueConverterWritebackStageState | `${RuntimeValueConverterWritebackStageState}`;
   /** Best-known checker input; `input-open` stages may carry a partial prior output. */
   readonly inputType: string | null;
@@ -4934,15 +4959,89 @@ export interface SemanticBindingDataFlowValueConverterWritebackStageRow {
   };
 }
 
+export interface SemanticRuntimeExpressionExecutionQualifierRow {
+  readonly kind: RuntimeExpressionExecutionQualifierKind | `${RuntimeExpressionExecutionQualifierKind}`;
+  readonly operationName: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly sourceAddressHandle?: AddressHandle | null;
+}
+
+export interface SemanticRuntimeExpressionAccessTargetRow {
+  readonly declarationSource: SemanticSourceReference | null;
+  readonly authorityProductHandle?: ProductHandle | null;
+  readonly targetIdentityHandle?: IdentityHandle | null;
+  readonly targetTypeMemberHandle?: HotDetailHandle | null;
+  readonly targetTypeSourceMemberHandle?: HotDetailHandle | null;
+  readonly declarationSourceAddressHandle?: AddressHandle | null;
+}
+
+/** Operation, control-flow, and closure facts shared by access-use and observed-dependency queries. */
+export interface SemanticRuntimeExpressionAccessUseSummaryRow {
+  readonly operationKind: RuntimeExpressionOperationKind | `${RuntimeExpressionOperationKind}`;
+  readonly operationIndex: number | null;
+  readonly origin: RuntimeExpressionAccessOrigin | `${RuntimeExpressionAccessOrigin}`;
+  readonly authored: boolean;
+  readonly accessForm: RuntimeExpressionAccessForm | `${RuntimeExpressionAccessForm}`;
+  readonly role: RuntimeExpressionAccessRole | `${RuntimeExpressionAccessRole}`;
+  readonly phase: RuntimeExpressionAccessPhase | `${RuntimeExpressionAccessPhase}`;
+  readonly tracking: RuntimeExpressionAccessTracking | `${RuntimeExpressionAccessTracking}`;
+  readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
+  readonly reachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
+  /** Explicit ancestor argument used by Aurelia Scope lookup after parser lowering. */
+  readonly scopeLookupAncestor: number | null;
+  /** Authored `$parent` count, with zero for explicit `$this`; null when no qualifier was authored. */
+  readonly authoredScopeAncestor: number | null;
+  /** Lexical arrow-callback nesting, which is not generally additive with `scopeLookupAncestor`. */
+  readonly callbackScopeDepth: number | null;
+  /** Whether the occurrence is rooted in an expression-local callback parameter. */
+  readonly lexicalLocal: boolean;
+  readonly targetResolution: RuntimeExpressionAccessTargetResolution | `${RuntimeExpressionAccessTargetResolution}`;
+  readonly targetCount: number;
+  readonly executionQualifiers: readonly SemanticRuntimeExpressionExecutionQualifierRow[];
+  readonly minimumExecutions: RuntimeExpressionExecutionMinimum | `${RuntimeExpressionExecutionMinimum}`;
+  readonly maximumExecutions: RuntimeExpressionExecutionMaximum | `${RuntimeExpressionExecutionMaximum}`;
+  readonly coverage: RuntimeExpressionAccessCoverage | `${RuntimeExpressionAccessCoverage}`;
+  readonly coverageReason: string | null;
+}
+
+/** Source and target facts shared wherever one exact access occurrence is projected. */
+export interface SemanticRuntimeExpressionAccessUseOccurrenceRow
+  extends SemanticRuntimeExpressionAccessUseSummaryRow {
+  readonly targetLinks: readonly SemanticRuntimeExpressionAccessTargetRow[];
+  readonly source: SemanticSourceReference | null;
+  readonly nameSource: SemanticSourceReference | null;
+}
+
+/** Public, lossless projection of one owner-qualified runtime expression access occurrence. */
+export interface SemanticRuntimeExpressionAccessUseRow extends SemanticRuntimeExpressionAccessUseOccurrenceRow {
+  readonly definitionName: string | null;
+  readonly ownerKind: RuntimeExpressionAccessOwnerKind | `${RuntimeExpressionAccessOwnerKind}`;
+  readonly handles?: {
+    readonly accessUseProductHandle: ProductHandle;
+    readonly accessUseIdentityHandle: IdentityHandle;
+    readonly ownerProductHandle: ProductHandle;
+    readonly operationProductHandle: ProductHandle | null;
+    readonly expressionProductHandle: ProductHandle | null;
+    readonly scopeProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly nameSourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRuntimeExpressionAccessUseResult {
+  readonly rows: readonly SemanticRuntimeExpressionAccessUseRow[];
+}
+
 export interface SemanticBindingDataFlowRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
   readonly direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`;
-  readonly realization: RuntimeBindingRealization | `${RuntimeBindingRealization}`;
+  readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
   readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind | `${RuntimeBindingSourceEvaluationKind}`;
-  readonly sourceEvaluationReachability: RuntimeExpressionResourcePhaseReachability | `${RuntimeExpressionResourcePhaseReachability}`;
+  readonly sourceEvaluationReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind | `${RuntimeBindingValueChannelTargetMutationKind}`;
   readonly strictBinding: boolean | null;
+  readonly accessUseCount: number;
   readonly expressionParseState: TemplateExpressionParseState | `${TemplateExpressionParseState}` | null;
   readonly expressionParseResultKind: ExpressionParseResultKind | `${ExpressionParseResultKind}` | null;
   readonly valueSiteKind: TemplateValueSiteKind | `${TemplateValueSiteKind}` | null;
@@ -4984,6 +5083,7 @@ export interface SemanticBindingDataFlowRow {
   readonly handles?: {
     readonly bindingProductHandle: ProductHandle | null;
     readonly dataFlowProductHandle: ProductHandle;
+    readonly accessUseProductHandles: readonly ProductHandle[];
     readonly targetAccessProductHandle: ProductHandle | null;
     readonly targetOperationProductHandle: ProductHandle | null;
     readonly sourceOperationProductHandle: ProductHandle | null;
@@ -5012,9 +5112,9 @@ export interface SemanticNullableBooleanCountRow {
 
 export interface SemanticBindingDataFlowSummaryRow {
   readonly direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`;
-  readonly realization: RuntimeBindingRealization | `${RuntimeBindingRealization}`;
+  readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
   readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind | `${RuntimeBindingSourceEvaluationKind}`;
-  readonly sourceEvaluationReachability: RuntimeExpressionResourcePhaseReachability | `${RuntimeExpressionResourcePhaseReachability}`;
+  readonly sourceEvaluationReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly targetMutationKind: RuntimeBindingValueChannelTargetMutationKind | `${RuntimeBindingValueChannelTargetMutationKind}`;
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;
@@ -5113,7 +5213,7 @@ export type SemanticObservedMemberSourceRoute =
 export interface SemanticBindingObservedDependencyRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
-  readonly realization: RuntimeBindingRealization | `${RuntimeBindingRealization}`;
+  readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
   readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
   readonly expressionKind: string;
   readonly sourceName: string | null;
@@ -5121,18 +5221,20 @@ export interface SemanticBindingObservedDependencyRow {
   readonly memberName: string | null;
   readonly keyExpression: string | null;
   readonly methodName: string | null;
+  readonly accessUse: SemanticRuntimeExpressionAccessUseOccurrenceRow;
   readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
   readonly observedMemberSource: SemanticSourceReference | null;
   readonly observedMemberSourceState: SemanticObservedMemberSourceState;
   readonly observedMemberSourceRoute: SemanticObservedMemberSourceRoute | null;
   readonly spanStart: number | null;
   readonly spanEnd: number | null;
-  /** Authored member-name token span for AccessMember/CallMember reads; null for other shapes. */
+  /** Authored token for the observed value carrier; follow access-use lineage for the operation token. */
   readonly memberTokenSource: SemanticSourceReference | null;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly bindingProductHandle: ProductHandle | null;
     readonly dataFlowProductHandle: ProductHandle;
+    readonly accessUseProductHandle: ProductHandle;
     readonly observedDependencyProductHandle: ProductHandle;
     readonly expressionProductHandle: ProductHandle | null;
     readonly bindingScopeProductHandle: ProductHandle | null;
@@ -5148,7 +5250,7 @@ export interface SemanticBindingObservedDependencyResult {
 export interface SemanticBindingObservedDependencySummaryRow {
   readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
-  readonly realization: RuntimeBindingRealization | `${RuntimeBindingRealization}`;
+  readonly realization: RuntimeOperationRealization | `${RuntimeOperationRealization}`;
   readonly observedMemberSourceState: SemanticObservedMemberSourceState;
   readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
   readonly sourceRootName: string | null;

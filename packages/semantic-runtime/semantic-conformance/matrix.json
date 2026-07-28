@@ -53,7 +53,7 @@
       "domainAxis": "open-honesty",
       "coverageIntent": "boundary-contract",
       "assertionKind": "candidate-honesty",
-      "requirement": "Unproven weak/dynamic member references return only proven rows, preserve candidates separately, and mark the answer open.",
+      "requirement": "Unproven weak/dynamic member references return the cursor occurrence, preserve only genuinely open candidates separately, and mark the answer open without admitting closed same-name misses.",
       "sourceFile": "src/components/loose-picklist.html",
       "cursor": {
         "marker": "${option.label || option}",
@@ -63,7 +63,7 @@
         "memberName": "label",
         "closure": "open",
         "rows": 1,
-        "candidateRowsAtLeast": 1,
+        "candidateRows": 0,
         "referenceKind": "template-usage"
       }
     },
@@ -13573,6 +13573,18 @@
               ]
             },
             {
+              "name": "generated spread-member access ownership",
+              "query": { "kind": "runtime-expression-access-uses", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "ownerKind": "binding", "operationKind": "spread-member-source", "origin": "generated", "authored": false, "accessForm": "scope", "role": "read", "phase": "source-evaluation", "tracking": "connectable", "realization": "conditional", "targetResolution": "exact", "executionQualifiers.0.kind": "runtime-object-member-guard", "executionQualifiers.0.operationName": "title", "minimumExecutions": "zero", "maximumExecutions": "one", "nameSource": null }, "source": { "marker": "...optionalSpread", "token": "optionalSpread" }, "count": 1 },
+                { "fields": { "operationKind": "spread-member-source", "executionQualifiers.0.operationName": "title" }, "sourceField": "targetLinks.0.declarationSource", "source": { "sourceFile": "src/template-spread-capture-semantics-app.ts", "marker": "optionalSpread: { title?: string; count: number }", "token": "title" }, "count": 1 },
+                { "fields": { "operationKind": "spread-member-source", "realization": "guaranteed", "targetResolution": "exact", "executionQualifiers.0.operationName": "count" }, "source": { "marker": "...optionalSpread", "token": "optionalSpread" }, "count": 1 },
+                { "fields": { "operationKind": "spread-member-source", "realization": "open", "targetResolution": "open", "executionQualifiers.0.operationName": "tone" }, "source": { "marker": "...optionalSpread", "token": "optionalSpread" }, "count": 1 },
+                { "fields": { "operationKind": "spread-member-source", "origin": "generated", "reachability": "blocked-by-bind-failure", "realization": "guaranteed", "executionQualifiers.0.kind": "runtime-object-member-guard", "executionQualifiers.0.operationName": "title" }, "source": { "marker": "...$bindables=\"spreadState & missingSpreadBehavior\"", "token": "spreadState & missingSpreadBehavior" }, "count": 1 },
+                { "fields": { "operationKind": "spread-member-source" }, "source": { "marker": "...callableSpread", "token": "callableSpread" }, "absent": true }
+              ]
+            },
+            {
               "name": "outer source and admitted member observation",
               "query": { "kind": "binding-observed-dependencies", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
@@ -13602,7 +13614,15 @@
                 { "fields": { "bindingKind": "spread-value", "expressionKind": "AccessMember", "sourceName": "inheritedSpread.title", "memberName": "title", "observedMemberKind": "accessor", "observedMemberSourceRoute": "member-declaration" }, "source": { "marker": "...inheritedSpread", "token": "inheritedSpread" }, "count": 1 },
                 { "fields": { "bindingKind": "spread-value", "expressionKind": "AccessMember", "sourceName": "inheritedSpread.title" }, "sourceField": "observedMemberSource", "source": { "sourceFile": "src/template-spread-capture-semantics-app.ts", "marker": "get title(): string", "token": "title" }, "count": 1 },
                 { "fields": { "bindingKind": "spread-value", "dependencyKind": "template-expression-read", "sourceName": "primitiveSpread" }, "source": { "marker": "...primitiveSpread", "token": "primitiveSpread" }, "count": 1 },
-                { "fields": { "bindingKind": "spread-value", "dependencyKind": "template-expression-read", "sourceName": "noBindableSpread" }, "source": { "marker": "...noBindableSpread", "token": "noBindableSpread" }, "count": 1 }
+                { "fields": { "bindingKind": "spread-value", "dependencyKind": "template-expression-read", "sourceName": "noBindableSpread" }, "source": { "marker": "...noBindableSpread", "token": "noBindableSpread" }, "count": 1 },
+                { "fields": { "bindingKind": "spread-value", "sourceName": "spreadState.title", "accessUse.operationKind": "spread-member-source" }, "source": { "marker": "...$bindables=\"spreadState & missingSpreadBehavior\"", "token": "spreadState & missingSpreadBehavior" }, "absent": true }
+              ]
+            },
+            {
+              "name": "blocked spread retains its framework failure",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "runtime-binding-behavior-framework-error", "frameworkErrorCode": "AUR0101", "phase": "bind", "selectedMemberName": "missingSpreadBehavior" }, "source": { "marker": "spreadState & missingSpreadBehavior", "token": "missingSpreadBehavior" }, "count": 1 }
               ]
             },
             {
@@ -13641,10 +13661,11 @@
             {
               "name": "spread diagnostics",
               "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
-              "equals": { "value.rows.length": 7 },
+              "equals": { "value.rows.length": 8 },
               "rows": [
                 { "fields": { "diagnosticKind": "binding-target-assignment-strictness", "missingInput": "binding-target-assignment:source-nullish-to-required-target", "selectedMemberName": "optionalSpread.title" }, "source": { "marker": "...optionalSpread", "token": "optionalSpread" }, "count": 1 },
                 { "fields": { "diagnosticKind": "binding-target-assignment-strictness", "missingInput": "binding-target-assignment:source-nullish-to-required-target", "selectedMemberName": "presentUndefinedSpread.title" }, "source": { "marker": "...presentUndefinedSpread", "token": "presentUndefinedSpread" }, "count": 1 },
+                { "fields": { "diagnosticKind": "runtime-binding-behavior-framework-error", "frameworkErrorCode": "AUR0101", "selectedMemberName": "missingSpreadBehavior" }, "source": { "marker": "spreadState & missingSpreadBehavior", "token": "missingSpreadBehavior" }, "count": 1 },
                 { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0720", "phase": "attribute-classification" }, "source": { "marker": "...$element=\"spreadState\"", "token": "...$element" }, "count": 1 },
                 { "fields": { "diagnosticKind": "runtime-renderer-framework-error", "frameworkErrorCode": "AUR0820", "phase": "render" }, "source": { "marker": "$element.spread=\"spreadState\"", "token": "$element" }, "count": 1 },
                 { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0720", "phase": "attribute-classification" }, "source": { "marker": "<div ...$bindables=\"spreadState\">", "token": "...$bindables" }, "count": 1 },
@@ -13682,10 +13703,10 @@
               "name": "captured data flows",
               "query": { "kind": "binding-data-flows", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "bindingKind": "property", "direction": "two-way", "valueSiteKind": "captured-value", "sourceName": "capturedValue", "sourceType": "string", "targetProperty": "value", "targetPropertyType": "string" }, "source": { "marker": "value.bind=\"capturedValue\"", "markerOccurrence": 1, "token": "value.bind=\"capturedValue\"" }, "count": 1 },
-                { "fields": { "bindingKind": "attribute", "valueSiteKind": "captured-value", "sourceName": "isActive", "sourceType": "boolean", "targetProperty": "active" }, "source": { "marker": "active.class=\"isActive\"", "markerOccurrence": 1, "token": "active.class=\"isActive\"" }, "count": 1 },
-                { "fields": { "bindingKind": "listener", "valueSiteKind": "captured-value", "sourceName": "handleCaptured($event)", "sourceType": "void", "targetProperty": "click" }, "source": { "marker": "click.trigger=\"handleCaptured($event)\"", "markerOccurrence": 1, "token": "click.trigger=\"handleCaptured($event)\"" }, "count": 1 },
-                { "fields": { "bindingKind": "listener", "valueSiteKind": "captured-value", "sourceName": "handleLabelEvent($event)", "sourceType": "void", "targetProperty": "label" }, "source": { "marker": "label.trigger=\"handleLabelEvent($event)\"", "markerOccurrence": 1, "token": "label.trigger=\"handleLabelEvent($event)\"" }, "count": 1 }
+                { "fields": { "definitionName": "template-spread-capture-semantics-app", "bindingKind": "property", "direction": "two-way", "valueSiteKind": "captured-value", "sourceName": "capturedValue", "sourceType": "string", "targetProperty": "value", "targetPropertyType": "string" }, "source": { "marker": "value.bind=\"capturedValue\"", "markerOccurrence": 1, "token": "value.bind=\"capturedValue\"" }, "count": 1 },
+                { "fields": { "definitionName": "template-spread-capture-semantics-app", "bindingKind": "attribute", "valueSiteKind": "captured-value", "sourceName": "isActive", "sourceType": "boolean", "targetProperty": "active" }, "source": { "marker": "active.class=\"isActive\"", "markerOccurrence": 1, "token": "active.class=\"isActive\"" }, "count": 1 },
+                { "fields": { "definitionName": "template-spread-capture-semantics-app", "bindingKind": "listener", "valueSiteKind": "captured-value", "sourceName": "handleCaptured($event)", "sourceType": "void", "targetProperty": "click" }, "source": { "marker": "click.trigger=\"handleCaptured($event)\"", "markerOccurrence": 1, "token": "click.trigger=\"handleCaptured($event)\"" }, "count": 1 },
+                { "fields": { "definitionName": "template-spread-capture-semantics-app", "bindingKind": "listener", "valueSiteKind": "captured-value", "sourceName": "handleLabelEvent($event)", "sourceType": "void", "targetProperty": "label" }, "source": { "marker": "label.trigger=\"handleLabelEvent($event)\"", "markerOccurrence": 1, "token": "label.trigger=\"handleLabelEvent($event)\"" }, "count": 1 }
               ]
             }
           ]
@@ -13697,10 +13718,10 @@
               "name": "captured target operations",
               "query": { "kind": "binding-target-operations", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "bindingKind": "attribute", "targetAttribute": "class", "targetProperty": "active", "operationKind": "class-list-toggle" }, "source": { "marker": "active.class=\"isActive\"", "markerOccurrence": 1, "token": "active.class=\"isActive\"" }, "count": 1 },
-                { "fields": { "bindingKind": "listener", "targetAttribute": "click", "targetProperty": "click", "operationKind": "event-listener-add" }, "source": { "marker": "click.trigger=\"handleCaptured($event)\"", "markerOccurrence": 1, "token": "click" }, "count": 1 },
-                { "fields": { "targetAttribute": "data-note", "targetProperty": "data-note", "staticValue": "clean-captured-note", "operationKind": "attribute-set" }, "source": { "marker": "data-note=\"clean-captured-note\"", "token": "data-note=\"clean-captured-note\"" }, "count": 1 },
-                { "fields": { "targetKind": "controller-view-model", "targetAttribute": "input-mark", "targetProperty": "value", "staticValue": "receiver-local-mark", "operationKind": "property-set" }, "source": { "marker": "input-mark=\"receiver-local-mark\"", "token": "input-mark=\"receiver-local-mark\"" }, "count": 1 }
+                { "fields": { "definitionName": "template-spread-capture-semantics-app", "bindingKind": "attribute", "targetAttribute": "class", "targetProperty": "active", "operationKind": "class-list-toggle" }, "source": { "marker": "active.class=\"isActive\"", "markerOccurrence": 1, "token": "active.class=\"isActive\"" }, "count": 1 },
+                { "fields": { "definitionName": "template-spread-capture-semantics-app", "bindingKind": "listener", "targetAttribute": "click", "targetProperty": "click", "operationKind": "event-listener-add" }, "source": { "marker": "click.trigger=\"handleCaptured($event)\"", "markerOccurrence": 1, "token": "click" }, "count": 1 },
+                { "fields": { "definitionName": "template-spread-capture-semantics-app", "targetAttribute": "data-note", "targetProperty": "data-note", "staticValue": "clean-captured-note", "operationKind": "attribute-set" }, "source": { "marker": "data-note=\"clean-captured-note\"", "token": "data-note=\"clean-captured-note\"" }, "count": 1 },
+                { "fields": { "definitionName": "template-spread-capture-semantics-app", "targetKind": "controller-view-model", "targetAttribute": "input-mark", "targetProperty": "value", "staticValue": "receiver-local-mark", "operationKind": "property-set" }, "source": { "marker": "input-mark=\"receiver-local-mark\"", "token": "input-mark=\"receiver-local-mark\"" }, "count": 1 }
               ]
             }
           ]
@@ -13725,15 +13746,15 @@
               "name": "nested transfer operations",
               "query": { "kind": "binding-target-operations", "cursor": false, "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "targetKind": "node", "targetAttribute": "input-mark", "targetProperty": "input-mark", "staticValue": "nested-mark", "operationKind": "attribute-set" }, "source": { "marker": "input-mark=\"nested-mark\"", "token": "input-mark=\"nested-mark\"" }, "count": 1 },
-                { "fields": { "targetKind": "controller-view-model", "targetAttribute": "input-mark", "targetProperty": "value", "operationKind": "property-set" }, "source": { "marker": "input-mark=\"receiver-local-mark\"", "token": "input-mark=\"receiver-local-mark\"" }, "count": 1 }
+                { "fields": { "definitionName": "template-spread-capture-semantics-app", "targetKind": "node", "targetAttribute": "input-mark", "targetProperty": "input-mark", "staticValue": "nested-mark", "operationKind": "attribute-set" }, "source": { "marker": "input-mark=\"nested-mark\"", "token": "input-mark=\"nested-mark\"" }, "count": 1 },
+                { "fields": { "definitionName": "template-spread-capture-semantics-app", "targetKind": "controller-view-model", "targetAttribute": "input-mark", "targetProperty": "value", "operationKind": "property-set" }, "source": { "marker": "input-mark=\"receiver-local-mark\"", "token": "input-mark=\"receiver-local-mark\"" }, "count": 1 }
               ]
             },
             {
               "name": "nested transfer flow",
               "query": { "kind": "binding-data-flows", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "bindingKind": "property", "valueSiteKind": "captured-value", "sourceName": "capturedValue", "targetProperty": "value", "direction": "two-way" }, "source": { "marker": "<nested-capture-shell value.bind=\"capturedValue | nestedIdentity\"", "token": "value.bind=\"capturedValue | nestedIdentity\"" }, "count": 1 }
+                { "fields": { "definitionName": "template-spread-capture-semantics-app", "bindingKind": "property", "valueSiteKind": "captured-value", "sourceName": "capturedValue", "targetProperty": "value", "direction": "two-way" }, "source": { "marker": "<nested-capture-shell value.bind=\"capturedValue | nestedIdentity\"", "token": "value.bind=\"capturedValue | nestedIdentity\"" }, "count": 1 }
               ]
             }
           ]
@@ -14089,7 +14110,7 @@
               "query": { "kind": "binding-target-operations", "cursor": false, "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "definitionName": "mode-panel", "targetKind": "host", "targetAttribute": "class", "targetProperty": "classList", "operationKind": "class-list-add", "staticValue": "local-panel" }, "source": { "marker": "class=\"local-panel\"", "token": "local-panel" }, "count": 1 },
-                { "fields": { "definitionName": "template-local-template-semantics-app", "targetKind": "host", "operationKind": "class-list-add", "staticValue": "local-panel" }, "source": { "marker": "class=\"local-panel\"", "token": "local-panel" }, "count": 2 }
+                { "fields": { "definitionName": "template-local-template-semantics-app", "targetKind": "host", "operationKind": "class-list-add", "staticValue": "local-panel" }, "source": { "marker": "class=\"local-panel\"", "token": "local-panel" }, "absent": true }
               ]
             },
             {
@@ -16353,6 +16374,513 @@
                   },
                   "count": 1
                 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "runtime-expression-access-use-algebra",
+      "fixture": "fixtures/pressure/runtime-expression-access-uses",
+      "aureliaDomain": "observation-data-flow",
+      "capability": "runtime-expression-access-uses",
+      "domainAxis": "observation",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/runtime-expression-access-uses-app.html",
+      "requirement": "Every authored access is conserved after pairing with its exact runtime owner and operation, while branch qualification, phase, tracking, and repeated source occurrence remain independent facts.",
+      "cases": [
+        {
+          "id": "conditional-arms-conserve-repeated-authored-loci",
+          "expectations": [
+            {
+              "name": "conditional access uses",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "ownerKind": "binding", "operationKind": "interpolation-part", "accessForm": "scope", "role": "read", "minimumExecutions": "one", "maximumExecutions": "one", "coverage": "complete" }, "source": { "marker": "${flag ? repeated.name : repeated.name}", "token": "flag" }, "count": 1 },
+                { "fields": { "ownerKind": "binding", "operationKind": "interpolation-part", "accessForm": "member", "role": "read", "executionQualifiers.0.kind": "conditional-true-arm", "minimumExecutions": "zero", "maximumExecutions": "one" }, "sourceField": "nameSource", "source": { "marker": "flag ? repeated.name : repeated.name", "token": "name", "occurrence": 1 }, "count": 1 },
+                { "fields": { "ownerKind": "binding", "operationKind": "interpolation-part", "accessForm": "member", "role": "read", "executionQualifiers.0.kind": "conditional-false-arm", "minimumExecutions": "zero", "maximumExecutions": "one" }, "sourceField": "nameSource", "source": { "marker": "flag ? repeated.name : repeated.name", "token": "name", "occurrence": 2 }, "count": 1 }
+              ]
+            },
+            {
+              "name": "binding observation retains access operation",
+              "query": { "kind": "binding-observed-dependencies", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "sourceName": "repeated.name", "accessUse.operationKind": "interpolation-part", "accessUse.origin": "authored", "accessUse.phase": "source-evaluation", "accessUse.tracking": "connectable", "accessUse.executionQualifiers.0.kind": "conditional-true-arm", "accessUse.minimumExecutions": "zero", "accessUse.maximumExecutions": "one", "accessUse.coverage": "complete" }, "sourceField": "memberTokenSource", "source": { "marker": "flag ? repeated.name : repeated.name", "token": "name", "occurrence": 1 }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "interpolation-holes-retain-distinct-operation-slots",
+          "expectations": [
+            {
+              "name": "interpolation part operations",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "ownerKind": "binding", "operationKind": "interpolation-part", "operationIndex": 0, "phase": "source-evaluation", "tracking": "connectable", "role": "read" }, "sourceField": "nameSource", "source": { "marker": "${form.name} / ${form.name}", "token": "name", "occurrence": 1 }, "count": 1 },
+                { "fields": { "ownerKind": "binding", "operationKind": "interpolation-part", "operationIndex": 1, "phase": "source-evaluation", "tracking": "connectable", "role": "read" }, "sourceField": "nameSource", "source": { "marker": "${form.name} / ${form.name}", "token": "name", "occurrence": 2 }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "optional-and-short-circuit-qualification-compose",
+          "expectations": [
+            {
+              "name": "optional short-circuit access uses",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "accessForm": "scope", "role": "read", "executionQualifiers.length": 1, "executionQualifiers.0.kind": "short-circuit-right-hand-side", "minimumExecutions": "zero" }, "source": { "marker": "${flag && form?.name}", "token": "form" }, "count": 1 },
+                { "fields": { "accessForm": "member", "role": "read", "executionQualifiers.length": 2, "executionQualifiers.0.kind": "short-circuit-right-hand-side", "executionQualifiers.1.kind": "optional-continuation", "minimumExecutions": "zero" }, "sourceField": "nameSource", "source": { "marker": "${flag && form?.name}", "token": "name" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "derived-collection-effects-retain-call-occurrence-authority",
+          "expectations": [
+            {
+              "name": "derived collection call access use",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "ownerKind": "binding", "operationKind": "interpolation-part", "accessForm": "member-call", "role": "call", "phase": "source-evaluation", "tracking": "connectable" }, "sourceField": "nameSource", "source": { "marker": "items.filter(item => item.label).map(item => item.id).join", "token": "map" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "derived collection observation keeps call lineage",
+              "query": { "kind": "binding-observed-dependencies", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "dependencyKind": "template-collection-read", "sourceName": "items.filter()", "methodName": "map", "observedMemberSourceState": "temporary-value", "accessUse.accessForm": "member-call", "accessUse.role": "call", "accessUse.phase": "source-evaluation", "accessUse.tracking": "connectable" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "scope-context-targets-separate-authored-and-callback-depth",
+          "expectations": [
+            {
+              "name": "context target access uses",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "accessForm": "scope", "scopeLookupAncestor": 0, "authoredScopeAncestor": 0, "callbackScopeDepth": 0, "targetResolution": "exact", "targetCount": 1 }, "sourceField": "nameSource", "source": { "marker": "${$this.form.name}", "token": "form" }, "count": 1 },
+                { "fields": { "accessForm": "scope", "scopeLookupAncestor": 1, "authoredScopeAncestor": 0, "callbackScopeDepth": 1, "targetResolution": "exact", "targetCount": 1 }, "sourceField": "nameSource", "source": { "marker": "item => $this.form.name + item.label", "token": "form" }, "count": 1 },
+                { "fields": { "accessForm": "scope", "scopeLookupAncestor": 0, "authoredScopeAncestor": null, "callbackScopeDepth": 1, "targetResolution": "exact", "targetCount": 1 }, "sourceField": "nameSource", "source": { "marker": "item => items.map", "token": "items" }, "count": 1 },
+                { "fields": { "accessForm": "this", "scopeLookupAncestor": 0, "authoredScopeAncestor": 0, "callbackScopeDepth": 0, "targetResolution": "exact", "targetCount": 1 }, "sourceField": "nameSource", "source": { "marker": "${$this} / ${items.map", "token": "$this" }, "count": 1 },
+                { "fields": { "accessForm": "this", "scopeLookupAncestor": 1, "authoredScopeAncestor": 0, "callbackScopeDepth": 1, "targetResolution": "exact", "targetCount": 1 }, "sourceField": "nameSource", "source": { "marker": "items.map(item => $this).length", "token": "$this" }, "count": 1 },
+                { "fields": { "accessForm": "this", "scopeLookupAncestor": 0, "authoredScopeAncestor": 0, "callbackScopeDepth": 0, "targetResolution": "exact", "targetCount": 1 }, "sourceField": "nameSource", "source": { "marker": "${$this} / ${$parent}", "token": "$this" }, "count": 1 },
+                { "fields": { "accessForm": "this", "scopeLookupAncestor": 1, "authoredScopeAncestor": 1, "callbackScopeDepth": 0, "targetResolution": "exact", "targetCount": 1 }, "sourceField": "nameSource", "source": { "marker": "${$this} / ${$parent}", "token": "$parent" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "callback-locals-retain-exact-shadowed-declarations",
+          "expectations": [
+            {
+              "name": "callback-local target links",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "accessForm": "scope", "lexicalLocal": true, "targetResolution": "exact", "targetCount": 1 }, "sourceField": "nameSource", "source": { "marker": "item => item.label", "markerOccurrence": 1, "token": "item", "occurrence": 2 }, "count": 1 },
+                { "fields": { "accessForm": "scope", "lexicalLocal": true, "targetResolution": "exact", "targetCount": 1 }, "sourceField": "targetLinks.0.declarationSource", "source": { "marker": "filter(item => item.label)", "token": "item" }, "count": 1 },
+                { "fields": { "accessForm": "scope", "lexicalLocal": true, "targetResolution": "exact", "targetCount": 1 }, "sourceField": "nameSource", "source": { "marker": "item => item.label).join(',') + item.id", "token": "item", "occurrence": 2 }, "count": 1 },
+                { "fields": { "accessForm": "scope", "lexicalLocal": true, "targetResolution": "exact", "targetCount": 1 }, "sourceField": "targetLinks.0.declarationSource", "source": { "marker": ".map(item => item.label)", "token": "item" }, "count": 1 },
+                { "fields": { "accessForm": "scope", "lexicalLocal": true, "targetResolution": "exact", "targetCount": 1 }, "sourceField": "nameSource", "source": { "marker": "+ item.id", "token": "item" }, "count": 1 },
+                { "fields": { "accessForm": "scope", "lexicalLocal": true, "targetResolution": "exact", "targetCount": 1 }, "sourceField": "targetLinks.0.declarationSource", "source": { "marker": ".map(item => items.map(item", "token": "item" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "callback-local-references-and-rename-respect-lexical-identity",
+          "cursor": { "marker": "filter(item => item.label)", "token": "item" },
+          "expectations": [
+            {
+              "name": "callback-local declaration cursor",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "item", "value.selectedMember.typeDisplay": "AccessUseItem", "value.selectedMember.memberKind": "property", "value.missingInputs.length": 0 },
+              "rows": [
+                { "rowPath": "value.selectedMember", "sourceField": "declarationSource", "source": { "marker": "filter(item => item.label)", "token": "item" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "callback-local usage cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "item => item.label", "markerOccurrence": 1, "token": "item", "occurrence": 2 }, "options": { "detail": "handles" } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "item", "value.selectedMember.typeDisplay": "AccessUseItem", "value.selectedMember.memberKind": "property", "value.missingInputs.length": 0 },
+              "rows": [
+                { "rowPath": "value.selectedMember", "sourceField": "declarationSource", "source": { "marker": "filter(item => item.label)", "token": "item" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "callback-local references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 20 } } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "item", "value.rows.length": 2, "value.candidateRows.length": 0 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "filter(item => item.label)", "token": "item" }, "count": 1 },
+                { "fields": { "referenceKind": "template-usage" }, "source": { "marker": "item => item.label", "markerOccurrence": 1, "token": "item", "occurrence": 2 }, "count": 1 }
+              ]
+            },
+            {
+              "name": "callback-local rename",
+              "query": { "kind": "template-rename", "options": { "newName": "entry" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "item", "newText": "entry" }, "source": { "marker": "filter(item => item.label)", "token": "item" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "item", "newText": "entry" }, "source": { "marker": "item => item.label", "markerOccurrence": 1, "token": "item", "occurrence": 2 }, "oldTextMatchesSource": true, "count": 1 }
+              ]
+            },
+            {
+              "name": "outer shadowed local references exclude inner local",
+              "query": { "kind": "template-references", "cursor": { "marker": "+ item.id", "token": "item" }, "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 20 } } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "item", "value.rows.length": 2, "value.candidateRows.length": 0 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": ".map(item => items.map(item", "token": "item" }, "count": 1 },
+                { "fields": { "referenceKind": "template-usage" }, "source": { "marker": "+ item.id", "token": "item" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "binding-modes-and-assignment-roles-remain-independent",
+          "expectations": [
+            {
+              "name": "read and write access phases",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "operationKind": "binding-source", "phase": "source-evaluation", "tracking": "untracked", "role": "read" }, "sourceField": "nameSource", "source": { "marker": "value.one-time=\"form.name\"", "token": "name" }, "count": 1 },
+                { "fields": { "operationKind": "binding-source", "phase": "source-evaluation", "tracking": "connectable", "role": "read" }, "sourceField": "nameSource", "source": { "marker": "value.two-way=\"form.name | suffix:converterSuffix & debounce:behaviorDelay\"", "token": "name" }, "count": 1 },
+                { "fields": { "operationKind": "binding-source", "phase": "source-assignment", "tracking": "not-applicable", "role": "write-target" }, "sourceField": "nameSource", "source": { "marker": "value.two-way=\"form.name | suffix:converterSuffix & debounce:behaviorDelay\"", "token": "name" }, "count": 1 },
+                { "fields": { "operationKind": "binding-source", "phase": "source-evaluation", "tracking": "not-applicable", "role": "write-target" }, "sourceField": "nameSource", "source": { "marker": "click.trigger=\"form.name = fallbackName\"", "token": "name" }, "count": 1 },
+                { "fields": { "operationKind": "binding-source", "phase": "source-evaluation", "tracking": "untracked", "role": "read" }, "source": { "marker": "click.trigger=\"form.name = fallbackName\"", "token": "fallbackName" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "references-and-rename-spend-access-use-authority",
+          "cursor": { "marker": "value.one-time=\"form.name\"", "token": "name" },
+          "expectations": [
+            {
+              "name": "references include observed and unobserved authored accesses",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 20 } } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "name", "value.rows.length": 10, "value.candidateRows.length": 0 },
+              "rows": [
+                { "fields": { "referenceKind": "template-usage" }, "source": { "marker": "value.one-time=\"form.name\"", "token": "name" }, "count": 1 },
+                { "fields": { "referenceKind": "template-usage" }, "source": { "marker": "click.trigger=\"handle(form.name)\"", "token": "name" }, "count": 1 },
+                { "fields": { "referenceKind": "template-usage" }, "source": { "marker": "click.trigger=\"form.name = fallbackName\"", "token": "name" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/runtime-expression-access-uses-app.ts", "marker": "name: 'Ada'", "token": "name" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "rename includes observed and unobserved authored accesses",
+              "query": { "kind": "template-rename", "options": { "newName": "displayName" } },
+              "equals": { "value.status": "available", "value.edits.length": 10 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-usage", "oldText": "name", "newText": "displayName" }, "source": { "marker": "value.one-time=\"form.name\"", "token": "name" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-usage", "oldText": "name", "newText": "displayName" }, "source": { "marker": "click.trigger=\"handle(form.name)\"", "token": "name" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-usage", "oldText": "name", "newText": "displayName" }, "source": { "marker": "click.trigger=\"form.name = fallbackName\"", "token": "name" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "typescript-reference", "oldText": "name", "newText": "displayName" }, "source": { "sourceFile": "src/runtime-expression-access-uses-app.ts", "marker": "name: 'Ada'", "token": "name" }, "oldTextMatchesSource": true, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "expression-resource-arguments-spend-their-own-phases",
+          "expectations": [
+            {
+              "name": "behavior and converter argument operations",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "operationKind": "binding-behavior-argument", "operationIndex": 0, "phase": "bind", "tracking": "untracked", "role": "read", "reachability": "reached" }, "source": { "marker": "debounce:behaviorDelay", "token": "behaviorDelay" }, "count": 1 },
+                { "fields": { "operationKind": "value-converter-argument", "operationIndex": 0, "phase": "source-evaluation", "tracking": "connectable", "role": "read", "reachability": "reached" }, "source": { "marker": "suffix:converterSuffix", "token": "converterSuffix" }, "count": 1 },
+                { "fields": { "operationKind": "value-converter-argument", "operationIndex": 0, "phase": "source-assignment", "tracking": "untracked", "role": "read", "reachability": "reached" }, "source": { "marker": "suffix:converterSuffix", "token": "converterSuffix" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-auxiliaries-are-owned-operations-not-independent-flows",
+          "expectations": [
+            {
+              "name": "repeat auxiliary access uses",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "ownerKind": "binding", "operationKind": "repeat-key", "phase": "collection-reconciliation", "tracking": "untracked", "role": "read" }, "sourceField": "nameSource", "source": { "marker": "key.bind: item.id", "token": "id" }, "count": 1 },
+                { "fields": { "ownerKind": "binding", "operationKind": "repeat-contextual", "phase": "bind", "tracking": "untracked", "role": "read" }, "source": { "marker": "contextual.bind: contextualRepeat", "token": "contextualRepeat" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "i18n-translation-access-use-conservation",
+      "fixture": "fixtures/pressure/i18n-translation-binding-errors",
+      "aureliaDomain": "observation-data-flow",
+      "capability": "runtime-expression-access-uses",
+      "domainAxis": "observation",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/i18n-translation-binding-errors-app.html",
+      "requirement": "Translation-key bindings publish the same owner-qualified access and connectable observation facts as ordinary runtime expression owners instead of disappearing outside generic data-flow.",
+      "cases": [
+        {
+          "id": "translation-keys-conserve-access-uses",
+          "expectations": [
+            {
+              "name": "translation key access uses",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "ownerKind": "binding", "operationKind": "binding-source", "phase": "source-evaluation", "tracking": "connectable", "accessForm": "scope", "role": "read" }, "source": { "marker": "t.bind=\"numericKey\"", "token": "numericKey" }, "count": 1 },
+                { "fields": { "ownerKind": "binding", "operationKind": "binding-source", "phase": "source-evaluation", "tracking": "connectable", "accessForm": "member", "role": "read" }, "sourceField": "nameSource", "source": { "marker": "t.bind=\"objectKey.viewName & state\"", "token": "viewName" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "source-observation-access-use-conservation",
+      "fixture": "fixtures/pressure/source-observation-effects",
+      "aureliaDomain": "observation-data-flow",
+      "capability": "runtime-expression-access-uses",
+      "domainAxis": "observation",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/source-observation-effects-app.ts",
+      "requirement": "Observation.watch and Observation.run retain immutable construction-site operations and exact TypeScript access loci without claiming mutable live IEffect identity.",
+      "cases": [
+        {
+          "id": "source-effects-conserve-construction-site-access-uses",
+          "expectations": [
+            {
+              "name": "source effect access uses",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "ownerKind": "source-effect-plan", "operationKind": "effect-getter", "phase": "effect-evaluation", "tracking": "connectable", "accessForm": "member", "role": "read" }, "sourceField": "nameSource", "source": { "marker": "(profile) => profile.name", "token": "name" }, "count": 1 },
+                { "fields": { "ownerKind": "source-effect-plan", "operationKind": "effect-expression", "phase": "effect-evaluation", "tracking": "connectable", "accessForm": "scope", "role": "read", "targetResolution": "exact" }, "sourceField": "nameSource", "source": { "marker": "this.observation.watch(this.state.profile, 'address.city'", "token": "address" }, "count": 1 },
+                { "fields": { "ownerKind": "source-effect-plan", "operationKind": "effect-expression", "phase": "effect-evaluation", "tracking": "connectable", "accessForm": "member", "role": "read", "targetResolution": "exact" }, "sourceField": "nameSource", "source": { "marker": "this.observation.watch(this.state.profile, 'address.city'", "token": "city" }, "count": 1 },
+                { "fields": { "ownerKind": "source-effect-plan", "operationKind": "effect-expression", "accessForm": "scope" }, "sourceField": "targetLinks.0.declarationSource", "source": { "marker": "address: {", "token": "address" }, "count": 1 },
+                { "fields": { "ownerKind": "source-effect-plan", "operationKind": "effect-expression", "accessForm": "member" }, "sourceField": "targetLinks.0.declarationSource", "source": { "marker": "city: 'Utrecht'", "token": "city" }, "count": 1 },
+                { "fields": { "ownerKind": "source-effect-plan", "operationKind": "effect-run-callback", "phase": "effect-evaluation", "tracking": "connectable", "accessForm": "member", "role": "read", "executionQualifiers.0.kind": "loop-body", "minimumExecutions": "one", "maximumExecutions": "many" }, "sourceField": "nameSource", "source": { "marker": "this.state.tracker.coord.join", "token": "coord" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "source effect observation retains access operation",
+              "query": { "kind": "runtime-effect-observed-dependencies", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "sourceName": "profile.name", "accessUse.operationKind": "effect-getter", "accessUse.origin": "authored", "accessUse.phase": "effect-evaluation", "accessUse.tracking": "connectable", "accessUse.accessForm": "member", "accessUse.role": "read", "accessUse.coverage": "complete" }, "source": { "marker": "(profile) => profile.name", "token": "profile.name" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "runtime-watcher-access-use-conservation",
+      "fixture": "fixtures/pressure/resource-metadata-errors",
+      "aureliaDomain": "observation-data-flow",
+      "capability": "runtime-expression-access-uses",
+      "domainAxis": "observation",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/resource-metadata-errors-app.ts",
+      "requirement": "Controller-owned watcher dependencies retain the exact watcher operation, lifecycle phase, tracking policy, and authored access occurrence that induced them.",
+      "cases": [
+        {
+          "id": "watcher-observation-retains-access-operation",
+          "expectations": [
+            {
+              "name": "watcher dependency access lineage",
+              "query": { "kind": "runtime-watcher-observed-dependencies", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "watcherKind": "expression", "watchIndex": 0, "sourceName": "name", "accessUse.operationKind": "watcher-expression", "accessUse.origin": "authored", "accessUse.phase": "watcher-evaluation", "accessUse.tracking": "connectable", "accessUse.accessForm": "scope", "accessUse.role": "read", "accessUse.coverage": "complete" }, "source": { "marker": "{ expression: 'name', callback: 'missingStaticWatchHandler'", "token": "name" }, "count": 1 },
+                { "fields": { "watcherKind": "expression", "watchIndex": 0, "sourceName": "name", "accessUse.targetResolution": "exact" }, "sourceField": "accessUse.targetLinks.0.declarationSource", "source": { "marker": "name = ''", "token": "name" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "watcher access retains root target authority",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "ownerKind": "runtime-watcher", "operationKind": "watcher-expression", "accessForm": "scope", "role": "read", "targetResolution": "exact" }, "sourceField": "nameSource", "source": { "marker": "{ expression: 'name', callback: 'missingStaticWatchHandler'", "token": "name" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "computed-access-use-conservation",
+      "fixture": "fixtures/pressure/computed-decorator-contexts",
+      "aureliaDomain": "observation-data-flow",
+      "capability": "runtime-expression-access-uses",
+      "domainAxis": "observation",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/computed-decorator-contexts-app.ts",
+      "requirement": "Computed observation distinguishes authored getter reads, explicit declarative dependency keys/functions, overload-selected expression chains, and synthetic deep candidates while preserving exact source identity and coverage.",
+      "cases": [
+        {
+          "id": "computed-operations-conserve-authored-and-declarative-uses",
+          "expectations": [
+            {
+              "name": "computed authored and declarative uses",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-getter", "phase": "computed-evaluation", "tracking": "untracked", "accessForm": "member", "role": "read", "authored": true }, "sourceField": "nameSource", "source": { "marker": "return this.value * 2", "token": "value" }, "count": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-getter", "phase": "computed-evaluation", "tracking": "connectable", "accessForm": "member", "role": "read", "authored": true }, "sourceField": "nameSource", "source": { "marker": "return this.value + this.doubled", "token": "value" }, "count": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-dependency-key", "phase": "computed-evaluation", "tracking": "connectable", "accessForm": "scope", "role": "declarative-dependency", "authored": true, "targetResolution": "exact" }, "sourceField": "nameSource", "source": { "marker": "@computed({ deps: ['value'] })", "markerOccurrence": 1, "token": "value" }, "count": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-dependency-function", "phase": "computed-evaluation", "tracking": "connectable", "accessForm": "member", "role": "declarative-dependency", "authored": true }, "sourceField": "nameSource", "source": { "marker": "@computed((vm: ComputedDecoratorContextsApp) => vm.value)", "token": "value" }, "count": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-dependency-key", "phase": "computed-evaluation", "tracking": "connectable", "accessForm": "declarative", "role": "declarative-dependency", "authored": false }, "source": { "marker": "@computed({ deps: ['nested'], deep: true })", "token": "'nested'" }, "countAtLeast": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-dependency-key", "accessForm": "scope", "role": "declarative-dependency", "targetResolution": "exact" }, "sourceField": "nameSource", "source": { "marker": "@computed('nested.detail.count')", "token": "nested" }, "count": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-dependency-key", "accessForm": "member", "role": "declarative-dependency", "targetResolution": "exact" }, "sourceField": "nameSource", "source": { "marker": "@computed('nested.detail.count')", "token": "detail" }, "count": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-dependency-key", "accessForm": "member", "role": "declarative-dependency", "targetResolution": "exact" }, "sourceField": "nameSource", "source": { "marker": "@computed('nested.detail.count')", "token": "count" }, "count": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-dependency-key", "accessForm": "scope-call", "role": "declarative-dependency", "targetResolution": "exact" }, "sourceField": "nameSource", "source": { "marker": "@computed(\"selectNested('tags').tags.length\")", "token": "selectNested" }, "count": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-dependency-key", "accessForm": "member", "role": "declarative-dependency", "targetResolution": "exact" }, "sourceField": "nameSource", "source": { "marker": "@computed(\"selectNested('tags').tags.length\")", "token": "tags", "occurrence": 2 }, "count": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-dependency-key", "accessForm": "member", "role": "declarative-dependency", "targetResolution": "exact" }, "sourceField": "nameSource", "source": { "marker": "@computed(\"selectNested('tags').tags.length\")", "token": "length" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "computed observation retains access operation",
+              "query": { "kind": "computed-observer-observed-dependencies", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "memberName": "plainTotal", "sourceName": "this.value", "accessUse.operationKind": "computed-getter", "accessUse.origin": "authored", "accessUse.phase": "computed-evaluation", "accessUse.tracking": "connectable", "accessUse.accessForm": "member", "accessUse.role": "read" }, "source": { "marker": "return this.value + this.doubled", "token": "this.value" }, "count": 1 },
+                { "fields": { "memberName": "doubled", "sourceName": "value", "accessUse.operationKind": "computed-dependency-key", "accessUse.origin": "authored", "accessUse.phase": "computed-evaluation", "accessUse.tracking": "connectable", "accessUse.accessForm": "scope", "accessUse.role": "declarative-dependency", "accessUse.targetResolution": "exact" }, "source": { "marker": "@computed({ deps: ['value'] })", "markerOccurrence": 1, "token": "value" }, "count": 1 },
+                { "fields": { "memberName": "nestedCountFromPath", "sourceName": "nested", "accessUse.accessForm": "scope", "accessUse.role": "declarative-dependency", "accessUse.targetResolution": "exact" }, "source": { "marker": "@computed('nested.detail.count')", "token": "nested" }, "count": 1 },
+                { "fields": { "memberName": "nestedCountFromPath", "sourceName": "nested.detail", "dependencyMemberName": "detail", "accessUse.accessForm": "member", "accessUse.role": "declarative-dependency", "accessUse.targetResolution": "exact" }, "source": { "marker": "@computed('nested.detail.count')", "token": "nested.detail" }, "count": 1 },
+                { "fields": { "memberName": "nestedCountFromPath", "sourceName": "nested.detail.count", "dependencyMemberName": "count", "accessUse.accessForm": "member", "accessUse.role": "declarative-dependency", "accessUse.targetResolution": "exact" }, "source": { "marker": "@computed('nested.detail.count')", "token": "nested.detail.count" }, "count": 1 },
+                { "fields": { "memberName": "nestedCountFromPath", "sourceName": "nested" }, "sourceField": "accessUse.targetLinks.0.declarationSource", "source": { "marker": "nested = {", "token": "nested" }, "count": 1 },
+                { "fields": { "memberName": "nestedCountFromPath", "sourceName": "nested.detail" }, "sourceField": "accessUse.targetLinks.0.declarationSource", "source": { "marker": "detail: {", "token": "detail" }, "count": 1 },
+                { "fields": { "memberName": "nestedCountFromPath", "sourceName": "nested.detail.count" }, "sourceField": "accessUse.targetLinks.0.declarationSource", "source": { "marker": "count: 2", "token": "count" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "computed-mutation-roles-match-javascript-read-semantics",
+          "expectations": [
+            {
+              "name": "mutation access roles",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 400 } } },
+              "rows": [
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-getter", "role": "write-target", "tracking": "not-applicable" }, "sourceField": "nameSource", "source": { "marker": "this.mutationState.direct = 'written'", "token": "direct" }, "count": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-getter", "role": "read-write-target", "tracking": "connectable" }, "sourceField": "nameSource", "source": { "marker": "this.mutationState.count += 1", "token": "count" }, "count": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-getter", "role": "read-write-target", "tracking": "connectable" }, "sourceField": "nameSource", "source": { "marker": "this.mutationState.count++", "token": "count" }, "count": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-getter", "role": "write-target", "tracking": "not-applicable" }, "sourceField": "nameSource", "source": { "marker": "delete this.mutationState.optional", "token": "optional" }, "count": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-getter", "role": "write-target", "tracking": "not-applicable" }, "sourceField": "nameSource", "source": { "marker": "for (this.mutationState.current of this.mutationState.values)", "token": "current" }, "count": 1 },
+                { "fields": { "ownerKind": "computed-observer", "operationKind": "computed-getter", "role": "write-target", "tracking": "not-applicable" }, "sourceField": "nameSource", "source": { "marker": "for (this.mutationState.key in this.mutationState.entries)", "token": "key" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "only value-reading mutation targets become dependencies",
+              "query": { "kind": "computed-observer-observed-dependencies", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 400 } } },
+              "rows": [
+                { "fields": { "memberName": "mutationRoleProbe", "sourceName": "this.mutationState.count", "accessUse.role": "read-write-target", "accessUse.tracking": "connectable" }, "source": { "marker": "this.mutationState.count += 1", "token": "this.mutationState.count" }, "count": 1 },
+                { "fields": { "memberName": "mutationRoleProbe", "sourceName": "this.mutationState.count", "accessUse.role": "read-write-target", "accessUse.tracking": "connectable" }, "source": { "marker": "this.mutationState.count++", "token": "this.mutationState.count" }, "count": 1 },
+                { "source": { "marker": "this.mutationState.direct = 'written'", "token": "this.mutationState.direct" }, "absent": true },
+                { "source": { "marker": "delete this.mutationState.optional", "token": "this.mutationState.optional" }, "absent": true },
+                { "source": { "marker": "for (this.mutationState.current of this.mutationState.values)", "token": "this.mutationState.current" }, "absent": true },
+                { "source": { "marker": "for (this.mutationState.key in this.mutationState.entries)", "token": "this.mutationState.key" }, "absent": true }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "trackable-method-access-use-conservation",
+      "fixture": "fixtures/pressure/trackable-method-dependencies",
+      "aureliaDomain": "observation-data-flow",
+      "capability": "runtime-expression-access-uses",
+      "domainAxis": "observation",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/trackable-method-dependencies-app.html",
+      "requirement": "Trackable method-body reads retain their TypeScript occurrence and method-body handoff while remaining owned by the exact template operation that invoked the method.",
+      "cases": [
+        {
+          "id": "trackable-method-observation-retains-handoff",
+          "expectations": [
+            {
+              "name": "method-body dependency access lineage",
+              "query": { "kind": "binding-observed-dependencies", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "dependencyKind": "proxy-property-read", "sourceName": "this.products", "accessUse.operationKind": "interpolation-part", "accessUse.origin": "authored", "accessUse.phase": "source-evaluation", "accessUse.tracking": "connectable", "accessUse.executionQualifiers.0.kind": "method-body-handoff", "accessUse.executionQualifiers.0.operationName": "featuredProductNames", "accessUse.coverage": "open" }, "source": { "sourceFile": "src/trackable-method-dependencies-app.ts", "marker": "return this.products", "token": "this.products" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "trackable-method-caller-context-composes-across-language-boundaries",
+          "expectations": [
+            {
+              "name": "conditional and synchronous callback handoffs",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "ownerKind": "binding", "operationKind": "interpolation-part", "tracking": "connectable", "executionQualifiers.0.kind": "short-circuit-right-hand-side", "executionQualifiers.0.operationName": "&&", "executionQualifiers.1.kind": "method-body-handoff", "executionQualifiers.1.operationName": "featuredProductNames", "minimumExecutions": "zero", "maximumExecutions": "one", "coverage": "open" }, "sourceField": "nameSource", "source": { "sourceFile": "src/trackable-method-dependencies-app.ts", "marker": "return this.products", "token": "products" }, "count": 1 },
+                { "fields": { "ownerKind": "binding", "operationKind": "interpolation-part", "tracking": "connectable", "executionQualifiers.0.kind": "synchronous-callback", "executionQualifiers.0.operationName": "map", "executionQualifiers.1.kind": "method-body-handoff", "executionQualifiers.1.operationName": "featuredProductNames", "minimumExecutions": "zero", "maximumExecutions": "many", "coverage": "open" }, "sourceField": "nameSource", "source": { "sourceFile": "src/trackable-method-dependencies-app.ts", "marker": "return this.products", "token": "products" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "caller context survives observation projection",
+              "query": { "kind": "binding-observed-dependencies", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "sourceName": "this.products", "accessUse.executionQualifiers.0.kind": "synchronous-callback", "accessUse.executionQualifiers.0.operationName": "map", "accessUse.executionQualifiers.1.kind": "method-body-handoff", "accessUse.executionQualifiers.1.operationName": "featuredProductNames", "accessUse.maximumExecutions": "many", "accessUse.coverage": "open" }, "source": { "sourceFile": "src/trackable-method-dependencies-app.ts", "marker": "return this.products", "token": "this.products" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "trackable-method-structured-control-flow-remains-honest",
+          "expectations": [
+            {
+              "name": "structured TypeScript execution qualifiers",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "executionQualifiers.0.kind": "method-body-handoff", "executionQualifiers.0.operationName": "switchLabel", "executionQualifiers.1.kind": "switch-clause", "executionQualifiers.1.operationName": "case", "minimumExecutions": "zero", "maximumExecutions": "one" }, "sourceField": "nameSource", "source": { "sourceFile": "src/trackable-method-dependencies-app.ts", "marker": "return this.control.primary", "markerOccurrence": 1, "token": "primary" }, "count": 1 },
+                { "fields": { "executionQualifiers.0.kind": "method-body-handoff", "executionQualifiers.0.operationName": "exceptionLabel", "executionQualifiers.1.kind": "exception-path", "executionQualifiers.1.operationName": "catch", "minimumExecutions": "zero", "maximumExecutions": "one" }, "sourceField": "nameSource", "source": { "sourceFile": "src/trackable-method-dependencies-app.ts", "marker": "return this.control.recovered", "token": "recovered" }, "count": 1 },
+                { "fields": { "executionQualifiers.0.kind": "method-body-handoff", "executionQualifiers.0.operationName": "continuationLabel", "executionQualifiers.1.kind": "conditional-continuation", "executionQualifiers.1.operationName": "IfStatement", "minimumExecutions": "zero", "maximumExecutions": "one" }, "sourceField": "nameSource", "source": { "sourceFile": "src/trackable-method-dependencies-app.ts", "marker": "return this.control.after", "token": "after" }, "count": 1 },
+                { "fields": { "executionQualifiers.0.kind": "method-body-handoff", "executionQualifiers.0.operationName": "shortCircuitAssignmentLabel", "executionQualifiers.1.kind": "short-circuit-right-hand-side", "executionQualifiers.1.operationName": "??=", "minimumExecutions": "zero", "maximumExecutions": "one" }, "sourceField": "nameSource", "source": { "sourceFile": "src/trackable-method-dependencies-app.ts", "marker": "state.value ??= this.control.fallback", "token": "fallback" }, "count": 1 },
+                { "fields": { "executionQualifiers.0.kind": "method-body-handoff", "executionQualifiers.0.operationName": "loopLabel", "executionQualifiers.1.kind": "loop-condition", "minimumExecutions": "zero", "maximumExecutions": "many" }, "sourceField": "nameSource", "source": { "sourceFile": "src/trackable-method-dependencies-app.ts", "marker": "index < this.products.length", "token": "products" }, "count": 1 },
+                { "fields": { "executionQualifiers.0.kind": "method-body-handoff", "executionQualifiers.0.operationName": "doWhileLabel", "executionQualifiers.1.kind": "loop-body", "minimumExecutions": "zero", "maximumExecutions": "many" }, "sourceField": "nameSource", "source": { "sourceFile": "src/trackable-method-dependencies-app.ts", "marker": "result += this.products[index]?.name", "token": "products" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "blocked-runtime-expression-sites-remain-unrealized",
+      "fixture": "fixtures/pressure/runtime-html-ref-renderer-errors",
+      "aureliaDomain": "observation-data-flow",
+      "capability": "runtime-expression-access-uses",
+      "domainAxis": "open-honesty",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/runtime-html-ref-renderer-errors-app.html",
+      "requirement": "An authored expression rejected before runtime owner construction remains diagnosed syntax and does not masquerade as a realized runtime access use.",
+      "cases": [
+        {
+          "id": "renderer-rejected-sites-do-not-gain-runtime-owners",
+          "expectations": [
+            {
+              "name": "blocked ref target is not a runtime use",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "source": { "marker": "ghost.ref=\"missingRef\"", "token": "missingRef" }, "absent": true }
+              ]
+            },
+            {
+              "name": "blocked ref remains diagnosed",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "runtime-renderer-framework-error" }, "countAtLeast": 1 }
               ]
             }
           ]

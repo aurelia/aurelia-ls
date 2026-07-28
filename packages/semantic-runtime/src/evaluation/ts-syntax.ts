@@ -248,6 +248,99 @@ export function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
   return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
 }
 
+/** Source-language value access performed by one TypeScript expression occurrence. */
+export const enum TypeScriptAccessMode {
+  /** Evaluating the occurrence reads its reached value. */
+  Read = 1 << 0,
+  /** Evaluating the occurrence writes its reached target. */
+  Write = 1 << 1,
+  /** Evaluating the occurrence reads and then writes the same target. */
+  ReadWrite = Read | Write,
+}
+
+/**
+ * Classify the terminal source access without confusing owner/key evaluation with mutation.
+ *
+ * `owner.value = next` writes `value` but still reads `owner`; compound assignment and increment
+ * read before writing. Destructuring carriers are followed until their enclosing assignment or
+ * loop target is reached, while computed property names remain ordinary reads.
+ */
+export function typescriptAccessModeForExpression(
+  expression: ts.Expression,
+): TypeScriptAccessMode {
+  let current: ts.Node = expression;
+  let parent = current.parent;
+
+  while (parent != null && isTypeScriptAssignmentTargetCarrier(parent, current)) {
+    current = parent;
+    parent = current.parent;
+  }
+
+  if (
+    parent != null
+    && ts.isBinaryExpression(parent)
+    && parent.left === current
+    && isAssignmentOperator(parent.operatorToken.kind)
+  ) {
+    return parent.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      ? TypeScriptAccessMode.Write
+      : TypeScriptAccessMode.ReadWrite;
+  }
+  if (
+    parent != null
+    && (ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent))
+    && parent.operand === current
+    && (parent.operator === ts.SyntaxKind.PlusPlusToken || parent.operator === ts.SyntaxKind.MinusMinusToken)
+  ) {
+    return TypeScriptAccessMode.ReadWrite;
+  }
+  if (parent != null && ts.isDeleteExpression(parent) && parent.expression === current) {
+    return TypeScriptAccessMode.Write;
+  }
+  if (
+    parent != null
+    && (ts.isForOfStatement(parent) || ts.isForInStatement(parent))
+    && parent.initializer === current
+  ) {
+    return TypeScriptAccessMode.Write;
+  }
+  return TypeScriptAccessMode.Read;
+}
+
+function isTypeScriptAssignmentTargetCarrier(
+  parent: ts.Node,
+  child: ts.Node,
+): boolean {
+  if (
+    (
+      ts.isAsExpression(parent)
+      || ts.isTypeAssertionExpression(parent)
+      || ts.isParenthesizedExpression(parent)
+      || ts.isNonNullExpression(parent)
+      || ts.isSatisfiesExpression(parent)
+    )
+    && parent.expression === child
+  ) {
+    return true;
+  }
+  if (ts.isPropertyAssignment(parent) && parent.initializer === child) {
+    return true;
+  }
+  if (
+    (ts.isSpreadAssignment(parent) || ts.isSpreadElement(parent))
+    && parent.expression === child
+  ) {
+    return true;
+  }
+  if (ts.isObjectLiteralExpression(parent)) {
+    return parent.properties.some((property) => property === child);
+  }
+  if (ts.isArrayLiteralExpression(parent)) {
+    return parent.elements.some((element) => element === child);
+  }
+  return false;
+}
+
 export function readCallCalleeText(
   expression: ts.Expression,
 ): string | null {

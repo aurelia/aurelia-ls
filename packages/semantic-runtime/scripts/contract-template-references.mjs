@@ -41,6 +41,9 @@ const stateScopeTemplatePath = path.join(stateScopeRoot, 'src/app.html');
 const stateScopeDefinitionPath = path.join(stateScopeRoot, 'src/app.ts');
 const stateScopeTemplateText = fs.readFileSync(stateScopeTemplatePath, 'utf8');
 const stateScopeDefinitionText = fs.readFileSync(stateScopeDefinitionPath, 'utf8');
+const accessUseRoot = path.join(packageRoot, 'fixtures/pressure/runtime-expression-access-uses');
+const accessUseTemplatePath = path.join(accessUseRoot, 'src/runtime-expression-access-uses-app.html');
+const accessUseTemplateText = fs.readFileSync(accessUseTemplatePath, 'utf8');
 
 const catalog = readSemanticAppQueryCatalog({ queryKind: SemanticAppQueryKind.TemplateReferences });
 assert.equal(catalog.value.rows.length, 1, 'TemplateReferences should be in the public app-query catalog.');
@@ -209,13 +212,10 @@ assert.equal(openMemberRow.source?.end, optionLabelStart + 'label'.length);
 assert.equal(openMemberRow.targetSource?.start, optionLabelStart);
 assert.equal(openMemberRow.targetSource?.end, optionLabelStart + 'label'.length);
 assert.equal(openMemberRow.handles?.targetSourceAddressHandle ?? null, null, 'Open self-row must not expose an unproven owner source as the target handle.');
-assert.ok(openMemberReferences.value.candidateRows.length > 0, 'Same-name unproven candidates should stay outside returned rows.');
-assert.ok(
-  openMemberReferences.value.candidateRows.every((row) =>
-    row.source?.path?.replace(/\\/g, '/') !== 'src/components/loose-picklist.html'
-    || row.source.start !== optionLabelStart
-  ),
-  'The cursor occurrence should not also appear in candidateRows.',
+assert.equal(
+  openMemberReferences.value.candidateRows.length,
+  0,
+  'Closed same-name misses such as string-literal member access must not masquerade as open candidates.',
 );
 
 const labelTextPropertyReferences = await aliasedBindableRuntime.answerAppQuery({
@@ -319,6 +319,171 @@ assert.equal(inlineAliasReferences.value.rows.length, 2, 'Inline alias reference
 expectBindableAliasFieldProvenance(aliasedBindableRuntime, 'product-card', 'labelText');
 expectBindableAliasFieldProvenance(aliasedBindableRuntime, 'display-hint', 'labelText');
 
+const accessUseRuntime = await createSemanticRuntime({
+  workspaceRoot: accessUseRoot,
+  storeKey: 'contract:template-references:access-use-authority',
+});
+const accessUseReferences = await accessUseRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.TemplateReferences,
+  sourceFilePath: accessUseTemplatePath,
+  cursor: cursorInsideSource(
+    accessUseTemplateText,
+    accessUseTemplatePath,
+    'value.one-time="form.name"',
+    'name',
+    1,
+  ),
+  includeDeclaration: true,
+  detail: 'handles',
+  page: { size: 20 },
+  analysisDepth: 'binding-observation',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+assert.match(accessUseReferences.outcome, /^(hit|partial)$/u, accessUseReferences.summary);
+assert.equal(accessUseReferences.closure, 'complete');
+assert.equal(accessUseReferences.value.selectedMemberName, 'name');
+assert.equal(
+  accessUseReferences.value.rows.length,
+  10,
+  'References should conserve every authored form.name occurrence, including untracked bindings and listeners.',
+);
+for (const marker of [
+  'value.one-time="form.name"',
+  'value.two-way="form.name | suffix',
+  'click.trigger="handle(form.name)"',
+  'click.trigger="form.name = fallbackName"',
+]) {
+  const nameStart = accessUseTemplateText.indexOf('name', accessUseTemplateText.indexOf(marker));
+  const row = expectReference(
+    accessUseReferences.value.rows,
+    'template-usage',
+    'src/runtime-expression-access-uses-app.html',
+    nameStart,
+    nameStart + 'name'.length,
+    accessUseRoot,
+  );
+  assert.notEqual(
+    row.handles?.accessUseProductHandle ?? null,
+    null,
+    `Expected ${marker} to retain its access-use authority.`,
+  );
+}
+const unobservedRows = accessUseReferences.value.rows.filter((row) =>
+  row.referenceKind === 'template-usage'
+  && row.handles?.observedDependencyProductHandle == null
+);
+assert.ok(
+  unobservedRows.length >= 3,
+  'One-time and listener occurrences should prove that references do not depend on observation rows.',
+);
+assert.ok(
+  unobservedRows.every((row) => row.handles?.accessUseProductHandle != null),
+  'Every unobserved template reference must retain its authored access-use handle.',
+);
+
+const callbackLocalReferences = await accessUseRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.TemplateReferences,
+  sourceFilePath: accessUseTemplatePath,
+  cursor: cursorInsideSource(
+    accessUseTemplateText,
+    accessUseTemplatePath,
+    'filter(item => item.label)',
+    'item',
+    1,
+  ),
+  includeDeclaration: true,
+  detail: 'handles',
+  page: { size: 20 },
+  analysisDepth: 'binding-observation',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+assert.match(callbackLocalReferences.outcome, /^(hit|partial)$/u, callbackLocalReferences.summary);
+assert.equal(callbackLocalReferences.closure, 'complete');
+assert.equal(callbackLocalReferences.value.selectedMemberName, 'item');
+assert.equal(callbackLocalReferences.value.rows.length, 2);
+const filterParameterStart = sourceTokenStart(
+  accessUseTemplateText,
+  'filter(item => item.label)',
+  'item',
+);
+const filterUsageStart = sourceTokenStart(
+  accessUseTemplateText,
+  'item => item.label',
+  'item',
+  2,
+  1,
+);
+expectReference(
+  callbackLocalReferences.value.rows,
+  'declaration',
+  'src/runtime-expression-access-uses-app.html',
+  filterParameterStart,
+  filterParameterStart + 'item'.length,
+  accessUseRoot,
+);
+const callbackUsage = expectReference(
+  callbackLocalReferences.value.rows,
+  'template-usage',
+  'src/runtime-expression-access-uses-app.html',
+  filterUsageStart,
+  filterUsageStart + 'item'.length,
+  accessUseRoot,
+);
+assert.notEqual(
+  callbackUsage.handles?.accessUseProductHandle ?? null,
+  null,
+  'Callback-local references should retain the exact access occurrence.',
+);
+
+const accessUseRows = await readAllRuntimeExpressionAccessUses(accessUseRuntime);
+const rootThis = accessUseAt(
+  accessUseRows,
+  '${$this} / ${items.map',
+  '$this',
+);
+const callbackThis = accessUseAt(
+  accessUseRows,
+  'items.map(item => $this).length',
+  '$this',
+);
+const repeatThis = accessUseAt(
+  accessUseRows,
+  '${$this} / ${$parent}',
+  '$this',
+);
+const repeatParent = accessUseAt(
+  accessUseRows,
+  '${$this} / ${$parent}',
+  '$parent',
+);
+assert.equal(rootThis.targetResolution, 'exact');
+assert.equal(callbackThis.targetResolution, 'exact');
+assert.equal(repeatThis.targetResolution, 'exact');
+assert.equal(repeatParent.targetResolution, 'exact');
+assert.equal(rootThis.authoredScopeAncestor, 0);
+assert.equal(rootThis.callbackScopeDepth, 0);
+assert.equal(callbackThis.authoredScopeAncestor, 0);
+assert.equal(callbackThis.callbackScopeDepth, 1);
+const rootContextIdentity = rootThis.targetLinks[0]?.targetIdentityHandle ?? null;
+assert.notEqual(rootContextIdentity, null, 'Root $this should retain a binding-context identity.');
+assert.equal(
+  callbackThis.targetLinks[0]?.targetIdentityHandle ?? null,
+  rootContextIdentity,
+  '$this inside an Aurelia arrow callback should still target the root binding context.',
+);
+assert.equal(
+  repeatParent.targetLinks[0]?.targetIdentityHandle ?? null,
+  rootContextIdentity,
+  '$parent inside the repeat scope should target the root binding context.',
+);
+assert.notEqual(
+  repeatThis.targetLinks[0]?.targetIdentityHandle ?? null,
+  rootContextIdentity,
+  '$this inside the repeat scope should target the repeated binding context.',
+);
+
 console.log(`Template references contract passed (${
   withDeclaration.value.rows.length
   + resourceReferences.value.rows.length
@@ -327,6 +492,8 @@ console.log(`Template references contract passed (${
   + labelTextTypeScriptPropertyReferences.value.rows.length
   + productAliasReferences.value.rows.length
   + inlineAliasReferences.value.rows.length
+  + accessUseReferences.value.rows.length
+  + callbackLocalReferences.value.rows.length
 } row(s)).`);
 
 async function askReferences(includeDeclaration) {
@@ -362,6 +529,52 @@ function cursorInsideSource(text, filePath, marker, needle, delta = 0) {
     character: lines[lines.length - 1].length,
     offset,
   };
+}
+
+async function readAllRuntimeExpressionAccessUses(semanticRuntime) {
+  const rows = [];
+  let cursor = null;
+  do {
+    const answer = await semanticRuntime.answerAppQuery({
+      kind: SemanticAppQueryKind.RuntimeExpressionAccessUses,
+      sourceFilePath: accessUseTemplatePath,
+      detail: 'handles',
+      page: { size: 200, cursor },
+      analysisDepth: 'binding-observation',
+      includeAuthoringTemplates: true,
+      appRetention: 'retain-app',
+    });
+    assert.match(answer.outcome, /^(hit|partial)$/u, answer.summary);
+    rows.push(...answer.value.rows);
+    cursor = answer.page?.nextCursor ?? null;
+  } while (cursor != null);
+  return rows;
+}
+
+function accessUseAt(rows, marker, token) {
+  const start = sourceTokenStart(accessUseTemplateText, marker, token);
+  const row = rows.find((candidate) =>
+    candidate.nameSource?.path?.replace(/\\/g, '/') === 'src/runtime-expression-access-uses-app.html'
+    && candidate.nameSource?.start === start
+    && candidate.nameSource?.end === start + token.length
+  );
+  assert.ok(row, `Expected access use at ${marker} / ${token}.`);
+  return row;
+}
+
+function sourceTokenStart(text, marker, token, occurrence = 1, markerOccurrence = 1) {
+  let markerOffset = -1;
+  for (let index = 0; index < markerOccurrence; index += 1) {
+    markerOffset = text.indexOf(marker, markerOffset + 1);
+    assert.notEqual(markerOffset, -1, `Expected marker: ${marker}`);
+  }
+  let tokenOffset = markerOffset - 1;
+  for (let index = 0; index < occurrence; index += 1) {
+    tokenOffset = text.indexOf(token, tokenOffset + 1);
+    assert.notEqual(tokenOffset, -1, `Expected token ${token} in marker ${marker}.`);
+  }
+  assert.ok(tokenOffset < markerOffset + marker.length, `Token ${token} escaped marker ${marker}.`);
+  return tokenOffset;
 }
 
 function expectReference(rows, referenceKind, filePath, start, end, root = fixtureRoot) {

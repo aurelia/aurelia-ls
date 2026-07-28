@@ -2,11 +2,16 @@ import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-
 import type { KernelStore } from '../kernel/store.js';
 import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import {
+  RuntimeObservedDependencyKind,
   type RuntimeBindingDataFlow,
   type RuntimeBindingDataFlowValueConverterWritebackStage,
   type RuntimeBindingObservedDependency,
-  RuntimeBindingRealization,
 } from '../observation/runtime-binding-observation.js';
+import { RuntimeOperationRealization } from '../runtime-expression/runtime-operation.js';
+import {
+  requireRuntimeExpressionAccessUseOccurrenceRow,
+  runtimeExpressionAccessUseRow,
+} from './runtime-expression-projections.js';
 import {
   runtimeBindingPrimitiveValueApiDisplay,
   runtimeBindingPrimitiveValueDomainKinds,
@@ -43,6 +48,7 @@ import type {
   SemanticBindingValueChannelSummaryResult,
   SemanticBindingValueChannelSummaryRow,
   SemanticObservedMemberSourceState,
+  SemanticRuntimeExpressionAccessUseRow,
   SemanticExpressionResourceLifecycleEffectsRow,
   SemanticTargetOperationRow,
   SemanticTemplateResourceReferenceRow,
@@ -56,9 +62,13 @@ import {
   resourceLocalBindingTargetAccesses,
   resourceLocalBindingTargetOperations,
   resourceLocalBindingValueChannels,
+  resourceLocalRuntimeExpressionAccessUses,
   resourceLocalRuntimeBindings,
   resourceLocalValueConverterApplications,
 } from '../template/runtime-resource-ownership.js';
+import {
+  runtimeWatcherProjectionControllers,
+} from './controller-projections.js';
 
 const BINDING_SUMMARY_NAME_LIMIT = 12;
 const BINDING_SUMMARY_TYPE_LIMIT = 8;
@@ -466,6 +476,40 @@ export function readBindingDataFlowRows(
     );
 }
 
+export function readRuntimeExpressionAccessUseRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): readonly SemanticRuntimeExpressionAccessUseRow[] {
+  const templateRows = bindingProjectionResources(emission)
+    .flatMap((resource): readonly SemanticRuntimeExpressionAccessUseRow[] =>
+      resourceLocalRuntimeExpressionAccessUses(store, resource).map((accessUse) =>
+        runtimeExpressionAccessUseRow(resource.compilation.definition.name, accessUse, store, handles)
+      )
+    );
+  const sourceRows = [
+    ...emission.runtimeEffects.readAccessUses(),
+    ...emission.computedObserverSources.readAccessUses(),
+  ].map((accessUse) => runtimeExpressionAccessUseRow(null, accessUse, store, handles));
+  const watcherRows = runtimeWatcherProjectionControllers(emission).flatMap(
+    ({ renderingDefinitionName, controller }) =>
+      controller.readWatchers().flatMap((watcher) =>
+        watcher.accessUses.map((accessUse) =>
+          runtimeExpressionAccessUseRow(renderingDefinitionName, accessUse, store, handles)
+        )
+      ),
+  );
+  return [...templateRows, ...watcherRows, ...sourceRows]
+    .sort((left, right) => {
+      const leftSource = left.source;
+      const rightSource = right.source;
+      return `${leftSource?.path ?? ''}:${leftSource?.start ?? -1}:${left.operationKind}:${left.operationIndex ?? -1}`
+        .localeCompare(
+          `${rightSource?.path ?? ''}:${rightSource?.start ?? -1}:${right.operationKind}:${right.operationIndex ?? -1}`,
+        );
+    });
+}
+
 export function readBindingDataFlowSummary(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
@@ -578,7 +622,7 @@ function summarizeBindingValueChannels(
     if (row.usesCustomMatcher) {
       group.customMatcherCount += 1;
     }
-    if (row.realization === RuntimeBindingRealization.Open
+    if (row.realization === RuntimeOperationRealization.Open
       || row.openReason != null
       || row.openReasonKinds.length > 0) {
       group.openCount += 1;
@@ -1386,6 +1430,7 @@ function bindingDataFlowRow(
     sourceEvaluationReachability: dataFlow.sourceEvaluationReachability,
     targetMutationKind: dataFlow.targetMutationKind,
     strictBinding: dataFlow.strictBinding,
+    accessUseCount: dataFlow.accessUseProductHandles.length,
     expressionParseState: parse?.state ?? null,
     expressionParseResultKind: parse?.resultKind ?? null,
     valueSiteKind: parse?.site.siteKind ?? null,
@@ -1433,6 +1478,7 @@ function bindingDataFlowRow(
       handles: {
         bindingProductHandle: dataFlow.binding.productHandle,
         dataFlowProductHandle: dataFlow.productHandle,
+        accessUseProductHandles: dataFlow.accessUseProductHandles,
         targetAccessProductHandle: dataFlow.targetAccess?.productHandle ?? null,
         targetOperationProductHandle: dataFlow.targetOperation?.productHandle ?? null,
         sourceOperationProductHandle: dataFlow.sourceOperation?.productHandle ?? null,
@@ -1511,6 +1557,11 @@ function bindingObservedDependencyRow(
   handles: boolean,
 ): SemanticBindingObservedDependencyRow {
   const source = describeAddress(store, dependency.sourceAddressHandle);
+  const accessUse = requireRuntimeExpressionAccessUseOccurrenceRow(
+    store,
+    dependency.accessUseProductHandle,
+    handles,
+  );
   return {
     definitionName,
     bindingKind: dependency.binding.bindingKind,
@@ -1522,18 +1573,22 @@ function bindingObservedDependencyRow(
     memberName: dependency.memberName,
     keyExpression: dependency.keyExpression,
     methodName: dependency.methodName,
+    accessUse,
     observedMemberKind: dependency.observedMemberKind,
     observedMemberSource: describeAddress(store, dependency.observedMemberSourceAddressHandle),
     observedMemberSourceState: dependency.observedMemberSourceState,
     observedMemberSourceRoute: dependency.observedMemberSourceRoute,
     spanStart: dependency.spanStart,
     spanEnd: dependency.spanEnd,
-    memberTokenSource: memberTokenSourceReference(source, dependency),
+    memberTokenSource: dependency.dependencyKind === RuntimeObservedDependencyKind.TemplateExpressionRead
+      ? accessUse.nameSource
+      : memberTokenSourceReference(source, dependency),
     source,
     ...(handles ? {
       handles: {
         bindingProductHandle: dependency.binding.productHandle,
         dataFlowProductHandle: dependency.dataFlowProductHandle,
+        accessUseProductHandle: dependency.accessUseProductHandle,
         observedDependencyProductHandle: dependency.productHandle,
         expressionProductHandle: dependency.expressionProductHandle,
         bindingScopeProductHandle: dependency.bindingScope?.productHandle ?? null,
@@ -1552,9 +1607,10 @@ function expressionParseForDataFlow(
 }
 
 /**
- * Authored member-name token reference for AccessMember/CallMember reads, derived from the parser
- * token bounds carried on the dependency record. The token lives in the same authored file as the
- * expression source, so no separate kernel address is minted for it.
+ * Authored token for the value whose observer is requested. For a derived collection read this can
+ * be the preceding call (`filter` in `items.filter().map()`), while the linked access use owns the
+ * operation token (`map`). The token lives in the same authored file as the expression source, so
+ * no separate kernel address is minted for it.
  */
 function memberTokenSourceReference(
   source: SemanticSourceReference | null,

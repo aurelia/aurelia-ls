@@ -28,6 +28,7 @@ const computedObserverSources = app.ask({
 }).value.rows;
 const bindingObservedDependencies = app.ask({
   kind: 'binding-observed-dependencies',
+  detail: 'handles',
   page: { size: 100 },
 }).value.rows;
 const bindingDataFlows = app.ask({
@@ -61,6 +62,9 @@ const forwardingComputedSources = computedObserverSources.filter((row) =>
 
 if (observedTemplateGetterReads.length !== 2) {
   failures.push(`Expected exactly two template getter reads, received ${observedTemplateGetterReads.length}.`);
+}
+if (!observedTemplateGetterReads.every(hasNestedAccessUseTargetHandles)) {
+  failures.push('Detailed binding dependency rows should retain handles on their nested access-use targets.');
 }
 
 if (directStateTemplateReads.length !== 1 || directStateDataFlows.length !== 1) {
@@ -100,6 +104,14 @@ function summaryObservedDependency(row) {
     observedMemberKind: row.observedMemberKind,
     observedMemberSourceState: row.observedMemberSourceState,
   };
+}
+
+function hasNestedAccessUseTargetHandles(row) {
+  return row.accessUse?.targetLinks?.some((target) =>
+    target.authorityProductHandle != null
+    && target.targetIdentityHandle != null
+    && target.declarationSourceAddressHandle != null
+  ) ?? false;
 }
 
 function summaryDataFlow(row) {

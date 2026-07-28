@@ -76,10 +76,10 @@ import {
   RuntimeExpressionResourceBindReachability,
   RuntimeExpressionResourceLifecycleEffectKind,
   RuntimeExpressionResourceLifecycleEffects,
-  RuntimeExpressionResourcePhaseReachability,
   RuntimeExpressionResourceSignal,
   RuntimeExpressionResourceValueState,
 } from './runtime-expression-resource.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 
 export class RuntimeValueConverterMaterializationRequest {
   constructor(
@@ -237,11 +237,11 @@ export class RuntimeValueConverterMaterializer {
     const issueApplication = entry.resource == null
       ? applications.find((application) =>
           application.phase === RuntimeValueConverterApplicationPhase.Bind
-          && application.phaseReachability === RuntimeExpressionResourcePhaseReachability.Reached
+          && application.phaseReachability === RuntimeOperationReachability.Reached
         ) ?? null
       : applications.find((application) =>
           application.phase === RuntimeValueConverterApplicationPhase.ToView
-          && application.phaseReachability === RuntimeExpressionResourcePhaseReachability.Reached
+          && application.phaseReachability === RuntimeOperationReachability.Reached
         ) ?? null;
     const issue = issueApplication == null
       ? null
@@ -462,7 +462,7 @@ export class RuntimeValueConverterMaterializer {
     local: string,
     entry: RuntimeValueConverterPlanEntry,
     phase: RuntimeValueConverterApplicationPhase,
-    phaseReachability: RuntimeExpressionResourcePhaseReachability,
+    phaseReachability: RuntimeOperationReachability,
     phaseOrder: number | null,
     lifecycleEffects: RuntimeExpressionResourceLifecycleEffects,
     sourceAddressHandle: AddressHandle | null,
@@ -624,12 +624,12 @@ function valueConverterPhaseReachability(
   plan: RuntimeExpressionResourcePlan,
   entry: RuntimeValueConverterPlanEntry,
   phase: RuntimeValueConverterApplicationPhase,
-): RuntimeExpressionResourcePhaseReachability {
+): RuntimeOperationReachability {
   if (entry.bindReachability !== RuntimeExpressionResourceBindReachability.Reached) {
-    return RuntimeExpressionResourcePhaseReachability.BlockedByOuterFailure;
+    return RuntimeOperationReachability.BlockedByOuterFailure;
   }
   if (phase === RuntimeValueConverterApplicationPhase.Bind) {
-    return RuntimeExpressionResourcePhaseReachability.Reached;
+    return RuntimeOperationReachability.Reached;
   }
   return plan.readPostBindPhaseReachability(entry);
 }
@@ -637,10 +637,10 @@ function valueConverterPhaseReachability(
 function valueConverterPhaseOrder(
   entry: RuntimeValueConverterPlanEntry,
   phase: RuntimeValueConverterApplicationPhase,
-  reachability: RuntimeExpressionResourcePhaseReachability,
+  reachability: RuntimeOperationReachability,
   conversionOrder: ReturnType<RuntimeExpressionResourcePlan['readValueConverterPhaseOrder']>,
 ): number | null {
-  if (reachability !== RuntimeExpressionResourcePhaseReachability.Reached) {
+  if (reachability !== RuntimeOperationReachability.Reached) {
     return null;
   }
   switch (phase) {
@@ -657,10 +657,10 @@ function valueConverterPhaseOrder(
 function lifecycleEffectsForValueConverter(
   _entry: RuntimeValueConverterPlanEntry,
   phase: RuntimeValueConverterApplicationPhase,
-  reachability: RuntimeExpressionResourcePhaseReachability,
+  reachability: RuntimeOperationReachability,
   configuredEffects: RuntimeExpressionResourceLifecycleEffects,
 ): RuntimeExpressionResourceLifecycleEffects {
-  if (reachability !== RuntimeExpressionResourcePhaseReachability.Reached
+  if (reachability !== RuntimeOperationReachability.Reached
     || (phase !== RuntimeValueConverterApplicationPhase.Bind
       && phase !== RuntimeValueConverterApplicationPhase.Unbind)) {
     return RuntimeExpressionResourceLifecycleEffects.none;

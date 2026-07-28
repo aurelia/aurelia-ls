@@ -100,6 +100,10 @@ export const KernelVocabulary = {
     ...KernelProductKinds.Template,
     ...KernelClaimPredicates.Template,
   },
+  RuntimeExpression: {
+    ...KernelProductKinds.RuntimeExpression,
+    ...KernelClaimPredicates.RuntimeExpression,
+  },
   Binding: {
     ...KernelOpenSeamKinds.Binding,
     ...KernelBindingKinds.Binding,

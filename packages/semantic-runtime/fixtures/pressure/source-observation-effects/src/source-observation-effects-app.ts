@@ -59,7 +59,11 @@ export class SourceObservationEffectsApp {
       this.latestContainerCity = value;
     });
     this.observation.run(() => {
-      this.latestCoordinateText = this.state.tracker.coord.join(', ');
+      let attempts = 0;
+      do {
+        this.latestCoordinateText = this.state.tracker.coord.join(', ');
+        attempts += 1;
+      } while (attempts < 1);
     });
   }
 }

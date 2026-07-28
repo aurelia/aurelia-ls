@@ -10,6 +10,7 @@ import { FrameworkIntrinsicDiKey } from '../di/framework-intrinsic-di-key.js';
 import type { Container } from '../di/container.js';
 import { ConfigurationProductDetails } from '../configuration/product-details.js';
 import { ObservationProductDetails } from '../observation/product-details.js';
+import { RuntimeExpressionProductDetails } from '../runtime-expression/product-details.js';
 import {
   EvidenceKind,
   EvidenceRole,
@@ -60,13 +61,14 @@ import {
 import type { TemplateCompilationProjectEmission } from '../template/template-compilation-project-pass.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import {
-  runtimeWatchersForDefinition,
+  runtimeWatcherMaterializationsForDefinition,
 } from '../template/runtime-watcher-factory.js';
 import {
   runtimeWatcherClaimsForController,
   runtimeWatcherRecordsForController,
 } from '../template/runtime-watcher-publication.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 
 /** ComponentAgent products created by pre-activation route-tree compilation. */
 export class RouteComponentAgentMaterializationProjectResult {
@@ -127,6 +129,7 @@ export class RouteComponentAgentMaterializationProjectPass {
         routeContextsByIdentity,
         compiledTemplateByDefinition,
         routeNode,
+        templates.expressionWorld,
         typeSystem,
       )
     );
@@ -149,6 +152,10 @@ export class RouteComponentAgentMaterializationProjectPass {
           controllers.map((controller) => controller.toControllerProduct()),
         ),
         ...publishProductDetails(TemplateProductDetails.RuntimeWatcher, watchers),
+        ...publishProductDetails(
+          RuntimeExpressionProductDetails.AccessUse,
+          watchers.flatMap((watcher) => watcher.accessUses),
+        ),
         ...publishProductDetails(
           ObservationProductDetails.RuntimeWatcherObservedDependency,
           watchers.flatMap((watcher) => watcher.observedDependencies),
@@ -194,6 +201,7 @@ function componentAgentEmissionForRouteNode(
   routeContextsByIdentity: ReadonlyMap<IdentityHandle | null, RouteContextModel>,
   compiledTemplateByDefinition: ReadonlyMap<string, ProductHandle>,
   routeNode: RouteNodeModel,
+  expressionWorld: CheckerExpressionTypeWorld,
   typeSystem: TypeSystemProject,
 ): readonly ComponentAgentEmission[] {
   if (routeNode.recognizedRoute == null) {
@@ -216,6 +224,7 @@ function componentAgentEmissionForRouteNode(
     routeContextContainer,
     customElementDefinitionForRouteNode(publication, routeNode),
     compiledTemplateByDefinition.get(routeNode.component?.resolvedProductHandle ?? '') ?? null,
+    expressionWorld,
     typeSystem,
   )];
 }
@@ -229,6 +238,7 @@ function componentAgentEmission(
   routeContextContainer: Container | null,
   definition: CustomElementDefinition | null,
   compiledTemplateProductHandle: ProductHandle | null,
+  expressionWorld: CheckerExpressionTypeWorld,
   typeSystem: TypeSystemProject,
 ): ComponentAgentEmission {
   const handles = componentAgentHandles(publication, routeNode);
@@ -242,6 +252,7 @@ function componentAgentEmission(
     definition,
     compiledTemplateProductHandle,
     handles.provenanceHandle,
+    expressionWorld,
     typeSystem,
   );
   const componentAgent = componentAgentModel(
@@ -295,6 +306,7 @@ function componentAgentControllerEmission(
   definition: CustomElementDefinition | null,
   compiledTemplateProductHandle: ProductHandle | null,
   provenanceHandle: ProvenanceHandle,
+  expressionWorld: CheckerExpressionTypeWorld,
   typeSystem: TypeSystemProject,
 ): RoutedControllerEmission | null {
   return routeContextContainer == null || definition == null
@@ -309,6 +321,7 @@ function componentAgentControllerEmission(
       definition,
       compiledTemplateProductHandle,
       provenanceHandle,
+      expressionWorld,
       typeSystem,
     );
 }
@@ -379,6 +392,7 @@ function routedControllerEmission(
   definition: CustomElementDefinition,
   compiledTemplateProductHandle: ProductHandle | null,
   provenanceHandle: ProvenanceHandle,
+  expressionWorld: CheckerExpressionTypeWorld,
   typeSystem: TypeSystemProject,
 ): RoutedControllerEmission {
   const sourceAddressHandle = routeNode.sourceAddressHandle;
@@ -396,7 +410,15 @@ function routedControllerEmission(
     sourceAddressHandle,
     provenanceHandle,
   );
-  for (const watcher of runtimeWatchersForDefinition(store, publication, local, controller, definition, typeSystem)) {
+  for (const watcher of runtimeWatcherMaterializationsForDefinition(
+    store,
+    publication,
+    local,
+    controller,
+    definition,
+    expressionWorld,
+    typeSystem,
+  )) {
     controller.addWatcher(watcher);
   }
   recordRoutedControllerHydration(controller, childContainer, sourceAddressHandle);
@@ -524,7 +546,7 @@ function recordsForRoutedController(
       [controller.productHandle],
       claims.map((claim) => claim.handle),
     ),
-    ...runtimeWatcherRecordsForController(store, publication, local, controller, provenanceHandle, watcherClaims),
+    ...runtimeWatcherRecordsForController(store, local, controller, provenanceHandle, watcherClaims),
     ...claims,
   ];
 }

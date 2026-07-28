@@ -57,6 +57,9 @@ export function isExternalDependencySourceReference(
 export const PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS = new Set<string>([
   'source',
   'sources',
+  'accessUse',
+  'executionQualifiers',
+  'targetLinks',
   'actionTargets',
   'argumentSources',
   'lifecycleEffects',
@@ -509,6 +512,7 @@ function identityReferenceLabel(identity: SemanticIdentity): string {
     case 'fetch-client-identity':
     case 'dialog-identity':
     case 'compiler-identity':
+    case 'runtime-expression-identity':
       return identity.localName ?? identity.productKindKey;
     case 'type-system-identity':
       return identity.display ?? identity.productKindKey;

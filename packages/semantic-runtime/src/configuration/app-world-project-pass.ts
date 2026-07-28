@@ -44,6 +44,8 @@ import {
   type ResourceRecognitionProjectResult,
 } from '../resources/resource-recognition-project-pass.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import { CheckerTypeProjector } from '../type-system/checker-projector.js';
+import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import type { DiContainerChainFacts } from '../di/container-chain.js';
 import type { Container } from '../di/container.js';
 import type { DiWorldConstructionEmission } from '../di/world-construction.js';
@@ -604,12 +606,16 @@ class AureliaAppWorldProjectConstructionFrame {
   ): AureliaAppWorldPreTemplateEmission {
     const evaluation = this.evaluation;
     const typeSystem = this.typeSystem;
+    const sourceExpressionWorld = new CheckerExpressionTypeWorld(
+      this.store,
+      new CheckerTypeProjector(this.store, this.publication),
+    );
     const evaluationIssues = this.materializeEvaluationIssues(evaluation, typeSystem);
     const sourceObservation = this.materializeObservationSourceIssues(typeSystem);
     const computedObservation = this.materializeComputedObservationDefinitions(typeSystem);
-    const computedObserverSources = this.materializeComputedObserverSources(typeSystem);
+    const computedObserverSources = this.materializeComputedObserverSources(typeSystem, sourceExpressionWorld);
     const classDependencies = new DiClassDependencyProjectView(evaluation, typeSystem);
-    const runtimeEffects = this.materializeRuntimeEffects(typeSystem, classDependencies);
+    const runtimeEffects = this.materializeRuntimeEffects(typeSystem, sourceExpressionWorld, classDependencies);
     const proxyObservableEscapes = this.materializeProxyObservableEscapes(typeSystem);
     const resources = this.recognizeResources(evaluation, typeSystem);
     const resourceIndex = this.indexResources(resources);
@@ -834,7 +840,7 @@ class AureliaAppWorldProjectConstructionFrame {
       this.publication,
       templates.expressionWorld.projector,
       bindingSourceEvaluation,
-      runtimeBoundControllerValueTableForTemplateResources(this.publication, templates.resources),
+      runtimeBoundControllerValueTableForTemplateResources(templates.resources),
       new DiProviderActivationView(
         this.publication,
         bindingSourceEvaluation,
@@ -981,20 +987,27 @@ class AureliaAppWorldProjectConstructionFrame {
 
   private materializeComputedObserverSources(
     typeSystem: TypeSystemProject,
+    expressionWorld: CheckerExpressionTypeWorld,
   ): ComputedObserverSourceProjectResult {
     return this.measure('computed-observer-sources', () =>
-      new ComputedObserverSourceMaterializer(this.store, this.publication).materialize(this.project, typeSystem)
+      new ComputedObserverSourceMaterializer(this.store, this.publication).materialize(
+        this.project,
+        typeSystem,
+        expressionWorld,
+      )
     );
   }
 
   private materializeRuntimeEffects(
     typeSystem: TypeSystemProject,
+    expressionWorld: CheckerExpressionTypeWorld,
     classDependencies: DiClassDependencyProjectView,
   ): RuntimeEffectProjectResult {
     return this.measure('runtime-effects', () =>
       new RuntimeEffectMaterializer(this.store, this.publication).materialize(
         this.project,
         typeSystem,
+        expressionWorld,
         classDependencies,
       )
     );

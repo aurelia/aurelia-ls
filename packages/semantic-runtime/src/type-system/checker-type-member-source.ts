@@ -1,17 +1,11 @@
 import { TypeScriptDeclarationIdentity } from '../kernel/identity.js';
-import type { AddressHandle, KernelRecordHandle } from '../kernel/handles.js';
-import {
-  KernelStoreBatch,
-  type KernelStoreReadView,
-  type KernelStoreRecord,
-} from '../kernel/store.js';
-import {
-  KernelPublicationPlan,
-  type KernelPublicationContext,
-} from '../kernel/publication.js';
+import type { AddressHandle } from '../kernel/handles.js';
+import type { KernelStoreReadView } from '../kernel/store.js';
+import type { KernelPublicationContext } from '../kernel/publication.js';
 import { SourceSpanRole } from '../kernel/address.js';
 import ts from 'typescript';
 import {
+  publishMissingCheckerSourceRecords,
   sourceSpanForCheckerDeclaration,
   sourceSpanForCheckerNode,
 } from './declaration-source.js';
@@ -59,7 +53,7 @@ export function checkerSymbolMemberSourceProjection(
   declarations: readonly ts.Declaration[] = declarationsForCheckerSymbol(symbol),
 ): CheckerSymbolMemberSourceProjection {
   const source = sourceSpanForCheckerDeclaration(publication, checker, symbol, declarations, SourceSpanRole.Name);
-  publishMissingSourceRecords(
+  publishMissingCheckerSourceRecords(
     publication,
     source?.records ?? [],
     `type-system:checker-symbol-member-source:${symbol.getName()}`,
@@ -104,7 +98,7 @@ export function checkerSymbolMemberValueSourceProjection(
     typeNode,
     SourceSpanRole.Type,
   );
-  publishMissingSourceRecords(
+  publishMissingCheckerSourceRecords(
     publication,
     source.records,
     `type-system:checker-symbol-member-value-source:${symbol.getName()}`,
@@ -113,19 +107,6 @@ export function checkerSymbolMemberValueSourceProjection(
     memberKind: checkerSymbolMemberKind(symbol, declarations),
     sourceAddressHandle: source.address.handle,
   };
-}
-
-function publishMissingSourceRecords(
-  publication: KernelPublicationContext,
-  records: readonly KernelStoreRecord[],
-  label: string,
-): void {
-  const missing = records.filter((record) =>
-    publication.read(record.handle as KernelRecordHandle) == null
-  );
-  if (missing.length > 0) {
-    publication.publish(new KernelPublicationPlan(new KernelStoreBatch(missing, label)));
-  }
 }
 
 function memberValueTypeNode(

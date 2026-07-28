@@ -1,7 +1,11 @@
 import ts from 'typescript';
 
 import type { ProjectBootFrame } from '../boot/frames.js';
-import { isAssignmentOperator, unwrapExpression } from '../evaluation/ts-syntax.js';
+import {
+  TypeScriptAccessMode,
+  typescriptAccessModeForExpression,
+  unwrapExpression,
+} from '../evaluation/ts-syntax.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   normalizeTypeSystemSourceFileName,
@@ -344,20 +348,5 @@ function propertyAccessOperationKind(
 function isWriteAccess(
   node: ts.PropertyAccessExpression,
 ): boolean {
-  const parent = node.parent;
-  if (
-    ts.isBinaryExpression(parent)
-    && parent.left === node
-    && isAssignmentOperator(parent.operatorToken.kind)
-  ) {
-    return true;
-  }
-  if (
-    (ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent))
-    && parent.operand === node
-    && (parent.operator === ts.SyntaxKind.PlusPlusToken || parent.operator === ts.SyntaxKind.MinusMinusToken)
-  ) {
-    return true;
-  }
-  return false;
+  return (typescriptAccessModeForExpression(node) & TypeScriptAccessMode.Write) !== 0;
 }

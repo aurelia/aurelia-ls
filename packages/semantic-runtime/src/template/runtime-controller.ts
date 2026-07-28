@@ -33,7 +33,10 @@ import {
   type RuntimeBindingTargetAccess,
   type RuntimeBindingTargetOperation,
 } from './runtime-binding.js';
-import type { RuntimeWatcher } from './runtime-watcher.js';
+import type {
+  RuntimeWatcher,
+  RuntimeWatcherMaterialization,
+} from './runtime-watcher.js';
 
 export const enum RuntimeControllerCreationKind {
   RootCustomElement = 'root-custom-element',
@@ -155,7 +158,7 @@ export class RuntimeControllerBindResult {
  */
 export class RuntimeControllerFrame {
   private readonly bindings: RuntimeBinding[] = [];
-  private readonly watchers: RuntimeWatcher[] = [];
+  private readonly watcherMaterializations: RuntimeWatcherMaterialization[] = [];
   private readonly children: RuntimeControllerFrame[] = [];
   private readonly assemblySteps: RuntimeControllerAssemblyStep[] = [];
   private scope: BindingScopeReference | null = null;
@@ -203,8 +206,9 @@ export class RuntimeControllerFrame {
     );
   }
 
-  addWatcher(watcher: RuntimeWatcher): void {
-    this.watchers.push(watcher);
+  addWatcher(materialization: RuntimeWatcherMaterialization): void {
+    this.watcherMaterializations.push(materialization);
+    const watcher = materialization.watcher;
     this.recordAssemblyStep(
       RuntimeControllerAssemblyStage.BindingAdmission,
       RuntimeControllerAssemblyStepKind.AddBinding,
@@ -341,7 +345,11 @@ export class RuntimeControllerFrame {
   }
 
   readWatchers(): readonly RuntimeWatcher[] {
-    return [...this.watchers];
+    return this.watcherMaterializations.map((materialization) => materialization.watcher);
+  }
+
+  readWatcherMaterializations(): readonly RuntimeWatcherMaterialization[] {
+    return [...this.watcherMaterializations];
   }
 
   readChildren(): readonly RuntimeControllerFrame[] {

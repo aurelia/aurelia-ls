@@ -2,7 +2,6 @@ import { BindingScope } from '../configuration/scope.js';
 import type { Container } from '../di/container.js';
 import type { AddressHandle, ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
 import { readFieldProvenance } from '../kernel/provenance.js';
-import type { KernelSourceFileReadView } from '../kernel/store.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import {
@@ -33,7 +32,7 @@ import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-
 import {
   bindingBehaviorEvaluationForRuntimeBindingSource,
 } from './runtime-binding-source-expression-context.js';
-import { RuntimeBindingExpressionScopeProjector } from './runtime-binding-expression-scope.js';
+import type { RuntimeBindingExpressionScopeProjectionReader } from './runtime-binding-expression-scope.js';
 
 export interface RuntimeBoundControllerPropertyValue {
   readonly controllerProductHandle: ProductHandle;
@@ -47,7 +46,7 @@ export interface RuntimeBoundControllerPropertyValue {
   readonly sourceProvenanceHandle: ProvenanceHandle | null;
   readonly sourceScope: BindingScope | null;
   /** Source-resource projector for binding-behavior scope changes such as `& state`. */
-  readonly sourceBindingExpressionScopes: RuntimeBindingExpressionScopeProjector;
+  readonly sourceBindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader;
   /** Compiler resource scope visible to the parent binding source expression. */
   readonly sourceResourceScope: TemplateResourceScope;
   /** Compiler-world container visible to parent binding-source `resolve(...)` calls. */
@@ -271,22 +270,17 @@ export class RuntimeBoundControllerValueTable {
 }
 
 export function runtimeBoundControllerValueTableForTemplateResources(
-  kernel: KernelSourceFileReadView,
   resources: readonly RuntimeBindingSourceValueTemplateResource[],
 ): RuntimeBoundControllerValueTable {
   return new RuntimeBoundControllerValueTable(
     resources.flatMap((resource) =>
-      boundControllerValuesForRuntimeAnalysis(
-        kernel,
-        resource.runtimeAnalysis,
-      )
+      boundControllerValuesForRuntimeAnalysis(resource.runtimeAnalysis)
     ),
     resources.flatMap((resource) => controllerDefinitionsForRuntimeAnalysis(resource)),
   );
 }
 
 export function extendRuntimeBoundControllerValueTable(
-  kernel: KernelSourceFileReadView,
   base: RuntimeBoundControllerValueTable,
   rootDefinition: RuntimeControllerDefinitionReference,
   runtimeAnalysis: RuntimeBindingSourceValueRuntimeAnalysis,
@@ -294,7 +288,7 @@ export function extendRuntimeBoundControllerValueTable(
   return new RuntimeBoundControllerValueTable(
     [
       ...base.values,
-      ...boundControllerValuesForRuntimeAnalysis(kernel, runtimeAnalysis),
+      ...boundControllerValuesForRuntimeAnalysis(runtimeAnalysis),
     ],
     [
       ...base.readControllerDefinitions(),
@@ -305,7 +299,6 @@ export function extendRuntimeBoundControllerValueTable(
 }
 
 function boundControllerValuesForRuntimeAnalysis(
-  kernel: KernelSourceFileReadView,
   analysis: RuntimeBindingSourceValueRuntimeAnalysis,
 ): readonly RuntimeBoundControllerPropertyValue[] {
   const bindingsByProductHandle = new Map<ProductHandle, RuntimeBinding>(analysis.runtimeRendering.bindings
@@ -313,11 +306,7 @@ function boundControllerValuesForRuntimeAnalysis(
   const controllersByProductHandle = new Map(analysis.runtimeRendering.controllers
     .map((controller) => [controller.productHandle, controller]));
   const scopes = instructionScopeLookup(analysis.scopes.instructionScopes);
-  const sourceBindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-    kernel,
-    analysis.expressionWorld,
-    analysis.expressionResourcePlan,
-  );
+  const sourceBindingExpressionScopes = analysis.scopes.bindingExpressionScopes;
   const values: RuntimeBoundControllerPropertyValue[] = [];
   for (const targetAccess of analysis.controllerBind.targetAccesses) {
     if (

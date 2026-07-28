@@ -11,6 +11,13 @@ import {
 } from './scope.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
 
+export interface UncommittedScopeCreateRequest {
+  readonly localKey: string;
+  readonly bindingContextType: CheckerTypeReference | null;
+  readonly bindingContextSlots?: readonly BindingContextSlot[];
+  readonly sourceAddressHandle?: AddressHandle | null;
+}
+
 export interface UncommittedScopeFromParentRequest {
   readonly localKey: string;
   readonly parent: BindingScope;
@@ -22,22 +29,63 @@ export interface UncommittedScopeFromParentRequest {
   readonly scopeCreators?: readonly BindingScopeCreator[];
 }
 
+/** Models framework `Scope.create(context)` when a speculative consumer needs root-object lookup semantics only. */
+export function uncommittedScopeCreate(
+  store: KernelStoreReadView,
+  request: UncommittedScopeCreateRequest,
+): BindingScope {
+  return uncommittedBindingScope(store, {
+    localKey: `uncommitted-scope-create:${request.localKey}`,
+    parent: null,
+    bindingContextSlots: request.bindingContextSlots ?? [],
+    bindingContextType: request.bindingContextType,
+    sourceAddressHandle: request.sourceAddressHandle ?? null,
+    ownerKind: BindingScopeOwnerKind.SyntheticView,
+    isBoundary: false,
+    scopeCreators: [],
+  });
+}
+
 /** Models framework `Scope.fromParent(parent, context)` when a speculative consumer needs lookup semantics only. */
 export function uncommittedScopeFromParent(
   store: KernelStoreReadView,
   request: UncommittedScopeFromParentRequest,
 ): BindingScope {
-  const localKey = `uncommitted-scope-from-parent:${request.localKey}`;
-  const sourceAddressHandle = request.sourceAddressHandle ?? null;
+  return uncommittedBindingScope(store, {
+    localKey: `uncommitted-scope-from-parent:${request.localKey}`,
+    parent: request.parent,
+    bindingContextSlots: request.bindingContextSlots,
+    bindingContextType: request.bindingContextType ?? null,
+    sourceAddressHandle: request.sourceAddressHandle ?? null,
+    ownerKind: request.ownerKind ?? BindingScopeOwnerKind.SyntheticView,
+    isBoundary: request.isBoundary ?? false,
+    scopeCreators: request.scopeCreators ?? [],
+  });
+}
+
+function uncommittedBindingScope(
+  store: KernelStoreReadView,
+  request: {
+    readonly localKey: string;
+    readonly parent: BindingScope | null;
+    readonly bindingContextSlots: readonly BindingContextSlot[];
+    readonly bindingContextType: CheckerTypeReference | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly ownerKind: BindingScopeOwnerKind;
+    readonly isBoundary: boolean;
+    readonly scopeCreators: readonly BindingScopeCreator[];
+  },
+): BindingScope {
+  const localKey = request.localKey;
   const scopeProductHandle = store.handles.product(`${localKey}:scope`);
   const bindingContext = new BindingContext(
     store.handles.product(`${localKey}:binding-context`),
     store.handles.identity(`${localKey}:binding-context`),
     BindingContextKind.Object,
     null,
-    request.bindingContextType ?? null,
+    request.bindingContextType,
     request.bindingContextSlots,
-    sourceAddressHandle,
+    request.sourceAddressHandle,
   );
   const overrideContext = new OverrideContext(
     store.handles.product(`${localKey}:override-context`),
@@ -45,7 +93,7 @@ export function uncommittedScopeFromParent(
     scopeProductHandle,
     null,
     [],
-    sourceAddressHandle,
+    request.sourceAddressHandle,
   );
   return new BindingScope(
     scopeProductHandle,
@@ -53,10 +101,10 @@ export function uncommittedScopeFromParent(
     request.parent,
     bindingContext,
     overrideContext,
-    request.isBoundary ?? false,
-    request.ownerKind ?? BindingScopeOwnerKind.SyntheticView,
-    sourceAddressHandle,
+    request.isBoundary,
+    request.ownerKind,
+    request.sourceAddressHandle,
     [],
-    request.scopeCreators ?? [],
+    request.scopeCreators,
   );
 }

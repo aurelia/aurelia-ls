@@ -1,5 +1,8 @@
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
-import type { AddressHandle } from '../kernel/handles.js';
+import type {
+  AddressHandle,
+  HotDetailHandle,
+} from '../kernel/handles.js';
 import type { CheckerExpressionTypeEvaluator } from '../type-system/expression-type-evaluator.js';
 import type {
   CheckerTypeMemberKind,
@@ -12,12 +15,12 @@ import type { RuntimeValueChannelBinding } from './runtime-binding-expression.js
 import type { RuntimeInstructionScopeLookup } from './runtime-binding-expression.js';
 import type { RuntimeBindingSourceExpressionContextProjector } from './runtime-binding-source-expression-context.js';
 import type {
-  RuntimeBindingRealization,
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelKind,
   RuntimeBindingValueChannelCouplingKind,
   RuntimeBindingPrimitiveValue,
 } from './runtime-binding-observation.js';
+import type { RuntimeOperationRealization } from '../runtime-expression/runtime-operation.js';
 
 export type { RuntimeValueChannelBinding } from './runtime-binding-expression.js';
 
@@ -36,9 +39,13 @@ export type RuntimeBindingValueChannelDraft = {
 
 export type RuntimeBindingValueChannelDraftResult = {
   readonly draft: RuntimeBindingValueChannelDraft;
-  readonly realization: RuntimeBindingRealization;
+  readonly realization: RuntimeOperationRealization;
+  /** Object type tested by a guarded source-member read. */
+  readonly admittedSourceOwnerType: CheckerTypeReference | null;
   readonly admittedSourceValueType: CheckerTypeReference | null;
   readonly admittedSourceMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
+  /** Exact projected member retained before the guarded-access result is compressed into a value channel. */
+  readonly admittedSourceMemberHandle: HotDetailHandle | null;
   readonly admittedSourceMemberSourceAddressHandle: AddressHandle | null;
 };
 

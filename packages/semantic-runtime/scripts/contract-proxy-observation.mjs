@@ -36,12 +36,64 @@ const expectedEffects = [
     'signature',
   ),
   ExpectedSemanticEffect.exactly(
-    'Computed watchers should publish one hundred sixty-two observed-dependency rows.',
+    'Computed watchers should publish one hundred sixty-six occurrence-level observed-dependency rows.',
     'runtime-watcher-observed-dependency',
     'template',
-    162,
+    166,
     null,
     [],
+    'signature',
+  ),
+  ExpectedSemanticEffect.exactly(
+    'Repeated products reads in the indexOf watcher should retain both authored occurrences.',
+    'runtime-watcher-observed-dependency',
+    'template',
+    2,
+    null,
+    [
+      effectFilter('watchIndex', 3),
+      effectFilter('dependencyKind', 'proxy-property-read'),
+      effectFilter('sourceName', 'vm.products'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.exactly(
+    'Repeated products reads in the lastIndexOf watcher should retain both authored occurrences.',
+    'runtime-watcher-observed-dependency',
+    'template',
+    2,
+    null,
+    [
+      effectFilter('watchIndex', 4),
+      effectFilter('dependencyKind', 'proxy-property-read'),
+      effectFilter('sourceName', 'vm.products'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.exactly(
+    'Repeated keyed-owner reads in one watcher should retain both authored occurrences.',
+    'runtime-watcher-observed-dependency',
+    'template',
+    2,
+    null,
+    [
+      effectFilter('watchIndex', 34),
+      effectFilter('dependencyKind', 'proxy-property-read'),
+      effectFilter('sourceName', 'vm.productKeys'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.exactly(
+    'Repeated keyed-value reads in one watcher should retain both authored occurrences.',
+    'runtime-watcher-observed-dependency',
+    'template',
+    2,
+    null,
+    [
+      effectFilter('watchIndex', 34),
+      effectFilter('dependencyKind', 'proxy-property-read'),
+      effectFilter('sourceName', 'vm.productKeys.0'),
+    ],
     'signature',
   ),
   ExpectedSemanticEffect.atLeast(
@@ -1036,6 +1088,20 @@ const verification = verifyFixtureEffects(
 const failures = verification.effectResults
   .filter((result) => result.outcome !== 'satisfied')
   .map((result) => result.summary);
+const detailedWatcherDependencies = app.ask({
+  kind: 'runtime-watcher-observed-dependencies',
+  detail: 'handles',
+  page: { size: 300 },
+}).value.rows;
+if (!detailedWatcherDependencies.some((row) =>
+  row.accessUse.targetLinks.some((target) =>
+    target.authorityProductHandle != null
+    && target.targetIdentityHandle != null
+    && target.declarationSourceAddressHandle != null
+  )
+)) {
+  failures.push('Detailed watcher dependencies should retain handles on nested access-use targets.');
+}
 failures.push(...exactSourceSpanFailures(snapshot.runtimeWatcherObservedDependencies, [
   {
     summary: 'Computed watcher proxy collection dependency should publish its own function-body source span.',
@@ -1049,6 +1115,25 @@ failures.push(...exactSourceSpanFailures(snapshot.runtimeWatcherObservedDependen
     sourceName: 'product.tags',
     methodName: 'includes',
   },
+  ...[
+    [3, 'vm.products', 2989],
+    [3, 'vm.products', 3009],
+    [4, 'vm.products', 3164],
+    [4, 'vm.products', 3188],
+    [34, 'vm.productKeys', 10488],
+    [34, 'vm.productKeys', 10529],
+    [34, 'vm.productKeys.0', 10488],
+    [34, 'vm.productKeys.0', 10529],
+  ].map(([watchIndex, sourceName, spanStart]) => ({
+    summary: `Watcher ${watchIndex} should retain the authored ${sourceName} occurrence at ${spanStart}.`,
+    path: 'src/watcher-proxy-dependencies-app.ts',
+    match: {
+      watchIndex,
+      sourceName,
+      spanStart,
+      dependencyKind: 'proxy-property-read',
+    },
+  })),
 ]));
 
 const summary = {

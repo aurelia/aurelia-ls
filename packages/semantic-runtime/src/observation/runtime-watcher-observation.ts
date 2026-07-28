@@ -3,25 +3,9 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import type { FieldProvenance } from '../kernel/provenance.js';
 import type { RuntimeWatcherReference } from '../template/runtime-watcher.js';
 import type { CheckerTypeMemberKind } from '../type-system/type-shape.js';
 import type { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
-
-export type RuntimeWatcherObservedDependencyField =
-  | 'watcher'
-  | 'expression'
-  | 'dependencyKind'
-  | 'expressionKind'
-  | 'sourceName'
-  | 'sourceRootName'
-  | 'memberName'
-  | 'keyExpression'
-  | 'methodName'
-  | 'observedMemberKind'
-  | 'observedMemberSource'
-  | 'span'
-  | 'source';
 
 /** Expression read collected by a controller-owned watcher execution path. */
 export class RuntimeWatcherObservedDependency {
@@ -29,6 +13,8 @@ export class RuntimeWatcherObservedDependency {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly watcher: RuntimeWatcherReference,
+    /** Exact authored or generated access occurrence that induced this observation effect. */
+    readonly accessUseProductHandle: ProductHandle,
     readonly expressionProductHandle: ProductHandle | null,
     readonly dependencyKind: RuntimeObservedDependencyKind,
     readonly expressionKind: string,
@@ -42,6 +28,5 @@ export class RuntimeWatcherObservedDependency {
     readonly spanStart: number | null,
     readonly spanEnd: number | null,
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RuntimeWatcherObservedDependencyField>[] = [],
   ) {}
 }

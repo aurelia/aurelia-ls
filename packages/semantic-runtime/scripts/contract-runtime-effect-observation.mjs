@@ -19,6 +19,7 @@ const effects = app.ask({
 }).value.rows;
 const observedDependencies = app.ask({
   kind: 'runtime-effect-observed-dependencies',
+  detail: 'handles',
   page: { size: 100 },
 }).value.rows;
 
@@ -80,6 +81,11 @@ const failures = [
     'connectable-run',
     'observable-property-read',
     'this.state.tracker.coord',
+  ),
+  nestedAccessUseHandleExpectation(
+    'Detailed source-effect dependencies should retain handles on nested access-use targets.',
+    observedDependencies,
+    'profile.name',
   ),
 ].filter(Boolean);
 
@@ -159,4 +165,15 @@ function dependencyExpectation(summary, rows, dependencyEvaluationKind, dependen
   return row == null
     ? `${summary}: missing ${dependencyEvaluationKind}/${dependencyKind}/${sourceName}.`
     : null;
+}
+
+function nestedAccessUseHandleExpectation(summary, rows, sourceName) {
+  const row = rows.find((candidate) => candidate.sourceName === sourceName);
+  return row?.accessUse?.targetLinks?.some((target) =>
+    target.authorityProductHandle != null
+    && target.targetIdentityHandle != null
+    && target.declarationSourceAddressHandle != null
+  )
+    ? null
+    : summary;
 }

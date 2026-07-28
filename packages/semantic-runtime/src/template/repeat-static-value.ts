@@ -12,7 +12,7 @@ import {
 import type { BindingScope } from '../configuration/scope.js';
 import type { TemplateResourceScope } from './compiler-world.js';
 import {
-  RuntimeBindingExpressionScopeProjector,
+  type RuntimeBindingExpressionScopeProjectionReader,
 } from '../observation/runtime-binding-expression-scope.js';
 import type { RuntimeExpressionBinding } from '../observation/runtime-binding-expression.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
@@ -42,7 +42,7 @@ export function repeatStaticLocalValue(
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   binding: RuntimeExpressionBinding | null = null,
   runtimeBindings: RuntimeRenderingEmission | null = null,
-  bindingExpressionScopes: RuntimeBindingExpressionScopeProjector | null = null,
+  bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader | null = null,
   resourceScope: TemplateResourceScope | null = null,
 ): RuntimeBindingSourceValueEvaluation | null {
   if (sourceValueEvaluator == null || parse?.result.kind !== ExpressionParseResultKind.IteratorSuccess) {

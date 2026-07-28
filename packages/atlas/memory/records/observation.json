@@ -653,7 +653,9 @@
         "Framework `ProxyObservable.canWrap(...)` is brand-based at runtime. Semantic-runtime approximates this statically by rejecting TypeScript default-library non-plain object brands such as Date, Error, URL, and RegExp as downstream proxy carriers while still observing the owning proxied property read. Do not maintain short hard-coded deny lists for host objects; keep the rule as a default-library brand approximation, and keep user/external class instances proxy-wrappable unless @nowrap, function, primitive, or collection rules say otherwise.",
         "RuntimeWatcherObservedDependency rows preserve observedMemberKind and observedMemberSource like binding observed-dependency rows. Use runtime-watcher-observed-dependencies when hover/diagnostic/authoring work needs to explain a watcher read against the authored member or TypeScript/library member that would be observed.",
         "Binding and watcher observed-dependency rows now publish per-dependency SourceSpanAddress records when their carrier can be narrowed to an admitted source file. Template bindings parse against the ValueSite source context; property-key ExpressionWatcher strings parse against the string-body source context; ProxyObservable watcher dependencies use the dependency function carrier. If a future row exposes `spanStart` / `spanEnd` but the public `source` regresses to an unexpanded or broader carrier, fix the runtime-expression source publication boundary rather than adding API-local span math.",
-        "Observed-dependency rows are semantic dependency products, not raw read-event counters. Use the shared runtime observed-dependency draft helper to dedupe repeated reads by dependency identity rather than by parser span, while keeping distinct lanes for template reads, proxy reads, collection methods, and trackable call evidence.",
+        "RuntimeExpressionAccessUse is the occurrence authority upstream of observation. Preserve repeated authored loci and derive owner-specific observed-dependency effects from their exact access handles; only suppress duplicate traversal of the same source occurrence, never coalesce rows by dependency spelling.",
+        "Source-root property expressions outside a materialized template Scope model framework Scope.create(obj) and spend CheckerExpressionTypeEvaluator.resolveAccessTarget. Watcher strings, source effects, and computed dependency strings must not rebuild member or call targets from path text in separate owner lanes.",
+        "Keep access-use execution semantics on the linked access product. Observed-dependency rows retain effect-specific display/member-source facts and the required accessUseProductHandle, but must not reconstruct phase, tracking, reachability, control-flow, multiplicity, or semantic coverage from dependency names.",
         "Binding-owned and watcher-owned observed dependencies share `runtime-observed-dependency-publication.ts` for the concrete ObservedDependency product/source/claim envelope. `runtimeObservedDependencyPublicationFrame(...)` owns source-address expansion plus owner-specific usage claims, and `runtimeObservedDependencyKernelRecords(...)` owns the record assembly. Add new owner-specific usage predicates there by parameter, not by copying the same CompilerIdentity/MaterializedProduct/MaterializationRecord ceremony into each materializer.",
         "Keep observed-dependency publication attached to the product that owns the semantic question. Binding data-flow owns concrete binding reads; ComputedObservationDefinition owns source declarations; ComputedObserverSource owns getter source-observer availability/projection; RuntimeWatcher owns controller watcher admission; ExpressionWatcher owns string-expression watcher reads; ComputedWatcher owns ProxyObservable dependency reads; binding and proxy execution both reuse the shared @computed/@astTrack method dependency recognizer.",
         "Treat object binding versus ID binding as an authoring/domain-modeling decision, not a universal correctness rule. Direct object binding can be appropriate when the domain model and view model are intentionally close; ID handoff can be better when routeability, lazy loading, component independence, or stale-object avoidance matters.",
@@ -754,7 +756,7 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-watcher-factory.ts",
-          "symbolName": "runtimeWatchersForDefinition",
+          "symbolName": "runtimeWatcherMaterializationsForDefinition",
           "summary": "Factory that materializes runtime watchers from resource definition.watches during controller creation."
         },
         {
@@ -849,9 +851,9 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/runtime-observed-dependency-draft.ts",
-          "symbolName": "distinctRuntimeObservedDependencyDrafts",
-          "summary": "Shared semantic-identity dedupe for binding, watcher, computed-observer, proxy, and trackable observed-dependency drafts."
+          "filePath": "packages/semantic-runtime/src/observation/runtime-expression-access-use-materializer.ts",
+          "symbolName": "RuntimeExpressionAccessUseMaterializer",
+          "summary": "Binding operation/access authority that derives observation effects from conserved access occurrences."
         },
         {
           "kind": "source",
@@ -997,8 +999,8 @@
         },
         {
           "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/observation/runtime-observed-dependency-draft.ts",
-          "symbolName": "distinctRuntimeObservedDependencyDrafts"
+          "filePath": "packages/semantic-runtime/src/runtime-expression/runtime-expression-access-use.ts",
+          "symbolName": "RuntimeExpressionAccessUse"
         },
         {
           "kind": "source-file-exists",
@@ -1069,7 +1071,7 @@
         }
       ],
       "createdAt": "2026-05-18",
-      "updatedAt": "2026-06-10"
+      "updatedAt": "2026-07-28"
     },
     {
       "id": "frontier:computed-observer-source-projection",
@@ -1435,8 +1437,8 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
-          "symbolName": "RuntimeBindingRealization",
+          "filePath": "packages/semantic-runtime/src/runtime-expression/runtime-operation.ts",
+          "symbolName": "RuntimeOperationRealization",
           "summary": "Shared direct, guaranteed, conditional, and open realization axis for value channels and their data-flow edges."
         },
         {
@@ -2201,12 +2203,13 @@
         "diagnostics",
         "provenance"
       ],
-      "summary": "Source-owned binding facts select resource-local runtime rows before publication because recursive rendering intentionally exposes child bindings in parent aggregate analyses.",
-      "rationale": "Runtime binding product handles identify a compilation/rendering context, not one authored occurrence. A child binding can therefore appear in a parent aggregate analysis and the child's own analysis with different handles but the same authored source. Topology may need both contexts; source-owned diagnostics, references, and public binding rows must publish the authored fact once through the shared resource-ownership projection.",
+      "summary": "Source-owned binding facts select resource-local instruction-owned rows before publication because recursive rendering intentionally exposes child bindings in parent aggregate analyses.",
+      "rationale": "A child binding can appear in a parent aggregate analysis and the child's own analysis, while captured/projection bindings can execute under a controller that did not author their instruction. Topology needs those runtime contexts; diagnostics, references, and public binding rows must publish the authored fact once by joining the binding to its compiled instruction and any dynamic instruction to its captured AttrSyntax origin.",
       "guidance": [
         "Use resourceLocalRuntimeBindings and the resourceLocalBinding* helpers from template/runtime-resource-ownership.ts before projecting or publishing source-owned binding facts.",
         "Do not deduplicate recursive binding facts by product handle: distinct recursive contexts legitimately mint distinct handles for the same authored source.",
-        "Exact template source containment is the primary ownership proof. Rendering-controller definition ownership is the fallback for rows without exact source spans.",
+        "Exact compiled-instruction membership is the primary ownership proof. Runtime-created spread instructions spend the normalized dynamic-instruction-to-captured-AttrSyntax claim; source containment is reserved for rows without binding/instruction identity.",
+        "Do not use renderingController or sourceController as authored-resource ownership. Those controllers own execution, source lookup, and DI environments and can legitimately differ from the authoring component.",
         "Aggregate controller/topology consumers may retain recursive contexts, but that is a different question from authored occurrence cardinality and should remain explicit.",
         "If a project-level producer emits duplicate rows at one authored token, first check whether it consumed raw resource runtimeAnalysis products instead of the shared resource-local ownership lane."
       ],
@@ -2215,7 +2218,7 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-resource-ownership.ts",
           "symbolName": "resourceLocalBindingObservedDependencies",
-          "summary": "Shared authored-source/controller ownership projection for observed dependencies."
+          "summary": "Shared authored-instruction ownership projection for observed dependencies."
         },
         {
           "kind": "source",
@@ -2248,7 +2251,113 @@
         }
       ],
       "createdAt": "2026-07-12",
-      "updatedAt": "2026-07-12"
+      "updatedAt": "2026-07-28"
+    },
+    {
+      "id": "decision:runtime-expression-access-use-authority",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "observation",
+        "runtime-expression",
+        "type-system",
+        "api",
+        "provenance"
+      ],
+      "summary": "Owner-qualified runtime expression access uses are the lossless occurrence authority upstream of observation, data flow, and public projection.",
+      "rationale": "Expression syntax, Aurelia operation ownership and lifecycle, TypeChecker target closure, and authored source precision were previously recombined independently by binding, watcher, source-effect, computed, and API lanes. That split lost repeated loci, leaf-token targets, control-flow qualification, and publication-order provenance. One immutable access-use product now conserves those independent facts; observation is an effect projection that retains the inducing handle rather than another source-reading authority.",
+      "guidance": [
+        "Publish one RuntimeExpressionAccessUse per authored or framework-generated occurrence after pairing it with its exact runtime owner and operation slot. Do not key occurrence identity by downstream dependency spelling.",
+        "Keep role, phase, tracking, realization, reachability, execution qualifiers, multiplicity, semantic coverage, target closure, and source/token addresses as independent axes.",
+        "Observed-dependency, data-flow, diagnostic, IDE, MCP, and future AOT consumers join through access-use handles or target links. They must not rescan source text or recreate operation semantics from sourceName/memberName.",
+        "Aurelia may coalesce live subscriptions by observer identity during execution; static authored occurrences remain separate. Any subscription grouping is a later summary with honest closure.",
+        "Runtime watchers, source effects, and computed dependency strings model framework Scope.create(obj) and spend CheckerExpressionTypeEvaluator.resolveAccessTarget so every authored path segment retains its own target without losing keyed, overload, generic-inference, or call-return semantics. TypeScript bodies use Program-owned nodes and the native checker-backed collector.",
+        "When an access and its derived dependency publish in one batch, carry the already-known access source through the transient draft. Do not reread a sibling detail before commit.",
+        "Materialize binding-expression source-scope handoffs once during template scope construction and reuse the immutable table. Ambient scope selects a rendered application; it must not replace the binding-owned instruction/source scope.",
+        "Keep binding transport cardinality separate from access occurrence cardinality. One interpolation or class/style transport may own several hole access uses, while each hole retains its operation and source locus.",
+        "Untracked auxiliary operations such as repeat keys remain queryable access uses with their own source scope. Cursor and navigation consumers must not require an observed-dependency row for an operation Aurelia evaluates without a connectable.",
+        "Keep scopeLookupAncestor, authoredScopeAncestor, and callbackScopeDepth separate. Unqualified callback-body names use lookup ancestor zero and normal name fallback, while explicit $this/$parent lowering can include callback escape depth; no additive invariant exists.",
+        "Template callback declarations are parser-owned. RuntimeExpressionAccessUse publishes their exact BindingIdentifier source as the target and distinguishes same-name nested callbacks; diagnostics, cursor selection, references, and rename must spend lexicalLocal plus target links instead of rebuilding callback-local name sets.",
+        "Speculative callback and narrowing BindingScope contexts are evaluation state, not durable product authority. Route public target handles to the nearest committed context with the same identity, or to the expression parse product for an expression-local declaration.",
+        "Resource-local access aggregation follows the runtime operation owner before source locality. Trackable method-body accesses keep TypeScript source but belong to the invoking template binding; filtering them by authored file silently drops the cross-language handoff from RuntimeExpressionAccessUses.",
+        "Do not add empty fieldProvenance arrays to access, observation, value-channel, or data-flow hot records. Product provenance, source addresses, target links, and access lineage already own current witnesses; add field provenance only for a genuinely distinct field witness."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/runtime-expression/runtime-expression-access-use.ts",
+          "symbolName": "RuntimeExpressionAccessUse",
+          "summary": "Lossless owner-qualified access occurrence and execution vocabulary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-expression-access-use-materializer.ts",
+          "symbolName": "RuntimeExpressionAccessUseMaterializer",
+          "summary": "Binding operation pairing and observation-effect derivation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/runtime-expression/checker-access-target-projection.ts",
+          "symbolName": "RuntimeRootExpressionAccessTargetProjector",
+          "summary": "Source-root adapter that models Scope.create(obj) and enters the shared checker expression target authority."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-type-evaluator.ts",
+          "symbolName": "CheckerExpressionTypeEvaluator",
+          "summary": "Shared scope/member/key/call target authority used by template and source-root expression lanes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/uncommitted-binding-scope.ts",
+          "symbolName": "uncommittedScopeCreate",
+          "summary": "Uncommitted framework Scope.create(obj) lookup model used for source-root expression evaluation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime-expression-projections.ts",
+          "symbolName": "readRuntimeExpressionAccessUseRows",
+          "summary": "Consumer-neutral access-use projection used directly and through nested observation lineage."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/runtime-expression/README.md",
+          "summary": "Owning access-use contract, source/target rules, and observation boundary."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/runtime-expression-access-uses",
+          "scenario": "owner-qualified access execution and public conservation",
+          "summary": "Framework-grounded authored, generated, conditional, loop, callback, resource-argument, and blocked access pressure."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance -- --aurelia-domain observation-data-flow",
+          "summary": "High-volume observation/data-flow access-use conformance."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "RuntimeExpressionAccessUseMaterializer",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-expression-access-use-materializer.ts",
+          "minLineCount": 300,
+          "minMethodCount": 8
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/runtime-expression/runtime-expression-access-use.ts",
+          "symbolName": "RuntimeExpressionAccessUse"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/runtime-expression/checker-access-target-projection.ts",
+          "symbolName": "RuntimeRootExpressionAccessTargetProjector"
+        }
+      ],
+      "createdAt": "2026-07-28",
+      "updatedAt": "2026-07-28"
     }
   ]
 }

@@ -47,12 +47,12 @@ import {
 import {
   RuntimeBindingDataFlowDirection,
   RuntimeBindingDataFlowTypeMismatchKind,
-  RuntimeBindingRealization,
   type RuntimeBindingPrimitiveValue,
   type RuntimeBindingValueChannel,
   RuntimeBindingValueChannelCouplingKind,
   RuntimeBindingValueChannelKind,
 } from './runtime-binding-observation.js';
+import { RuntimeOperationRealization } from '../runtime-expression/runtime-operation.js';
 
 /** Type-system capability surface consumed by binding data-flow assignability policy. */
 export interface BindingDataFlowAssignabilityTypeAccess {
@@ -140,14 +140,14 @@ export class BindingDataFlowAssignabilityEvaluator {
     valueChannel: RuntimeBindingValueChannel | null,
   ): boolean | null {
     if (
-      valueChannel?.realization === RuntimeBindingRealization.Open
+      valueChannel?.realization === RuntimeOperationRealization.Open
       && this.typeAccess.readTypeShape(sourceType)?.shapeKind === CheckerTypeShapeKind.Unknown
     ) {
       return null;
     }
-    const observerSync = this.observerSourceToTargetRuntimeAcceptance(sourceType, targetType, valueChannel);
-    if (observerSync != null) {
-      return observerSync;
+    const runtimeAcceptance = this.sourceToTargetRuntimeAcceptance(sourceType, targetType, valueChannel);
+    if (runtimeAcceptance != null) {
+      return runtimeAcceptance;
     }
     const valueDomain = valueChannel?.valueDomain ?? [];
     const primitiveValueDomain = this.primitiveValueDomain(valueChannel);
@@ -172,7 +172,7 @@ export class BindingDataFlowAssignabilityEvaluator {
     return this.isTypeAssignableToStringDomain(sourceType, valueDomain);
   }
 
-  private observerSourceToTargetRuntimeAcceptance(
+  private sourceToTargetRuntimeAcceptance(
     sourceType: CheckerTypeReference | null,
     targetType: CheckerTypeReference | null,
     valueChannel: RuntimeBindingValueChannel | null,
@@ -181,6 +181,14 @@ export class BindingDataFlowAssignabilityEvaluator {
       return null;
     }
     switch (valueChannel.channelKind) {
+      case RuntimeBindingValueChannelKind.TextContent:
+      case RuntimeBindingValueChannelKind.AttributeValue:
+      case RuntimeBindingValueChannelKind.ClassAttributeTokens:
+      case RuntimeBindingValueChannelKind.ClassToggle:
+      case RuntimeBindingValueChannelKind.StyleAttributeRules:
+      case RuntimeBindingValueChannelKind.StylePropertyValue:
+        // Runtime-html accepts arbitrary values here and applies truthiness, removal, or stringification itself.
+        return true;
       case RuntimeBindingValueChannelKind.EventHandlerInvocation:
         // ListenerBinding accepts any expression value and only invokes it when the runtime value is callable.
         return true;

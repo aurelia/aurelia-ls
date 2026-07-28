@@ -900,6 +900,15 @@ export const KernelProductKinds = {
       'Expression parser publication for one parser-owned authored template value site.',
     ),
   },
+  RuntimeExpression: {
+    /** Product kind for one expression access paired with the runtime operation that spends it. */
+    AccessUse: defineVocabulary(
+      KernelVocabularyNamespace.RuntimeExpression,
+      'access-use',
+      KernelVocabularySlot.ProductKind,
+      'Source-backed expression access paired with its exact runtime owner, operation slot, phase, tracking policy, and semantic coverage.',
+    ),
+  },
   Binding: {
 
     /** Product kind for runtime binding instances emulated from renderer semantics. */

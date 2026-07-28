@@ -63,7 +63,7 @@ export const ObservationDetailDescriptors = {
   RuntimeEffect: defineProductDetailDescriptor<RuntimeEffect>(
     KernelVocabulary.Observation.RuntimeEffect.key,
     'observation.runtime-effect',
-    'Source-level IEffect created by Observation.watch(...) or Observation.run(...).',
+    'Immutable source-level effect construction plan for Observation.watch(...) or Observation.run(...).',
   ),
   RuntimeEffectObservedDependency: defineProductDetailDescriptor<RuntimeEffectObservedDependency>(
     KernelVocabulary.Binding.ObservedDependency.key,

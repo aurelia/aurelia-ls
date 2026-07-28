@@ -165,6 +165,7 @@ export function isSemanticIdentityRecord(record: KernelStoreRecord): record is S
     case 'fetch-client-identity':
     case 'dialog-identity':
     case 'compiler-identity':
+    case 'runtime-expression-identity':
     case 'template-identity':
     case 'template-node-identity':
     case 'binding-identity':
@@ -380,6 +381,7 @@ function identityDirectSourceAddressHandles(identity: SemanticIdentity): readonl
     case 'validation-identity':
     case 'fetch-client-identity':
     case 'dialog-identity':
+    case 'runtime-expression-identity':
     case 'type-system-identity':
       return compactAddressHandles(identity.sourceAddressHandle);
     case 'compiler-identity':
@@ -428,6 +430,7 @@ function identityOwnerAnchorHandles(identity: SemanticIdentity): readonly Source
     case 'validation-identity':
     case 'fetch-client-identity':
     case 'dialog-identity':
+    case 'runtime-expression-identity':
     case 'compiler-identity':
     case 'template-identity':
     case 'type-system-identity':

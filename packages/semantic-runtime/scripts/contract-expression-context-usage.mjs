@@ -28,6 +28,8 @@ const allowedDirectContextConstructors = new Set([
 const allowedKnownScopeContextCalls = new Set([
   'packages/semantic-runtime/src/observation/runtime-binding-source-expression-context.ts#checkerContextForRuntimeBindingSourceExpressionProjection',
   'packages/semantic-runtime/src/observation/runtime-binding-source-expression-context.ts#checkerContextForRuntimeBindingBehaviorArguments',
+  // Source-level watch/effect/computed expressions own a framework-grounded Scope.create(context) model.
+  'packages/semantic-runtime/src/runtime-expression/checker-access-target-projection.ts#RuntimeRootExpressionAccessTargetProjector.project',
   'packages/semantic-runtime/src/inquiry/template-completion.ts#memberOwnerEvaluationContextForCursorExpression',
   'packages/semantic-runtime/src/template/template-scope-type-projector.ts#TemplateScopeTypeProjector.evaluationContextForRuntimeBinding',
 ]);

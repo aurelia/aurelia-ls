@@ -1,9 +1,11 @@
 import {
+  kernelProductDetailReference,
   kernelRecordReferences,
   mergeKernelDetailReferences,
   type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
 import type { BindingScopeReference } from './scope.js';
+import { ConfigurationDetailDescriptors } from './detail-descriptors.js';
 
 /** Structural occupancy proven by a compact binding-scope reference. */
 export function bindingScopeReferenceKernelReferences(
@@ -11,6 +13,11 @@ export function bindingScopeReferenceKernelReferences(
 ): KernelDetailReferenceClosure {
   return reference == null
     ? mergeKernelDetailReferences()
-    // Scope references also describe speculative evaluator contexts whose logical product/identity was never emitted.
-    : mergeKernelDetailReferences(kernelRecordReferences(reference.sourceAddressHandle));
+    : mergeKernelDetailReferences(
+        [kernelProductDetailReference(ConfigurationDetailDescriptors.BindingScope, reference.productHandle)],
+        kernelRecordReferences(
+          reference.identityHandle,
+          reference.sourceAddressHandle,
+        ),
+      );
 }

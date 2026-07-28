@@ -383,7 +383,7 @@ export class CheckerExpressionResourceProjector {
         `Binding behavior '${expression.name.name}' is applied more than once in this expression.`,
       );
     }
-    const stateScope = this.stateScopes.scopeForBindingBehavior(
+    const stateScope = this.stateScopes.scopeForSpeculativeBindingBehavior(
       expression,
       context.scope,
       `${localKey}:behavior:${expression.name.name}`,

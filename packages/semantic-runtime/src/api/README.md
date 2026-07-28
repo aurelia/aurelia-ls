@@ -1749,12 +1749,15 @@ structural object type remains open because extra runtime properties are valid T
 `SpreadBinding`-owned inner bindings created from captured `...$attrs` are
 reported through the same target-access, target-operation, value-channel, and data-flow projections as ordinary
 bindings, while their ownership remains a binding-to-binding runtime claim under the hood.
-Binding-family public rows are resource-local by authored source ownership, not by whichever recursive aggregate render
-pass materialized them first. Aggregate child custom-element rendering remains visible for controller topology, but API
-projections filter binding-backed rows to the resource whose template contains the binding source span. Captured
-`...$attrs` are the main canary: a forwarded inner input binding can render inside a wrapper component while its source
-expression still belongs to the parent usage template that authored the captured attribute. Render-controller ownership
-is only a fallback for rows that genuinely lack exact source spans. Project-level producers consume the same
+Binding-family public rows are resource-local by authored instruction ownership, not by whichever recursive aggregate
+render pass materialized them first. Aggregate child custom-element rendering remains visible for controller topology,
+but API projections join each binding to its exact compiled instruction. Runtime-created spread instructions spend
+their normalized captured-`AttrSyntax` origin claim. Captured `...$attrs` are the main canary: a forwarded inner input
+binding can render inside a wrapper component while its instruction still belongs to the parent usage template that
+authored the captured attribute. Conversely, compiler-local templates can share a source file with their owner while
+retaining distinct compiled instruction sets. Render/source controllers describe execution and lookup environments, not
+authored resource ownership; source-span containment is reserved for rows with no binding/instruction product.
+Project-level producers consume the same
 `runtime-resource-ownership` projection before publishing source-owned diagnostics; otherwise a child binding visible
 in both parent aggregate rendering and child analysis would produce duplicate semantic facts before the API is reached.
 Expression references, completions, semantic tokens, capability demands, and overlay diagnostics follow the same
@@ -1814,13 +1817,38 @@ template-to-state/service handoff as read/write interaction rows. This lets idio
 the API reads the binding row's materialized `BindingScope`, locates the root slot, and requires that slot's source to
 match the injected member source before publishing a direct support-member handoff.
 
+`RuntimeExpressionAccessUses` exposes the lossless owner-qualified access occurrences beneath binding, watcher,
+source-effect, and computed-observer execution. Each row retains its exact operation slot, origin, access form and role,
+runtime phase, tracking mode, realization and reachability, control-flow qualifiers, execution multiplicity, semantic
+coverage, target closure, exact access/token source, and optional substrate handles. This is the query for questions
+about what Aurelia will read, call, or assign even when the operation is untracked, blocked, generated, or still open.
+It is not a subscription list. Observation rows below include the same access-use execution summary and require a
+lineage handle to the owning access fact, so MCP, IDE, and future AOT consumers must not reconstruct operation semantics
+from dependency display names.
+`scopeLookupAncestor`, `authoredScopeAncestor`, and `callbackScopeDepth` are separate facts. Unqualified names can have
+lookup ancestor zero inside a callback because Aurelia scope lookup falls through by name; explicit `$this`/`$parent`
+lowering can include callback escape depth. `lexicalLocal` and exact declaration target links distinguish callback
+parameters, including same-name nested parameters, without a consumer-local lexical graph.
+Binding-owned method-body rows retain their TypeScript source while inheriting the invoking binding's template-resource
+ownership. A source-file mismatch across that handoff is not evidence that the row belongs to a different resource.
+The query belongs to the observation catalog group rather than the binding group because it spans binding, watcher,
+source-effect, and computed-observer owners. Its typed continuations lead to each owner-specific effect family plus
+observation issues. Nested `executionQualifiers`, `targetLinks`, and owner-specific `accessUse` projections are
+registered source-reference carriers, so continuation evidence and other public source-precision policies see every
+nested authored or declaration locus instead of only the row's top-level source.
+
 `BindingObservedDependencies` exposes the concrete source-side reads that a source-to-target binding evaluation would
 collect through Aurelia's template connectable circuit. Rows preserve expression kind, source/root/member/key
 names, method name for calls, parser-local spans, source reference, and optional handles back to the runtime binding,
-data-flow edge, expression parse, and binding scope. Member reads also carry TypeChecker member kind and declaration
-source when the binding scope can close the owner expression. The `observedMemberSourceState` field distinguishes
+data-flow edge, expression parse, binding scope, and required access-use lineage. Member reads also carry TypeChecker
+member kind and declaration source when the binding scope can close the owner expression. Repeated authored occurrences
+remain separate rows even when Aurelia would coalesce their live observer subscription. The
+`observedMemberSourceState` field distinguishes
 closed source routes from honest non-member carriers such as temporary collection call results, `$` runtime scope names,
 and genuinely open scope roots, so aggregate pressure does not treat every null declaration source as provenance loss.
+`memberTokenSource` names the value carrier whose observer is requested; for a derived call such as
+`items.filter().map()`, that can be `filter`. The linked access use names the `map` operation occurrence. Do not flatten
+those two loci into one source field.
 Rows are published only when `sourceEvaluationKind` is connectable-read and
 `sourceEvaluationReachability` is reached. A blocked binding remains visible in `BindingDataFlows` for diagnostics and
 explanation, while this query stays an honest runtime-effect projection.
@@ -1855,8 +1883,10 @@ writes the same trackable-method marker consumed by `@astTrack` for methods.
 `ComputedObserver` rows with proxy-auto dependency collection; decorated getters with explicit deps publish
 `ControlledComputedObserver` rows. `ComputedObserverObservedDependencies` is the source-observer companion row family:
 plain getter bodies and dependency functions publish proxy property/collection reads, explicit dependency strings
-publish expression-observer reads at the dependency literal span, and explicit dependency keys with `deep: true` publish
-the first TypeChecker-shaped `deep-property-read` / `deep-collection-read` rows for nested observable value shapes.
+publish one authored access row per path segment at the dependency literal span, and explicit dependency keys with
+`deep: true` additionally publish generated TypeChecker-shaped `deep-property-read` / `deep-collection-read` rows for
+nested observable value shapes. The authored rows retain exact declaration targets; generated deep candidates retain
+their synthetic origin and coverage instead of masquerading as extra source tokens.
 These rows are source-backed getter capability/projection rows. A direct `ObserverLocator.getObserver(obj, fn)`
 function-key request is still a runtime `ComputedObserver` branch, but it is a concrete observer lookup call site and
 should be modeled by a call-site product, not folded into getter availability rows. Pair computed observer source rows
@@ -1890,8 +1920,10 @@ admitted through `Controller.addBinding(...)` in the framework, but watchers are
 before ordinary rendered bindings and need their own source/resource metadata handle.
 `RuntimeWatcherObservedDependencies` is the execution-detail companion for watcher reads that semantic-runtime can close
 today. Expression watchers parse the accepted string property key with Aurelia property-expression semantics and reuse
-the same connectable dependency collector as binding data-flow, so rows can explain `AccessScope`, `AccessMember`,
+the same access-use and connectable policies as binding data flow, so rows can explain `AccessScope`, `AccessMember`,
 `AccessKeyed`, and collection-call dependencies without reclassifying the watcher as an ordinary renderer binding.
+Each authored path segment retains its own source token and target declaration through the shared source-root checker
+resolver.
 Computed watchers use a first `ProxyObservable` function-body projection to explain property and collection reads rooted
 in the wrapped dependency function parameter, including nested collection callback values and simple local aliases or
 object destructuring. Collection-call rows are TypeChecker-discriminated when receiver types are visible, so ordinary

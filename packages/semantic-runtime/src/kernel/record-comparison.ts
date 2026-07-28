@@ -144,7 +144,8 @@ export function compareKernelRecords(
     case 'state-identity':
     case 'validation-identity':
     case 'fetch-client-identity':
-    case 'dialog-identity': {
+    case 'dialog-identity':
+    case 'runtime-expression-identity': {
       const candidate = next as typeof previous;
       return semanticThenWitness(
         sameValues(
@@ -304,6 +305,7 @@ export function referencedKernelRecordHandles(record: KernelStoreRecord): readon
     case 'validation-identity':
     case 'fetch-client-identity':
     case 'dialog-identity':
+    case 'runtime-expression-identity':
       return compactHandles(record.ownerHandle, record.sourceAddressHandle);
     case 'evaluation-identity':
       return compactHandles(record.ownerHandle, record.sourceAddressHandle);

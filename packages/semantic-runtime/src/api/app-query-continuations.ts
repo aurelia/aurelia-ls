@@ -841,6 +841,35 @@ function addObservationContinuations(
   page: SemanticRuntimePageInput,
 ): void {
   switch (query.kind) {
+    case SemanticAppQueryKind.RuntimeExpressionAccessUses:
+      seeds.push(
+        inspect(
+          'Compare authored access occurrences with binding observed-dependency summaries.',
+          rowQuery(SemanticAppQueryKind.BindingObservedDependencySummary, query, page),
+          InquiryEvidenceState.TypeProjected,
+        ),
+        inspect(
+          'Inspect controller-watcher observation effects induced by authored access occurrences.',
+          rowQuery(SemanticAppQueryKind.RuntimeWatcherObservedDependencies, query, page),
+          InquiryEvidenceState.TypeProjected,
+        ),
+        inspect(
+          'Inspect source-effect observation effects induced by authored access occurrences.',
+          rowQuery(SemanticAppQueryKind.RuntimeEffectObservedDependencies, query, page),
+          InquiryEvidenceState.TypeProjected,
+        ),
+        inspect(
+          'Inspect computed-observer effects induced by authored access occurrences.',
+          rowQuery(SemanticAppQueryKind.ComputedObserverObservedDependencies, query, page),
+          InquiryEvidenceState.TypeProjected,
+        ),
+        diagnose(
+          'Inspect observation issues beside authored access occurrences.',
+          rowQuery(SemanticAppQueryKind.ObservationIssues, query, page),
+          InquiryEvidenceState.Open,
+        ),
+      );
+      break;
     case SemanticAppQueryKind.ComputedObservationDefinitions:
       seeds.push(
         inspect(

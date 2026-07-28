@@ -19,6 +19,7 @@ import {
 } from '../inquiry/locus.js';
 import { ObservationDetailDescriptors } from '../observation/detail-descriptors.js';
 import type { RuntimeWatcherObservedDependency } from '../observation/runtime-watcher-observation.js';
+import { RuntimeExpressionDetailDescriptors } from '../runtime-expression/detail-descriptors.js';
 import type { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
 import type {
   BindableDefinition,
@@ -1499,6 +1500,18 @@ function referencesForRuntimeWatcher(
     detailReferences(ResourceDetailDescriptors.Definition, watcher.definitionProductHandle),
     watchExpressionReferences(watcher.expression),
     watchCallbackReferences(watcher.callback),
+    ...watcher.accessUses.map((accessUse) => mergeKernelDetailReferences(
+      kernelRecordReferences(
+        accessUse.productHandle,
+        accessUse.identityHandle,
+        accessUse.sourceAddressHandle,
+        accessUse.nameSourceAddressHandle,
+      ),
+      [kernelProductDetailReference(
+        RuntimeExpressionDetailDescriptors.AccessUse,
+        accessUse.productHandle,
+      )],
+    )),
     ...watcher.observedDependencies.map(runtimeWatcherObservedDependencyReferences),
     kernelFieldProvenanceReferences(watcher.fieldProvenance),
   );

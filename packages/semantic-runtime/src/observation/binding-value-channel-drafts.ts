@@ -24,10 +24,10 @@ import type {
   RuntimeValueChannelBinding,
 } from './binding-value-channel-draft-types.js';
 import {
-  RuntimeBindingRealization,
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelKind,
 } from './runtime-binding-observation.js';
+import { RuntimeOperationRealization } from '../runtime-expression/runtime-operation.js';
 import {
   BuiltInTemplateControllerFlowKind,
   type BuiltInTemplateControllerSemantics,
@@ -126,8 +126,9 @@ class RuntimeBindingValueChannelDraftFrame {
     if (targetAccess == null) {
       throw new Error('SpreadValueBinding value-channel materialization requires a target candidate.');
     }
+    const sourceType = this.readSourceType();
     const access = this.support.types.runtimeObjectMemberAccess(
-      this.readSourceType(),
+      sourceType,
       targetAccess.targetProperty,
     );
     if (access?.admissionKind === CheckerRuntimeObjectMemberAdmissionKind.Impossible) {
@@ -136,8 +137,10 @@ class RuntimeBindingValueChannelDraftFrame {
     return {
       draft: this.readDraft(),
       realization: runtimeBindingRealizationForAdmission(access?.admissionKind ?? null),
+      admittedSourceOwnerType: sourceType,
       admittedSourceValueType: access?.valueType?.toReference() ?? null,
       admittedSourceMemberKind: access?.memberKind ?? null,
+      admittedSourceMemberHandle: access?.member?.detailHandle ?? null,
       admittedSourceMemberSourceAddressHandle: access?.memberSourceAddressHandle ?? null,
     };
   }
@@ -433,24 +436,26 @@ function directValueChannelDraft(
 ): RuntimeBindingValueChannelDraftResult {
   return {
     draft,
-    realization: RuntimeBindingRealization.Direct,
+    realization: RuntimeOperationRealization.Direct,
+    admittedSourceOwnerType: null,
     admittedSourceValueType: null,
     admittedSourceMemberKind: null,
+    admittedSourceMemberHandle: null,
     admittedSourceMemberSourceAddressHandle: null,
   };
 }
 
 function runtimeBindingRealizationForAdmission(
   admission: CheckerRuntimeObjectMemberAdmissionKind | null,
-): RuntimeBindingRealization {
+): RuntimeOperationRealization {
   switch (admission) {
     case CheckerRuntimeObjectMemberAdmissionKind.Guaranteed:
-      return RuntimeBindingRealization.Guaranteed;
+      return RuntimeOperationRealization.Guaranteed;
     case CheckerRuntimeObjectMemberAdmissionKind.Conditional:
-      return RuntimeBindingRealization.Conditional;
+      return RuntimeOperationRealization.Conditional;
     case CheckerRuntimeObjectMemberAdmissionKind.Open:
     case null:
-      return RuntimeBindingRealization.Open;
+      return RuntimeOperationRealization.Open;
     case CheckerRuntimeObjectMemberAdmissionKind.Impossible:
       throw new Error('Impossible spread member admission must not materialize a value channel.');
   }

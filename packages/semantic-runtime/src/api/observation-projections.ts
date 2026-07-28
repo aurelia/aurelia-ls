@@ -24,6 +24,9 @@ import {
 import {
   describeAddress,
 } from './source-reference.js';
+import {
+  requireRuntimeExpressionAccessUseOccurrenceRow,
+} from './runtime-expression-projections.js';
 import type {
   SemanticComputedObservationDefinitionsResult,
   SemanticComputedObservationDefinitionRow,
@@ -221,12 +224,18 @@ function computedObserverObservedDependencyRow(
     dependencyMemberName: dependency.memberName,
     keyExpression: dependency.keyExpression,
     methodName: dependency.methodName,
+    accessUse: requireRuntimeExpressionAccessUseOccurrenceRow(
+      store,
+      dependency.accessUseProductHandle,
+      handles,
+    ),
     spanStart: dependency.spanStart,
     spanEnd: dependency.spanEnd,
     source: describeAddress(store, dependency.sourceAddressHandle),
     ...(handles ? {
       handles: {
         computedObserverProductHandle: dependency.computedObserver.productHandle,
+        accessUseProductHandle: dependency.accessUseProductHandle,
         observedDependencyProductHandle: dependency.productHandle,
         observedDependencyIdentityHandle: dependency.identityHandle,
         sourceAddressHandle: dependency.sourceAddressHandle,
@@ -278,6 +287,11 @@ function runtimeEffectObservedDependencyRow(
     memberName: dependency.memberName,
     keyExpression: dependency.keyExpression,
     methodName: dependency.methodName,
+    accessUse: requireRuntimeExpressionAccessUseOccurrenceRow(
+      store,
+      dependency.accessUseProductHandle,
+      handles,
+    ),
     observedMemberKind: dependency.observedMemberKind,
     observedMemberSource: describeAddress(store, dependency.observedMemberSourceAddressHandle),
     spanStart: dependency.spanStart,
@@ -286,6 +300,7 @@ function runtimeEffectObservedDependencyRow(
     ...(handles ? {
       handles: {
         effectProductHandle: dependency.effect.productHandle,
+        accessUseProductHandle: dependency.accessUseProductHandle,
         observedDependencyProductHandle: dependency.productHandle,
         observedDependencyIdentityHandle: dependency.identityHandle,
         observedMemberSourceAddressHandle: dependency.observedMemberSourceAddressHandle,

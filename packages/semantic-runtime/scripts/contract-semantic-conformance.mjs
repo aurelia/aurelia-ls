@@ -353,9 +353,10 @@ async function assertCandidateHonesty(assertion, failures, notes) {
   expectEqual(answer.closure, assertion.expected.closure, 'reference answer closure', failures);
   expectEqual(answer.value?.selectedMemberName, assertion.expected.memberName, 'selected member name', failures);
   expectEqual(answer.value?.rows?.length, assertion.expected.rows, 'proven reference row count', failures);
-  expect(
-    (answer.value?.candidateRows?.length ?? 0) >= assertion.expected.candidateRowsAtLeast,
-    `Expected at least ${assertion.expected.candidateRowsAtLeast} candidate row(s), got ${answer.value?.candidateRows?.length ?? 0}.`,
+  expectEqual(
+    answer.value?.candidateRows?.length ?? 0,
+    assertion.expected.candidateRows,
+    'candidate reference row count',
     failures,
   );
   const row = answer.value?.rows?.[0] ?? null;

@@ -29,8 +29,8 @@ import {
   RuntimeExpressionResourceApplicationOrigin,
   RuntimeExpressionResourceBindReachability,
   RuntimeExpressionResourceLifecycleEffects,
-  RuntimeExpressionResourcePhaseReachability,
 } from './runtime-expression-resource.js';
+import type { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 
 export const enum RuntimeBindingBehaviorApplicationPhase {
   Bind = 'bind',
@@ -88,7 +88,7 @@ export class RuntimeBindingBehaviorApplication {
     readonly authoredChainDepth: number,
     readonly runtimeChainDepth: number,
     readonly bindReachability: RuntimeExpressionResourceBindReachability,
-    readonly phaseReachability: RuntimeExpressionResourcePhaseReachability,
+    readonly phaseReachability: RuntimeOperationReachability,
     readonly bindOrder: number | null,
     readonly phaseOrder: number | null,
     readonly lifecycleEffects: RuntimeExpressionResourceLifecycleEffects,

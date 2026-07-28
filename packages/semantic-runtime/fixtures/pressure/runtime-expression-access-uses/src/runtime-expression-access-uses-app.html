@@ -1,0 +1,32 @@
+<template>
+  <p data-case="conditional">${flag ? repeated.name : repeated.name}</p>
+  <p data-case="interpolation-parts">${form.name} / ${form.name}</p>
+  <p data-case="optional-short-circuit">${flag && form?.name}</p>
+  <p data-case="derived-collection">
+    ${items.filter(item => item.label).map(item => item.id).join(',')}
+  </p>
+  <p data-case="context-authority">
+    ${$this.form.name} / ${items.map(item => $this.form.name + item.label).join(',')}
+  </p>
+  <p data-case="bare-context-authority">
+    ${$this} / ${items.map(item => $this).length}
+  </p>
+  <p data-case="nested-callback-shadowing">
+    ${items.map(item => items.map(item => item.label).join(',') + item.id).join('|')}
+  </p>
+
+  <input data-case="one-time" value.one-time="form.name">
+  <input
+    data-case="two-way-resources"
+    value.two-way="form.name | suffix:converterSuffix & debounce:behaviorDelay"
+  >
+  <button data-case="listener-call" click.trigger="handle(form.name)">Handle</button>
+  <button data-case="listener-assignment" click.trigger="form.name = fallbackName">Assign</button>
+
+  <section
+    repeat.for="item of items; key.bind: item.id; contextual.bind: contextualRepeat"
+  >
+    ${item.label}
+    <span data-case="repeat-context-authority">${$this} / ${$parent}</span>
+  </section>
+</template>

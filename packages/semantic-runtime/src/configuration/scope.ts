@@ -29,6 +29,7 @@ export const enum BindingScopeCreatorKind {
   RuntimeAssignment = 'runtime-assignment',
   ListenerEvent = 'listener-event',
   StateBinding = 'state-binding',
+  StateBindingBehavior = 'state-binding-behavior',
   TemplateControllerCondition = 'template-controller-condition',
   TemplateControllerBranch = 'template-controller-branch',
   TemplateControllerValueScope = 'template-controller-value-scope',

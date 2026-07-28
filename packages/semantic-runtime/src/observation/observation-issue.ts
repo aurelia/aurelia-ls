@@ -3,7 +3,6 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import type { FieldProvenance } from '../kernel/provenance.js';
 import type { ObservationFrameworkErrorCode } from './framework-error-code.js';
 
 export const enum ObservationIssuePhase {
@@ -27,15 +26,6 @@ export const enum ObservationIssueKind {
   /** Template calls an undecorated method whose body reads state that astEvaluate will not proxy-observe. */
   NonTrackableTemplateMethodCall = 'non-trackable-template-method-call',
 }
-
-export type ObservationIssueField =
-  | 'phase'
-  | 'issueKind'
-  | 'message'
-  | 'frameworkErrorCode'
-  | 'source'
-  | 'subjectName'
-  | 'relatedSources';
 
 export const enum ObservationIssueRelatedSourceKind {
   /** Declaration of the method whose body is not observed through an ordinary template call. */
@@ -75,7 +65,5 @@ export class ObservationIssue {
     readonly relatedSources: readonly ObservationIssueRelatedSource[] = [],
     /** Issue-specific subject name, such as the called method, when repair planning needs a compact handle. */
     readonly subjectName: string | null = null,
-    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
-    readonly fieldProvenance: readonly FieldProvenance<ObservationIssueField>[] = [],
   ) {}
 }

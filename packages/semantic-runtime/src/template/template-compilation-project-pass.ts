@@ -978,7 +978,6 @@ export class TemplateCompilationProjectPass {
       const cohortResources: TemplateResourceRuntimeAnalysisEmission[] = [];
       for (const group of runtimeAnalysisScheduleGroups(currentCohort, resourceDefinitions)) {
         const boundControllerValues = runtimeBoundControllerValueTableForTemplateResources(
-          this.publication,
           cohortResources,
         );
         const groupResources = group.map((compilation) =>

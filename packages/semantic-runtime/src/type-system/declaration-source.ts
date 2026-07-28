@@ -7,9 +7,16 @@ import {
   SourceSpanRole,
 } from '../kernel/address.js';
 import { TypeScriptDeclarationIdentity } from '../kernel/identity.js';
+import type { KernelRecordHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
-import type { KernelPublicationContext } from '../kernel/publication.js';
-import type { KernelStoreRecord } from '../kernel/store.js';
+import {
+  KernelPublicationPlan,
+  type KernelPublicationContext,
+} from '../kernel/publication.js';
+import {
+  KernelStoreBatch,
+  type KernelStoreRecord,
+} from '../kernel/store.js';
 import { normalizeHostPath } from '../kernel/source-address.js';
 import { inferSourceFileRole } from '../kernel/source-classification.js';
 import {
@@ -27,6 +34,39 @@ export interface DeclarationSourcePublication {
 export interface CheckerNodeSourceSpanPublication {
   readonly address: SourceSpanAddress;
   readonly records: readonly KernelStoreRecord[];
+}
+
+/** Ensure the canonical checker-owned source-file address for a node is available to later source-span products. */
+export function ensureSourceFileAddressForCheckerNode(
+  publication: KernelPublicationContext,
+  checker: ts.TypeChecker,
+  node: ts.Node,
+): SourceFileAddress {
+  const source = sourceFileAddressForDeclaration(
+    publication,
+    checkerDeclarationSourceContext(checker),
+    node.getSourceFile(),
+  );
+  publishMissingCheckerSourceRecords(
+    publication,
+    source.records,
+    `type-system:checker-source-file:${source.address.path}`,
+  );
+  return source.address;
+}
+
+/** Publish checker source records that are neither committed nor staged in the current publication. */
+export function publishMissingCheckerSourceRecords(
+  publication: KernelPublicationContext,
+  records: readonly KernelStoreRecord[],
+  label: string,
+): void {
+  const missing = records.filter((record) =>
+    publication.read(record.handle as KernelRecordHandle) == null
+  );
+  if (missing.length > 0) {
+    publication.publish(new KernelPublicationPlan(new KernelStoreBatch(missing, label)));
+  }
 }
 
 /** Append declaration source records that are not already published or staged in the current batch. */

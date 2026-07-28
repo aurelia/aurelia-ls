@@ -62,6 +62,7 @@ import {
 } from '../observation/observer-locator.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
 import { RuntimeHtmlControllerFrameworkErrorCode } from './framework-error-code.js';
@@ -105,7 +106,7 @@ import {
   RuntimeControllerIssuePublisher,
 } from './runtime-controller-issue.js';
 import {
-  runtimeWatchersForDefinition,
+  runtimeWatcherMaterializationsForDefinition,
 } from './runtime-watcher-factory.js';
 import {
   directDependencyDefinitions,
@@ -210,6 +211,7 @@ export class RuntimeControllerCreationMaterializer {
     definition: CustomElementDefinition,
     rootContainer: Container,
     source: RuntimeRenderingSourceSet,
+    expressionWorld: CheckerExpressionTypeWorld,
     typeSystem: TypeSystemProject | null,
     projectKey: string | null,
     resourceDefinitions: ResourceDefinitionIndex | null,
@@ -261,12 +263,13 @@ export class RuntimeControllerCreationMaterializer {
       source.provenanceHandle,
       records,
     );
-    this.recordControllerWatchers(`${localKey}:controller:root`, frame, definition, typeSystem);
+    this.recordControllerWatchers(`${localKey}:controller:root`, frame, definition, expressionWorld, typeSystem);
     return frame;
   }
 
   createChildController(
     creation: RuntimeControllerCreationRequest,
+    expressionWorld: CheckerExpressionTypeWorld,
     typeSystem: TypeSystemProject | null,
     observerLocator: ObserverLocator,
     source: RuntimeRenderingSourceSet,
@@ -336,7 +339,7 @@ export class RuntimeControllerCreationMaterializer {
       )
     );
     measure('watcher-setup', () =>
-      this.recordControllerWatchers(`${creation.local}:controller`, frame, definition, typeSystem)
+      this.recordControllerWatchers(`${creation.local}:controller`, frame, definition, expressionWorld, typeSystem)
     );
     measure('activation-di-issues', () =>
       this.recordControllerActivationDiIssues(creation, frame, definition, source, records, controllerIssues)
@@ -665,14 +668,16 @@ export class RuntimeControllerCreationMaterializer {
     local: string,
     frame: RuntimeControllerFrame,
     definition: CustomElementDefinition | CustomAttributeDefinition | null,
+    expressionWorld: CheckerExpressionTypeWorld,
     typeSystem: TypeSystemProject | null = null,
   ): void {
-    for (const watcher of runtimeWatchersForDefinition(
+    for (const watcher of runtimeWatcherMaterializationsForDefinition(
       this.store,
       this.publication,
       local,
       frame,
       definition,
+      expressionWorld,
       typeSystem,
     )) {
       frame.addWatcher(watcher);

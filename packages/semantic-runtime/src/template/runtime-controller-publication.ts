@@ -330,7 +330,6 @@ export class RuntimeControllerPublicationMaterializer {
       ),
       ...runtimeWatcherRecordsForController(
         this.store,
-        this.publication,
         local,
         controller,
         source.provenanceHandle,

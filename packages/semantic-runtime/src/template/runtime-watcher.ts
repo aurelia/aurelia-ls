@@ -6,6 +6,8 @@ import type {
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { RuntimeWatcherObservedDependency } from '../observation/runtime-watcher-observation.js';
+import type { RuntimeExpressionAccessPublication } from '../runtime-expression/runtime-expression-access-publication.js';
+import type { RuntimeExpressionAccessUse } from '../runtime-expression/runtime-expression-access-use.js';
 import type {
   WatchCallbackDefinition,
   WatchExpressionDefinition,
@@ -54,6 +56,7 @@ class RuntimeWatcherBase {
     readonly callback: WatchCallbackDefinition,
     readonly flush: WatchFlushMode,
     readonly sourceAddressHandle: AddressHandle | null,
+    readonly accessUses: readonly RuntimeExpressionAccessUse[] = [],
     readonly observedDependencies: readonly RuntimeWatcherObservedDependency[] = [],
     readonly fieldProvenance: readonly FieldProvenance<RuntimeWatcherField>[] = [],
   ) {}
@@ -81,6 +84,7 @@ export class ComputedWatcher extends RuntimeWatcherBase {
     callback: WatchCallbackDefinition,
     flush: WatchFlushMode,
     sourceAddressHandle: AddressHandle | null,
+    accessUses: readonly RuntimeExpressionAccessUse[] = [],
     observedDependencies: readonly RuntimeWatcherObservedDependency[] = [],
     fieldProvenance: readonly FieldProvenance<RuntimeWatcherField>[] = [],
   ) {
@@ -97,6 +101,7 @@ export class ComputedWatcher extends RuntimeWatcherBase {
       callback,
       flush,
       sourceAddressHandle,
+      accessUses,
       observedDependencies,
       fieldProvenance,
     );
@@ -116,6 +121,7 @@ export class ExpressionWatcher extends RuntimeWatcherBase {
     callback: WatchCallbackDefinition,
     flush: WatchFlushMode,
     sourceAddressHandle: AddressHandle | null,
+    accessUses: readonly RuntimeExpressionAccessUse[] = [],
     observedDependencies: readonly RuntimeWatcherObservedDependency[] = [],
     fieldProvenance: readonly FieldProvenance<RuntimeWatcherField>[] = [],
   ) {
@@ -132,6 +138,7 @@ export class ExpressionWatcher extends RuntimeWatcherBase {
       callback,
       flush,
       sourceAddressHandle,
+      accessUses,
       observedDependencies,
       fieldProvenance,
     );
@@ -141,3 +148,16 @@ export class ExpressionWatcher extends RuntimeWatcherBase {
 export type RuntimeWatcher =
   | ComputedWatcher
   | ExpressionWatcher;
+
+/**
+ * Render-time watcher assembly retained until the owning controller publication commits its kernel records.
+ *
+ * The frozen watcher carries durable semantic details; transient publication records stay on the mutable controller
+ * frame so watcher construction does not introduce a hidden publication side effect.
+ */
+export class RuntimeWatcherMaterialization {
+  constructor(
+    readonly watcher: RuntimeWatcher,
+    readonly accessUsePublications: readonly RuntimeExpressionAccessPublication[],
+  ) {}
+}

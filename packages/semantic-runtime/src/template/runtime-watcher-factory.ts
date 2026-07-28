@@ -6,17 +6,24 @@ import { ExpressionParser } from '../expression/expression-parser.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import { sourceFileAddressForAddress } from '../kernel/source-address.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
-  collectRuntimeConnectableObservedDependencyDrafts,
+  runtimeConnectableObservedAccessUseDrafts,
 } from '../observation/connectable-observed-dependency.js';
 import {
   ProxyObservable,
 } from '../observation/proxy-observable-dependency.js';
 import { RuntimeWatcherObservedDependency } from '../observation/runtime-watcher-observation.js';
 import {
-  distinctRuntimeObservedDependencyDrafts,
-  type RuntimeObservedDependencyDraft,
+  type RuntimeObservedDependencyAccessUseDraft,
 } from '../observation/runtime-observed-dependency-draft.js';
+import {
+  observedDependencyAccessUseDrafts,
+} from '../observation/runtime-observed-dependency-access-use.js';
+import {
+  observedMemberSourceFields,
+  observedMemberSourceForRuntimeExpressionAccessUse,
+} from '../observation/observed-dependency-member-source.js';
 import type { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
@@ -24,30 +31,60 @@ import {
   WatchExpressionKind,
   type WatchDefinition,
 } from '../resources/watch-definition.js';
+import {
+  RuntimeExpressionAccessOwnerKind,
+  RuntimeExpressionAccessPhase,
+  RuntimeExpressionAccessTargetResolution,
+  RuntimeExpressionAccessTracking,
+  RuntimeExpressionOperationKind,
+} from '../runtime-expression/runtime-expression-access-use.js';
+import type { RuntimeExpressionAccessDraft } from '../runtime-expression/runtime-expression-access-draft.js';
+import {
+  type RuntimeExpressionAccessPublication,
+} from '../runtime-expression/runtime-expression-access-publication.js';
+import {
+  publishRuntimeSourceAccessUses,
+  type RuntimeSourceAccessUseDraft,
+  type RuntimeSourceAccessUsePublication,
+} from '../runtime-expression/source-access-use-publication.js';
+import {
+  collectRuntimeTemplateAccessUseDrafts,
+} from '../runtime-expression/template-access-use-collector.js';
+import {
+  collectRuntimeTypeScriptAccessUseDrafts,
+} from '../runtime-expression/typescript-access-use-collector.js';
+import {
+  RuntimeRootExpressionAccessTargetProjector,
+} from '../runtime-expression/checker-access-target-projection.js';
+import {
+  RuntimeOperationRealization,
+  RuntimeOperationReachability,
+} from '../runtime-expression/runtime-operation.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import type { RuntimeControllerFrame } from './runtime-controller.js';
 import {
   ComputedWatcher,
   ExpressionWatcher,
   RuntimeWatcherKind,
+  RuntimeWatcherMaterialization,
   RuntimeWatcherReference,
-  type RuntimeWatcher,
 } from './runtime-watcher.js';
 import {
   runtimeExpressionParseContextForAddress,
-  sourceAddressForRuntimeExpressionBounds,
 } from './runtime-expression-source-address.js';
 
 const watcherExpressionParser = new ExpressionParser();
 
-export function runtimeWatchersForDefinition(
+export function runtimeWatcherMaterializationsForDefinition(
   store: KernelStore,
   publication: KernelPublicationContext,
   local: string,
   frame: RuntimeControllerFrame,
   definition: CustomElementDefinition | CustomAttributeDefinition | null,
+  expressionWorld: CheckerExpressionTypeWorld,
   typeSystem: TypeSystemProject | null = null,
-): readonly RuntimeWatcher[] {
+): readonly RuntimeWatcherMaterialization[] {
   if (definition == null || definition.watches.length === 0) {
     return [];
   }
@@ -60,6 +97,7 @@ export function runtimeWatchersForDefinition(
       definition,
       watch,
       index,
+      expressionWorld,
       typeSystem,
     )
   );
@@ -73,8 +111,9 @@ function runtimeWatcherForDefinitionWatch(
   definition: CustomElementDefinition | CustomAttributeDefinition,
   watch: WatchDefinition,
   watchIndex: number,
+  expressionWorld: CheckerExpressionTypeWorld,
   typeSystem: TypeSystemProject | null,
-): RuntimeWatcher {
+): RuntimeWatcherMaterialization {
   const productHandle = store.handles.product(local);
   const identityHandle = store.handles.identity(local);
   const sourceAddressHandle = sourceAddressForWatch(watch, definition);
@@ -82,16 +121,26 @@ function runtimeWatcherForDefinitionWatch(
     ? RuntimeWatcherKind.Computed
     : RuntimeWatcherKind.Expression;
   const watcherReference = new RuntimeWatcherReference(watcherKind, productHandle, identityHandle, sourceAddressHandle);
-  const observedDependencies = runtimeWatcherObservedDependenciesForWatch(
+  const accessUseEmission = runtimeWatcherAccessUseEmissionForWatch(
     store,
     publication,
     local,
     watcherReference,
+    definition,
     watch,
     sourceAddressHandle,
+    frame.provenanceHandle,
+    expressionWorld,
     typeSystem,
   );
-  return watcherKind === RuntimeWatcherKind.Computed
+  const observedDependencies = runtimeWatcherObservedDependenciesForAccessUses(
+    store,
+    local,
+    watcherReference,
+    accessUseEmission.dependencies,
+    accessUseEmission.publication,
+  );
+  const watcher = watcherKind === RuntimeWatcherKind.Computed
     ? new ComputedWatcher(
       productHandle,
       identityHandle,
@@ -103,6 +152,7 @@ function runtimeWatcherForDefinitionWatch(
       watch.callback,
       watch.flush,
       sourceAddressHandle,
+      accessUseEmission.publication.accessUses,
       observedDependencies,
     )
     : new ExpressionWatcher(
@@ -116,8 +166,13 @@ function runtimeWatcherForDefinitionWatch(
       watch.callback,
       watch.flush,
       sourceAddressHandle,
+      accessUseEmission.publication.accessUses,
       observedDependencies,
     );
+  return new RuntimeWatcherMaterialization(
+    watcher,
+    accessUseEmission.publication.publications,
+  );
 }
 
 function sourceAddressForWatch(
@@ -131,32 +186,72 @@ function sourceAddressForWatch(
     ?? definition.sourceAddressHandle;
 }
 
-function runtimeWatcherObservedDependenciesForWatch(
+class RuntimeWatcherAccessUseEmission {
+  constructor(
+    readonly publication: RuntimeSourceAccessUsePublication,
+    readonly dependencies: readonly RuntimeObservedDependencyAccessUseDraft[],
+  ) {}
+}
+
+function runtimeWatcherAccessUseEmissionForWatch(
   store: KernelStore,
   publication: KernelPublicationContext,
   local: string,
   watcher: RuntimeWatcherReference,
+  definition: CustomElementDefinition | CustomAttributeDefinition,
   watch: WatchDefinition,
   sourceAddressHandle: AddressHandle | null,
+  provenanceHandle: RuntimeControllerFrame['provenanceHandle'],
+  expressionWorld: CheckerExpressionTypeWorld,
   typeSystem: TypeSystemProject | null,
+): RuntimeWatcherAccessUseEmission {
+  return watch.expression.kind === WatchExpressionKind.DependencyCollectionFunction
+    ? computedWatcherAccessUseEmission(
+        store,
+        publication,
+        local,
+        watcher,
+        watch,
+        sourceAddressHandle,
+        provenanceHandle,
+        typeSystem,
+      )
+    : expressionWatcherAccessUseEmission(
+        store,
+        publication,
+        local,
+        watcher,
+        definition,
+        watch,
+        sourceAddressHandle,
+        provenanceHandle,
+        expressionWorld,
+      );
+}
+
+function runtimeWatcherObservedDependenciesForAccessUses(
+  store: KernelStore,
+  local: string,
+  watcher: RuntimeWatcherReference,
+  dependencies: readonly RuntimeObservedDependencyAccessUseDraft[],
+  publication: RuntimeSourceAccessUsePublication,
 ): readonly RuntimeWatcherObservedDependency[] {
-  const drafts: readonly RuntimeObservedDependencyDraft[] = watch.expression.kind === WatchExpressionKind.DependencyCollectionFunction
-    ? proxyObservedDependencyDraftsForComputedWatcher(typeSystem, store, publication, watch.expression.target)
-    : connectableObservedDependencyDraftsForExpressionWatcher(publication, watch);
-  const dependencies = distinctRuntimeObservedDependencyDrafts(drafts);
+  const accessUsesByHandle = new Map(
+    publication.accessUses.map((accessUse) => [accessUse.productHandle, accessUse] as const),
+  );
   return dependencies.map((dependency, index) => {
     const dependencyLocal = `${local}:observed-dependency:${index}`;
-    const dependencySource = sourceAddressForRuntimeExpressionBounds(
-      publication,
-      dependencyLocal,
-      sourceAddressHandle,
-      dependency.spanStart,
-      dependency.spanEnd,
-    );
+    const accessUse = accessUsesByHandle.get(dependency.accessUseProductHandle);
+    if (accessUse == null) {
+      throw new Error(
+        `Runtime watcher dependency '${dependencyLocal}' lost access-use '${dependency.accessUseProductHandle}'.`,
+      );
+    }
     return new RuntimeWatcherObservedDependency(
       store.handles.product(dependencyLocal),
       store.handles.identity(dependencyLocal),
       watcher,
+      dependency.accessUseProductHandle,
       null,
       dependency.dependencyKind,
       dependency.expressionKind,
@@ -169,35 +264,150 @@ function runtimeWatcherObservedDependenciesForWatch(
       dependency.observedMemberSourceAddressHandle ?? null,
       dependency.spanStart,
       dependency.spanEnd,
-      dependencySource.handle,
-      [],
+      accessUse.sourceAddressHandle,
     );
   });
 }
 
-function connectableObservedDependencyDraftsForExpressionWatcher(
-  publication: KernelPublicationContext,
-  watch: WatchDefinition,
-) {
-  const ast = expressionAstForExpressionWatcher(publication, watch);
-  return ast == null
-    ? []
-    : collectRuntimeConnectableObservedDependencyDrafts(ast);
-}
-
-function proxyObservedDependencyDraftsForComputedWatcher(
-  typeSystem: TypeSystemProject | null,
+function expressionWatcherAccessUseEmission(
   store: KernelStore,
   publication: KernelPublicationContext,
-  target: ResourceTargetReference | null,
-) {
-  const declaration = dependencyCollectionFunctionForTarget(typeSystem, publication, target);
-  return declaration == null
+  local: string,
+  watcher: RuntimeWatcherReference,
+  definition: CustomElementDefinition | CustomAttributeDefinition,
+  watch: WatchDefinition,
+  sourceAddressHandle: AddressHandle | null,
+  provenanceHandle: RuntimeControllerFrame['provenanceHandle'],
+  expressionWorld: CheckerExpressionTypeWorld,
+): RuntimeWatcherAccessUseEmission {
+  const ast = expressionAstForExpressionWatcher(publication, watch);
+  const accessDrafts = ast == null
     ? []
-    : ProxyObservable.collectObservedDependencyDrafts(
-      declaration,
-      ProxyObservable.typeContextForTypeSystem(typeSystem, store, publication),
-    );
+    : collectRuntimeTemplateAccessUseDrafts({ expression: ast });
+  const observationEffects = runtimeConnectableObservedAccessUseDrafts(accessDrafts, null, ast);
+  const connectable = new Set(observationEffects.map((effect) => effect.accessUse));
+  const targetProjector = RuntimeRootExpressionAccessTargetProjector.forTypeReference(
+    store,
+    expressionWorld,
+    definition.target.targetType,
+    `${local}:expression-target`,
+  );
+  const drafts: readonly RuntimeSourceAccessUseDraft[] = accessDrafts.map((draft) => {
+    const target = targetProjector?.project(draft.expression) ?? null;
+    return {
+      ...draft,
+      tracking: connectable.has(draft)
+        ? RuntimeExpressionAccessTracking.Connectable
+        : RuntimeExpressionAccessTracking.Untracked,
+      targetResolution: target?.resolution ?? RuntimeExpressionAccessTargetResolution.Open,
+      targetLinks: target?.links ?? [],
+    };
+  });
+  const accessPublication = publishRuntimeWatcherAccessUses(
+    store,
+    publication,
+    local,
+    watcher,
+    sourceAddressHandle,
+    provenanceHandle,
+    RuntimeExpressionOperationKind.WatcherExpression,
+    drafts,
+  );
+  const publicationByDraft = new Map<RuntimeExpressionAccessDraft, RuntimeExpressionAccessPublication>(
+    accessDrafts.map((draft, index) => [draft, accessPublication.publications[index]!] as const),
+  );
+  const dependencies = observationEffects.map((effect) => {
+    const accessUse = publicationByDraft.get(effect.accessUse);
+    if (accessUse == null) {
+      throw new Error('Expression watcher observation effect lost its originating access occurrence.');
+    }
+    return {
+      ...effect.dependency,
+      ...observedMemberSourceFields(
+        observedMemberSourceForRuntimeExpressionAccessUse(publication, accessUse.detail),
+      ),
+      sourceFileAddressHandle: effect.accessUse.sourceSpan.file?.id == null
+        ? null
+        : effect.accessUse.sourceSpan.file.id as AddressHandle,
+      accessUseProductHandle: accessUse.detail.productHandle,
+      accessUseSourceAddressHandle: accessUse.detail.sourceAddressHandle,
+    };
+  });
+  return new RuntimeWatcherAccessUseEmission(accessPublication, dependencies);
+}
+
+function computedWatcherAccessUseEmission(
+  store: KernelStore,
+  publication: KernelPublicationContext,
+  local: string,
+  watcher: RuntimeWatcherReference,
+  watch: WatchDefinition,
+  sourceAddressHandle: AddressHandle | null,
+  provenanceHandle: RuntimeControllerFrame['provenanceHandle'],
+  typeSystem: TypeSystemProject | null,
+): RuntimeWatcherAccessUseEmission {
+  const declaration = dependencyCollectionFunctionForTarget(typeSystem, publication, watch.expression.target);
+  const dependencies = declaration == null
+    ? []
+    : ProxyObservable.collectObservedDependencyOccurrenceDrafts(
+        declaration,
+        ProxyObservable.typeContextForTypeSystem(typeSystem, store, publication),
+      );
+  const drafts = declaration == null || typeSystem == null
+    ? []
+    : collectRuntimeTypeScriptAccessUseDrafts({
+        declaration,
+        typeSystem,
+        store,
+        publication,
+        trackedDependencies: dependencies,
+      });
+  const accessPublication = publishRuntimeWatcherAccessUses(
+    store,
+    publication,
+    local,
+    watcher,
+    sourceAddressHandle,
+    provenanceHandle,
+    RuntimeExpressionOperationKind.WatcherGetter,
+    drafts,
+  );
+  return new RuntimeWatcherAccessUseEmission(
+    accessPublication,
+    observedDependencyAccessUseDrafts(publication, dependencies, accessPublication.publications),
+  );
+}
+
+function publishRuntimeWatcherAccessUses(
+  store: KernelStore,
+  publication: KernelPublicationContext,
+  local: string,
+  watcher: RuntimeWatcherReference,
+  sourceAddressHandle: AddressHandle | null,
+  provenanceHandle: RuntimeControllerFrame['provenanceHandle'],
+  operationKind: RuntimeExpressionOperationKind,
+  drafts: readonly RuntimeSourceAccessUseDraft[],
+): RuntimeSourceAccessUsePublication {
+  if (watcher.productHandle == null || watcher.identityHandle == null) {
+    throw new Error(`Runtime watcher '${local}' has no durable owner identity.`);
+  }
+  return publishRuntimeSourceAccessUses({
+    store,
+    publication,
+    local: `${local}:runtime-expression`,
+    ownerKind: RuntimeExpressionAccessOwnerKind.RuntimeWatcher,
+    ownerProductHandle: watcher.productHandle,
+    ownerIdentityHandle: watcher.identityHandle,
+    ownerSourceAddressHandle: sourceAddressHandle,
+    operationKind,
+    operationIndex: null,
+    phase: RuntimeExpressionAccessPhase.WatcherEvaluation,
+    realization: RuntimeOperationRealization.Direct,
+    reachability: RuntimeOperationReachability.Reached,
+    provenanceHandle,
+    claimPredicateKey: KernelVocabulary.RuntimeExpression.RuntimeWatcherUsesAccessUse.key,
+    drafts,
+  });
 }
 
 function expressionAstForExpressionWatcher(

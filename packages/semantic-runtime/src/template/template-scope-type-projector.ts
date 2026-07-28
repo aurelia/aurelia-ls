@@ -32,7 +32,7 @@ import {
   type RuntimeExpressionBinding,
 } from '../observation/runtime-binding-expression.js';
 import {
-  RuntimeBindingExpressionScopeProjector,
+  type RuntimeBindingExpressionScopeProjectionReader,
 } from '../observation/runtime-binding-expression-scope.js';
 import {
   RuntimeBindingSourceExpressionProjectionKind,
@@ -148,6 +148,7 @@ export class TemplateScopeTypeProjector {
   constructor(
     private readonly store: KernelStore,
     private readonly typeProjector: CheckerTypeProjector,
+    private readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader,
   ) {
     this.asyncTypeProjector = new CheckerAsyncTypeProjector(store, typeProjector);
     this.typeSynthesizer = new CheckerExpressionTypeSynthesizer(typeProjector);
@@ -661,12 +662,7 @@ export class TemplateScopeTypeProjector {
     if (binding == null) {
       return CheckerExpressionTypeEvaluationContext.knownScope(expression, sourceScope, localKey, sourceAddressHandle);
     }
-    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(
-      this.store,
-      input.expressionWorld,
-      input.expressionResourcePlan,
-    );
-    const projection = projectRuntimeBindingSourceExpressionInScope(input.runtimeBindings, bindingExpressionScopes, {
+    const projection = projectRuntimeBindingSourceExpressionInScope(input.runtimeBindings, this.bindingExpressionScopes, {
       binding,
       expression,
       localKey,

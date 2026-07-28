@@ -4,13 +4,13 @@ import type { ExpressionAstNode } from '../expression/ast.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
-import { RuntimeExpressionResourcePhaseReachability } from '../template/runtime-expression-resource.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 import {
   CheckerExpressionTypeBindingBehaviorEvaluation,
 } from '../type-system/expression-type-context.js';
 import type { RuntimeExpressionBinding } from './runtime-binding-expression.js';
 import {
-  RuntimeBindingExpressionScopeProjector,
+  type RuntimeBindingExpressionScopeProjectionReader,
   runtimeBindingExpressionUsesModeledScopeChangingBindingBehavior,
 } from './runtime-binding-expression-scope.js';
 import {
@@ -31,7 +31,7 @@ export interface RuntimeBindingSourceValueKnownScopeProjectionRequest {
   /** Rendered runtime binding table that owns strict-mode and render-context facts when a binding exists. */
   readonly runtimeBindings?: RuntimeRenderingEmission | null;
   /** Source-scope projector that models binding-behavior `bind(...)` handoff before source reads. */
-  readonly bindingExpressionScopes?: RuntimeBindingExpressionScopeProjector | null;
+  readonly bindingExpressionScopes?: RuntimeBindingExpressionScopeProjectionReader | null;
   /** Runtime expression binding whose source is being reduced to a static value, if the source is binding-owned. */
   readonly binding?: RuntimeExpressionBinding | null;
   /** Binding source expression before runtime source-scope projection. */
@@ -99,7 +99,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
     /** Active controller/container visible to `resolve(...)`; undefined means use the evaluator default. */
     readonly activeContainer: Container | null | undefined = undefined,
     private readonly activeBoundControllerReads: Set<string> = new Set(),
-    private readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjector | null = null,
+    private readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader | null = null,
     private readonly bindingProductHandle: ProductHandle | null = null,
     private readonly localKey: string | null = null,
     private readonly sourceAddressHandle: AddressHandle | null = null,
@@ -109,7 +109,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
     /** Rendering-controller strict mode passed to Aurelia `astEvaluate` for this source-value request. */
     readonly strictBinding: boolean | null = null,
     /** Whether the rendered binding completed `astBind(...)` far enough to enter source evaluation. */
-    readonly sourceEvaluationReachability: RuntimeExpressionResourcePhaseReachability = RuntimeExpressionResourcePhaseReachability.Reached,
+    readonly sourceEvaluationReachability: RuntimeOperationReachability = RuntimeOperationReachability.Reached,
   ) {}
 
   /** Returns a child request in the same source-value read chain. */
@@ -215,7 +215,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
   projectBindingSourceValueContext(
     expression: ExpressionAstNode,
     sourceScope: BindingScope,
-    bindingExpressionScopes: RuntimeBindingExpressionScopeProjector | null,
+    bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader | null,
     bindingProductHandle: ProductHandle,
     bindingBehavior: CheckerExpressionTypeBindingBehaviorEvaluation,
     localKey: string,
@@ -238,7 +238,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
           bindingBehavior,
           resourceScope,
           strictBinding,
-          RuntimeExpressionResourcePhaseReachability.Reached,
+          RuntimeOperationReachability.Reached,
         ),
         openReason: null,
       };
@@ -262,7 +262,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
               bindingBehavior,
               resourceScope,
               strictBinding,
-              RuntimeExpressionResourcePhaseReachability.Reached,
+              RuntimeOperationReachability.Reached,
             ),
             openReason: null,
           };

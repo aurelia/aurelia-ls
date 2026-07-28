@@ -21,10 +21,9 @@ const dataFlows = app.ask({
   kind: 'binding-data-flows',
   page: { size: 100 },
 }).value.rows;
-const observedDependencies = app.ask({
-  kind: 'binding-observed-dependencies',
-  page: { size: 200 },
-}).value.rows;
+const observedDependencies = collectPagedRows((page) =>
+  app.bindingObservedDependencies(page)
+);
 const templateDiagnostics = app.ask({
   kind: 'template-diagnostics',
   page: { size: 100 },
@@ -167,4 +166,15 @@ function expectObservedDependency(message, sourceName) {
   if (row.observedMemberSourceState !== 'source') {
     failures.push(`${message}: expected observedMemberSourceState=source, observed ${JSON.stringify(row.observedMemberSourceState)}.`);
   }
+}
+
+function collectPagedRows(readPage) {
+  const rows = [];
+  let cursor = null;
+  do {
+    const answer = readPage({ size: 200, cursor });
+    rows.push(...answer.value.rows);
+    cursor = answer.page?.nextCursor ?? null;
+  } while (cursor != null);
+  return rows;
 }

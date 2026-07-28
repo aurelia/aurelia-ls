@@ -1,12 +1,13 @@
 import { bindingScopeReferenceKernelReferences } from '../configuration/structural-references.js';
 import {
-  kernelFieldProvenanceReferences,
+  kernelHotDetailReference,
   kernelProductDetailReference,
   kernelRecordReferences,
   mergeKernelDetailReferences,
   type KernelDetailReferenceClosure,
 } from '../kernel/detail-references.js';
 import { defineProductDetailSlot } from '../kernel/product-details.js';
+import { RuntimeExpressionDetailDescriptors } from '../runtime-expression/detail-descriptors.js';
 import type { TemplateVisibleResourceReference } from '../template/compiler-world-reference.js';
 import { TemplateDetailDescriptors } from '../template/detail-descriptors.js';
 import {
@@ -18,6 +19,7 @@ import {
   runtimeWatcherReferenceReferences,
 } from '../template/structural-references.js';
 import { checkerTypeReferenceKernelReferences } from '../type-system/structural-references.js';
+import { TypeSystemHotDetailDescriptors } from '../type-system/detail-descriptors.js';
 import type {
   RuntimeBindingDataFlowValueConverterWritebackStage,
   RuntimeBindingObservedDependency,
@@ -30,6 +32,18 @@ import {
   runtimeBindingValueChannelReferenceReferences,
   runtimeEffectReferenceReferences,
 } from './structural-references.js';
+
+function runtimeExpressionAccessUseRecords(
+  productHandle: RuntimeBindingObservedDependency['accessUseProductHandle'],
+): KernelDetailReferenceClosure {
+  return mergeKernelDetailReferences(
+    kernelRecordReferences(productHandle),
+    [kernelProductDetailReference(
+      RuntimeExpressionDetailDescriptors.AccessUse,
+      productHandle,
+    )],
+  );
+}
 
 function visibleResourceReferenceRecords(
   reference: TemplateVisibleResourceReference | null,
@@ -66,7 +80,7 @@ function computedObserverDependencyRecords(
     includeObserverBackReference
       ? computedObserverSourceReferenceReferences(dependency.computedObserver)
       : kernelRecordReferences(),
-    kernelFieldProvenanceReferences(dependency.fieldProvenance),
+    runtimeExpressionAccessUseRecords(dependency.accessUseProductHandle),
   );
 }
 
@@ -78,8 +92,8 @@ function runtimeEffectDependencyRecords(
     includeEffectBackReference
       ? runtimeEffectReferenceReferences(dependency.effect)
       : kernelRecordReferences(),
+    runtimeExpressionAccessUseRecords(dependency.accessUseProductHandle),
     kernelRecordReferences(dependency.observedMemberSourceAddressHandle),
-    kernelFieldProvenanceReferences(dependency.fieldProvenance),
   );
 }
 
@@ -88,6 +102,7 @@ function runtimeBindingObservedDependencyReferences(
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
     runtimeBindingReferenceReferences(dependency.binding),
+    runtimeExpressionAccessUseRecords(dependency.accessUseProductHandle),
     kernelRecordReferences(
       dependency.dataFlowProductHandle,
       dependency.expressionProductHandle,
@@ -102,7 +117,6 @@ function runtimeBindingObservedDependencyReferences(
       dependency.expressionProductHandle,
     )],
     bindingScopeReferenceKernelReferences(dependency.bindingScope),
-    kernelFieldProvenanceReferences(dependency.fieldProvenance),
   );
 }
 
@@ -110,6 +124,18 @@ function computedObserverSourceReferences(
   observer: ComputedObserverSource,
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
+    ...observer.accessUses.map((accessUse) => mergeKernelDetailReferences(
+      kernelRecordReferences(
+        accessUse.productHandle,
+        accessUse.identityHandle,
+        accessUse.sourceAddressHandle,
+        accessUse.nameSourceAddressHandle,
+      ),
+      [kernelProductDetailReference(
+        RuntimeExpressionDetailDescriptors.AccessUse,
+        accessUse.productHandle,
+      )],
+    )),
     ...observer.observedDependencies.map((dependency) => mergeKernelDetailReferences(
       kernelRecordReferences(
         dependency.productHandle,
@@ -122,7 +148,6 @@ function computedObserverSourceReferences(
       )],
       computedObserverDependencyRecords(dependency, false),
     )),
-    kernelFieldProvenanceReferences(observer.fieldProvenance),
   );
 }
 
@@ -130,6 +155,18 @@ function runtimeEffectReferences(
   effect: RuntimeEffect,
 ): KernelDetailReferenceClosure {
   return mergeKernelDetailReferences(
+    ...effect.accessUses.map((accessUse) => mergeKernelDetailReferences(
+      kernelRecordReferences(
+        accessUse.productHandle,
+        accessUse.identityHandle,
+        accessUse.sourceAddressHandle,
+        accessUse.nameSourceAddressHandle,
+      ),
+      [kernelProductDetailReference(
+        RuntimeExpressionDetailDescriptors.AccessUse,
+        accessUse.productHandle,
+      )],
+    )),
     ...effect.observedDependencies.map((dependency) => mergeKernelDetailReferences(
       kernelRecordReferences(
         dependency.productHandle,
@@ -142,7 +179,6 @@ function runtimeEffectReferences(
       )],
       runtimeEffectDependencyRecords(dependency, false),
     )),
-    kernelFieldProvenanceReferences(effect.fieldProvenance),
   );
 }
 
@@ -158,7 +194,6 @@ export const ObservationProductDetails = {
     ObservationDetailDescriptors.Issue,
     (issue) => mergeKernelDetailReferences(
       kernelRecordReferences(...issue.relatedSources.map((source) => source.addressHandle)),
-      kernelFieldProvenanceReferences(issue.fieldProvenance),
     ),
   ),
   RuntimeBindingValueChannel: defineProductDetailSlot(
@@ -170,15 +205,20 @@ export const ObservationProductDetails = {
       runtimeBindingSourceOperationReferenceReferences(channel.sourceOperation),
       checkerTypeReferenceKernelReferences(channel.rawTargetPropertyType),
       checkerTypeReferenceKernelReferences(channel.runtimeValueType),
+      checkerTypeReferenceKernelReferences(channel.admittedSourceOwnerType),
       checkerTypeReferenceKernelReferences(channel.admittedSourceValueType),
+      [kernelHotDetailReference(
+        TypeSystemHotDetailDescriptors.TypeMember,
+        channel.admittedSourceMemberHandle,
+      )],
       kernelRecordReferences(channel.admittedSourceMemberSourceAddressHandle),
-      kernelFieldProvenanceReferences(channel.fieldProvenance),
     ),
   ),
   RuntimeBindingDataFlow: defineProductDetailSlot(
     ObservationDetailDescriptors.RuntimeBindingDataFlow,
     (dataFlow) => mergeKernelDetailReferences(
       runtimeBindingReferenceReferences(dataFlow.binding),
+      ...dataFlow.accessUseProductHandles.map(runtimeExpressionAccessUseRecords),
       runtimeBindingTargetAccessReferenceReferences(dataFlow.targetAccess),
       runtimeBindingTargetOperationReferenceReferences(dataFlow.targetOperation),
       runtimeBindingSourceOperationReferenceReferences(dataFlow.sourceOperation),
@@ -198,7 +238,6 @@ export const ObservationProductDetails = {
       checkerTypeReferenceKernelReferences(dataFlow.targetValueType),
       checkerTypeReferenceKernelReferences(dataFlow.targetToSourceValueType),
       ...dataFlow.valueConverterWritebackStages.map(valueConverterWritebackStageRecords),
-      kernelFieldProvenanceReferences(dataFlow.fieldProvenance),
     ),
   ),
   RuntimeBindingObservedDependency: defineProductDetailSlot(
@@ -209,6 +248,7 @@ export const ObservationProductDetails = {
     ObservationDetailDescriptors.RuntimeWatcherObservedDependency,
     (dependency) => mergeKernelDetailReferences(
       runtimeWatcherReferenceReferences(dependency.watcher),
+      runtimeExpressionAccessUseRecords(dependency.accessUseProductHandle),
       kernelRecordReferences(
         dependency.expressionProductHandle,
         dependency.observedMemberSourceAddressHandle,
@@ -217,7 +257,6 @@ export const ObservationProductDetails = {
         TemplateDetailDescriptors.ExpressionParse,
         dependency.expressionProductHandle,
       )],
-      kernelFieldProvenanceReferences(dependency.fieldProvenance),
     ),
   ),
   ComputedObserverSource: defineProductDetailSlot(
@@ -230,9 +269,7 @@ export const ObservationProductDetails = {
   ),
   ComputedObservationDefinition: defineProductDetailSlot(
     ObservationDetailDescriptors.ComputedObservationDefinition,
-    (definition) => mergeKernelDetailReferences(
-      kernelFieldProvenanceReferences(definition.fieldProvenance),
-    ),
+    () => mergeKernelDetailReferences(),
   ),
   RuntimeEffect: defineProductDetailSlot(
     ObservationDetailDescriptors.RuntimeEffect,
@@ -244,6 +281,6 @@ export const ObservationProductDetails = {
   ),
   ProxyObservableEscape: defineProductDetailSlot(
     ObservationDetailDescriptors.ProxyObservableEscape,
-    (escape) => mergeKernelDetailReferences(kernelFieldProvenanceReferences(escape.fieldProvenance)),
+    () => mergeKernelDetailReferences(),
   ),
 } as const;

@@ -3,13 +3,6 @@
   "schemaVersion": "semantic-conformance-known-gaps.v1",
   "knownGaps": [
     {
-      "assertionId": "state-and-virtualization-static-projection/state-scope-completion-reuses-projected-store-type",
-      "status": "known-gap",
-      "failureBucket": "query-projection-data-loss",
-      "firstObserved": "2026-07-25",
-      "rationale": "Cursor scope materialization proves the configured state type, but template completions reopen at the binding-scope-detail boundary and return no candidates instead of reusing that projection."
-    },
-    {
       "assertionId": "state-and-virtualization-static-projection/state-reference-and-rename-cover-contextual-initial-state-property",
       "status": "known-gap",
       "failureBucket": "typescript-reference-semantics",

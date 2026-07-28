@@ -139,7 +139,7 @@ import {
 import { StateProductDetails } from '../state/product-details.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ValueConverterDefinition } from '../resources/value-converter-definition.js';
-import { RuntimeExpressionResourcePhaseReachability } from '../template/runtime-expression-resource.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 
 type RuntimeBindingSourceClassValueTarget = {
   readonly classNode: ts.ClassLikeDeclarationBase;
@@ -288,7 +288,7 @@ export class RuntimeBindingSourceValueEvaluator {
   private evaluateNode(
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
-    if (context.sourceEvaluationReachability !== RuntimeExpressionResourcePhaseReachability.Reached) {
+    if (context.sourceEvaluationReachability !== RuntimeOperationReachability.Reached) {
       return RuntimeBindingSourceValueEvaluation.open(
         `Runtime binding source evaluation was blocked because its expression-resource bind phase was '${context.sourceEvaluationReachability}'.`,
         [OpenSeamReasonKind.BindingSourceResourceOpen],

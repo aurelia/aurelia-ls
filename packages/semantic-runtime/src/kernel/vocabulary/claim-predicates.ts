@@ -1353,7 +1353,6 @@ export const KernelClaimPredicates = {
     ),
   },
   Observation: {
-
     /** A source-backed observer exposes a dependency read collected by its execution path. */
     SourceObserverUsesObservedDependency: defineClaimPredicate(
       KernelVocabularyNamespace.Observation,
@@ -1373,6 +1372,62 @@ export const KernelClaimPredicates = {
       claimSignature(
         productEndpoint(KernelProductKinds.Observation.RuntimeEffect),
         productEndpoint(KernelProductKinds.Binding.ObservedDependency),
+      ),
+    ),
+  },
+  RuntimeExpression: {
+    /** A rendered runtime binding owns one source-backed expression access use. */
+    RuntimeBindingUsesAccessUse: defineClaimPredicate(
+      KernelVocabularyNamespace.RuntimeExpression,
+      'runtime-binding-uses-access-use',
+      'A rendered runtime binding owns one source-backed expression access use in an exact operation slot.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.RuntimeBinding),
+        productEndpoint(KernelProductKinds.RuntimeExpression.AccessUse),
+      ),
+    ),
+
+    /** A controller-owned runtime watcher owns one expression access use. */
+    RuntimeWatcherUsesAccessUse: defineClaimPredicate(
+      KernelVocabularyNamespace.RuntimeExpression,
+      'runtime-watcher-uses-access-use',
+      'A controller-owned runtime watcher owns one source-backed expression access use.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.RuntimeWatcher),
+        productEndpoint(KernelProductKinds.RuntimeExpression.AccessUse),
+      ),
+    ),
+
+    /** A source-backed computed observer owns one expression access use. */
+    SourceObserverUsesAccessUse: defineClaimPredicate(
+      KernelVocabularyNamespace.RuntimeExpression,
+      'source-observer-uses-access-use',
+      'A source-backed computed or controlled-computed observer owns one source-backed expression access use.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Observation.SourceObserver),
+        productEndpoint(KernelProductKinds.RuntimeExpression.AccessUse),
+      ),
+    ),
+
+    /** A source-level Observation.watch/run construction plan owns one expression access use. */
+    SourceEffectPlanUsesAccessUse: defineClaimPredicate(
+      KernelVocabularyNamespace.RuntimeExpression,
+      'source-effect-plan-uses-access-use',
+      'A source-level Observation.watch/run construction plan owns one source-backed expression access use.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Observation.RuntimeEffect),
+        productEndpoint(KernelProductKinds.RuntimeExpression.AccessUse),
+      ),
+    ),
+
+    /** A binding data-flow edge spends one access use during source evaluation or assignment. */
+    DataFlowUsesAccessUse: defineClaimPredicate(
+      KernelVocabularyNamespace.RuntimeExpression,
+      'data-flow-uses-access-use',
+      'A runtime binding data-flow edge spends one owner-qualified access use during source evaluation or assignment.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.DataFlow),
+        productEndpoint(KernelProductKinds.RuntimeExpression.AccessUse),
       ),
     ),
   },

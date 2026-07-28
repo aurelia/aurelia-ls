@@ -74,7 +74,6 @@ export class ObservationIssuePublisher {
       sourceAddressHandle,
       relatedSources,
       subjectName,
-      [],
     );
     return new ObservationIssuePublication(
       issue,

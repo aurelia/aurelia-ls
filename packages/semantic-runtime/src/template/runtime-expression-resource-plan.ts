@@ -72,8 +72,8 @@ import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-exp
 import {
   RuntimeExpressionResourceApplicationOrigin,
   RuntimeExpressionResourceBindReachability,
-  RuntimeExpressionResourcePhaseReachability,
 } from './runtime-expression-resource.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import {
   runtimeBindingAccessTarget,
@@ -172,7 +172,7 @@ export class RuntimeExpressionResourcePlan {
   private readonly targetObserverOverridesByBinding = new Map<ProductHandle, RuntimeBindingTargetObserverOverride>();
   private readonly converterPhaseOrders = new Map<RuntimeValueConverterPlanEntry, RuntimeValueConverterPhaseOrder>();
   private readonly failedBindChains = new Set<string>();
-  private readonly sourceEvaluationReachabilityByBinding = new Map<ProductHandle, RuntimeExpressionResourcePhaseReachability>();
+  private readonly sourceEvaluationReachabilityByBinding = new Map<ProductHandle, RuntimeOperationReachability>();
   private readonly behaviorEntriesByExpression = new Map<BindingBehaviorExpression, RuntimeBindingBehaviorPlanEntry[]>();
   private readonly behaviorEntriesBySource = new Map<string, RuntimeBindingBehaviorPlanEntry[]>();
   private readonly converterEntriesBySource = new Map<string, RuntimeValueConverterPlanEntry[]>();
@@ -233,10 +233,10 @@ export class RuntimeExpressionResourcePlan {
     for (const entry of entries) {
       const reachability = this.readPostBindPhaseReachability(entry);
       const current = this.sourceEvaluationReachabilityByBinding.get(entry.binding.productHandle)
-        ?? RuntimeExpressionResourcePhaseReachability.Reached;
+        ?? RuntimeOperationReachability.Reached;
       if (
-        current === RuntimeExpressionResourcePhaseReachability.Reached
-        || reachability === RuntimeExpressionResourcePhaseReachability.BlockedByBindFailure
+        current === RuntimeOperationReachability.Reached
+        || reachability === RuntimeOperationReachability.BlockedByBindFailure
       ) {
         this.sourceEvaluationReachabilityByBinding.set(entry.binding.productHandle, reachability);
       }
@@ -280,9 +280,9 @@ export class RuntimeExpressionResourcePlan {
   /** Whether `astBind(...)` completed far enough for this rendered binding to enter source evaluation. */
   readSourceEvaluationReachability(
     bindingProductHandle: ProductHandle,
-  ): RuntimeExpressionResourcePhaseReachability {
+  ): RuntimeOperationReachability {
     return this.sourceEvaluationReachabilityByBinding.get(bindingProductHandle)
-      ?? RuntimeExpressionResourcePhaseReachability.Reached;
+      ?? RuntimeOperationReachability.Reached;
   }
 
   readValueConverterPhaseOrder(
@@ -294,17 +294,17 @@ export class RuntimeExpressionResourcePlan {
   /** Reachability after the complete `astBind(...)` chain, before conversion or teardown can run. */
   readPostBindPhaseReachability(
     entry: RuntimeExpressionResourcePlanEntry,
-  ): RuntimeExpressionResourcePhaseReachability {
+  ): RuntimeOperationReachability {
     if (entry.bindReachability !== RuntimeExpressionResourceBindReachability.Reached) {
-      return RuntimeExpressionResourcePhaseReachability.BlockedByOuterFailure;
+      return RuntimeOperationReachability.BlockedByOuterFailure;
     }
     return this.failedBindChains.has(expressionChainKey(
       entry.binding.productHandle,
       entry.expressionProductHandle,
       chainIndexForPlanEntry(entry),
     ))
-      ? RuntimeExpressionResourcePhaseReachability.BlockedByBindFailure
-      : RuntimeExpressionResourcePhaseReachability.Reached;
+      ? RuntimeOperationReachability.BlockedByBindFailure
+      : RuntimeOperationReachability.Reached;
   }
 
   /** Runtime application of one authored behavior AST for the specified rendered binding. */
