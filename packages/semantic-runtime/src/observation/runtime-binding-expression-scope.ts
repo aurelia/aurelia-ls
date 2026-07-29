@@ -19,10 +19,7 @@ import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-
 import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
 import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
-import {
-  RuntimeExpressionResourceBindReachability,
-} from '../template/runtime-expression-resource.js';
-import type { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 
 export class RuntimeBindingExpressionScopeProjection {
   constructor(
@@ -49,7 +46,6 @@ export interface RuntimeBindingExpressionScopeProjectionReader {
   projectSourceExpressions(
     input: RuntimeBindingExpressionScopeProjectionRequest,
   ): readonly RuntimeBindingExpressionScopeProjection[];
-  sourceEvaluationReachability(bindingProductHandle: ProductHandle): RuntimeOperationReachability;
 }
 
 /** Immutable source-scope handoffs shared by every post-scope runtime-analysis and query consumer. */
@@ -62,7 +58,6 @@ export class RuntimeBindingExpressionScopeProjectionTable implements RuntimeBind
   constructor(
     private readonly projections: ReadonlyMap<string, RuntimeBindingExpressionScopeProjectionEntry>,
     private readonly unparsedBindingScopes: ReadonlyMap<string, BindingScope>,
-    private readonly expressionResourcePlan: RuntimeExpressionResourcePlan,
   ) {
     const grouped = new Map<string, RuntimeBindingExpressionScopeProjectionEntry[]>();
     for (const entry of projections.values()) {
@@ -138,11 +133,6 @@ export class RuntimeBindingExpressionScopeProjectionTable implements RuntimeBind
     );
   }
 
-  sourceEvaluationReachability(
-    bindingProductHandle: ProductHandle,
-  ): RuntimeOperationReachability {
-    return this.expressionResourcePlan.readSourceEvaluationReachability(bindingProductHandle);
-  }
 }
 
 export interface RuntimeBindingExpressionScopeProjectionRequest {
@@ -227,13 +217,6 @@ export class RuntimeBindingExpressionScopeProjector implements RuntimeBindingExp
     );
   }
 
-  /** Whether the rendered binding completed `astBind(...)` and can enter source evaluation. */
-  sourceEvaluationReachability(
-    bindingProductHandle: ProductHandle,
-  ): RuntimeOperationReachability {
-    return this.expressionResourcePlan.readSourceEvaluationReachability(bindingProductHandle);
-  }
-
   readScopeEmissions(): readonly BindingScopeConstructionEmission[] {
     return [...this.scopeEmissions.values()];
   }
@@ -242,7 +225,6 @@ export class RuntimeBindingExpressionScopeProjector implements RuntimeBindingExp
     return new RuntimeBindingExpressionScopeProjectionTable(
       new Map(this.projections),
       new Map(this.unparsedBindingScopes),
-      this.expressionResourcePlan,
     );
   }
 
@@ -286,7 +268,7 @@ export class RuntimeBindingExpressionScopeProjector implements RuntimeBindingExp
       bindingProductHandle,
     );
     const reached = planEntry != null
-      && planEntry.bindReachability === RuntimeExpressionResourceBindReachability.Reached
+      && planEntry.bindReachability === RuntimeOperationReachability.Reached
       && planEntry.issue == null;
     if (planEntry == null && unwrapped.name.name === STATE_BINDING_BEHAVIOR_NAME) {
       return new RuntimeBindingExpressionScopeProjection(

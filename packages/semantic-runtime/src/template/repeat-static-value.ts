@@ -14,8 +14,12 @@ import type { TemplateResourceScope } from './compiler-world.js';
 import {
   type RuntimeBindingExpressionScopeProjectionReader,
 } from '../observation/runtime-binding-expression-scope.js';
-import type { RuntimeExpressionBinding } from '../observation/runtime-binding-expression.js';
+import {
+  expressionProductHandleForBinding,
+  type RuntimeExpressionBinding,
+} from '../observation/runtime-binding-expression.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
+import type { RuntimeExpressionResourcePlan } from './runtime-expression-resource-plan.js';
 import {
   EvaluationArrayValue,
   EvaluationKeyedCollectionEntryState,
@@ -43,6 +47,7 @@ export function repeatStaticLocalValue(
   binding: RuntimeExpressionBinding | null = null,
   runtimeBindings: RuntimeRenderingEmission | null = null,
   bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader | null = null,
+  expressionResourcePlan: RuntimeExpressionResourcePlan | null = null,
   resourceScope: TemplateResourceScope | null = null,
 ): RuntimeBindingSourceValueEvaluation | null {
   if (sourceValueEvaluator == null || parse?.result.kind !== ExpressionParseResultKind.IteratorSuccess) {
@@ -51,7 +56,10 @@ export function repeatStaticLocalValue(
   const contextProjection = projectRuntimeBindingSourceValueContextInScope({
     runtimeBindings,
     bindingExpressionScopes,
+    expressionResourcePlan,
     binding,
+    expressionProductHandle: binding == null ? null : expressionProductHandleForBinding(binding),
+    expressionChainIndex: 0,
     expression: parse.result.ast.iterable,
     localKey: `repeat-static-local:${effect.productHandle}:${localName}:iterable`,
     sourceScope: parent,

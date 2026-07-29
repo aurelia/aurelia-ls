@@ -21,6 +21,7 @@ import type {
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import {
   KernelPublicationPlan,
+  publishHotDetail,
   publishProductDetails,
   type KernelPublicationContext,
 } from '../kernel/publication.js';
@@ -50,9 +51,22 @@ import {
 import type { RuntimeExpressionAccessDraft } from '../runtime-expression/runtime-expression-access-draft.js';
 import {
   type RuntimeExpressionAccessPublication,
+  type TemplateExpressionAccessOccurrencePublication,
+  publishRuntimeBindingExpressionAccessResolution,
   publishRuntimeExpressionAccessUse,
+  publishTemplateExpressionAccessOccurrence,
 } from '../runtime-expression/runtime-expression-access-publication.js';
-import { RuntimeExpressionProductDetails } from '../runtime-expression/product-details.js';
+import {
+  RuntimeExpressionHotDetails,
+  RuntimeExpressionProductDetails,
+} from '../runtime-expression/product-details.js';
+import {
+  RuntimeBindingExpressionAccessContextKind,
+  type RuntimeBindingExpressionAccessResolution,
+} from '../runtime-expression/runtime-binding-expression-access-resolution.js';
+import type {
+  TemplateExpressionAccessOccurrence,
+} from '../runtime-expression/template-expression-access-occurrence.js';
 import {
   collectRuntimeTemplateAccessUseDrafts,
 } from '../runtime-expression/template-access-use-collector.js';
@@ -161,6 +175,7 @@ import {
   type RuntimeExpressionSourceAddress,
 } from '../template/runtime-expression-source-address.js';
 import {
+  aggregateRuntimeBindingSourceExpressionChainIndex,
   checkerContextForRuntimeBindingBehaviorArguments,
   checkerContextForRuntimeBindingSourceExpressionProjection,
   RuntimeBindingSourceExpressionContextProjector,
@@ -169,6 +184,8 @@ import {
   type RuntimeBindingSourceExpressionContextProjection,
 } from './runtime-binding-source-expression-context.js';
 import {
+  runtimeBindingSourceChainLifecycle,
+  runtimeBindingSourceEvaluationKindIncludesRead,
   runtimeBindingSourceLifecycle,
 } from './runtime-binding-source-lifecycle.js';
 import {
@@ -178,7 +195,7 @@ import {
   collectRuntimeTrackableMethodObservedDependencyDrafts,
 } from './trackable-method-observed-dependency.js';
 
-export class RuntimeExpressionAccessUseMaterializationRequest {
+export class RuntimeExpressionAccessMaterializationRequest {
   constructor(
     readonly localKey: string,
     readonly runtimeRendering: RuntimeRenderingEmission,
@@ -193,16 +210,28 @@ export class RuntimeExpressionAccessUseMaterializationRequest {
   ) {}
 }
 
-export class RuntimeExpressionAccessUseEmission {
+export class RuntimeExpressionAccessEmission {
   private readonly usesByBinding = new Map<ProductHandle, RuntimeExpressionAccessUse[]>();
   private readonly usesByExpressionProduct = new Map<ProductHandle, RuntimeExpressionAccessUse[]>();
+  private readonly resolutionsByBinding = new Map<ProductHandle, RuntimeBindingExpressionAccessResolution[]>();
+  private readonly resolutionsByExpressionProduct = new Map<ProductHandle, RuntimeBindingExpressionAccessResolution[]>();
   private readonly observationEffectsByBinding = new Map<ProductHandle, RuntimeBindingObservationEffectDraft[]>();
 
   constructor(
+    readonly accessOccurrences: readonly TemplateExpressionAccessOccurrence[],
+    readonly accessResolutions: readonly RuntimeBindingExpressionAccessResolution[],
     readonly accessUses: readonly RuntimeExpressionAccessUse[],
     readonly observationEffects: readonly RuntimeBindingObservationEffectDraft[],
     readonly records: readonly KernelStoreRecord[],
   ) {
+    for (const resolution of accessResolutions) {
+      const bindingRows = this.resolutionsByBinding.get(resolution.bindingProductHandle) ?? [];
+      bindingRows.push(resolution);
+      this.resolutionsByBinding.set(resolution.bindingProductHandle, bindingRows);
+      const expressionRows = this.resolutionsByExpressionProduct.get(resolution.expressionProductHandle) ?? [];
+      expressionRows.push(resolution);
+      this.resolutionsByExpressionProduct.set(resolution.expressionProductHandle, expressionRows);
+    }
     for (const accessUse of accessUses) {
       if (accessUse.ownerKind !== RuntimeExpressionAccessOwnerKind.Binding) {
         continue;
@@ -231,6 +260,18 @@ export class RuntimeExpressionAccessUseEmission {
     return this.usesByExpressionProduct.get(productHandle) ?? [];
   }
 
+  readAccessResolutionsForBinding(
+    productHandle: ProductHandle,
+  ): readonly RuntimeBindingExpressionAccessResolution[] {
+    return this.resolutionsByBinding.get(productHandle) ?? [];
+  }
+
+  readAccessResolutionsForExpressionProduct(
+    productHandle: ProductHandle,
+  ): readonly RuntimeBindingExpressionAccessResolution[] {
+    return this.resolutionsByExpressionProduct.get(productHandle) ?? [];
+  }
+
   readObservationEffectsForBinding(productHandle: ProductHandle): readonly RuntimeBindingObservationEffectDraft[] {
     return this.observationEffectsByBinding.get(productHandle) ?? [];
   }
@@ -253,18 +294,23 @@ interface RuntimeExpressionAccessUseSourceSet {
 }
 
 interface RuntimeExpressionAccessOperation {
-  readonly binding: RuntimeExpressionBinding;
   readonly operationProductHandle: ProductHandle | null;
-  readonly expressionProductHandle: ProductHandle | null;
-  readonly expression: ExpressionAstNode;
-  readonly checkerContext: CheckerExpressionTypeEvaluationContext | null;
-  readonly scope: BindingScope | null;
   readonly operationKind: RuntimeExpressionOperationKind;
   readonly operationIndex: number | null;
   readonly phase: RuntimeExpressionAccessPhase;
   readonly tracking: RuntimeExpressionAccessTracking;
   readonly reachability: RuntimeOperationReachability;
+}
+
+interface RuntimeBindingExpressionAccessContext {
+  readonly binding: RuntimeExpressionBinding;
+  readonly expressionProductHandle: ProductHandle | null;
+  readonly expression: ExpressionAstNode;
+  readonly checkerContext: CheckerExpressionTypeEvaluationContext | null;
+  readonly scope: BindingScope | null;
+  readonly contextKind: RuntimeBindingExpressionAccessContextKind;
   readonly rootRole: RuntimeExpressionAccessRole;
+  readonly runtimeOperations: readonly RuntimeExpressionAccessOperation[];
 }
 
 interface RuntimeExpressionAccessMaterializationContext {
@@ -273,16 +319,18 @@ interface RuntimeExpressionAccessMaterializationContext {
 }
 
 /** Pairs authored expression occurrences with the exact runtime operation and scope that spend them. */
-export class RuntimeExpressionAccessUseMaterializer {
+export class RuntimeExpressionAccessMaterializer {
   constructor(
     readonly store: KernelStore,
     readonly publication: KernelPublicationContext,
   ) {}
 
   materialize(
-    input: RuntimeExpressionAccessUseMaterializationRequest,
-  ): RuntimeExpressionAccessUseEmission {
+    input: RuntimeExpressionAccessMaterializationRequest,
+  ): RuntimeExpressionAccessEmission {
     const source = this.recordsForSource(input.localKey);
+    const accessOccurrencePublications: TemplateExpressionAccessOccurrencePublication[] = [];
+    const accessResolutions: RuntimeBindingExpressionAccessResolution[] = [];
     const accessUses: RuntimeExpressionAccessUse[] = [];
     const observationEffects: RuntimeBindingObservationEffectDraft[] = [];
     const records: KernelStoreRecord[] = [...source.records];
@@ -291,12 +339,17 @@ export class RuntimeExpressionAccessUseMaterializer {
       input.runtimeRendering,
       instructionScopes,
       input.scopes.bindingExpressionScopes,
+      input.expressionResourcePlan,
     );
     const context: RuntimeExpressionAccessMaterializationContext = {
       instructionScopes,
       sourceContexts,
     };
     const lexicalTargetSources = new Map<string, RuntimeExpressionSourceAddress>();
+    const occurrencesByExpressionProduct = new Map<
+      ProductHandle,
+      Map<ExpressionAstNode, TemplateExpressionAccessOccurrencePublication>
+    >();
 
     input.runtimeRendering.bindings
       .filter(isRuntimeExpressionBinding)
@@ -304,20 +357,47 @@ export class RuntimeExpressionAccessUseMaterializer {
         const evaluator = input.expressionWorld.evaluator(
           input.runtimeRendering.requireRenderContextForBinding(binding.productHandle).resourceScope,
         );
-        const operations = this.operationsForBinding(input, context, binding, bindingIndex);
-        operations.forEach((operation, operationIndex) => {
-          const canUseRuntimeArrayMethod = operation.checkerContext == null
+        const bindingContexts = this.accessContextsForBinding(input, context, binding, bindingIndex);
+        bindingContexts.forEach((accessContext, contextIndex) => {
+          const canUseRuntimeArrayMethod = accessContext.checkerContext == null
             ? null
-            : this.templateArrayMethodPolicy(evaluator, operation.checkerContext);
+            : this.templateArrayMethodPolicy(evaluator, accessContext.checkerContext);
           const drafts = collectRuntimeTemplateAccessUseDrafts({
-            expression: operation.expression,
-            rootRole: operation.rootRole,
+            expression: accessContext.expression,
+            rootRole: accessContext.rootRole,
             canUseRuntimeArrayMethod,
           });
-          const publications = drafts.map((draft, accessIndex) => {
+          if (drafts.length > 0 && accessContext.expressionProductHandle == null) {
+            throw new Error(
+              `Authored binding access context '${binding.productHandle}:${accessContext.contextKind}' `
+              + 'did not retain its owning expression-parse product.',
+            );
+          }
+          const resolutions = drafts.map((draft, accessIndex) => {
+            const expressionProductHandle = accessContext.expressionProductHandle!;
+            let occurrences = occurrencesByExpressionProduct.get(expressionProductHandle);
+            if (occurrences == null) {
+              occurrences = new Map();
+              occurrencesByExpressionProduct.set(expressionProductHandle, occurrences);
+            }
+            let occurrence = occurrences.get(draft.expression) ?? null;
+            if (occurrence == null) {
+              occurrence = publishTemplateExpressionAccessOccurrence({
+                store: this.store,
+                publication: this.publication,
+                local: `${input.localKey}:template-expression-access:${localKeyPart(expressionProductHandle)}`
+                  + `:${draft.sourceSpan.start}:${draft.nameSourceSpan?.start ?? 'range'}`,
+                expressionProductHandle,
+                draft,
+                carrierSourceAddressHandle: binding.sourceAddressHandle,
+              });
+              occurrences.set(draft.expression, occurrence);
+              accessOccurrencePublications.push(occurrence);
+              records.push(...occurrence.records);
+            }
             const lexicalTargetSource = this.lexicalTargetSourceForDraft(
               input.localKey,
-              operation,
+              accessContext,
               draft,
               lexicalTargetSources,
             );
@@ -326,70 +406,84 @@ export class RuntimeExpressionAccessUseMaterializer {
             }
             const target = this.targetForDraft(
               evaluator,
-              operation,
+              accessContext,
               draft,
               lexicalTargetSource?.handle ?? null,
             );
-            const publication = publishRuntimeExpressionAccessUse({
+            const resolution = publishRuntimeBindingExpressionAccessResolution({
               store: this.store,
               publication: this.publication,
-              local: `${input.localKey}:runtime-expression-access:${bindingIndex}:${operationIndex}:${accessIndex}`,
-              index: accessIndex,
-              ownerKind: RuntimeExpressionAccessOwnerKind.Binding,
-              ownerProductHandle: binding.productHandle,
-              ownerIdentityHandle: binding.identityHandle,
-              operationProductHandle: operation.operationProductHandle,
-              expressionProductHandle: operation.expressionProductHandle,
-              scopeProductHandle: operation.scope?.productHandle ?? null,
-              operationKind: operation.operationKind,
-              operationIndex: operation.operationIndex,
-              phase: operation.phase,
-              tracking: this.trackingForDraft(operation, draft),
-              realization: RuntimeOperationRealization.Direct,
-              reachability: operation.reachability,
+              local: `${input.localKey}:runtime-expression-resolution:${bindingIndex}:${contextIndex}:${accessIndex}`,
+              bindingProductHandle: binding.productHandle,
+              bindingIdentityHandle: binding.identityHandle,
+              occurrence: occurrence.detail,
+              contextKind: accessContext.contextKind,
+              scopeProductHandle: accessContext.scope?.productHandle ?? null,
               draft,
               targetResolution: target.resolution,
               targetLinks: target.links,
-              carrierSourceAddressHandle: binding.sourceAddressHandle,
-              provenanceHandle: source.provenanceHandle,
-              claims: [{
-                localName: 'owner',
-                subjectProductHandle: binding.productHandle,
-                predicateKey: KernelVocabulary.RuntimeExpression.RuntimeBindingUsesAccessUse.key,
-              }],
             });
-            accessUses.push(publication.detail);
-            records.push(...publication.records);
-            return publication;
+            accessResolutions.push(resolution);
+            return resolution;
           });
-          observationEffects.push(...this.observationEffectsForOperation(
-            evaluator,
-            operation,
-            drafts,
-            publications,
-            canUseRuntimeArrayMethod,
-          ));
-          if (
-            input.typeSystem != null
-            && operation.checkerContext != null
-            && operation.tracking === RuntimeExpressionAccessTracking.Connectable
-            && operation.reachability === RuntimeOperationReachability.Reached
-          ) {
-            const trackable = this.trackableMethodEffectsForOperation(
-              input,
+
+          accessContext.runtimeOperations.forEach((operation, operationIndex) => {
+            const publications = drafts.map((draft, accessIndex) => {
+              const resolution = resolutions[accessIndex]!;
+              const publication = publishRuntimeExpressionAccessUse({
+                store: this.store,
+                publication: this.publication,
+                local: `${input.localKey}:runtime-expression-access:${bindingIndex}:${contextIndex}`
+                  + `:${operationIndex}:${accessIndex}`,
+                index: accessIndex,
+                operationProductHandle: operation.operationProductHandle,
+                operationKind: operation.operationKind,
+                operationIndex: operation.operationIndex,
+                phase: operation.phase,
+                tracking: this.trackingForDraft(operation, draft),
+                realization: RuntimeOperationRealization.Direct,
+                reachability: operation.reachability,
+                draft,
+                resolution,
+                carrierSourceAddressHandle: binding.sourceAddressHandle,
+                provenanceHandle: source.provenanceHandle,
+              });
+              accessUses.push(publication.detail);
+              records.push(...publication.records);
+              return publication;
+            });
+            observationEffects.push(...this.observationEffectsForOperation(
               evaluator,
+              accessContext,
               operation,
               drafts,
+              publications,
               canUseRuntimeArrayMethod,
-              bindingIndex,
-              operationIndex,
-              drafts.length,
-              source,
-            );
-            accessUses.push(...trackable.publications.map((publication) => publication.detail));
-            records.push(...trackable.publications.flatMap((publication) => publication.records));
-            observationEffects.push(...trackable.effects);
-          }
+            ));
+            if (
+              input.typeSystem != null
+              && accessContext.checkerContext != null
+              && operation.tracking === RuntimeExpressionAccessTracking.Connectable
+              && operation.reachability === RuntimeOperationReachability.Reached
+            ) {
+              const trackable = this.trackableMethodEffectsForOperation(
+                input,
+                evaluator,
+                accessContext,
+                operation,
+                drafts,
+                canUseRuntimeArrayMethod,
+                bindingIndex,
+                contextIndex,
+                operationIndex,
+                drafts.length,
+                source,
+              );
+              accessUses.push(...trackable.publications.map((publication) => publication.detail));
+              records.push(...trackable.publications.flatMap((publication) => publication.records));
+              observationEffects.push(...trackable.effects);
+            }
+          });
         });
         if (binding instanceof SpreadValueBinding) {
           const spreadMembers = this.spreadMemberAccessUsesForBinding(
@@ -404,16 +498,37 @@ export class RuntimeExpressionAccessUseMaterializer {
         }
       });
 
-    const emission = new RuntimeExpressionAccessUseEmission(accessUses, observationEffects, records);
+    const accessOccurrences = accessOccurrencePublications.map((row) => row.detail);
+    const emission = new RuntimeExpressionAccessEmission(
+      accessOccurrences,
+      accessResolutions,
+      accessUses,
+      observationEffects,
+      records,
+    );
     this.publication.publish(new KernelPublicationPlan(
       new KernelStoreBatch(records, `runtime-expression-access-use:${input.localKey}`),
       publishProductDetails(RuntimeExpressionProductDetails.AccessUse, accessUses),
+      [
+        ...accessOccurrences.map((occurrence) => publishHotDetail(
+          RuntimeExpressionHotDetails.TemplateAccessOccurrence,
+          occurrence.expressionProductHandle,
+          occurrence.detailHandle,
+          occurrence,
+        )),
+        ...accessResolutions.map((resolution) => publishHotDetail(
+          RuntimeExpressionHotDetails.BindingAccessResolution,
+          resolution.bindingProductHandle,
+          resolution.detailHandle,
+          resolution,
+        )),
+      ],
     ));
     return emission;
   }
 
   private spreadMemberAccessUsesForBinding(
-    input: RuntimeExpressionAccessUseMaterializationRequest,
+    input: RuntimeExpressionAccessMaterializationRequest,
     binding: SpreadValueBinding,
     bindingIndex: number,
     source: RuntimeExpressionAccessUseSourceSet,
@@ -481,6 +596,7 @@ export class RuntimeExpressionAccessUseMaterializer {
           sourceSpan: expression.span,
           nameSourceSpan: null,
         },
+        resolution: null,
         targetResolution: target.resolution,
         targetLinks: target.links,
         carrierSourceAddressHandle: binding.sourceAddressHandle,
@@ -587,12 +703,14 @@ export class RuntimeExpressionAccessUseMaterializer {
   }
 
   private trackableMethodEffectsForOperation(
-    input: RuntimeExpressionAccessUseMaterializationRequest,
+    input: RuntimeExpressionAccessMaterializationRequest,
     evaluator: CheckerExpressionTypeEvaluator,
+    accessContext: RuntimeBindingExpressionAccessContext,
     operation: RuntimeExpressionAccessOperation,
     invocationAccesses: readonly RuntimeExpressionAccessDraft[],
     canUseRuntimeArrayMethod: RuntimeTemplateArrayMethodPolicy | null,
     bindingIndex: number,
+    contextIndex: number,
     operationIndex: number,
     firstAccessIndex: number,
     source: RuntimeExpressionAccessUseSourceSet,
@@ -600,13 +718,13 @@ export class RuntimeExpressionAccessUseMaterializer {
     readonly publications: readonly RuntimeExpressionAccessPublication[];
     readonly effects: readonly RuntimeBindingObservationEffectDraft[];
   } {
-    if (input.typeSystem == null || operation.checkerContext == null) {
+    if (input.typeSystem == null || accessContext.checkerContext == null) {
       return { publications: [], effects: [] };
     }
     const publications: RuntimeExpressionAccessPublication[] = [];
     const effects: RuntimeBindingObservationEffectDraft[] = [];
     const methods = collectRuntimeTrackableMethodObservedDependencyDrafts({
-      checkerContext: operation.checkerContext,
+      checkerContext: accessContext.checkerContext,
       store: this.store,
       publication: this.publication,
       evaluator,
@@ -641,11 +759,12 @@ export class RuntimeExpressionAccessUseMaterializer {
         publishRuntimeExpressionAccessUse({
           store: this.store,
           publication: this.publication,
-          local: `${input.localKey}:runtime-expression-access:${bindingIndex}:${operationIndex}:method:${methodIndex}:${methodAccessIndex}`,
+          local: `${input.localKey}:runtime-expression-access:${bindingIndex}:${contextIndex}:${operationIndex}`
+            + `:method:${methodIndex}:${methodAccessIndex}`,
           index: firstAccessIndex + publications.length + methodAccessIndex,
           ownerKind: RuntimeExpressionAccessOwnerKind.Binding,
-          ownerProductHandle: operation.binding.productHandle,
-          ownerIdentityHandle: operation.binding.identityHandle,
+          ownerProductHandle: accessContext.binding.productHandle,
+          ownerIdentityHandle: accessContext.binding.identityHandle,
           operationProductHandle: operation.operationProductHandle,
           expressionProductHandle: null,
           scopeProductHandle: null,
@@ -656,13 +775,14 @@ export class RuntimeExpressionAccessUseMaterializer {
           realization: RuntimeOperationRealization.Direct,
           reachability: operation.reachability,
           draft,
+          resolution: null,
           targetResolution: draft.targetResolution,
           targetLinks: draft.targetLinks,
-          carrierSourceAddressHandle: operation.binding.sourceAddressHandle,
+          carrierSourceAddressHandle: accessContext.binding.sourceAddressHandle,
           provenanceHandle: source.provenanceHandle,
           claims: [{
             localName: 'owner',
-            subjectProductHandle: operation.binding.productHandle,
+            subjectProductHandle: accessContext.binding.productHandle,
             predicateKey: KernelVocabulary.RuntimeExpression.RuntimeBindingUsesAccessUse.key,
           }],
         })
@@ -685,7 +805,7 @@ export class RuntimeExpressionAccessUseMaterializer {
         return new RuntimeBindingObservationEffectDraft(
           accessUse,
           dependency,
-          operation.scope,
+          accessContext.scope,
           null,
         );
       }));
@@ -696,6 +816,7 @@ export class RuntimeExpressionAccessUseMaterializer {
 
   private observationEffectsForOperation(
     evaluator: CheckerExpressionTypeEvaluator,
+    accessContext: RuntimeBindingExpressionAccessContext,
     operation: RuntimeExpressionAccessOperation,
     drafts: readonly RuntimeExpressionAccessDraft[],
     publications: readonly RuntimeExpressionAccessPublication[],
@@ -707,7 +828,7 @@ export class RuntimeExpressionAccessUseMaterializer {
     return runtimeConnectableObservedAccessUseDrafts(
       drafts,
       canUseRuntimeArrayMethod,
-      operation.expression,
+      accessContext.expression,
     ).flatMap(({ accessUse, dependency }) => {
       const publication = publicationByDraft.get(accessUse) ?? null;
       if (publication?.detail.tracking !== RuntimeExpressionAccessTracking.Connectable) {
@@ -718,28 +839,28 @@ export class RuntimeExpressionAccessUseMaterializer {
         accessUseProductHandle: publication.detail.productHandle,
         accessUseSourceAddressHandle: publication.detail.sourceAddressHandle,
       };
-      const memberProjection = operation.checkerContext == null
+      const memberProjection = accessContext.checkerContext == null
         ? null
         : accessUseDependency.dependencyKind === RuntimeObservedDependencyKind.TemplateCollectionRead
           ? observedMemberSourceForBindingDependency({
               dependency: accessUseDependency,
-              checkerContext: operation.checkerContext,
+              checkerContext: accessContext.checkerContext,
               evaluator,
-              localKey: `${operation.checkerContext.localKey}:collection-observation`,
+              localKey: `${accessContext.checkerContext.localKey}:collection-observation`,
             })
           : observedMemberSourceForRuntimeExpressionAccessUse(
               this.publication,
               publication.detail,
             ) ?? observedMemberSourceForBindingDependency({
               dependency: accessUseDependency,
-              checkerContext: operation.checkerContext,
+              checkerContext: accessContext.checkerContext,
               evaluator,
-              localKey: `${operation.checkerContext.localKey}:access-observation`,
+              localKey: `${accessContext.checkerContext.localKey}:access-observation`,
             });
       return [new RuntimeBindingObservationEffectDraft(
         publication.detail,
         accessUseDependency,
-        operation.scope,
+        accessContext.scope,
         memberProjection,
       )];
     });
@@ -790,43 +911,49 @@ export class RuntimeExpressionAccessUseMaterializer {
     };
   }
 
-  private operationsForBinding(
-    input: RuntimeExpressionAccessUseMaterializationRequest,
+  private accessContextsForBinding(
+    input: RuntimeExpressionAccessMaterializationRequest,
     context: RuntimeExpressionAccessMaterializationContext,
     binding: RuntimeExpressionBinding,
     bindingIndex: number,
-  ): readonly RuntimeExpressionAccessOperation[] {
-    const operations: RuntimeExpressionAccessOperation[] = [];
+  ): readonly RuntimeBindingExpressionAccessContext[] {
+    const accessContexts: RuntimeBindingExpressionAccessContext[] = [];
     const expression = runtimeBindingSourceExpression(this.publication, binding);
     if (expression == null) {
-      return operations;
+      return accessContexts;
     }
     const expressionProductHandle = expressionProductHandleForBinding(binding);
     const lifecycle = runtimeBindingSourceLifecycle(binding, input.expressionResourcePlan);
     const sourceScope = context.instructionScopes.scopeForBinding(input.runtimeRendering, binding);
     const projections = context.sourceContexts.projectSourceExpressions({
       binding,
+      expressionProductHandle,
+      expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(expression),
       expression,
       localKey: `${input.localKey}:runtime-expression-access:${bindingIndex}:source`,
     });
     const authoredParts = runtimeBindingSourceExpressionParts(expression);
     const interpolation = expression.$kind === 'Interpolation';
 
-    if (lifecycle.evaluationKind !== RuntimeBindingSourceEvaluationKind.AssignmentOnly) {
-      projections.forEach((projection, index) => {
-        const authoredPart = authoredParts[index] ?? expression;
-        operations.push(this.sourceEvaluationOperation(
-          binding,
-          expressionProductHandle,
-          authoredPart,
-          projection,
-          index,
-          interpolation,
-          lifecycle.evaluationKind,
-          lifecycle.evaluationReachability,
-        ));
-      });
-    }
+    projections.forEach((projection, index) => {
+      const authoredPart = authoredParts[index] ?? expression;
+      const chainLifecycle = runtimeBindingSourceChainLifecycle(
+        binding,
+        input.expressionResourcePlan,
+        expressionProductHandle,
+        index,
+      );
+      accessContexts.push(this.sourceValueAccessContext(
+        binding,
+        expressionProductHandle,
+        authoredPart,
+        projection,
+        index,
+        interpolation,
+        chainLifecycle.evaluationKind,
+        chainLifecycle.evaluationReachability,
+      ));
+    });
 
     if (lifecycle.includesSourceAssignment) {
       const target = runtimeAssignmentTargetAstForExpression(expression);
@@ -842,6 +969,8 @@ export class RuntimeExpressionAccessUseMaterializer {
           ? null
           : context.sourceContexts.projectSource({
               binding,
+              expressionProductHandle,
+              expressionChainIndex: 0,
               expression: target,
               localKey: `${input.localKey}:runtime-expression-access:${bindingIndex}:source-assignment`,
               sourceScope: assignmentScope,
@@ -849,9 +978,8 @@ export class RuntimeExpressionAccessUseMaterializer {
         const sourceOperation = binding instanceof RefBinding
           ? input.controllerBind.readSourceOperationsForBinding(binding.productHandle)[0] ?? null
           : null;
-        operations.push({
+        accessContexts.push({
           binding,
-          operationProductHandle: sourceOperation?.productHandle ?? null,
           expressionProductHandle,
           expression: target,
           checkerContext: projection?.kind === RuntimeBindingSourceExpressionProjectionKind.Context
@@ -860,31 +988,34 @@ export class RuntimeExpressionAccessUseMaterializer {
           scope: projection?.kind === RuntimeBindingSourceExpressionProjectionKind.Context
             ? projection.scope
             : assignmentScope,
-          operationKind: RuntimeExpressionOperationKind.BindingSource,
-          operationIndex: null,
-          phase: RuntimeExpressionAccessPhase.SourceAssignment,
-          tracking: RuntimeExpressionAccessTracking.NotApplicable,
-          reachability: lifecycle.evaluationReachability,
+          contextKind: RuntimeBindingExpressionAccessContextKind.SourceAssignment,
           rootRole: RuntimeExpressionAccessRole.WriteTarget,
+          runtimeOperations: [{
+            operationProductHandle: sourceOperation?.productHandle ?? null,
+            operationKind: RuntimeExpressionOperationKind.BindingSource,
+            operationIndex: null,
+            phase: RuntimeExpressionAccessPhase.SourceAssignment,
+            tracking: RuntimeExpressionAccessTracking.NotApplicable,
+            reachability: lifecycle.evaluationReachability,
+          }],
         });
       }
     }
 
-    operations.push(
-      ...this.bindingBehaviorArgumentOperations(input, projections, binding, expressionProductHandle),
-      ...this.valueConverterArgumentOperations(
+    accessContexts.push(
+      ...this.bindingBehaviorArgumentAccessContexts(input, projections, binding, expressionProductHandle),
+      ...this.valueConverterArgumentAccessContexts(
         input,
         projections,
         binding,
         expressionProductHandle,
-        lifecycle.evaluationKind,
       ),
-      ...this.repeatAuxiliaryOperations(input, context, binding),
+      ...this.repeatAuxiliaryAccessContexts(input, context, binding),
     );
-    return operations;
+    return accessContexts;
   }
 
-  private sourceEvaluationOperation(
+  private sourceValueAccessContext(
     binding: RuntimeExpressionBinding,
     expressionProductHandle: ProductHandle | null,
     authoredPart: ExpressionAstNode,
@@ -893,14 +1024,13 @@ export class RuntimeExpressionAccessUseMaterializer {
     interpolation: boolean,
     evaluationKind: RuntimeBindingSourceEvaluationKind,
     reachability: RuntimeOperationReachability,
-  ): RuntimeExpressionAccessOperation {
+  ): RuntimeBindingExpressionAccessContext {
     const known = projection.kind === RuntimeBindingSourceExpressionProjectionKind.Context
       ? projection
       : null;
     const tracking = trackingForSourceEvaluationKind(evaluationKind);
     return {
       binding,
-      operationProductHandle: null,
       expressionProductHandle,
       expression: known?.expression ?? authoredPart,
       checkerContext: known == null
@@ -910,24 +1040,30 @@ export class RuntimeExpressionAccessUseMaterializer {
             tracking === RuntimeExpressionAccessTracking.Connectable,
           ),
       scope: known?.scope ?? null,
-      operationKind: interpolation
-        ? RuntimeExpressionOperationKind.InterpolationPart
-        : RuntimeExpressionOperationKind.BindingSource,
-      operationIndex: interpolation ? partIndex : null,
-      phase: RuntimeExpressionAccessPhase.SourceEvaluation,
-      tracking,
-      reachability: known?.sourceEvaluationReachability ?? reachability,
+      contextKind: RuntimeBindingExpressionAccessContextKind.SourceValue,
       rootRole: RuntimeExpressionAccessRole.Read,
+      runtimeOperations: runtimeBindingSourceEvaluationKindIncludesRead(evaluationKind)
+        ? [{
+            operationProductHandle: null,
+            operationKind: interpolation
+              ? RuntimeExpressionOperationKind.InterpolationPart
+              : RuntimeExpressionOperationKind.BindingSource,
+            operationIndex: interpolation ? partIndex : null,
+            phase: RuntimeExpressionAccessPhase.SourceEvaluation,
+            tracking,
+            reachability: known?.sourceEvaluationReachability ?? reachability,
+          }]
+        : [],
     };
   }
 
-  private bindingBehaviorArgumentOperations(
-    input: RuntimeExpressionAccessUseMaterializationRequest,
+  private bindingBehaviorArgumentAccessContexts(
+    input: RuntimeExpressionAccessMaterializationRequest,
     projections: readonly ReturnType<RuntimeBindingSourceExpressionContextProjector['projectSourceExpressions']>[number][],
     binding: RuntimeExpressionBinding,
     expressionProductHandle: ProductHandle | null,
-  ): readonly RuntimeExpressionAccessOperation[] {
-    const operations: RuntimeExpressionAccessOperation[] = [];
+  ): readonly RuntimeBindingExpressionAccessContext[] {
+    const accessContexts: RuntimeBindingExpressionAccessContext[] = [];
     for (const entry of input.expressionResourcePlan.behaviorEntries) {
       if (entry.binding.productHandle !== binding.productHandle) {
         continue;
@@ -936,9 +1072,8 @@ export class RuntimeExpressionAccessUseMaterializer {
         .find((candidate) => candidate.phase === RuntimeBindingBehaviorApplicationPhase.Bind) ?? null;
       const projection = projectionForBehaviorEntry(projections, entry);
       entry.occurrence.expression.args.forEach((argument, index) => {
-        operations.push({
+        accessContexts.push({
           binding,
-          operationProductHandle: application?.productHandle ?? null,
           expressionProductHandle: entry.expressionProductHandle ?? expressionProductHandle,
           expression: argument,
           checkerContext: projection == null
@@ -949,75 +1084,91 @@ export class RuntimeExpressionAccessUseMaterializer {
                 `binding-behavior-argument:${entry.behaviorIndex}:${index}`,
               ).child(argument, `argument:${index}`),
           scope: projection?.bindScope ?? null,
-          operationKind: RuntimeExpressionOperationKind.BindingBehaviorArgument,
-          operationIndex: index,
-          phase: RuntimeExpressionAccessPhase.Bind,
-          tracking: RuntimeExpressionAccessTracking.Untracked,
-          reachability: application?.phaseReachability ?? RuntimeOperationReachability.Open,
+          contextKind: RuntimeBindingExpressionAccessContextKind.BindingBehaviorArgument,
           rootRole: RuntimeExpressionAccessRole.Read,
+          runtimeOperations: [{
+            operationProductHandle: application?.productHandle ?? null,
+            operationKind: RuntimeExpressionOperationKind.BindingBehaviorArgument,
+            operationIndex: index,
+            phase: RuntimeExpressionAccessPhase.Bind,
+            tracking: RuntimeExpressionAccessTracking.Untracked,
+            reachability: application?.phaseReachability ?? RuntimeOperationReachability.Open,
+          }],
         });
       });
     }
-    return operations;
+    return accessContexts;
   }
 
-  private valueConverterArgumentOperations(
-    input: RuntimeExpressionAccessUseMaterializationRequest,
+  private valueConverterArgumentAccessContexts(
+    input: RuntimeExpressionAccessMaterializationRequest,
     projections: readonly ReturnType<RuntimeBindingSourceExpressionContextProjector['projectSourceExpressions']>[number][],
     binding: RuntimeExpressionBinding,
     expressionProductHandle: ProductHandle | null,
-    evaluationKind: RuntimeBindingSourceEvaluationKind,
-  ): readonly RuntimeExpressionAccessOperation[] {
-    const operations: RuntimeExpressionAccessOperation[] = [];
+  ): readonly RuntimeBindingExpressionAccessContext[] {
+    const accessContexts: RuntimeBindingExpressionAccessContext[] = [];
     for (const entry of input.expressionResourcePlan.converterEntries) {
       if (entry.binding.productHandle !== binding.productHandle) {
         continue;
       }
       const projection = projectionForConverterEntry(projections, entry);
-      for (const application of input.valueConverter.readApplicationsForPlanEntry(entry)) {
-        if (application.phase !== RuntimeValueConverterApplicationPhase.ToView
-          && application.phase !== RuntimeValueConverterApplicationPhase.FromView) {
-          continue;
-        }
-        const fromView = application.phase === RuntimeValueConverterApplicationPhase.FromView;
-        const tracking = fromView
-          ? RuntimeExpressionAccessTracking.Untracked
-          : trackingForSourceEvaluationKind(evaluationKind);
-        entry.expression.args.forEach((argument, index) => {
-          operations.push({
+      const lifecycle = runtimeBindingSourceChainLifecycle(
+        binding,
+        input.expressionResourcePlan,
+        entry.expressionProductHandle,
+        entry.chainIndex,
+      );
+      const applications = input.valueConverter.readApplicationsForPlanEntry(entry)
+        .filter((application) =>
+          application.phase === RuntimeValueConverterApplicationPhase.ToView
+          || application.phase === RuntimeValueConverterApplicationPhase.FromView
+        );
+      entry.expression.args.forEach((argument, index) => {
+        accessContexts.push({
             binding,
-            operationProductHandle: application.productHandle,
             expressionProductHandle: entry.expressionProductHandle ?? expressionProductHandle,
             expression: argument,
             checkerContext: projection == null
               ? null
               : checkerContextForRuntimeBindingSourceExpressionProjection(
                   projection,
-                  tracking === RuntimeExpressionAccessTracking.Connectable,
+                  applications.some((application) =>
+                    application.phase === RuntimeValueConverterApplicationPhase.ToView
+                    && trackingForSourceEvaluationKind(lifecycle.evaluationKind)
+                      === RuntimeExpressionAccessTracking.Connectable
+                  ),
                   null,
-                  `value-converter-argument:${entry.converterIndex}:${application.phase}:${index}`,
+                  `value-converter-argument:${entry.converterIndex}:${index}`,
                 ).child(argument, `argument:${index}`),
             scope: projection?.scope ?? null,
-            operationKind: RuntimeExpressionOperationKind.ValueConverterArgument,
-            operationIndex: index,
-            phase: fromView
-              ? RuntimeExpressionAccessPhase.SourceAssignment
-              : RuntimeExpressionAccessPhase.SourceEvaluation,
-            tracking,
-            reachability: application.phaseReachability,
+            contextKind: RuntimeBindingExpressionAccessContextKind.ValueConverterArgument,
             rootRole: RuntimeExpressionAccessRole.Read,
+            runtimeOperations: applications.map((application) => {
+              const fromView = application.phase === RuntimeValueConverterApplicationPhase.FromView;
+              return {
+                operationProductHandle: application.productHandle,
+                operationKind: RuntimeExpressionOperationKind.ValueConverterArgument,
+                operationIndex: index,
+                phase: fromView
+                  ? RuntimeExpressionAccessPhase.SourceAssignment
+                  : RuntimeExpressionAccessPhase.SourceEvaluation,
+                tracking: fromView
+                  ? RuntimeExpressionAccessTracking.Untracked
+                  : trackingForSourceEvaluationKind(lifecycle.evaluationKind),
+                reachability: application.phaseReachability,
+              };
+            }),
           });
-        });
-      }
+      });
     }
-    return operations;
+    return accessContexts;
   }
 
-  private repeatAuxiliaryOperations(
-    input: RuntimeExpressionAccessUseMaterializationRequest,
+  private repeatAuxiliaryAccessContexts(
+    input: RuntimeExpressionAccessMaterializationRequest,
     context: RuntimeExpressionAccessMaterializationContext,
     binding: RuntimeExpressionBinding,
-  ): readonly RuntimeExpressionAccessOperation[] {
+  ): readonly RuntimeBindingExpressionAccessContext[] {
     const instruction = this.publication.readProductDetail(
       TemplateProductDetails.Instruction,
       binding.instructionProductHandle,
@@ -1028,7 +1179,7 @@ export class RuntimeExpressionAccessUseMaterializer {
     const controllerProductHandle = input.runtimeRendering
       .requireRenderContextForBinding(binding.productHandle)
       .sourceController.productHandle;
-    const operations: RuntimeExpressionAccessOperation[] = [];
+    const accessContexts: RuntimeBindingExpressionAccessContext[] = [];
     for (const handle of instruction.tailInstructionProductHandles) {
       const tail = this.publication.readProductDetail(TemplateProductDetails.Instruction, handle);
       if (!(tail instanceof MultiAttrInstruction)
@@ -1046,6 +1197,8 @@ export class RuntimeExpressionAccessUseMaterializer {
         ? null
         : context.sourceContexts.projectSourceWithBindingBehavior({
             binding,
+            expressionProductHandle: tail.expressionProductHandle,
+            expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(expression),
             expression,
             localKey: `${input.localKey}:runtime-expression-access:${binding.productHandle}:repeat:${tail.target}`,
             sourceScope: scope,
@@ -1053,33 +1206,38 @@ export class RuntimeExpressionAccessUseMaterializer {
       const known = projection?.kind === RuntimeBindingSourceExpressionProjectionKind.Context
         ? projection
         : null;
-      operations.push({
+      accessContexts.push({
         binding,
-        operationProductHandle: tail.productHandle,
         expressionProductHandle: tail.expressionProductHandle,
         expression: known?.expression ?? expression,
         checkerContext: known == null
           ? null
           : checkerContextForRuntimeBindingSourceExpressionProjection(known, false),
         scope: known?.scope ?? scope,
-        operationKind: tail.target === 'key'
-          ? RuntimeExpressionOperationKind.RepeatKey
-          : RuntimeExpressionOperationKind.RepeatContextual,
-        operationIndex: null,
-        phase: tail.target === 'key'
-          ? RuntimeExpressionAccessPhase.CollectionReconciliation
-          : RuntimeExpressionAccessPhase.Bind,
-        tracking: RuntimeExpressionAccessTracking.Untracked,
-        reachability: RuntimeOperationReachability.Reached,
+        contextKind: tail.target === 'key'
+          ? RuntimeBindingExpressionAccessContextKind.RepeatKey
+          : RuntimeBindingExpressionAccessContextKind.RepeatContextual,
         rootRole: RuntimeExpressionAccessRole.Read,
+        runtimeOperations: [{
+          operationProductHandle: tail.productHandle,
+          operationKind: tail.target === 'key'
+            ? RuntimeExpressionOperationKind.RepeatKey
+            : RuntimeExpressionOperationKind.RepeatContextual,
+          operationIndex: null,
+          phase: tail.target === 'key'
+            ? RuntimeExpressionAccessPhase.CollectionReconciliation
+            : RuntimeExpressionAccessPhase.Bind,
+          tracking: RuntimeExpressionAccessTracking.Untracked,
+          reachability: RuntimeOperationReachability.Reached,
+        }],
       });
     }
-    return operations;
+    return accessContexts;
   }
 
   private targetForDraft(
     evaluator: CheckerExpressionTypeEvaluator,
-    operation: RuntimeExpressionAccessOperation,
+    accessContext: RuntimeBindingExpressionAccessContext,
     draft: RuntimeExpressionAccessDraft,
     lexicalTargetSourceAddressHandle: AddressHandle | null,
   ): {
@@ -1090,7 +1248,7 @@ export class RuntimeExpressionAccessUseMaterializer {
       return {
         resolution: RuntimeExpressionAccessTargetResolution.Exact,
         links: [new RuntimeExpressionAccessTargetLink(
-          operation.expressionProductHandle ?? operation.operationProductHandle,
+          accessContext.expressionProductHandle,
           null,
           null,
           null,
@@ -1099,20 +1257,20 @@ export class RuntimeExpressionAccessUseMaterializer {
       };
     }
     const expression = accessTargetExpression(draft);
-    if (operation.checkerContext == null || expression == null) {
+    if (accessContext.checkerContext == null || expression == null) {
       return {
         resolution: RuntimeExpressionAccessTargetResolution.Open,
         links: [],
       };
     }
     return runtimeCheckerAccessTargetProjection(
-      evaluator.resolveAccessTarget(operation.checkerContext, expression),
+      evaluator.resolveAccessTarget(accessContext.checkerContext, expression),
     );
   }
 
   private lexicalTargetSourceForDraft(
     localKey: string,
-    operation: RuntimeExpressionAccessOperation,
+    accessContext: RuntimeBindingExpressionAccessContext,
     draft: RuntimeExpressionAccessDraft,
     sources: Map<string, RuntimeExpressionSourceAddress>,
   ): RuntimeExpressionSourceAddress | null {
@@ -1128,7 +1286,7 @@ export class RuntimeExpressionAccessUseMaterializer {
     const source = sourceAddressForRuntimeExpressionSpan(
       this.publication,
       `${localKey}:runtime-expression-lexical-target:${localKeyPart(key)}`,
-      operation.binding.sourceAddressHandle,
+      accessContext.binding.sourceAddressHandle,
       span,
     );
     sources.set(key, source);
@@ -1164,6 +1322,7 @@ function trackingForSourceEvaluationKind(
     case RuntimeBindingSourceEvaluationKind.UntrackedRead:
       return RuntimeExpressionAccessTracking.Untracked;
     case RuntimeBindingSourceEvaluationKind.AssignmentOnly:
+    case RuntimeBindingSourceEvaluationKind.NotEvaluated:
       return RuntimeExpressionAccessTracking.NotApplicable;
     case RuntimeBindingSourceEvaluationKind.Open:
       return RuntimeExpressionAccessTracking.Open;

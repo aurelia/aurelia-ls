@@ -36,7 +36,9 @@ const allowedKnownScopeContextCalls = new Set([
 
 const allowedSourceValueKnownScopeCalls = new Set([
   'packages/semantic-runtime/src/observation/binding-source-value-evaluation-context.ts#projectRuntimeBindingSourceValueContextInScope',
-  'packages/semantic-runtime/src/observation/binding-source-value-evaluator.ts#RuntimeBindingSourceValueEvaluator.evaluateBoundControllerPropertyValue',
+  // Bound-controller rows admit only reached bindings and retain the exact parent Scope; candidate evaluation owns
+  // the root recursion context before projecting that row's resource and binding-behavior lifecycle.
+  'packages/semantic-runtime/src/observation/binding-source-value-evaluator.ts#RuntimeBindingSourceValueEvaluator.evaluateBoundControllerPropertyCandidate',
   'packages/semantic-runtime/src/router/route-instruction-materialization.ts#routerSourceExpressionEvaluationFrame',
 ]);
 

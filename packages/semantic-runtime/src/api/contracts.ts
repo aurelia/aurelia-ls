@@ -251,7 +251,6 @@ import type {
 import type { RuntimeValueConverterWritebackStageState } from '../type-system/value-converter-writeback.js';
 import type {
   RuntimeExpressionResourceApplicationOrigin,
-  RuntimeExpressionResourceBindReachability,
   RuntimeExpressionResourceLifecycleEffectKind,
   RuntimeExpressionResourceValueState,
 } from '../template/runtime-expression-resource.js';
@@ -3951,7 +3950,8 @@ export interface SemanticTemplateReferenceRow {
   readonly name: string;
   readonly definitionName: string | null;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}` | null;
-  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}` | null;
+  /** Distinct runtime observation kinds spending this authored occurrence; empty when no operation observes it. */
+  readonly dependencyKinds: readonly (RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`)[];
   /** Authored resource syntax form, present on resource-usage rows. */
   readonly resourceUsageKind?: SemanticTemplateResourceUsageKind | `${SemanticTemplateResourceUsageKind}` | null;
   /** Public-name declaration form, present on resource declaration rows. */
@@ -3964,8 +3964,14 @@ export interface SemanticTemplateReferenceRow {
   /** Declaration/member source that all returned template usages resolve to. */
   readonly targetSource: SemanticSourceReference | null;
   readonly handles?: {
-    readonly accessUseProductHandle: ProductHandle | null;
-    readonly observedDependencyProductHandle: ProductHandle | null;
+    /** Every runtime operation spending this binding-context resolution. */
+    readonly accessUseProductHandles: readonly ProductHandle[];
+    /** Parse-owned authored token retained even when Aurelia executes no runtime operation. */
+    readonly accessOccurrenceHandle: HotDetailHandle | null;
+    /** Binding-context target interpretation shared by zero or more runtime operations. */
+    readonly accessResolutionHandle: HotDetailHandle | null;
+    /** Every observation edge derived from the runtime operations above. */
+    readonly observedDependencyProductHandles: readonly ProductHandle[];
     readonly expressionProductHandle: ProductHandle | null;
     readonly bindingProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
@@ -4715,10 +4721,10 @@ export interface SemanticBindingBehaviorApplicationRow {
   readonly authoredChainDepth: number;
   /** Depth in the effective runtime chain after reached behavior projections. */
   readonly runtimeChainDepth: number;
-  readonly bindReachability: RuntimeExpressionResourceBindReachability | `${RuntimeExpressionResourceBindReachability}`;
+  readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly phaseReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly bindOrder: number | null;
-  /** Nominal order within the binding-behavior bind phase. */
+  /** Nominal execution order within this binding-behavior lifecycle phase. */
   readonly phaseOrder: number | null;
   readonly lifecycleEffects: SemanticExpressionResourceLifecycleEffectsRow;
   readonly argumentSources: readonly (SemanticSourceReference | null)[];
@@ -4752,7 +4758,7 @@ export interface SemanticValueConverterApplicationRow {
   readonly authoredChainDepth: number | null;
   /** Depth in the effective runtime chain after reached behavior projections. */
   readonly runtimeChainDepth: number;
-  readonly bindReachability: RuntimeExpressionResourceBindReachability | `${RuntimeExpressionResourceBindReachability}`;
+  readonly bindReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly phaseReachability: RuntimeOperationReachability | `${RuntimeOperationReachability}`;
   readonly bindOrder: number | null;
   /** Nominal execution order within this converter phase. */
@@ -5023,6 +5029,8 @@ export interface SemanticRuntimeExpressionAccessUseRow extends SemanticRuntimeEx
     readonly operationProductHandle: ProductHandle | null;
     readonly expressionProductHandle: ProductHandle | null;
     readonly scopeProductHandle: ProductHandle | null;
+    readonly accessOccurrenceHandle: HotDetailHandle | null;
+    readonly accessResolutionHandle: HotDetailHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
     readonly nameSourceAddressHandle: AddressHandle | null;
   };

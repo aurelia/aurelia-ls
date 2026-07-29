@@ -944,8 +944,8 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
-          "symbolName": "unprovenSameNameCandidateRows",
-          "summary": "Shared candidate computation feeding references, rename, and rename-from-TypeScript answers."
+          "symbolName": "runtimeBindingExpressionAccessIsUnprovenSameNameCandidate",
+          "summary": "Shared binding-resolution candidate test feeding references, rename, and rename-from-TypeScript answers."
         }
       ],
       "liveChecks": [
@@ -956,7 +956,7 @@
         }
       ],
       "createdAt": "2026-07-07",
-      "updatedAt": "2026-07-07"
+      "updatedAt": "2026-07-29"
     },
     {
       "id": "decision:lsp-source-lifecycle-bridge",

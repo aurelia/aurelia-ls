@@ -6,6 +6,7 @@ import {
   CheckerTypeProjectionOrigin,
   type CheckerTypeReference,
   CheckerTypeShape,
+  CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
 import { checkerTypeMemberReachableIdentityHandle } from '../type-system/type-shape.js';
 import { checkerTypeReferenceWithSource } from '../type-system/type-shape.js';
@@ -120,6 +121,7 @@ export function bindingContextSlotTargetTypeSourceMember(
     return member;
   }
   return slot.targetType == null
+    || slot.targetType.shapeKind === CheckerTypeShapeKind.Unknown
     || member.valueType == null
     || sameCheckerTypeReference(slot.targetType, member.valueType)
     ? member
@@ -134,7 +136,7 @@ export function bindingContextSlotTargetTypeShape(
   const typeShape = slot.targetType?.productHandle == null
     ? null
     : projector.publication.readProductDetail(TypeSystemProductDetails.TypeShape, slot.targetType.productHandle);
-  if (typeShape != null) {
+  if (typeShape != null && typeShape.shapeKind !== CheckerTypeShapeKind.Unknown) {
     return typeShape;
   }
   const member = bindingContextSlotTargetTypeSourceMember(projector.publication, slot);
@@ -149,7 +151,9 @@ export function bindingContextSlotTargetTypeShape(
     sourceNode: member.carrier.declarations[0] ?? null,
     sourceAddressHandle: slot.targetType?.sourceAddressHandle ?? slot.sourceAddressHandle,
     ownerIdentityHandle: slot.targetIdentityHandle,
-    display: slot.targetType?.display ?? member.valueType?.display ?? null,
+    display: slot.targetType?.shapeKind === CheckerTypeShapeKind.Unknown
+      ? member.valueType?.display ?? null
+      : slot.targetType?.display ?? member.valueType?.display ?? null,
     memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
   });
 }

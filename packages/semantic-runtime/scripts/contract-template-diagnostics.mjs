@@ -199,19 +199,19 @@ const contracts = [
         ],
         'signature',
       ),
-      ExpectedSemanticEffect.exactly(
-        'Unknown repeat-local owner diagnostics should share the authored member-access subject across overlay and semantic rows.',
+      ExpectedSemanticEffect.absent(
+        'Reached parent-bound repeat-local types should not retain obsolete weak-owner diagnostics.',
         'template-diagnostic',
         'template',
-        2,
         null,
         [
+          effectFilter('diagnosticKind', 'weak-expression-member-owner'),
+          effectFilter('selectedMemberName', 'label'),
           effectFilter('subject.subjectKind', 'template-member-access'),
           effectFilter('subject.source.path', 'src/components/loose-picklist.html'),
           effectFilter('subject.source.start', 121),
           effectFilter('subject.source.end', 133),
         ],
-        'signature',
       ),
       ExpectedSemanticEffect.atLeast(
         'Binding data-flow rows should preserve the declaration source for assignment repair targets.',

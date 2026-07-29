@@ -60,6 +60,7 @@ import {
   bindingScopesForTemplateExpressionParse,
 } from '../out/template/template-expression-selection.js';
 import { resourceLocalEffectiveTemplateExpressionParses } from '../out/template/template-expression-selection.js';
+import { runtimeBoundControllerValueTableForTemplateResources } from '../out/observation/runtime-bound-controller-value.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/typescript-project-diagnostics');
@@ -72,6 +73,7 @@ const runtimeAssignmentConverterFixtureRoot = path.join(packageRoot, 'fixtures/p
 const scopeAliasFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-scope-aliases');
 const valueConverterFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-value-converter');
 const boundControllerFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-bound-controller');
+const effectiveModeFixtureRoot = path.join(packageRoot, 'fixtures/pressure/observation-binding-lifecycle');
 const templateTypeErrorFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-type-errors');
 const stateSourceFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-state-binding-scope');
 const stateConditionBoundaryFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-controller-state-condition-boundary');
@@ -210,6 +212,7 @@ const generatedScopeAliasOverlay = await readGeneratedScopeAliasOverlayProbe();
 const generatedValueConverterOverlay = await readGeneratedValueConverterOverlayProbe();
 const generatedValueConverterEvaluator = await readGeneratedValueConverterEvaluatorProbe();
 const generatedBoundControllerOverlay = await readGeneratedBoundControllerOverlayProbe();
+const generatedEffectiveModeOverlay = await readGeneratedEffectiveModeOverlayProbe();
 const generatedStateSourceOverlay = await readGeneratedStateSourceOverlayProbe();
 const generatedStateConditionBoundaryOverlay = await readGeneratedStateConditionBoundaryOverlayProbe();
 const resourceLocalOverlayOwnership = await readResourceLocalOverlayOwnershipProbe();
@@ -647,6 +650,9 @@ if (generatedBoundControllerOverlay.expressionProbeCount !== 3 || generatedBound
 if (generatedBoundControllerOverlay.variableTypes.get('onAction') !== '(action: OverlayAction) => boolean') {
   failures.push(`Expected child root alias to use the parent-bound callback type, observed ${generatedBoundControllerOverlay.variableTypes.get('onAction') ?? 'missing'}.`);
 }
+if (generatedBoundControllerOverlay.onActionDefinitionWriterCount !== 2) {
+  failures.push(`Expected both callback-panel use sites to remain available to definition-context type projection, observed ${generatedBoundControllerOverlay.onActionDefinitionWriterCount}.`);
+}
 if (
   generatedBoundControllerOverlay.bindingScopeMemberName !== 'onAction'
   || generatedBoundControllerOverlay.bindingScopeMemberFile !== 'callback-panel.ts'
@@ -673,6 +679,34 @@ if (generatedBoundControllerOverlay.overlayDiagnosticCodes.includes(2554)) {
 }
 if (generatedBoundControllerOverlay.overlayDiagnosticCount !== 0) {
   failures.push(`Expected generated bound-controller overlay to have no explicit overlay diagnostics for the represented callback binding, observed ${generatedBoundControllerOverlay.overlayDiagnosticCount}.`);
+}
+if (generatedEffectiveModeOverlay.authoredExpressions.includes('effectiveFromView & fromView')) {
+  failures.push('Expected effective fromView mode to suppress a source-read overlay even when the instruction was authored as to-view.');
+}
+if (!generatedEffectiveModeOverlay.authoredExpressions.includes('effectiveToView & toView')) {
+  failures.push('Expected effective toView mode to retain a source-read overlay even when the instruction was authored as from-view.');
+}
+if (!generatedEffectiveModeOverlay.authoredExpressions.includes('blockedFromView & fromView & missingBehavior')) {
+  failures.push('Expected an outer bind failure to preserve the authored to-view mode when the inner fromView behavior was not reached.');
+}
+for (const expression of [
+  'attributeFromView & fromView',
+  'attributeFromView | identityValue & fromView',
+]) {
+  if (!generatedEffectiveModeOverlay.authoredExpressions.includes(expression)) {
+    failures.push(`Expected runtime-inert attribute source '${expression}' to remain in the authoring overlay for symbol and type diagnostics.`);
+  }
+}
+for (const expression of [
+  'attributeTwoWay & twoWay',
+  'attributeInterpolationFromView & fromView',
+  'attributeInterpolationTwoWay & twoWay',
+  'contentFromView & fromView',
+  'contentTwoWay & twoWay',
+]) {
+  if (!generatedEffectiveModeOverlay.authoredExpressions.includes(expression)) {
+    failures.push(`Expected runtime-evaluated non-property source expression '${expression}' to retain its authoring overlay.`);
+  }
 }
 if (generatedStateSourceOverlay.expressionProbeCount !== 6 || generatedStateSourceOverlay.skippedExpressionCount !== 0) {
   failures.push(`Expected generated state-source overlay to cover state binding sources without skips, observed probes=${generatedStateSourceOverlay.expressionProbeCount}, skipped=${generatedStateSourceOverlay.skippedExpressionCount}.`);
@@ -1927,6 +1961,7 @@ async function readGeneratedBoundControllerOverlayProbe() {
       bindingScopeMemberSourceMatchesSlot: false,
       bindingScopeTypeSourceMemberName: null,
       bindingScopeTypeSourceMemberFile: null,
+      onActionDefinitionWriterCount: 0,
     };
   }
   const typeSystem = new TypeSystemProjectBuilder(projectTypeSystemProgramSources).build(
@@ -1949,6 +1984,14 @@ async function readGeneratedBoundControllerOverlayProbe() {
     selectedResource,
     'actions',
   );
+  const boundControllerValues = runtimeBoundControllerValueTableForTemplateResources(
+    app.emission.templates.resources,
+  );
+  const onActionDefinitionWriterCount = selectedResource?.compilation.definition.productHandle == null
+    ? 0
+    : boundControllerValues.readAllDefinitionValues(
+        selectedResource.compilation.definition.productHandle,
+      ).filter((value) => value.propertyName === 'onAction').length;
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
@@ -1966,7 +2009,35 @@ async function readGeneratedBoundControllerOverlayProbe() {
     actionsBindingScopeMemberSourceMatchesSlot: actionsBindingScopeMember.sourceMatchesSlot,
     actionsBindingScopeTypeSourceMemberName: actionsBindingScopeMember.typeSourceName,
     actionsBindingScopeTypeSourceMemberFile: actionsBindingScopeMember.typeSourceFile,
+    onActionDefinitionWriterCount,
     generatedAnyHole: overlayTextHasGeneratedAnyHole(emission.overlaySource),
+  };
+}
+
+async function readGeneratedEffectiveModeOverlayProbe() {
+  const runtime = await createSemanticRuntime({
+    workspaceRoot: effectiveModeFixtureRoot,
+    storeKey: 'type-system-generated-effective-mode-overlay-contract',
+  });
+  const app = await runtime.openApp({
+    analysisDepth: 'binding-observation',
+  });
+  const resource = app.emission.templates.resources.find((candidate) =>
+    candidate.compilation.definition.name === 'observation-binding-lifecycle-app'
+  ) ?? null;
+  if (resource == null) {
+    return {
+      authoredExpressions: [],
+      skippedExpressionCount: 0,
+    };
+  }
+  const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.project, app.emission.typeSystem)
+    .build(resource, 'contract-effective-mode-template-overlay');
+  return {
+    authoredExpressions: emission.expressionProbes
+      .map((probe) => probe.authoredExpressionText)
+      .filter((expression) => expression != null),
+    skippedExpressionCount: emission.skippedExpressions.length,
   };
 }
 

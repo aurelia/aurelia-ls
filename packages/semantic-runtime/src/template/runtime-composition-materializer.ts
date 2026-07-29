@@ -347,6 +347,7 @@ export class RuntimeCompositionMaterializer {
       input.runtimeRendering,
       scopesByInstruction,
       input.scopes.bindingExpressionScopes,
+      input.expressionResourcePlan,
     );
     const asyncTypeProjector = new CheckerAsyncTypeProjector(
       this.store,
@@ -790,6 +791,8 @@ export class RuntimeCompositionMaterializer {
     }
     const projection = sourceExpressionContexts.projectSource({
       binding,
+      expressionProductHandle: binding.expressionProductHandle,
+      expressionChainIndex: 0,
       expression,
       localKey: `${input.localKey}:runtime-composition:${binding.productHandle}:source-value`,
     });

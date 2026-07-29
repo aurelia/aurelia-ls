@@ -90,6 +90,7 @@ export function publishRuntimeSourceAccessUses(
       realization: request.realization,
       reachability: request.reachability,
       draft,
+      resolution: null,
       targetResolution: draft.targetResolution,
       targetLinks: draft.targetLinks,
       carrierSourceAddressHandle: request.ownerSourceAddressHandle,

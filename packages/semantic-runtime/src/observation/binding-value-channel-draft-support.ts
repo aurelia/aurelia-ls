@@ -82,6 +82,7 @@ import {
   runtimeBindingSourceExpression,
 } from './runtime-binding-expression.js';
 import {
+  aggregateRuntimeBindingSourceExpressionChainIndex,
   checkerContextForRuntimeBindingSourceExpressionProjection,
   RuntimeBindingSourceExpressionProjectionKind,
   type RuntimeBindingSourceExpressionContextProjection,
@@ -733,6 +734,8 @@ export class RuntimeBindingValueChannelDraftSupport {
   ): RuntimeBindingSourceExpressionContextProjection | null {
     const projection = context.sourceExpressionContexts.projectSource({
       binding,
+      expressionProductHandle: expressionProductHandleForBinding(binding),
+      expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(ast),
       expression: ast,
       localKey: `${local}:expression-type`,
     });
@@ -841,6 +844,8 @@ export class RuntimeBindingValueChannelDraftSupport {
     }
     const projection = context.sourceExpressionContexts.projectSource({
       binding,
+      expressionProductHandle: expressionProductHandleForBinding(binding),
+      expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(ast),
       expression: ast,
       localKey: `binding-value-channel:${binding.productHandle}:${expressionProductHandleForBinding(binding) ?? 'binding-expression'}:source-type`,
     });

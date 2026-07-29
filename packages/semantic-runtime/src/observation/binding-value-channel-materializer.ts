@@ -184,6 +184,7 @@ export class RuntimeBindingValueChannelMaterializer {
       input.runtimeBindings,
       instructionScopes,
       bindingExpressionScopes,
+      input.expressionResourcePlan,
     );
     const channelDrafts = new RuntimeBindingValueChannelDraftMaterializer(
       this.store,

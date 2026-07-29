@@ -112,6 +112,7 @@ import {
   resourceLocalBindingTargetAccesses,
   resourceLocalBindingTargetOperations,
   resourceLocalBindingValueChannels,
+  resourceLocalRuntimeBindingExpressionAccessResolutions,
   resourceLocalRuntimeExpressionAccessUses,
   resourceLocalRuntimeBindings,
   resourceLocalDynamicTemplateInstructions,
@@ -165,11 +166,13 @@ import type { GenerationAuthority } from '../kernel/generation-authority.js';
 import type { RuntimeBindingObservedDependency } from '../observation/runtime-binding-observation.js';
 import {
   RuntimeExpressionAccessForm,
-  RuntimeExpressionAccessOrigin,
   RuntimeExpressionAccessTargetResolution,
   type RuntimeExpressionAccessTargetLink,
   type RuntimeExpressionAccessUse,
 } from '../runtime-expression/runtime-expression-access-use.js';
+import type {
+  RuntimeBindingExpressionAccessResolution,
+} from '../runtime-expression/runtime-binding-expression-access-resolution.js';
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
@@ -822,19 +825,19 @@ export class SemanticAppTemplateQueries {
       return null;
     }
     for (const site of this.templateRuntimeExpressionAccessSites()) {
-      const accessUse = site.accessUse;
+      const resolution = site.resolution;
       if (
-        !accessUse.lexicalLocal
+        !resolution.lexicalLocal
         || (
-          accessUse.accessForm !== RuntimeExpressionAccessForm.Scope
-          && accessUse.accessForm !== RuntimeExpressionAccessForm.ScopeCall
+          resolution.occurrence.accessForm !== RuntimeExpressionAccessForm.Scope
+          && resolution.occurrence.accessForm !== RuntimeExpressionAccessForm.ScopeCall
         )
-        || accessUse.targetResolution !== RuntimeExpressionAccessTargetResolution.Exact
-        || accessUse.targetLinks.length !== 1
+        || resolution.targetResolution !== RuntimeExpressionAccessTargetResolution.Exact
+        || resolution.targetLinks.length !== 1
       ) {
         continue;
       }
-      const target = accessUse.targetLinks[0] ?? null;
+      const target = resolution.targetLinks[0] ?? null;
       if (target == null) {
         continue;
       }
@@ -842,7 +845,7 @@ export class SemanticAppTemplateQueries {
         this.store,
         target.declarationSourceAddressHandle,
       ));
-      const accessSource = runtimeExpressionAccessNameSource(this.store, accessUse);
+      const accessSource = runtimeBindingExpressionAccessNameSource(this.store, resolution);
       if (
         targetSource == null
         || (
@@ -909,9 +912,9 @@ export class SemanticAppTemplateQueries {
 
     const accessSites = this.templateRuntimeExpressionAccessSites();
     const activeSite = accessSites.find((site) =>
-      unprovenRuntimeExpressionAccessContainsCursor(
+      unprovenRuntimeBindingExpressionAccessContainsCursor(
         this.store,
-        site.accessUse,
+        site.resolution,
         selectedMemberName,
         cursor,
         (source) => this.authoredTextForSource(source),
@@ -920,7 +923,7 @@ export class SemanticAppTemplateQueries {
     if (activeSite == null) {
       return null;
     }
-    const activeSource = runtimeExpressionAccessNameSource(this.store, activeSite.accessUse);
+    const activeSource = runtimeBindingExpressionAccessNameSource(this.store, activeSite.resolution);
     if (activeSource == null) {
       return null;
     }
@@ -935,9 +938,9 @@ export class SemanticAppTemplateQueries {
     const candidateRows = uniqueSortedTemplateReferenceRows(accessSites
       .filter((site) =>
         site !== activeSite
-        && runtimeExpressionAccessIsUnprovenSameNameCandidate(
+        && runtimeBindingExpressionAccessIsUnprovenSameNameCandidate(
           this.store,
-          site.accessUse,
+          site.resolution,
           selectedMemberName,
           (source) => this.authoredTextForSource(source),
         )
@@ -1276,9 +1279,9 @@ export class SemanticAppTemplateQueries {
     const templateUsageRows: SemanticTemplateReferenceRow[] = [];
     const candidateRows: SemanticTemplateReferenceRow[] = [];
     for (const site of accessSites) {
-      const targetLink = matchingRuntimeExpressionAccessTarget(
+      const targetLink = matchingRuntimeBindingExpressionAccessTarget(
         this.store,
-        site.accessUse,
+        site.resolution,
         observedTargetSources,
         targetIdentityHandle,
         targetSourceAddressHandle,
@@ -1297,9 +1300,9 @@ export class SemanticAppTemplateQueries {
         }
         continue;
       }
-      if (runtimeExpressionAccessIsUnprovenSameNameCandidate(
+      if (runtimeBindingExpressionAccessIsUnprovenSameNameCandidate(
         this.store,
-        site.accessUse,
+        site.resolution,
         selectedMemberName,
         (source) => this.authoredTextForSource(source),
       )) {
@@ -1322,24 +1325,38 @@ export class SemanticAppTemplateQueries {
   private templateRuntimeExpressionAccessSites(): readonly TemplateRuntimeExpressionAccessSite[] {
     const sites: TemplateRuntimeExpressionAccessSite[] = [];
     for (const resource of [...this.emission.templates.resources, ...this.emission.templates.authoringResources]) {
-      const observedByAccessUse = new Map<ProductHandle, RuntimeBindingObservedDependency>();
+      const observedByAccessUse = new Map<ProductHandle, RuntimeBindingObservedDependency[]>();
       for (const dependency of resourceLocalBindingObservedDependencies(this.store, resource)) {
-        if (!observedByAccessUse.has(dependency.accessUseProductHandle)) {
-          observedByAccessUse.set(dependency.accessUseProductHandle, dependency);
-        }
+        const dependencies = observedByAccessUse.get(dependency.accessUseProductHandle) ?? [];
+        dependencies.push(dependency);
+        observedByAccessUse.set(dependency.accessUseProductHandle, dependencies);
       }
+      const accessUsesByResolution = new Map<HotDetailHandle, RuntimeExpressionAccessUse[]>();
       for (const accessUse of resourceLocalRuntimeExpressionAccessUses(this.store, resource)) {
-        const binding = resource.runtimeAnalysis.runtimeRendering.readBinding(accessUse.ownerProductHandle);
+        if (accessUse.resolutionHandle == null) {
+          continue;
+        }
+        const rows = accessUsesByResolution.get(accessUse.resolutionHandle) ?? [];
+        rows.push(accessUse);
+        accessUsesByResolution.set(accessUse.resolutionHandle, rows);
+      }
+      for (const resolution of resourceLocalRuntimeBindingExpressionAccessResolutions(this.store, resource)) {
+        const binding = resource.runtimeAnalysis.runtimeRendering.readBinding(resolution.bindingProductHandle);
         if (binding == null) {
           throw new Error(
-            `Template runtime access use '${accessUse.productHandle}' has no owning runtime binding.`,
+            `Template access resolution '${resolution.detailHandle}' has no owning runtime binding.`,
           );
         }
+        const accessUses = accessUsesByResolution.get(resolution.detailHandle) ?? [];
+        const observedDependencies = accessUses.flatMap(
+          (accessUse) => observedByAccessUse.get(accessUse.productHandle) ?? [],
+        );
         sites.push({
           definitionName: resource.compilation.definition.name,
           bindingKind: binding.bindingKind,
-          accessUse,
-          observedDependency: observedByAccessUse.get(accessUse.productHandle) ?? null,
+          resolution,
+          accessUses,
+          observedDependencies,
         });
       }
     }
@@ -1551,8 +1568,9 @@ interface ReferenceRowsForTarget {
 interface TemplateRuntimeExpressionAccessSite {
   readonly definitionName: string;
   readonly bindingKind: SemanticTemplateReferenceRow['bindingKind'];
-  readonly accessUse: RuntimeExpressionAccessUse;
-  readonly observedDependency: RuntimeBindingObservedDependency | null;
+  readonly resolution: RuntimeBindingExpressionAccessResolution;
+  readonly accessUses: readonly RuntimeExpressionAccessUse[];
+  readonly observedDependencies: readonly RuntimeBindingObservedDependency[];
 }
 
 interface TypeScriptReferenceContext {
@@ -2343,7 +2361,7 @@ function typeScriptUsageReferenceRows(
       name: site.text.length > 0 ? site.text : selectedMemberName,
       definitionName: null,
       bindingKind: null,
-      dependencyKind: null,
+      dependencyKinds: [],
       source: semanticExactSourceReference(site.source),
       targetSource,
     }));
@@ -2630,15 +2648,17 @@ function templateReferenceDeclarationRow(
     name: selectedMemberName,
     definitionName: null,
     bindingKind: null,
-    dependencyKind: null,
+    dependencyKinds: [],
     resourceDeclarationKind,
     bindableDeclarationKind,
     source: semanticExactSourceReference(source),
     targetSource,
     ...(handles ? {
       handles: {
-        accessUseProductHandle: null,
-        observedDependencyProductHandle: null,
+        accessUseProductHandles: [],
+        accessOccurrenceHandle: null,
+        accessResolutionHandle: null,
+        observedDependencyProductHandles: [],
         expressionProductHandle: null,
         bindingProductHandle: null,
         sourceAddressHandle,
@@ -2753,14 +2773,16 @@ function bindableAttributeReferenceRow(
     name: token.text,
     definitionName: resource.compilation.definition.name,
     bindingKind: null,
-    dependencyKind: null,
+    dependencyKinds: [],
     bindableAttributeSourceKind: bindableAttributeSourceKind(bindable),
     source: token.source,
     targetSource,
     ...(handles ? {
       handles: {
-        accessUseProductHandle: null,
-        observedDependencyProductHandle: null,
+        accessUseProductHandles: [],
+        accessOccurrenceHandle: null,
+        accessResolutionHandle: null,
+        observedDependencyProductHandles: [],
         expressionProductHandle: null,
         bindingProductHandle: null,
         sourceAddressHandle: token.sourceAddressHandle,
@@ -2939,14 +2961,16 @@ function resourceUsageReferenceRow(
     name,
     definitionName: resource.compilation.definition.name,
     bindingKind: null,
-    dependencyKind: null,
+    dependencyKinds: [],
     resourceUsageKind,
     source,
     targetSource: target.targetSource,
     ...(handles ? {
       handles: {
-        accessUseProductHandle: null,
-        observedDependencyProductHandle: null,
+        accessUseProductHandles: [],
+        accessOccurrenceHandle: null,
+        accessResolutionHandle: null,
+        observedDependencyProductHandles: [],
         expressionProductHandle,
         bindingProductHandle,
         sourceAddressHandle,
@@ -3348,14 +3372,14 @@ function sourceSlice(
   );
 }
 
-function matchingRuntimeExpressionAccessTarget(
+function matchingRuntimeBindingExpressionAccessTarget(
   store: KernelStore,
-  accessUse: RuntimeExpressionAccessUse,
+  resolution: RuntimeBindingExpressionAccessResolution,
   targetSources: readonly SemanticSourceReference[],
   targetIdentityHandle: IdentityHandle | null,
   targetSourceAddressHandle: AddressHandle | null,
 ): RuntimeExpressionAccessTargetLink | null {
-  for (const target of accessUse.targetLinks) {
+  for (const target of resolution.targetLinks) {
     if (
       targetSourceAddressHandle != null
       && target.declarationSourceAddressHandle === targetSourceAddressHandle
@@ -3390,67 +3414,73 @@ function templateReferenceRowForRuntimeExpressionAccess(
   matchedTarget: RuntimeExpressionAccessTargetLink | null,
   handles: boolean,
 ): SemanticTemplateReferenceRow {
-  const accessUse = site.accessUse;
+  const resolution = site.resolution;
+  const dependencyKinds = [...new Set(
+    site.observedDependencies.map((dependency) => dependency.dependencyKind),
+  )].sort();
   return {
     referenceKind: SemanticTemplateReferenceKind.TemplateUsage,
     name: selectedMemberName,
     definitionName: site.definitionName,
     bindingKind: site.bindingKind,
-    dependencyKind: site.observedDependency?.dependencyKind ?? null,
-    source: runtimeExpressionAccessNameSource(store, accessUse),
+    dependencyKinds,
+    source: runtimeBindingExpressionAccessNameSource(store, resolution),
     targetSource,
     ...(handles ? {
       handles: {
-        accessUseProductHandle: accessUse.productHandle,
-        observedDependencyProductHandle: site.observedDependency?.productHandle ?? null,
-        expressionProductHandle: accessUse.expressionProductHandle,
-        bindingProductHandle: accessUse.ownerProductHandle,
-        sourceAddressHandle: accessUse.nameSourceAddressHandle ?? accessUse.sourceAddressHandle,
+        accessUseProductHandles: site.accessUses.map((accessUse) => accessUse.productHandle),
+        accessOccurrenceHandle: resolution.occurrence.detailHandle,
+        accessResolutionHandle: resolution.detailHandle,
+        observedDependencyProductHandles: site.observedDependencies.map(
+          (dependency) => dependency.productHandle,
+        ),
+        expressionProductHandle: resolution.expressionProductHandle,
+        bindingProductHandle: resolution.bindingProductHandle,
+        sourceAddressHandle: resolution.nameSourceAddressHandle ?? resolution.sourceAddressHandle,
         targetSourceAddressHandle: matchedTarget?.declarationSourceAddressHandle ?? null,
       },
     } : {}),
   };
 }
 
-function runtimeExpressionAccessNameSource(
+function runtimeBindingExpressionAccessNameSource(
   store: KernelStore,
-  accessUse: RuntimeExpressionAccessUse,
+  resolution: RuntimeBindingExpressionAccessResolution,
 ): SemanticSourceReference | null {
   return semanticExactSourceReference(describeAddress(
     store,
-    accessUse.nameSourceAddressHandle ?? accessUse.sourceAddressHandle,
+    resolution.nameSourceAddressHandle ?? resolution.sourceAddressHandle,
   ));
 }
 
-function runtimeExpressionAccessIsUnprovenSameNameCandidate(
+function runtimeBindingExpressionAccessIsUnprovenSameNameCandidate(
   store: KernelStore,
-  accessUse: RuntimeExpressionAccessUse,
+  resolution: RuntimeBindingExpressionAccessResolution,
   selectedMemberName: string,
   authoredTextForSource: (source: SemanticSourceReference | null) => string | null,
 ): boolean {
   if (
-    accessUse.origin !== RuntimeExpressionAccessOrigin.Authored
-    || (
-      accessUse.targetResolution !== RuntimeExpressionAccessTargetResolution.Open
-      && accessUse.targetResolution !== RuntimeExpressionAccessTargetResolution.IndexSignature
-    )
+    resolution.targetResolution !== RuntimeExpressionAccessTargetResolution.Open
+    && resolution.targetResolution !== RuntimeExpressionAccessTargetResolution.IndexSignature
   ) {
     return false;
   }
-  return authoredTextForSource(runtimeExpressionAccessNameSource(store, accessUse)) === selectedMemberName;
+  return authoredTextForSource(
+    runtimeBindingExpressionAccessNameSource(store, resolution),
+  ) === selectedMemberName;
 }
 
-function unprovenRuntimeExpressionAccessContainsCursor(
+function unprovenRuntimeBindingExpressionAccessContainsCursor(
   store: KernelStore,
-  accessUse: RuntimeExpressionAccessUse,
+  resolution: RuntimeBindingExpressionAccessResolution,
   selectedMemberName: string,
   cursor: NonNullable<SemanticAppQuery['cursor']>,
   authoredTextForSource: (source: SemanticSourceReference | null) => string | null,
 ): boolean {
-  const source = runtimeExpressionAccessNameSource(store, accessUse);
-  return runtimeExpressionAccessIsUnprovenSameNameCandidate(
+  const source = runtimeBindingExpressionAccessNameSource(store, resolution);
+  return runtimeBindingExpressionAccessIsUnprovenSameNameCandidate(
     store,
-    accessUse,
+    resolution,
     selectedMemberName,
     authoredTextForSource,
   ) && semanticSourceReferenceContainsFileOffset(source, cursor.filePath, cursor.offset);

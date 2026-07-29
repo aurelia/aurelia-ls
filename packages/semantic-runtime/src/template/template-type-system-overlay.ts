@@ -157,9 +157,12 @@ import {
   type RuntimeExpressionBinding,
 } from '../observation/runtime-binding-expression.js';
 import {
+  aggregateRuntimeBindingSourceExpressionChainIndex,
   checkerContextForRuntimeBindingBehaviorArguments,
   RuntimeBindingSourceExpressionContextProjector,
 } from '../observation/runtime-binding-source-expression-context.js';
+import { runtimeBindingSourceLifecycle } from '../observation/runtime-binding-source-lifecycle.js';
+import { RuntimeBindingSourceEvaluationKind } from '../observation/runtime-binding-observation.js';
 import { CheckerExpressionTypeBindingBehaviorEvaluation } from '../type-system/expression-type-context.js';
 
 export const enum TemplateTypeSystemOverlaySkippedReason {
@@ -224,6 +227,7 @@ export class TemplateTypeSystemOverlayEmission {
 interface OverlayExpressionSpan {
   readonly span: SourceSpan;
   readonly ast: ExpressionAstNode;
+  readonly chainIndex: number;
 }
 
 type ViewModelImport = TemplateTypeSystemOverlayPreludeViewModel;
@@ -416,6 +420,7 @@ export class TemplateTypeSystemOverlayBuilder {
           resource.runtimeAnalysis.runtimeRendering,
           instructionScopeLookup(resource.runtimeAnalysis.scopes.instructionScopes),
           resource.runtimeAnalysis.scopes.bindingExpressionScopes,
+          resource.runtimeAnalysis.expressionResourcePlan,
         ),
       },
     };
@@ -426,9 +431,6 @@ export class TemplateTypeSystemOverlayBuilder {
   ): void {
     let index = 0;
     for (const parse of resourceLocalEffectiveTemplateExpressionParses(this.store, frame.resource)) {
-      if (this.expressionParseIsTargetToSourceOnlyBindingTarget(frame.resource, parse)) {
-        continue;
-      }
       for (const expressionSpan of expressionSpansForOverlay(parse)) {
         const scopes = bindingScopesForTemplateExpressionParse(frame.resource, parse);
         const bindings = runtimeExpressionBindingsForTemplateExpressionParse(frame.resource, parse);
@@ -454,6 +456,9 @@ export class TemplateTypeSystemOverlayBuilder {
             ));
             continue;
           }
+          if (this.expressionParseIsSourceAssignmentOnly(frame.resource, parse, scopedBindings)) {
+            continue;
+          }
           index = this.appendTemplateExpressionProbe(frame, parse, expressionSpan, scope, scopedBindings, index);
         }
       }
@@ -472,6 +477,7 @@ export class TemplateTypeSystemOverlayBuilder {
       frame.resource,
       expressionSpan.ast,
       parse.productHandle,
+      expressionSpan.chainIndex,
       scope,
       scopedBindings,
       frame.expressionSourceProjectors,
@@ -545,13 +551,22 @@ export class TemplateTypeSystemOverlayBuilder {
       .appendLine('__au_template.call($vm);');
   }
 
-  private expressionParseIsTargetToSourceOnlyBindingTarget(
+  private expressionParseIsSourceAssignmentOnly(
     resource: TemplateResourceRuntimeAnalysisEmission,
     parse: TemplateExpressionParse,
+    scopedBindings: readonly RuntimeExpressionBinding[],
   ): boolean {
-    const binding = templateInstructionForExpressionParse(resource, parse);
-    return binding instanceof PropertyBindingInstruction
-      && binding.bindingMode === TemplateBindingMode.FromView;
+    if (scopedBindings.length > 0) {
+      return scopedBindings.every((binding) =>
+        runtimeBindingSourceLifecycle(
+          binding,
+          resource.runtimeAnalysis.expressionResourcePlan,
+        ).evaluationKind === RuntimeBindingSourceEvaluationKind.AssignmentOnly
+      );
+    }
+    const instruction = templateInstructionForExpressionParse(resource, parse);
+    return instruction instanceof PropertyBindingInstruction
+      && instruction.bindingMode === TemplateBindingMode.FromView;
   }
 
   private appendRootAliases(
@@ -738,6 +753,7 @@ export class TemplateTypeSystemOverlayBuilder {
     resource: TemplateResourceRuntimeAnalysisEmission,
     expression: ExpressionAstNode,
     expressionProductHandle: ProductHandle,
+    expressionChainIndex: number | null,
     ambientScope: BindingScope,
     bindings: readonly RuntimeExpressionBinding[],
     projectors: OverlayExpressionSourceProjectors,
@@ -755,6 +771,8 @@ export class TemplateTypeSystemOverlayBuilder {
 
     const selection = selectRuntimeBindingSourceContextProjection({
       bindings,
+      expressionProductHandle,
+      expressionChainIndex,
       expression,
       localKey,
       sourceExpressions: projectors.sourceExpressions,
@@ -852,6 +870,7 @@ export class TemplateTypeSystemOverlayBuilder {
       resource,
       expression,
       expressionProductHandle,
+      aggregateRuntimeBindingSourceExpressionChainIndex(expression),
       ambientScope,
       binding == null ? [] : [binding],
       projectors,
@@ -1886,6 +1905,7 @@ export class TemplateTypeSystemOverlayBuilder {
       resource,
       ast,
       expressionProductHandle,
+      aggregateRuntimeBindingSourceExpressionChainIndex(ast),
       ambientScope,
       scopedBindings,
       projectors,
@@ -2168,9 +2188,13 @@ function expressionSpansForOverlay(parse: TemplateExpressionParse): readonly Ove
     case ExpressionParseResultKind.ExpressionSuccess:
     case ExpressionParseResultKind.EmptyExpressionSuccess:
     case ExpressionParseResultKind.OpaqueSuccess:
-      return [{ span: parse.result.ast.span, ast: parse.result.ast }];
+      return [{ span: parse.result.ast.span, ast: parse.result.ast, chainIndex: 0 }];
     case ExpressionParseResultKind.InterpolationSuccess:
-      return parse.result.ast.expressions.map((expression) => ({ span: expression.span, ast: expression }));
+      return parse.result.ast.expressions.map((expression, chainIndex) => ({
+        span: expression.span,
+        ast: expression,
+        chainIndex,
+      }));
     default:
       return [];
   }

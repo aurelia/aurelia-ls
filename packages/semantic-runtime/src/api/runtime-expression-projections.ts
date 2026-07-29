@@ -65,6 +65,8 @@ export function runtimeExpressionAccessUseRow(
             operationProductHandle: accessUse.operationProductHandle,
             expressionProductHandle: accessUse.expressionProductHandle,
             scopeProductHandle: accessUse.scopeProductHandle,
+            accessOccurrenceHandle: accessUse.occurrenceHandle,
+            accessResolutionHandle: accessUse.resolutionHandle,
             sourceAddressHandle: accessUse.sourceAddressHandle,
             nameSourceAddressHandle: accessUse.nameSourceAddressHandle,
           },

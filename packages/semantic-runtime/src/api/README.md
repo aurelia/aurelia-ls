@@ -639,17 +639,21 @@ authored on a known owner type but the owner does not project that member, curso
 completion hit.
 Cursor-info answers also own `displayText` for MCP/LSP-style hover or explanation surfaces: selected HTML/value site,
 resource/bindable/member/owner facts, cursor diagnostics, missing inputs, and the next focused tool family.
-`TemplateReferences` and `TemplateRename` share one canonical property target and occurrence closure. Returned
+`TemplateReferences` and `TemplateRename` share one canonical binding-resolution target and authored-occurrence closure.
+The parse owns exact tokens, the rendered binding owns target interpretation, and a runtime access use is attached only
+when Aurelia actually has an operation that spends that resolution. This keeps a `fromView`-only attribute source
+navigable and renameable without falsely reporting a source read or data-flow edge. Returned
 `template-usage` rows use the exact authored member token as their primary `source`; declaration rows can include both
 the TypeScript property and distinct bindable metadata names, with `bindableDeclarationKind` preserving the authored
 form. Default-derived attribute spellings join through the bindable's property target, explicit aliases remain a
 separate public-name surface, and conventional `${name}Changed` propagation spends the converged callback target rather
 than reconstructing a class AST locally. Declaration rows are included only when `includeDeclaration` is true.
-Lexical scope references join parser-owned scope-access occurrences to the materialized `BindingScope`; they do not
-require a runtime observed-dependency row. That distinction keeps listener, dispatch, one-time, and other intentionally
-untracked reads navigable. When an observed row and a structural scope row cover the same token, the observed row wins
-because it carries richer runtime binding/dependency evidence; the structural row is the authored-closure fallback.
-An occurrence equal to its slot's authored declaration locus is not emitted again as a usage.
+Lexical and member references join parse-owned occurrences through the binding-context resolution and materialized
+`BindingScope`; they do not require a runtime use or observed-dependency row. That distinction keeps listener, dispatch,
+one-time, non-evaluated, blocked, and other intentionally untracked syntax navigable. When runtime uses and observed
+dependencies exist for a resolution, the same reference row carries every richer lineage handle; it neither chooses a
+representative operation nor emits a second occurrence. An occurrence equal to its slot's authored declaration locus is
+not emitted again as a usage.
 Resource reference contexts do not require a mappable authored declaration in order to return authored usages.
 Framework/catalog resources anchor the query at the active usage and omit the nonexistent declaration row; their
 definition product remains the matching authority. Rename stays unavailable with
@@ -1817,8 +1821,10 @@ template-to-state/service handoff as read/write interaction rows. This lets idio
 the API reads the binding row's materialized `BindingScope`, locates the root slot, and requires that slot's source to
 match the injected member source before publishing a direct support-member handoff.
 
-`RuntimeExpressionAccessUses` exposes the lossless owner-qualified access occurrences beneath binding, watcher,
-source-effect, and computed-observer execution. Each row retains its exact operation slot, origin, access form and role,
+`RuntimeExpressionAccessUses` exposes the lossless owner-qualified operation uses beneath binding, watcher,
+source-effect, and computed-observer execution. It deliberately does not enumerate authored template tokens that no
+runtime operation spends; template references and rename consume the binding-resolution layer for that authoring
+closure. Each row retains its exact operation slot, origin, access form and role,
 runtime phase, tracking mode, realization and reachability, control-flow qualifiers, execution multiplicity, semantic
 coverage, target closure, exact access/token source, and optional substrate handles. This is the query for questions
 about what Aurelia will read, call, or assign even when the operation is untracked, blocked, generated, or still open.

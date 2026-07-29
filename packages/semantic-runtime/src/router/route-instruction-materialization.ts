@@ -44,10 +44,12 @@ import {
   sourceValueContextForRuntimeBindingSourceExpressionProjection,
 } from '../observation/binding-source-value-evaluation-context.js';
 import {
+  expressionProductHandleForBinding,
   instructionScopeLookup,
   isRuntimeExpressionBinding,
 } from '../observation/runtime-binding-expression.js';
 import {
+  aggregateRuntimeBindingSourceExpressionChainIndex,
   RuntimeBindingSourceExpressionContextProjector,
   RuntimeBindingSourceExpressionProjectionKind,
 } from '../observation/runtime-binding-source-expression-context.js';
@@ -522,6 +524,7 @@ function routerResourceInstructionSite(
       runtimeAnalysis.runtimeRendering,
       instructionScopes,
       runtimeAnalysis.scopes.bindingExpressionScopes,
+      runtimeAnalysis.expressionResourcePlan,
     ),
     host,
     sourceAddressHandle: instruction.sourceAddressHandle ?? controller.sourceAddressHandle,
@@ -2161,6 +2164,8 @@ function routerSourceExpressionEvaluationFrame(
   const binding = bindings[0]!;
   const projection = site.sourceExpressionContexts.projectSource({
     binding,
+    expressionProductHandle: expressionProductHandleForBinding(binding),
+    expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(expression),
     expression,
     localKey: `router-resource:${binding.productHandle}:source-value:${expression.span.start}:${expression.span.end}`,
   });

@@ -26,7 +26,12 @@ const storefrontTemplateText = fs.readFileSync(storefrontTemplatePath, 'utf8');
 const storefrontDefinitionText = fs.readFileSync(storefrontDefinitionPath, 'utf8');
 const mixedFormRoot = path.join(packageRoot, 'fixtures/pressure/mixed-form-surfaces');
 const mixedFormTemplatePath = path.join(mixedFormRoot, 'src/components/loose-picklist.html');
+const mixedFormModelPath = path.join(mixedFormRoot, 'src/models/ticket.ts');
 const mixedFormTemplateText = fs.readFileSync(mixedFormTemplatePath, 'utf8');
+const mixedFormModelText = fs.readFileSync(mixedFormModelPath, 'utf8');
+const typecheckingCorpusRoot = path.join(packageRoot, 'fixtures/pressure/template-typechecking-corpus');
+const typecheckingCorpusTemplatePath = path.join(typecheckingCorpusRoot, 'src/read-expressions.html');
+const typecheckingCorpusTemplateText = fs.readFileSync(typecheckingCorpusTemplatePath, 'utf8');
 const aliasedBindableRoot = path.join(packageRoot, 'fixtures/pressure/aliased-bindable-surfaces');
 const aliasedBindableAppTemplatePath = path.join(aliasedBindableRoot, 'src/app.html');
 const aliasedBindableProductTemplatePath = path.join(aliasedBindableRoot, 'src/product-card.html');
@@ -44,6 +49,17 @@ const stateScopeDefinitionText = fs.readFileSync(stateScopeDefinitionPath, 'utf8
 const accessUseRoot = path.join(packageRoot, 'fixtures/pressure/runtime-expression-access-uses');
 const accessUseTemplatePath = path.join(accessUseRoot, 'src/runtime-expression-access-uses-app.html');
 const accessUseTemplateText = fs.readFileSync(accessUseTemplatePath, 'utf8');
+const bindingLifecycleRoot = path.join(packageRoot, 'fixtures/pressure/observation-binding-lifecycle');
+const bindingLifecycleTemplatePath = path.join(
+  bindingLifecycleRoot,
+  'src/observation-binding-lifecycle-app.html',
+);
+const bindingLifecycleDefinitionPath = path.join(
+  bindingLifecycleRoot,
+  'src/observation-binding-lifecycle-app.ts',
+);
+const bindingLifecycleTemplateText = fs.readFileSync(bindingLifecycleTemplatePath, 'utf8');
+const bindingLifecycleDefinitionText = fs.readFileSync(bindingLifecycleDefinitionPath, 'utf8');
 
 const catalog = readSemanticAppQueryCatalog({ queryKind: SemanticAppQueryKind.TemplateReferences });
 assert.equal(catalog.value.rows.length, 1, 'TemplateReferences should be in the public app-query catalog.');
@@ -180,13 +196,17 @@ assert.equal(resourceReferences.value.targetSource?.end, resourceNameStart + 'it
 
 const mixedFormRuntime = await createSemanticRuntime({
   workspaceRoot: mixedFormRoot,
+  storeKey: 'contract:template-references:parent-bound-specialization',
+});
+const typecheckingCorpusRuntime = await createSemanticRuntime({
+  workspaceRoot: typecheckingCorpusRoot,
   storeKey: 'contract:template-references:open-member-self-row',
 });
 const aliasedBindableRuntime = await createSemanticRuntime({
   workspaceRoot: aliasedBindableRoot,
   storeKey: 'contract:template-references:aliased-bindables',
 });
-const openMemberReferences = await mixedFormRuntime.answerAppQuery({
+const specializedMemberReferences = await mixedFormRuntime.answerAppQuery({
   kind: SemanticAppQueryKind.TemplateReferences,
   sourceFilePath: mixedFormTemplatePath,
   cursor: cursorInsideSource(mixedFormTemplateText, mixedFormTemplatePath, '${option.label || option}', 'label', 1),
@@ -197,20 +217,50 @@ const openMemberReferences = await mixedFormRuntime.answerAppQuery({
   includeAuthoringTemplates: true,
   appRetention: 'retain-app',
 });
-assert.match(openMemberReferences.outcome, /^(hit|partial)$/u, openMemberReferences.summary);
-assert.equal(openMemberReferences.closure, 'open', 'Unproven member references should not claim complete coverage.');
-assert.equal(openMemberReferences.value.selectedMemberName, 'label');
+assert.match(specializedMemberReferences.outcome, /^(hit|partial)$/u, specializedMemberReferences.summary);
+assert.equal(specializedMemberReferences.closure, 'complete', 'Reached parent-bound value types should close child repeat-local member references.');
+assert.equal(specializedMemberReferences.value.selectedMemberName, 'label');
 const optionLabelMarkerStart = mixedFormTemplateText.indexOf('${option.label || option}');
 assert.notEqual(optionLabelMarkerStart, -1, 'Expected option.label marker in mixed-form template.');
 const optionLabelStart = optionLabelMarkerStart + '${option.'.length;
+assert.equal(specializedMemberReferences.value.rows.length, 2, 'Specialized member references should include the template use and TypeScript declaration.');
+const specializedMemberUse = specializedMemberReferences.value.rows.find((row) => row.referenceKind === 'template-usage');
+assert.ok(specializedMemberUse, 'Expected the specialized option.label template occurrence.');
+assert.equal(specializedMemberUse.source?.path?.replace(/\\/g, '/'), 'src/components/loose-picklist.html');
+assert.equal(specializedMemberUse.source?.start, optionLabelStart);
+assert.equal(specializedMemberUse.source?.end, optionLabelStart + 'label'.length);
+const specializedMemberDeclaration = specializedMemberReferences.value.rows.find((row) => row.referenceKind === 'declaration');
+assert.ok(specializedMemberDeclaration, 'Expected the specialized TicketOption.label declaration.');
+const ticketOptionLabelStart = mixedFormModelText.indexOf('label', mixedFormModelText.indexOf('readonly label: string'));
+assert.equal(specializedMemberDeclaration.source?.path?.replace(/\\/g, '/'), 'src/models/ticket.ts');
+assert.equal(specializedMemberDeclaration.source?.start, ticketOptionLabelStart);
+assert.equal(specializedMemberDeclaration.source?.end, ticketOptionLabelStart + 'label'.length);
+
+const openMemberReferences = await typecheckingCorpusRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.TemplateReferences,
+  sourceFilePath: typecheckingCorpusTemplatePath,
+  cursor: cursorInsideSource(typecheckingCorpusTemplateText, typecheckingCorpusTemplatePath, '${unknownValue.label}', 'label', 1),
+  includeDeclaration: true,
+  detail: 'handles',
+  page: { size: 20 },
+  analysisDepth: 'binding-observation',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+assert.match(openMemberReferences.outcome, /^(hit|partial)$/u, openMemberReferences.summary);
+assert.equal(openMemberReferences.closure, 'open', 'Unproven member references should not claim complete coverage.');
+assert.equal(openMemberReferences.value.selectedMemberName, 'label');
+const unknownLabelMarkerStart = typecheckingCorpusTemplateText.indexOf('${unknownValue.label}');
+assert.notEqual(unknownLabelMarkerStart, -1, 'Expected unknownValue.label marker in typechecking corpus template.');
+const unknownLabelStart = unknownLabelMarkerStart + '${unknownValue.'.length;
 assert.equal(openMemberReferences.value.rows.length, 1, 'Unproven member references should return only the cursor occurrence.');
 const openMemberRow = openMemberReferences.value.rows[0];
 assert.equal(openMemberRow.referenceKind, 'template-usage');
-assert.equal(openMemberRow.source?.path?.replace(/\\/g, '/'), 'src/components/loose-picklist.html');
-assert.equal(openMemberRow.source?.start, optionLabelStart);
-assert.equal(openMemberRow.source?.end, optionLabelStart + 'label'.length);
-assert.equal(openMemberRow.targetSource?.start, optionLabelStart);
-assert.equal(openMemberRow.targetSource?.end, optionLabelStart + 'label'.length);
+assert.equal(openMemberRow.source?.path?.replace(/\\/g, '/'), 'src/read-expressions.html');
+assert.equal(openMemberRow.source?.start, unknownLabelStart);
+assert.equal(openMemberRow.source?.end, unknownLabelStart + 'label'.length);
+assert.equal(openMemberRow.targetSource?.start, unknownLabelStart);
+assert.equal(openMemberRow.targetSource?.end, unknownLabelStart + 'label'.length);
 assert.equal(openMemberRow.handles?.targetSourceAddressHandle ?? null, null, 'Open self-row must not expose an unproven owner source as the target handle.');
 assert.equal(
   openMemberReferences.value.candidateRows.length,
@@ -364,21 +414,21 @@ for (const marker of [
     accessUseRoot,
   );
   assert.notEqual(
-    row.handles?.accessUseProductHandle ?? null,
-    null,
+    row.handles?.accessUseProductHandles?.length ?? 0,
+    0,
     `Expected ${marker} to retain its access-use authority.`,
   );
 }
 const unobservedRows = accessUseReferences.value.rows.filter((row) =>
   row.referenceKind === 'template-usage'
-  && row.handles?.observedDependencyProductHandle == null
+  && (row.handles?.observedDependencyProductHandles?.length ?? 0) === 0
 );
 assert.ok(
   unobservedRows.length >= 3,
   'One-time and listener occurrences should prove that references do not depend on observation rows.',
 );
 assert.ok(
-  unobservedRows.every((row) => row.handles?.accessUseProductHandle != null),
+  unobservedRows.every((row) => (row.handles?.accessUseProductHandles?.length ?? 0) > 0),
   'Every unobserved template reference must retain its authored access-use handle.',
 );
 
@@ -432,8 +482,8 @@ const callbackUsage = expectReference(
   accessUseRoot,
 );
 assert.notEqual(
-  callbackUsage.handles?.accessUseProductHandle ?? null,
-  null,
+  callbackUsage.handles?.accessUseProductHandles?.length ?? 0,
+  0,
   'Callback-local references should retain the exact access occurrence.',
 );
 
@@ -483,6 +533,173 @@ assert.notEqual(
   rootContextIdentity,
   '$this inside the repeat scope should target the repeated binding context.',
 );
+const converterArgumentUses = accessUsesAt(
+  accessUseRows,
+  'value.two-way="form.name | suffix:converterSuffix & debounce:behaviorDelay"',
+  'converterSuffix',
+);
+const twoWayMemberUses = accessUsesAt(
+  accessUseRows,
+  'value.two-way="form.name | suffix:converterSuffix & debounce:behaviorDelay"',
+  'name',
+);
+assert.equal(twoWayMemberUses.length, 2, 'Two-way member access should retain read and write operations.');
+assert.equal(
+  twoWayMemberUses[0]?.handles?.accessOccurrenceHandle,
+  twoWayMemberUses[1]?.handles?.accessOccurrenceHandle,
+  'Read and write interpretations should share one parse-owned member occurrence.',
+);
+assert.notEqual(
+  twoWayMemberUses[0]?.handles?.accessResolutionHandle,
+  twoWayMemberUses[1]?.handles?.accessResolutionHandle,
+  'Read and write binding contexts must retain distinct target resolutions.',
+);
+assert.deepEqual(
+  twoWayMemberUses.map((row) => row.role).sort(),
+  ['read', 'write-target'],
+);
+assert.equal(converterArgumentUses.length, 2, 'Two-way converter argument should be spent in both directions.');
+assert.deepEqual(
+  converterArgumentUses.map((row) => row.phase).sort(),
+  ['source-assignment', 'source-evaluation'],
+);
+assert.notEqual(
+  converterArgumentUses[0]?.handles?.accessOccurrenceHandle ?? null,
+  null,
+  'Authored runtime uses should link to their parse-owned occurrence.',
+);
+assert.equal(
+  converterArgumentUses[0]?.handles?.accessOccurrenceHandle,
+  converterArgumentUses[1]?.handles?.accessOccurrenceHandle,
+  'Both converter phases should reuse one authored token occurrence.',
+);
+assert.equal(
+  converterArgumentUses[0]?.handles?.accessResolutionHandle,
+  converterArgumentUses[1]?.handles?.accessResolutionHandle,
+  'Both converter phases should reuse one binding-context target resolution.',
+);
+const converterArgumentReferences = await accessUseRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.TemplateReferences,
+  sourceFilePath: accessUseTemplatePath,
+  cursor: cursorInsideSource(
+    accessUseTemplateText,
+    accessUseTemplatePath,
+    'suffix:converterSuffix',
+    'converterSuffix',
+  ),
+  includeDeclaration: true,
+  detail: 'handles',
+  page: { size: 20 },
+  analysisDepth: 'binding-observation',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+assert.match(converterArgumentReferences.outcome, /^(hit|partial)$/u, converterArgumentReferences.summary);
+const converterArgumentReference = converterArgumentReferences.value.rows.find((row) =>
+  row.referenceKind === 'template-usage'
+  && row.source?.path?.replace(/\\/g, '/') === 'src/runtime-expression-access-uses-app.html'
+  && row.source.start === sourceTokenStart(
+    accessUseTemplateText,
+    'suffix:converterSuffix',
+    'converterSuffix',
+  )
+);
+assert.ok(converterArgumentReference != null, 'Expected a reference row for the converter argument.');
+assert.equal(
+  converterArgumentReference.handles?.accessUseProductHandles?.length ?? 0,
+  2,
+  'A reference row must conserve both runtime phases spending one binding-context resolution.',
+);
+
+const bindingLifecycleRuntime = await createSemanticRuntime({
+  workspaceRoot: bindingLifecycleRoot,
+  storeKey: 'contract:template-references:non-evaluated-authored-access',
+});
+const inertAttributeReferences = await bindingLifecycleRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.TemplateReferences,
+  sourceFilePath: bindingLifecycleTemplatePath,
+  cursor: cursorInsideSource(
+    bindingLifecycleTemplateText,
+    bindingLifecycleTemplatePath,
+    'data-lifecycle.attr="attributeFromView & fromView"',
+    'attributeFromView',
+    1,
+  ),
+  includeDeclaration: true,
+  detail: 'handles',
+  page: { size: 20 },
+  analysisDepth: 'binding-observation',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+assert.match(inertAttributeReferences.outcome, /^(hit|partial)$/u, inertAttributeReferences.summary);
+assert.equal(inertAttributeReferences.closure, 'complete');
+assert.equal(inertAttributeReferences.value.selectedMemberName, 'attributeFromView');
+const inertAttributeStart = sourceTokenStart(
+  bindingLifecycleTemplateText,
+  'data-lifecycle.attr="attributeFromView & fromView"',
+  'attributeFromView',
+);
+const convertedInertAttributeStart = sourceTokenStart(
+  bindingLifecycleTemplateText,
+  'data-converted-lifecycle.attr="attributeFromView | identityValue & fromView"',
+  'attributeFromView',
+);
+const inertAttributeDeclarationStart = bindingLifecycleDefinitionText.indexOf('attributeFromView');
+expectReference(
+  inertAttributeReferences.value.rows,
+  'template-usage',
+  'src/observation-binding-lifecycle-app.html',
+  inertAttributeStart,
+  inertAttributeStart + 'attributeFromView'.length,
+  bindingLifecycleRoot,
+);
+expectReference(
+  inertAttributeReferences.value.rows,
+  'template-usage',
+  'src/observation-binding-lifecycle-app.html',
+  convertedInertAttributeStart,
+  convertedInertAttributeStart + 'attributeFromView'.length,
+  bindingLifecycleRoot,
+);
+expectReference(
+  inertAttributeReferences.value.rows,
+  'declaration',
+  'src/observation-binding-lifecycle-app.ts',
+  inertAttributeDeclarationStart,
+  inertAttributeDeclarationStart + 'attributeFromView'.length,
+  bindingLifecycleRoot,
+);
+const inertTemplateRows = inertAttributeReferences.value.rows.filter(
+  (row) => row.referenceKind === 'template-usage',
+);
+assert.equal(inertTemplateRows.length, 2);
+assert.ok(
+  inertTemplateRows.every((row) =>
+    (row.handles?.accessUseProductHandles?.length ?? 0) === 0
+    && row.handles?.accessOccurrenceHandle != null
+    && row.handles?.accessResolutionHandle != null
+  ),
+  'Non-evaluated authored accesses should retain occurrence and resolution provenance without fabricating a runtime use.',
+);
+const bindingLifecycleAccessUses = await bindingLifecycleRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.RuntimeExpressionAccessUses,
+  sourceFilePath: bindingLifecycleTemplatePath,
+  detail: 'handles',
+  page: { size: 500 },
+  analysisDepth: 'binding-observation',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+assert.match(bindingLifecycleAccessUses.outcome, /^(hit|partial)$/u, bindingLifecycleAccessUses.summary);
+assert.ok(
+  bindingLifecycleAccessUses.value.rows.every((row) =>
+    row.nameSource?.path?.replace(/\\/g, '/') !== 'src/observation-binding-lifecycle-app.html'
+    || row.nameSource.start !== inertAttributeStart
+    || row.nameSource.end !== inertAttributeStart + 'attributeFromView'.length
+  ),
+  'Reference coverage must not turn a fromView-only attribute source into a runtime read.',
+);
 
 console.log(`Template references contract passed (${
   withDeclaration.value.rows.length
@@ -494,6 +711,7 @@ console.log(`Template references contract passed (${
   + inlineAliasReferences.value.rows.length
   + accessUseReferences.value.rows.length
   + callbackLocalReferences.value.rows.length
+  + inertAttributeReferences.value.rows.length
 } row(s)).`);
 
 async function askReferences(includeDeclaration) {
@@ -552,14 +770,19 @@ async function readAllRuntimeExpressionAccessUses(semanticRuntime) {
 }
 
 function accessUseAt(rows, marker, token) {
+  const matches = accessUsesAt(rows, marker, token);
+  const row = matches[0] ?? null;
+  assert.ok(row, `Expected access use at ${marker} / ${token}.`);
+  return row;
+}
+
+function accessUsesAt(rows, marker, token) {
   const start = sourceTokenStart(accessUseTemplateText, marker, token);
-  const row = rows.find((candidate) =>
+  return rows.filter((candidate) =>
     candidate.nameSource?.path?.replace(/\\/g, '/') === 'src/runtime-expression-access-uses-app.html'
     && candidate.nameSource?.start === start
     && candidate.nameSource?.end === start + token.length
   );
-  assert.ok(row, `Expected access use at ${marker} / ${token}.`);
-  return row;
 }
 
 function sourceTokenStart(text, marker, token, occurrence = 1, markerOccurrence = 1) {

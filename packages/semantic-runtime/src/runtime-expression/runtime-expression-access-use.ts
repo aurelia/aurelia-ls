@@ -4,10 +4,19 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
+import {
+  CheckerExpressionAccessTarget as RuntimeExpressionAccessTargetLink,
+  CheckerExpressionAccessTargetResolutionKind as RuntimeExpressionAccessTargetResolution,
+} from '../type-system/expression-access-target.js';
 import type {
   RuntimeOperationRealization,
   RuntimeOperationReachability,
 } from './runtime-operation.js';
+
+export {
+  CheckerExpressionAccessTarget as RuntimeExpressionAccessTargetLink,
+  CheckerExpressionAccessTargetResolutionKind as RuntimeExpressionAccessTargetResolution,
+} from '../type-system/expression-access-target.js';
 
 /** Runtime owner whose expression operation contains an access use. */
 export const enum RuntimeExpressionAccessOwnerKind {
@@ -189,36 +198,6 @@ export const enum RuntimeExpressionAccessCoverage {
   Truncated = 'truncated',
 }
 
-/** Closure of the semantic target reached by one access occurrence. */
-export const enum RuntimeExpressionAccessTargetResolution {
-  /** One exact declaration, scope slot, or context is reached. */
-  Exact = 'exact',
-  /** A finite dynamic key reaches several exact declaration targets. */
-  Finite = 'finite',
-  /** A governing index signature is known, but the runtime property identity is not. */
-  IndexSignature = 'index-signature',
-  /** The owner is closed and proves that the requested target is absent. */
-  Missing = 'missing',
-  /** Available scope/type facts cannot close the target. */
-  Open = 'open',
-}
-
-/** One exact or governing target retained without flattening checker/scope authority into text. */
-export class RuntimeExpressionAccessTargetLink {
-  constructor(
-    /** Scope-context or type-shape product that owns the target surface. */
-    readonly authorityProductHandle: ProductHandle | null,
-    /** Declaration, scope-slot, or context identity reached by this target. */
-    readonly targetIdentityHandle: IdentityHandle | null,
-    /** Declaration member detail reached by the target. */
-    readonly targetTypeMemberHandle: HotDetailHandle | null,
-    /** Member detail that supplied the current value type when distinct from the declaration member. */
-    readonly targetTypeSourceMemberHandle: HotDetailHandle | null,
-    /** Exact declaration/local source when one is known. */
-    readonly declarationSourceAddressHandle: AddressHandle | null,
-  ) {}
-}
-
 /** One operation-local condition carried by an access use. */
 export class RuntimeExpressionExecutionQualifier {
   constructor(
@@ -233,9 +212,9 @@ export class RuntimeExpressionExecutionQualifier {
 /**
  * One source-backed access after syntax is paired with the exact Aurelia runtime operation that spends it.
  *
- * This is a static semantic use, not a live property subscription. Observation, references, diagnostics, IDE
- * features, and future AOT analysis project from this fact instead of rediscovering or text-deduplicating access
- * occurrences.
+ * This is a static semantic operation use, not a live property subscription or the authority for every authored token.
+ * Observation, diagnostics, and future AOT execution analysis project from this fact. IDE authoring features project
+ * template targets from `RuntimeBindingExpressionAccessResolution`, including resolutions with no runtime use.
  */
 export class RuntimeExpressionAccessUse {
   constructor(
@@ -252,6 +231,10 @@ export class RuntimeExpressionAccessUse {
     readonly expressionProductHandle: ProductHandle | null,
     /** Runtime Scope product used for this access, when the operation is template-owned. */
     readonly scopeProductHandle: ProductHandle | null,
+    /** Parse-owned authored occurrence spent by this use; null for generated and TypeScript-only operations. */
+    readonly occurrenceHandle: HotDetailHandle | null,
+    /** Binding-context resolution spent by this use; null for generated and non-template operations. */
+    readonly resolutionHandle: HotDetailHandle | null,
     readonly origin: RuntimeExpressionAccessOrigin,
     readonly accessForm: RuntimeExpressionAccessForm,
     readonly role: RuntimeExpressionAccessRole,

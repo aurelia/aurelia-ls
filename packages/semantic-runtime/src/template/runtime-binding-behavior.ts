@@ -27,7 +27,6 @@ import type {
 import type { SourceSpan } from '../expression/source-span.js';
 import {
   RuntimeExpressionResourceApplicationOrigin,
-  RuntimeExpressionResourceBindReachability,
   RuntimeExpressionResourceLifecycleEffects,
 } from './runtime-expression-resource.js';
 import type { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
@@ -87,7 +86,7 @@ export class RuntimeBindingBehaviorApplication {
     readonly chainIndex: number,
     readonly authoredChainDepth: number,
     readonly runtimeChainDepth: number,
-    readonly bindReachability: RuntimeExpressionResourceBindReachability,
+    readonly bindReachability: RuntimeOperationReachability,
     readonly phaseReachability: RuntimeOperationReachability,
     readonly bindOrder: number | null,
     readonly phaseOrder: number | null,

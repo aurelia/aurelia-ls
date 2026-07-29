@@ -56,6 +56,17 @@ const stateScopeTemplatePath = path.join(stateScopeRoot, 'src/app.html');
 const stateScopeDefinitionPath = path.join(stateScopeRoot, 'src/app.ts');
 const stateScopeTemplateText = fs.readFileSync(stateScopeTemplatePath, 'utf8');
 const stateScopeDefinitionText = fs.readFileSync(stateScopeDefinitionPath, 'utf8');
+const bindingLifecycleRoot = path.join(packageRoot, 'fixtures/pressure/observation-binding-lifecycle');
+const bindingLifecycleTemplatePath = path.join(
+  bindingLifecycleRoot,
+  'src/observation-binding-lifecycle-app.html',
+);
+const bindingLifecycleDefinitionPath = path.join(
+  bindingLifecycleRoot,
+  'src/observation-binding-lifecycle-app.ts',
+);
+const bindingLifecycleTemplateText = fs.readFileSync(bindingLifecycleTemplatePath, 'utf8');
+const bindingLifecycleDefinitionText = fs.readFileSync(bindingLifecycleDefinitionPath, 'utf8');
 
 const catalog = readSemanticAppQueryCatalog({ queryKind: SemanticAppQueryKind.TemplateRename });
 assert.equal(catalog.value.rows.length, 1, 'TemplateRename should be in the public app-query catalog.');
@@ -350,6 +361,64 @@ expectEdit(inlineAliasRename.value.edits, 'bindable-attribute-alias-declaration'
 expectEdit(inlineAliasRename.value.edits, 'bindable-attribute', 'src/app.html', inlineAliasUsageStart, inlineAliasUsageStart + 'display-label'.length, 'hint-label', aliasedBindableRoot);
 assert.equal(inlineAliasRename.value.edits.length, 2, 'Inline alias rename should edit only the alias declaration and matching segment target.');
 
+const bindingLifecycleRuntime = await createSemanticRuntime({
+  workspaceRoot: bindingLifecycleRoot,
+  storeKey: 'contract:template-rename:non-evaluated-authored-access',
+});
+const inertAttributeRename = await bindingLifecycleRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.TemplateRename,
+  sourceFilePath: bindingLifecycleTemplatePath,
+  cursor: cursorInside(
+    bindingLifecycleTemplateText,
+    bindingLifecycleTemplatePath,
+    'data-lifecycle.attr="attributeFromView & fromView"',
+    'attributeFromView',
+    1,
+  ),
+  newName: 'attributeAfterView',
+  analysisDepth: 'binding-observation',
+  diagnosticProjection: 'type-projection',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+assert.equal(inertAttributeRename.outcome, 'hit');
+assert.equal(inertAttributeRename.value.status, 'available');
+assert.equal(inertAttributeRename.value.templateReferenceCount, 2);
+assert.equal(inertAttributeRename.value.typeScriptReferenceCount, 1);
+const inertAttributeStart = bindingLifecycleTemplateText.indexOf('attributeFromView');
+const convertedInertAttributeStart = bindingLifecycleTemplateText.indexOf(
+  'attributeFromView',
+  inertAttributeStart + 'attributeFromView'.length,
+);
+const inertAttributeDeclarationStart = bindingLifecycleDefinitionText.indexOf('attributeFromView');
+expectEdit(
+  inertAttributeRename.value.edits,
+  'template-usage',
+  'src/observation-binding-lifecycle-app.html',
+  inertAttributeStart,
+  inertAttributeStart + 'attributeFromView'.length,
+  'attributeAfterView',
+  bindingLifecycleRoot,
+);
+expectEdit(
+  inertAttributeRename.value.edits,
+  'template-usage',
+  'src/observation-binding-lifecycle-app.html',
+  convertedInertAttributeStart,
+  convertedInertAttributeStart + 'attributeFromView'.length,
+  'attributeAfterView',
+  bindingLifecycleRoot,
+);
+expectEdit(
+  inertAttributeRename.value.edits,
+  'typescript-reference',
+  'src/observation-binding-lifecycle-app.ts',
+  inertAttributeDeclarationStart,
+  inertAttributeDeclarationStart + 'attributeFromView'.length,
+  'attributeAfterView',
+  bindingLifecycleRoot,
+);
+
 console.log(`Template rename contract passed (${
   rename.value.edits.length
   + stateScopeRename.value.edits.length
@@ -359,6 +428,7 @@ console.log(`Template rename contract passed (${
   + aliasedPropertyRename.value.edits.length
   + productAliasRename.value.edits.length
   + inlineAliasRename.value.edits.length
+  + inertAttributeRename.value.edits.length
 } edit row(s)).`);
 
 async function askRename(newName) {

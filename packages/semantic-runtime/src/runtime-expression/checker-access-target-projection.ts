@@ -11,11 +11,10 @@ import {
   readCheckerTypeShape,
 } from '../type-system/checker-type-shape-access.js';
 import {
-  RuntimeExpressionAccessTargetLink,
   RuntimeExpressionAccessTargetResolution,
+  type RuntimeExpressionAccessTargetLink,
 } from './runtime-expression-access-use.js';
 import {
-  CheckerExpressionAccessTargetResolutionKind,
   type CheckerExpressionAccessTargetResolution,
 } from '../type-system/expression-access-target.js';
 import {
@@ -46,14 +45,8 @@ export function runtimeCheckerAccessTargetProjection(
   target: CheckerExpressionAccessTargetResolution,
 ): RuntimeCheckerAccessTargetProjection {
   return new RuntimeCheckerAccessTargetProjection(
-    runtimeAccessTargetResolution(target.kind),
-    target.targets.map((candidate) => new RuntimeExpressionAccessTargetLink(
-      candidate.authorityProductHandle,
-      candidate.targetIdentityHandle,
-      candidate.targetTypeMemberHandle,
-      candidate.targetTypeSourceMemberHandle,
-      candidate.declarationSourceAddressHandle,
-    )),
+    target.kind,
+    target.targets,
   );
 }
 
@@ -128,23 +121,6 @@ export class RuntimeRootExpressionAccessTargetProjector {
       astEvaluateOnlyRuntimeContext(true, null),
     );
     return runtimeCheckerAccessTargetProjection(this.evaluator.resolveAccessTarget(context, expression));
-  }
-}
-
-function runtimeAccessTargetResolution(
-  kind: CheckerExpressionAccessTargetResolutionKind,
-): RuntimeExpressionAccessTargetResolution {
-  switch (kind) {
-    case CheckerExpressionAccessTargetResolutionKind.Exact:
-      return RuntimeExpressionAccessTargetResolution.Exact;
-    case CheckerExpressionAccessTargetResolutionKind.Finite:
-      return RuntimeExpressionAccessTargetResolution.Finite;
-    case CheckerExpressionAccessTargetResolutionKind.IndexSignature:
-      return RuntimeExpressionAccessTargetResolution.IndexSignature;
-    case CheckerExpressionAccessTargetResolutionKind.Missing:
-      return RuntimeExpressionAccessTargetResolution.Missing;
-    case CheckerExpressionAccessTargetResolutionKind.Open:
-      return RuntimeExpressionAccessTargetResolution.Open;
   }
 }
 

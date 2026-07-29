@@ -28,6 +28,7 @@ import {
   CheckerExpressionTypeEvaluationContext,
 } from '../type-system/expression-type-context.js';
 import {
+  expressionProductHandleForBinding,
   isRuntimeExpressionBinding,
   type RuntimeExpressionBinding,
 } from '../observation/runtime-binding-expression.js';
@@ -35,6 +36,7 @@ import {
   type RuntimeBindingExpressionScopeProjectionReader,
 } from '../observation/runtime-binding-expression-scope.js';
 import {
+  aggregateRuntimeBindingSourceExpressionChainIndex,
   RuntimeBindingSourceExpressionProjectionKind,
   checkerContextForRuntimeBindingSourceExpressionProjection,
   projectRuntimeBindingSourceExpressionInScope,
@@ -662,12 +664,19 @@ export class TemplateScopeTypeProjector {
     if (binding == null) {
       return CheckerExpressionTypeEvaluationContext.knownScope(expression, sourceScope, localKey, sourceAddressHandle);
     }
-    const projection = projectRuntimeBindingSourceExpressionInScope(input.runtimeBindings, this.bindingExpressionScopes, {
-      binding,
-      expression,
-      localKey,
-      sourceScope,
-    });
+    const projection = projectRuntimeBindingSourceExpressionInScope(
+      input.runtimeBindings,
+      this.bindingExpressionScopes,
+      input.expressionResourcePlan,
+      {
+        binding,
+        expressionProductHandle: expressionProductHandleForBinding(binding),
+        expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(expression),
+        expression,
+        localKey,
+        sourceScope,
+      },
+    );
     return projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open
       ? null
       : checkerContextForRuntimeBindingSourceExpressionProjection(projection, false);

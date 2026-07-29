@@ -1,9 +1,16 @@
 import type { BindingScope } from '../configuration/scope.js';
 import type { Container } from '../di/container.js';
-import type { ExpressionAstNode } from '../expression/ast.js';
+import type {
+  ExpressionAstNode,
+  ValueConverterExpression,
+} from '../expression/ast.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
+import type {
+  RuntimeExpressionResourcePlan,
+  RuntimeValueConverterPlanEntry,
+} from '../template/runtime-expression-resource-plan.js';
 import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 import {
   CheckerExpressionTypeBindingBehaviorEvaluation,
@@ -11,7 +18,6 @@ import {
 import type { RuntimeExpressionBinding } from './runtime-binding-expression.js';
 import {
   type RuntimeBindingExpressionScopeProjectionReader,
-  runtimeBindingExpressionUsesModeledScopeChangingBindingBehavior,
 } from './runtime-binding-expression-scope.js';
 import {
   RuntimeBindingSourceExpressionProjectionKind,
@@ -29,11 +35,17 @@ export interface RuntimeBindingSourceValueContextProjection {
 
 export interface RuntimeBindingSourceValueKnownScopeProjectionRequest {
   /** Rendered runtime binding table that owns strict-mode and render-context facts when a binding exists. */
-  readonly runtimeBindings?: RuntimeRenderingEmission | null;
+  readonly runtimeBindings: RuntimeRenderingEmission | null;
   /** Source-scope projector that models binding-behavior `bind(...)` handoff before source reads. */
-  readonly bindingExpressionScopes?: RuntimeBindingExpressionScopeProjectionReader | null;
+  readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader | null;
+  /** Exact resource-lifecycle plan for a binding-owned source; null only for an ownerless known-scope read. */
+  readonly expressionResourcePlan: RuntimeExpressionResourcePlan | null;
   /** Runtime expression binding whose source is being reduced to a static value, if the source is binding-owned. */
-  readonly binding?: RuntimeExpressionBinding | null;
+  readonly binding: RuntimeExpressionBinding | null;
+  /** Parse product for a binding-owned source; null only when the binding has no parsed product or is ownerless. */
+  readonly expressionProductHandle: ProductHandle | null;
+  /** Exact interpolation-hole index, or null for an aggregate interpolation or ownerless source. */
+  readonly expressionChainIndex: number | null;
   /** Binding source expression before runtime source-scope projection. */
   readonly expression: ExpressionAstNode;
   /** Semantic local key for projected source-value products. */
@@ -65,6 +77,9 @@ export class RuntimeBindingSourceValueEvaluationContext {
       null,
       null,
       null,
+      null,
+      null,
+      null,
       CheckerExpressionTypeBindingBehaviorEvaluation.AstBindThenEvaluate,
       resourceScope,
       strictBinding,
@@ -82,6 +97,9 @@ export class RuntimeBindingSourceValueEvaluationContext {
       undefined,
       projection.bindingExpressionScopes,
       projection.bindingProductHandle,
+      projection.expressionProductHandle,
+      projection.expressionChainIndex,
+      projection.expressionResourcePlan,
       projection.localKey,
       projection.sourceAddressHandle,
       projection.bindingBehavior,
@@ -101,6 +119,9 @@ export class RuntimeBindingSourceValueEvaluationContext {
     private readonly activeBoundControllerReads: Set<string> = new Set(),
     private readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader | null = null,
     private readonly bindingProductHandle: ProductHandle | null = null,
+    private readonly expressionProductHandle: ProductHandle | null = null,
+    private readonly expressionChainIndex: number | null = null,
+    private readonly expressionResourcePlan: RuntimeExpressionResourcePlan | null = null,
     private readonly localKey: string | null = null,
     private readonly sourceAddressHandle: AddressHandle | null = null,
     private readonly bindingBehavior: CheckerExpressionTypeBindingBehaviorEvaluation = CheckerExpressionTypeBindingBehaviorEvaluation.AstBindThenEvaluate,
@@ -124,6 +145,9 @@ export class RuntimeBindingSourceValueEvaluationContext {
       this.activeBoundControllerReads,
       this.bindingExpressionScopes,
       this.bindingProductHandle,
+      this.expressionProductHandle,
+      this.expressionChainIndex,
+      this.expressionResourcePlan,
       this.localKey,
       this.sourceAddressHandle,
       this.bindingBehavior,
@@ -142,6 +166,9 @@ export class RuntimeBindingSourceValueEvaluationContext {
       this.activeBoundControllerReads,
       this.bindingExpressionScopes,
       this.bindingProductHandle,
+      this.expressionProductHandle,
+      this.expressionChainIndex,
+      this.expressionResourcePlan,
       this.localKey,
       this.sourceAddressHandle,
       this.bindingBehavior,
@@ -160,6 +187,9 @@ export class RuntimeBindingSourceValueEvaluationContext {
       this.activeBoundControllerReads,
       this.bindingExpressionScopes,
       this.bindingProductHandle,
+      this.expressionProductHandle,
+      this.expressionChainIndex,
+      this.expressionResourcePlan,
       this.localKey,
       this.sourceAddressHandle,
       this.bindingBehavior,
@@ -172,6 +202,31 @@ export class RuntimeBindingSourceValueEvaluationContext {
   /** Returns the container visible to static-evaluator resolve hooks for this request. */
   containerOrDefault(defaultActiveContainer: Container | null): Container | null {
     return this.activeContainer === undefined ? defaultActiveContainer : this.activeContainer;
+  }
+
+  /** Whether this request is owned by one rendered binding's exact expression-resource plan. */
+  ownsExpressionResourcePlan(): boolean {
+    return this.bindingBehavior === CheckerExpressionTypeBindingBehaviorEvaluation.AstBindThenEvaluate
+      && this.bindingProductHandle != null
+      && this.expressionResourcePlan != null;
+  }
+
+  /** Exact converter application selected for this binding-owned expression, if one was planned. */
+  readValueConverterPlanEntry(
+    expression: ValueConverterExpression,
+  ): RuntimeValueConverterPlanEntry | null {
+    if (
+      this.bindingProductHandle == null
+      || this.expressionProductHandle == null
+      || this.expressionResourcePlan == null
+    ) {
+      return null;
+    }
+    return this.expressionResourcePlan.readValueConverterEntry(
+      this.expressionProductHandle,
+      expression,
+      this.bindingProductHandle,
+    );
   }
 
   /** Runs a read with a bound-controller value marked active so recursive source values stay explicit. */
@@ -215,8 +270,11 @@ export class RuntimeBindingSourceValueEvaluationContext {
   projectBindingSourceValueContext(
     expression: ExpressionAstNode,
     sourceScope: BindingScope,
-    bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader | null,
+    bindingExpressionScopes: RuntimeBindingExpressionScopeProjectionReader,
     bindingProductHandle: ProductHandle,
+    expressionProductHandle: ProductHandle | null,
+    expressionChainIndex: number | null,
+    expressionResourcePlan: RuntimeExpressionResourcePlan,
     bindingBehavior: CheckerExpressionTypeBindingBehaviorEvaluation,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
@@ -233,6 +291,9 @@ export class RuntimeBindingSourceValueEvaluationContext {
           this.activeBoundControllerReads,
           bindingExpressionScopes,
           bindingProductHandle,
+          expressionProductHandle,
+          expressionChainIndex,
+          expressionResourcePlan,
           localKey,
           sourceAddressHandle,
           bindingBehavior,
@@ -243,32 +304,11 @@ export class RuntimeBindingSourceValueEvaluationContext {
         openReason: null,
       };
     }
-    if (bindingExpressionScopes == null) {
-      return runtimeBindingExpressionUsesModeledScopeChangingBindingBehavior(expression)
-        ? {
-            context: null,
-            openReason: 'Runtime binding source value read did not carry the binding-expression scope projector needed for a modeled scope-changing binding behavior.',
-          }
-        : {
-            context: new RuntimeBindingSourceValueEvaluationContext(
-              expression,
-              sourceScope,
-              activeContainer,
-              this.activeBoundControllerReads,
-              bindingExpressionScopes,
-              bindingProductHandle,
-              localKey,
-              sourceAddressHandle,
-              bindingBehavior,
-              resourceScope,
-              strictBinding,
-              RuntimeOperationReachability.Reached,
-            ),
-            openReason: null,
-          };
-    }
     const projected = projectRuntimeSourceExpressionWithLifecycle({
       bindingProductHandle,
+      expressionProductHandle,
+      expressionChainIndex,
+      expressionResourcePlan,
       expression,
       sourceScope,
       resourceScope,
@@ -294,6 +334,9 @@ export class RuntimeBindingSourceValueEvaluationContext {
         this.activeBoundControllerReads,
         bindingExpressionScopes,
         bindingProductHandle,
+        expressionProductHandle,
+        expressionChainIndex,
+        expressionResourcePlan,
         localKey,
         sourceAddressHandle,
         bindingBehavior,
@@ -322,11 +365,17 @@ export class RuntimeBindingSourceValueEvaluationContext {
     if (this.bindingProductHandle == null) {
       return null;
     }
+    if (this.expressionResourcePlan == null) {
+      return null;
+    }
     if (this.resourceScope == null) {
       return null;
     }
     const projected = projectRuntimeSourceExpressionWithLifecycle({
       bindingProductHandle: this.bindingProductHandle,
+      expressionProductHandle: this.expressionProductHandle,
+      expressionChainIndex: this.expressionChainIndex,
+      expressionResourcePlan: this.expressionResourcePlan,
       expression,
       sourceScope: scope,
       resourceScope: this.resourceScope,
@@ -374,27 +423,24 @@ export function projectRuntimeBindingSourceValueContextInScope(
       openReason: null,
     };
   }
-  if (input.runtimeBindings == null || input.bindingExpressionScopes == null) {
-    return runtimeBindingExpressionUsesModeledScopeChangingBindingBehavior(input.expression)
-      ? {
-          context: null,
-          openReason: 'Runtime binding source value read did not carry the binding-expression scope projector needed for a modeled scope-changing binding behavior.',
-        }
-      : {
-          context: RuntimeBindingSourceValueEvaluationContext.knownScope(
-            input.expression,
-            input.sourceScope,
-            input.activeContainer,
-            input.resourceScope ?? null,
-          ),
-          openReason: null,
-        };
+  if (
+    input.runtimeBindings == null
+    || input.bindingExpressionScopes == null
+    || input.expressionResourcePlan == null
+  ) {
+    return {
+      context: null,
+      openReason: 'Binding-owned source value read did not carry its runtime binding, source-scope, and expression-resource authorities.',
+    };
   }
   const projection = projectRuntimeBindingSourceExpressionInScope(
     input.runtimeBindings,
     input.bindingExpressionScopes,
+    input.expressionResourcePlan,
     {
       binding: input.binding,
+      expressionProductHandle: input.expressionProductHandle,
+      expressionChainIndex: input.expressionChainIndex,
       expression: input.expression,
       localKey: input.localKey,
       sourceScope: input.sourceScope,

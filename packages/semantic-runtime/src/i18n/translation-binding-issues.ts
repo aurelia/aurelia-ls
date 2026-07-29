@@ -65,6 +65,7 @@ import {
   type RuntimeInstructionScopeLookup,
 } from '../observation/runtime-binding-expression.js';
 import {
+  aggregateRuntimeBindingSourceExpressionChainIndex,
   checkerContextForRuntimeBindingSourceExpressionProjection,
   RuntimeBindingSourceExpressionContextProjector,
   RuntimeBindingSourceExpressionProjectionKind,
@@ -164,6 +165,7 @@ export class I18nTranslationBindingIssueMaterializer {
         input.runtimeRendering,
         instructionScopes,
         input.scopes.bindingExpressionScopes,
+        input.expressionResourcePlan,
       ),
     };
 
@@ -270,6 +272,8 @@ export class I18nTranslationBindingIssueMaterializer {
     }
     const projection = context.sourceExpressionContexts.projectSource({
       binding,
+      expressionProductHandle,
+      expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(ast),
       expression: ast,
       localKey: checkerExpressionTypeLocalKey(scope.productHandle, binding.productHandle, expressionProductHandle),
       sourceScope: scope,

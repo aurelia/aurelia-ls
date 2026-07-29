@@ -481,8 +481,14 @@ classification, expression parsing, and instruction lowering converge on the sam
   on the second bind attempt before behavior-specific effects run.
   Interpolation bindings are handled as runtime-html handles them: each interpolation hole behaves like an
   `InterpolationPartBinding` expression for bind-time behavior and value-converter publication, rather than treating the
-  outer interpolation string as an inert wrapper. Behavior application and issue products source to the exact behavior
-  name span when the carrier comes from an admitted source file, not just the whole binding carrier span.
+  outer interpolation string as an inert wrapper. Parts bind in source order, so a resource-bind failure keeps the
+  failing part's earlier wrappers visible, blocks inner wrappers as `blocked-by-outer-failure`, and blocks every later
+  part as `blocked-by-bind-failure`, including parts with no expression resource of their own. The complete
+  interpolation source operation remains blocked when any part cannot bind, while access-use rows retain each part's
+  own reachability. `RuntimeOperationReachability` is the sole vocabulary
+  for both bind and later phase reachability; do not reintroduce a narrower bind-only enum. Behavior application and
+  issue products source to the exact behavior name span when the carrier comes from an admitted source file, not just
+  the whole binding carrier span.
   Binding-mode behaviors (`oneTime`, `toView`, `fromView`, and `twoWay`) are modeled as reached, resource-visible
   framework bind-time effects, not parser aliases. Scope assignment, controller target access, value-converter phases,
   bound-controller values, observation data-flow, and inlay hints all spend the same expression-resource plan. A missing
@@ -1124,10 +1130,16 @@ both roles or carry provenance through a transforming wrapper; either mistake tu
 declaration/type-source relationship.
 The table is the resource-boundary carrier: once a child template is being analyzed, the parent `RuntimeBinding` is not
 available through the child's runtime rendering emission, so strict mode and binding-behavior lifecycle must travel on
-the table entry rather than being rediscovered downstream. That includes the parent resource's binding-expression
-scope projector. Definition/type fallback is reserved for synthetic-view and cross-resource child analysis;
-instance-owning consumers use the exact-controller read so one resource usage cannot lend its bound value to a sibling
-usage of the same definition.
+the table entry rather than being rediscovered downstream. That includes the parent resource's exact
+`RuntimeExpressionResourcePlan` and binding-expression scope projector. Binding-owned value-converter evaluation spends
+the plan entry selected during parent rendering; only ownerless known-scope evaluation performs an ambient resource
+lookup. Definition/type fallback is reserved for synthetic-view and cross-resource child analysis. An exact-controller
+steady read requires one live writer, while an initial-settlement read selects the last render-order writer and
+all-writer enumeration preserves the ordered set for scope/type projection. This distinction prevents one resource
+usage from lending its value to a sibling and avoids misrepresenting multiple active bindings as permanent
+last-writer-wins state. Writer admission spends `runtimeBindingSourceLifecycle(...)`: a structural controller target
+access whose expression-resource bind failed, or whose effective mode is source-assignment-only, did not deliver a
+parent value and is excluded.
 When the parent binding source uses a source-scope-changing behavior such as `& state`, child root slot source lookup
 must spend `RuntimeBindingExpressionScopeProjector` before chasing `AccessScope`/`AccessMember` identity; otherwise the
 slot can have the right evaluated type while losing the store member as its source. The state-source overlay fixture

@@ -999,25 +999,32 @@ function viewportStringField(
   instruction: SetPropertyInstruction | PropertyBindingInstruction | InterpolationInstruction | null,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
 ): ViewportStringField {
-  const bound = sourceValueEvaluator.boundControllerValues.readExactControllerProperty(
+  const boundRead = sourceValueEvaluator.evaluateInitialBoundControllerPropertyValue(
     controller.productHandle,
     field,
   );
-  if (bound != null) {
-    const evaluated = sourceValueEvaluator.evaluateBoundControllerPropertyValue(bound);
+  if (boundRead != null) {
+    const bound = boundRead.source;
+    const evaluated = boundRead.evaluation;
+    const sourceAddressHandle = bound?.sourceAddressHandle ?? instruction?.sourceAddressHandle ?? null;
+    const provenanceHandle = bound?.sourceProvenanceHandle
+      ?? (instruction == null
+        ? null
+        : readFieldProvenance(instruction.fieldProvenance, 'expression')
+          ?? readFieldProvenance(instruction.fieldProvenance, 'source'));
     if (evaluated.value?.kind === EvaluationValueKind.String) {
       return {
         value: evaluated.value.value,
         state: evaluated.closure === RuntimeBindingSourceValueEvaluationClosure.Value
-          ? new ViewportFieldState(field, ViewportFieldStateKind.Closed, bound.sourceAddressHandle)
+          ? new ViewportFieldState(field, ViewportFieldStateKind.Closed, sourceAddressHandle)
           : new ViewportFieldState(
               field,
               ViewportFieldStateKind.Open,
-              bound.sourceAddressHandle,
+              sourceAddressHandle,
               evaluated.openReason,
               evaluated.openReasonKinds,
             ),
-        provenanceHandle: bound.sourceProvenanceHandle,
+        provenanceHandle,
       };
     }
     if (
@@ -1029,10 +1036,10 @@ function viewportStringField(
         state: new ViewportFieldState(
           field,
           ViewportFieldStateKind.Referential,
-          bound.sourceAddressHandle,
+          sourceAddressHandle,
           `au-viewport ${field} binding closed to '${evaluated.value.kind}', not a concrete string.`,
         ),
-        provenanceHandle: bound.sourceProvenanceHandle,
+        provenanceHandle,
       };
     }
     return {
@@ -1040,11 +1047,11 @@ function viewportStringField(
       state: new ViewportFieldState(
         field,
         ViewportFieldStateKind.Open,
-        bound.sourceAddressHandle,
+        sourceAddressHandle,
         evaluated.openReason,
         evaluated.openReasonKinds,
       ),
-      provenanceHandle: bound.sourceProvenanceHandle,
+      provenanceHandle,
     };
   }
   if (instruction instanceof SetPropertyInstruction) {

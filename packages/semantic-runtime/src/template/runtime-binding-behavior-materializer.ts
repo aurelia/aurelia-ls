@@ -55,7 +55,6 @@ import type {
 import {
   RuntimeExpressionResourceLifecycleEffectKind,
   RuntimeExpressionResourceLifecycleEffects,
-  RuntimeExpressionResourceBindReachability,
   RuntimeExpressionResourceSignal,
   RuntimeExpressionResourceValueState,
 } from './runtime-expression-resource.js';
@@ -270,7 +269,9 @@ export class RuntimeBindingBehaviorMaterializer {
       phaseReachability,
       entry.bindOrder,
       phaseReachability === RuntimeOperationReachability.Reached
-        ? entry.phaseOrder
+        ? phase === RuntimeBindingBehaviorApplicationPhase.Unbind
+          ? plan.readCleanupPhaseOrder(entry)
+          : entry.bindOrder
         : null,
       phaseReachability === RuntimeOperationReachability.Reached && entry.issue == null
         ? lifecycleEffects
@@ -368,11 +369,11 @@ function bindingBehaviorPhaseReachability(
   entry: RuntimeBindingBehaviorPlanEntry,
   phase: RuntimeBindingBehaviorApplicationPhase,
 ): RuntimeOperationReachability {
-  if (entry.bindReachability !== RuntimeExpressionResourceBindReachability.Reached) {
-    return RuntimeOperationReachability.BlockedByOuterFailure;
+  if (entry.bindReachability !== RuntimeOperationReachability.Reached) {
+    return entry.bindReachability;
   }
   if (phase === RuntimeBindingBehaviorApplicationPhase.Unbind) {
-    return plan.readPostBindPhaseReachability(entry);
+    return plan.readCleanupPhaseReachability(entry);
   }
   return RuntimeOperationReachability.Reached;
 }

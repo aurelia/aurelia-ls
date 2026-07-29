@@ -36,10 +36,10 @@ import {
   RuntimeBindingSourceValueEvaluator,
 } from '../observation/binding-source-value-evaluator.js';
 import {
-  RuntimeExpressionAccessUseEmission,
-  RuntimeExpressionAccessUseMaterializationRequest,
-  RuntimeExpressionAccessUseMaterializer,
-} from '../observation/runtime-expression-access-use-materializer.js';
+  RuntimeExpressionAccessEmission,
+  RuntimeExpressionAccessMaterializationRequest,
+  RuntimeExpressionAccessMaterializer,
+} from '../observation/runtime-expression-access-materializer.js';
 import type { DiProviderActivationView } from '../di/provider-activation.js';
 import {
   extendRuntimeBoundControllerValueTable,
@@ -183,7 +183,7 @@ export class TemplateRuntimeAnalysisEmission {
     /** Runtime value-converter applications and converter-owned framework issues. */
     readonly valueConverter: RuntimeValueConverterEmission,
     /** Owner-qualified runtime expression access occurrences paired with exact operation slots and checker targets. */
-    readonly expressionAccessUses: RuntimeExpressionAccessUseEmission,
+    readonly expressionAccesses: RuntimeExpressionAccessEmission,
     /** Value channels derived from target access, target operation, and observer semantics. */
     readonly bindingValueChannel: RuntimeBindingValueChannelEmission,
     /** Source/target data-flow edges derived from runtime binding scopes and target-side products. */
@@ -207,7 +207,7 @@ export class TemplateRuntimeAnalysisEmission {
       this.i18nTranslationBinding,
       this.bindingBehavior,
       this.valueConverter,
-      this.expressionAccessUses,
+      this.expressionAccesses,
       this.bindingValueChannel,
       this.bindingDataFlow,
       this.runtimeComposition,
@@ -227,7 +227,7 @@ export class TemplateRuntimeAnalysisEmission {
       this.i18nTranslationBinding,
       this.bindingBehavior,
       this.valueConverter,
-      this.expressionAccessUses,
+      this.expressionAccesses,
       this.bindingValueChannel,
       this.bindingDataFlow,
       this.runtimeComposition,
@@ -305,7 +305,7 @@ export class TemplateRuntimeAnalysisMaterializer {
   private readonly i18nTranslationBinding: I18nTranslationBindingIssueMaterializer;
   private readonly bindingBehavior: RuntimeBindingBehaviorMaterializer;
   private readonly valueConverter: RuntimeValueConverterMaterializer;
-  private readonly expressionAccessUses: RuntimeExpressionAccessUseMaterializer;
+  private readonly expressionAccesses: RuntimeExpressionAccessMaterializer;
   private readonly bindingValueChannel: RuntimeBindingValueChannelMaterializer;
   private readonly bindingDataFlow: RuntimeBindingDataFlowMaterializer;
   private readonly runtimeComposition: RuntimeCompositionMaterializer;
@@ -323,7 +323,7 @@ export class TemplateRuntimeAnalysisMaterializer {
     this.i18nTranslationBinding = new I18nTranslationBindingIssueMaterializer(store, publication);
     this.bindingBehavior = new RuntimeBindingBehaviorMaterializer(store, publication);
     this.valueConverter = new RuntimeValueConverterMaterializer(store, publication);
-    this.expressionAccessUses = new RuntimeExpressionAccessUseMaterializer(store, publication);
+    this.expressionAccesses = new RuntimeExpressionAccessMaterializer(store, publication);
     this.bindingValueChannel = new RuntimeBindingValueChannelMaterializer(store, publication);
     this.bindingDataFlow = new RuntimeBindingDataFlowMaterializer(store, publication);
     this.runtimeComposition = new RuntimeCompositionMaterializer(store, publication);
@@ -338,7 +338,7 @@ export class TemplateRuntimeAnalysisMaterializer {
       i18nTranslationBinding: this.i18nTranslationBinding,
       bindingBehavior: this.bindingBehavior,
       valueConverter: this.valueConverter,
-      expressionAccessUses: this.expressionAccessUses,
+      expressionAccesses: this.expressionAccesses,
       bindingValueChannel: this.bindingValueChannel,
       bindingDataFlow: this.bindingDataFlow,
       runtimeComposition: this.runtimeComposition,
@@ -354,7 +354,7 @@ interface TemplateRuntimeAnalysisServices {
   readonly i18nTranslationBinding: I18nTranslationBindingIssueMaterializer;
   readonly bindingBehavior: RuntimeBindingBehaviorMaterializer;
   readonly valueConverter: RuntimeValueConverterMaterializer;
-  readonly expressionAccessUses: RuntimeExpressionAccessUseMaterializer;
+  readonly expressionAccesses: RuntimeExpressionAccessMaterializer;
   readonly bindingValueChannel: RuntimeBindingValueChannelMaterializer;
   readonly bindingDataFlow: RuntimeBindingDataFlowMaterializer;
   readonly runtimeComposition: RuntimeCompositionMaterializer;
@@ -405,10 +405,17 @@ class TemplateRuntimeAnalysisFrame {
       scopes,
     );
     const bindingBehavior = this.materializeBindingBehaviorForDepth(expressionResourcePlan, controllerBind);
+    const bindingValueChannel = this.materializeBindingValueChannelForDepth(
+      runtimeRendering,
+      expressionResourcePlan,
+      controllerBind,
+      scopes,
+    );
     const sourceValueEvaluator = this.runtimeAnalysisSourceValueEvaluator(
       runtimeRendering,
       expressionResourcePlan,
       controllerBind,
+      bindingValueChannel,
       scopes,
     );
     const valueConverter = this.materializeValueConverterForDepth(
@@ -416,13 +423,7 @@ class TemplateRuntimeAnalysisFrame {
       expressionResourcePlan,
       sourceValueEvaluator,
     );
-    const bindingValueChannel = this.materializeBindingValueChannelForDepth(
-      runtimeRendering,
-      expressionResourcePlan,
-      controllerBind,
-      scopes,
-    );
-    const expressionAccessUses = this.materializeExpressionAccessUsesForDepth(
+    const expressionAccesses = this.materializeExpressionAccessesForDepth(
       runtimeRendering,
       expressionResourcePlan,
       controllerBind,
@@ -437,7 +438,7 @@ class TemplateRuntimeAnalysisFrame {
       controllerBind,
       bindingValueChannel,
       valueConverter,
-      expressionAccessUses,
+      expressionAccesses,
       scopes,
     );
     const runtimeComposition = this.materializeRuntimeCompositionForDepth(
@@ -463,7 +464,7 @@ class TemplateRuntimeAnalysisFrame {
       i18nTranslationBinding,
       bindingBehavior,
       valueConverter,
-      expressionAccessUses,
+      expressionAccesses,
       bindingValueChannel,
       bindingDataFlow,
       runtimeComposition,
@@ -509,7 +510,7 @@ class TemplateRuntimeAnalysisFrame {
       : skippedBindingValueChannel(this.phases);
   }
 
-  private materializeExpressionAccessUsesForDepth(
+  private materializeExpressionAccessesForDepth(
     runtimeRendering: RuntimeRenderingEmission,
     expressionResourcePlan: RuntimeExpressionResourcePlan,
     controllerBind: RuntimeControllerBindEmission,
@@ -517,10 +518,10 @@ class TemplateRuntimeAnalysisFrame {
     valueConverter: RuntimeValueConverterEmission,
     bindingValueChannel: RuntimeBindingValueChannelEmission,
     scopes: TemplateScopeConstructionEmission,
-  ): RuntimeExpressionAccessUseEmission {
+  ): RuntimeExpressionAccessEmission {
     return semanticAppAnalysisDepthSatisfies(this.analysisDepth, SemanticAppAnalysisDepth.BindingObservation)
       ? this.measure('runtime-expression-access-use', () =>
-        this.materializeExpressionAccessUses(
+        this.materializeExpressionAccesses(
           runtimeRendering,
           expressionResourcePlan,
           controllerBind,
@@ -562,7 +563,7 @@ class TemplateRuntimeAnalysisFrame {
     controllerBind: RuntimeControllerBindEmission,
     bindingValueChannel: RuntimeBindingValueChannelEmission,
     valueConverter: RuntimeValueConverterEmission,
-    expressionAccessUses: RuntimeExpressionAccessUseEmission,
+    expressionAccesses: RuntimeExpressionAccessEmission,
     scopes: TemplateScopeConstructionEmission,
   ): RuntimeBindingDataFlowEmission {
     return semanticAppAnalysisDepthSatisfies(this.analysisDepth, SemanticAppAnalysisDepth.BindingObservation)
@@ -573,7 +574,7 @@ class TemplateRuntimeAnalysisFrame {
           controllerBind,
           bindingValueChannel,
           valueConverter,
-          expressionAccessUses,
+          expressionAccesses,
           scopes,
         )
       )
@@ -632,6 +633,11 @@ class TemplateRuntimeAnalysisFrame {
     runtimeRendering: RuntimeRenderingEmission,
     expressionResourcePlan: RuntimeExpressionResourcePlan,
   ): TemplateScopeConstructionEmission {
+    const boundControllerValues = this.boundControllerValues.withDefinitionContextController({
+      controllerProductHandle: runtimeRendering.rootController.productHandle,
+      definitionProductHandle: this.request.definition.productHandle,
+      definitionTargetType: this.request.definition.target.targetType,
+    });
     return this.services.templateScopes.construct({
       localKey: this.request.localKey,
       definition: this.request.definition,
@@ -642,7 +648,7 @@ class TemplateRuntimeAnalysisFrame {
       evaluation: this.request.evaluation,
       typeSystem: this.request.typeSystem,
       expressionWorld: this.expressionWorld,
-      boundControllerValues: this.boundControllerValues,
+      boundControllerValues,
       sourceValueActivationView: this.sourceValueActivationView,
       profiling: this.profilingSink(),
     } satisfies TemplateScopeConstructionRequest);
@@ -721,7 +727,7 @@ class TemplateRuntimeAnalysisFrame {
     ));
   }
 
-  private materializeExpressionAccessUses(
+  private materializeExpressionAccesses(
     runtimeRendering: RuntimeRenderingEmission,
     expressionResourcePlan: RuntimeExpressionResourcePlan,
     controllerBind: RuntimeControllerBindEmission,
@@ -729,8 +735,8 @@ class TemplateRuntimeAnalysisFrame {
     valueConverter: RuntimeValueConverterEmission,
     bindingValueChannel: RuntimeBindingValueChannelEmission,
     scopes: TemplateScopeConstructionEmission,
-  ): RuntimeExpressionAccessUseEmission {
-    return this.services.expressionAccessUses.materialize(new RuntimeExpressionAccessUseMaterializationRequest(
+  ): RuntimeExpressionAccessEmission {
+    return this.services.expressionAccesses.materialize(new RuntimeExpressionAccessMaterializationRequest(
       this.request.localKey,
       runtimeRendering,
       expressionResourcePlan,
@@ -750,7 +756,7 @@ class TemplateRuntimeAnalysisFrame {
     controllerBind: RuntimeControllerBindEmission,
     bindingValueChannel: RuntimeBindingValueChannelEmission,
     valueConverter: RuntimeValueConverterEmission,
-    expressionAccessUses: RuntimeExpressionAccessUseEmission,
+    expressionAccesses: RuntimeExpressionAccessEmission,
     scopes: TemplateScopeConstructionEmission,
   ): RuntimeBindingDataFlowEmission {
     return this.services.bindingDataFlow.materialize(new RuntimeBindingDataFlowMaterializationRequest(
@@ -760,7 +766,7 @@ class TemplateRuntimeAnalysisFrame {
       valueConverter,
       controllerBind,
       bindingValueChannel,
-      expressionAccessUses,
+      expressionAccesses,
       scopes,
       this.expressionWorld,
     ));
@@ -793,6 +799,7 @@ class TemplateRuntimeAnalysisFrame {
     runtimeRendering: RuntimeRenderingEmission,
     expressionResourcePlan: RuntimeExpressionResourcePlan,
     controllerBind: RuntimeControllerBindEmission,
+    bindingValueChannel: RuntimeBindingValueChannelEmission,
     scopes: TemplateScopeConstructionEmission,
   ): RuntimeBindingSourceValueEvaluator | null {
     if (this.request.evaluation == null) {
@@ -809,6 +816,7 @@ class TemplateRuntimeAnalysisFrame {
         runtimeRendering,
         expressionResourcePlan,
         controllerBind,
+        bindingValueChannel,
         scopes,
         expressionWorld: this.expressionWorld,
       },
@@ -868,9 +876,9 @@ function skippedValueConverter(phases: TemplateRuntimeAnalysisPhaseTiming[]): Ru
 
 function skippedExpressionAccessUses(
   phases: TemplateRuntimeAnalysisPhaseTiming[],
-): RuntimeExpressionAccessUseEmission {
+): RuntimeExpressionAccessEmission {
   recordSkippedTemplateRuntimeAnalysisPhase(phases, 'runtime-expression-access-use');
-  return new RuntimeExpressionAccessUseEmission([], [], []);
+  return new RuntimeExpressionAccessEmission([], [], [], [], []);
 }
 
 function skippedBindingDataFlow(phases: TemplateRuntimeAnalysisPhaseTiming[]): RuntimeBindingDataFlowEmission {

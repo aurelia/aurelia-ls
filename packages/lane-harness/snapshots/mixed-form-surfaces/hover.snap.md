@@ -6,7 +6,7 @@ Lane: `hover`
 
 This snapshot records observed language-server behavior. Operator verdicts live in the probe data.
 
-## bindable-member-label-silent-partial
+## bindable-member-label
 
 ### Probe
 
@@ -52,7 +52,7 @@ owner: `LoosePicklist`
 owner shape: `class`
 ````
 
-## open-member-option-label
+## parent-specialized-option-label
 
 ### Probe
 
@@ -78,7 +78,7 @@ owner shape: `class`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 218,
+    "markdownCharacters": 129,
     "range": null
   }
 }
@@ -86,18 +86,18 @@ owner shape: `class`
 
 ### Hover markdown
 
-```markdown
+````markdown
 **label**
 
-owner: `unknown`
-owner shape: `unknown`
-
----
-
-**information: weak-expression-member-owner**
-
-The owner type has no projected members at this cursor, so the selected member cannot be validated or navigated.
+```ts
+label: string
 ```
+
+kind: `property`
+owner: `TicketOption<FulfillmentMethod>`
+owner shape: `class`
+readonly
+````
 
 ## masked-member-shellTone-label
 

@@ -742,7 +742,7 @@
         "Use RouterRealizationStageKind as an orthogonal axis: RouteContext, au-viewport, and ViewportAgent rows are potential; pre-activation RouteTree, RouteNode, and ComponentAgent rows are planned; no current producer may emit live.",
         "Potential viewport presence spends the existing template-controller child-view cardinality. Optional, many, or open presence remains potential and publishes open topology evidence rather than being treated as one live registration.",
         "Viewport name, usedBy, default, and fallback retain independent defaulted, closed, referential, or open state plus exact authored sources. Open bound values must not be rewritten as absent framework defaults.",
-        "RuntimeBoundControllerValueTable has two intentional authority modes. Synthetic/cross-resource analysis may use definition/type fallback; a consumer that owns one concrete hydrated controller must use readExactControllerProperty so sibling usage sites cannot lend each other values.",
+        "RuntimeBoundControllerValueTable retains exact-controller and definition-context writer rows without selecting a winner. RuntimeBindingSourceValueEvaluator applies presence guards and owns steady-state versus initial-settlement selection; viewport defaults spend evaluateInitialBoundControllerPropertyValue because render order determines only initial settlement.",
         "Bound-controller rows carry their source resource's RuntimeBindingExpressionScopeProjector. Evaluate parent-to-child values with the row-owned projector rather than borrowing a consumer's binding-behavior lifecycle across resources.",
         "Viewport matching compares usedBy with the resolved custom-element registration name, while routeable products and public rows preserve authored spelling separately for navigation and explanation. If resolution did not close, keep the resolved name null/open; never borrow the authored class or string label as registration identity.",
         "Candidate resolution is none, sole, multiple, or open. Only sole may seed planned route products. None may publish exact rcNoAvailableVpa/AUR3174 when no statically compatible candidate exists; multiple/open publish a seam and no partial plan.",
@@ -770,7 +770,7 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/observation/runtime-bound-controller-value.ts",
           "symbolName": "RuntimeBoundControllerValueTable",
-          "summary": "Exact-controller versus contextual definition/type bound-value authority."
+          "summary": "Steady-state, initial-settlement, all-writer, and contextual definition/type bound-value authority."
         },
         {
           "kind": "source",
@@ -803,7 +803,7 @@
         }
       ],
       "createdAt": "2026-07-11",
-      "updatedAt": "2026-07-11"
+      "updatedAt": "2026-07-29"
     },
     {
       "id": "decision:framework-view-model-hook-ownership",

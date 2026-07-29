@@ -1,16 +1,20 @@
 import { BindingScope } from '../configuration/scope.js';
 import type { Container } from '../di/container.js';
-import type { AddressHandle, ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
+import type {
+  AddressHandle,
+  HotDetailHandle,
+  ProductHandle,
+  ProvenanceHandle,
+} from '../kernel/handles.js';
 import { readFieldProvenance } from '../kernel/provenance.js';
+import { RuntimeOperationReachability } from '../runtime-expression/runtime-operation.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
-import {
-  TemplateBindingMode,
-} from '../template/instruction-ir.js';
 import {
   InterpolationBinding,
   PropertyBinding,
   RuntimeBindingTargetKind,
+  SpreadValueBinding,
   type RuntimeBinding,
 } from '../template/runtime-binding.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
@@ -32,7 +36,10 @@ import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-
 import {
   bindingBehaviorEvaluationForRuntimeBindingSource,
 } from './runtime-binding-source-expression-context.js';
+import { runtimeBindingSourceLifecycle } from './runtime-binding-source-lifecycle.js';
+import { RuntimeBindingSourceEvaluationKind } from './runtime-binding-observation.js';
 import type { RuntimeBindingExpressionScopeProjectionReader } from './runtime-binding-expression-scope.js';
+import type { RuntimeBindingValueChannelEmission } from './binding-value-channel-materializer.js';
 
 export interface RuntimeBoundControllerPropertyValue {
   readonly controllerProductHandle: ProductHandle;
@@ -40,6 +47,18 @@ export interface RuntimeBoundControllerPropertyValue {
   readonly propertyName: string;
   readonly bindingProductHandle: ProductHandle;
   readonly expressionProductHandle: ProductHandle | null;
+  /** Interpolation-hole index, or null when this row carries the complete aggregate interpolation value. */
+  readonly sourceExpressionChainIndex: number | null;
+  /** Runtime source lifecycle that determines whether this writer can continue after initial settlement. */
+  readonly sourceEvaluationKind: RuntimeBindingSourceEvaluationKind;
+  /** Source-object member selected by a `$bindables` spread row; null for direct binding values. */
+  readonly sourceValueProperty: string | null;
+  /** Existing value-channel projection of the admitted spread member type; null for direct or structurally open rows. */
+  readonly admittedSourceValueType: CheckerTypeReference | null;
+  /** Exact TypeChecker member admitted by the spread guard, when every runtime lane agrees. */
+  readonly admittedSourceMemberHandle: HotDetailHandle | null;
+  /** Exact parent binding resource plan used by nested source-value evaluation. */
+  readonly sourceExpressionResourcePlan: RuntimeExpressionResourcePlan;
   /** Authored source address for the parent binding expression that feeds this child controller property. */
   readonly sourceAddressHandle: AddressHandle | null;
   /** Field provenance for the parent binding expression, when the runtime binding retained it. */
@@ -67,6 +86,7 @@ export interface RuntimeBindingSourceValueRuntimeAnalysis {
   readonly runtimeRendering: RuntimeRenderingEmission;
   readonly expressionResourcePlan: RuntimeExpressionResourcePlan;
   readonly controllerBind: RuntimeControllerBindEmission;
+  readonly bindingValueChannel: RuntimeBindingValueChannelEmission;
   readonly scopes: TemplateScopeConstructionEmission;
   readonly expressionWorld: CheckerExpressionTypeWorld;
 }
@@ -91,21 +111,41 @@ export interface RuntimeBindingSourceValueTemplateResource {
  * binding-source value evaluation without making router/resources rediscover renderer semantics.
  */
 export class RuntimeBoundControllerValueTable {
-  static readonly empty = new RuntimeBoundControllerValueTable([], []);
+  static readonly empty = new RuntimeBoundControllerValueTable([], [], []);
 
-  private readonly byController = new Map<ProductHandle, Map<string, RuntimeBoundControllerPropertyValue>>();
+  private readonly byController = new Map<ProductHandle, Map<string, RuntimeBoundControllerPropertyValue[]>>();
   private readonly byDefinition = new Map<ProductHandle, Map<string, RuntimeBoundControllerPropertyValue[]>>();
-  private readonly definitionByController = new Map<ProductHandle, ProductHandle>();
+  private readonly controllerHandlesByDefinition = new Map<ProductHandle, Set<ProductHandle>>();
+  private readonly definitionContextControllers: ReadonlySet<ProductHandle>;
+  private readonly definitionByContextController = new Map<ProductHandle, ProductHandle>();
   private readonly definitions: RuntimeControllerDefinitionReference[] = [];
 
   constructor(
     readonly values: readonly RuntimeBoundControllerPropertyValue[],
     controllerDefinitions: readonly RuntimeControllerDefinitionReference[],
+    definitionContextControllerProductHandles: readonly ProductHandle[],
   ) {
+    this.definitionContextControllers = new Set(definitionContextControllerProductHandles);
     for (const controller of controllerDefinitions) {
       this.definitions.push(controller);
-      if (controller.controllerProductHandle != null && controller.definitionProductHandle != null) {
-        this.definitionByController.set(controller.controllerProductHandle, controller.definitionProductHandle);
+      if (
+        controller.controllerProductHandle != null
+        && controller.definitionProductHandle != null
+        && this.definitionContextControllers.has(controller.controllerProductHandle)
+      ) {
+        this.definitionByContextController.set(
+          controller.controllerProductHandle,
+          controller.definitionProductHandle,
+        );
+      }
+      if (
+        controller.controllerProductHandle != null
+        && controller.definitionProductHandle != null
+        && !this.definitionContextControllers.has(controller.controllerProductHandle)
+      ) {
+        const controllers = this.controllerHandlesByDefinition.get(controller.definitionProductHandle) ?? new Set();
+        controllers.add(controller.controllerProductHandle);
+        this.controllerHandlesByDefinition.set(controller.definitionProductHandle, controllers);
       }
     }
     for (const value of values) {
@@ -114,9 +154,9 @@ export class RuntimeBoundControllerValueTable {
         byProperty = new Map();
         this.byController.set(value.controllerProductHandle, byProperty);
       }
-      if (!byProperty.has(value.propertyName)) {
-        byProperty.set(value.propertyName, value);
-      }
+      const propertyValues = byProperty.get(value.propertyName) ?? [];
+      propertyValues.push(value);
+      byProperty.set(value.propertyName, propertyValues);
       if (value.controllerDefinitionProductHandle == null) {
         continue;
       }
@@ -130,34 +170,40 @@ export class RuntimeBoundControllerValueTable {
     }
   }
 
-  read(
+  /** Read every possible writer for one property, preserving exact-controller or explicit definition context. */
+  readPropertyValues(
     controllerProductHandle: ProductHandle | null,
     propertyName: string,
     contextType: CheckerTypeReference | null = null,
-  ): RuntimeBoundControllerPropertyValue | null {
-    return (controllerProductHandle == null
-      ? null
-      : this.byController.get(controllerProductHandle)?.get(propertyName)
-        ?? this.readDefinitionValue(controllerProductHandle, propertyName))
-      ?? this.readContextTypeDefinitionValue(contextType, propertyName);
+  ): readonly RuntimeBoundControllerPropertyValue[] {
+    if (
+      controllerProductHandle != null
+      && !this.definitionContextControllers.has(controllerProductHandle)
+    ) {
+      return this.readExactControllerPropertyValues(controllerProductHandle, propertyName);
+    }
+    return this.definitionHandlesForContext(controllerProductHandle, contextType)
+      .flatMap((definitionProductHandle) =>
+        this.byDefinition.get(definitionProductHandle)?.get(propertyName) ?? []
+      );
   }
 
-  /** Read only a binding rendered against this exact controller instance. */
-  readExactControllerProperty(
+  /** Read every binding rendered against one exact controller property in render admission order. */
+  readExactControllerPropertyValues(
     controllerProductHandle: ProductHandle,
     propertyName: string,
-  ): RuntimeBoundControllerPropertyValue | null {
-    return this.byController.get(controllerProductHandle)?.get(propertyName) ?? null;
+  ): readonly RuntimeBoundControllerPropertyValue[] {
+    return this.byController.get(controllerProductHandle)?.get(propertyName) ?? [];
   }
 
-  /** Read every binding rendered against this exact controller instance. */
+  /** Read every binding rendered against this exact controller instance in render admission order. */
   readExactControllerValues(
     controllerProductHandle: ProductHandle | null,
   ): readonly RuntimeBoundControllerPropertyValue[] {
     if (controllerProductHandle == null) {
       return [];
     }
-    return [...(this.byController.get(controllerProductHandle)?.values() ?? [])];
+    return [...(this.byController.get(controllerProductHandle)?.values() ?? [])].flat();
   }
 
   /** Read all observed bindings for a definition, retaining distinct runtime use sites. */
@@ -174,79 +220,71 @@ export class RuntimeBoundControllerValueTable {
     return [...this.definitions];
   }
 
+  readDefinitionContextControllerProductHandles(): readonly ProductHandle[] {
+    return [...this.definitionContextControllers];
+  }
+
+  /** Add the root controller currently being analyzed as an explicit definition-wide projection context. */
+  withDefinitionContextController(
+    controller: RuntimeControllerDefinitionReference,
+  ): RuntimeBoundControllerValueTable {
+    if (controller.controllerProductHandle == null) {
+      return this;
+    }
+    return new RuntimeBoundControllerValueTable(
+      this.values,
+      [...this.definitions, controller],
+      [...this.definitionContextControllers, controller.controllerProductHandle],
+    );
+  }
+
+  isDefinitionContextController(controllerProductHandle: ProductHandle | null): boolean {
+    return controllerProductHandle != null
+      && this.definitionContextControllers.has(controllerProductHandle);
+  }
+
+  /** Whether at least one concrete use of this definition has no admitted writer for the property. */
+  definitionContextHasUnboundUseSite(
+    controllerProductHandle: ProductHandle | null,
+    contextType: CheckerTypeReference | null,
+    propertyName: string,
+  ): boolean {
+    if (!this.isDefinitionContextController(controllerProductHandle)) {
+      return false;
+    }
+    const definitionHandles = new Set(this.definitionHandlesForContext(controllerProductHandle, contextType));
+    const useSiteControllers = new Set(
+      [...definitionHandles].flatMap((definitionHandle) =>
+        [...(this.controllerHandlesByDefinition.get(definitionHandle) ?? [])]
+      ),
+    );
+    return useSiteControllers.size === 0
+      || [...useSiteControllers].some((handle) =>
+        (this.byController.get(handle)?.get(propertyName)?.length ?? 0) === 0
+      );
+  }
+
   readAll(
     controllerProductHandle: ProductHandle | null,
     contextType: CheckerTypeReference | null = null,
   ): readonly RuntimeBoundControllerPropertyValue[] {
-    const byProperty = new Map<string, RuntimeBoundControllerPropertyValue>();
-    for (const value of this.readExactControllerValues(controllerProductHandle)) {
-      byProperty.set(value.propertyName, value);
-    }
-    for (const value of this.readDefinitionValues(controllerProductHandle)) {
-      if (!byProperty.has(value.propertyName)) {
-        byProperty.set(value.propertyName, value);
-      }
-    }
-    for (const value of this.readContextTypeDefinitionValues(contextType)) {
-      if (!byProperty.has(value.propertyName)) {
-        byProperty.set(value.propertyName, value);
-      }
-    }
-    return [...byProperty.values()];
+    return controllerProductHandle != null
+      && !this.definitionContextControllers.has(controllerProductHandle)
+      ? this.readExactControllerValues(controllerProductHandle)
+      : this.definitionHandlesForContext(controllerProductHandle, contextType)
+          .flatMap((definitionProductHandle) => this.readAllDefinitionValues(definitionProductHandle));
   }
 
-  private readDefinitionValue(
-    controllerProductHandle: ProductHandle,
-    propertyName: string,
-  ): RuntimeBoundControllerPropertyValue | null {
-    const definitionProductHandle = this.definitionByController.get(controllerProductHandle) ?? null;
-    if (definitionProductHandle == null) {
-      return null;
-    }
-    const values = this.byDefinition.get(definitionProductHandle)?.get(propertyName) ?? [];
-    return values.length === 1 ? values[0]! : null;
-  }
-
-  private readDefinitionValues(
+  private definitionHandlesForContext(
     controllerProductHandle: ProductHandle | null,
-  ): readonly RuntimeBoundControllerPropertyValue[] {
-    if (controllerProductHandle == null) {
-      return [];
-    }
-    const definitionProductHandle = this.definitionByController.get(controllerProductHandle) ?? null;
-    return definitionProductHandle == null
-      ? []
-      : this.readUnambiguousDefinitionValues(definitionProductHandle);
-  }
-
-  private readContextTypeDefinitionValue(
     contextType: CheckerTypeReference | null,
-    propertyName: string,
-  ): RuntimeBoundControllerPropertyValue | null {
-    const values = this.definitionHandlesForContextType(contextType)
-      .flatMap((definitionProductHandle) =>
-        this.byDefinition.get(definitionProductHandle)?.get(propertyName) ?? []
-      );
-    return values.length === 1 ? values[0]! : null;
-  }
-
-  private readContextTypeDefinitionValues(
-    contextType: CheckerTypeReference | null,
-  ): readonly RuntimeBoundControllerPropertyValue[] {
-    return this.definitionHandlesForContextType(contextType)
-      .flatMap((definitionProductHandle) => this.readUnambiguousDefinitionValues(definitionProductHandle));
-  }
-
-  private readUnambiguousDefinitionValues(
-    definitionProductHandle: ProductHandle,
-  ): readonly RuntimeBoundControllerPropertyValue[] {
-    const byProperty = this.byDefinition.get(definitionProductHandle);
-    if (byProperty == null) {
-      return [];
-    }
-    return [...byProperty.values()].flatMap((values) =>
-      values.length === 1 ? [values[0]!] : []
-    );
+  ): readonly ProductHandle[] {
+    const retainedDefinition = controllerProductHandle == null
+      ? null
+      : this.definitionByContextController.get(controllerProductHandle) ?? null;
+    return retainedDefinition == null
+      ? this.definitionHandlesForContextType(contextType)
+      : [retainedDefinition];
   }
 
   private definitionHandlesForContextType(
@@ -277,6 +315,7 @@ export function runtimeBoundControllerValueTableForTemplateResources(
       boundControllerValuesForRuntimeAnalysis(resource.runtimeAnalysis)
     ),
     resources.flatMap((resource) => controllerDefinitionsForRuntimeAnalysis(resource)),
+    resources.map((resource) => resource.runtimeAnalysis.runtimeRendering.rootController.productHandle),
   );
 }
 
@@ -295,6 +334,10 @@ export function extendRuntimeBoundControllerValueTable(
       rootDefinition,
       ...controllerDefinitionsForRuntimeRendering(runtimeAnalysis.runtimeRendering),
     ],
+    [
+      ...base.readDefinitionContextControllerProductHandles(),
+      runtimeAnalysis.runtimeRendering.rootController.productHandle,
+    ],
   );
 }
 
@@ -305,6 +348,11 @@ function boundControllerValuesForRuntimeAnalysis(
     .map((binding) => [binding.productHandle, binding]));
   const controllersByProductHandle = new Map(analysis.runtimeRendering.controllers
     .map((controller) => [controller.productHandle, controller]));
+  const valueChannelsByTargetAccessProductHandle = new Map(analysis.bindingValueChannel.valueChannels.flatMap((channel) =>
+    channel.targetAccess?.productHandle == null
+      ? []
+      : [[channel.targetAccess.productHandle, channel] as const]
+  ));
   const scopes = instructionScopeLookup(analysis.scopes.instructionScopes);
   const sourceBindingExpressionScopes = analysis.scopes.bindingExpressionScopes;
   const values: RuntimeBoundControllerPropertyValue[] = [];
@@ -317,11 +365,22 @@ function boundControllerValuesForRuntimeAnalysis(
       continue;
     }
     const binding = bindingsByProductHandle.get(targetAccess.binding.productHandle) ?? null;
-    const expressionProductHandle = sourceExpressionProductHandleForBoundControllerBinding(
-      binding,
-      analysis.expressionResourcePlan,
-    );
-    if (binding == null || expressionProductHandle === undefined || !isRuntimeExpressionBinding(binding)) {
+    if (binding == null || !isRuntimeExpressionBinding(binding)) {
+      continue;
+    }
+    const lifecycle = runtimeBindingSourceLifecycle(binding, analysis.expressionResourcePlan);
+    const expressionProductHandle = sourceExpressionProductHandleForBoundControllerBinding(binding, lifecycle);
+    const valueChannel = targetAccess.productHandle == null
+      ? null
+      : valueChannelsByTargetAccessProductHandle.get(targetAccess.productHandle) ?? null;
+    if (
+      expressionProductHandle === undefined
+      || lifecycle.evaluationReachability !== RuntimeOperationReachability.Reached
+      || (
+        binding instanceof SpreadValueBinding
+        && valueChannel == null
+      )
+    ) {
       continue;
     }
     const renderContext = analysis.runtimeRendering.requireRenderContextForBinding(binding.productHandle);
@@ -332,6 +391,16 @@ function boundControllerValuesForRuntimeAnalysis(
       propertyName: targetAccess.targetProperty,
       bindingProductHandle: binding.productHandle,
       expressionProductHandle,
+      sourceExpressionChainIndex: binding instanceof InterpolationBinding ? null : 0,
+      sourceEvaluationKind: lifecycle.evaluationKind,
+      sourceValueProperty: binding instanceof SpreadValueBinding ? targetAccess.targetProperty : null,
+      admittedSourceValueType: binding instanceof SpreadValueBinding
+        ? valueChannel?.admittedSourceValueType ?? null
+        : null,
+      admittedSourceMemberHandle: binding instanceof SpreadValueBinding
+        ? valueChannel?.admittedSourceMemberHandle ?? null
+        : null,
+      sourceExpressionResourcePlan: analysis.expressionResourcePlan,
       sourceAddressHandle: readTemplateExpressionParse(
         analysis.expressionWorld.projector.publication,
         expressionProductHandle,
@@ -374,32 +443,27 @@ function controllerDefinitionsForRuntimeRendering(
 }
 
 function sourceExpressionProductHandleForBoundControllerBinding(
-  binding: RuntimeBinding | null,
-  expressionResourcePlan: RuntimeExpressionResourcePlan,
+  binding: RuntimeBinding,
+  lifecycle: ReturnType<typeof runtimeBindingSourceLifecycle>,
 ): ProductHandle | null | undefined {
-  if (binding instanceof PropertyBinding) {
-    return propertyBindingCarriesSourceToTarget(binding, expressionResourcePlan)
-      ? binding.expressionProductHandle
-      : undefined;
+  if (!(
+    binding instanceof PropertyBinding
+    || binding instanceof InterpolationBinding
+    || binding instanceof SpreadValueBinding
+  )) {
+    return undefined;
   }
-  if (binding instanceof InterpolationBinding) {
-    return binding.expressionProductHandles[0] ?? null;
-  }
-  return undefined;
-}
-
-function propertyBindingCarriesSourceToTarget(
-  binding: PropertyBinding,
-  expressionResourcePlan: RuntimeExpressionResourcePlan,
-): boolean {
-  switch (expressionResourcePlan.effectivePropertyBindingMode(binding)) {
-    case TemplateBindingMode.OneTime:
-    case TemplateBindingMode.ToView:
-    case TemplateBindingMode.TwoWay:
-      return true;
-    case TemplateBindingMode.FromView:
-    case TemplateBindingMode.Default:
-    case TemplateBindingMode.Open:
-      return false;
+  switch (lifecycle.evaluationKind) {
+    case RuntimeBindingSourceEvaluationKind.ConnectableRead:
+    case RuntimeBindingSourceEvaluationKind.UntrackedRead:
+      return binding instanceof PropertyBinding
+        ? binding.expressionProductHandle
+        : binding instanceof InterpolationBinding
+          ? binding.expressionProductHandles[0] ?? null
+          : binding.expressionProductHandle;
+    case RuntimeBindingSourceEvaluationKind.AssignmentOnly:
+    case RuntimeBindingSourceEvaluationKind.NotEvaluated:
+    case RuntimeBindingSourceEvaluationKind.Open:
+      return undefined;
   }
 }

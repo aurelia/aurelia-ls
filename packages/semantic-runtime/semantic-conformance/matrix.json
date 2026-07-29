@@ -46,17 +46,17 @@
       }
     },
     {
-      "id": "mixed-form-option-label-open-candidate-honesty",
-      "fixture": "fixtures/pressure/mixed-form-surfaces",
+      "id": "unknown-member-label-open-candidate-honesty",
+      "fixture": "fixtures/pressure/template-typechecking-corpus",
       "aureliaDomain": "template-expression-typing",
       "capability": "open-reference-honesty",
       "domainAxis": "open-honesty",
       "coverageIntent": "boundary-contract",
       "assertionKind": "candidate-honesty",
       "requirement": "Unproven weak/dynamic member references return the cursor occurrence, preserve only genuinely open candidates separately, and mark the answer open without admitting closed same-name misses.",
-      "sourceFile": "src/components/loose-picklist.html",
+      "sourceFile": "src/read-expressions.html",
       "cursor": {
-        "marker": "${option.label || option}",
+        "marker": "${unknownValue.label}",
         "token": "label"
       },
       "expected": {
@@ -68,26 +68,82 @@
       }
     },
     {
-      "id": "mixed-form-option-label-diagnostic-provenance-agreement",
-      "fixture": "fixtures/pressure/mixed-form-surfaces",
+      "id": "unknown-member-label-diagnostic-provenance-agreement",
+      "fixture": "fixtures/pressure/template-typechecking-corpus",
       "aureliaDomain": "template-expression-typing",
       "capability": "diagnostic-provenance",
       "domainAxis": "diagnostics",
       "coverageIntent": "boundary-contract",
       "assertionKind": "diagnostic-provenance-agreement",
       "requirement": "App-level diagnostic aggregation preserves the template diagnostic subject, selected member identity, suggestion action, source, and domain.",
-      "sourceFile": "src/components/loose-picklist.html",
+      "sourceFile": "src/read-expressions.html",
       "cursor": {
-        "marker": "${option.label || option}",
+        "marker": "${unknownValue.label}",
         "token": "label"
       },
       "expected": {
         "diagnosticKind": "weak-expression-member-owner",
         "selectedMemberName": "label",
-        "subjectMarker": "option.label",
+        "subjectMarker": "unknownValue.label",
         "suggestionActionKind": "inspect-owner-type",
         "appDiagnosticDomain": "template"
       }
+    },
+    {
+      "id": "mixed-form-option-label-parent-bound-specialization",
+      "fixture": "fixtures/pressure/mixed-form-surfaces",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "parent-bound-child-scope-typing",
+      "domainAxis": "type-system",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "requirement": "A child template keeps the bindable declaration as identity while a reached parent-bound value supplies its more precise current type to repeat-local member navigation.",
+      "sourceFile": "src/components/loose-picklist.html",
+      "cursor": {
+        "marker": "${option.label || option}",
+        "token": "label"
+      },
+      "expectations": [
+        {
+          "name": "parent-bound repeat-local cursor type",
+          "query": { "kind": "template-cursor-info", "options": { "detail": "full" } },
+          "equals": {
+            "closure": "complete",
+            "value.selectedMemberName": "label",
+            "value.selectedMember.typeDisplay": "string",
+            "value.memberOwnerType.display": "TicketOption<FulfillmentMethod>",
+            "value.memberOwnerType.origin": "type-checker"
+          }
+        },
+        {
+          "name": "parent-bound repeat-local references",
+          "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 20 } } },
+          "equals": { "closure": "complete", "value.selectedMemberName": "label" },
+          "rows": [
+            {
+              "fields": { "referenceKind": "template-usage" },
+              "source": { "marker": "${option.label || option}", "token": "label" },
+              "count": 1
+            },
+            {
+              "fields": { "referenceKind": "declaration" },
+              "source": { "sourceFile": "src/models/ticket.ts", "marker": "readonly label: string", "token": "label" },
+              "count": 1
+            }
+          ]
+        },
+        {
+          "name": "parent-bound repeat-local diagnostics",
+          "query": { "kind": "template-diagnostics", "cursor": false, "options": { "detail": "full", "page": { "size": 50 } } },
+          "rows": [
+            {
+              "fields": { "diagnosticKind": "weak-expression-member-owner", "selectedMemberName": "label" },
+              "source": { "marker": "${option.label || option}", "token": "label" },
+              "absent": true
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "observation-diagnostic-fact-conservation",
@@ -13880,7 +13936,7 @@
               "rows": [
                 { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" }, "count": 2 },
                 { "fields": { "referenceKind": "declaration", "name": "oneTimeValue" }, "source": { "marker": "<bindable name=\"oneTimeValue\"", "token": "oneTimeValue" }, "count": 1 },
-                { "fields": { "referenceKind": "template-usage", "dependencyKind": "template-expression-read", "definitionName": "mode-panel" }, "count": 2 }
+                { "fields": { "referenceKind": "template-usage", "dependencyKinds": ["template-expression-read"], "definitionName": "mode-panel" }, "count": 2 }
               ]
             },
             {
@@ -14413,8 +14469,8 @@
                 { "fields": { "converterName": "numberText", "phase": "bind", "origin": "authored", "authoredChainDepth": 1, "runtimeChainDepth": 1, "phaseReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "numberText" }, "count": 1 },
                 { "fields": { "converterName": "numberText", "phase": "to-view", "authoredChainDepth": 1, "runtimeChainDepth": 1, "bindReachability": "reached", "bindOrder": 1, "phaseOrder": 0 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "numberText" }, "count": 1 },
                 { "fields": { "converterName": "textLength", "phase": "to-view", "authoredChainDepth": 0, "runtimeChainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 1 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "textLength" }, "count": 1 },
-                { "fields": { "converterName": "textLength", "phase": "unbind", "phaseReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "textLength" }, "count": 1 },
-                { "fields": { "converterName": "numberText", "phase": "unbind", "phaseReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "numberText" }, "count": 1 },
+                { "fields": { "converterName": "textLength", "phase": "unbind", "phaseReachability": "reached", "bindOrder": 0, "phaseOrder": 1 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "textLength" }, "count": 1 },
+                { "fields": { "converterName": "numberText", "phase": "unbind", "phaseReachability": "reached", "bindOrder": 1, "phaseOrder": 0 }, "source": { "marker": "${count | numberText:prefix | textLength}", "token": "numberText" }, "count": 1 },
                 { "fields": { "converterName": "textLength", "phase": "from-view", "authoredChainDepth": 0, "runtimeChainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "value.two-way=\"count | numberText:prefix | textLength\"", "token": "textLength" }, "count": 1 },
                 { "fields": { "converterName": "numberText", "phase": "from-view", "authoredChainDepth": 1, "runtimeChainDepth": 1, "bindReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "value.two-way=\"count | numberText:prefix | textLength\"", "token": "numberText" }, "count": 1 },
                 { "fields": { "converterName": "identityValue", "bindingKind": "ref", "phase": "bind", "origin": "authored", "runtimeChainDepth": 0, "phaseReachability": "reached", "phaseOrder": 0 }, "source": { "marker": "component.ref=\"refTarget | identityValue\"", "token": "identityValue" }, "count": 1 },
@@ -14429,8 +14485,8 @@
               "rows": [
                 { "fields": { "behaviorName": "outerAudit", "phase": "bind", "authoredChainDepth": 0, "runtimeChainDepth": 0, "bindReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "innerAudit:'inner' & outerAudit:'outer'", "token": "outerAudit" }, "count": 1 },
                 { "fields": { "behaviorName": "innerAudit", "phase": "bind", "authoredChainDepth": 1, "runtimeChainDepth": 1, "bindReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "innerAudit:'inner' & outerAudit:'outer'", "token": "innerAudit" }, "count": 1 },
-                { "fields": { "behaviorName": "outerAudit", "phase": "unbind", "phaseReachability": "reached", "bindOrder": 0, "phaseOrder": 0 }, "source": { "marker": "innerAudit:'inner' & outerAudit:'outer'", "token": "outerAudit" }, "count": 1 },
-                { "fields": { "behaviorName": "innerAudit", "phase": "unbind", "phaseReachability": "reached", "bindOrder": 1, "phaseOrder": 1 }, "source": { "marker": "innerAudit:'inner' & outerAudit:'outer'", "token": "innerAudit" }, "count": 1 },
+                { "fields": { "behaviorName": "outerAudit", "phase": "unbind", "phaseReachability": "reached", "bindOrder": 0, "phaseOrder": 1 }, "source": { "marker": "innerAudit:'inner' & outerAudit:'outer'", "token": "outerAudit" }, "count": 1 },
+                { "fields": { "behaviorName": "innerAudit", "phase": "unbind", "phaseReachability": "reached", "bindOrder": 1, "phaseOrder": 0 }, "source": { "marker": "innerAudit:'inner' & outerAudit:'outer'", "token": "innerAudit" }, "count": 1 },
                 { "fields": { "behaviorName": "typedAudit", "phase": "bind", "argumentCount": 2 }, "source": { "marker": "typedAudit:'view':limit", "token": "typedAudit" }, "sourceField": "source", "count": 1 },
                 { "fields": { "behaviorName": "typedAudit", "phase": "bind" }, "source": { "marker": "typedAudit:'view':limit", "token": "'view'" }, "sourceField": "argumentSources.0", "count": 1 },
                 { "fields": { "behaviorName": "typedAudit", "phase": "bind" }, "source": { "marker": "typedAudit:'view':limit", "token": "limit" }, "sourceField": "argumentSources.1", "count": 1 }
@@ -14491,6 +14547,48 @@
                 { "fields": { "converterName": "numberText", "phase": "bind", "authoredChainDepth": 1, "runtimeChainDepth": 1, "bindReachability": "blocked-by-outer-failure", "bindOrder": null, "phaseOrder": null }, "source": { "marker": "numberText:prefix & missingBehavior", "token": "numberText" }, "count": 1 },
                 { "fields": { "converterName": "numberText", "phase": "to-view", "phaseReachability": "blocked-by-outer-failure", "phaseOrder": null }, "source": { "marker": "numberText:prefix & missingBehavior", "token": "numberText" }, "count": 1 },
                 { "fields": { "converterName": "numberText", "phase": "unbind", "phaseReachability": "blocked-by-outer-failure", "phaseOrder": null }, "source": { "marker": "numberText:prefix & missingBehavior", "token": "numberText" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "attribute-interpolation-parts-retain-independent-lifecycle",
+          "sourceFile": "src/resource-combinator-gallery.html",
+          "domainAxis": "runtime-lifecycle",
+          "expectations": [
+            {
+              "name": "part-local converter bind reachability",
+              "query": { "kind": "value-converter-applications", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "converterName": "identityValue", "chainIndex": 0, "phase": "bind", "bindReachability": "reached", "phaseReachability": "reached", "bindOrder": 0 }, "source": { "marker": "title=\"before-${item.label | identityValue}-middle-${count | missingInterpolationConverter}-after-${item.label | identityValue}-plain-${item.id}-literal-${42}\"", "token": "identityValue", "occurrence": 1 }, "count": 1 },
+                { "fields": { "converterName": "missingInterpolationConverter", "chainIndex": 1, "phase": "bind", "bindReachability": "reached", "phaseReachability": "reached", "bindOrder": 0 }, "source": { "marker": "title=\"before-${item.label | identityValue}-middle-${count | missingInterpolationConverter}-after-${item.label | identityValue}-plain-${item.id}-literal-${42}\"", "token": "missingInterpolationConverter" }, "count": 1 },
+                { "fields": { "converterName": "identityValue", "chainIndex": 2, "phase": "bind", "bindReachability": "blocked-by-bind-failure", "phaseReachability": "blocked-by-bind-failure", "bindOrder": null }, "source": { "marker": "title=\"before-${item.label | identityValue}-middle-${count | missingInterpolationConverter}-after-${item.label | identityValue}-plain-${item.id}-literal-${42}\"", "token": "identityValue", "occurrence": 2 }, "count": 1 }
+              ]
+            },
+            {
+              "name": "part-local source evaluation reachability",
+              "query": { "kind": "runtime-expression-access-uses", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 400 } } },
+              "rows": [
+                { "fields": { "operationKind": "interpolation-part", "operationIndex": 0, "phase": "source-evaluation", "reachability": "reached", "tracking": "connectable", "role": "read" }, "sourceField": "nameSource", "source": { "marker": "title=\"before-${item.label | identityValue}-middle-${count | missingInterpolationConverter}-after-${item.label | identityValue}-plain-${item.id}-literal-${42}\"", "token": "label", "occurrence": 1 }, "count": 1 },
+                { "fields": { "operationKind": "interpolation-part", "operationIndex": 1, "phase": "source-evaluation", "reachability": "blocked-by-bind-failure", "tracking": "connectable", "role": "read" }, "source": { "marker": "title=\"before-${item.label | identityValue}-middle-${count | missingInterpolationConverter}-after-${item.label | identityValue}-plain-${item.id}-literal-${42}\"", "token": "count" }, "count": 1 },
+                { "fields": { "operationKind": "interpolation-part", "operationIndex": 2, "phase": "source-evaluation", "reachability": "blocked-by-bind-failure", "tracking": "connectable", "role": "read" }, "sourceField": "nameSource", "source": { "marker": "title=\"before-${item.label | identityValue}-middle-${count | missingInterpolationConverter}-after-${item.label | identityValue}-plain-${item.id}-literal-${42}\"", "token": "label", "occurrence": 2 }, "count": 1 },
+                { "fields": { "operationKind": "interpolation-part", "operationIndex": 3, "phase": "source-evaluation", "reachability": "blocked-by-bind-failure", "tracking": "connectable", "role": "read" }, "sourceField": "nameSource", "source": { "marker": "-plain-${item.id}-literal-${42}\"", "token": "id" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "successful earlier parts retain reverse-order rollback",
+              "query": { "kind": "value-converter-applications", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "converterName": "identityValue", "chainIndex": 0, "phase": "unbind", "phaseReachability": "reached", "phaseOrder": 0 }, "source": { "marker": "title=\"before-${item.label | identityValue}-middle-${count | missingInterpolationConverter}-after-${item.label | identityValue}-plain-${item.id}-literal-${42}\"", "token": "identityValue", "occurrence": 1 }, "count": 1 },
+                { "fields": { "converterName": "missingInterpolationConverter", "chainIndex": 1, "phase": "unbind", "phaseReachability": "blocked-by-bind-failure", "phaseOrder": null }, "source": { "marker": "title=\"before-${item.label | identityValue}-middle-${count | missingInterpolationConverter}-after-${item.label | identityValue}-plain-${item.id}-literal-${42}\"", "token": "missingInterpolationConverter" }, "count": 1 },
+                { "fields": { "converterName": "identityValue", "chainIndex": 2, "phase": "unbind", "phaseReachability": "blocked-by-bind-failure", "phaseOrder": null }, "source": { "marker": "title=\"before-${item.label | identityValue}-middle-${count | missingInterpolationConverter}-after-${item.label | identityValue}-plain-${item.id}-literal-${42}\"", "token": "identityValue", "occurrence": 2 }, "count": 1 }
+              ]
+            },
+            {
+              "name": "aggregate interpolation settlement remains blocked",
+              "query": { "kind": "binding-data-flows", "sourceFile": "src/resource-combinator-gallery.html", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "bindingKind": "interpolation", "targetProperty": "title", "direction": "source-to-target", "sourceEvaluationReachability": "blocked-by-bind-failure" }, "source": { "marker": "title=\"before-${item.label | identityValue}-middle-${count | missingInterpolationConverter}-after-${item.label | identityValue}-plain-${item.id}-literal-${42}\"", "token": "before-${item.label | identityValue}-middle-${count | missingInterpolationConverter}-after-${item.label | identityValue}-plain-${item.id}-literal-${42}" }, "count": 1 }
               ]
             }
           ]
@@ -14584,7 +14682,7 @@
               "query": { "kind": "binding-behavior-applications", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
               "rows": [
                 { "fields": { "behaviorName": "t", "phase": "bind", "origin": "authored", "authoredChainDepth": 0, "runtimeChainDepth": 0, "bindOrder": 0, "phaseOrder": 0, "lifecycleEffects.effectKinds": ["expression-projection"] }, "source": { "marker": " & t\"", "token": "t" }, "count": 1 },
-                { "fields": { "behaviorName": "t", "phase": "unbind", "phaseReachability": "reached", "lifecycleEffects.effectKinds": [] }, "source": { "marker": " & t\"", "token": "t" }, "count": 1 }
+                { "fields": { "behaviorName": "t", "phase": "unbind", "phaseReachability": "reached", "phaseOrder": 1, "lifecycleEffects.effectKinds": [] }, "source": { "marker": " & t\"", "token": "t" }, "count": 1 }
               ]
             },
             {
@@ -14594,7 +14692,7 @@
                 { "fields": { "converterName": "t", "phase": "bind", "origin": "authored", "authoredChainDepth": 0, "runtimeChainDepth": 0, "lifecycleEffects.effectKinds": ["signal-subscription"], "lifecycleEffects.signalState": "closed", "lifecycleEffects.signals.0.name": "aurelia-translation-signal" }, "source": { "marker": " | t}", "token": "t" }, "count": 1 },
                 { "fields": { "converterName": "t", "phase": "bind", "origin": "binding-behavior-projection", "authoredChainDepth": null, "runtimeChainDepth": 1, "bindOrder": 1, "phaseOrder": 1, "lifecycleEffects.effectKinds": ["signal-subscription"], "lifecycleEffects.signals.0.name": "aurelia-translation-signal" }, "source": { "marker": " & t\"", "token": "t" }, "count": 1 },
                 { "fields": { "converterName": "t", "phase": "to-view", "origin": "binding-behavior-projection", "authoredChainDepth": null, "runtimeChainDepth": 1, "phaseReachability": "reached", "phaseOrder": 0, "lifecycleEffects.effectKinds": [] }, "source": { "marker": " & t\"", "token": "t" }, "count": 1 },
-                { "fields": { "converterName": "t", "phase": "unbind", "origin": "binding-behavior-projection", "authoredChainDepth": null, "runtimeChainDepth": 1, "phaseReachability": "reached", "phaseOrder": 1, "lifecycleEffects.effectKinds": ["signal-subscription"] }, "source": { "marker": " & t\"", "token": "t" }, "count": 1 }
+                { "fields": { "converterName": "t", "phase": "unbind", "origin": "binding-behavior-projection", "authoredChainDepth": null, "runtimeChainDepth": 1, "phaseReachability": "reached", "phaseOrder": 0, "lifecycleEffects.effectKinds": ["signal-subscription"] }, "source": { "marker": " & t\"", "token": "t" }, "count": 1 }
               ]
             }
           ]
@@ -14684,6 +14782,169 @@
                 { "fields": { "targetProperty": "value", "lookup": "observer", "strategy": "value-attribute-observer", "nodeObserverConfig.eventNames": ["blur"], "authority": "binding-behavior" }, "source": { "marker": "value.to-view=\"message & updateTrigger:'blur' & twoWay\"", "token": "value.to-view=\"message & updateTrigger:'blur' & twoWay\"" }, "count": 1 },
                 { "fields": { "targetProperty": "value", "lookup": "observer", "strategy": "value-attribute-observer", "nodeObserverConfig.eventNames": [], "nodeObserverConfig.fieldStates.events": "open", "nodeObserverConfig.openReason": "Binding behavior target-observer event names depend on runtime expression values.", "authority": "binding-behavior", "openReason": null }, "source": { "marker": "value.to-view=\"message & updateTrigger:eventName & twoWay\"", "token": "value.to-view=\"message & updateTrigger:eventName & twoWay\"" }, "count": 1 },
                 { "fields": { "targetProperty": "value", "lookup": "accessor", "strategy": "data-attribute-accessor", "nodeObserverConfig": null, "authority": "binding-behavior" }, "source": { "marker": "value.to-view=\"message & attr\"", "token": "value.to-view=\"message & attr\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "effective-mode-consumers-agree-on-source-lifecycle",
+          "domainAxis": "runtime-lifecycle",
+          "expectations": [
+            {
+              "name": "effective data-flow directions",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 150 } } },
+              "rows": [
+                { "fields": { "sourceName": "effectiveFromView", "direction": "target-to-source", "sourceEvaluationKind": "assignment-only" }, "source": { "marker": "value.to-view=\"effectiveFromView & fromView\"", "token": "value.to-view=\"effectiveFromView & fromView\"" }, "count": 1 },
+                { "fields": { "sourceName": "effectiveToView", "direction": "source-to-target", "sourceEvaluationKind": "connectable-read" }, "source": { "marker": "value.from-view=\"effectiveToView & toView\"", "token": "value.from-view=\"effectiveToView & toView\"" }, "count": 1 },
+                { "fields": { "sourceName": "blockedFromView", "direction": "source-to-target", "sourceEvaluationKind": "connectable-read" }, "source": { "marker": "value.to-view=\"blockedFromView & fromView & missingBehavior\"", "token": "value.to-view=\"blockedFromView & fromView & missingBehavior\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "effective access-use phases",
+              "query": { "kind": "runtime-expression-access-uses", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "operationKind": "binding-source", "phase": "source-assignment", "role": "write-target", "tracking": "not-applicable" }, "source": { "marker": "value.to-view=\"effectiveFromView & fromView\"", "token": "effectiveFromView" }, "count": 1 },
+                { "fields": { "phase": "source-evaluation", "role": "read" }, "source": { "marker": "value.to-view=\"effectiveFromView & fromView\"", "token": "effectiveFromView" }, "absent": true },
+                { "fields": { "operationKind": "binding-source", "phase": "source-evaluation", "role": "read", "tracking": "connectable" }, "source": { "marker": "value.from-view=\"effectiveToView & toView\"", "token": "effectiveToView" }, "count": 1 },
+                { "fields": { "phase": "source-assignment", "role": "write-target" }, "source": { "marker": "value.from-view=\"effectiveToView & toView\"", "token": "effectiveToView" }, "absent": true },
+                { "fields": { "operationKind": "binding-source", "phase": "source-evaluation", "role": "read", "tracking": "connectable" }, "source": { "marker": "value.to-view=\"blockedFromView & fromView & missingBehavior\"", "token": "blockedFromView" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "effective modes remain visible at the authoring boundary",
+              "query": { "kind": "template-inlay-hints", "options": { "detail": "full", "page": { "size": 150 } } },
+              "rows": [
+                { "fields": { "authoredMode": "to-view", "effectiveMode": "from-view" }, "source": { "marker": "value.to-view=\"effectiveFromView & fromView\"", "token": "value.to-view" }, "count": 1 },
+                { "fields": { "authoredMode": "from-view", "effectiveMode": "to-view" }, "source": { "marker": "value.from-view=\"effectiveToView & toView\"", "token": "value.from-view" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "blocked mode occurrence keeps its blocker",
+              "query": { "kind": "binding-behavior-applications", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "behaviorName": "missingBehavior", "phase": "bind", "bindReachability": "reached", "phaseReachability": "reached" }, "source": { "marker": "value.to-view=\"blockedFromView & fromView & missingBehavior\"", "token": "missingBehavior" }, "count": 1 },
+                { "fields": { "behaviorName": "fromView", "phase": "bind", "bindReachability": "blocked-by-outer-failure", "phaseReachability": "blocked-by-outer-failure" }, "source": { "marker": "value.to-view=\"blockedFromView & fromView & missingBehavior\"", "token": "fromView" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "non-property lifecycle distinguishes inert attributes from value-producing interpolation",
+              "query": { "kind": "runtime-expression-access-uses", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 400 } } },
+              "rows": [
+                { "fields": { "phase": "source-evaluation", "role": "read" }, "source": { "marker": "data-lifecycle.attr=\"attributeFromView & fromView\"", "token": "attributeFromView" }, "absent": true },
+                { "fields": { "phase": "source-assignment", "role": "write-target" }, "source": { "marker": "data-lifecycle.attr=\"attributeFromView & fromView\"", "token": "attributeFromView" }, "absent": true },
+                { "fields": { "phase": "source-evaluation", "role": "read" }, "source": { "marker": "data-converted-lifecycle.attr=\"attributeFromView | identityValue & fromView\"", "token": "attributeFromView" }, "absent": true },
+                { "fields": { "phase": "source-assignment", "role": "write-target" }, "source": { "marker": "data-converted-lifecycle.attr=\"attributeFromView | identityValue & fromView\"", "token": "attributeFromView" }, "absent": true },
+                { "fields": { "operationKind": "binding-source", "phase": "source-evaluation", "role": "read", "tracking": "connectable" }, "source": { "marker": "data-lifecycle.attr=\"attributeTwoWay & twoWay\"", "token": "attributeTwoWay" }, "count": 1 },
+                { "fields": { "phase": "source-assignment", "role": "write-target" }, "source": { "marker": "data-lifecycle.attr=\"attributeTwoWay & twoWay\"", "token": "attributeTwoWay" }, "absent": true },
+                { "fields": { "operationKind": "interpolation-part", "phase": "source-evaluation", "role": "read", "tracking": "untracked" }, "source": { "marker": "title=\"${attributeInterpolationFromView & fromView}\"", "token": "attributeInterpolationFromView" }, "count": 1 },
+                { "fields": { "phase": "source-assignment", "role": "write-target" }, "source": { "marker": "title=\"${attributeInterpolationFromView & fromView}\"", "token": "attributeInterpolationFromView" }, "absent": true },
+                { "fields": { "operationKind": "interpolation-part", "phase": "source-evaluation", "role": "read", "tracking": "connectable" }, "source": { "marker": "title=\"${attributeInterpolationTwoWay & twoWay}\"", "token": "attributeInterpolationTwoWay" }, "count": 1 },
+                { "fields": { "phase": "source-assignment", "role": "write-target" }, "source": { "marker": "title=\"${attributeInterpolationTwoWay & twoWay}\"", "token": "attributeInterpolationTwoWay" }, "absent": true },
+                { "fields": { "operationKind": "interpolation-part", "phase": "source-evaluation", "role": "read", "tracking": "untracked" }, "source": { "marker": "${contentFromView & fromView}", "token": "contentFromView" }, "count": 1 },
+                { "fields": { "phase": "source-assignment", "role": "write-target" }, "source": { "marker": "${contentFromView & fromView}", "token": "contentFromView" }, "absent": true },
+                { "fields": { "operationKind": "interpolation-part", "phase": "source-evaluation", "role": "read", "tracking": "connectable" }, "source": { "marker": "${contentTwoWay & twoWay}", "token": "contentTwoWay" }, "count": 1 },
+                { "fields": { "phase": "source-assignment", "role": "write-target" }, "source": { "marker": "${contentTwoWay & twoWay}", "token": "contentTwoWay" }, "absent": true }
+              ]
+            },
+            {
+              "name": "only value-producing non-property bindings publish source-to-target flow",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 250 } } },
+              "rows": [
+                { "fields": { "bindingKind": "attribute", "sourceName": "attributeFromView" }, "source": { "marker": "data-lifecycle.attr=\"attributeFromView & fromView\"", "token": "data-lifecycle.attr=\"attributeFromView & fromView\"" }, "absent": true },
+                { "fields": { "bindingKind": "attribute", "sourceName": "attributeFromView" }, "source": { "marker": "data-converted-lifecycle.attr=\"attributeFromView | identityValue & fromView\"", "token": "data-converted-lifecycle.attr=\"attributeFromView | identityValue & fromView\"" }, "absent": true },
+                { "fields": { "bindingKind": "attribute", "sourceName": "attributeTwoWay", "direction": "source-to-target", "sourceEvaluationKind": "connectable-read" }, "source": { "marker": "data-lifecycle.attr=\"attributeTwoWay & twoWay\"", "token": "data-lifecycle.attr=\"attributeTwoWay & twoWay\"" }, "count": 1 },
+                { "fields": { "bindingKind": "interpolation", "direction": "source-to-target", "sourceEvaluationKind": "untracked-read" }, "source": { "marker": "title=\"${attributeInterpolationFromView & fromView}\"", "token": "${attributeInterpolationFromView & fromView}" }, "count": 1 },
+                { "fields": { "bindingKind": "interpolation", "direction": "source-to-target", "sourceEvaluationKind": "connectable-read" }, "source": { "marker": "title=\"${attributeInterpolationTwoWay & twoWay}\"", "token": "${attributeInterpolationTwoWay & twoWay}" }, "count": 1 },
+                { "fields": { "bindingKind": "content", "sourceName": "contentFromView", "direction": "source-to-target", "sourceEvaluationKind": "untracked-read" }, "source": { "marker": "${contentFromView & fromView}", "token": "${contentFromView & fromView}" }, "count": 1 },
+                { "fields": { "bindingKind": "content", "sourceName": "contentTwoWay", "direction": "source-to-target", "sourceEvaluationKind": "connectable-read" }, "source": { "marker": "${contentTwoWay & twoWay}", "token": "${contentTwoWay & twoWay}" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "inert attribute converters bind without conversion",
+              "query": { "kind": "value-converter-applications", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "converterName": "identityValue", "bindingKind": "attribute", "phase": "bind", "phaseReachability": "reached" }, "source": { "marker": "data-converted-lifecycle.attr=\"attributeFromView | identityValue & fromView\"", "token": "identityValue" }, "count": 1 },
+                { "fields": { "converterName": "identityValue", "phase": "to-view" }, "source": { "marker": "data-converted-lifecycle.attr=\"attributeFromView | identityValue & fromView\"", "token": "identityValue" }, "absent": true },
+                { "fields": { "converterName": "identityValue", "phase": "from-view" }, "source": { "marker": "data-converted-lifecycle.attr=\"attributeFromView | identityValue & fromView\"", "token": "identityValue" }, "absent": true },
+                { "fields": { "converterName": "identityValue", "bindingKind": "attribute", "phase": "unbind", "phaseReachability": "reached" }, "source": { "marker": "data-converted-lifecycle.attr=\"attributeFromView | identityValue & fromView\"", "token": "identityValue" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "non-evaluated-authored-access-remains-ide-addressable",
+          "domainAxis": "source-precision",
+          "capability": "authored-access-navigation-lifecycle",
+          "cursor": {
+            "marker": "data-lifecycle.attr=\"attributeFromView & fromView\"",
+            "token": "attributeFromView"
+          },
+          "expectations": [
+            {
+              "name": "non-evaluated source has no runtime operation",
+              "query": { "kind": "runtime-expression-access-uses", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 400 } } },
+              "rows": [
+                {
+                  "fields": { "phase": "source-evaluation", "role": "read" },
+                  "source": { "marker": "data-lifecycle.attr=\"attributeFromView & fromView\"", "token": "attributeFromView" },
+                  "absent": true
+                }
+              ]
+            },
+            {
+              "name": "non-evaluated source remains referenceable",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 20 } } },
+              "equals": {
+                "closure": "complete",
+                "value.selectedMemberName": "attributeFromView",
+                "value.rows.length": 3
+              },
+              "rows": [
+                {
+                  "fields": { "referenceKind": "template-usage", "handles.accessUseProductHandles": [] },
+                  "source": { "marker": "data-lifecycle.attr=\"attributeFromView & fromView\"", "token": "attributeFromView" },
+                  "count": 1
+                },
+                {
+                  "fields": { "referenceKind": "template-usage", "handles.accessUseProductHandles": [] },
+                  "source": { "marker": "data-converted-lifecycle.attr=\"attributeFromView | identityValue & fromView\"", "token": "attributeFromView" },
+                  "count": 1
+                },
+                {
+                  "fields": { "referenceKind": "declaration" },
+                  "source": { "sourceFile": "src/observation-binding-lifecycle-app.ts", "marker": "attributeFromView = 'Attribute", "token": "attributeFromView" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "non-evaluated source remains renameable",
+              "query": { "kind": "template-rename", "options": { "newName": "attributeAfterView" } },
+              "equals": {
+                "value.status": "available",
+                "value.templateReferenceCount": 2,
+                "value.typeScriptReferenceCount": 1,
+                "value.edits.length": 3
+              },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "template-usage", "oldText": "attributeFromView", "newText": "attributeAfterView" },
+                  "source": { "marker": "data-lifecycle.attr=\"attributeFromView & fromView\"", "token": "attributeFromView" },
+                  "oldTextMatchesSource": true
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "template-usage", "oldText": "attributeFromView", "newText": "attributeAfterView" },
+                  "source": { "marker": "data-converted-lifecycle.attr=\"attributeFromView | identityValue & fromView\"", "token": "attributeFromView" },
+                  "oldTextMatchesSource": true
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "attributeFromView", "newText": "attributeAfterView" },
+                  "source": { "sourceFile": "src/observation-binding-lifecycle-app.ts", "marker": "attributeFromView = 'Attribute", "token": "attributeFromView" },
+                  "oldTextMatchesSource": true
+                }
               ]
             }
           ]
@@ -16389,7 +16650,7 @@
       "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/runtime-expression-access-uses-app.html",
-      "requirement": "Every authored access is conserved after pairing with its exact runtime owner and operation, while branch qualification, phase, tracking, and repeated source occurrence remain independent facts.",
+      "requirement": "Every runtime-spent authored access is conserved with its exact occurrence, binding resolution, owner, and operation, while branch qualification, phase, tracking, and repeated source occurrence remain independent facts.",
       "cases": [
         {
           "id": "conditional-arms-conserve-repeated-authored-loci",
@@ -16562,7 +16823,7 @@
           ]
         },
         {
-          "id": "references-and-rename-spend-access-use-authority",
+          "id": "references-and-rename-spend-binding-resolution-authority",
           "cursor": { "marker": "value.one-time=\"form.name\"", "token": "name" },
           "expectations": [
             {

@@ -19,6 +19,7 @@ import {
   type RuntimeBindingExpressionScopeProjectionReader,
 } from '../observation/runtime-binding-expression-scope.js';
 import {
+  aggregateRuntimeBindingSourceExpressionChainIndex,
   RuntimeBindingSourceExpressionProjectionKind,
   projectRuntimeBindingSourceExpressionInScope,
 } from '../observation/runtime-binding-source-expression-context.js';
@@ -785,12 +786,22 @@ export class TemplateControllerFlowScopeMaterializer {
       };
     }
 
-    const projection = projectRuntimeBindingSourceExpressionInScope(input.runtimeBindings, this.bindingExpressionScopes, {
-      binding,
-      expression,
-      localKey,
-      sourceScope: parent,
-    });
+    const projection = projectRuntimeBindingSourceExpressionInScope(
+      input.runtimeBindings,
+      this.bindingExpressionScopes,
+      input.expressionResourcePlan,
+      {
+        binding,
+        expressionProductHandle: templateControllerValueExpressionProductHandle(
+          this.scopeNarrower.projector.publication,
+          instruction,
+        ),
+        expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(expression),
+        expression,
+        localKey,
+        sourceScope: parent,
+      },
+    );
     if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
       return null;
     }

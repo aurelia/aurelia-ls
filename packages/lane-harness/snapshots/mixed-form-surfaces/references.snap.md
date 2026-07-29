@@ -6,7 +6,7 @@ Lane: `references`
 
 This snapshot records observed language-server behavior. Operator verdicts live in the probe data.
 
-## bindable-member-label-silent-partial
+## bindable-member-label
 
 ### Probe
 
@@ -132,7 +132,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 }
 ```
 
-## open-member-option-label
+## parent-specialized-option-label
 
 ### Probe
 
@@ -169,6 +169,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "uri": "fixtures://pressure/mixed-form-surfaces/src/components/loose-picklist.html"
+    },
+    {
+      "range": {
+        "end": {
+          "character": 18,
+          "line": 19
+        },
+        "start": {
+          "character": 13,
+          "line": 19
+        }
+      },
+      "uri": "fixtures://pressure/mixed-form-surfaces/src/models/ticket.ts"
     }
   ]
 }
@@ -178,7 +191,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "locationCount": 1,
+  "locationCount": 2,
   "locations": [
     {
       "anomaly": null,
@@ -195,6 +208,22 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       },
       "rangeText": "label",
       "uri": "fixtures://pressure/mixed-form-surfaces/src/components/loose-picklist.html"
+    },
+    {
+      "anomaly": null,
+      "file": "src/models/ticket.ts",
+      "range": {
+        "end": {
+          "character": 18,
+          "line": 19
+        },
+        "start": {
+          "character": 13,
+          "line": 19
+        }
+      },
+      "rangeText": "label",
+      "uri": "fixtures://pressure/mixed-form-surfaces/src/models/ticket.ts"
     }
   ]
 }

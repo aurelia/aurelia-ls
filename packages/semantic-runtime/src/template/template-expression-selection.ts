@@ -1,6 +1,9 @@
 import type { BindingScope } from '../configuration/scope.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
-import { expressionSourceSpansEqual } from '../expression/source-span.js';
+import {
+  expressionSourceSpansEqual,
+  expressionSpanContainsOffset,
+} from '../expression/source-span.js';
 import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
 import { sourceSpanContainsOffset } from '../kernel/address.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
@@ -15,6 +18,7 @@ import {
 } from '../observation/runtime-binding-expression.js';
 import {
   bindingBehaviorEvaluationForRuntimeBindingSource,
+  aggregateRuntimeBindingSourceExpressionChainIndex,
   RuntimeBindingSourceExpressionContextProjector,
   RuntimeBindingSourceExpressionProjectionKind,
   type RuntimeBindingSourceExpressionContextProjection,
@@ -26,7 +30,10 @@ import {
   type RuntimeExpressionAccessUse,
 } from '../runtime-expression/runtime-expression-access-use.js';
 import type { TemplateResourceScope } from './compiler-world.js';
-import { bindingExpressionAstForProductAtOffset } from './expression-parse-product.js';
+import {
+  bindingExpressionAstForProduct,
+  bindingExpressionAstForProductAtOffset,
+} from './expression-parse-product.js';
 import {
   expressionProductHandlesForInstruction,
   MultiAttrInstruction,
@@ -201,11 +208,16 @@ export function bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOff
     resource.runtimeAnalysis.runtimeRendering,
     instructionScopeLookup(resource.runtimeAnalysis.scopes.instructionScopes),
     resource.runtimeAnalysis.scopes.bindingExpressionScopes,
+    resource.runtimeAnalysis.expressionResourcePlan,
   );
   const accessUses = runtimeExpressionAccessUsesForTemplateExpressionAtOffset(
     store,
     resource,
     expressionParse.productHandle,
+    offset,
+  );
+  const expressionChainIndex = templateExpressionChainIndexAtCursor(
+    bindingExpressionAstForProduct(store, expressionParse.productHandle),
     offset,
   );
   const accessUseOwnsSourceEnvironment = accessUses.some((accessUse) =>
@@ -215,12 +227,16 @@ export function bindingSourceEnvironmentSelectionForTemplateExpressionParseAtOff
     ? selectRuntimeExpressionAccessUseSourceContextProjection({
         resource,
         accessUses,
+        expressionProductHandle: expressionParse.productHandle,
+        expressionChainIndex,
         expression,
         localKey: `template-expression-selection:${expressionParse.productHandle}:access-use-source-scope`,
         sourceExpressions,
       })
     : selectRuntimeBindingSourceContextProjection({
         bindings,
+        expressionProductHandle: expressionParse.productHandle,
+        expressionChainIndex,
         expression,
         localKey: `template-expression-selection:${expressionParse.productHandle}:source-scope`,
         sourceExpressions,
@@ -301,6 +317,8 @@ function selectRuntimeBindingSourceEnvironment(
 export function selectRuntimeBindingSourceContextProjection(
   input: {
     readonly bindings: readonly RuntimeExpressionBinding[];
+    readonly expressionProductHandle: ProductHandle;
+    readonly expressionChainIndex: number | null;
     readonly expression: ExpressionAstNode;
     readonly localKey: string;
     readonly sourceExpressions: RuntimeBindingSourceExpressionContextProjector;
@@ -315,6 +333,8 @@ export function selectRuntimeBindingSourceContextProjection(
     const projection = input.sourceExpressions.projectSourceWithBindingBehavior(
       {
         binding,
+        expressionProductHandle: input.expressionProductHandle,
+        expressionChainIndex: input.expressionChainIndex,
         expression: input.expression,
         localKey: input.localKey,
       },
@@ -333,6 +353,8 @@ function selectRuntimeExpressionAccessUseSourceContextProjection(
   input: {
     readonly resource: TemplateResourceRuntimeAnalysisEmission;
     readonly accessUses: readonly RuntimeExpressionAccessUse[];
+    readonly expressionProductHandle: ProductHandle;
+    readonly expressionChainIndex: number | null;
     readonly expression: ExpressionAstNode;
     readonly localKey: string;
     readonly sourceExpressions: RuntimeBindingSourceExpressionContextProjector;
@@ -362,6 +384,8 @@ function selectRuntimeExpressionAccessUseSourceContextProjection(
     const projection = input.sourceExpressions.projectSourceWithBindingBehavior(
       {
         binding,
+        expressionProductHandle: input.expressionProductHandle,
+        expressionChainIndex: input.expressionChainIndex,
         expression: input.expression,
         localKey: input.localKey,
         sourceScope,
@@ -431,12 +455,27 @@ export function runtimeExpressionAccessUsesForTemplateExpressionAtOffset(
   return selected.length > 0 ? selected : accessUses;
 }
 
+function templateExpressionChainIndexAtCursor(
+  aggregateExpression: ExpressionAstNode | null,
+  offset: number,
+): number | null {
+  if (aggregateExpression?.$kind === 'Interpolation') {
+    const index = aggregateExpression.expressions.findIndex((expression) =>
+      expressionSpanContainsOffset(expression.span, offset)
+    );
+    return index < 0 ? null : index;
+  }
+  return aggregateExpression == null
+    ? null
+    : aggregateRuntimeBindingSourceExpressionChainIndex(aggregateExpression);
+}
+
 /** Runtime access occurrences owned by one effective template expression product. */
 export function runtimeExpressionAccessUsesForTemplateExpression(
   resource: TemplateResourceRuntimeAnalysisEmission,
   expressionProductHandle: ProductHandle,
 ): readonly RuntimeExpressionAccessUse[] {
-  return resource.runtimeAnalysis.expressionAccessUses
+  return resource.runtimeAnalysis.expressionAccesses
     .readAccessUsesForExpressionProduct(expressionProductHandle)
     .filter((accessUse) => accessUse.ownerKind === RuntimeExpressionAccessOwnerKind.Binding);
 }
@@ -589,6 +628,8 @@ function runtimeBindingSourceContextProjectionsMatch(
     && left.localKey === right.localKey
     && left.bindingBehavior === right.bindingBehavior
     && left.sourceEvaluationReachability === right.sourceEvaluationReachability
+    && left.expressionProductHandle === right.expressionProductHandle
+    && left.expressionChainIndex === right.expressionChainIndex
     && left.expression.$kind === right.expression.$kind
     && expressionSourceSpansEqual(left.expression.span, right.expression.span)
     && left.authoredExpression.$kind === right.authoredExpression.$kind

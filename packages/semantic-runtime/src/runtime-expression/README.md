@@ -1,12 +1,27 @@
-# Runtime Expression Access Uses
+# Expression Access Authority
 
 See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and auLink rule.
 
-This folder owns the semantic fact that one runtime operation uses one expression access occurrence. It is the common
-authority between expression syntax, Aurelia lifecycle, TypeChecker target closure, observation effects, public
-inquiries, IDE features, and future AOT work.
+This folder owns the layered relationship between authored expression tokens, binding-context target resolution, and
+runtime operations that spend those tokens. It is the common authority between expression syntax, Aurelia lifecycle,
+TypeChecker target closure, observation effects, public inquiries, IDE features, and future AOT work.
 
 ## Unit Of Meaning
+
+Template access facts have three deliberately separate layers:
+
+1. `TemplateExpressionAccessOccurrence` is a parse-owned authored token. It carries exact source addresses and syntax
+   form, but no rendered scope, target, phase, tracking, or reachability.
+2. `RuntimeBindingExpressionAccessResolution` interprets that occurrence in one rendered binding context. It carries
+   scope, lexical role, target closure, and control qualifiers, but does not claim that Aurelia executes an operation.
+3. `RuntimeExpressionAccessUse` records one actual or open runtime operation that spends a resolution. Generated and
+   TypeScript-backed operations may instead publish a use without a template occurrence or binding resolution.
+
+Occurrences and resolutions are high-cardinality hot details owned by existing expression-parse and runtime-binding
+products. They are not a parallel durable graph. One occurrence can have several rendered resolutions, and one
+resolution can be spent by zero or more runtime uses. For example, a `fromView`-only attribute source remains
+referenceable even though Aurelia never evaluates it, while a two-way value-converter argument shares one resolution
+across its `toView` and `fromView` uses.
 
 A `RuntimeExpressionAccessUse` is:
 
@@ -19,9 +34,10 @@ A `RuntimeExpressionAccessUse` is:
 - the finest target closure that the binding scope and TypeChecker can prove; and
 - exact access and member-token source addresses when those loci exist.
 
-An access use is not a live observer, subscription, data-flow edge, diagnostic, or TypeScript reference. Those products
-derive from the access fact and retain its handle as lineage. Do not make access identity depend on whichever downstream
-consumer happened to discover it first.
+An access use is not a live observer, subscription, data-flow edge, diagnostic, or TypeScript reference. Runtime effects
+derive from uses and retain their handles as lineage. Authoring consumers such as references and rename derive template
+occurrences from binding resolutions, because requiring a runtime use would erase valid non-evaluated syntax. Do not
+make access identity depend on whichever downstream consumer happened to discover it first.
 
 ## Independent Axes
 
@@ -73,8 +89,8 @@ Arrow-parameter identity also belongs to the parser, not to a second lexical-sym
 exact `BindingIdentifier` declaration span and publishes it as the callback root target; same-name nested callbacks
 therefore stay distinct. Temporary callback/narrowing `BindingScope` contexts can supply evaluation state, but they are
 not durable kernel products. Public target authority routes to a committed context with the same semantic identity, or
-to the expression parse product for the callback declaration. References, rename, diagnostics, and cursor selection
-spend those target links rather than rebuilding a local-name set.
+to the expression parse product for the callback declaration. References and rename spend the resolution target links;
+runtime diagnostics and observation spend the use that links back to that same resolution.
 
 Resource ownership follows the runtime operation owner before source locality. A trackable method-body access is authored
 in TypeScript but is still used by, and belongs to, the exact template binding operation that invoked the method.
@@ -90,9 +106,9 @@ projection.
 
 Repeat key and contextual expressions are auxiliary `AstEvaluateOnly` operations. They run in the repeated-item scope
 but do not enter the iterator binding's `astBind(...)` lifecycle and do not create connectable observed dependencies.
-Their access uses therefore retain the source scope needed by cursor, reference, rename, and type consumers. Those
-consumers must select the operation at the authored token and spend that scope rather than requiring an observation row
-that cannot honestly exist.
+Their binding resolutions therefore retain the source scope needed by cursor, reference, rename, and type consumers.
+Runtime uses independently retain the auxiliary operation semantics. Consumers must select the authored resolution
+rather than requiring an observation row that cannot honestly exist.
 
 `...$bindables` has two levels:
 
@@ -120,17 +136,20 @@ rows.
 
 - `template-access-use-collector.ts` extracts occurrence and control-flow facts from Aurelia expression ASTs.
 - `typescript-access-use-collector.ts` extracts source-operation occurrences from checker-backed TypeScript bodies.
-- `runtime-expression-access-publication.ts` publishes source, identity, target, provenance, and claims.
+- `runtime-expression-access-publication.ts` publishes parse-owned occurrences, binding resolutions, and runtime uses
+  without republishing their shared source/target facts.
 - `source-access-use-publication.ts` publishes source-effect, computed, watcher, and method-body access uses.
-- `../observation/runtime-expression-access-use-materializer.ts` pairs template occurrences with binding lifecycle and
-  derives observation effects.
+- `../observation/runtime-expression-access-materializer.ts` resolves authored template occurrences once per binding
+  context, lets zero or more lifecycle operations spend each resolution, and derives observation effects from uses.
+- `../api/app-template-queries.ts` projects references and rename from binding resolutions, attaching every access-use
+  and observed-dependency handle spending that resolution when runtime operations actually exist.
 - `../api/runtime-expression-projections.ts` is the shared public projection used by the dedicated access-use query and
   nested observation lineage.
 
-Consumers should join through product handles or target links. Do not rescan source text, rebuild local expression
-walkers, infer operation semantics from dependency names, or normalize repeated occurrences before publication.
-Syntax-only consumers may still read the parse tree for authored token spelling, but semantic decisions such as
-callback-local classification and target ownership must come from the access-use product.
+Consumers should join through occurrence/resolution handles, product handles, or target links. Do not rescan source
+text, rebuild local expression walkers, infer operation semantics from dependency names, or normalize repeated
+occurrences before publication. Authored token spelling comes from the occurrence; callback-local classification and
+target ownership come from the binding resolution; phase, tracking, realization, and reachability come from the use.
 
 Publication batches may create access uses and their observation effects together. Pairing therefore carries the
 access use's already-known source address through the transient dependency draft; it must not reread a not-yet-committed

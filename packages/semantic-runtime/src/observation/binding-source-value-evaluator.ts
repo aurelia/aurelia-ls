@@ -81,6 +81,7 @@ import {
   type EvaluationValue,
 } from '../evaluation/values.js';
 import type { KernelSourceFileReadView } from '../kernel/store.js';
+import type { ProductHandle } from '../kernel/handles.js';
 import type { Container } from '../di/container.js';
 import {
   TypeSystemHotDetails,
@@ -109,7 +110,6 @@ import {
   findVisibleTemplateResource,
   readVisibleTemplateResourceDefinition,
 } from '../template/compiler-resource-lookup.js';
-import type { TemplateResourceScope } from '../template/compiler-world.js';
 import {
   PropertyBinding,
 } from '../template/runtime-binding.js';
@@ -136,6 +136,7 @@ import {
   RuntimeBoundControllerValueTable,
   type RuntimeBoundControllerPropertyValue,
 } from './runtime-bound-controller-value.js';
+import { RuntimeBindingSourceEvaluationKind } from './runtime-binding-observation.js';
 import { StateProductDetails } from '../state/product-details.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ValueConverterDefinition } from '../resources/value-converter-definition.js';
@@ -154,6 +155,41 @@ type RuntimeBindingSourceClassValueTargetRead = {
   readonly target: null;
   readonly openReason: string;
 };
+
+const enum RuntimeBoundControllerWriterPresence {
+  /** The runtime binding exists for the evaluated source value. */
+  Present = 'present',
+  /** The runtime guard rejects the evaluated source value, so no child-property binding exists. */
+  Absent = 'absent',
+  /** Static evaluation cannot close the runtime guard. */
+  Open = 'open',
+}
+
+interface RuntimeBoundControllerValueEvaluation {
+  readonly evaluation: RuntimeBindingSourceValueEvaluation;
+  readonly writerPresence: RuntimeBoundControllerWriterPresence;
+}
+
+interface RuntimeBoundControllerCandidateEvaluation extends RuntimeBoundControllerValueEvaluation {
+  readonly bound: RuntimeBoundControllerPropertyValue;
+  readonly expression: ExpressionAstNode | null;
+}
+
+/** Presence-aware value selected for one child-controller property. */
+export class RuntimeBoundControllerPropertyEvaluation {
+  constructor(
+    /** Exact winning writer, or null when multiple runtime outcomes remain possible. */
+    readonly source: RuntimeBoundControllerPropertyValue | null,
+    readonly evaluation: RuntimeBindingSourceValueEvaluation,
+  ) {}
+}
+
+interface RuntimeBoundControllerPropertySelection {
+  readonly result: RuntimeBoundControllerPropertyEvaluation;
+  readonly representativeExpression: ExpressionAstNode | null;
+  /** Whether every current writer may be absent, leaving the controller's existing property value in place. */
+  readonly fallbackPossible: boolean;
+}
 
 export const enum RuntimeValueConverterInstancePropertyReadState {
   /** Checker and evaluator agree that the instance property has no runtime value. */
@@ -229,7 +265,6 @@ export class RuntimeBindingSourceValueEvaluator {
     );
   }
 
-  /** Returns a source-value evaluator whose root requests default to the supplied DI activation container. */
   /** Read one app-owned converter instance field without collapsing retained values when evaluation remains open. */
   readValueConverterInstanceProperty(
     definition: ValueConverterDefinition,
@@ -260,17 +295,63 @@ export class RuntimeBindingSourceValueEvaluator {
   evaluateBoundControllerPropertyValue(
     bound: RuntimeBoundControllerPropertyValue,
   ): RuntimeBindingSourceValueEvaluation {
+    return this.evaluateBoundControllerPropertyCandidate(bound).evaluation;
+  }
+
+  /** Evaluate the writers that may determine one exact controller property's steady value. */
+  evaluateSteadyBoundControllerPropertyValue(
+    controllerProductHandle: ProductHandle,
+    propertyName: string,
+  ): RuntimeBoundControllerPropertyEvaluation | null {
+    const values = this.boundControllerValues.readExactControllerPropertyValues(
+      controllerProductHandle,
+      propertyName,
+    );
+    return this.evaluateSteadyBoundControllerRows(
+      values,
+      (bound) => this.evaluateBoundControllerPropertyCandidate(bound),
+    )?.result ?? null;
+  }
+
+  /** Evaluate render-order initial settlement after runtime-guarded writers have established their presence. */
+  evaluateInitialBoundControllerPropertyValue(
+    controllerProductHandle: ProductHandle,
+    propertyName: string,
+  ): RuntimeBoundControllerPropertyEvaluation | null {
+    const values = this.boundControllerValues.readExactControllerPropertyValues(
+      controllerProductHandle,
+      propertyName,
+    );
+    return this.evaluateInitialBoundControllerRows(
+      values,
+      (bound) => this.evaluateBoundControllerPropertyCandidate(bound),
+    )?.result ?? null;
+  }
+
+  private evaluateBoundControllerPropertyCandidate(
+    bound: RuntimeBoundControllerPropertyValue,
+  ): RuntimeBoundControllerCandidateEvaluation {
     const sourceScope = bound.sourceScope;
     if (sourceScope == null) {
-      return openBindingSourceSlotNoStaticValue(
-        `Bound controller property '${bound.propertyName}' did not retain its parent binding Scope.`,
-      );
+      return {
+        bound,
+        expression: null,
+        evaluation: openBindingSourceSlotNoStaticValue(
+          `Bound controller property '${bound.propertyName}' did not retain its parent binding Scope.`,
+        ),
+        writerPresence: RuntimeBoundControllerWriterPresence.Open,
+      };
     }
     const expression = bindingExpressionAstForProduct(this.projector.publication, bound.expressionProductHandle);
     if (expression == null) {
-      return openBindingSourceSlotNoStaticValue(
-        `Bound controller property '${bound.propertyName}' did not retain a runtime-accepted binding expression.`,
-      );
+      return {
+        bound,
+        expression: null,
+        evaluation: openBindingSourceSlotNoStaticValue(
+          `Bound controller property '${bound.propertyName}' did not retain a runtime-accepted binding expression.`,
+        ),
+        writerPresence: RuntimeBoundControllerWriterPresence.Open,
+      };
     }
     const context = RuntimeBindingSourceValueEvaluationContext.knownScope(
       expression,
@@ -281,7 +362,11 @@ export class RuntimeBindingSourceValueEvaluator {
     );
     return this.evaluationFrame.withActiveContainer(
       context.containerOrDefault(this.defaultActiveContainer),
-      () => this.evaluateBoundControllerValueRow(bound, expression, sourceScope, context),
+      () => ({
+        bound,
+        expression,
+        ...this.evaluateBoundControllerValueRowWithPresence(bound, expression, sourceScope, context),
+      }),
     );
   }
 
@@ -381,7 +466,7 @@ export class RuntimeBindingSourceValueEvaluator {
     }
     const inputPressure = [input, ...argumentsRead.pressure];
 
-    const definition = this.valueConverterDefinition(expression, context.resourceScope);
+    const definition = this.valueConverterDefinition(expression, context);
     if (definition == null) {
       return bindingSourceValueEvaluationWithPressure(
         openBindingSourceUnsupportedExpression(
@@ -450,9 +535,15 @@ export class RuntimeBindingSourceValueEvaluator {
 
   private valueConverterDefinition(
     expression: ValueConverterExpression,
-    resourceScope: TemplateResourceScope | null,
+    context: RuntimeBindingSourceValueEvaluationContext,
   ): ValueConverterDefinition | null {
-    const resource = findVisibleTemplateResource(resourceScope, ResourceDefinitionKind.ValueConverter, expression.name.name);
+    const resource = context.ownsExpressionResourcePlan()
+      ? context.readValueConverterPlanEntry(expression)?.resource ?? null
+      : findVisibleTemplateResource(
+          context.resourceScope,
+          ResourceDefinitionKind.ValueConverter,
+          expression.name.name,
+        );
     const definition = readVisibleTemplateResourceDefinition(this.projector.publication, resource);
     return definition?.type === ResourceDefinitionKind.ValueConverter
       ? definition
@@ -882,46 +973,88 @@ export class RuntimeBindingSourceValueEvaluator {
       return openBindingSourceSlotNoStaticValue(`Scope lookup for '${name}' did not expose a TypeChecker member slot.`);
     }
     const bound = lookup.lookupKind === BindingScopeLookupKind.BindingContext
-      ? this.evaluateBoundControllerValue(lookup.scope, lookup.slot.name, context)
+      ? this.evaluateBoundControllerValueSelection(lookup.scope, lookup.slot.name, context)
       : null;
-    return bound ?? this.evaluateSlot(lookup.slot, lookup.scope, context);
+    const fallback = () => this.evaluateSlot(lookup.slot!, lookup.scope, context);
+    if (bound == null) {
+      return fallback();
+    }
+    return bound.fallbackPossible
+      ? bindingSourceValueEvaluationWithPressure(fallback(), [bound.result.evaluation])
+      : bound.result.evaluation;
   }
 
-  private evaluateBoundControllerValue(
+  private evaluateBoundControllerValueSelection(
     scope: BindingScope | null,
     propertyName: string,
     context: RuntimeBindingSourceValueEvaluationContext,
-  ): RuntimeBindingSourceValueEvaluation | null {
-    const bound = this.boundControllerValues.read(
+  ): RuntimeBoundControllerPropertySelection | null {
+    const values = this.boundControllerValues.readPropertyValues(
       scope?.bindingContext.ownerProductHandle ?? null,
       propertyName,
       scope?.bindingContext.contextType ?? null,
     );
-    if (bound == null) {
-      return null;
-    }
-    if (bound.sourceScope == null) {
-      return openBindingSourceSlotNoStaticValue(`Bound controller property '${propertyName}' did not retain its parent binding Scope.`);
-    }
-    const expression = bindingExpressionAstForProduct(this.projector.publication, bound.expressionProductHandle);
-    if (expression == null) {
-      return openBindingSourceSlotNoStaticValue(`Bound controller property '${propertyName}' did not retain a runtime-accepted binding expression.`);
-    }
-    return this.evaluateBoundControllerValueRow(bound, expression, bound.sourceScope, context);
+    return this.evaluateSteadyBoundControllerRows(
+      values,
+      (bound) => this.evaluateBoundControllerPropertyCandidateInContext(bound, context),
+      this.boundControllerValues.definitionContextHasUnboundUseSite(
+        scope?.bindingContext.ownerProductHandle ?? null,
+        scope?.bindingContext.contextType ?? null,
+        propertyName,
+      ),
+    );
   }
 
-  private evaluateBoundControllerValueRow(
+  private evaluateBoundControllerPropertyCandidateInContext(
+    bound: RuntimeBoundControllerPropertyValue,
+    context: RuntimeBindingSourceValueEvaluationContext,
+  ): RuntimeBoundControllerCandidateEvaluation {
+    const expression = bindingExpressionAstForProduct(this.projector.publication, bound.expressionProductHandle);
+    if (expression == null) {
+      return {
+        bound,
+        expression: null,
+        evaluation: openBindingSourceSlotNoStaticValue(
+          `Bound controller property '${bound.propertyName}' did not retain a runtime-accepted binding expression.`,
+        ),
+        writerPresence: RuntimeBoundControllerWriterPresence.Open,
+      };
+    }
+    return {
+      bound,
+      expression,
+      ...this.evaluateBoundControllerValueRowWithPresence(
+        bound,
+        expression,
+        bound.sourceScope,
+        context,
+      ),
+    };
+  }
+
+  private evaluateBoundControllerValueRowWithPresence(
     bound: RuntimeBoundControllerPropertyValue,
     expression: ExpressionAstNode,
-    sourceScope: BindingScope,
+    sourceScope: BindingScope | null,
     context: RuntimeBindingSourceValueEvaluationContext,
-  ): RuntimeBindingSourceValueEvaluation {
+  ): RuntimeBoundControllerValueEvaluation {
+    if (sourceScope == null) {
+      return {
+        evaluation: openBindingSourceSlotNoStaticValue(
+          `Bound controller property '${bound.propertyName}' did not retain its parent binding Scope.`,
+        ),
+        writerPresence: RuntimeBoundControllerWriterPresence.Open,
+      };
+    }
     const key = `${bound.controllerProductHandle}:${bound.propertyName}:${bound.bindingProductHandle}`;
     const sourceContext = context.projectBindingSourceValueContext(
       expression,
       sourceScope,
       bound.sourceBindingExpressionScopes,
       bound.bindingProductHandle,
+      bound.expressionProductHandle,
+      bound.sourceExpressionChainIndex,
+      bound.sourceExpressionResourcePlan,
       bound.sourceBindingBehavior,
       `bound-controller:${bound.propertyName}:${bound.bindingProductHandle}`,
       bound.sourceAddressHandle,
@@ -930,16 +1063,216 @@ export class RuntimeBindingSourceValueEvaluator {
       bound.sourceDefaultContainer,
     );
     if (sourceContext.context == null) {
-      return RuntimeBindingSourceValueEvaluation.open(
-        sourceContext.openReason ?? `Bound controller property '${bound.propertyName}' did not project to a source-value context.`,
-        [OpenSeamReasonKind.BindingSourceNeedsRuntimeValue],
-      );
+      return {
+        evaluation: RuntimeBindingSourceValueEvaluation.open(
+          sourceContext.openReason ?? `Bound controller property '${bound.propertyName}' did not project to a source-value context.`,
+          [OpenSeamReasonKind.BindingSourceNeedsRuntimeValue],
+        ),
+        writerPresence: RuntimeBoundControllerWriterPresence.Open,
+      };
     }
     return context.withBoundControllerRead(
       key,
-      () => openBindingSourceNeedsRuntimeValue(`Bound controller property '${bound.propertyName}' recursively depends on itself.`),
-      () => this.evaluateNode(sourceContext.context!),
+      () => ({
+        evaluation: openBindingSourceNeedsRuntimeValue(
+          `Bound controller property '${bound.propertyName}' recursively depends on itself.`,
+        ),
+        writerPresence: RuntimeBoundControllerWriterPresence.Open,
+      }),
+      () => this.evaluateBoundControllerSourceValue(bound, sourceContext.context!),
     );
+  }
+
+  private evaluateBoundControllerSourceValue(
+    bound: RuntimeBoundControllerPropertyValue,
+    context: RuntimeBindingSourceValueEvaluationContext,
+  ): RuntimeBoundControllerValueEvaluation {
+    const source = this.evaluateNode(context);
+    if (bound.sourceValueProperty == null) {
+      return {
+        evaluation: source,
+        writerPresence: RuntimeBoundControllerWriterPresence.Present,
+      };
+    }
+    const sourceValue = source.addressableValue;
+    if (sourceValue == null) {
+      return source.executableValue != null
+        ? {
+            evaluation: source,
+            writerPresence: RuntimeBoundControllerWriterPresence.Absent,
+          }
+        : {
+            evaluation: bindingSourceValueEvaluationWithPressure(
+              openBindingSourceNeedsRuntimeValue(
+                `Spread source member '${bound.sourceValueProperty}' requires an executable or addressable owner value.`,
+              ),
+              [source],
+            ),
+            writerPresence: RuntimeBoundControllerWriterPresence.Open,
+          };
+    }
+    const presenceValue = evaluateStaticBinaryOperation(
+      'in',
+      new EvaluationStringValue(bound.sourceValueProperty, null),
+      sourceValue,
+      null,
+    );
+    const present = presenceValue != null && isEvaluationPrimitiveValue(presenceValue)
+      ? readEvaluationPrimitive(presenceValue)
+      : null;
+    return {
+      evaluation: bindingSourceValueEvaluationWithPressure(
+        this.memberValues.property(sourceValue, bound.sourceValueProperty),
+        [source],
+      ),
+      writerPresence: present === true
+        ? RuntimeBoundControllerWriterPresence.Present
+        : present === false
+          ? RuntimeBoundControllerWriterPresence.Absent
+          : RuntimeBoundControllerWriterPresence.Open,
+    };
+  }
+
+  private evaluateSteadyBoundControllerRows(
+    values: readonly RuntimeBoundControllerPropertyValue[],
+    evaluate: (bound: RuntimeBoundControllerPropertyValue) => RuntimeBoundControllerCandidateEvaluation,
+    definitionFallbackPossible: boolean = false,
+  ): RuntimeBoundControllerPropertySelection | null {
+    const byController = new Map<ProductHandle, RuntimeBoundControllerPropertyValue[]>();
+    for (const value of values) {
+      const controllerValues = byController.get(value.controllerProductHandle) ?? [];
+      controllerValues.push(value);
+      byController.set(value.controllerProductHandle, controllerValues);
+    }
+    const candidates: RuntimeBoundControllerCandidateEvaluation[] = [];
+    let fallbackPossible = false;
+    for (const controllerValues of byController.values()) {
+      const evaluated = controllerValues.map(evaluate);
+      const retained = new Set<RuntimeBoundControllerPropertyValue>();
+      for (const candidate of evaluated) {
+        if (candidate.bound.sourceEvaluationKind === RuntimeBindingSourceEvaluationKind.ConnectableRead) {
+          retained.add(candidate.bound);
+          candidates.push(
+            candidate.writerPresence === RuntimeBoundControllerWriterPresence.Absent
+              ? this.futureBoundControllerCandidate(candidate)
+              : candidate
+          );
+        }
+      }
+      let currentWriterPresent = false;
+      for (let index = evaluated.length - 1; index >= 0; index -= 1) {
+        const candidate = evaluated[index]!;
+        if (candidate.writerPresence === RuntimeBoundControllerWriterPresence.Absent) {
+          continue;
+        }
+        if (!retained.has(candidate.bound)) {
+          retained.add(candidate.bound);
+          candidates.push(candidate);
+        }
+        if (candidate.writerPresence === RuntimeBoundControllerWriterPresence.Present) {
+          currentWriterPresent = true;
+          break;
+        }
+      }
+      if (!currentWriterPresent) {
+        fallbackPossible = true;
+      }
+    }
+    return this.collapseBoundControllerCandidates(
+      candidates,
+      values[0]?.propertyName ?? 'unknown',
+      'steady',
+      fallbackPossible || definitionFallbackPossible,
+      definitionFallbackPossible,
+    );
+  }
+
+  private futureBoundControllerCandidate(
+    candidate: RuntimeBoundControllerCandidateEvaluation,
+  ): RuntimeBoundControllerCandidateEvaluation {
+    return {
+      ...candidate,
+      evaluation: bindingSourceValueEvaluationWithPressure(
+        openBindingSourceNeedsRuntimeValue(
+          `Connectable spread writer for '${candidate.bound.propertyName}' is absent from the evaluated source value but may become present after an update.`,
+        ),
+        [candidate.evaluation],
+      ),
+      writerPresence: RuntimeBoundControllerWriterPresence.Open,
+    };
+  }
+
+  private evaluateInitialBoundControllerRows(
+    values: readonly RuntimeBoundControllerPropertyValue[],
+    evaluate: (bound: RuntimeBoundControllerPropertyValue) => RuntimeBoundControllerCandidateEvaluation,
+  ): RuntimeBoundControllerPropertySelection | null {
+    const candidates: RuntimeBoundControllerCandidateEvaluation[] = [];
+    for (let index = values.length - 1; index >= 0; index -= 1) {
+      const candidate = evaluate(values[index]!);
+      if (candidate.writerPresence === RuntimeBoundControllerWriterPresence.Absent) {
+        continue;
+      }
+      candidates.push(candidate);
+      if (candidate.writerPresence === RuntimeBoundControllerWriterPresence.Present) {
+        break;
+      }
+    }
+    return this.collapseBoundControllerCandidates(
+      candidates,
+      values[0]?.propertyName ?? 'unknown',
+      'initial',
+      false,
+      false,
+    );
+  }
+
+  private collapseBoundControllerCandidates(
+    candidates: readonly RuntimeBoundControllerCandidateEvaluation[],
+    propertyName: string,
+    phase: 'initial' | 'steady',
+    fallbackPossible: boolean,
+    definitionFallbackPossible: boolean,
+  ): RuntimeBoundControllerPropertySelection | null {
+    if (candidates.length === 0) {
+      return null;
+    }
+    const candidate = candidates[0]!;
+    if (
+      candidates.length === 1
+      && candidate.writerPresence === RuntimeBoundControllerWriterPresence.Present
+      && !fallbackPossible
+    ) {
+      return {
+        result: new RuntimeBoundControllerPropertyEvaluation(candidate.bound, candidate.evaluation),
+        representativeExpression: candidate.expression,
+        fallbackPossible,
+      };
+    }
+    const retainedCandidate = candidates.find((entry) =>
+      entry.writerPresence === RuntimeBoundControllerWriterPresence.Present
+      && entry.evaluation.value != null
+    )?.evaluation.value ?? null;
+    const summary = definitionFallbackPossible
+      ? `Bound controller property '${propertyName}' has ${candidates.length} possible ${phase}-state writers and at least one definition use site without an admitted writer.`
+      : `Bound controller property '${propertyName}' has ${candidates.length} possible ${phase}-state writers after runtime guard evaluation.`;
+    const open = retainedCandidate == null
+      ? openBindingSourceSlotNoStaticValue(summary)
+      : RuntimeBindingSourceValueEvaluation.openWithValue(
+          retainedCandidate,
+          summary,
+          [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
+        );
+    return {
+      result: new RuntimeBoundControllerPropertyEvaluation(
+        null,
+        bindingSourceValueEvaluationWithPressure(
+          open,
+          candidates.map((entry) => entry.evaluation),
+        ),
+      ),
+      representativeExpression: candidates.find((entry) => entry.expression != null)?.expression ?? null,
+      fallbackPossible,
+    };
   }
 
   private evaluateAccessMember(
@@ -1616,22 +1949,46 @@ export class RuntimeBindingSourceValueEvaluator {
       return new Map();
     }
     const values = new Map<string, RuntimeBindingSourceValueEvaluation>();
+    const byProperty = new Map<string, RuntimeBoundControllerPropertyValue[]>();
     for (const bound of this.boundControllerValues.readAll(
       scope?.bindingContext.ownerProductHandle ?? null,
       scope?.bindingContext.contextType ?? null,
     )) {
-      const expression = bindingExpressionAstForProduct(this.projector.publication, bound.expressionProductHandle);
-      if (expression == null || bound.sourceScope == null) {
+      const propertyValues = byProperty.get(bound.propertyName) ?? [];
+      propertyValues.push(bound);
+      byProperty.set(bound.propertyName, propertyValues);
+    }
+    for (const [propertyName, propertyValues] of byProperty) {
+      const selected = this.evaluateSteadyBoundControllerRows(
+        propertyValues,
+        (bound) => this.evaluateBoundControllerPropertyCandidateInContext(bound, context),
+        this.boundControllerValues.definitionContextHasUnboundUseSite(
+          scope?.bindingContext.ownerProductHandle ?? null,
+          scope?.bindingContext.contextType ?? null,
+          propertyName,
+        ),
+      );
+      if (selected == null) {
         continue;
       }
-      const evaluation = this.evaluateBoundControllerValueExpression(bound, expression, context);
-      values.set(bound.propertyName, evaluation);
+      const existingProperty = instance.properties.get(propertyName) ?? null;
+      const evaluation = selected.fallbackPossible && existingProperty != null
+        ? bindingSourceValueEvaluationWithPressure(
+            RuntimeBindingSourceValueEvaluation.value(existingProperty.value),
+            [selected.result.evaluation],
+          )
+        : selected.result.evaluation;
+      values.set(propertyName, evaluation);
+      const expression = selected.representativeExpression;
+      if (expression == null) {
+        continue;
+      }
       const value = valueOrBoundaryForOpen(evaluation, expression);
       if (value == null) {
         continue;
       }
-      instance.properties.set(bound.propertyName, new EvaluationObjectProperty(
-        bound.propertyName,
+      instance.properties.set(propertyName, new EvaluationObjectProperty(
+        propertyName,
         value,
         value.node ?? instance.node ?? instance.classValue.node ?? instance.classValue.declaration,
         evaluation.closure === RuntimeBindingSourceValueEvaluationClosure.Open
@@ -1641,52 +1998,6 @@ export class RuntimeBindingSourceValueEvaluator {
       ));
     }
     return values;
-  }
-
-  private evaluateBoundControllerValueExpression(
-    bound: RuntimeBoundControllerPropertyValue,
-    expression: ExpressionAstNode,
-    context: RuntimeBindingSourceValueEvaluationContext,
-  ): RuntimeBindingSourceValueEvaluation {
-    if (bound.sourceScope == null) {
-      return openBindingSourceSlotNoStaticValue(
-        `Bound controller property '${bound.propertyName}' did not retain its parent binding Scope.`,
-      );
-    }
-    const key = `${bound.controllerProductHandle}:${bound.propertyName}:${bound.bindingProductHandle}`;
-    const sourceContext = context.projectBindingSourceValueContext(
-      expression,
-      bound.sourceScope,
-      bound.sourceBindingExpressionScopes,
-      bound.bindingProductHandle,
-      bound.sourceBindingBehavior,
-      `bound-controller:${bound.propertyName}:${bound.bindingProductHandle}`,
-      bound.sourceAddressHandle,
-      bound.sourceStrictBinding,
-      bound.sourceResourceScope,
-      bound.sourceDefaultContainer,
-    );
-    if (sourceContext.context == null) {
-      const reason = sourceContext.openReason
-        ?? `Bound controller property '${bound.propertyName}' did not project to a source-value context.`;
-      return RuntimeBindingSourceValueEvaluation.openWithValue(
-        new EvaluationBoundaryValue(EvaluationBoundaryKind.BindingScope, reason, null),
-        reason,
-        [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
-      );
-    }
-    return context.withBoundControllerRead(
-      key,
-      () => {
-        const reason = `Bound controller property '${bound.propertyName}' recursively depends on itself.`;
-        return RuntimeBindingSourceValueEvaluation.openWithValue(
-          new EvaluationBoundaryValue(EvaluationBoundaryKind.BindingScope, reason, null),
-          reason,
-          [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
-        );
-      },
-      () => this.evaluateNode(sourceContext.context!),
-    );
   }
 
   private evaluateTemplate(
@@ -2088,17 +2399,22 @@ export class RuntimeBindingSourceValueEvaluator {
       );
     }
 
-    const bound = bindingContext === scope?.bindingContext
-      ? this.evaluateBoundControllerValue(scope, slot.name, context)
+    const boundSelection = bindingContext === scope?.bindingContext
+      ? this.evaluateBoundControllerValueSelection(scope, slot.name, context)
       : null;
-    if (bound == null) {
+    if (boundSelection == null) {
       const member = this.checkerMemberForSlot(slot);
       if (member != null && bindingContext === scope?.bindingContext) {
         return this.evaluateMemberCallTarget(member, scope, context);
       }
     }
 
-    const callee = bound ?? this.evaluateSlot(slot, scope, context);
+    const fallback = () => this.evaluateSlot(slot, scope, context);
+    const callee = boundSelection == null
+      ? fallback()
+      : boundSelection.fallbackPossible
+        ? bindingSourceValueEvaluationWithPressure(fallback(), [boundSelection.result.evaluation])
+        : boundSelection.result.evaluation;
     const receiver = this.contextReceiverValue(scope, bindingContext, label, context);
     if (receiver.value == null) {
       return RuntimeBindingSourceCallTargetEvaluation.open(receiver);

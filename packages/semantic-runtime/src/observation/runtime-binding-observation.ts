@@ -191,6 +191,8 @@ export const enum RuntimeBindingSourceEvaluationKind {
   UntrackedRead = 'untracked-read',
   /** Source syntax is used as an assignment target rather than evaluated for a value during binding. */
   AssignmentOnly = 'assignment-only',
+  /** The binding retains authored source syntax but performs neither source evaluation nor assignment. */
+  NotEvaluated = 'not-evaluated',
   /** The binding lifecycle did not prove how the source expression is evaluated. */
   Open = 'open',
 }

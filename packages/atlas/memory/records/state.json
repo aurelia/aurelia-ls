@@ -107,6 +107,13 @@
           "symbolName": "StateBindingScopeProjector"
         },
         {
+          "kind": "product-large-class",
+          "className": "StateBindingScopeProjector",
+          "filePath": "packages/semantic-runtime/src/state/state-binding-scope.ts",
+          "minLineCount": 80,
+          "minMethodCount": 2
+        },
+        {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/observation/runtime-binding-expression-scope.ts",
           "symbolName": "RuntimeBindingExpressionScopeProjector"

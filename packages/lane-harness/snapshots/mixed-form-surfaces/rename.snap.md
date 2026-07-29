@@ -6,7 +6,7 @@ Lane: `rename`
 
 This snapshot records observed language-server behavior. Operator verdicts live in the probe data.
 
-## bindable-member-label-silent-partial
+## bindable-member-label
 
 ### Probe
 
@@ -126,17 +126,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "notificationCount": 1,
-  "notifications": [
-    {
-      "jsonrpc": "2.0",
-      "method": "window/showMessage",
-      "params": {
-        "message": "Aurelia rename prepared 3 verified edits; 2 same-name usages could not be verified and were left unchanged.",
-        "type": 3
-      }
-    }
-  ]
+  "notificationCount": 0,
+  "notifications": []
 }
 ```
 
@@ -320,7 +311,7 @@ diff --git a/src/components/ticket-editor.html b/src/components/ticket-editor.ht
  </form>
 ```
 
-## open-member-option-label
+## parent-specialized-option-label
 
 ### Probe
 
@@ -345,7 +336,19 @@ diff --git a/src/components/ticket-editor.html b/src/components/ticket-editor.ht
 ```json
 {
   "outcome": "result",
-  "result": null
+  "result": {
+    "placeholder": "label",
+    "range": {
+      "end": {
+        "character": 20,
+        "line": 4
+      },
+      "start": {
+        "character": 15,
+        "line": 4
+      }
+    }
+  }
 }
 ```
 
@@ -353,11 +356,53 @@ diff --git a/src/components/ticket-editor.html b/src/components/ticket-editor.ht
 
 ```json
 {
-  "error": {
-    "code": 0,
-    "message": "No source-backed template member is selected at this cursor."
-  },
-  "outcome": "error"
+  "outcome": "result",
+  "result": {
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "caption",
+            "range": {
+              "end": {
+                "character": 18,
+                "line": 19
+              },
+              "start": {
+                "character": 13,
+                "line": 19
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/mixed-form-surfaces/src/models/ticket.ts",
+          "version": null
+        }
+      },
+      {
+        "edits": [
+          {
+            "newText": "caption",
+            "range": {
+              "end": {
+                "character": 20,
+                "line": 4
+              },
+              "start": {
+                "character": 15,
+                "line": 4
+              }
+            }
+          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/mixed-form-surfaces/src/components/loose-picklist.html",
+          "version": 1
+        }
+      }
+    ]
+  }
 }
 ```
 
@@ -375,19 +420,111 @@ diff --git a/src/components/ticket-editor.html b/src/components/ticket-editor.ht
 ```json
 {
   "anomalies": [],
-  "editCount": 0,
+  "editCount": 2,
   "expectedOldTexts": [
     "label"
   ],
-  "filesTouched": [],
-  "outcome": "rename-error",
-  "validation": []
+  "filesTouched": [
+    "src/components/loose-picklist.html",
+    "src/models/ticket.ts"
+  ],
+  "outcome": "applied",
+  "validation": [
+    {
+      "file": "src/components/loose-picklist.html",
+      "newText": "caption",
+      "oldText": "label",
+      "range": {
+        "end": {
+          "character": 20,
+          "line": 4
+        },
+        "start": {
+          "character": 15,
+          "line": 4
+        }
+      },
+      "source": "documentChanges",
+      "status": "ok"
+    },
+    {
+      "file": "src/models/ticket.ts",
+      "newText": "caption",
+      "oldText": "label",
+      "range": {
+        "end": {
+          "character": 18,
+          "line": 19
+        },
+        "start": {
+          "character": 13,
+          "line": 19
+        }
+      },
+      "source": "documentChanges",
+      "status": "ok"
+    }
+  ]
 }
 ```
 
 ### Applied diff
 
-_No in-memory diff._
+```diff
+diff --git a/src/components/loose-picklist.html b/src/components/loose-picklist.html
+--- a/src/components/loose-picklist.html
++++ b/src/components/loose-picklist.html
+@@ -1,8 +1,8 @@
+ <label>
+   ${label}
+   <select value.bind="value">
+     <option repeat.for="option of options" model.bind="option">
+-      ${option.label || option}
++      ${option.caption || option}
+     </option>
+   </select>
+ </label>
+diff --git a/src/models/ticket.ts b/src/models/ticket.ts
+--- a/src/models/ticket.ts
++++ b/src/models/ticket.ts
+@@ -1,35 +1,35 @@
+ export type FulfillmentMethod = 'ship' | 'pickup' | 'onsite';
+ export type ContactChannel = 'email' | 'phone' | 'sms';
+
+ export class CustomerProfile {
+   id = '';
+   displayName = '';
+   email = '';
+   phone = '';
+   address = new PostalAddress();
+ }
+
+ export class PostalAddress {
+   street = '';
+   postalCode = '';
+   countryCode = 'NL';
+ }
+
+ export class TicketOption<TValue> {
+   constructor(
+-    readonly label: string,
++    readonly caption: string,
+     readonly value: TValue,
+   ) {}
+ }
+
+ export interface TicketDraft {
+   id: string;
+   customer: CustomerProfile;
+   fulfillmentMethod: FulfillmentMethod;
+   preferredChannels: ContactChannel[];
+   channelConsent: Map<ContactChannel, boolean>;
+   requestedTags: string[];
+   priority: number;
+   metadata: Record<string, unknown>;
+   looseFields: Record<string, string | number | boolean | null>;
+ }
+```
 
 ## receiver-rename-shellTone-no-overlap
 

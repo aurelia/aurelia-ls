@@ -519,14 +519,29 @@ static type surfaces rather than hydrated runtime values.
   `RuntimeBindingSourceValueEvaluationContext.projectBindingSourceValueContext(...)` before evaluation, so parent
   binding-behavior scope handoffs such as `& state` are spent even when the child property is read later through a
   getter, composition value, or static source-value reduction. That same handoff carries the parent binding's
-  authored source address, strict-mode axis, compiler resource scope, and compiler-world container; a child-side
-  source-value read should not rederive provenance, resource visibility, `resolve(...)` visibility, or nullish runtime
-  behavior from the child controller.
-  The table has two deliberate authority modes. Ordinary `read(...)` / `readAll(...)` may fall back through an
-  unambiguous definition or context type because synthetic views and recursively analyzed child resources can change
-  the exact controller handle. Consumers that own a concrete hydrated controller instance, such as router viewport
-  topology, must use `readExactControllerProperty(...)`; definition fallback there would leak one usage site's bound
-  value into sibling instances of the same resource. Every bound row also retains its source resource's
+  authored source address, strict-mode axis, exact expression-resource plan, compiler resource scope, and compiler-world
+  container; a child-side source-value read should not rederive provenance, converter visibility, `resolve(...)`
+  visibility, lifecycle reachability, or nullish runtime behavior from the child controller.
+  The table is an index, not a winner selector. `readPropertyValues(...)` preserves either one exact controller's
+  render-ordered rows or every row in an explicitly marked definition-analysis context;
+  `readExactControllerPropertyValues(...)`, `readExactControllerValues(...)`, and
+  `readAllDefinitionValues(...)` expose those ownership questions directly. Static value selection belongs to
+  `RuntimeBindingSourceValueEvaluator`: it evaluates `$bindables` property-presence guards first, then applies
+  render-order initial settlement or steady-state writer semantics. Initial settlement lets an absent final spread
+  writer reveal an earlier explicit writer; steady-state analysis still retains an absent connectable spread writer
+  because a later source update can create its inner property binding. Definition-context type projection receives
+  every use-site row and unions the admitted source types; static
+  singular-value evaluation remains a separate question. A definition-analysis root spends its retained exact
+  resource-definition product before any checker-type fallback; generated local-template types may not provide a stable
+  equality join, while distinct resources can expose equal target types. Definition-wide static evaluation also spends
+  the retained controller-definition index: when any concrete use site has no admitted writer for a property, the
+  declaration initializer remains an open alternative rather than allowing one bound use to masquerade as universal.
+  Definition fallback on an exact-controller read would instead leak one usage site's bound value into a sibling
+  instance.
+  A live writer must have a reached, value-producing source lifecycle: structural target-access rows from bind-failed
+  or `fromView`-only bindings are not parent-to-child values. Spread rows retain the existing value channel's admitted
+  member type and exact member handle, so child scope projection does not mistake the outer spread object for the value
+  assigned to one bindable. Every bound row also retains its source resource's
   `RuntimeBindingExpressionScopeProjector`, and evaluator reads spend that row-owned projector rather than borrowing
   the caller's projector across a resource boundary.
 - `binding-value-channel-materializer.ts` publishes runtime value-channel products, claims, product-level provenance,
@@ -749,6 +764,11 @@ the rendered binding's complete expression-resource `astBind(...)` chain reached
 retains prospective source/target types, assignment pressure, and the cause of the block for diagnostics, but it does
 not publish runtime observed dependencies. Binding-observed dependencies therefore remain evidence of a connectable
 read the modeled runtime can actually enter, not merely of syntax that would have been readable if bind had succeeded.
+`RuntimeExpressionResourcePlan` is the lifecycle authority behind that aggregate answer and behind each independently
+bound interpolation part. Source-expression contexts carry the exact expression product and interpolation chain index;
+an earlier part's bind failure marks later parts `blocked-by-bind-failure`, while a failure inside one wrapper chain
+marks structurally inner wrappers `blocked-by-outer-failure`. Scope projection owns only the post-behavior `BindingScope`
+handoff and must not cache or restate either reachability axis.
 Ordinary
 `AccessScope`, `AccessMember`, and `AccessKeyed` reads become `binding-observed-dependencies` rows. Collection method
 calls such as `map(...)` become collection-read rows only when TypeChecker receiver facts can still be a runtime array,
@@ -767,8 +787,9 @@ downstream reads below the keyed value keep their full route, and the keyed row 
 there is no static member declaration to point at.
 Template scope construction publishes one immutable binding-expression scope projection table after applying
 binding-behavior bind-time handoffs. In particular, `& state` changes the binding's later source-evaluation scope through
-`binding.useScope(...)`, so access uses, observed dependencies, source typing, and writeability all read the same
-store-backed scope projection. This applies to interpolation holes too: runtime-html binds each part as an
+`binding.useScope(...)`, so binding access resolutions, runtime uses, observed dependencies, source typing, and
+writeability all read the same store-backed scope projection. This applies to interpolation holes too: runtime-html
+binds each part as an
 `InterpolationPartBinding`, and each part calls `astBind(...)` on its own expression before evaluation. Binding-behavior
 arguments are untracked bind-phase access uses because Aurelia evaluates them from `astBind(...)` with no active
 connectable; value-converter arguments participate in source observation because `astEvaluate(...)` evaluates them
@@ -782,9 +803,11 @@ preserves one materialized source environment without treating an ambient child-
 expression consumers. It combines `RuntimeInstructionScopeLookup`, binding-behavior source-scope projection, and the
 rendering controller's `strict` flag before value channels, data-flow, source-value consumers, or router/composition
 materializers ask what a binding source means. Its projection also retains the expression-resource plan's
-post-bind source-evaluation reachability. Type/checker consumers may inspect the authored expression and its projected
-scope even when that lifecycle axis is blocked; evaluator consumers must spend the reachability before executing the
-source. This keeps select/checked/template-controller value-channel
+  post-bind source-evaluation reachability. Type/checker consumers may inspect the authored expression and its projected
+  scope even when that lifecycle axis is blocked; evaluator consumers must spend the reachability before executing the
+  source. Cursor projections derive an interpolation-hole index from the authored hole spans; the access-use selector's
+  all-uses fallback is environment evidence, not permission to assign a literal-only hole a sibling member access's
+  lifecycle. This keeps select/checked/template-controller value-channel
 source-shape reads aligned with data-flow source typing and writeability, and it also keeps static source-value reads
 from accidentally evaluating a binding against the raw instruction scope after `& state` has called
 `binding.useScope(...)`. Consumers should use this projector before constructing `CheckerExpressionTypeEvaluationContext`
@@ -827,13 +850,13 @@ Template TypeScript overlays use the same projector for source-scope-changing bi
 copied binding source expression. The child view created by a template controller keeps the framework parent scope that
 created the view; the state binding behavior changes the binding's source evaluation scope, not the synthetic view's
 ancestry.
-Runtime expression access-use materialization reads that projection table, splits interpolation operations, and retains
-trackable method handoffs in the projected source scope. Observation effects are then derived from the durable access
-uses. This keeps binding-owned dependency rows aligned with data-flow and overlay rows for `& state`, i18n evaluate-only
-keys, recursive render-context scopes, strict/non-strict nullish policy, and post-bind source-evaluation reachability. A
-blocked expression remains an access fact inspectable by overlays and diagnostics but contributes no connectable runtime
-dependency row. See [../runtime-expression/README.md](../runtime-expression/README.md) for the owning access-use
-contract.
+Runtime expression materialization reads that projection table, publishes parse-owned authored occurrences and
+binding-context target resolutions, then lets zero or more runtime operations spend each resolution. Observation
+effects derive only from durable runtime uses. This keeps binding-owned dependency rows aligned with data-flow and
+overlay rows for `& state`, i18n evaluate-only keys, recursive render-context scopes, strict/non-strict nullish policy,
+and post-bind source-evaluation reachability. A blocked or non-evaluated expression remains authoring-addressable
+through its resolution without manufacturing an executable use or connectable dependency. See
+[../runtime-expression/README.md](../runtime-expression/README.md) for the owning layered contract.
 Binding transport and access occurrence cardinality are deliberately independent. One interpolation/class/style
 binding still publishes one aggregate data-flow transport, while each interpolation hole keeps its own operation and
 access-use rows. The transport's source projection therefore uses the aggregate expression plus the common retained

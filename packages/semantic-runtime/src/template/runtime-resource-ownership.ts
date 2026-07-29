@@ -19,6 +19,9 @@ import type {
   RuntimeExpressionAccessUse,
 } from '../runtime-expression/runtime-expression-access-use.js';
 import type {
+  RuntimeBindingExpressionAccessResolution,
+} from '../runtime-expression/runtime-binding-expression-access-resolution.js';
+import type {
   RuntimeBinding,
   RuntimeBindingReference,
   RuntimeBindingSourceOperation,
@@ -256,7 +259,7 @@ export function resourceLocalRuntimeExpressionAccessUses(
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly RuntimeExpressionAccessUse[] {
   const localBindingProductHandles = resourceLocalRuntimeBindingProductHandles(resource);
-  return resource.runtimeAnalysis.expressionAccessUses.accessUses.filter((accessUse) => {
+  return resource.runtimeAnalysis.expressionAccesses.accessUses.filter((accessUse) => {
     const binding = resource.runtimeAnalysis.runtimeRendering.readBinding(accessUse.ownerProductHandle);
     if (binding != null) {
       // Binding-owned method-body accesses legitimately live in TypeScript source. Their operation owner, not their
@@ -269,6 +272,23 @@ export function resourceLocalRuntimeExpressionAccessUses(
       );
     }
     return sourceAddressResourceOwnership(store, resource, accessUse.sourceAddressHandle) ?? false;
+  });
+}
+
+/** Binding-context access resolutions owned by authored bindings rendered for this resource. */
+export function resourceLocalRuntimeBindingExpressionAccessResolutions(
+  store: KernelStoreReadView,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): readonly RuntimeBindingExpressionAccessResolution[] {
+  const localBindingProductHandles = resourceLocalRuntimeBindingProductHandles(resource);
+  return resource.runtimeAnalysis.expressionAccesses.accessResolutions.filter((resolution) => {
+    const binding = resource.runtimeAnalysis.runtimeRendering.readBinding(resolution.bindingProductHandle);
+    return binding != null && runtimeBindingReferenceBelongsToResource(
+      store,
+      resource,
+      localBindingProductHandles,
+      binding.toReference(),
+    );
   });
 }
 

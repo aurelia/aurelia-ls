@@ -128,12 +128,14 @@ import {
   type RuntimeExpressionAccessUse,
 } from '../runtime-expression/runtime-expression-access-use.js';
 import {
+  runtimeBindingSourceLifecycleIncludesOperation,
   runtimeBindingSourceLifecycle,
 } from './runtime-binding-source-lifecycle.js';
 import {
   type RuntimeBindingExpressionScopeProjectionReader,
 } from './runtime-binding-expression-scope.js';
 import {
+  aggregateRuntimeBindingSourceExpressionChainIndex,
   checkerContextForRuntimeBindingSourceExpressionProjection,
   RuntimeBindingSourceExpressionContextProjector,
   RuntimeBindingSourceExpressionProjectionKind,
@@ -158,8 +160,8 @@ import {
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type {
   RuntimeBindingObservationEffectDraft,
-  RuntimeExpressionAccessUseEmission,
-} from './runtime-expression-access-use-materializer.js';
+  RuntimeExpressionAccessEmission,
+} from './runtime-expression-access-materializer.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
 import type { RuntimeExpressionResourcePlan } from '../template/runtime-expression-resource-plan.js';
 import {
@@ -220,8 +222,8 @@ export class RuntimeBindingDataFlowMaterializationRequest {
     readonly controllerBind: RuntimeControllerBindEmission,
     /** Value channels visible to runtime property, attribute, and interpolation bindings. */
     readonly valueChannels: RuntimeBindingValueChannelEmission,
-    /** Owner-qualified access occurrences and their derived connectable effects. */
-    readonly expressionAccessUses: RuntimeExpressionAccessUseEmission,
+    /** Authored access resolutions, runtime uses, and their derived connectable effects. */
+    readonly expressionAccesses: RuntimeExpressionAccessEmission,
     /** Runtime Scope applications visible to instruction-owned expressions. */
     readonly scopes: TemplateScopeConstructionEmission,
     /** Runtime-analysis expression world shared by scope, value-channel, and data-flow phases. */
@@ -507,6 +509,7 @@ export class RuntimeBindingDataFlowMaterializer {
         input.runtimeBindings,
         instructionScopes,
         bindingExpressionScopes,
+        input.expressionResourcePlan,
       ),
       draftMaterializer: new RuntimeBindingDataFlowDraftMaterializer(
         this.store,
@@ -522,6 +525,11 @@ export class RuntimeBindingDataFlowMaterializer {
     frame: BindingDataFlowMaterializationFrame,
   ): void {
     if (!isRuntimeDataFlowBinding(binding)) {
+      return;
+    }
+    if (!runtimeBindingSourceLifecycleIncludesOperation(
+      runtimeBindingSourceLifecycle(binding, input.expressionResourcePlan),
+    )) {
       return;
     }
     const renderContext = input.runtimeBindings.requireRenderContextForBinding(binding.productHandle);
@@ -673,7 +681,7 @@ export class RuntimeBindingDataFlowMaterializer {
       accessUsesForDataFlowTarget(
         binding,
         target,
-        input.expressionAccessUses.readAccessUsesForBinding(binding.productHandle),
+        input.expressionAccesses.readAccessUsesForBinding(binding.productHandle),
       )
         .map((accessUse) => accessUse.productHandle),
       target,
@@ -715,7 +723,7 @@ export class RuntimeBindingDataFlowMaterializer {
     return observationEffectsForDataFlowTarget(
       binding,
       target,
-      input.expressionAccessUses.readObservationEffectsForBinding(binding.productHandle),
+      input.expressionAccesses.readObservationEffectsForBinding(binding.productHandle),
     )
       .map((effect, index) => this.observedDependencyForDraft(
         `${local}:observed-dependency:${index}`,
@@ -1221,6 +1229,8 @@ class BindingDataFlowSourceProjector {
       ? null
       : sourceExpressionContexts.projectSource({
           binding,
+          expressionProductHandle: expressionFacts.expressionProductHandle,
+          expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(expressionFacts.ast),
           expression: expressionFacts.ast,
           localKey: `${expressionFacts.expressionTypeLocal}:source`,
           sourceScope,

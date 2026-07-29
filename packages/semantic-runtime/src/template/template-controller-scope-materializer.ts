@@ -50,6 +50,7 @@ import {
 import { runtimeBindingSourceLifecycle } from '../observation/runtime-binding-source-lifecycle.js';
 import { runtimeAssignmentInputScopeForAccessScope } from '../observation/binding-source-write-capability.js';
 import {
+  aggregateRuntimeBindingSourceExpressionChainIndex,
   type RuntimeBindingSourceExpressionContextProjection,
   RuntimeBindingSourceExpressionProjectionKind,
   checkerContextForRuntimeBindingSourceExpressionProjection,
@@ -107,7 +108,10 @@ import {
   type CheckerTypeMember,
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
-import { TypeSystemProductDetails } from '../type-system/product-details.js';
+import {
+  TypeSystemHotDetails,
+  TypeSystemProductDetails,
+} from '../type-system/product-details.js';
 import { readOrProjectCheckerTypeMembersInProjection } from '../type-system/checker-type-member-surface.js';
 import {
   bindingContextSlotDraftForContextTypeMember,
@@ -1256,8 +1260,11 @@ export class TemplateControllerScopeMaterializer {
     const projection = projectRuntimeBindingSourceExpressionInScope(
       input.runtimeBindings,
       services.bindingExpressionScopes,
+      input.expressionResourcePlan,
       {
         binding,
+        expressionProductHandle,
+        expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(expression),
         expression,
         localKey: `${localKey}:source-scope`,
         sourceScope,
@@ -1435,24 +1442,35 @@ export class TemplateControllerScopeMaterializer {
     contextType: CheckerTypeReference | null,
     services: TemplateScopeConstructionServices,
   ): readonly BindingContextSlotDraft[] {
-    if (input.boundControllerValues == null) {
+    const boundControllerValues = input.boundControllerValues;
+    if (boundControllerValues == null) {
       return [];
     }
-    const exactValues = input.boundControllerValues.readExactControllerValues(controllerProductHandle);
-    const values = exactValues.length > 0
-      ? exactValues
-      : contextType != null
-        ? input.boundControllerValues.readAll(controllerProductHandle, contextType)
-        : input.boundControllerValues.readAllDefinitionValues(definition.productHandle);
+    const values = contextType != null
+      ? boundControllerValues.readAll(controllerProductHandle, contextType)
+      : boundControllerValues.isDefinitionContextController(controllerProductHandle)
+        ? boundControllerValues.readAllDefinitionValues(definition.productHandle)
+        : boundControllerValues.readExactControllerValues(controllerProductHandle);
     const valuesByProperty = new Map<string, RuntimeBoundControllerPropertyValue[]>();
     for (const value of values) {
       const propertyValues = valuesByProperty.get(value.propertyName) ?? [];
       propertyValues.push(value);
       valuesByProperty.set(value.propertyName, propertyValues);
     }
-    return [...valuesByProperty.values()].flatMap((propertyValues) =>
-      this.boundControllerBindingContextSlot(input, propertyValues, contextType, services)
-    );
+    return [...valuesByProperty.values()].flatMap((propertyValues) => {
+      const propertyName = propertyValues[0]?.propertyName ?? null;
+      return this.boundControllerBindingContextSlot(
+        input,
+        propertyValues,
+        contextType,
+        services,
+        propertyName != null && boundControllerValues.definitionContextHasUnboundUseSite(
+          controllerProductHandle,
+          contextType,
+          propertyName,
+        ),
+      );
+    });
   }
 
   private boundControllerBindingContextSlot(
@@ -1460,6 +1478,7 @@ export class TemplateControllerScopeMaterializer {
     values: readonly RuntimeBoundControllerPropertyValue[],
     contextType: CheckerTypeReference | null,
     services: TemplateScopeConstructionServices,
+    definitionHasUnboundUseSite: boolean,
   ): readonly BindingContextSlotDraft[] {
     const projections = values.flatMap((value, index) => {
       const projection = this.boundControllerPropertyTypeProjection(
@@ -1474,23 +1493,35 @@ export class TemplateControllerScopeMaterializer {
     if (value == null || projections.length === 0) {
       return [];
     }
+    const declarationSlot = bindingContextSlotDraftForContextTypeMember(
+      services.scopeNarrower.projector,
+      contextType,
+      value.propertyName,
+    );
+    const hasUnprojectedRuntimeAlternative = definitionHasUnboundUseSite
+      || projections.length !== values.length;
+    const declarationFallbackType = hasUnprojectedRuntimeAlternative
+      ? declarationSlot?.targetType ?? null
+      : null;
+    if (hasUnprojectedRuntimeAlternative && declarationFallbackType == null) {
+      return [];
+    }
     const targetType = services.typeSupport.commonOrUnionTypeReference(
-      projections.map((projection) => projection.targetType),
+      [
+        ...projections.map((projection) => projection.targetType),
+        ...(declarationFallbackType == null ? [] : [declarationFallbackType]),
+      ],
       `${input.localKey}:bound-controller:${value.propertyName}:use-types`,
       this.boundControllerPropertySourceAddressHandle(input, value),
     );
     if (targetType == null) {
       return [];
     }
-    const declarationSlot = bindingContextSlotDraftForContextTypeMember(
-      services.scopeNarrower.projector,
-      contextType,
-      value.propertyName,
-    );
     const sourceTypeMemberHandles = new Set(
       projections.map((projection) => projection.sourceTypeMember?.detailHandle ?? null),
     );
-    const targetTypeSourceMemberHandle = sourceTypeMemberHandles.size === 1
+    const targetTypeSourceMemberHandle = !hasUnprojectedRuntimeAlternative
+      && sourceTypeMemberHandles.size === 1
       ? [...sourceTypeMemberHandles][0] ?? null
       : null;
     return [new BindingContextSlotDraft(
@@ -1513,6 +1544,21 @@ export class TemplateControllerScopeMaterializer {
     index: number,
     services: TemplateScopeConstructionServices,
   ): BoundControllerPropertyTypeProjection | null {
+    if (value.sourceValueProperty != null) {
+      if (value.admittedSourceValueType == null) {
+        return null;
+      }
+      const sourceTypeMember = value.admittedSourceMemberHandle == null
+        ? null
+        : services.scopeNarrower.projector.publication.readHotDetail(
+            TypeSystemHotDetails.TypeMember,
+            value.admittedSourceMemberHandle,
+          );
+      return {
+        targetType: value.admittedSourceValueType,
+        sourceTypeMember,
+      };
+    }
     if (value.expressionProductHandle == null || value.sourceScope == null) {
       return null;
     }
@@ -1622,6 +1668,9 @@ export class TemplateControllerScopeMaterializer {
     const bindingExpressionScopes = value.sourceBindingExpressionScopes;
     const projection = projectRuntimeSourceExpressionWithLifecycle({
       bindingProductHandle: value.bindingProductHandle,
+      expressionProductHandle: value.expressionProductHandle,
+      expressionChainIndex: value.sourceExpressionChainIndex,
+      expressionResourcePlan: value.sourceExpressionResourcePlan,
       expression,
       sourceScope: value.sourceScope,
       resourceScope: value.sourceResourceScope,
@@ -2048,8 +2097,11 @@ export class TemplateControllerScopeMaterializer {
     const projection = projectRuntimeBindingSourceExpressionInScope(
       frame.input.runtimeBindings,
       frame.services.bindingExpressionScopes,
+      frame.input.expressionResourcePlan,
       {
         binding: runtimeBinding,
+        expressionProductHandle: runtimeBinding.expressionProductHandle,
+        expressionChainIndex: 0,
         expression,
         localKey: `${frame.input.localKey}:scope:${localSuffix}:runtime-assignment-writeback`,
         sourceScope: parent,
@@ -2258,6 +2310,7 @@ export class TemplateControllerScopeMaterializer {
     const localProjection = this.measure(input, 'iterator-local-slots', () =>
       this.iteratorLocalSlots(iteratorFrame)
     );
+    frame.addScopeSupportRecords(localProjection.sourceRecords);
     const localSlots = localProjection.slots;
     const overrideSlots = this.measure(input, 'iterator-override-slots', () =>
       frame.services.typeSupport.repeatOverrideSlots(
@@ -2288,7 +2341,7 @@ export class TemplateControllerScopeMaterializer {
       prepared.bindingContext,
       prepared.overrideContext,
       prepared.scope,
-      [...localProjection.sourceRecords, ...prepared.records],
+      prepared.records,
       prepared.bindingContextMaterialized,
     );
     this.recordIteratorTailExpressionScopes(frame, iteratorFrame, emission.scope);
@@ -2490,6 +2543,7 @@ export class TemplateControllerScopeMaterializer {
         binding,
         input.runtimeBindings,
         bindingExpressionScopes,
+        input.expressionResourcePlan,
         frame.resourceScope,
       ),
       [],
@@ -2689,7 +2743,10 @@ export class TemplateControllerScopeMaterializer {
     const contextProjection = projectRuntimeBindingSourceValueContextInScope({
       runtimeBindings: input.runtimeBindings,
       bindingExpressionScopes: frame.services.bindingExpressionScopes,
+      expressionResourcePlan: input.expressionResourcePlan,
       binding,
+      expressionProductHandle: effect.expressionProductHandle,
+      expressionChainIndex: aggregateRuntimeBindingSourceExpressionChainIndex(expression),
       expression,
       localKey: `${input.localKey}:let:${effect.productHandle}:source-value`,
       sourceScope: parent,

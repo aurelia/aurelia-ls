@@ -42,6 +42,11 @@ import {
   RuntimeBindingSourceValueEvaluator,
   RuntimeValueConverterInstancePropertyReadState,
 } from '../observation/binding-source-value-evaluator.js';
+import {
+  runtimeBindingSourceEvaluationKindIncludesRead,
+  runtimeBindingSourceLifecycle,
+} from '../observation/runtime-binding-source-lifecycle.js';
+import type { RuntimeExpressionBinding } from '../observation/runtime-binding-expression.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
 import { readVisibleTemplateResourceDefinition } from './compiler-resource-lookup.js';
 import { TemplateProductDetails } from './product-details.js';
@@ -73,7 +78,6 @@ import type {
 } from './runtime-expression-resource-plan.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import {
-  RuntimeExpressionResourceBindReachability,
   RuntimeExpressionResourceLifecycleEffectKind,
   RuntimeExpressionResourceLifecycleEffects,
   RuntimeExpressionResourceSignal,
@@ -219,6 +223,7 @@ export class RuntimeValueConverterMaterializer {
       converter.name.span,
     );
     const phaseOrder = input.expressionResourcePlan.readValueConverterPhaseOrder(entry);
+    const cleanupOrder = input.expressionResourcePlan.readCleanupPhaseOrder(entry);
     const renderContext = input.runtimeRendering.requireRenderContextForBinding(entry.binding.productHandle);
     const container = renderContext.requireActiveContainer();
     const lifecycle = this.lifecyclePublication(`${local}:lifecycle`, input, entry, container);
@@ -229,7 +234,7 @@ export class RuntimeValueConverterMaterializer {
         entry,
         phase,
         phaseReachability,
-        valueConverterPhaseOrder(entry, phase, phaseReachability, phaseOrder),
+        valueConverterPhaseOrder(entry, phase, phaseReachability, phaseOrder, cleanupOrder),
         lifecycleEffectsForValueConverter(entry, phase, phaseReachability, lifecycle.effects),
         expressionSource.handle,
       );
@@ -583,7 +588,7 @@ function recordsForIssue(
 }
 
 function valueConverterApplicationPhasesForBinding(
-  binding: RuntimeBinding,
+  binding: RuntimeExpressionBinding,
   expressionResourcePlan: RuntimeExpressionResourcePlan,
 ): readonly RuntimeValueConverterApplicationPhase[] {
   const conversionPhases = valueConverterConversionPhasesForBinding(binding, expressionResourcePlan);
@@ -595,7 +600,7 @@ function valueConverterApplicationPhasesForBinding(
 }
 
 function valueConverterConversionPhasesForBinding(
-  binding: RuntimeBinding,
+  binding: RuntimeExpressionBinding,
   expressionResourcePlan: RuntimeExpressionResourcePlan,
 ): readonly RuntimeValueConverterApplicationPhase[] {
   if (binding instanceof RefBinding) {
@@ -605,7 +610,11 @@ function valueConverterConversionPhasesForBinding(
     ];
   }
   if (!(binding instanceof PropertyBinding)) {
-    return [RuntimeValueConverterApplicationPhase.ToView];
+    return runtimeBindingSourceEvaluationKindIncludesRead(
+      runtimeBindingSourceLifecycle(binding, expressionResourcePlan).evaluationKind,
+    )
+      ? [RuntimeValueConverterApplicationPhase.ToView]
+      : [];
   }
   switch (expressionResourcePlan.effectivePropertyBindingMode(binding)) {
     case TemplateBindingMode.FromView:
@@ -625,11 +634,14 @@ function valueConverterPhaseReachability(
   entry: RuntimeValueConverterPlanEntry,
   phase: RuntimeValueConverterApplicationPhase,
 ): RuntimeOperationReachability {
-  if (entry.bindReachability !== RuntimeExpressionResourceBindReachability.Reached) {
-    return RuntimeOperationReachability.BlockedByOuterFailure;
+  if (entry.bindReachability !== RuntimeOperationReachability.Reached) {
+    return entry.bindReachability;
   }
   if (phase === RuntimeValueConverterApplicationPhase.Bind) {
     return RuntimeOperationReachability.Reached;
+  }
+  if (phase === RuntimeValueConverterApplicationPhase.Unbind) {
+    return plan.readCleanupPhaseReachability(entry);
   }
   return plan.readPostBindPhaseReachability(entry);
 }
@@ -639,14 +651,16 @@ function valueConverterPhaseOrder(
   phase: RuntimeValueConverterApplicationPhase,
   reachability: RuntimeOperationReachability,
   conversionOrder: ReturnType<RuntimeExpressionResourcePlan['readValueConverterPhaseOrder']>,
+  cleanupOrder: number | null,
 ): number | null {
   if (reachability !== RuntimeOperationReachability.Reached) {
     return null;
   }
   switch (phase) {
     case RuntimeValueConverterApplicationPhase.Bind:
-    case RuntimeValueConverterApplicationPhase.Unbind:
       return entry.bindOrder;
+    case RuntimeValueConverterApplicationPhase.Unbind:
+      return cleanupOrder;
     case RuntimeValueConverterApplicationPhase.ToView:
       return conversionOrder?.toView ?? null;
     case RuntimeValueConverterApplicationPhase.FromView:

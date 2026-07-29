@@ -1171,6 +1171,7 @@
         "Use framework.rendering and framework.lifecycle to check whether a flow belongs to controller creation, bind, hydration, or lifecycle semantics.",
         "Do not treat nested template controller scopes as plain lexical TypeScript scopes; they sit between runtime controller semantics and checker projection.",
         "Repeat/iterator scope construction now has an explicit `IteratorScopeMaterializationFrame`: it owns the source-value evaluator, rendered-binding source projector, iterator type projection, local type map, and static local handoff before issues, local slots, override slots, and BindingScope publication are assembled.",
+        "Iterator-local token addresses describe one authored declaration shared by every rendered runtime instance. Publish those address records once as scope-support records; do not attach identical authored-source records to each instance-owned BindingScope emission or weaken duplicate-record validation.",
         "Let binding static values now pass through `LetStaticValueEvaluationFrame`: it keeps parse recovery, runtime binding lookup, source-expression context projection, and source-value evaluator handoff together before the slot receives either a concrete value or an explicit binding-scope boundary."
       ],
       "anchors": [
@@ -1198,6 +1199,12 @@
           "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
           "symbolName": "iteratorLocalSlots",
           "summary": "Repeat local-slot construction phase that attaches TypeChecker-projected local types and representative static values."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+          "symbolName": "iteratorLocalSourceAddresses",
+          "summary": "Authored repeat-local token addresses shared across runtime scope instances."
         },
         {
           "kind": "source",
@@ -1262,7 +1269,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-29"
     },
     {
       "id": "frontier:runtime-rendering-materializer",
@@ -1996,10 +2003,12 @@
       "guidance": [
         "Start at RuntimeExpressionResourcePlanner when built-in behavior effects, behavior-projected converters, duplicate/rate-limit/target-subscriber diagnostics, effective binding mode, target observer selection, or expression-resource reachability changes.",
         "Keep expression parsing and structural occurrence extraction below expressionResourceOccurrences; do not reparse expression text in planner, materializers, API, or diagnostics code.",
-        "Walk each interpolation-hole chain once in astBind order, including converters inserted by reached i18n behaviors. Retain authored and runtime chain depth separately.",
+        "Walk each interpolation-hole chain once in astBind order, including resource-free parts and converters inserted by reached i18n behaviors. Retain authored and runtime chain depth separately. Parts bind in source order: one part's bind failure blocks every later part while preserving earlier reached parts.",
+        "Cursor source projections derive the active interpolation chain from authored hole spans. Access-use selection may fall back to all uses for environment convergence, but that fallback must not assign a literal-only or otherwise access-free hole a sibling hole's lifecycle.",
         "A reached resource-resolution or behavior-bind failure blocks every inner resource plus conversion and teardown phases; preserve blocked structural rows and report phaseReachability instead of deleting them.",
+        "Use RuntimeOperationReachability for bind and later phases. RuntimeExpressionResourcePlan owns both binding-wide aggregate source reachability and exact expression-product/interpolation-chain reachability; RuntimeBindingExpressionScopeProjectionReader owns scope handoff only.",
         "Resolve the runtime target and NodeObserverLocator configuration before ordinary target access so attr and updateTrigger can supply the target observer that PropertyBinding.bind uses.",
-        "Scope assignment, controller target access, converter phases, bound-controller values, binding data flow, and inlay hints must consume RuntimeExpressionResourcePlan. Do not restore independent AST/resource-visibility scans.",
+        "Scope assignment, controller target access, converter phases, bound-controller values, binding data flow, overlays, and inlay hints must consume RuntimeExpressionResourcePlan. Binding-owned source-value conversion spends the exact planned converter; ambient resource lookup is reserved for ownerless known-scope evaluation.",
         "RuntimeBindingBehaviorMaterializer is a publication phase. It emits bind/unbind applications, exact behavior and argument sources, phase-local lifecycle effects, and framework issues without re-running behavior state.",
         "Do not add generic source/target subscription effects: connectable-read dependencies and selected target observers already own those facts. Lifecycle effects are for behavior-owned state such as signals, rate limits, mode, self, validation, state scope, target overrides, and expression projection.",
         "Retain unresolved authored behavior applications with resource: null and publish ast_behavior_not_found / AUR0101 before behavior-specific effects run.",
@@ -3125,7 +3134,7 @@
         }
       ],
       "createdAt": "2026-07-17",
-      "updatedAt": "2026-07-22"
+      "updatedAt": "2026-07-29"
     },
     {
       "id": "decision:app-analysis-current-generation",

@@ -69,7 +69,11 @@ The tooling model should keep that split:
 - Member slot value types are also intentionally lazy. When a scope consumer needs to walk through a slot such as
   `state.handleAction`, use `bindingContextSlotTargetTypeShape(...)` to materialize the slot target type from the
   retained checker member carrier. Do not make all view-model slots eagerly project nested members just because one
-  template or overlay needs a composed state-class member.
+  template or overlay needs a composed state-class member. A published `unknown` member reference is the lazy
+  placeholder, not authority to discard the retained checker carrier; continuation spends the current type-source
+  member when present, otherwise the declaration member, and must not preserve the placeholder display over the
+  continued checker type. An explicitly `unknown` source member still projects `unknown`; continuation spends retained
+  evidence and does not infer a type from syntax or same-name candidates.
 - When a materializer needs the actual slot named by a source expression, use
   `bindingContextSlotDraftForExpressionAccess(...)`. It spends `BindingScope.locate(...)` for `AccessScope`, unwraps
   parentheses and binding behaviors, and walks nested `AccessMember` paths through the same lazy slot-target type

@@ -352,7 +352,7 @@ function createMockReferencesContext() {
               name: "message",
               definitionName: "my-app",
               bindingKind: "property",
-              dependencyKind: "template-expression-read",
+              dependencyKinds: ["template-expression-read"],
               source: {
                 kind: "source-span-address",
                 label: `src/my-app.html@${messageStart}..${messageStart + "my-el".length}`,
@@ -367,7 +367,7 @@ function createMockReferencesContext() {
               name: "message",
               definitionName: null,
               bindingKind: null,
-              dependencyKind: null,
+              dependencyKinds: [],
               source: {
                 kind: "typescript-node",
                 label: `src/my-app.ts@${declarationStart}..${declarationStart + "message".length}`,
